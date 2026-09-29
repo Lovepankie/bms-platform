@@ -20,8 +20,8 @@ import tools.jackson.databind.ObjectMapper;
 class JdbcAuditLog implements AuditLog {
 
     /** Keys whose values are personal identifiers (FR-AUD-05). */
-    static final Set<String> MASKED_KEYS =
-            Set.of("national_id", "phone_e164", "alt_phone_e164", "phone", "other_id_number", "payer_phone_e164");
+    static final Set<String> MASKED_KEYS = Set.of(
+            "national_id", "phone_e164", "alt_phone_e164", "phone", "other_id_number", "payer_phone_e164", "login");
 
     private final JdbcClient jdbc;
     private final ObjectMapper mapper;
@@ -35,6 +35,15 @@ class JdbcAuditLog implements AuditLog {
     @Transactional(propagation = Propagation.MANDATORY)
     public void record(Entry entry) {
         Optional<Principal> principal = CurrentPrincipal.get();
+        record(
+                entry,
+                principal.map(Principal::userId).orElse(null),
+                principal.map(Principal::kind).orElse("system"));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void record(Entry entry, UUID actorUserId, String actorKind) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("before", mask(entry.before()));
         data.put("after", mask(entry.after()));
@@ -44,8 +53,8 @@ class JdbcAuditLog implements AuditLog {
                         VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, CAST(? AS inet), CAST(? AS jsonb))
                         """)
                 .param(UUID.randomUUID())
-                .param(principal.map(Principal::userId).orElse(null))
-                .param(principal.map(Principal::kind).orElse("system"))
+                .param(actorUserId)
+                .param(actorKind)
                 .param(entry.branchId())
                 .param(entry.action())
                 .param(entry.entityType())

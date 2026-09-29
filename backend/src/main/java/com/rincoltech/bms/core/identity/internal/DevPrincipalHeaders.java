@@ -1,43 +1,23 @@
-package com.rincoltech.bms.core.identity;
+package com.rincoltech.bms.core.identity.internal;
 
-import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * The development authentication stub of chapter 7 section 7.4.3, active only with
  * {@code AUTH_MODE=dev}, which only the dev and test profiles accept. Reads the principal from
  * {@code X-Dev-User-Id}, {@code X-Dev-Kind}, {@code X-Dev-Permissions} (comma separated) and
  * {@code X-Dev-Branch-Ids} (comma separated UUIDs, or {@code *} for all branches). Malformed or
- * missing headers leave the request unauthenticated.
+ * missing headers leave the request unauthenticated. A bearer token always takes precedence.
  */
-class DevAuthenticationFilter extends OncePerRequestFilter {
+final class DevPrincipalHeaders {
 
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith("/api/v1/");
-    }
-
-    @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
-            throws ServletException, IOException {
-        parse(request).ifPresent(CurrentPrincipal::set);
-        try {
-            chain.doFilter(request, response);
-        } finally {
-            CurrentPrincipal.clear();
-        }
-    }
+    private DevPrincipalHeaders() {}
 
     static Optional<Principal> parse(HttpServletRequest request) {
         try {

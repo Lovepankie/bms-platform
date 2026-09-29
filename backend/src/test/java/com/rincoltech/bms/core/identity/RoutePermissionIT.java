@@ -3,6 +3,7 @@ package com.rincoltech.bms.core.identity;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rincoltech.bms.IntegrationTest;
+import com.rincoltech.bms.kernel.AuthenticatedEndpoint;
 import com.rincoltech.bms.kernel.PublicEndpoint;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import java.util.List;
@@ -26,7 +27,8 @@ class RoutePermissionIT extends IntegrationTest {
         assertThat(ours).as("routes found").isNotEmpty();
         List<String> undeclared = ours.stream()
                 .filter(e -> !e.getValue().hasMethodAnnotation(RequiresPermission.class)
-                        && !e.getValue().hasMethodAnnotation(PublicEndpoint.class))
+                        && !e.getValue().hasMethodAnnotation(PublicEndpoint.class)
+                        && !e.getValue().hasMethodAnnotation(AuthenticatedEndpoint.class))
                 .map(e -> e.getKey().toString())
                 .toList();
         assertThat(undeclared)
