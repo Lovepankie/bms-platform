@@ -1,9 +1,14 @@
 package com.rincoltech.bms.lending.members.internal;
 
 import com.rincoltech.bms.kernel.RequiresPermission;
+import com.rincoltech.bms.lending.members.internal.MemberApi.BlacklistRequest;
 import com.rincoltech.bms.lending.members.internal.MemberApi.CreateMemberRequest;
+import com.rincoltech.bms.lending.members.internal.MemberApi.DuplicateCheckRequest;
+import com.rincoltech.bms.lending.members.internal.MemberApi.DuplicateCheckResponse;
+import com.rincoltech.bms.lending.members.internal.MemberApi.KycDecisionRequest;
 import com.rincoltech.bms.lending.members.internal.MemberApi.MemberPage;
 import com.rincoltech.bms.lending.members.internal.MemberApi.MemberResponse;
+import com.rincoltech.bms.lending.members.internal.MemberApi.UpdateMemberRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -13,9 +18,11 @@ import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -59,6 +66,47 @@ class MemberController {
     @Operation(summary = "Get one member", operationId = "getMember")
     ResponseEntity<MemberResponse> get(@PathVariable("member_id") UUID memberId) {
         MemberResponse member = service.get(memberId);
+        return ResponseEntity.ok().eTag(String.valueOf(member.version())).body(member);
+    }
+
+    @PatchMapping("/{member_id}")
+    @RequiresPermission("lending.members.update")
+    @Operation(summary = "Edit a member or change their status (FR-MEM-10)", operationId = "updateMember")
+    ResponseEntity<MemberResponse> update(
+            @PathVariable("member_id") UUID memberId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody UpdateMemberRequest request) {
+        return withETag(service.update(memberId, ifMatch, request));
+    }
+
+    @PostMapping("/duplicate-check")
+    @RequiresPermission("lending.members.create")
+    @Operation(summary = "Find likely duplicates before registering (FR-MEM-04)", operationId = "checkMemberDuplicates")
+    DuplicateCheckResponse duplicateCheck(@Valid @RequestBody DuplicateCheckRequest request) {
+        return service.duplicateCheck(request);
+    }
+
+    @PostMapping("/{member_id}/kyc/verify")
+    @RequiresPermission("lending.members.verify_kyc")
+    @Operation(summary = "Verify or reject a member's KYC (FR-MEM-05)", operationId = "decideMemberKyc")
+    ResponseEntity<MemberResponse> decideKyc(
+            @PathVariable("member_id") UUID memberId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody KycDecisionRequest request) {
+        return withETag(service.decideKyc(memberId, ifMatch, request));
+    }
+
+    @PostMapping("/{member_id}/blacklist")
+    @RequiresPermission("lending.members.blacklist")
+    @Operation(summary = "Blacklist a member or lift it (FR-MEM-13)", operationId = "setMemberBlacklist")
+    ResponseEntity<MemberResponse> blacklist(
+            @PathVariable("member_id") UUID memberId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody BlacklistRequest request) {
+        return withETag(service.setBlacklist(memberId, ifMatch, request));
+    }
+
+    private static ResponseEntity<MemberResponse> withETag(MemberResponse member) {
         return ResponseEntity.ok().eTag(String.valueOf(member.version())).body(member);
     }
 }

@@ -202,6 +202,20 @@
           }
         }
       },
+      "BlacklistRequest" : {
+        "properties" : {
+          "is_blacklisted" : {
+            "type" : "boolean"
+          },
+          "reason" : {
+            "description" : "Required when blacklisting (FR-MEM-13)",
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "is_blacklisted" ]
+      },
       "Branch" : {
         "properties" : {
           "code" : {
@@ -275,6 +289,10 @@
           "branch_id" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "confirmed_not_duplicate" : {
+            "description" : "True after the user confirmed that a member with the same phone is a different person (FR-MEM-04)",
+            "type" : "boolean"
           },
           "currency" : {
             "description" : "Defaults to the tenant currency",
@@ -423,6 +441,67 @@
           }
         }
       },
+      "DuplicateCandidate" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "full_name" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "in_scope" : {
+            "type" : "boolean"
+          },
+          "match_reasons" : {
+            "description" : "Any of nin, phone, name",
+            "items" : {
+              "description" : "Any of nin, phone, name",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "national_id_masked" : {
+            "type" : "string"
+          },
+          "phone_e164_masked" : {
+            "type" : "string"
+          }
+        }
+      },
+      "DuplicateCheckRequest" : {
+        "description" : "At least one field is required (FR-MEM-04)",
+        "properties" : {
+          "full_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "national_id" : {
+            "type" : "string"
+          },
+          "phone" : {
+            "type" : "string"
+          }
+        }
+      },
+      "DuplicateCheckResponse" : {
+        "properties" : {
+          "candidates" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DuplicateCandidate"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "FirstAdminInvitation" : {
         "description" : "Shown once to the operator, and sent to the admin",
         "properties" : {
@@ -527,6 +606,21 @@
           }
         }
       },
+      "KycDecisionRequest" : {
+        "properties" : {
+          "decision" : {
+            "pattern" : "verified|rejected",
+            "type" : "string"
+          },
+          "note" : {
+            "description" : "Required when rejected",
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "decision" ]
+      },
       "Me" : {
         "properties" : {
           "all_branches" : {
@@ -604,6 +698,9 @@
           "alt_phone_e164" : {
             "type" : "string"
           },
+          "blacklist_reason" : {
+            "type" : "string"
+          },
           "branch_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -642,6 +739,14 @@
             "type" : "boolean"
           },
           "kyc_status" : {
+            "type" : "string"
+          },
+          "kyc_verified_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "kyc_verified_by" : {
+            "format" : "uuid",
             "type" : "string"
           },
           "last_name" : {
@@ -1135,6 +1240,104 @@
           "name" : {
             "maxLength" : 200,
             "minLength" : 1,
+            "type" : "string"
+          }
+        }
+      },
+      "UpdateMemberRequest" : {
+        "description" : "Omitted fields are unchanged",
+        "properties" : {
+          "alt_phone" : {
+            "type" : "string"
+          },
+          "confirmed_not_duplicate" : {
+            "description" : "As on create, when the new phone belongs to another member (FR-MEM-04)",
+            "type" : "boolean"
+          },
+          "date_of_birth" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "district" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "first_name" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "full_name" : {
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "gender" : {
+            "pattern" : "female|male|other|unspecified",
+            "type" : "string"
+          },
+          "id_type" : {
+            "pattern" : "nin|passport|refugee_id|other|none",
+            "type" : "string"
+          },
+          "last_name" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "location" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "marital_status" : {
+            "pattern" : "single|married|divorced|widowed|separated|unknown",
+            "type" : "string"
+          },
+          "monthly_income_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "national_id" : {
+            "type" : "string"
+          },
+          "occupation" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "officer_user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "other_id_number" : {
+            "maxLength" : 40,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "other_income_source" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "phone" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "FR-MEM-10",
+            "pattern" : "active|inactive|exited",
+            "type" : "string"
+          },
+          "sub_county" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "village" : {
+            "maxLength" : 100,
+            "minLength" : 0,
             "type" : "string"
           }
         }
@@ -2039,6 +2242,35 @@
         "tags" : [ "lending-members" ]
       }
     },
+    "/api/v1/lending/members/duplicate-check" : {
+      "post" : {
+        "operationId" : "checkMemberDuplicates",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DuplicateCheckRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DuplicateCheckResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Find likely duplicates before registering (FR-MEM-04)",
+        "tags" : [ "lending-members" ]
+      }
+    },
     "/api/v1/lending/members/{member_id}" : {
       "get" : {
         "operationId" : "getMember",
@@ -2064,6 +2296,139 @@
           }
         },
         "summary" : "Get one member",
+        "tags" : [ "lending-members" ]
+      },
+      "patch" : {
+        "operationId" : "updateMember",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "member_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateMemberRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Member"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit a member or change their status (FR-MEM-10)",
+        "tags" : [ "lending-members" ]
+      }
+    },
+    "/api/v1/lending/members/{member_id}/blacklist" : {
+      "post" : {
+        "operationId" : "setMemberBlacklist",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "member_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BlacklistRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Member"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Blacklist a member or lift it (FR-MEM-13)",
+        "tags" : [ "lending-members" ]
+      }
+    },
+    "/api/v1/lending/members/{member_id}/kyc/verify" : {
+      "post" : {
+        "operationId" : "decideMemberKyc",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "member_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/KycDecisionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Member"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Verify or reject a member's KYC (FR-MEM-05)",
         "tags" : [ "lending-members" ]
       }
     },
