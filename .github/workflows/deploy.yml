@@ -1,14 +1,18 @@
 name: Deploy
 
-# The delivery pipeline of ADR-006 (docs/sdd/10-cicd-pipeline.md):
+# The delivery pipeline of ADR-006 and ADR-018 (docs/sdd/10-cicd-pipeline.md):
 #
-#   push to main  -> build api, web and proxy images ONCE, tag sha-<short>, push to GHCR
-#                 -> deploy those images to the `staging` environment
+#   push to main  -> build api, web and proxy images ONCE, for linux/amd64 and linux/arm64, tag
+#                    sha-<short>, push to GHCR
+#                 -> move the `staging` pointer tag to those images. The ARM64 staging host sits
+#                    behind a Cloudflare Tunnel and cannot be reached from here: its systemd timer
+#                    (deploy/pull-staging.sh) sees the pointer move and deploys the sha-<short> tag
+#                    the image's labels name (ADR-018). No SSH key, no inbound access.
 #   tag vX.Y.Z    -> no rebuild: the sha-<short> images of the tagged commit are retagged vX.Y.Z
-#                 -> deploy to the `production` environment (required reviewer: dev lead)
+#                 -> deploy to the `production` environment (required reviewer: dev lead) over SSH
 #
-# Hosts are not provisioned yet: each deploy job checks its environment's HOST and SSH_KEY
-# secrets and, when either is missing, reports a notice and succeeds. Build and push still run.
+# The production VM is not provisioned yet: its deploy job checks the environment's HOST and
+# SSH_KEY secrets and, when either is missing, reports a notice and succeeds.
 #
 # Only pushes to this repository's main branch and version tags trigger it. Pull requests never do,
 # so code from a fork never runs with these secrets or with package write access.
@@ -74,61 +78,73 @@ jobs:
             context: deploy/caddy
     steps:
       - uses: actions/checkout@v7
+      # Every Dockerfile compiles in a stage pinned to $BUILDPLATFORM (Maven, npm and a Go
+      # cross-compile run natively on the runner), and the per-target runtime stages have no RUN
+      # step, so nothing is compiled or executed under emulation today. QEMU is registered only so
+      # that a future RUN step in a runtime stage still builds for arm64.
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # The version and revision labels are what the staging host's puller reads from the
+      # `staging` pointer to find the release and the commit of its host files (ADR-018).
       - uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}:${{ needs.meta.outputs.sha_tag }}
           build-args: GIT_SHA=${{ needs.meta.outputs.sha_tag }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.meta.outputs.sha_tag }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,scope=${{ matrix.image }},mode=max
 
-  deploy-staging:
-    name: Deploy to staging
+  staging-pointer:
+    name: Point staging at ${{ needs.meta.outputs.sha_tag }}
     needs: [meta, build]
     if: github.ref_type == 'branch'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: staging
+    timeout-minutes: 10
     concurrency:
-      group: deploy-staging
+      group: staging-pointer
       cancel-in-progress: false
     permissions:
       contents: read
-      packages: read
+      packages: write
     steps:
-      - id: host
-        env:
-          HOST: ${{ secrets.STAGING_HOST }}
-          KEY: ${{ secrets.STAGING_SSH_KEY }}
-        run: |
-          if [ -z "$HOST" ] || [ -z "$KEY" ]; then
-            echo "::notice title=Staging not provisioned::STAGING_HOST or STAGING_SSH_KEY is not set in the staging environment. Images ${{ needs.meta.outputs.sha_tag }} are pushed; deploy skipped (docs/runbooks/provision-host.md)."
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.host.outputs.configured == 'true'
-        uses: actions/checkout@v7
-      - if: steps.host.outputs.configured == 'true'
-        uses: ./.github/actions/ssh-deploy
+      - uses: actions/checkout@v7
         with:
-          host: ${{ secrets.STAGING_HOST }}
-          ssh-user: ${{ vars.STAGING_SSH_USER || 'deploy' }}
-          ssh-key: ${{ secrets.STAGING_SSH_KEY }}
-          known-hosts: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
-          image-tag: ${{ needs.meta.outputs.sha_tag }}
-          registry-user: ${{ github.actor }}
-          registry-token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Move the staging tag to the images just built (no rebuild)
+        env:
+          SHA_TAG: ${{ needs.meta.outputs.sha_tag }}
+        run: |
+          # Never move the pointer backwards: a run that finishes after a newer commit's run leaves
+          # the pointer where it is.
+          pointer="$(docker buildx imagetools inspect "${IMAGE_PREFIX}-api:staging" --format '{{ json .Image }}' 2>/dev/null \
+            | jq -r 'if has("linux/amd64") then ."linux/amd64" else . end | .config.Labels["org.opencontainers.image.revision"] // empty' || true)"
+          if [ -n "$pointer" ] && [ "$pointer" != "$GITHUB_SHA" ] && git merge-base --is-ancestor "$GITHUB_SHA" "$pointer" 2>/dev/null; then
+            echo "::notice::staging already points at ${pointer}, which is newer than ${GITHUB_SHA}; left as it is."
+            exit 0
+          fi
+          for image in api web proxy; do
+            docker buildx imagetools create --tag "${IMAGE_PREFIX}-${image}:staging" "${IMAGE_PREFIX}-${image}:${SHA_TAG}"
+          done
+          echo "::notice title=Staging pointer::staging now names ${SHA_TAG}; the staging host deploys it within a few minutes (docs/runbooks/deploy.md)."
 
   promote:
     name: Retag ${{ needs.meta.outputs.sha_tag }} as ${{ needs.meta.outputs.version }}

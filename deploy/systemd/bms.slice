@@ -1,0 +1,15 @@
+# Hard resource cap for every BMS staging container on the shared ARM64 host (ADR-018,
+# docs/sdd/09-infrastructure-design.md section 9.12). compose.pi-staging.yml places each container
+# in this slice (cgroup_parent: bms.slice), so the whole stack, including the one-shot migrate
+# container, never takes more than MemoryMax from the host's other workloads.
+# Install: docs/runbooks/provision-host.md section 8.
+[Unit]
+Description=BMS staging containers (hard memory cap)
+Before=slices.target
+
+[Slice]
+MemoryAccounting=yes
+MemoryHigh=860M
+MemoryMax=900M
+MemorySwapMax=0
+CPUQuota=250%

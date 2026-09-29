@@ -11,7 +11,8 @@
 #   2. start PostgreSQL if it is not running and wait until it is healthy;
 #   3. run migrations as a one-shot container, as bms_owner, BEFORE any application container
 #      changes. A failed migration stops the deploy with the old version still serving;
-#   4. switch api, web and proxy to the new tag;
+#   4. switch api, web and proxy to the new tag (and start any other default service, such as
+#      cloudflared on the ARM64 staging host);
 #   5. wait for the API's readiness (database reachable, migrations at head) and for web behind
 #      the proxy, up to READY_TIMEOUT seconds;
 #   6. on failure, switch back to the previously recorded tag and exit non-zero. Migrations are
@@ -19,8 +20,10 @@
 #      (chapter 6 section 6.9);
 #   7. on success, record the tag and the time in state/.
 #
-# Runs from /opt/bms (the directory holding this script, compose.yml and .env). Registry login is
-# done by the caller before this script runs (the deploy workflow logs in with a short-lived token).
+# Runs from /opt/bms (the directory holding this script, compose.yml and .env). Registry login, when
+# the packages are private, is done by the caller before this script runs (the production workflow
+# logs in with a short-lived token). The ARM64 staging host pulls public packages anonymously and
+# is driven by pull-staging.sh on a systemd timer (ADR-018).
 set -euo pipefail
 # Docker commands below never read the caller's stdin (it may be the SSH session).
 exec < /dev/null
@@ -49,8 +52,11 @@ fi
 PREVIOUS="$(cat state/current_tag 2>/dev/null || true)"
 log "deploying ${TAG} (previous: ${PREVIOUS:-none})"
 
+# Brings every default service of compose.yml to the tag: api, web and proxy are recreated when the
+# tag changes; postgres and, on the ARM64 staging host, cloudflared are left alone unless their
+# pinned definition changed.
 switch_to() {
-    IMAGE_TAG="$1" "${COMPOSE[@]}" up --detach --no-deps --remove-orphans api web proxy
+    IMAGE_TAG="$1" "${COMPOSE[@]}" up --detach --remove-orphans
 }
 
 wait_ready() {

@@ -1,0 +1,13 @@
+# Every two minutes, ask the registry whether the staging pointer moved (ADR-018).
+# Install: docs/runbooks/provision-host.md section 8.
+[Unit]
+Description=BMS staging: check the staging pointer every two minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=2min
+RandomizedDelaySec=15s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

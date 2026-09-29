@@ -88,11 +88,23 @@ jobs:
           POSTGRES_SUPERUSER_PASSWORD: ci-placeholder
           BMS_OWNER_PASSWORD: ci-placeholder
           BMS_APP_PASSWORD: ci-placeholder
-          BMS_BASE_DOMAIN: bms.example
+          BMS_TENANT_HOST_PATTERN: "{slug}-bms-staging.rincoltech.com"
+          BMS_PLATFORM_HOST: bms-staging.rincoltech.com
+          BMS_DNS_ZONE: rincoltech.com
+          BMS_CALLBACK_HOST: bms-staging-callbacks.rincoltech.com
           ACME_EMAIL: ops@bms.example
           CLOUDFLARE_API_TOKEN: ci-placeholder
+          CLOUDFLARE_TUNNEL_TOKEN: ci-placeholder
+          CLOUDFLARED_IMAGE: cloudflare/cloudflared:2026.9.3
           BMS_TOKEN_SIGNING_JWK: ci-placeholder
           BMS_DATA_KEY: ci-placeholder
         run: |
           docker compose -f deploy/compose.yml config --quiet
+          docker compose -f deploy/compose.pi-staging.yml config --quiet
           docker compose -f docker-compose.yml config --quiet
+      - name: systemd units parse
+        run: |
+          for unit in deploy/systemd/*; do
+            grep -Eq '^\[(Unit|Service|Timer|Slice)\]' "$unit" || { echo "::error::$unit has no unit section"; exit 1; }
+          done
+          systemd-analyze verify deploy/systemd/bms.slice deploy/systemd/bms-pull.timer

@@ -25,7 +25,10 @@
 		respond `{"tenantHostPattern":"{$BMS_TENANT_HOST_PATTERN}","platformHost":"{$BMS_PLATFORM_HOST}"}` 200
 	}
 
-	# Single-page app: unknown paths serve index.html and the router takes over.
-	try_files {path} /index.html
-	file_server
+	# Single-page app: unknown paths serve index.html and the router takes over. Inside its own
+	# handle, because try_files would otherwise rewrite /app-config.json before the handle above.
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
 }
