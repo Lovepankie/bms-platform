@@ -36,7 +36,7 @@ branches, 100 staff users, 50,000 members and 100,000 loans over its lifetime, a
 | NFR-ISO-03 | A session with no tenant bound gets an error on any tenant-owned table. | Isolation test. |
 | NFR-ISO-04 | Every list endpoint on a branch-owned resource returns no row outside the principal's branch scope. | Per-endpoint test with two branches. |
 | NFR-ISO-05 | Object storage access for one tenant's documents is only possible through a signed URL issued after a permission check. | Test: a guessed key without a signature is refused by the bucket. |
-| NFR-ISO-06 | Redis keys for tenant-scoped data carry the tenant prefix. | Unit test on the key builder. |
+| NFR-ISO-06 | Cache and rate-limit keys for tenant-scoped data include the tenant id (in process; there is no Redis, ADR-008). | Unit test on the key builder. |
 
 ## 4.4 Performance (PERF)
 
@@ -66,7 +66,7 @@ NFR-CAP-01 loaded, at 50 concurrent users.
 |---|---|---|
 | NFR-AVL-01 | Production availability of at least 99.5 percent per calendar month, excluding announced maintenance. | Uptime monitor on `/healthz` and a tenant sign-in page every minute. |
 | NFR-AVL-02 | Planned maintenance is announced to tenant admins 48 hours ahead and scheduled outside 07:00 to 21:00 East Africa Time. | Runbook. |
-| NFR-AVL-03 | A deploy causes at most 30 seconds of unavailability, and a failed health check rolls back automatically to the previous version (pending ADR-006; chapter 10). | Deploy log review. |
+| NFR-AVL-03 | A deploy causes at most 30 seconds of unavailability, and a failed health check rolls back automatically to the previous version (ADR-006; chapter 10). | Deploy log review. |
 | NFR-AVL-04 | Loss of the SMS aggregator or payment gateway degrades only the dependent feature: messages queue and retry, payment intents fail cleanly, everything else works. | Fault injection test with the provider adapter returning errors. |
 
 ## 4.7 Backup and recovery (BAK)

@@ -14,10 +14,18 @@ in through mobile money.
 
 Developers and coding agents start with **[AGENTS.md](AGENTS.md)**.
 
-Local environment: `make dev` starts PostgreSQL 16, Redis 7, the API, the worker and the
-web app with fabricated seed data. The Makefile arrives with the application scaffold,
-whose backend framework is pending ADR-010; until then the specification in `docs/` is the
-deliverable.
+Requirements: JDK 25, Maven 3.9, Node 20.19 or later, Docker.
+
+```bash
+make dev      # PostgreSQL 16, one-shot migrate, API, web and a local proxy; seeds the "demo" tenant
+make test     # backend mvn verify (incl. RLS isolation tests on real PostgreSQL) and frontend tests
+```
+
+Then open http://localhost:8000 (the PWA) or call the API on http://localhost:8080 with the
+development headers shown in [AGENTS.md](AGENTS.md) ("How to run it"). The stack is Java 25,
+Spring Boot 4.1 and Spring Modulith 2.1 (ADR-010), PostgreSQL 16 with forced row-level security
+(ADR-003), background jobs on PostgreSQL with db-scheduler and no Redis (ADR-008), and a React
+PWA (ADR-009).
 
 View the architecture model locally:
 
@@ -57,7 +65,8 @@ and uploads the site as a build artifact.
 | Tables, RLS, ledger, posting rules | [docs/sdd/06-database-design.md](docs/sdd/06-database-design.md) |
 | Endpoints and API conventions | [docs/sdd/07-api-design.md](docs/sdd/07-api-design.md) |
 | Roles, permissions, maker-checker | [docs/sdd/08-security-design.md](docs/sdd/08-security-design.md) |
-| Infrastructure and CI/CD | `docs/sdd/09-infrastructure-design.md`, `docs/sdd/10-cicd-pipeline.md`, `docs/runbooks/` |
+| Infrastructure and CI/CD | [docs/sdd/09-infrastructure-design.md](docs/sdd/09-infrastructure-design.md), [docs/sdd/10-cicd-pipeline.md](docs/sdd/10-cicd-pipeline.md), [docs/runbooks/](docs/runbooks/) |
+| API contract (generated) | [docs/api/openapi.json](docs/api/openapi.json) |
 | Importing the pilot spreadsheet | [docs/sdd/13-data-migration-and-import.md](docs/sdd/13-data-migration-and-import.md), [docs/specs/pilot-data-dictionary.md](docs/specs/pilot-data-dictionary.md) |
 | Report definitions and formulas | [docs/sdd/14-reporting.md](docs/sdd/14-reporting.md) |
 | Test strategy | [docs/sdd/15-test-strategy.md](docs/sdd/15-test-strategy.md) |
@@ -67,8 +76,8 @@ and uploads the site as a build artifact.
 
 Short-lived branch, pull request with CI, merge to `main` deploys to **staging**
 automatically; a version tag `vX.Y.Z` on a commit already green on staging promotes the
-same images to **production** after the dev lead's approval. Details in
-[PROCESS.md](PROCESS.md) section 7.
+same images to **production** after the dev lead's approval (ADR-006). Details in
+[PROCESS.md](PROCESS.md) section 7 and chapter 10.
 
 ## House style and content boundary
 

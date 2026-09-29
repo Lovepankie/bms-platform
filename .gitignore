@@ -7,6 +7,12 @@
 inputs/
 private/
 
+# Host-side state and backups, if deploy/ is ever used in place
+deploy/state/
+deploy/backups/
+*.dump
+*.dump.enc
+
 # Build output
 docs/build/
 node_modules/

@@ -3,8 +3,7 @@
 ## Status
 
 Accepted (2026-09-29). The backend language and framework are deliberately not decided
-here; they are the subject of pending ADR-010. This record holds whichever framework is
-chosen.
+here; they are the subject of ADR-010. This record holds whichever framework is chosen.
 
 ## Context
 
@@ -29,8 +28,8 @@ Three shapes were considered.
 
 Adopt option 3.
 
-**Logical module map.** Names below are logical; the physical package paths follow the
-framework chosen in pending ADR-010.
+**Logical module map.** Names below are logical; the physical package paths are set by
+ADR-010 (`docs/sdd/05-architecture.md` section 5.4.6).
 
 | Layer | Modules |
 |---|---|
@@ -63,7 +62,7 @@ never through another sub-domain's data access code. That rule is checked in rev
 the ledger's posting operation (ADR-004) inside the same database transaction as its own
 writes. Side effects that may lag (SMS, PDF generation, report builds) are written to a
 transactional outbox in the same transaction and executed by the background worker after
-commit (the worker technology is pending ADR-008).
+commit (the worker technology is set by ADR-008).
 
 ## Consequences
 
@@ -96,4 +95,6 @@ commit (the worker technology is pending ADR-008).
 
 - ADR-001 defines the core and the vertical modules this layout contains.
 - ADR-004 defines the posting operation every money-moving module calls.
-- Pending ADR-010 chooses the backend framework and therefore the enforcement mechanism.
+- ADR-010 chooses the backend framework and therefore the enforcement mechanism (Spring
+  Modulith).
+- ADR-008 defines the worker, which runs inside the API process by default.

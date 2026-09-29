@@ -107,7 +107,8 @@ intent, so the API and data model do not block it:
 - Tenant identification: one USSD code per tenant, or a shared code with a tenant choice
   menu; decided with the aggregator.
 - Sessions are stateless on the server apart from a short-lived session record keyed by
-  the aggregator's session id (TTL 3 minutes, in Redis).
+  the aggregator's session id (expires after 3 minutes; a small PostgreSQL table purged by a
+  job, ADR-008).
 - USSD responses must return within the aggregator's time limit (typically a few seconds);
   the payment step only creates the payment intent and returns.
 

@@ -201,9 +201,14 @@ the lending module is switched on (runbook `docs/runbooks/`, onboarding a tenant
 - The token's tenant claim must equal the host's tenant.
 - Object storage keys are prefixed `tenants/<tenant_id>/`, and a signed URL is issued only
   after a permission check on the owning record, never from a client-supplied key.
-- Redis keys are prefixed `t:<tenant_id>:` for every tenant-scoped value (rate limits,
-  permission cache, revoked sessions).
-- Worker jobs carry the tenant id in the payload and bind it before any query.
+- In-process cache and rate-limit keys include the tenant id for every tenant-scoped value
+  (permission cache, rate limits); there is no Redis (ADR-008). Revoked sessions are read from
+  `auth_sessions`, which is under RLS like every tenant-owned table.
+- Background jobs bind each tenant through `TenantJobs` before any query, one transaction per
+  tenant (ADR-008).
+- Actuator is locked down: every endpoint is disabled except `health` and `info`, which exist
+  only on the internal management port; the public port serves `/healthz` and `/readyz` with
+  status only (chapter 7 section 7.11.1).
 - The isolation test suite (chapter 15 section 15.4) runs on every pull request.
 
 ## 8.6 Audit
