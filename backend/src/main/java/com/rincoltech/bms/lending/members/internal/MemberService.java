@@ -3,6 +3,7 @@ package com.rincoltech.bms.lending.members.internal;
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
+import com.rincoltech.bms.core.tenancy.PlanLimits;
 import com.rincoltech.bms.core.tenancy.TenantSequences;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
@@ -37,21 +38,24 @@ class MemberService implements MemberLookup {
     private final CurrentTenant currentTenant;
     private final TenantSequences sequences;
     private final AuditLog audit;
+    private final PlanLimits planLimits;
 
     MemberService(
             MemberRepository members,
             Branches branches,
             CurrentTenant currentTenant,
             TenantSequences sequences,
-            AuditLog audit) {
+            AuditLog audit,
+            PlanLimits planLimits) {
         this.members = members;
         this.branches = branches;
         this.currentTenant = currentTenant;
         this.sequences = sequences;
         this.audit = audit;
+        this.planLimits = planLimits;
     }
 
-    /** FR-MEM-01, FR-MEM-02, FR-MEM-03, FR-AUD-01. One transaction: number, row and audit row. */
+    /** FR-MEM-01, FR-MEM-02, FR-MEM-03, FR-TEN-04, FR-AUD-01. One transaction: number, row and audit row. */
     @Transactional
     MemberResponse create(CreateMemberRequest request) {
         Principal principal = CurrentPrincipal.require();
@@ -65,6 +69,7 @@ class MemberService implements MemberLookup {
                 ? null
                 : PhoneNumbers.normaliseUganda(request.altPhone()).orElseThrow(() -> invalidPhone("alt_phone"));
         String nin = checkIdentity(request);
+        planLimits.checkRoomFor(PlanLimits.MAX_ACTIVE_MEMBERS, members.countActive());
 
         UUID id = UUID.randomUUID();
         String memberNo = "M%06d".formatted(sequences.next("member_no"));
