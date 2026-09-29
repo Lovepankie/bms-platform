@@ -1,0 +1,21 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Real client material never enters this repo (see AGENTS.md content boundary)
+inputs/
+private/
+
+# Build output
+docs/build/
+node_modules/
+dist/
+target/
+build/
+__pycache__/
+*.pyc
+.venv/
+.idea/
+.vscode/
+.DS_Store
