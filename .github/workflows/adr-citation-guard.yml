@@ -1,0 +1,26 @@
+name: ADR citation guard
+
+# Two Accepted ADRs once cited ADR-007 as settled fact while it was unwritten, so the
+# decision log asserted a dependency on a document nobody could read. External review
+# caught it. This guard makes that class of defect a build failure instead.
+#
+# An unwritten record may still be referenced, but only as "pending ADR-NNN" or
+# "ADR-NNN will ...", so a reader can always tell a decision from an intention.
+
+on:
+  push:
+    paths: ["docs/**", "AGENTS.md", "README.md"]
+  pull_request:
+    paths: ["docs/**", "AGENTS.md", "README.md"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  citations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check every ADR citation resolves or is marked pending
+        run: python3 .github/scripts/adr_citation_guard.py

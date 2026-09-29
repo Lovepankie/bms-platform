@@ -1,0 +1,62 @@
+name: Architecture model
+
+# Validate the Structurizr C4 model on every change, and build the browsable SDD.
+# The DSL is the source of truth; a broken model (bad reference, unresolved
+# !docs path, an illegal dynamic view) is caught here rather than only when
+# someone opens the viewer.
+#
+# IMPORTANT: the CLI version is PINNED. structurizr/cli:latest is now a no-op
+# deprecation stub that prints a banner and exits 0 WITHOUT validating anything
+# (it "passes" a deliberately broken workspace), so it must never be used here.
+#
+# The static SDD site (all C4 views incl. the dynamic flows, the ADRs, and the
+# SDD chapters, cross-linked and searchable) is built with structurizr-site-generatr
+# and uploaded as a build artifact on every push. The repo is private and the
+# org is on the Team plan, so private GitHub Pages is not available (that needs
+# Enterprise) and public Pages would expose the SDD; the artifact keeps it
+# readable only to people with repo access. Download it from a run's Artifacts,
+# unzip, open index.html. Interactive local browsing is still Structurizr Lite
+# (see README). The CLI itself has no static-HTML export ("unknown export format:
+# static"); the site generator is a separate tool.
+
+on:
+  push:
+    paths: ["docs/workspace.dsl", "docs/sdd/**", "docs/adr/**"]
+  pull_request:
+    paths: ["docs/workspace.dsl", "docs/sdd/**", "docs/adr/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  STRUCTURIZR_CLI: structurizr/cli:2024.09.19
+  SITE_GENERATR: ghcr.io/avisi-cloud/structurizr-site-generatr:latest
+
+jobs:
+  model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate the workspace
+        run: |
+          docker run --rm -v "$PWD/docs:/work" -w /work "$STRUCTURIZR_CLI" \
+            validate -workspace workspace.dsl
+
+      - name: Build the static SDD site
+        run: |
+          # The generatr image runs as a non-root user; make the output dir
+          # writable so it can create build/ inside the runner-owned checkout.
+          mkdir -p docs/build/site && chmod -R 777 docs/build
+          docker run --rm -v "$PWD/docs:/var/model" -w /var/model "$SITE_GENERATR" \
+            generate-site -w workspace.dsl
+          echo "Built $(find docs/build/site -type f | wc -l) files into docs/build/site."
+
+      - name: Upload the static SDD site
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdd-static-site
+          path: docs/build/site
+          if-no-files-found: error
+          retention-days: 90

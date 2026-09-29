@@ -1,0 +1,43 @@
+name: estimate-guard
+
+# Enforces the PROCESS.md delivery-tracking rules on the board:
+#   1. Leaf-only numbers: no Estimate (h) or Actual (h) on epic/feature/story
+#      parents (they roll up). HARD fail, this is the double-count guard.
+#   2. Every item carries a type label (epic/feature/story/task/chore/...).
+#   3. No orphans: every non-epic has a parent.
+# Rules 2 and 3 are warnings until STRICT=1 (flip once the backlog is fully
+# typed and parented), then they fail too.
+#
+# Requires a repo (or org) secret PROJECT_TOKEN: a PAT with read:project
+# and repo scope. The default GITHUB_TOKEN cannot read an org Projects v2
+# board, so this token is mandatory. See runbooks/estimate-guard.md.
+
+on:
+  # No schedule trigger: PROJECT below is empty until the bms-platform board exists,
+  # so a daily run would just fail on a timer with nobody to act on it. Restore
+  # the schedule once PROJECT and PROJECT_TOKEN are configured for real.
+  workflow_dispatch: {}    # allow manual runs from the Actions tab
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Guard board hierarchy (leaf-only estimate + actual, typing, parenting)
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          ORG: RincolTech-Solutions-ltd
+          PROJECT: "" # set once the bms-platform board exists; empty fails loudly rather than querying the wrong board
+          ESTIMATE_FIELD: "Estimate (h)"
+          ACTUAL_FIELD: "Actual (h)"
+          STRICT: "1"   # backlog fully typed + parented (2026-07-26); untyped/orphan now hard-fail
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::PROJECT_TOKEN secret is not set. Add a PAT with read:project + repo scope. See runbooks/estimate-guard.md."
+            exit 1
+          fi
+          python3 .github/scripts/estimate_guard.py
