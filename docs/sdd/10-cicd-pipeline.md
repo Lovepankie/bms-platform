@@ -140,3 +140,13 @@ allows 30 seconds; measured locally at under 10).
 - A registry retention policy for `sha-*` tags older than 90 days that no release references.
 - End-to-end browser tests against staging after each deploy (chapter 15 section 15.10).
 - Dependency and image vulnerability scanning (NFR-SEC-06) as a CI job.
+
+## 10.12 Claude cloud agent sessions
+
+Work can also run as a Claude Code session in Anthropic's cloud (runbook
+`docs/runbooks/cloud-agent-sessions.md`). Such a session is one more contributor: it
+works on a branch and opens a pull request, which goes through the same CI and review
+as any other. The cloud sandbox ships OpenJDK 21, so the SessionStart hook
+`.claude/hooks/cloud-setup.sh` installs Temurin 25 in cloud sessions only
+(`CLAUDE_CODE_REMOTE=true`) and exports `JAVA_HOME` for the session. Developer
+machines are unaffected.
