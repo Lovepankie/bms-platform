@@ -146,7 +146,8 @@ allows 30 seconds; measured locally at under 10).
 Work can also run as a Claude Code session in Anthropic's cloud (runbook
 `docs/runbooks/cloud-agent-sessions.md`). Such a session is one more contributor: it
 works on a branch and opens a pull request, which goes through the same CI and review
-as any other. The cloud sandbox ships OpenJDK 21, so the SessionStart hook
-`.claude/hooks/cloud-setup.sh` installs Temurin 25 in cloud sessions only
-(`CLAUDE_CODE_REMOTE=true`) and exports `JAVA_HOME` for the session. Developer
-machines are unaffected.
+as any other. The cloud sandbox ships OpenJDK 21 and its egress proxy blocks the usual
+JDK download sites, so the SessionStart hook `.claude/hooks/cloud-setup.sh` installs
+`openjdk-25-jdk-headless` from the Ubuntu archive in cloud sessions only
+(`CLAUDE_CODE_REMOTE=true`), exports `JAVA_HOME` for the session and starts the Docker
+daemon for the Testcontainers tests. Developer machines are unaffected.

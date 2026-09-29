@@ -1,35 +1,46 @@
 #!/usr/bin/env bash
-# SessionStart hook. In Claude cloud sessions only, make a Java 25 JDK available,
-# because the cloud sandbox ships OpenJDK 21 and ADR-010 requires Java 25.
-# On a developer machine it does nothing. It is idempotent: the JDK is downloaded
-# once per sandbox and reused.
-set -euo pipefail
+# SessionStart hook. In Claude cloud sessions only, prepare the toolchain the build needs:
+#   1. a Java 25 JDK (the sandbox ships OpenJDK 21; ADR-010 requires 25), from the Ubuntu
+#      archive, because the sandbox's egress policy blocks Adoptium, java.net and GitHub
+#      release downloads while the Ubuntu archive and Docker Hub are allowed;
+#   2. a running Docker daemon, so the Testcontainers integration tests can start PostgreSQL.
+# On a developer machine it does nothing. Every step is idempotent and never fails the
+# session: a problem is reported and the session continues.
+set -uo pipefail
 
 [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
 
-JDK_DIR="$HOME/.jdks/temurin-25"
+SUDO=""
+[ "$(id -u)" -eq 0 ] || SUDO="sudo -n"
 
-if [ ! -x "$JDK_DIR/bin/java" ]; then
-  case "$(uname -m)" in
-    x86_64) arch=x64 ;;
-    aarch64 | arm64) arch=aarch64 ;;
-    *) echo "cloud-setup: unsupported architecture $(uname -m)" >&2; exit 0 ;;
-  esac
-  mkdir -p "$JDK_DIR"
-  url="https://api.adoptium.net/v3/binary/latest/25/ga/linux/${arch}/jdk/hotspot/normal/eclipse"
-  if ! curl -fsSL --retry 3 "$url" | tar -xz -C "$JDK_DIR" --strip-components=1; then
-    echo "cloud-setup: JDK 25 download failed; the build will not compile on Java 21" >&2
-    rm -rf "$JDK_DIR"
-    exit 0
+jdk_home() { ls -d /usr/lib/jvm/java-25-openjdk-* 2>/dev/null | head -1; }
+
+if [ -z "$(jdk_home)" ]; then
+  # Some preinstalled PPAs return 403 under the egress policy; the Ubuntu archive still updates.
+  $SUDO apt-get update -qq >/dev/null 2>&1 || true
+  if ! $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openjdk-25-jdk-headless >/dev/null 2>&1; then
+    echo "cloud-setup: apt could not install openjdk-25-jdk-headless; the build will not compile on Java 21" >&2
   fi
 fi
 
-# Persist for every later command in this session.
-if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-  {
-    echo "export JAVA_HOME=\"$JDK_DIR\""
-    echo "export PATH=\"$JDK_DIR/bin:\$PATH\""
-  } >> "$CLAUDE_ENV_FILE"
+JAVA25="$(jdk_home)"
+if [ -n "$JAVA25" ]; then
+  if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+    {
+      echo "export JAVA_HOME=\"$JAVA25\""
+      echo "export PATH=\"$JAVA25/bin:\$PATH\""
+    } >> "$CLAUDE_ENV_FILE"
+  fi
+  echo "cloud-setup: $("$JAVA25/bin/java" -version 2>&1 | grep -m1 version) at $JAVA25"
 fi
 
-echo "cloud-setup: $("$JDK_DIR/bin/java" -version 2>&1 | head -1) at $JDK_DIR"
+if ! docker info >/dev/null 2>&1; then
+  ($SUDO dockerd >/tmp/dockerd.log 2>&1 &)
+  for _ in $(seq 1 15); do docker info >/dev/null 2>&1 && break; sleep 1; done
+fi
+if docker info >/dev/null 2>&1; then
+  echo "cloud-setup: docker daemon running"
+else
+  echo "cloud-setup: docker daemon not reachable; integration tests will fail (see /tmp/dockerd.log)" >&2
+fi
+exit 0

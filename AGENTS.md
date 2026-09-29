@@ -137,9 +137,10 @@ curl -s localhost:8080/api/v1/lending/members -H 'X-Tenant: demo' \
 For the Vite dev server, `cd frontend && npm install && npm run dev` with `VITE_DEV_TENANT=demo`
 in `frontend/.env.local` (the other `VITE_DEV_*` values are in `.env.example`).
 
-In a Claude cloud session, `.claude/hooks/cloud-setup.sh` installs JDK 25 at session start
-(the sandbox ships Java 21). If `java -version` still shows 21, run
-`bash .claude/hooks/cloud-setup.sh` and `export JAVA_HOME=$HOME/.jdks/temurin-25 PATH=$HOME/.jdks/temurin-25/bin:$PATH`.
+In a Claude cloud session, `.claude/hooks/cloud-setup.sh` installs JDK 25 (Ubuntu
+`openjdk-25-jdk-headless`) and starts Docker at session start (the sandbox ships Java 21).
+If `java -version` still shows 21, run `bash .claude/hooks/cloud-setup.sh` and
+`export JAVA_HOME=$(ls -d /usr/lib/jvm/java-25-openjdk-*) PATH=$JAVA_HOME/bin:$PATH`.
 See `docs/runbooks/cloud-agent-sessions.md`.
 
 ## Standing rules (hard)

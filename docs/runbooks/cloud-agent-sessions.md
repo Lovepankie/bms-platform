@@ -10,11 +10,12 @@ contributor. Nothing about the review, CI or merge rules changes.
 - A clone of this repository at the default branch.
 - Maven 3.9, Docker (so Testcontainers integration tests run), Node, 4 CPUs, about 15 GiB of memory.
 - OpenJDK 21 only. `.claude/hooks/cloud-setup.sh` runs at session start, detects a
-  cloud session (`CLAUDE_CODE_REMOTE=true`), downloads Eclipse Temurin 25 into
-  `~/.jdks/temurin-25` and exports `JAVA_HOME` and `PATH` for the rest of the session.
-  On a developer machine the hook does nothing.
-- Outbound network through a proxy. Anything the build downloads must be reachable
-  through it (Maven Central, the Adoptium API and GitHub releases are).
+  cloud session (`CLAUDE_CODE_REMOTE=true`), installs `openjdk-25-jdk-headless` from the
+  Ubuntu archive, exports `JAVA_HOME` and `PATH` for the rest of the session, and starts
+  the Docker daemon for Testcontainers. On a developer machine the hook does nothing.
+- Outbound network through an egress proxy with an allow list. Verified 2026-09-29:
+  allowed are Maven Central, the Ubuntu archive, Docker Hub, npm and git access to this
+  repository; blocked are Adoptium, download.java.net and GitHub release downloads.
 
 ## Writing a task for a cloud session
 
