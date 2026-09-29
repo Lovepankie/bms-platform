@@ -16,6 +16,15 @@
 	header /sw.js Cache-Control "no-cache"
 	header /index.html Cache-Control "no-cache"
 
+	# Runtime host configuration (ADR-018): the same image serves staging and production, so the
+	# PWA reads the hosts from the container's environment instead of from its build. When the
+	# variables are unset (local development) the PWA falls back to {slug}.localhost and localhost.
+	handle /app-config.json {
+		header Content-Type application/json
+		header Cache-Control "no-cache"
+		respond `{"tenantHostPattern":"{$BMS_TENANT_HOST_PATTERN}","platformHost":"{$BMS_PLATFORM_HOST}"}` 200
+	}
+
 	# Single-page app: unknown paths serve index.html and the router takes over.
 	try_files {path} /index.html
 	file_server

@@ -1,0 +1,41 @@
+# Internal origin on the ARM64 staging host (ADR-018, docs/sdd/09-infrastructure-design.md
+# section 9.12). cloudflared terminates nothing here: TLS ends at Cloudflare's edge, and the tunnel
+# delivers plain HTTP to this server on the host's private Docker network. No port is published.
+# Same routing as Caddyfile; the API resolves the tenant from the Host header, which cloudflared
+# and Caddy pass through unchanged. Environment: none.
+{
+	admin off
+	auto_https off
+	servers {
+		# cloudflared is the only client, on the private Docker network; it sends the visitor's
+		# address in Cf-Connecting-Ip.
+		trusted_proxies static private_ranges
+		client_ip_headers Cf-Connecting-Ip X-Forwarded-For
+	}
+}
+
+:8080 {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		Permissions-Policy "camera=(self), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+	encode zstd gzip
+
+	# Uploads are 5 MB at most (chapter 8 section 8.8); a little headroom for multipart framing.
+	request_body {
+		max_size 6MB
+	}
+
+	@backend path /api/* /healthz /readyz /version
+	handle @backend {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		reverse_proxy web:8080
+	}
+}

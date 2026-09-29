@@ -1,8 +1,11 @@
+import { useQuery } from '@tanstack/react-query';
 import { Link, Outlet, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
+import { classifyHost, loadHostConfig } from './hosts';
 
 // Route-level split (ADR-009): /staff and /member are separate lazily loaded route trees, so a
 // member never downloads staff code; sign-in and invitation acceptance are small chunks of their
-// own. The platform console (/platform on app.<base domain>) joins as a further tree when built.
+// own. The platform console (on the platform host, BMS_PLATFORM_HOST) joins as a further tree
+// when built; until then its host shows a placeholder.
 
 function RootLayout() {
   return (
@@ -13,6 +16,28 @@ function RootLayout() {
 }
 
 function AreaChooser() {
+  // The host decides the area (ADR-018). The Vite dev server's X-Tenant slug counts as a tenant host.
+  const hosts = useQuery({ queryKey: ['app-config'], queryFn: loadHostConfig, staleTime: Infinity });
+  if (!hosts.data) return null;
+  const area = import.meta.env.DEV && import.meta.env.VITE_DEV_TENANT
+    ? { kind: 'tenant' as const }
+    : classifyHost(window.location.hostname, hosts.data);
+  if (area.kind === 'platform') {
+    return (
+      <main>
+        <h1>BMS Platform console</h1>
+        <p>The platform console is not built yet. Tenants sign in at their own address.</p>
+      </main>
+    );
+  }
+  if (area.kind === 'unknown') {
+    return (
+      <main>
+        <h1>BMS Platform</h1>
+        <p>No BMS tenant is served at this address. Check the address you were given.</p>
+      </main>
+    );
+  }
   return (
     <main>
       <h1>BMS Platform</h1>
