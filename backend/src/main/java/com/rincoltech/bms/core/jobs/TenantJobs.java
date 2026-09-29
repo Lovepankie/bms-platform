@@ -13,4 +13,11 @@ public interface TenantJobs {
 
     /** @return the number of tenants the work ran for */
     int forEachActiveTenant(String jobName, Consumer<UUID> work);
+
+    /**
+     * As {@link #forEachActiveTenant}, for a vertical's job: only active tenants that have the
+     * module switched on (FR-TEN-03). A tenant with the module disabled keeps its data and is
+     * skipped.
+     */
+    int forEachActiveTenantWithModule(String jobName, String moduleKey, Consumer<UUID> work);
 }

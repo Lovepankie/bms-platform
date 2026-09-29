@@ -91,6 +91,8 @@ jobs:
           BMS_BASE_DOMAIN: bms.example
           ACME_EMAIL: ops@bms.example
           CLOUDFLARE_API_TOKEN: ci-placeholder
+          BMS_TOKEN_SIGNING_JWK: ci-placeholder
+          BMS_DATA_KEY: ci-placeholder
         run: |
           docker compose -f deploy/compose.yml config --quiet
           docker compose -f docker-compose.yml config --quiet

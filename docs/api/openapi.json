@@ -1,6 +1,272 @@
 {
   "components" : {
     "schemas" : {
+      "AcceptInvitationRequest" : {
+        "properties" : {
+          "password" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "token" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "password", "token" ]
+      },
+      "Approval" : {
+        "properties" : {
+          "action_type" : {
+            "type" : "string"
+          },
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "can_cancel" : {
+            "type" : "boolean"
+          },
+          "can_decide" : {
+            "type" : "boolean"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "decided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decided_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "decision_note" : {
+            "type" : "string"
+          },
+          "execution_error" : {
+            "type" : "string"
+          },
+          "expires_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "payload" : {
+            "additionalProperties" : {
+              "description" : "The snapshot executed on approval; detail only (FR-APR-08)",
+              "type" : "object"
+            },
+            "description" : "The snapshot executed on approval; detail only (FR-APR-08)",
+            "type" : "object"
+          },
+          "requested_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requested_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "requested_by_name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "pending, approved, rejected, cancelled, expired or stale",
+            "type" : "string"
+          },
+          "subject_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "subject_type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ApprovalDecisionRequest" : {
+        "properties" : {
+          "note" : {
+            "description" : "Required to reject",
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
+      "ApprovalPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Approval"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AuditEvent" : {
+        "description" : "Identifiers in data are masked (FR-AUD-05)",
+        "properties" : {
+          "action" : {
+            "type" : "string"
+          },
+          "actor_kind" : {
+            "type" : "string"
+          },
+          "actor_user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "data" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          },
+          "entity_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "entity_type" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "request_id" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AuditEventPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AuditEvent"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AuditExportRequest" : {
+        "description" : "The same filters as the search",
+        "properties" : {
+          "action" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "actor_user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "entity_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "entity_type" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "to" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
+      "Branch" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "is_head_office" : {
+            "type" : "boolean"
+          },
+          "location" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "updated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "BranchList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Branch"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "CreateBranchRequest" : {
+        "properties" : {
+          "code" : {
+            "minLength" : 1,
+            "pattern" : "^[A-Z0-9]{2,10}$",
+            "type" : "string"
+          },
+          "location" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "name" ]
+      },
       "CreateMemberRequest" : {
         "properties" : {
           "alt_phone" : {
@@ -101,6 +367,237 @@
           }
         },
         "required" : [ "branch_id", "full_name", "id_type", "phone" ]
+      },
+      "CreateTenantRequest" : {
+        "properties" : {
+          "admin" : {
+            "$ref" : "#/components/schemas/FirstAdminRequest"
+          },
+          "currency" : {
+            "description" : "Default UGX",
+            "pattern" : "^[A-Z]{3}$",
+            "type" : "string"
+          },
+          "head_office" : {
+            "$ref" : "#/components/schemas/HeadOfficeRequest"
+          },
+          "modules" : {
+            "items" : {
+              "pattern" : "^[a-z]{2,30}$",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "plan_code" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "slug" : {
+            "description" : "FR-TEN-02 rules; cannot change later",
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "timezone" : {
+            "description" : "Default Africa/Kampala",
+            "type" : "string"
+          }
+        },
+        "required" : [ "admin", "head_office", "name", "plan_code", "slug" ]
+      },
+      "CreatedTenant" : {
+        "properties" : {
+          "admin_invitation" : {
+            "$ref" : "#/components/schemas/FirstAdminInvitation"
+          },
+          "head_office_branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenant" : {
+            "$ref" : "#/components/schemas/PlatformTenant"
+          }
+        }
+      },
+      "FirstAdminInvitation" : {
+        "description" : "Shown once to the operator, and sent to the admin",
+        "properties" : {
+          "expires_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          },
+          "user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "FirstAdminRequest" : {
+        "description" : "Email or phone (or both) is required",
+        "properties" : {
+          "email" : {
+            "format" : "email",
+            "maxLength" : 320,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "full_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "phone" : {
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "full_name" ]
+      },
+      "HeadOfficeRequest" : {
+        "properties" : {
+          "code" : {
+            "minLength" : 1,
+            "pattern" : "^[A-Z0-9]{2,10}$",
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "name" ]
+      },
+      "InvitationLink" : {
+        "properties" : {
+          "expires_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        }
+      },
+      "InviteUserRequest" : {
+        "description" : "Email or phone (or both) is required (FR-IAM-01)",
+        "properties" : {
+          "email" : {
+            "format" : "email",
+            "maxLength" : 320,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "full_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "phone" : {
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "roles" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RoleAssignmentRequest"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "required" : [ "full_name", "roles" ]
+      },
+      "InvitedUser" : {
+        "properties" : {
+          "invitation" : {
+            "$ref" : "#/components/schemas/InvitationLink"
+          },
+          "user" : {
+            "$ref" : "#/components/schemas/User"
+          }
+        }
+      },
+      "Me" : {
+        "properties" : {
+          "all_branches" : {
+            "type" : "boolean"
+          },
+          "branches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MeBranch"
+            },
+            "type" : "array"
+          },
+          "default_branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "email" : {
+            "type" : "string"
+          },
+          "full_name" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "mfa_enabled" : {
+            "type" : "boolean"
+          },
+          "mfa_required" : {
+            "type" : "boolean"
+          },
+          "permissions" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "phone_e164" : {
+            "type" : "string"
+          },
+          "roles" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RoleAssignment"
+            },
+            "type" : "array"
+          },
+          "unused_recovery_codes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "MeBranch" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "is_head_office" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
       },
       "Member" : {
         "properties" : {
@@ -249,6 +746,543 @@
             "type" : "string"
           }
         }
+      },
+      "MfaConfirmRequest" : {
+        "properties" : {
+          "code" : {
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "mfa_token" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "code" ]
+      },
+      "MfaEnrolRequest" : {
+        "description" : "mfa_token when enrolment is forced at sign-in; empty when signed in",
+        "properties" : {
+          "mfa_token" : {
+            "type" : "string"
+          }
+        }
+      },
+      "MfaEnrolment" : {
+        "properties" : {
+          "otpauth_uri" : {
+            "description" : "otpauth URI for a QR code; shown once",
+            "type" : "string"
+          },
+          "secret" : {
+            "description" : "Base32 secret for manual entry; shown once",
+            "type" : "string"
+          }
+        }
+      },
+      "MfaVerifyRequest" : {
+        "properties" : {
+          "code" : {
+            "description" : "A 6 digit TOTP code or a recovery code",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "mfa_token" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "mfa_token" ]
+      },
+      "Plan" : {
+        "description" : "Limits only; prices are not stored in this repository",
+        "properties" : {
+          "allowed_modules" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "max_active_members" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "max_branches" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "max_staff_users" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PlanList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Plan"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "PlatformMe" : {
+        "properties" : {
+          "email" : {
+            "type" : "string"
+          },
+          "full_name" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "permissions" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "PlatformTenant" : {
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "modules" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "next_status_change_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "plan_code" : {
+            "type" : "string"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "active or suspended (read only, FR-TEN-06)",
+            "type" : "string"
+          },
+          "subscription_status" : {
+            "type" : "string"
+          },
+          "timezone" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PlatformTenantList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlatformTenant"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RecoveryCodes" : {
+        "properties" : {
+          "recovery_codes" : {
+            "description" : "Shown once; each works once",
+            "items" : {
+              "description" : "Shown once; each works once",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RecoveryCodesRequest" : {
+        "properties" : {
+          "code" : {
+            "description" : "A current TOTP code",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code" ]
+      },
+      "Role" : {
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "mfa_required" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "permissions" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RoleAssignment" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "role_key" : {
+            "type" : "string"
+          },
+          "role_name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RoleAssignmentRequest" : {
+        "description" : "branch_id null means every branch",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "role_key" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "role_key" ]
+      },
+      "RoleCatalogue" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Role"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "SignInRequest" : {
+        "properties" : {
+          "login" : {
+            "description" : "Email, or phone for staff",
+            "maxLength" : 320,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "password" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "login", "password" ]
+      },
+      "SignInResponse" : {
+        "properties" : {
+          "access_token" : {
+            "type" : "string"
+          },
+          "expires_in" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "mfa_enrolment_required" : {
+            "type" : "boolean"
+          },
+          "mfa_required" : {
+            "type" : "boolean"
+          },
+          "mfa_token" : {
+            "type" : "string"
+          },
+          "recovery_codes" : {
+            "description" : "Present once, right after MFA enrolment (FR-IAM-11)",
+            "items" : {
+              "description" : "Present once, right after MFA enrolment (FR-IAM-11)",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "token_type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SubscriptionStatusRequest" : {
+        "properties" : {
+          "next_status_change_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "status" : {
+            "minLength" : 1,
+            "pattern" : "trial|active|past_due|suspended|cancelled",
+            "type" : "string"
+          }
+        },
+        "required" : [ "status" ]
+      },
+      "TenantModulesRequest" : {
+        "properties" : {
+          "modules" : {
+            "items" : {
+              "pattern" : "^[a-z]{2,30}$",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "modules" ]
+      },
+      "TenantSettings" : {
+        "properties" : {
+          "allow_loans_before_kyc_verified" : {
+            "type" : "boolean"
+          },
+          "appraisal_weights" : {
+            "additionalProperties" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "approval_thresholds_minor" : {
+            "additionalProperties" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "approval_validity_days" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "disabled_collateral_types" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "display_name" : {
+            "type" : "string"
+          },
+          "max_active_loans_per_member" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "receipt_footer" : {
+            "type" : "string"
+          },
+          "require_mfa_all_staff" : {
+            "type" : "boolean"
+          },
+          "sms_sender_name" : {
+            "type" : "string"
+          },
+          "sms_window_end" : {
+            "type" : "string"
+          },
+          "sms_window_start" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "UpdateBranchRequest" : {
+        "description" : "Omitted fields are unchanged. The code never changes.",
+        "properties" : {
+          "location" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        }
+      },
+      "UpdateTenantSettingsRequest" : {
+        "properties" : {
+          "allow_loans_before_kyc_verified" : {
+            "type" : "boolean"
+          },
+          "appraisal_weights" : {
+            "additionalProperties" : {
+              "description" : "repayment_history, affordability, collateral_cover, exposure; summing to 100",
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "description" : "repayment_history, affordability, collateral_cover, exposure; summing to 100",
+            "type" : "object"
+          },
+          "approval_thresholds_minor" : {
+            "additionalProperties" : {
+              "description" : "Action type to amount in minor units; below it no checker is needed (FR-APR-04)",
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "description" : "Action type to amount in minor units; below it no checker is needed (FR-APR-04)",
+            "type" : "object"
+          },
+          "approval_validity_days" : {
+            "format" : "int32",
+            "maximum" : 90,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "disabled_collateral_types" : {
+            "items" : {
+              "pattern" : "^[a-z_]{2,40}$",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "display_name" : {
+            "maxLength" : 100,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "max_active_loans_per_member" : {
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "receipt_footer" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "require_mfa_all_staff" : {
+            "type" : "boolean"
+          },
+          "sms_sender_name" : {
+            "description" : "Subject to aggregator approval",
+            "pattern" : "^[A-Za-z0-9 ]{3,11}$",
+            "type" : "string"
+          },
+          "sms_window_end" : {
+            "pattern" : "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+            "type" : "string"
+          },
+          "sms_window_start" : {
+            "pattern" : "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+            "type" : "string"
+          }
+        }
+      },
+      "UpdateUserRequest" : {
+        "description" : "Omitted fields are unchanged",
+        "properties" : {
+          "email" : {
+            "format" : "email",
+            "maxLength" : 320,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "full_name" : {
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "phone" : {
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
+      "User" : {
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "email" : {
+            "type" : "string"
+          },
+          "full_name" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "last_login_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "mfa_enabled" : {
+            "type" : "boolean"
+          },
+          "phone_e164" : {
+            "type" : "string"
+          },
+          "roles" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RoleAssignment"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "UserPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/User"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
       }
     }
   },
@@ -258,6 +1292,663 @@
   },
   "openapi" : "3.1.0",
   "paths" : {
+    "/api/v1/approvals" : {
+      "get" : {
+        "operationId" : "listApprovals",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "action_type",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApprovalPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Requests the caller may decide or made (FR-APR-05)",
+        "tags" : [ "approvals" ]
+      }
+    },
+    "/api/v1/approvals/{approval_id}" : {
+      "get" : {
+        "operationId" : "getApproval",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "approval_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Approval"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One request with its payload snapshot",
+        "tags" : [ "approvals" ]
+      }
+    },
+    "/api/v1/approvals/{approval_id}/approve" : {
+      "post" : {
+        "operationId" : "approveApproval",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "approval_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApprovalDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Approval"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Approve and execute in the same transaction (FR-APR-02, FR-APR-06, FR-APR-08)",
+        "tags" : [ "approvals" ]
+      }
+    },
+    "/api/v1/approvals/{approval_id}/cancel" : {
+      "post" : {
+        "operationId" : "cancelApproval",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "approval_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Approval"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The maker cancels their own pending request (FR-APR-07)",
+        "tags" : [ "approvals" ]
+      }
+    },
+    "/api/v1/approvals/{approval_id}/reject" : {
+      "post" : {
+        "operationId" : "rejectApproval",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "approval_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApprovalDecisionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Approval"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reject with a required note (FR-APR-06)",
+        "tags" : [ "approvals" ]
+      }
+    },
+    "/api/v1/audit-events" : {
+      "get" : {
+        "operationId" : "searchAuditEvents",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "actor_user_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "entity_type",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "entity_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "action",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuditEventPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Search the audit log in the caller's branch scope (FR-AUD-04)",
+        "tags" : [ "audit" ]
+      }
+    },
+    "/api/v1/audit-events/export" : {
+      "post" : {
+        "operationId" : "exportAuditEvents",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AuditExportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/csv" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Export matching events as CSV, at most 10,000 rows; the export is audited (FR-AUD-04)",
+        "tags" : [ "audit" ]
+      }
+    },
+    "/api/v1/auth/logout" : {
+      "post" : {
+        "operationId" : "logout",
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sign out: revokes the session family (FR-IAM-07)",
+        "tags" : [ "auth" ]
+      }
+    },
+    "/api/v1/auth/refresh" : {
+      "post" : {
+        "operationId" : "refreshSession",
+        "parameters" : [ {
+          "in" : "cookie",
+          "name" : "bms_rt",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rotate the refresh token in the bms_rt cookie (FR-IAM-07)",
+        "tags" : [ "auth" ]
+      }
+    },
+    "/api/v1/auth/staff/invitations/accept" : {
+      "post" : {
+        "operationId" : "acceptInvitation",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AcceptInvitationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set a password with the one-time invitation token (FR-IAM-01)",
+        "tags" : [ "auth" ]
+      }
+    },
+    "/api/v1/auth/staff/login" : {
+      "post" : {
+        "operationId" : "staffLogin",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SignInRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sign in with email or phone and password (FR-IAM-04, FR-IAM-05)",
+        "tags" : [ "auth" ]
+      }
+    },
+    "/api/v1/auth/staff/mfa/confirm" : {
+      "post" : {
+        "operationId" : "staffMfaConfirm",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MfaConfirmRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Confirm TOTP enrolment; returns recovery codes once, and tokens when enrolment was forced",
+        "tags" : [ "auth" ]
+      }
+    },
+    "/api/v1/auth/staff/mfa/enrol" : {
+      "post" : {
+        "operationId" : "staffMfaEnrol",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MfaEnrolRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MfaEnrolment"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Start TOTP enrolment; returns the secret once (FR-IAM-06)",
+        "tags" : [ "auth" ]
+      }
+    },
+    "/api/v1/auth/staff/mfa/recovery-codes" : {
+      "post" : {
+        "operationId" : "staffRecoveryCodes",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RecoveryCodesRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecoveryCodes"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace the recovery codes; returns the new ones once (FR-IAM-11)",
+        "tags" : [ "auth" ]
+      }
+    },
+    "/api/v1/auth/staff/mfa/verify" : {
+      "post" : {
+        "operationId" : "staffMfaVerify",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MfaVerifyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Second factor: TOTP or recovery code (FR-IAM-06, FR-IAM-11)",
+        "tags" : [ "auth" ]
+      }
+    },
+    "/api/v1/branches" : {
+      "get" : {
+        "operationId" : "listBranches",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BranchList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Branches in the caller's scope (FR-BR-04)",
+        "tags" : [ "branches" ]
+      },
+      "post" : {
+        "operationId" : "createBranch",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateBranchRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Create a branch (FR-BR-01, FR-TEN-04)",
+        "tags" : [ "branches" ]
+      }
+    },
+    "/api/v1/branches/{branch_id}" : {
+      "get" : {
+        "operationId" : "getBranch",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "branch_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Get one branch",
+        "tags" : [ "branches" ]
+      },
+      "patch" : {
+        "operationId" : "updateBranch",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "branch_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateBranchRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rename a branch or change its location (FR-BR-01)",
+        "tags" : [ "branches" ]
+      }
+    },
+    "/api/v1/branches/{branch_id}/deactivate" : {
+      "post" : {
+        "operationId" : "deactivateBranch",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "branch_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Deactivate a branch (FR-BR-01)",
+        "tags" : [ "branches" ]
+      }
+    },
     "/api/v1/lending/members" : {
       "get" : {
         "operationId" : "listMembers",
@@ -374,6 +2065,816 @@
         },
         "summary" : "Get one member",
         "tags" : [ "lending-members" ]
+      }
+    },
+    "/api/v1/me" : {
+      "get" : {
+        "operationId" : "getMe",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Me"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The signed-in user, permissions and branches (FR-BR-03)",
+        "tags" : [ "users" ]
+      }
+    },
+    "/api/v1/platform/auth/login" : {
+      "post" : {
+        "operationId" : "platformLogin",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SignInRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Platform sign-in, first factor",
+        "tags" : [ "platform-auth" ]
+      }
+    },
+    "/api/v1/platform/auth/logout" : {
+      "post" : {
+        "operationId" : "platformLogout",
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Platform sign-out",
+        "tags" : [ "platform-auth" ]
+      }
+    },
+    "/api/v1/platform/auth/mfa/confirm" : {
+      "post" : {
+        "operationId" : "platformMfaConfirm",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MfaConfirmRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Confirm TOTP enrolment and sign in",
+        "tags" : [ "platform-auth" ]
+      }
+    },
+    "/api/v1/platform/auth/mfa/enrol" : {
+      "post" : {
+        "operationId" : "platformMfaEnrol",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MfaEnrolRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MfaEnrolment"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Start the mandatory TOTP enrolment with the MFA token",
+        "tags" : [ "platform-auth" ]
+      }
+    },
+    "/api/v1/platform/auth/mfa/verify" : {
+      "post" : {
+        "operationId" : "platformMfaVerify",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MfaVerifyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Platform sign-in, second factor",
+        "tags" : [ "platform-auth" ]
+      }
+    },
+    "/api/v1/platform/auth/refresh" : {
+      "post" : {
+        "operationId" : "platformRefresh",
+        "parameters" : [ {
+          "in" : "cookie",
+          "name" : "bms_prt",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rotate the platform refresh token",
+        "tags" : [ "platform-auth" ]
+      }
+    },
+    "/api/v1/platform/auth/setup" : {
+      "post" : {
+        "operationId" : "platformSetup",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AcceptInvitationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set the first password with the one-time setup token",
+        "tags" : [ "platform-auth" ]
+      }
+    },
+    "/api/v1/platform/me" : {
+      "get" : {
+        "operationId" : "platformMe",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformMe"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The signed-in platform operator",
+        "tags" : [ "platform-auth" ]
+      }
+    },
+    "/api/v1/platform/plans" : {
+      "get" : {
+        "operationId" : "platformListPlans",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlanList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Plans with their limits (FR-TEN-04)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants" : {
+      "get" : {
+        "operationId" : "platformListTenants",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformTenantList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every tenant",
+        "tags" : [ "platform" ]
+      },
+      "post" : {
+        "operationId" : "platformCreateTenant",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateTenantRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CreatedTenant"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Create a tenant with head office, modules and an invited first admin (FR-TEN-01)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}" : {
+      "get" : {
+        "operationId" : "platformGetTenant",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformTenant"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One tenant",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/modules" : {
+      "put" : {
+        "operationId" : "platformSetModules",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TenantModulesRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformTenant"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Switch modules on or off; data is kept (FR-TEN-03)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/resume" : {
+      "post" : {
+        "operationId" : "platformResumeTenant",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformTenant"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Resume a suspended tenant (FR-TEN-06)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/subscription" : {
+      "post" : {
+        "operationId" : "platformSetSubscription",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SubscriptionStatusRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformTenant"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Move the subscription status (FR-TEN-05)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/suspend" : {
+      "post" : {
+        "operationId" : "platformSuspendTenant",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformTenant"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Suspend: the tenant becomes read only (FR-TEN-06)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/users/{user_id}/mfa/reset" : {
+      "post" : {
+        "operationId" : "platformResetAdminMfa",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reset the lost second factor of a tenant admin (FR-IAM-12)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/roles" : {
+      "get" : {
+        "operationId" : "listRoles",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RoleCatalogue"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The fixed role catalogue with permissions (FR-IAM-02)",
+        "tags" : [ "users" ]
+      }
+    },
+    "/api/v1/settings" : {
+      "get" : {
+        "operationId" : "getSettings",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Tenant settings",
+        "tags" : [ "settings" ]
+      },
+      "patch" : {
+        "operationId" : "updateSettings",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateTenantSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change tenant settings, audited with before and after (FR-TEN-08)",
+        "tags" : [ "settings" ]
+      }
+    },
+    "/api/v1/users" : {
+      "get" : {
+        "operationId" : "listUsers",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UserPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Staff users with their roles",
+        "tags" : [ "users" ]
+      },
+      "post" : {
+        "operationId" : "inviteUser",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InviteUserRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvitedUser"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Invite a staff user; the one-time link is returned once to the inviting admin (FR-IAM-01)",
+        "tags" : [ "users" ]
+      }
+    },
+    "/api/v1/users/{user_id}" : {
+      "get" : {
+        "operationId" : "getUser",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/User"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Get one staff user",
+        "tags" : [ "users" ]
+      },
+      "patch" : {
+        "operationId" : "updateUser",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateUserRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/User"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change a staff user's name or contact",
+        "tags" : [ "users" ]
+      }
+    },
+    "/api/v1/users/{user_id}/deactivate" : {
+      "post" : {
+        "operationId" : "deactivateUser",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/User"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Deactivate a user and revoke every session (FR-IAM-08)",
+        "tags" : [ "users" ]
+      }
+    },
+    "/api/v1/users/{user_id}/invitation" : {
+      "post" : {
+        "operationId" : "reissueInvitation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvitationLink"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Issue a new invitation link to a user still invited (FR-IAM-01)",
+        "tags" : [ "users" ]
+      }
+    },
+    "/api/v1/users/{user_id}/mfa/reset" : {
+      "post" : {
+        "operationId" : "resetUserMfa",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/User"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reset another user's lost second factor (FR-IAM-12)",
+        "tags" : [ "users" ]
+      }
+    },
+    "/api/v1/users/{user_id}/roles" : {
+      "put" : {
+        "operationId" : "setUserRoles",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "items" : {
+                  "$ref" : "#/components/schemas/RoleAssignmentRequest"
+                },
+                "type" : "array"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/User"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace a user's roles and branch scopes (FR-IAM-01)",
+        "tags" : [ "users" ]
       }
     },
     "/version" : {

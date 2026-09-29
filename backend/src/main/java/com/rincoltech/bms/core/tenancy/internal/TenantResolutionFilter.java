@@ -24,7 +24,10 @@ import tools.jackson.databind.ObjectMapper;
 class TenantResolutionFilter extends OncePerRequestFilter {
 
     static final String TENANT_HEADER = "X-Tenant";
-    private static final Pattern SLUG = Pattern.compile("^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])$");
+    /** Request attribute holding the resolved tenant's status, {@code active} or {@code suspended}. */
+    static final String STATUS_ATTRIBUTE = "bms.tenant.status";
+
+    static final Pattern SLUG = Pattern.compile("^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])$");
 
     private final TenancyProperties properties;
     private final JdbcClient jdbc;
@@ -39,16 +42,19 @@ class TenantResolutionFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        // Tenant-free paths: health, version and the contract document. The platform console
-        // (/api/v1/platform, on app.<base domain>) will get its own resolution when it lands.
-        return !path.startsWith("/api/v1/") || path.startsWith("/api/v1/openapi.json");
+        // Tenant-free paths: health, version, the contract document and the platform API
+        // (/api/v1/platform, served on app.<base domain>, which resolves no tenant).
+        return !path.startsWith("/api/v1/")
+                || path.startsWith("/api/v1/openapi.json")
+                || path.equals("/api/v1/platform")
+                || path.startsWith("/api/v1/platform/");
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        Optional<UUID> tenantId = slugFrom(request).flatMap(this::resolve);
-        if (tenantId.isEmpty()) {
+        Optional<Resolved> tenant = slugFrom(request).flatMap(this::resolve);
+        if (tenant.isEmpty()) {
             Problems.write(
                     response,
                     mapper,
@@ -59,7 +65,8 @@ class TenantResolutionFilter extends OncePerRequestFilter {
                             "No active tenant is served at this address."));
             return;
         }
-        TenantContext.bind(tenantId.get());
+        TenantContext.bind(tenant.get().id());
+        request.setAttribute(STATUS_ATTRIBUTE, tenant.get().status());
         try {
             chain.doFilter(request, response);
         } finally {
@@ -99,12 +106,15 @@ class TenantResolutionFilter extends OncePerRequestFilter {
         return Optional.of(label);
     }
 
-    private Optional<UUID> resolve(String slug) {
-        // app_resolve_tenant is the SECURITY DEFINER function of chapter 6 section 6.3.2: it
-        // returns the id of an active tenant with this slug, or NULL, and nothing else.
-        return jdbc.sql("SELECT app_resolve_tenant(?)")
+    private Optional<Resolved> resolve(String slug) {
+        // app_resolve_tenant_status is a SECURITY DEFINER function of chapter 6 section 6.3.2: it
+        // returns the id and status of an active or suspended tenant with this slug, and nothing
+        // else. A suspended tenant is served read only (FR-TEN-06).
+        return jdbc.sql("SELECT id, status FROM app_resolve_tenant_status(?)")
                 .param(slug)
-                .query(UUID.class)
+                .query((rs, n) -> new Resolved(rs.getObject("id", UUID.class), rs.getString("status")))
                 .optional();
     }
+
+    private record Resolved(UUID id, String status) {}
 }

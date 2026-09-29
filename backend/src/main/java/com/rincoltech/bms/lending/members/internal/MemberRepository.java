@@ -85,6 +85,12 @@ class MemberRepository {
                 .optional();
     }
 
+    long countActive() {
+        return jdbc.sql("SELECT count(*) FROM lending_members WHERE status = 'active'")
+                .query(Long.class)
+                .single();
+    }
+
     Optional<String> memberNoByNationalId(String nationalId) {
         return jdbc.sql("SELECT member_no FROM lending_members WHERE national_id = ?")
                 .param(nationalId)

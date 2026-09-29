@@ -17,11 +17,17 @@ dev:
 down:
 	$(COMPOSE) down
 
-## Fabricated demo tenant with a head office and the lending chart of accounts (idempotent).
+## Fabricated demo tenant with a head office and the lending chart of accounts, an invited tenant
+## admin (the link is printed) and a platform operator (the setup token is printed). Idempotent.
 seed:
 	$(COMPOSE) exec -T postgres psql -v ON_ERROR_STOP=1 -U bms_owner -d bms \
 		-v slug=$(SEED_SLUG) -v name='Demo Lender (fabricated)' -v plan=starter -v currency=UGX \
 		-v branch_code=HQ -v branch_name='Head Office' -v lending=true -f - < deploy/sql/create-tenant.sql
+	$(COMPOSE) exec -T postgres psql -v ON_ERROR_STOP=1 -U bms_owner -d bms \
+		-v slug=$(SEED_SLUG) -v email=owner@$(SEED_SLUG).example.test -v name='Test Owner (fabricated)' \
+		-v origin=http://$(SEED_SLUG).localhost:8000 -f - < deploy/sql/invite-tenant-admin.sql
+	$(COMPOSE) exec -T postgres psql -v ON_ERROR_STOP=1 -U bms_owner -d bms \
+		-v email=operator@example.test -v name='Test Operator (fabricated)' -f - < deploy/sql/create-platform-user.sql
 
 ## Apply migrations to the local database (the same one-shot command the servers run).
 migrate:

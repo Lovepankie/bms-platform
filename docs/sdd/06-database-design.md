@@ -82,7 +82,7 @@ updatable column, granted by column.
 |---|---|---|---|
 | `bms_owner` | yes | Migrations, backup (`pg_dump`), restore, onboarding scripts | `NOSUPERUSER BYPASSRLS`. Owns the database, the schema, every table and function. `BYPASSRLS` is required because every table is `FORCE ROW LEVEL SECURITY`: without it `pg_dump` and the `SECURITY DEFINER` resolvers would be filtered by the policy too. Never used by the running API or worker. |
 | `bms_app` | yes | API and worker | `NOSUPERUSER NOBYPASSRLS`. DML per table as granted by migrations. Subject to RLS. |
-| `bms_platform` | yes | Platform console endpoints on `app.<base domain>` | Read and write on platform tables (6.4); no access to tenant-owned tables except through the audited support session path (FR-TEN-07). Created with the platform console; until then tenants are onboarded as `bms_owner` (`docs/runbooks/onboard-tenant.md`). |
+| `bms_platform` | yes | Platform console endpoints on `app.<base domain>` | Read and write on platform tables (6.4); no access to tenant-owned tables except through the audited support session path (FR-TEN-07). Not created yet: until it is, the platform console runs as `bms_app` and changes tenancy tables only through the platform `SECURITY DEFINER` functions of section 6.3.2 (ADR-016). |
 
 `bms_owner` and `bms_app` are created by `deploy/postgres/initdb/01-roles.sh` when the database
 volume is first initialised, on servers, in `make dev` and in the integration tests alike. The
@@ -134,7 +134,17 @@ CREATE FUNCTION app_resolve_tenant(p_slug text) RETURNS uuid ...;
 CREATE FUNCTION app_list_active_tenants() RETURNS SETOF uuid ...;
 ```
 
-A third, for gateway callbacks (chapter 12), returns only `(tenant_id, intent_id)` for a
+Migration V2 adds two more of the same kind: `app_resolve_tenant_status(slug)` returns the id and
+status of an active or suspended tenant, for request-time resolution (a suspended tenant is
+served read only, FR-TEN-06), and `app_list_active_tenants_with_module(module)` returns the
+active tenants with a module switched on, for a vertical's jobs (FR-TEN-03).
+
+The platform functions `platform_create_tenant`, `platform_set_tenant_modules`,
+`platform_set_subscription_status` and `platform_list_tenants` (also `SECURITY DEFINER`, owned by
+`bms_owner`) are the only way the application changes `tenants`, `tenant_modules` and
+`subscriptions`, which stay SELECT-only for `bms_app` (ADR-016).
+
+A third resolver, for gateway callbacks (chapter 12), returns only `(tenant_id, intent_id)` for a
 provider reference:
 
 ```sql
@@ -180,18 +190,35 @@ Prices are commercial and are not stored in this repository's seed data.
 | Table | Columns |
 |---|---|
 | `permissions` | `key text PK` (format `<module>.<resource>.<action>`, for example `lending.loans.approve`), `module text NOT NULL`, `description text NOT NULL`, `is_money_moving boolean NOT NULL` |
-| `roles` | `key text PK` [`tenant_admin`, `branch_manager`, `loan_officer`, `cashier`, `accountant`, `auditor`, `member`], `name text NOT NULL`, `kind text NOT NULL` [`staff`, `member`] |
+| `roles` | `key text PK` [`tenant_admin`, `branch_manager`, `loan_officer`, `cashier`, `accountant`, `auditor`, `member`], `name text NOT NULL`, `kind text NOT NULL` [`staff`, `member`], `mfa_required boolean NOT NULL DEFAULT false` (true for `tenant_admin`, FR-IAM-06) |
 | `role_permissions` | `role_key text FK roles`, `permission_key text FK permissions`, PK both |
 
-Seeded from the matrix in chapter 8. Custom tenant roles are `Later`.
+Seeded from the matrix in chapter 8 by migration V2, with the two platform permissions
+(`platform.tenants.read`, `platform.tenants.manage`) that no role holds. Custom tenant roles are
+`Later`.
 
-### `platform_users` (`bms_platform` only)
+### `platform_users` (`bms_platform` only; `bms_app` until then, ADR-016)
 
-`id uuid PK`, `email text UNIQUE NOT NULL`, `full_name text NOT NULL`,
-`password_hash text NOT NULL` (argon2id), `totp_secret_enc bytea NOT NULL` (encrypted with
-the platform key; MFA is mandatory), `is_active boolean`, `created_at`, `last_login_at`.
+`id uuid PK`, `email varchar(320) NOT NULL` (unique on `lower(email)`), `full_name text NOT NULL`,
+`password_hash text` (argon2id; NULL until the operator uses the setup token),
+`totp_secret_enc bytea` and `totp_pending_secret_enc bytea` (encrypted with the application data
+key; MFA is mandatory and enrolled at first sign-in), `totp_last_step bigint`,
+`mfa_enabled boolean NOT NULL DEFAULT false`, `is_active boolean NOT NULL DEFAULT true`,
+`failed_login_count integer NOT NULL DEFAULT 0`, `locked_until timestamptz`,
+`setup_token_hash char(64) UNIQUE`, `setup_token_expires_at timestamptz`, `created_at`,
+`updated_at`, `last_login_at`.
 
-### `platform_audit_log` (`bms_platform` INSERT and SELECT only, append-only)
+### `platform_sessions` and `platform_user_recovery_codes` (platform)
+
+`platform_sessions` has the columns of `auth_sessions` with `platform_user_id` in place of
+`tenant_id` and `user_id`. `platform_user_recovery_codes`: `id uuid PK`,
+`platform_user_id uuid NOT NULL` FK, `code_hash char(64) NOT NULL`, `used_at timestamptz`,
+`created_at`.
+
+Until the `bms_platform` role exists, `bms_app` holds the grants on the platform tables
+(`platform_audit_log`: SELECT and INSERT only) and no tenant endpoint reads them (ADR-016).
+
+### `platform_audit_log` (`bms_platform` INSERT and SELECT only, append-only; `bms_app` until then, ADR-016)
 
 `id uuid PK`, `occurred_at timestamptz`, `platform_user_id uuid`, `action text`,
 `tenant_id uuid NULL` (not a FK, survives tenant deletion), `data jsonb`, `request_id text`,
@@ -205,7 +232,7 @@ the platform key; MFA is mandatory), `is_active boolean`, `created_at`, `last_lo
 
 ## 6.5 Core tenant-owned tables
 
-### `tenants` (RLS on `id`; `bms_app` SELECT only; written by `bms_platform`)
+### `tenants` (RLS on `id`; `bms_app` SELECT only; written by the platform functions, ADR-016)
 
 | Column | Type | Notes |
 |---|---|---|
@@ -233,8 +260,9 @@ the platform key; MFA is mandatory), `is_active boolean`, `created_at`, `last_lo
 
 ### `tenant_settings` (RLS)
 
-(std) `settings jsonb NOT NULL`, `UNIQUE (tenant_id)`. The JSON is validated against a
-typed schema in the service. Keys and defaults:
+(std) `settings jsonb NOT NULL`, `UNIQUE (tenant_id)`. The JSON holds only the keys a tenant
+admin has set, validated against a typed schema in the service; every read applies the defaults
+below to the rest. A tenant without a row reads all defaults. Keys and defaults:
 
 | Key | Type | Default | Requirement |
 |---|---|---|---|
@@ -274,15 +302,25 @@ partial unique `(tenant_id, phone_e164) WHERE kind = 'member'`.
 
 `user_id uuid PK` (FK `(tenant_id, user_id)`), `tenant_id uuid NOT NULL`,
 `password_hash text` (argon2id; staff), `pin_hash text` (argon2id; members),
-`totp_secret_enc bytea` (encrypted with the application data key), `password_changed_at
-timestamptz`, `pin_failed_count integer NOT NULL DEFAULT 0`, `pin_locked_until
-timestamptz`, `updated_at`. Never returned by any endpoint.
+`totp_secret_enc bytea` (encrypted with the application data key),
+`totp_pending_secret_enc bytea` (issued by enrolment, not yet confirmed), `totp_last_step bigint`
+(a TOTP code is accepted once), `password_changed_at timestamptz`,
+`pin_failed_count integer NOT NULL DEFAULT 0`, `pin_locked_until timestamptz`, `updated_at`.
+Never returned by any endpoint.
+
+### `user_recovery_codes` (RLS)
+
+`id uuid PK`, `tenant_id`, `created_at`, `user_id uuid NOT NULL` (FK `(tenant_id, user_id)`),
+`code_hash char(64) NOT NULL` (SHA-256), `used_at timestamptz`. Ten per enrolment, single use;
+replaced as a set. FR-IAM-11.
 
 ### `user_invitations` (RLS)
 
 (std, no `version`) `user_id uuid NOT NULL`, `token_hash char(64) NOT NULL UNIQUE`
-(SHA-256 of the one-time token), `expires_at timestamptz NOT NULL`,
-`accepted_at timestamptz`, `invited_by uuid NOT NULL`.
+(SHA-256 of the one-time token), `expires_at timestamptz NOT NULL` (72 hours),
+`accepted_at timestamptz`, `revoked_at timestamptz` (a newer invitation replaced it),
+`invited_by uuid NOT NULL` (a staff user, or the platform operator who created the tenant; no
+foreign key).
 
 ### `auth_sessions` (RLS)
 
@@ -290,7 +328,9 @@ timestamptz`, `updated_at`. Never returned by any endpoint.
 `refresh_token_hash char(64) NOT NULL UNIQUE`, `expires_at timestamptz NOT NULL`,
 `idle_expires_at timestamptz NOT NULL`, `rotated_at timestamptz`,
 `revoked_at timestamptz`, `revoked_reason text` [`sign_out`, `rotation_reuse`,
-`user_deactivated`, `admin`], `ip inet`, `user_agent text`.
+`user_deactivated`, `admin`, `mfa_reset`], `ip inet`, `user_agent text`.
+One row per refresh token: a rotation marks the row `rotated_at` and inserts the next row of the
+same family; the access token's `sid` is the row id.
 Index `(tenant_id, user_id) WHERE revoked_at IS NULL`. FR-IAM-07, FR-IAM-08.
 
 ### `otp_challenges` (RLS)
@@ -304,7 +344,7 @@ Index `(tenant_id, user_id) WHERE revoked_at IS NULL`. FR-IAM-07, FR-IAM-08.
 
 (std) `user_id uuid NOT NULL`, `role_key text NOT NULL` (FK `roles`),
 `branch_id uuid` (NULL = all branches of the tenant), `granted_by uuid NOT NULL`,
-`revoked_at timestamptz`.
+`revoked_at timestamptz`, `revoked_by uuid`.
 Partial unique `(tenant_id, user_id, role_key, coalesce(branch_id, '00000000-0000-0000-0000-000000000000'::uuid)) WHERE revoked_at IS NULL`.
 
 ### `audit_log` (RLS, append-only)
@@ -331,7 +371,7 @@ Indexes: `(tenant_id, created_at DESC)`, `(tenant_id, entity_type, entity_id)`,
 |---|---|---|
 | (std) | | |
 | `branch_id` | `uuid NOT NULL` | |
-| `action_type` | `text NOT NULL` | [`loan_disbursement`, `repayment_reversal`, `charge_waiver`, `loan_write_off`, `loan_restructure`, `manual_journal`, `period_close`, `savings_withdrawal`, `investment_early_withdrawal`, `collateral_release`, `member_branch_transfer`, `import_commit`, `member_credit_refund`] |
+| `action_type` | `text NOT NULL` | `CHECK (action_type ~ '^[a-z][a-z0-9_]{2,62}$')`. The values are the action types of chapter 8 section 8.4, each registered by the module that owns it; the registry, not the database, refuses an unknown type (ADR-015). |
 | `subject_type` | `text NOT NULL` | For example `lending.loan`. |
 | `subject_id` | `uuid NOT NULL` | |
 | `amount_minor` | `bigint` | For threshold rules and the queue display. |
@@ -347,7 +387,9 @@ Indexes: `(tenant_id, created_at DESC)`, `(tenant_id, entity_type, entity_id)`,
 | `decision_note` | `text` | Required when `rejected`. |
 | `execution_error` | `text` | Last failed execution attempt (FR-APR-06). |
 
-`CHECK (decided_by IS NULL OR decided_by <> requested_by)` (FR-APR-02). Partial unique
+`CONSTRAINT approval_checker_is_not_maker CHECK (decided_by IS NULL OR decided_by <> requested_by)`
+(FR-APR-02); a rejection needs a note; `amount_minor` and `currency` are both set or both NULL.
+A cancellation sets `decided_at` but not `decided_by`. Partial unique
 `(tenant_id, action_type, subject_id) WHERE status = 'pending'`: one pending request per
 action and subject.
 
@@ -1077,8 +1119,14 @@ erDiagram
 `gl_accounts`, `gl_periods`, `journal_entries`, `journal_lines` (with both balance triggers),
 `lending_members`, db-scheduler's `scheduled_tasks` (ADR-008; not tenant-owned), the resolvers
 `app_resolve_tenant` and `app_list_active_tenants`, and `bms_seed_lending_chart(tenant)`, which
-seeds the chart of section 6.6.2 and is callable by `bms_owner` only. Every other table in this
-chapter is added by the migration of the feature that first uses it.
+seeds the chart of section 6.6.2 and is callable by `bms_owner` only. `V2__tenancy_identity_approvals.sql` (increment 1) adds `permissions`, `roles` and
+`role_permissions` (seeded from chapter 8), `subscriptions`, `tenant_settings`,
+`user_credentials`, `user_recovery_codes`, `user_invitations`, `auth_sessions`,
+`user_role_assignments`, `approval_requests`, the platform tables `platform_users`,
+`platform_sessions`, `platform_user_recovery_codes` and `platform_audit_log`, the resolvers
+`app_resolve_tenant_status` and `app_list_active_tenants_with_module`, and the platform functions
+of section 6.3.2. Every other table in this chapter is added by the migration of the feature that
+first uses it.
 `lending_members.import_row_id` gets its foreign key when the import tables arrive.
 
 ## 6.10 Open items

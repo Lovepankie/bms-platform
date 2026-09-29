@@ -1,4 +1,4 @@
-package com.rincoltech.bms.core.identity;
+package com.rincoltech.bms.kernel;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

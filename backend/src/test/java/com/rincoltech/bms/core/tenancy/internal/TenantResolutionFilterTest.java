@@ -9,7 +9,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 class TenantResolutionFilterTest {
 
     TenantResolutionFilter filter(boolean allowHeader) {
-        return new TenantResolutionFilter(new TenancyProperties("bms.example", allowHeader), null, null);
+        return new TenantResolutionFilter(new TenancyProperties("bms.example", allowHeader, null), null, null);
     }
 
     @Test

@@ -54,7 +54,26 @@ Run connected as `bms_app`, never as the owner. Built so far: items 1, 2 (reads 
 table, writes for representative tables), 3, 5 and 9 in `RlsIsolationIT`, which enumerates
 tenant-owned tables from the catalogue and requires a factory row for each; item 4 in
 `TenantBindingIT`; item 6 in `DatabaseRoleGuardIT`; item 7 for the members list and detail in
-`MembersApiIT`.
+`MembersApiIT`, for branches in `TenancyAdminIT`, for the approval queue in `ApprovalsIT` and for
+the audit log in `AuditSearchIT`. The platform tables of chapter 6 section 6.4 carry no tenant
+policy by design and are left out of the catalogue query.
+
+### 15.4.1 Identity, tenancy and approvals (increment 1)
+
+| Test | Proves |
+|---|---|
+| `StaffAuthIT` | Invitation link shown to the admin, audited and sent through the notification port; expiry and replacement; weak passwords; generic sign-in errors; lockout on the fifth failure; forced TOTP enrolment for a tenant admin; a TOTP code works once; a recovery code works once and replacement invalidates the old set; another admin resets a lost factor and the user's sessions end; refresh rotation, reuse detection and idle expiry; deactivation refused on the next request; a token refused on another tenant's host; masked phones in audit rows (FR-IAM-01, FR-IAM-04 to FR-IAM-08, FR-IAM-11, FR-IAM-12, FR-AUD-03, FR-AUD-05) |
+| `PermissionMatrixIT` | Seeded `role_permissions` equal the chapter 8 table; each role signed in holds exactly its column; for every route a principal lacking only its permission gets 403 (FR-IAM-02, FR-IAM-03) |
+| `ApprovalsIT`, `ApprovalExpiryJobIT` | Pending with no effect; approval executes the stored payload once; the maker cannot approve (service and database CHECK); conflicted checkers; rejection needs a note; expiry and cancellation; stale subject; failed execution stays pending with the error; threshold; one pending request per subject; the queue per role and branch; the nightly expiry (FR-APR-01 to FR-APR-08) |
+| `TenancyAdminIT` | Branch create, rename with `If-Match`, deactivate, head office kept; scoped branch lists and `/me` branches; plan limits for branches, staff and members; settings validation, conflicts and audited before and after; tenant-wide MFA; the suspended tenant (FR-BR-01, FR-BR-03, FR-BR-04, FR-TEN-04, FR-TEN-06, FR-TEN-08) |
+| `PlatformIT` | Operator setup token and mandatory TOTP; tenant creation with head office, modules, chart, settings, invited admin and audit rows; slug rules; module switching and the job tenant list; subscription moves and suspension; platform MFA reset of a tenant admin; host and token separation (FR-TEN-01 to FR-TEN-06, FR-IAM-12) |
+| `AuditSearchIT` | Search filters and branch scope; CSV export, audited; audited denial on a money-moving route (FR-AUD-03, FR-AUD-04) |
+| `Increment1AcceptanceIT` | The increment 1 demo end to end: a platform operator creates a tenant, its admin enrols MFA and invites a branch manager and a cashier, the cashier requests a test action and the branch manager approves it |
+| `CredentialsTest`, `PrincipalTest`, `SecurityArchitectureTest` | RFC 6238 vectors, the data key box, argon2id and password rules, recovery codes, token verification; per-permission branch scope; only identity sets the principal and only tenancy binds a request's tenant |
+
+The maker-checker tests use a test-only action type registered in the test sources
+(`TestApprovalAction`, requested with a cashier's permission and decided with a branch manager's),
+because no production action exists before increment 2 (ADR-015).
 
 1. **Catalogue test.** Query `pg_class` and `pg_policy` for every table with a
    `tenant_id` column (plus `tenants`). Each must have `relrowsecurity` and
@@ -80,7 +99,8 @@ tenant-owned tables from the catalogue and requires a factory row for each; item
 8. **Member ownership tests.** Member portal endpoints return 404 for another member's
    records (FR-MSS-01).
 9. **Resolver function tests.** `app_resolve_tenant` returns only an id and only for active
-   tenants; `app_list_active_tenants` returns only ids.
+   tenants; `app_list_active_tenants` returns only ids; `app_list_active_tenants_with_module`
+   leaves out a tenant with the module switched off (`PlatformIT`).
 
 ## 15.5 Module boundary test
 
@@ -91,8 +111,9 @@ depending on anything, or a cycle. The allowed dependency list is chapter 5 sect
 to the architecture shows up in review as a change to that line. `ModularityTest` runs Spring
 Modulith's `verify()` over them and adds an explicit rule that no `core.*` module depends on a
 vertical. `RoutePermissionIT` enumerates routes and fails on any without a declared permission
-(FR-IAM-03), and `ClockArchitectureTest` fails on any direct system clock read outside the
-kernel.
+(FR-IAM-03), `ClockArchitectureTest` fails on any direct system clock read outside the
+kernel, and `SecurityArchitectureTest` fails when a module other than identity sets the current
+principal or one other than tenancy binds a request's tenant (ADR-017).
 
 ## 15.6 Money correctness
 
@@ -147,7 +168,9 @@ output changed.
 ## 15.9 Frontend tests
 
 - Unit tests for formatters (money from minor units, dates), permission-driven visibility,
-  form validation shared with the API's rules, and the offline draft store.
+  form validation shared with the API's rules, and the offline draft store. Built so far: money
+  formatting, the second factor and invitation token parsing, the password rule echo, recovery
+  code display and the active branch choice (`auth/codes.test.ts`).
 - Component tests for the schedule table, allocation display and approval queue.
 - Bundle budget check for the member area (NFR-PERF-06).
 - Accessibility checks on key screens (NFR-ACC-01).

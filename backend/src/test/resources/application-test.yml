@@ -4,6 +4,10 @@ bms:
     allow-tenant-header: true
   auth:
     mode: dev
+    # argon2id at test cost. The PHC string carries its parameters, so every hash still verifies;
+    # other profiles use the chapter 8 cost (64 MiB, 3 iterations).
+    argon2-memory-kib: 4096
+    argon2-iterations: 2
 
 management:
   server:

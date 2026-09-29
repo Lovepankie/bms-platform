@@ -1,16 +1,17 @@
 package com.rincoltech.bms.lending.members.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
-import com.rincoltech.bms.core.identity.CurrentPrincipal;
-import com.rincoltech.bms.core.identity.Principal;
 import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
+import com.rincoltech.bms.core.tenancy.PlanLimits;
 import com.rincoltech.bms.core.tenancy.TenantSequences;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
+import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.NationalIds;
 import com.rincoltech.bms.kernel.PhoneNumbers;
+import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.lending.members.MemberLookup;
 import com.rincoltech.bms.lending.members.internal.MemberApi.CreateMemberRequest;
 import com.rincoltech.bms.lending.members.internal.MemberApi.MemberListItem;
@@ -37,25 +38,28 @@ class MemberService implements MemberLookup {
     private final CurrentTenant currentTenant;
     private final TenantSequences sequences;
     private final AuditLog audit;
+    private final PlanLimits planLimits;
 
     MemberService(
             MemberRepository members,
             Branches branches,
             CurrentTenant currentTenant,
             TenantSequences sequences,
-            AuditLog audit) {
+            AuditLog audit,
+            PlanLimits planLimits) {
         this.members = members;
         this.branches = branches;
         this.currentTenant = currentTenant;
         this.sequences = sequences;
         this.audit = audit;
+        this.planLimits = planLimits;
     }
 
-    /** FR-MEM-01, FR-MEM-02, FR-MEM-03, FR-AUD-01. One transaction: number, row and audit row. */
+    /** FR-MEM-01, FR-MEM-02, FR-MEM-03, FR-TEN-04, FR-AUD-01. One transaction: number, row and audit row. */
     @Transactional
     MemberResponse create(CreateMemberRequest request) {
         Principal principal = CurrentPrincipal.require();
-        if (!principal.canSeeBranch(request.branchId())
+        if (!principal.may("lending.members.create", request.branchId())
                 || branches.findActive(request.branchId()).isEmpty()) {
             throw ApiException.validation(
                     List.of(new FieldProblem("branch_id", "unknown_branch", "No such active branch in your scope.")));
@@ -65,6 +69,7 @@ class MemberService implements MemberLookup {
                 ? null
                 : PhoneNumbers.normaliseUganda(request.altPhone()).orElseThrow(() -> invalidPhone("alt_phone"));
         String nin = checkIdentity(request);
+        planLimits.checkRoomFor(PlanLimits.MAX_ACTIVE_MEMBERS, members.countActive());
 
         UUID id = UUID.randomUUID();
         String memberNo = "M%06d".formatted(sequences.next("member_no"));
@@ -112,7 +117,8 @@ class MemberService implements MemberLookup {
     MemberPage list(List<UUID> requestedBranches, List<String> statuses, String q, Integer limit, String cursor) {
         Principal principal = CurrentPrincipal.require();
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
-        List<UUID> branchFilter = branchFilter(principal, requestedBranches);
+        // Branch scope is authorisation (ADR-003), applied per permission (chapter 8 section 8.3.1).
+        List<UUID> branchFilter = principal.branchFilter("lending.members.read", requestedBranches);
         String after = Cursor.decode(cursor).orElse(null);
         List<MemberListItem> rows = members.page(branchFilter, statuses, q, after, size + 1);
         boolean more = rows.size() > size;
@@ -126,7 +132,7 @@ class MemberService implements MemberLookup {
     MemberResponse get(UUID memberId) {
         Principal principal = CurrentPrincipal.require();
         return members.findById(memberId)
-                .filter(m -> principal.canSeeBranch(m.branchId()))
+                .filter(m -> principal.may("lending.members.read", m.branchId()))
                 .orElseThrow(ApiException::notFound);
     }
 
@@ -142,21 +148,6 @@ class MemberService implements MemberLookup {
                         m.kycStatus(),
                         m.status(),
                         m.isBlacklisted()));
-    }
-
-    /**
-     * Branch scope is authorisation (ADR-003): an all-branch principal gets what it asked for
-     * (everything when it asked for nothing); a scoped principal gets the intersection.
-     */
-    static List<UUID> branchFilter(Principal principal, List<UUID> requested) {
-        List<UUID> asked = requested == null ? List.of() : requested;
-        if (principal.allBranches()) {
-            return asked.isEmpty() ? null : asked;
-        }
-        if (asked.isEmpty()) {
-            return List.copyOf(principal.branchIds());
-        }
-        return asked.stream().filter(principal::canSeeBranch).toList();
     }
 
     private String checkIdentity(CreateMemberRequest request) {

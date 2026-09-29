@@ -69,6 +69,11 @@ services:
       BMS_BASE_DOMAIN: ${BMS_BASE_DOMAIN:?}
       BMS_SCHEDULER_ENABLED: ${BMS_SCHEDULER_ENABLED:-true}
       BMS_OPENAPI_ENABLED: ${BMS_OPENAPI_ENABLED:-false}
+      # Staff and platform sign-in keys (chapter 8 section 8.7, ADR-014); the API refuses to start
+      # without them. Generate with: docker run --rm <api image> keys
+      BMS_TOKEN_SIGNING_JWK: ${BMS_TOKEN_SIGNING_JWK:?}
+      BMS_DATA_KEY: ${BMS_DATA_KEY:?}
+      BMS_DATA_KEY_ID: ${BMS_DATA_KEY_ID:-k1}
     mem_limit: 1536m
     depends_on:
       postgres:

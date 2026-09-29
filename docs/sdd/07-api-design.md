@@ -38,6 +38,9 @@ chapter 3, permissions to chapter 8, tables to chapter 6.
   lending module they return 404 `module_not_enabled` (FR-TEN-03).
 - Member portal endpoints live under `/api/v1/member/...` and accept only member
   principals, scoped to the member's own records.
+- Platform endpoints live under `/api/v1/platform/...`. They resolve no tenant, are served only on
+  a host that names no tenant (on a tenant host they answer 404), and accept only platform
+  operator tokens (ADR-016).
 
 ## 7.3 Contract and generated clients
 
@@ -58,10 +61,15 @@ chapter 3, permissions to chapter 8, tables to chapter 6.
 | Access token | Signed JWT (asymmetric signature, `kid` header for rotation) | 15 minutes | `Authorization: Bearer <token>`; held in memory by the SPA, never in local storage |
 | Refresh token | 256-bit random, stored hashed (`auth_sessions.refresh_token_hash`) | Staff idle 12 hours, absolute 7 days; members idle 30 days, absolute 90 days | Cookie `bms_rt`, `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth` on the tenant host |
 
-Access token claims: `sub` (user id), `tid` (tenant id), `knd` (`staff` or `member`),
-`sid` (session id), `iat`, `exp`, `iss` (the tenant host). Permissions and branch scope
-are not in the token; they are loaded per request (cached for at most 60 seconds, and the
-cache is cleared when role assignments change).
+Access token claims: `sub` (user id), `tid` (tenant id; absent for platform operators), `knd`
+(`staff`, `member` or `platform`), `sid` (session id), `iat`, `exp`, `iss` (the request host),
+`pur` (`access`). Access tokens are ES256 JWS (ADR-014). Between the password and the second
+factor the API hands out a 5 minute MFA token (`pur=mfa`, no `sid`) that is accepted only by the
+MFA endpoints. Permissions and branch scope are not in the token; they are loaded per request
+from the role assignments (the 60 second cache this section allows is not built yet).
+
+Platform operators use the same design with their own cookie, `bms_prt`, scoped to
+`/api/v1/platform/auth`, idle 2 hours and absolute 12 hours.
 
 ### 7.4.2 Per-request checks, in order
 
@@ -71,20 +79,23 @@ cache is cleared when role assignments change).
 4. Session `sid` is not revoked (a primary key lookup in `auth_sessions`; there is no Redis,
    ADR-008), else 401 `session_revoked` (FR-IAM-08).
 5. User status is `active`.
-6. Tenant not `suspended` for state-changing methods, else 423 `tenant_suspended`.
+6. Tenant not `suspended` for state-changing methods, else 423 `tenant_suspended`. Staff sign-in,
+   MFA, refresh and sign-out stay open so staff can still read and export (FR-TEN-06).
 7. Route's declared permission is held (chapter 8), else 403 `permission_denied`.
 8. Branch scope: the target record's branch is within the principal's scope, else 404
    `not_found` (a record outside scope is indistinguishable from a missing one).
 
 ### 7.4.3 Development stub
 
-Until real authentication lands, local and test environments may run with
-`AUTH_MODE=dev`, where the principal is read from `X-Dev-User-Id` (a UUID), `X-Dev-Kind`
-(`staff`, the default, or `member`), `X-Dev-Permissions` (comma separated permission keys) and
-`X-Dev-Branch-Ids` (comma separated branch UUIDs, or `*` for all branches) headers. Missing or
-malformed headers leave the request unauthenticated. The application refuses to start with
-`AUTH_MODE=dev` in any profile other than `dev` or `test`; with the default `AUTH_MODE=none`
-every non-public route answers 401 `unauthenticated` until real sign-in lands.
+Signed-in sessions (bearer tokens) work in every environment. In addition, local and test
+environments may run with `AUTH_MODE=dev`, where a request without a bearer token takes its
+principal from `X-Dev-User-Id` (a UUID), `X-Dev-Kind` (`staff`, the default, or `member`),
+`X-Dev-Permissions` (comma separated permission keys) and `X-Dev-Branch-Ids` (comma separated
+branch UUIDs, or `*` for all branches) headers, each permission applying in those branches. Missing
+or malformed headers leave the request unauthenticated; the stub never applies to platform paths.
+The application refuses to start with `AUTH_MODE=dev` in any profile other than `dev` or `test`;
+with the default `AUTH_MODE=none` only signed-in sessions authenticate. The PWA always signs in
+for real; the stub is for curl and tests.
 
 ## 7.5 Request and response conventions
 
@@ -141,12 +152,13 @@ registered.
 | Status | When |
 |---|---|
 | 400 | `malformed_request`: bad JSON, bad UUID, unknown body field, unknown query parameter |
-| 401 | `unauthenticated`, token expired, `tenant_mismatch`, `session_revoked` |
+| 401 | `unauthenticated`, `token_expired`, `tenant_mismatch`, `session_revoked`, `session_expired`, `invalid_credentials` (sign-in), `invalid_mfa_code` (sign-in), `mfa_token_invalid` |
 | 403 | Authenticated but lacks the permission (`permission_denied`) |
 | 404 | Not found or outside branch scope; `unknown_tenant`; `module_not_enabled` |
-| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`); `conflict` for any other unique or foreign key violation |
+| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, `approval_already_pending`, `mfa_already_enrolled`, `mfa_not_enrolled`, `mfa_enrolment_not_started`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`, `duplicate_email`, `duplicate_phone`, `duplicate_branch_code`, `duplicate_slug`); `conflict` for any other unique or foreign key violation |
 | 422 | Validation and business rule failures (codes below) |
 | 423 | `tenant_suspended`, `account_locked` |
+| 428 | `precondition_required`: a `PATCH` without `If-Match` (section 7.9) |
 | 429 | Rate limited; `Retry-After` header set |
 | 500 | `internal_error`; the body carries only the generic title and the `request_id` |
 | 503 | Dependency down (the database); readiness fails |
@@ -163,12 +175,18 @@ Business rule codes used in chapter 3 (each is a 422 unless listed above):
 `branch_has_open_accounts`, `account_has_open_items`, `unknown_placeholder`,
 `blocking_issues_unresolved`, `system_account_not_allowed`, `idempotency_key_reused`,
 `idempotency_key_missing`, and from the ledger's posting operation (ADR-004):
-`unbalanced_entry`, `invalid_journal_line`, `account_not_postable`, `currency_mismatch`.
+`unbalanced_entry`, `invalid_journal_line`, `account_not_postable`, `currency_mismatch`; and
+from identity, tenancy and approvals (increment 1): `weak_password`, `invitation_invalid`,
+`invitation_expired`, `invalid_mfa_code` (enrolment and recovery code replacement),
+`cannot_deactivate_self`, `cannot_reset_own_mfa`, `last_tenant_admin`, `not_a_tenant_admin`,
+`head_office_required`, `invalid_tenant`, `module_not_allowed`, `unknown_action_type`,
+`approval_execution_failed`.
 
 Entries of the `errors` array carry their own `code`: `invalid` (a Bean Validation failure;
 the message says which), `required`, `unknown_branch` (a branch that does not exist, is inactive
 or is outside the caller's scope, deliberately indistinguishable), `invalid_phone`,
-`invalid_nin`. Every response, success or error, carries the `X-Request-Id` header.
+`invalid_nin`, `unknown_role`, `invalid_slug`, `weak_password`. Every response, success or error,
+carries the `X-Request-Id` header.
 
 ## 7.8 Idempotency (money-moving endpoints)
 
@@ -239,32 +257,44 @@ port (8081), which is never published outside the container network.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| POST | `/auth/staff/login` | public | `{login, password}` returns tokens, or `{mfa_required: true, mfa_token}`. FR-IAM-04, FR-IAM-05 |
-| POST | `/auth/staff/mfa/verify` | public (mfa_token) | `{mfa_token, code}` returns tokens. FR-IAM-06 |
-| POST | `/auth/staff/mfa/enrol` | authenticated staff | Returns TOTP secret URI once; `/auth/staff/mfa/confirm` activates |
-| POST | `/auth/staff/invitations/accept` | public (token) | `{token, password}` |
-| POST | `/auth/staff/password/forgot` | public | Always 202 |
-| POST | `/auth/staff/password/reset` | public (token) | |
-| POST | `/auth/member/otp/request` | public | `{phone, purpose}`; always 202. FR-IAM-09 |
-| POST | `/auth/member/otp/verify` | public | `{phone, code}` returns a short-lived `pin_setup_token` |
-| POST | `/auth/member/pin` | public (pin_setup_token) | Sets PIN, returns tokens |
-| POST | `/auth/member/login` | public | `{phone, pin}` |
+| POST | `/auth/staff/login` | public | `{login, password}` returns tokens (`status: signed_in`), or `{status: mfa_required \| mfa_enrolment_required, mfa_token}`. FR-IAM-04, FR-IAM-05 |
+| POST | `/auth/staff/mfa/verify` | public (mfa_token) | `{mfa_token, code}`; `code` is a TOTP code or a recovery code. Returns tokens. FR-IAM-06, FR-IAM-11 |
+| POST | `/auth/staff/mfa/enrol` | public (mfa_token), or signed in | Returns the TOTP secret and `otpauth` URI once |
+| POST | `/auth/staff/mfa/confirm` | public (mfa_token), or signed in | `{mfa_token?, code}` activates TOTP and returns ten recovery codes once; with the MFA token it also signs in. FR-IAM-11 |
+| POST | `/auth/staff/mfa/recovery-codes` | authenticated staff | `{code}` (a current TOTP code) replaces every recovery code; returns the new ones once. FR-IAM-11 |
+| POST | `/auth/staff/invitations/accept` | public (token) | `{token, password}`; 204. FR-IAM-01 |
+| POST | `/auth/staff/password/forgot` | public | Always 202. Not built yet |
+| POST | `/auth/staff/password/reset` | public (token) | Not built yet |
+| POST | `/auth/member/otp/request` | public | `{phone, purpose}`; always 202. FR-IAM-09 (P2) |
+| POST | `/auth/member/otp/verify` | public | `{phone, code}` returns a short-lived `pin_setup_token` (P2) |
+| POST | `/auth/member/pin` | public (pin_setup_token) | Sets PIN, returns tokens (P2) |
+| POST | `/auth/member/login` | public | `{phone, pin}` (P2) |
 | POST | `/auth/refresh` | refresh cookie | Rotates refresh token. FR-IAM-07 |
-| POST | `/auth/logout` | authenticated | Revokes the session |
-| GET | `/me` | authenticated | User, kind, roles, permissions, branch scope, active branch default |
+| POST | `/auth/logout` | authenticated staff | Revokes the session family; clears the cookie |
+| GET | `/me` | authenticated staff | User, roles, permissions, `all_branches`, the branches to switch between, the default branch, MFA state and unused recovery codes. FR-BR-03 |
+
+The refresh token never appears in a response body: it is the `bms_rt` cookie of section 7.4.1.
 
 ### 7.11.3 Platform (`app.<base domain>`, `/platform`, platform users only)
 
-| Method | Path | Notes |
-|---|---|---|
-| GET, POST | `/platform/tenants` | Create per FR-TEN-01 |
-| GET, PATCH | `/platform/tenants/{tenant_id}` | |
-| PUT | `/platform/tenants/{tenant_id}/modules` | `{modules: ["lending"]}`. FR-TEN-03 |
-| POST | `/platform/tenants/{tenant_id}/subscription` | Status change. FR-TEN-05 |
-| POST | `/platform/tenants/{tenant_id}/suspend`, `/resume` | FR-TEN-06 |
-| POST | `/platform/tenants/{tenant_id}/support-sessions` | FR-TEN-07 (P2) |
-| GET | `/platform/plans` | |
-| GET | `/platform/tenants/{tenant_id}/usage` | Users, members, SMS segments. FR-NTF-07 |
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/platform/auth/setup` | public (setup token) | `{token, password}`: first password, with the token from `deploy/sql/create-platform-user.sql` |
+| POST | `/platform/auth/login`, `/platform/auth/mfa/verify`, `/platform/auth/mfa/enrol`, `/platform/auth/mfa/confirm` | public (mfa_token) | As the staff endpoints; TOTP is mandatory and enrolled at first sign-in |
+| POST | `/platform/auth/refresh` | refresh cookie `bms_prt` | |
+| POST | `/platform/auth/logout` | authenticated platform | |
+| GET | `/platform/me` | authenticated platform | |
+| GET | `/platform/plans` | `platform.tenants.read` | Limits only, no prices. FR-TEN-04 |
+| GET | `/platform/tenants` | `platform.tenants.read` | |
+| POST | `/platform/tenants` | `platform.tenants.manage` | Create per FR-TEN-01: tenant, subscription (`trial`), settings, head office, modules with their chart of accounts, first tenant admin; returns the admin's one-time link once |
+| GET | `/platform/tenants/{tenant_id}` | `platform.tenants.read` | |
+| PATCH | `/platform/tenants/{tenant_id}` | `platform.tenants.manage` | Not built yet |
+| PUT | `/platform/tenants/{tenant_id}/modules` | `platform.tenants.manage` | `{modules: ["lending"]}`. FR-TEN-03 |
+| POST | `/platform/tenants/{tenant_id}/subscription` | `platform.tenants.manage` | `{status, next_status_change_on}`. FR-TEN-05 |
+| POST | `/platform/tenants/{tenant_id}/suspend`, `/resume` | `platform.tenants.manage` | FR-TEN-06 |
+| POST | `/platform/tenants/{tenant_id}/users/{user_id}/mfa/reset` | `platform.tenants.manage` | Tenant admins only. FR-IAM-12 |
+| POST | `/platform/tenants/{tenant_id}/support-sessions` | | FR-TEN-07 (P2) |
+| GET | `/platform/tenants/{tenant_id}/usage` | | Users, members, SMS segments. FR-NTF-07. Not built yet |
 
 ### 7.11.4 Tenant administration
 
@@ -277,13 +307,15 @@ port (8081), which is never published outside the container network.
 | GET, PATCH | `/branches/{branch_id}` | read / manage | |
 | POST | `/branches/{branch_id}/deactivate` | `core.branches.manage` | |
 | GET | `/users` | `core.users.read` | |
-| POST | `/users` | `core.users.manage` | Invite. FR-IAM-01 |
+| POST | `/users` | `core.users.manage` | Invite; returns the user and the one-time link once (`invitation.url`, `invitation.expires_at`). FR-IAM-01 |
 | GET, PATCH | `/users/{user_id}` | read / manage | |
 | PUT | `/users/{user_id}/roles` | `core.users.manage` | `[{role_key, branch_id or null}]` |
-| POST | `/users/{user_id}/deactivate` | `core.users.manage` | FR-IAM-08 |
+| POST | `/users/{user_id}/deactivate` | `core.users.manage` | Revokes every session. FR-IAM-08 |
+| POST | `/users/{user_id}/invitation` | `core.users.manage` | New one-time link for a user still invited; the previous link stops working. FR-IAM-01 |
+| POST | `/users/{user_id}/mfa/reset` | `core.users.manage` | Another user only. FR-IAM-12 |
 | GET | `/roles` | `core.users.read` | Catalogue with permissions |
 | GET | `/audit-events` | `core.audit.read` | Filters per FR-AUD-04 |
-| POST | `/audit-events/export` | `core.audit.export` | Async report run |
+| POST | `/audit-events/export` | `core.audit.export` | Same filters as the search; CSV, at most 10,000 rows, synchronous until the report runs of increment 8 (FR-RPT-04); the export is audited |
 
 ### 7.11.5 Approvals
 
@@ -291,9 +323,13 @@ port (8081), which is never published outside the container network.
 |---|---|---|---|
 | GET | `/approvals` | `core.approvals.read` | `?status=pending&action_type=...`; returns only requests the principal may decide or made. FR-APR-05 |
 | GET | `/approvals/{approval_id}` | `core.approvals.read` | Includes payload snapshot and subject summary |
-| POST | `/approvals/{approval_id}/approve` | checker permission for the action type (chapter 8 section 8.4) | Executes the action in the same transaction. FR-APR-06 |
+| POST | `/approvals/{approval_id}/approve` | `core.approvals.read`, then the action type's checker permission in the request's branch (chapter 8 section 8.4) | Executes the action in the same transaction. FR-APR-06 |
 | POST | `/approvals/{approval_id}/reject` | same | `{note}` required |
-| POST | `/approvals/{approval_id}/cancel` | maker only | FR-APR-07 |
+| POST | `/approvals/{approval_id}/cancel` | `core.approvals.read`, maker only | FR-APR-07 |
+
+Approval requests are made by each module's own endpoint for the action (for example the
+disbursement request), which calls the approvals module (ADR-015); there is no generic create
+endpoint.
 
 ### 7.11.6 Ledger (`/ledger`)
 

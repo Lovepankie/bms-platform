@@ -36,6 +36,9 @@ class ModularityTest {
                         "core.ledger",
                         "core.jobs",
                         "core.operations",
+                        "core.notifications",
+                        "core.approvals",
+                        "core.platform",
                         "lending.manifest",
                         "lending.members");
     }

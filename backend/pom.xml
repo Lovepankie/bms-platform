@@ -28,6 +28,8 @@
         <git-commit-id-plugin.version>9.0.2</git-commit-id-plugin.version>
         <spotless.version>3.10.3</spotless.version>
         <palantir-java-format.version>2.100.0</palantir-java-format.version>
+        <nimbus-jose-jwt.version>10.10</nimbus-jose-jwt.version>
+        <bouncycastle.version>1.86</bouncycastle.version>
     </properties>
 
     <dependencyManagement>
@@ -89,6 +91,28 @@
             <groupId>com.github.kagkarlsson</groupId>
             <artifactId>db-scheduler-spring-boot-4-starter</artifactId>
             <version>${db-scheduler.version}</version>
+        </dependency>
+        <!-- Staff authentication (ADR-014): argon2id password hashing through Spring Security's
+             crypto module (Bouncy Castle provides the argon2 implementation), and signed access
+             tokens (JWS, ES256) through Nimbus. Only the crypto module of Spring Security is
+             used; there is no Spring Security filter chain. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>${bouncycastle.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>nimbus-jose-jwt</artifactId>
+            <version>${nimbus-jose-jwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
         </dependency>
 
         <dependency>
