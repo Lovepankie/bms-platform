@@ -1,0 +1,509 @@
+# 7. API Design
+
+**Status:** Draft · **Owner:** Hillary
+
+## 7.1 Scope
+
+The HTTP API that the web PWA (staff and member areas), the platform console, payment
+gateways and SMS or USSD aggregators call. The conventions here are independent of the
+backend framework (pending ADR-010); whichever framework is chosen must produce this
+contract. Requirement IDs refer to chapter 3, permissions to chapter 8, tables to
+chapter 6.
+
+## 7.2 Hosts, tenant resolution and versioning
+
+| Host | Serves | Tenant |
+|---|---|---|
+| `<slug>.<base domain>` | Staff area, member area, tenant API | Resolved from the slug |
+| `app.<base domain>` | Platform console and platform API (`/api/v1/platform/...`) | None; platform users only |
+| `api.<base domain>` | Gateway and aggregator callbacks only | Resolved from the callback payload (chapter 12) |
+
+- The tenant is resolved from the `Host` header: exactly one DNS label directly under the
+  base domain, not a reserved label (`www`, `api`, `app`, `admin`, `static`, `mail`).
+  The slug is resolved with `app_resolve_tenant(slug)` (chapter 6 section 6.3.2). An
+  unknown or inactive slug returns 404 `unknown_tenant`.
+- In local and test environments only, with `ALLOW_TENANT_HEADER=true`, the header
+  `X-Tenant: <slug>` is accepted when the host carries no slug. Production configuration
+  refuses the setting at startup.
+- Every tenant request runs in one database transaction bound to the tenant
+  (`set_config('app.tenant_id', ..., true)`), committed before the response is sent. A
+  failed commit is never reported as success.
+- Base path `/api/v1`. A breaking change gets `/api/v2` for the affected resources; the
+  previous version is kept for at least one release after the frontend moves.
+- Lending endpoints live under `/api/v1/lending/...`. If the tenant has not enabled the
+  lending module they return 404 `module_not_enabled` (FR-TEN-03).
+- Member portal endpoints live under `/api/v1/member/...` and accept only member
+  principals, scoped to the member's own records.
+
+## 7.3 Contract and generated clients
+
+- The API publishes an OpenAPI 3.1 document at `/api/v1/openapi.json` (disabled on
+  production unless the principal is a platform user).
+- CI writes the document to `docs/api/openapi.json` and fails if the committed snapshot
+  differs, so every contract change is visible in review.
+- The frontend's API types are generated from that document (ADR-009). Hand-written
+  request or response types are not allowed.
+
+## 7.4 Authentication
+
+### 7.4.1 Tokens
+
+| Token | Form | Lifetime | Transport |
+|---|---|---|---|
+| Access token | Signed JWT (asymmetric signature, `kid` header for rotation) | 15 minutes | `Authorization: Bearer <token>`; held in memory by the SPA, never in local storage |
+| Refresh token | 256-bit random, stored hashed (`auth_sessions.refresh_token_hash`) | Staff idle 12 hours, absolute 7 days; members idle 30 days, absolute 90 days | Cookie `bms_rt`, `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth` on the tenant host |
+
+Access token claims: `sub` (user id), `tid` (tenant id), `knd` (`staff` or `member`),
+`sid` (session id), `iat`, `exp`, `iss` (the tenant host). Permissions and branch scope
+are not in the token; they are loaded per request (cached for at most 60 seconds, and the
+cache is cleared when role assignments change).
+
+### 7.4.2 Per-request checks, in order
+
+1. Resolve tenant from host (7.2).
+2. Verify the access token signature and expiry.
+3. `tid` equals the host's tenant, else 401 `tenant_mismatch`.
+4. Session `sid` is not revoked (Redis set of revoked session ids, falling back to
+   `auth_sessions`), else 401 `session_revoked` (FR-IAM-08).
+5. User status is `active`.
+6. Tenant not `suspended` for state-changing methods, else 423 `tenant_suspended`.
+7. Route's declared permission is held (chapter 8), else 403 `permission_denied`.
+8. Branch scope: the target record's branch is within the principal's scope, else 404
+   `not_found` (a record outside scope is indistinguishable from a missing one).
+
+### 7.4.3 Development stub
+
+Until real authentication lands, local and test environments may run with
+`AUTH_MODE=dev`, where the principal is read from `X-Dev-User-Id`, `X-Dev-Kind`,
+`X-Dev-Permissions` and `X-Dev-Branch-Ids` headers. Production configuration refuses
+`AUTH_MODE=dev` at startup.
+
+## 7.5 Request and response conventions
+
+- JSON bodies, UTF-8, `snake_case` field names.
+- Identifiers are UUID strings. Human numbers (`member_no`, `loan_no`, `receipt_no`) are
+  separate fields.
+- Amounts are JSON integers in minor units, in fields ending `_minor`, with a `currency`
+  field on the same object. The API never accepts or returns a decimal amount.
+- Rates are integers in basis points, in fields ending `_bp`.
+- Dates are `YYYY-MM-DD`; instants are RFC 3339 in UTC with `Z`.
+- Enumerations are lower snake case strings, exactly the values in chapter 6.
+- Phone numbers are returned in E.164. Inputs accept the local forms in FR-MEM-02.
+- National ID numbers and phone numbers are masked (last 4 visible) in list responses and
+  shown in full on detail responses only to roles whose permission includes the member
+  detail (chapter 8).
+- `null` means unknown or not applicable; omitted fields in a `PATCH` mean "unchanged".
+
+## 7.6 Lists: pagination, filtering, sorting
+
+- Cursor pagination: `?limit=50&cursor=<opaque>`. Default `limit` 50, maximum 200.
+- Response: `{"items": [...], "next_cursor": "<opaque>" | null}`. With
+  `include_total=true` the response adds `"total"` (capped at 10,000; beyond that
+  `"total_capped": true`).
+- Sorting: `?sort=<field>` or `?sort=-<field>`; each endpoint lists its sortable fields;
+  the cursor encodes the sort key plus `id` as a tiebreaker.
+- Filters are query parameters named after fields: `status=active&status=closed`
+  (repeatable means OR), ranges as `<field>_from` and `<field>_to` (inclusive), free
+  search as `q`.
+- `branch_id` (repeatable) filters branch-owned lists. When omitted the list covers every
+  branch in the principal's scope; the UI sends the active branch (FR-BR-03, FR-BR-04).
+
+## 7.7 Errors
+
+Errors use RFC 9457 problem details, `Content-Type: application/problem+json`:
+
+```json
+{
+  "type": "https://docs.bms.invalid/errors/validation_failed",
+  "title": "Validation failed",
+  "status": 422,
+  "code": "validation_failed",
+  "detail": "One or more fields are invalid.",
+  "request_id": "01J9ZQ3K7T2V8XW4",
+  "errors": [
+    {"field": "requested_principal_minor", "code": "below_product_minimum", "message": "Must be at least the product minimum."}
+  ]
+}
+```
+
+`code` is the stable, machine-readable identifier the frontend switches on; `title` and
+`detail` are for people. The `type` URI host is a placeholder until the product domain is
+registered.
+
+| Status | When |
+|---|---|
+| 400 | Malformed request (bad JSON, bad UUID, unknown query parameter) |
+| 401 | Not authenticated, token expired, `tenant_mismatch`, `session_revoked` |
+| 403 | Authenticated but lacks the permission (`permission_denied`) |
+| 404 | Not found or outside branch scope; `unknown_tenant`; `module_not_enabled` |
+| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`) |
+| 422 | Validation and business rule failures (codes below) |
+| 423 | `tenant_suspended`, `account_locked` |
+| 429 | Rate limited; `Retry-After` header set |
+| 500 | Unexpected; body carries only `request_id` |
+| 503 | Dependency down (database, Redis); readiness fails |
+
+Business rule codes used in chapter 3 (each is a 422 unless listed above):
+`validation_failed`, `plan_limit_reached`, `invalid_phone`, `invalid_nin`,
+`invalid_term_frequency`, `invalid_rate_unit`, `below_product_minimum`,
+`above_product_maximum`, `guarantor_required`, `collateral_required`,
+`collateral_cover_insufficient`, `kyc_not_verified`, `member_blacklisted`,
+`max_active_loans_reached`, `approval_above_requested`, `self_approval_forbidden`,
+`approver_conflict`, `subject_changed`, `approval_expired`, `period_closed`,
+`payment_method_unmapped`, `value_date_in_future`, `has_repayments`,
+`already_reversed`, `insufficient_balance`, `collateral_secures_open_loan`,
+`branch_has_open_accounts`, `account_has_open_items`, `unknown_placeholder`,
+`blocking_issues_unresolved`, `system_account_not_allowed`, `idempotency_key_reused`,
+`idempotency_key_missing`.
+
+## 7.8 Idempotency (money-moving endpoints)
+
+Endpoints marked **M** in the catalogue move money or create financial records. They
+require the header `Idempotency-Key` (8 to 100 characters; clients use a UUID generated
+when the user first presses the button, and reuse it on retry). A missing key returns
+422 `idempotency_key_missing`.
+
+Server behaviour:
+
+1. Compute `request_hash` = SHA-256 of the method, path and canonical JSON body.
+2. In the same transaction as the business write, insert
+   `idempotency_keys (tenant_id, principal_id, key, ..., status = 'in_progress')`.
+   Transaction `lock_timeout` is 5 seconds.
+3. If the insert conflicts (a concurrent or earlier request with the same key):
+   - waiting beyond the lock timeout returns 409 `idempotency_in_progress`;
+   - a stored row with a different `request_hash` returns 422 `idempotency_key_reused`;
+   - a stored `completed` row replays its stored status and body, with header
+     `Idempotent-Replayed: true`, and performs no work.
+4. Otherwise perform the work, then update the row to `completed` with the response
+   status and body, and commit. Key row and business write commit or roll back together,
+   so a failed request (any 4xx or 5xx) leaves no key behind and may be retried with the
+   same key.
+5. Keys are kept 7 days.
+
+Gateway callbacks use the provider's transaction reference as the idempotency key
+(FR-PAY-03).
+
+## 7.9 Optimistic concurrency
+
+Mutable resources return `ETag: "<version>"` on GET. `PATCH` and state transitions on
+those resources require `If-Match: "<version>"`; a mismatch returns 409
+`version_conflict` with the current version in the body. Money-moving endpoints lock the
+target row (`SELECT ... FOR UPDATE`) instead, and do not need `If-Match`.
+
+## 7.10 Rate limits
+
+Enforced in Redis, per tenant:
+
+| Scope | Limit |
+|---|---|
+| Staff sign-in per login identifier | 10 per 15 minutes |
+| Member OTP request per phone | 3 per hour |
+| Member PIN sign-in per phone | 10 per 15 minutes |
+| Any authenticated user | 600 requests per minute |
+| Report runs per user | 10 per minute |
+| Callbacks per provider | 50 per second |
+
+## 7.11 Endpoint catalogue
+
+Legend: **M** money-moving, requires `Idempotency-Key`. **A** creates an approval
+request unless below the tenant threshold (FR-APR-04). Permission keys are defined in
+chapter 8. Paths are relative to `/api/v1`.
+
+### 7.11.1 Public and health (no tenant, no auth)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/healthz` | Liveness: process up. Outside `/api/v1`. |
+| GET | `/readyz` | Readiness: database and Redis reachable, migrations at head. Outside `/api/v1`. |
+| GET | `/version` | Git SHA and version. Outside `/api/v1`. |
+
+### 7.11.2 Authentication (`/auth`)
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/auth/staff/login` | public | `{login, password}` returns tokens, or `{mfa_required: true, mfa_token}`. FR-IAM-04, FR-IAM-05 |
+| POST | `/auth/staff/mfa/verify` | public (mfa_token) | `{mfa_token, code}` returns tokens. FR-IAM-06 |
+| POST | `/auth/staff/mfa/enrol` | authenticated staff | Returns TOTP secret URI once; `/auth/staff/mfa/confirm` activates |
+| POST | `/auth/staff/invitations/accept` | public (token) | `{token, password}` |
+| POST | `/auth/staff/password/forgot` | public | Always 202 |
+| POST | `/auth/staff/password/reset` | public (token) | |
+| POST | `/auth/member/otp/request` | public | `{phone, purpose}`; always 202. FR-IAM-09 |
+| POST | `/auth/member/otp/verify` | public | `{phone, code}` returns a short-lived `pin_setup_token` |
+| POST | `/auth/member/pin` | public (pin_setup_token) | Sets PIN, returns tokens |
+| POST | `/auth/member/login` | public | `{phone, pin}` |
+| POST | `/auth/refresh` | refresh cookie | Rotates refresh token. FR-IAM-07 |
+| POST | `/auth/logout` | authenticated | Revokes the session |
+| GET | `/me` | authenticated | User, kind, roles, permissions, branch scope, active branch default |
+
+### 7.11.3 Platform (`app.<base domain>`, `/platform`, platform users only)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET, POST | `/platform/tenants` | Create per FR-TEN-01 |
+| GET, PATCH | `/platform/tenants/{tenant_id}` | |
+| PUT | `/platform/tenants/{tenant_id}/modules` | `{modules: ["lending"]}`. FR-TEN-03 |
+| POST | `/platform/tenants/{tenant_id}/subscription` | Status change. FR-TEN-05 |
+| POST | `/platform/tenants/{tenant_id}/suspend`, `/resume` | FR-TEN-06 |
+| POST | `/platform/tenants/{tenant_id}/support-sessions` | FR-TEN-07 (P2) |
+| GET | `/platform/plans` | |
+| GET | `/platform/tenants/{tenant_id}/usage` | Users, members, SMS segments. FR-NTF-07 |
+
+### 7.11.4 Tenant administration
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/settings` | `core.settings.read` | |
+| PATCH | `/settings` | `core.settings.manage` | FR-TEN-08 |
+| GET | `/branches` | `core.branches.read` | |
+| POST | `/branches` | `core.branches.manage` | FR-BR-01 |
+| GET, PATCH | `/branches/{branch_id}` | read / manage | |
+| POST | `/branches/{branch_id}/deactivate` | `core.branches.manage` | |
+| GET | `/users` | `core.users.read` | |
+| POST | `/users` | `core.users.manage` | Invite. FR-IAM-01 |
+| GET, PATCH | `/users/{user_id}` | read / manage | |
+| PUT | `/users/{user_id}/roles` | `core.users.manage` | `[{role_key, branch_id or null}]` |
+| POST | `/users/{user_id}/deactivate` | `core.users.manage` | FR-IAM-08 |
+| GET | `/roles` | `core.users.read` | Catalogue with permissions |
+| GET | `/audit-events` | `core.audit.read` | Filters per FR-AUD-04 |
+| POST | `/audit-events/export` | `core.audit.export` | Async report run |
+
+### 7.11.5 Approvals
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/approvals` | `core.approvals.read` | `?status=pending&action_type=...`; returns only requests the principal may decide or made. FR-APR-05 |
+| GET | `/approvals/{approval_id}` | `core.approvals.read` | Includes payload snapshot and subject summary |
+| POST | `/approvals/{approval_id}/approve` | checker permission for the action type (chapter 8 section 8.4) | Executes the action in the same transaction. FR-APR-06 |
+| POST | `/approvals/{approval_id}/reject` | same | `{note}` required |
+| POST | `/approvals/{approval_id}/cancel` | maker only | FR-APR-07 |
+
+### 7.11.6 Ledger (`/ledger`)
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/ledger/accounts` | `core.ledger.read` | Tree with balances as at `?as_of` |
+| POST | `/ledger/accounts` | `core.ledger_accounts.manage` | FR-GL-02 |
+| PATCH | `/ledger/accounts/{account_id}` | `core.ledger_accounts.manage` | |
+| GET | `/ledger/accounts/{account_id}/lines` | `core.ledger.read` | Account activity |
+| GET | `/ledger/journal-entries` | `core.ledger.read` | |
+| GET | `/ledger/journal-entries/{entry_id}` | `core.ledger.read` | |
+| POST | `/ledger/journal-entries` | `core.journals.create` | **M A**. Manual journal. FR-GL-05 |
+| POST | `/ledger/journal-entries/{entry_id}/reverse` | `core.journals.create` | **M A** |
+| GET | `/ledger/periods` | `core.ledger.read` | |
+| POST | `/ledger/periods/{period_id}/close` | `core.periods.close` | **A**. FR-GL-06 |
+| GET, PUT | `/ledger/payment-methods` | read / `core.payment_methods.manage` | FR-GL-08 |
+| GET | `/ledger/reconciliation` | `core.ledger.read` | Latest subledger reconciliation. FR-GL-10 |
+
+### 7.11.7 Notifications and documents
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/notification-templates` | `core.notifications.read` | |
+| PUT | `/notification-templates/{event_key}/{channel}` | `core.notification_templates.manage` | FR-NTF-03 |
+| POST | `/notification-templates/{event_key}/{channel}/preview` | `core.notification_templates.manage` | Renders with fabricated sample data |
+| GET | `/notifications` | `core.notifications.read` | Send log with status |
+| GET | `/documents/{document_id}` | permission on the subject | Metadata |
+| POST | `/documents/{document_id}/download-url` | permission on the subject | Returns a 5 minute signed URL. FR-DOC-03 |
+| POST | `/documents` | `lending.members.update` or `lending.collateral.manage` | Multipart upload (images, PDF, 5 MB max) |
+
+### 7.11.8 Reports
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/reports` | authenticated staff | Catalogue filtered by permission. FR-RPT-01 |
+| GET | `/reports/{report_key}` | report's permission | Synchronous JSON for small reports; params as query |
+| POST | `/report-runs` | report's permission | `{report_key, params, format}`; async. FR-RPT-04 |
+| GET | `/report-runs/{run_id}` | requester or `core.audit.read` | Status and document id |
+
+### 7.11.9 Imports (`/imports`)
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/imports/templates` | `core.imports.manage` | Available templates, for example `pilot_loan_register_v1` |
+| POST | `/imports` | `core.imports.manage` | Multipart `{file, template_key, branch_id}`. FR-IMP-01 |
+| GET | `/imports` | `core.imports.manage` | |
+| GET | `/imports/{batch_id}` | `core.imports.manage` | Summary: counts by class, status, issue code |
+| GET | `/imports/{batch_id}/rows` | `core.imports.manage` | `?status=needs_review&issue_code=...` |
+| GET | `/imports/{batch_id}/rows/{row_id}` | `core.imports.manage` | Raw, normalised, issues, resolutions |
+| PATCH | `/imports/{batch_id}/rows/{row_id}` | `core.imports.manage` | Edit normalised fields; re-runs row validation. FR-IMP-05 |
+| POST | `/imports/{batch_id}/rows/{row_id}/resolve` | `core.imports.manage` | `{issue_id, resolution, value?, link_row_id?, link_member_id?, note}` |
+| POST | `/imports/{batch_id}/issues/bulk-resolve` | `core.imports.manage` | `{issue_code, resolution: "accept_suggestion"}` |
+| GET | `/imports/{batch_id}/preview` | `core.imports.manage` | FR-IMP-06 |
+| POST | `/imports/{batch_id}/commit` | `core.imports.manage` | **M A**. FR-IMP-07 |
+| POST | `/imports/{batch_id}/cancel` | `core.imports.manage` | |
+| GET | `/imports/{batch_id}/reconciliation` | `core.imports.manage` | FR-IMP-08 |
+
+### 7.11.10 Payments
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/payments/intents` | `core.payments.collect` or `member.self.pay` | **M**. FR-PAY-01 |
+| GET | `/payments/intents/{intent_id}` | initiator or `core.payments.read` | Polled by the UI |
+| GET | `/payments/unallocated` | `core.payments.read` | FR-PAY-04 |
+| POST | `/payments/unallocated/{receipt_id}/allocate` | `core.payments.allocate` | **M** |
+| POST | `/payments/callbacks/{provider}` | public, signature verified | On `api.<base domain>`. FR-PAY-02 |
+
+### 7.11.11 Lending: members (`/lending/members`)
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/lending/members` | `lending.members.read` | `q` searches member no, name, phone, NIN, loan no. FR-MEM-11 |
+| POST | `/lending/members/duplicate-check` | `lending.members.create` | `{full_name, phone, national_id}` returns candidates. FR-MEM-04 |
+| POST | `/lending/members` | `lending.members.create` | FR-MEM-01 |
+| GET, PATCH | `/lending/members/{member_id}` | read / `lending.members.update` | |
+| POST | `/lending/members/{member_id}/kyc/verify` | `lending.members.verify_kyc` | `{decision: verified or rejected, note}` |
+| POST | `/lending/members/{member_id}/blacklist` | `lending.members.blacklist` | `{is_blacklisted, reason}` |
+| GET, POST | `/lending/members/{member_id}/next-of-kin` | read / update | FR-MEM-06 |
+| PATCH, DELETE | `/lending/next-of-kin/{kin_id}` | `lending.members.update` | Cannot delete the last next of kin of a KYC-complete member |
+| POST | `/lending/next-of-kin/{kin_id}/link` | `lending.members.update` | `{decision: confirm or reject}` for suggested links. FR-MEM-07 |
+| GET | `/lending/members/{member_id}/relationships` | `lending.members.read` | Graph with exposure. FR-MEM-08 |
+| GET, POST | `/lending/members/{member_id}/documents` | read / update | FR-MEM-09 |
+| POST | `/lending/members/{member_id}/portal-invite` | `lending.members.update` | Sends activation SMS. FR-IAM-09 |
+| GET | `/lending/members/{member_id}/credits` | `lending.members.read` | Overpayment credits |
+| POST | `/lending/members/{member_id}/credits/refund` | `lending.repayments.create` | **M A**. FR-REP-04a |
+| POST | `/lending/members/{member_id}/transfer` | `lending.members.update` | **A**. FR-BR-06 (P2) |
+
+### 7.11.12 Lending: loan products (`/lending/loan-products`)
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/lending/loan-products` | `lending.products.read` | |
+| POST | `/lending/loan-products` | `lending.products.manage` | Creates product and version 1. FR-PRD-01 |
+| GET | `/lending/loan-products/{product_id}` | `lending.products.read` | Current version plus history |
+| POST | `/lending/loan-products/{product_id}/versions` | `lending.products.manage` | New version. FR-PRD-04 |
+| POST | `/lending/loan-products/{product_id}/archive` | `lending.products.manage` | FR-PRD-05 |
+| POST | `/lending/loan-products/schedule-preview` | `lending.products.read` | `{terms..., principal_minor, disbursement_date}` returns the schedule. FR-PRD-03 |
+
+### 7.11.13 Lending: loans (`/lending/loans`)
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/lending/loans` | `lending.loans.read` | Filters: `status`, `member_id`, `officer_user_id`, `product_id`, `dpd_from`, `dpd_to`, `disbursed_on_from/_to` |
+| POST | `/lending/loans` | `lending.loans.create` | Draft application. FR-ORG-01 |
+| GET | `/lending/loans/{loan_id}` | `lending.loans.read` | Includes balances, DPD, PAR bucket, guarantors, collateral |
+| PATCH | `/lending/loans/{loan_id}` | `lending.loans.create` | Draft only |
+| PUT | `/lending/loans/{loan_id}/guarantors` | `lending.loans.create` | Draft only. FR-ORG-02 |
+| PUT | `/lending/loans/{loan_id}/collateral` | `lending.loans.create` | Draft only |
+| POST | `/lending/loans/{loan_id}/submit` | `lending.loans.create` | FR-ORG-03 |
+| POST | `/lending/loans/{loan_id}/return` | `lending.loans.approve` | Back to draft with note |
+| POST | `/lending/loans/{loan_id}/appraisals` | `lending.loans.appraise` | Runs and stores the score. FR-ORG-04 |
+| GET | `/lending/loans/{loan_id}/appraisals` | `lending.loans.read` | |
+| POST | `/lending/loans/{loan_id}/decision` | `lending.loans.approve` | `{decision: approve or reject, approved_principal_minor?, approved_term_count?, note}`. FR-ORG-06, FR-APR-03 |
+| POST | `/lending/loans/{loan_id}/cancel` | `lending.loans.cancel` | |
+| POST | `/lending/loans/{loan_id}/disbursements` | `lending.disbursements.request` | **M A**. FR-DIS-01 |
+| GET | `/lending/loans/{loan_id}/schedule` | `lending.loans.read` | FR-DIS-04 |
+| GET | `/lending/loans/{loan_id}/transactions` | `lending.loans.read` | With allocations |
+| POST | `/lending/loans/{loan_id}/repayments` | `lending.repayments.create` | **M**. `{amount_minor, value_date, payment_method_key, external_reference}`. FR-REP-01 |
+| POST | `/lending/loans/{loan_id}/transactions/{txn_id}/reverse` | `lending.repayments.reverse_request` | **M A**. FR-REP-05 |
+| GET | `/lending/loans/{loan_id}/payoff-quote` | `lending.loans.read` | `?value_date=`. FR-REP-06 |
+| POST | `/lending/loans/{loan_id}/charges/{charge_id}/waive` | `lending.charges.waive_request` | **M A**. FR-ARR-04 |
+| POST | `/lending/loans/{loan_id}/write-off` | `lending.loans.write_off_request` | **M A**. FR-LCL-02 |
+| POST | `/lending/loans/{loan_id}/restructure` | `lending.loans.restructure_request` | **M A**. FR-LCL-04 (P2) |
+| PUT | `/lending/loans/{loan_id}/officer` | `lending.collections.assign` | FR-CLN-01 |
+| GET, POST | `/lending/loans/{loan_id}/collection-actions` | `lending.collections.read` / `lending.collections.log_action` | FR-CLN-04 |
+| POST | `/lending/loans/{loan_id}/documents/{doc_type}` | `lending.loans.read` | Generates statement, schedule, or agreement PDF |
+
+### 7.11.14 Lending: collateral (`/lending/collateral`)
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/lending/collateral` | `lending.collateral.read` | Filters: `member_id`, `type`, `custody_status`, `loan_status` |
+| POST | `/lending/collateral` | `lending.collateral.manage` | FR-COL-01 |
+| GET, PATCH | `/lending/collateral/{collateral_id}` | read / manage | |
+| POST | `/lending/collateral/{collateral_id}/valuations` | `lending.collateral.manage` | FR-COL-02 |
+| POST | `/lending/collateral/{collateral_id}/events` | `lending.collateral.manage` | Custody change (not release). FR-COL-03 |
+| POST | `/lending/collateral/{collateral_id}/release` | `lending.collateral.release_request` | **A**. FR-COL-04 |
+
+### 7.11.15 Lending: savings
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET, POST | `/lending/savings-products` | `lending.savings.read` / `lending.savings_products.manage` | FR-SAV-01 |
+| GET | `/lending/savings-accounts` | `lending.savings.read` | |
+| POST | `/lending/savings-accounts` | `lending.savings.open` | FR-SAV-02 |
+| GET | `/lending/savings-accounts/{account_id}` | `lending.savings.read` | |
+| GET | `/lending/savings-accounts/{account_id}/transactions` | `lending.savings.read` | |
+| POST | `/lending/savings-accounts/{account_id}/deposits` | `lending.savings.deposit` | **M**. FR-SAV-03 |
+| POST | `/lending/savings-accounts/{account_id}/withdrawals` | `lending.savings.withdraw` | **M A** |
+| POST | `/lending/savings-accounts/{account_id}/transactions/{txn_id}/reverse` | `lending.savings.withdraw` | **M A** |
+| POST | `/lending/savings-accounts/{account_id}/reactivate` | `lending.savings.withdraw_approve` | FR-SAV-06 |
+| POST | `/lending/savings-accounts/{account_id}/close` | `lending.savings.withdraw` | **M A**. FR-SAV-07 |
+
+### 7.11.16 Lending: investments
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET, POST | `/lending/investment-products` | `lending.investments.read` / `lending.investment_products.manage` | FR-INV-01 |
+| GET | `/lending/investments` | `lending.investments.read` | |
+| POST | `/lending/investments` | `lending.investments.open` | FR-INV-02 |
+| GET | `/lending/investments/{investment_id}` | `lending.investments.read` | |
+| POST | `/lending/investments/{investment_id}/funding` | `lending.investments.fund` | **M**. FR-INV-03 |
+| PUT | `/lending/investments/{investment_id}/maturity-instruction` | `lending.investments.open` | FR-INV-05 |
+| POST | `/lending/investments/{investment_id}/payout` | `lending.investments.payout` | **M** |
+| POST | `/lending/investments/{investment_id}/rollover` | `lending.investments.payout` | **M** |
+| POST | `/lending/investments/{investment_id}/early-withdrawal` | `lending.investments.payout` | **M A**. FR-INV-06 |
+
+### 7.11.17 Lending: collections
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/lending/collections/due-list` | `lending.collections.read` | `?date_from&date_to&officer_user_id`. FR-CLN-02 |
+| GET | `/lending/collections/arrears` | `lending.collections.read` | `?bucket=1_30`. FR-CLN-03 |
+| POST | `/lending/collections/reassign` | `lending.collections.assign` | `{loan_ids, officer_user_id}` |
+| GET | `/lending/collections/promises` | `lending.collections.read` | `?promise_status=pending` |
+
+### 7.11.18 Member portal (`/member`, member principals only)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/member/me` | Member profile (own) |
+| GET | `/member/loans` | Own loans. FR-MSS-01 |
+| GET | `/member/loans/{loan_id}` | 404 if not own |
+| GET | `/member/loans/{loan_id}/schedule` | |
+| POST | `/member/loan-applications` | Draft with channel `portal`. FR-ORG-09 |
+| GET | `/member/savings-accounts` | FR-MSS-02 |
+| GET | `/member/savings-accounts/{account_id}/transactions` | |
+| GET | `/member/investments` | |
+| POST | `/member/investments` | FR-INV-02 |
+| POST | `/member/payments` | **M**. Creates a payment intent. FR-MSS-04 |
+| GET | `/member/payments/{intent_id}` | |
+| GET | `/member/documents` | Own receipts and statements |
+| POST | `/member/documents/{document_id}/download-url` | |
+
+### 7.11.19 Channel callbacks (`api.<base domain>`, public, verified)
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/payments/callbacks/{provider}` | 7.11.10 |
+| POST | `/channels/sms/{provider}/delivery-reports` | FR-NTF-05 |
+| POST | `/channels/ussd/{provider}` | Session callback. FR-MSS-07 (Later) |
+
+## 7.12 Example: record a repayment
+
+```http
+POST /api/v1/lending/loans/7a0c.../repayments HTTP/1.1
+Host: pilot.bms.invalid
+Authorization: Bearer eyJ...
+Idempotency-Key: 2f1e7d3c-5b6a-4c1d-9e8f-0a1b2c3d4e5f
+Content-Type: application/json
+
+{"amount_minor": 300000, "currency": "UGX", "value_date": "2026-04-16",
+ "payment_method_key": "cash", "external_reference": null}
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{"transaction_id": "c4d1...", "receipt_no": "RC-HQ-000124",
+ "allocations": [
+   {"schedule_item_no": 1, "component": "interest", "amount_minor": 120000},
+   {"schedule_item_no": 1, "component": "principal", "amount_minor": 180000}],
+ "loan": {"status": "active", "principal_outstanding_minor": 1020000,
+          "days_past_due": 0, "next_due_date": "2026-04-16"},
+ "receipt_document_id": null}
+```
+
+The receipt PDF is rendered after commit; its `document_id` appears on the transaction
+when ready. Repeating the request with the same key returns the same body with
+`Idempotent-Replayed: true`.
