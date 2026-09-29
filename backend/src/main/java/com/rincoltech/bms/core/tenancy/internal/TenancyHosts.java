@@ -20,6 +20,13 @@ class TenancyHosts implements PlatformHost {
     }
 
     @Override
+    public boolean isValidSlug(String slug) {
+        return slug != null
+                && TenantResolutionFilter.SLUG.matcher(slug).matches()
+                && !TenancyProperties.RESERVED_LABELS.contains(slug);
+    }
+
+    @Override
     public String tenantOrigin(String slug) {
         return properties.linkOrigin().replace("{slug}", slug);
     }

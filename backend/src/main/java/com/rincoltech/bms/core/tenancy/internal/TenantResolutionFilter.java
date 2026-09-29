@@ -27,7 +27,7 @@ class TenantResolutionFilter extends OncePerRequestFilter {
     /** Request attribute holding the resolved tenant's status, {@code active} or {@code suspended}. */
     static final String STATUS_ATTRIBUTE = "bms.tenant.status";
 
-    private static final Pattern SLUG = Pattern.compile("^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])$");
+    static final Pattern SLUG = Pattern.compile("^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])$");
 
     private final TenancyProperties properties;
     private final JdbcClient jdbc;

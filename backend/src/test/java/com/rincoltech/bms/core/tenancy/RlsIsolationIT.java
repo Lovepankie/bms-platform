@@ -49,6 +49,41 @@ class RlsIsolationIT {
                         "INSERT INTO users (id, tenant_id, kind, full_name, phone_e164, status) VALUES (?, ?, 'staff', 'Test Staff 01', '+256700000090', 'active')")
                 .params(user, t.tenantId())
                 .update();
+        // Increment 1 tables (migration V2).
+        owner.sql(
+                        "INSERT INTO subscriptions (id, tenant_id, plan_id, status) VALUES (?, ?, '00000000-0000-4000-8000-000000000001', 'trial')")
+                .params(UUID.randomUUID(), t.tenantId())
+                .update();
+        owner.sql(
+                        "INSERT INTO tenant_settings (id, tenant_id, settings) VALUES (?, ?, '{\"display_name\": \"Test Display\"}')")
+                .params(UUID.randomUUID(), t.tenantId())
+                .update();
+        owner.sql("INSERT INTO user_credentials (user_id, tenant_id, password_hash) VALUES (?, ?, 'not-a-real-hash')")
+                .params(user, t.tenantId())
+                .update();
+        owner.sql(
+                        "INSERT INTO user_recovery_codes (id, tenant_id, user_id, code_hash) VALUES (?, ?, ?, repeat('1', 64))")
+                .params(UUID.randomUUID(), t.tenantId(), user)
+                .update();
+        owner.sql("INSERT INTO user_invitations (id, tenant_id, user_id, token_hash, expires_at, invited_by)"
+                        + " VALUES (?, ?, ?, ?, now() + interval '72 hours', ?)")
+                .params(UUID.randomUUID(), t.tenantId(), user, randomHash(), user)
+                .update();
+        owner.sql(
+                        "INSERT INTO auth_sessions (id, tenant_id, user_id, family_id, refresh_token_hash, expires_at, idle_expires_at)"
+                                + " VALUES (?, ?, ?, ?, ?, now() + interval '7 days', now() + interval '12 hours')")
+                .params(UUID.randomUUID(), t.tenantId(), user, UUID.randomUUID(), randomHash())
+                .update();
+        owner.sql("INSERT INTO user_role_assignments (id, tenant_id, user_id, role_key, branch_id, granted_by)"
+                        + " VALUES (?, ?, ?, 'cashier', ?, ?)")
+                .params(UUID.randomUUID(), t.tenantId(), user, t.headOffice(), user)
+                .update();
+        owner.sql(
+                        "INSERT INTO approval_requests (id, tenant_id, branch_id, action_type, subject_type, subject_id, payload,"
+                                + " status, requested_by, requested_at, expires_at)"
+                                + " VALUES (?, ?, ?, 'test_action', 'test.subject', ?, '{}', 'pending', ?, now(), now() + interval '7 days')")
+                .params(UUID.randomUUID(), t.tenantId(), t.headOffice(), UUID.randomUUID(), user)
+                .update();
         owner.sql("INSERT INTO tenant_sequences (tenant_id, sequence_key, next_value) VALUES (?, 'rls_fixture', 1)")
                 .param(t.tenantId())
                 .update();
@@ -86,6 +121,10 @@ class RlsIsolationIT {
                 .update();
     }
 
+    static String randomHash() {
+        return (UUID.randomUUID().toString() + UUID.randomUUID()).replace("-", "");
+    }
+
     static void insertMember(TestDatabase.Fixture t, UUID id, String name, String nin) {
         TestDatabase.owner()
                 .sql("""
@@ -101,6 +140,8 @@ class RlsIsolationIT {
         return TestDatabase.owner().sql("""
                         SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
                          WHERE n.nspname = 'public' AND c.relkind = 'r'
+                           -- Platform tables (chapter 6 section 6.4) carry no tenant policy by design.
+                           AND c.relname NOT LIKE 'platform\\_%'
                            AND (c.relname = 'tenants' OR EXISTS (
                                 SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'tenant_id'
                                    AND NOT a.attisdropped))
@@ -146,7 +187,21 @@ class RlsIsolationIT {
     @Test
     void everyTenantOwnedTableHasForcedRlsAndTheStandardPolicy() {
         List<String> tables = tenantOwnedTables();
-        assertThat(tables).contains("tenants", "branches", "audit_log", "journal_lines", "lending_members");
+        assertThat(tables)
+                .contains(
+                        "tenants",
+                        "branches",
+                        "audit_log",
+                        "journal_lines",
+                        "lending_members",
+                        "subscriptions",
+                        "tenant_settings",
+                        "user_credentials",
+                        "user_recovery_codes",
+                        "user_invitations",
+                        "auth_sessions",
+                        "user_role_assignments",
+                        "approval_requests");
         JdbcClient owner = TestDatabase.owner();
         List<String> missing = new ArrayList<>();
         for (String table : tables) {
