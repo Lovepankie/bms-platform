@@ -32,7 +32,7 @@ jobs:
   meta:
     name: Resolve tags
     if: github.repository == 'RincolTech-Solutions-ltd/bms-platform'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, hillary-pi]
     outputs:
       sha_tag: ${{ steps.tags.outputs.sha_tag }}
       version: ${{ steps.tags.outputs.version }}
@@ -61,7 +61,7 @@ jobs:
     name: Build and push ${{ matrix.image }}
     needs: meta
     if: github.ref_type == 'branch'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, hillary-pi]
     timeout-minutes: 30
     permissions:
       contents: read
@@ -79,12 +79,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # Every Dockerfile compiles in a stage pinned to $BUILDPLATFORM (Maven, npm and a Go
-      # cross-compile run natively on the runner), and the per-target runtime stages have no RUN
-      # step, so nothing is compiled or executed under emulation today. QEMU is registered only so
-      # that a future RUN step in a runtime stage still builds for arm64.
-      - uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
+      # cross-compile run natively on the ARM64 runner), and the per-target runtime stages have no
+      # RUN step, so the amd64 images are assembled without emulation. QEMU is deliberately not
+      # registered: it needs privileges the walled runner does not have (ADR-018). A future RUN
+      # step in a runtime stage must therefore be avoided, or the amd64 build will fail loudly.
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -111,7 +109,7 @@ jobs:
     name: Point staging at ${{ needs.meta.outputs.sha_tag }}
     needs: [meta, build]
     if: github.ref_type == 'branch'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, hillary-pi]
     timeout-minutes: 10
     concurrency:
       group: staging-pointer
@@ -136,7 +134,7 @@ jobs:
           # Never move the pointer backwards: a run that finishes after a newer commit's run leaves
           # the pointer where it is.
           pointer="$(docker buildx imagetools inspect "${IMAGE_PREFIX}-api:staging" --format '{{ json .Image }}' 2>/dev/null \
-            | jq -r 'if has("linux/amd64") then ."linux/amd64" else . end | .config.Labels["org.opencontainers.image.revision"] // empty' || true)"
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d.get("linux/amd64", d); print(((d.get("config") or {}).get("Labels") or {}).get("org.opencontainers.image.revision", ""))' || true)"
           if [ -n "$pointer" ] && [ "$pointer" != "$GITHUB_SHA" ] && git merge-base --is-ancestor "$GITHUB_SHA" "$pointer" 2>/dev/null; then
             echo "::notice::staging already points at ${pointer}, which is newer than ${GITHUB_SHA}; left as it is."
             exit 0
@@ -150,7 +148,7 @@ jobs:
     name: Retag ${{ needs.meta.outputs.sha_tag }} as ${{ needs.meta.outputs.version }}
     needs: meta
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, hillary-pi]
     timeout-minutes: 10
     permissions:
       contents: read
@@ -180,7 +178,7 @@ jobs:
     name: Deploy to production
     needs: [meta, promote]
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, hillary-pi]
     timeout-minutes: 20
     environment: production
     concurrency:

@@ -136,13 +136,34 @@ to `$BUILDPLATFORM`: Maven builds the jar and npm builds the bundle natively on 
 output does not depend on the architecture), and the proxy's Caddy is cross-compiled by Go for
 `TARGETARCH`. The per-target runtime stages contain no `RUN` step (users and ownership are set
 with numeric ids and `COPY --chown`), so nothing executes under emulation. QEMU is still
-registered in the build job so a future runtime `RUN` step builds, and the build publishes one
-manifest list per image for `linux/amd64` and `linux/arm64`. The production retag copies the whole
-list.
+not registered (see the next paragraph), and the build publishes one manifest list per image for
+`linux/amd64` and `linux/arm64`. The production retag copies the whole list.
+
+**CI and image builds run on the host's walled runner, not on hosted runners.** The repository is
+private and the organisation has no paid Actions minutes, so every workflow runs on a self-hosted
+runner. It is the runner that already lives on the staging host for another repository of the same
+organisation. It is registered once at organisation level in a runner group restricted to exactly
+two repositories and closed to public ones, and every job targets the `hillary-pi` label. One
+runner process means jobs from the two repositories queue and never run side by side. This
+revisits the deploy option rejected above ("a self-hosted runner on the host"). What makes it
+acceptable is that the runner is walled from staging, not that the risk vanished:
+- it runs as its own user with no sudo, outside the docker group, with its own rootless Docker
+  daemon, so it cannot reach the root daemon that runs staging or its volumes;
+- a cgroup caps it at 5.5 GB of memory and three CPUs, so a build cannot starve staging;
+- an owner-match firewall rule blocks it from the home LAN, the overlay network and link-local
+  ranges;
+- package write access exists only in `deploy.yml`, which runs only on pushes to `main`, that is
+  on reviewed code; pull request jobs get read access only, and a private repository accepts pull
+  requests only from organisation members.
+Staging is still deployed by the host's own timer (pull), never by the runner. QEMU is not
+registered because the walled runner lacks the privilege; the amd64 images still build because no
+runtime stage executes anything.
 
 ## Consequences
 
 **Better:**
+
+- CI costs nothing and the repository stays private: self-hosted jobs use no Actions minutes.
 
 - Staging exists now at no hosting cost, on hardware already running, with no inbound port and no
   credential that lets anything outside reach the host.
@@ -167,6 +188,12 @@ list.
 - Staging depends on Cloudflare for both DNS and ingress.
 
 **Watch for:**
+
+- The runner executes pull request code on the same machine as staging. The walls above are the
+  control; any change to them (sudo, docker group, firewall, memory cap) reopens this decision.
+  CI is also slower on a Raspberry Pi, and jobs wait while the other repository's jobs run.
+- A runtime-stage `RUN` step would break the amd64 build (no emulation on the runner). Keep
+  runtime stages to `COPY` and metadata.
 
 - Memory: the 900 MB slice will OOM-kill a container before it touches the other workloads. Watch
   `systemctl status bms.slice` and `docker stats` after releases that add dependencies or jobs.

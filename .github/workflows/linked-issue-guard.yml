@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   linked-issue:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, hillary-pi]
     steps:
       - uses: actions/checkout@v7
         with:

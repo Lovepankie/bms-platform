@@ -38,6 +38,16 @@ branch --PR--> ci.yml: backend mvn verify | frontend contract, types, tests, bui
 
 ## 10.3 Continuous integration (`.github/workflows/ci.yml`)
 
+**Where jobs run (ADR-018).** Every workflow in this repository targets `runs-on: [self-hosted,
+hillary-pi]`: the organisation runner on the ARM64 staging host, in runner group `hillary-pi`
+(two repositories, public repositories refused). It costs no Actions minutes, which matters
+because the repository is private. The runner is walled from staging: its own user without sudo
+or the docker group, a rootless Docker daemon (`DOCKER_HOST` is set in the runner's environment,
+which Testcontainers picks up), a 5.5 GB memory and 300% CPU cgroup, and a firewall that blocks the
+LAN and overlay network. Tools the host lacks run as containers (`rhysd/actionlint`,
+`koalaman/shellcheck`); JSON handling uses `python3`. One job runs at a time across both
+repositories, so a job may queue.
+
 Runs on every pull request and every push to `main`.
 
 | Job | Steps | Proves |
@@ -64,7 +74,8 @@ read-only token and no secrets. Nothing in CI pushes images or deploys.
 - **No emulated compilation** (ADR-018): every Dockerfile compiles in a stage pinned to
   `$BUILDPLATFORM` (Maven and npm run natively on the runner; the proxy's Caddy is
   cross-compiled by Go for `TARGETARCH`), and the per-target runtime stages have no `RUN` step.
-  QEMU is registered for arm64 only as a safety net for a future runtime `RUN` step.
+  QEMU is not registered: the walled runner cannot, and nothing needs it. A runtime `RUN` step
+  would therefore break the amd64 build.
 - Only `build`, `staging-pointer` and `promote` have `packages: write`.
 - The workflow runs only for this repository (`github.repository` check), so a fork's `main`
   cannot publish.
