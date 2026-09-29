@@ -2,9 +2,14 @@ package com.rincoltech.bms.core.tenancy.internal;
 
 import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
+import com.rincoltech.bms.core.tenancy.PlanLimits;
 import com.rincoltech.bms.core.tenancy.TenantModules;
 import com.rincoltech.bms.core.tenancy.TenantSequences;
+import com.rincoltech.bms.kernel.ApiException;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -14,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** JDBC implementation of the tenancy module's public interfaces. */
 @Service
-class JdbcTenancy implements Branches, CurrentTenant, TenantModules, TenantSequences {
+class JdbcTenancy implements Branches, CurrentTenant, TenantModules, TenantSequences, PlanLimits {
 
     private final JdbcClient jdbc;
 
@@ -25,14 +30,47 @@ class JdbcTenancy implements Branches, CurrentTenant, TenantModules, TenantSeque
     @Override
     @Transactional(readOnly = true)
     public Optional<Branch> findActive(UUID branchId) {
-        return jdbc.sql("SELECT id, code, name, is_head_office FROM branches WHERE id = ? AND status = 'active'")
+        return jdbc.sql(
+                        "SELECT id, code, name, is_head_office, status FROM branches WHERE id = ? AND status = 'active'")
                 .param(branchId)
-                .query((rs, n) -> new Branch(
-                        rs.getObject("id", UUID.class),
-                        rs.getString("code"),
-                        rs.getString("name"),
-                        rs.getBoolean("is_head_office")))
+                .query(JdbcTenancy::branch)
                 .optional();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Branch> all() {
+        return jdbc.sql(
+                        "SELECT id, code, name, is_head_office, status FROM branches ORDER BY is_head_office DESC, code")
+                .query(JdbcTenancy::branch)
+                .list();
+    }
+
+    private static Branch branch(ResultSet rs, int n) throws SQLException {
+        return new Branch(
+                rs.getObject("id", UUID.class),
+                rs.getString("code"),
+                rs.getString("name"),
+                rs.getBoolean("is_head_office"),
+                "active".equals(rs.getString("status")));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void checkRoomFor(String limitKey, long currentCount) {
+        if (!List.of(MAX_BRANCHES, MAX_STAFF_USERS, MAX_ACTIVE_MEMBERS).contains(limitKey)) {
+            throw new IllegalArgumentException("unknown plan limit " + limitKey);
+        }
+        // The column name comes from the fixed list above, never from a caller's input.
+        Integer limit = jdbc.sql("SELECT p." + limitKey + " FROM tenants t JOIN plans p ON p.id = t.plan_id")
+                .query(Integer.class)
+                .optional()
+                .orElse(null);
+        if (limit != null && currentCount >= limit) {
+            throw ApiException.rule(
+                    "plan_limit_reached",
+                    "The plan allows at most " + limit + " (" + limitKey + "); the limit has been reached.");
+        }
     }
 
     @Override

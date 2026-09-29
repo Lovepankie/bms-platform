@@ -1,11 +1,11 @@
 package com.rincoltech.bms.core.ledger.internal;
 
-import com.rincoltech.bms.core.identity.CurrentPrincipal;
-import com.rincoltech.bms.core.identity.Principal;
 import com.rincoltech.bms.core.ledger.LedgerPosting;
 import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.core.tenancy.TenantSequences;
 import com.rincoltech.bms.kernel.ApiException;
+import com.rincoltech.bms.kernel.CurrentPrincipal;
+import com.rincoltech.bms.kernel.Principal;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;

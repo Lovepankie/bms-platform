@@ -1,5 +1,7 @@
 package com.rincoltech.bms.core.identity;
 
+import com.rincoltech.bms.kernel.CurrentPrincipal;
+import com.rincoltech.bms.kernel.Principal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -54,7 +56,7 @@ class DevAuthenticationFilter extends OncePerRequestFilter {
             Set<UUID> branchIds = all
                     ? Set.of()
                     : split(branches).stream().map(UUID::fromString).collect(Collectors.toSet());
-            return Optional.of(new Principal(UUID.fromString(userId), kind, permissions, all, branchIds));
+            return Optional.of(Principal.uniform(UUID.fromString(userId), kind, permissions, all, branchIds));
         } catch (IllegalArgumentException e) {
             return Optional.empty();
         }

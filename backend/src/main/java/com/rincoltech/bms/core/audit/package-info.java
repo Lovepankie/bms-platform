@@ -6,7 +6,7 @@
 @ApplicationModule(
         id = "core.audit",
         displayName = "Core: Audit",
-        allowedDependencies = {"kernel", "core.identity"})
+        allowedDependencies = {"kernel"})
 package com.rincoltech.bms.core.audit;
 
 import org.springframework.modulith.ApplicationModule;

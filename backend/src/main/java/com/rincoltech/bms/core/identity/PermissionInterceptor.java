@@ -1,6 +1,10 @@
 package com.rincoltech.bms.core.identity;
 
 import com.rincoltech.bms.kernel.ApiException;
+import com.rincoltech.bms.kernel.CurrentPrincipal;
+import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.PublicEndpoint;
+import com.rincoltech.bms.kernel.RequiresPermission;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;

@@ -27,8 +27,24 @@ class TransactionalTenantJobs implements TenantJobs {
 
     @Override
     public int forEachActiveTenant(String jobName, Consumer<UUID> work) {
-        List<UUID> tenants =
-                jdbc.sql("SELECT app_list_active_tenants()").query(UUID.class).list();
+        return run(
+                jobName,
+                jdbc.sql("SELECT app_list_active_tenants()").query(UUID.class).list(),
+                work);
+    }
+
+    @Override
+    public int forEachActiveTenantWithModule(String jobName, String moduleKey, Consumer<UUID> work) {
+        return run(
+                jobName,
+                jdbc.sql("SELECT app_list_active_tenants_with_module(?)")
+                        .param(moduleKey)
+                        .query(UUID.class)
+                        .list(),
+                work);
+    }
+
+    private int run(String jobName, List<UUID> tenants, Consumer<UUID> work) {
         int failures = 0;
         for (UUID tenantId : tenants) {
             try {

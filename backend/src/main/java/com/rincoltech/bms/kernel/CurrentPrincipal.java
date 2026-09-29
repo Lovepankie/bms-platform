@@ -1,10 +1,14 @@
-package com.rincoltech.bms.core.identity;
+package com.rincoltech.bms.kernel;
 
-import com.rincoltech.bms.kernel.ApiException;
 import java.util.Optional;
 import org.springframework.http.HttpStatus;
 
-/** The principal of the current request, set by the authentication filter for one request. */
+/**
+ * The principal of the current request, set by the identity module's authentication filters for
+ * one request. It lives in the kernel so that every module (the audit writer included) can read
+ * it without depending on the identity module; only {@code core.identity} may set or clear it,
+ * which {@code SecurityArchitectureTest} enforces.
+ */
 public final class CurrentPrincipal {
 
     private static final ThreadLocal<Principal> CURRENT = new ThreadLocal<>();
@@ -24,11 +28,13 @@ public final class CurrentPrincipal {
         return principal;
     }
 
-    static void set(Principal principal) {
+    /** Identity module only. */
+    public static void set(Principal principal) {
         CURRENT.set(principal);
     }
 
-    static void clear() {
+    /** Identity module only. */
+    public static void clear() {
         CURRENT.remove();
     }
 }

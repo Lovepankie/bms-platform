@@ -1,6 +1,6 @@
 package com.rincoltech.bms.lending.members.internal;
 
-import com.rincoltech.bms.core.identity.RequiresPermission;
+import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.lending.members.internal.MemberApi.CreateMemberRequest;
 import com.rincoltech.bms.lending.members.internal.MemberApi.MemberPage;
 import com.rincoltech.bms.lending.members.internal.MemberApi.MemberResponse;

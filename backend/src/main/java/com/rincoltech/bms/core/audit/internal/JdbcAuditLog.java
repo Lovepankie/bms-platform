@@ -1,9 +1,9 @@
 package com.rincoltech.bms.core.audit.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
-import com.rincoltech.bms.core.identity.CurrentPrincipal;
-import com.rincoltech.bms.core.identity.Principal;
+import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Masking;
+import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.RequestContext;
 import java.util.LinkedHashMap;
 import java.util.Map;

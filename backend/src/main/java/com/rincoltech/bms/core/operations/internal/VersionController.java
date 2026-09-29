@@ -1,6 +1,6 @@
 package com.rincoltech.bms.core.operations.internal;
 
-import com.rincoltech.bms.core.identity.PublicEndpoint;
+import com.rincoltech.bms.kernel.PublicEndpoint;
 import io.swagger.v3.oas.annotations.Operation;
 import java.util.LinkedHashMap;
 import java.util.Map;

@@ -53,6 +53,9 @@ class TenancyConfiguration {
                 registry.addInterceptor(new ModuleGateInterceptor(manifests, tenantModules))
                         .addPathPatterns("/api/v1/**")
                         .order(Ordered.HIGHEST_PRECEDENCE);
+                registry.addInterceptor(new SuspendedTenantInterceptor())
+                        .addPathPatterns("/api/v1/**")
+                        .order(Ordered.HIGHEST_PRECEDENCE + 1);
             }
         };
     }

@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.tenancy;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -8,5 +9,8 @@ public interface Branches {
 
     Optional<Branch> findActive(UUID branchId);
 
-    record Branch(UUID id, String code, String name, boolean headOffice) {}
+    /** Every branch of the tenant, active and inactive, head office first. */
+    List<Branch> all();
+
+    record Branch(UUID id, String code, String name, boolean headOffice, boolean active) {}
 }
