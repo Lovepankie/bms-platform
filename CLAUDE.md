@@ -10,7 +10,10 @@ agent in this repository; this file only adds what is specific to Claude Code.
   branch. If you add a decision, write the ADR; cite unwritten ADRs only as
   "pending ADR-NNN". Run `python3 .github/scripts/adr_citation_guard.py` and validate
   `docs/workspace.dsl` (command in `README.md`) before you finish.
-- **Backend framework is pending ADR-010.** Do not extend `backend/` until it is accepted.
+- **Backend is Java 25 and Spring Boot 4.1 with Spring Modulith 2.1 (ADR-010).** New modules copy
+  the shape of `lending.members`. Run `make test` (it needs JDK 25 and Docker) and `make fmt`
+  before you finish; after an API change run `make openapi` and commit the regenerated
+  `docs/api/openapi.json` and `frontend/src/api/schema.d.ts`.
 - **Never** put real client, borrower or staff data, real phone or ID numbers, or real
   figures in code, fixtures, tests, docs or commit messages. Fabricate them.
 - `.claude/settings.json` denies edits to `.env` files and secrets, `rm -rf`, and global

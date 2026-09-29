@@ -55,9 +55,9 @@ in chapter 13 and is documented in `docs/specs/pilot-data-dictionary.md`.
 | Reader | Read |
 |---|---|
 | Anyone new | Chapters 1, 2, 5; then `docs/specs/lending-mvp-scope.md` |
-| Backend developer | 3, 5, 6, 7, 8, 13, 15, and ADR-002, ADR-003, ADR-004 |
+| Backend developer | 3, 5, 6, 7, 8, 13, 15, and ADR-002, ADR-003, ADR-004, ADR-010 |
 | Frontend developer | 3, 7, 11, ADR-009, and chapter 4 section 4.8 (offline) |
-| Whoever owns deployment | 9, 10, `docs/runbooks/`, and pending ADR-006 |
+| Whoever owns deployment | 9, 10, `docs/runbooks/`, ADR-006 and ADR-008 |
 | Reviewer of money correctness | Chapter 3 section 3.4, chapter 6 section 6.6, chapter 14, ADR-004 |
 
 Chapter list and ownership are in `docs/sdd/README.md`.

@@ -1,0 +1,10 @@
+bms:
+  tenancy:
+    base-domain: bms.test
+    allow-tenant-header: true
+  auth:
+    mode: dev
+
+management:
+  server:
+    port: 0

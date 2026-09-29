@@ -1,0 +1,78 @@
+name: SSH deploy
+description: >
+  Copies the host-side deployment files to /opt/bms on the target, logs the host in to GHCR with
+  the workflow's short-lived token, runs deploy/deploy.sh with the image tag, and logs out.
+  Used by the staging and production jobs of deploy.yml (ADR-006). Never echoes a secret.
+
+inputs:
+  host:
+    description: Host name or address of the target VM
+    required: true
+  ssh-user:
+    description: Deploy user on the target
+    required: true
+  ssh-key:
+    description: Private key of the deploy user (an environment secret)
+    required: true
+  known-hosts:
+    description: known_hosts line(s) for the target; when empty the key is scanned (trust on first use)
+    required: false
+    default: ""
+  image-tag:
+    description: sha-<short> or vX.Y.Z
+    required: true
+  registry-user:
+    description: GHCR user for the pull
+    required: true
+  registry-token:
+    description: Token with packages:read, valid only for this workflow run
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare SSH
+      shell: bash
+      env:
+        HOST: ${{ inputs.host }}
+        SSH_KEY: ${{ inputs.ssh-key }}
+        KNOWN_HOSTS: ${{ inputs.known-hosts }}
+      run: |
+        install -m 700 -d ~/.ssh
+        umask 077
+        printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+        if [ -n "$KNOWN_HOSTS" ]; then
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+        else
+          echo "::warning::No known_hosts secret for this environment; trusting the key scanned now. Add one (docs/runbooks/provision-host.md)."
+          ssh-keyscan -T 15 "$HOST" > ~/.ssh/known_hosts 2>/dev/null
+        fi
+
+    - name: Copy deployment files
+      shell: bash
+      env:
+        TARGET: ${{ inputs.ssh-user }}@${{ inputs.host }}
+      run: |
+        tar -C deploy -czf - compose.yml deploy.sh backup.sh postgres sql \
+          | ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes "$TARGET" \
+              'mkdir -p /opt/bms && tar -xzf - -C /opt/bms && chmod 755 /opt/bms/deploy.sh /opt/bms/backup.sh'
+
+    - name: Deploy
+      shell: bash
+      env:
+        TARGET: ${{ inputs.ssh-user }}@${{ inputs.host }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
+        REGISTRY_USER: ${{ inputs.registry-user }}
+        REGISTRY_TOKEN: ${{ inputs.registry-token }}
+      run: |
+        ssh_run() { ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes "$TARGET" "$@"; }
+        printf '%s' "$REGISTRY_TOKEN" | ssh_run "docker login ghcr.io --username '$REGISTRY_USER' --password-stdin" > /dev/null
+        status=0
+        ssh_run "/opt/bms/deploy.sh '$IMAGE_TAG'" || status=$?
+        ssh_run "docker logout ghcr.io" > /dev/null || true
+        exit "$status"
+
+    - name: Remove SSH key
+      if: always()
+      shell: bash
+      run: rm -f ~/.ssh/deploy_key

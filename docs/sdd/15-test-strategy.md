@@ -4,9 +4,8 @@
 
 ## 15.1 Purpose
 
-What is tested, at which level, with what data, and which tests gate a merge. The test
-types are independent of the backend framework (pending ADR-010); each maps to a tool in
-either candidate stack.
+What is tested, at which level, with what data, and which tests gate a merge. Tools follow
+ADR-010 (section 15.3.1).
 
 ## 15.2 Principles
 
@@ -15,8 +14,9 @@ either candidate stack.
   request.
 - **Real PostgreSQL, not a substitute.** RLS, constraint triggers, composite foreign keys
   and `SELECT ... FOR UPDATE` only behave correctly on the real engine. Integration tests
-  run against PostgreSQL 16 (a CI service container, and a local container through
-  `make dev`).
+  run against PostgreSQL 16 in Testcontainers, in CI and on a developer's machine alike,
+  initialised with the servers' own role script and migrator, and connected as `bms_app`
+  (a test connected as a superuser passes with every policy dropped).
 - **Fixed clocks.** Every test that depends on time sets the business date through the
   clock abstraction (chapter 5 section 5.4.5).
 - **Fabricated data only.** No production data in any environment other than production
@@ -37,9 +37,24 @@ either candidate stack.
 | End to end | Browser flows on staging | minutes | After deploy to staging (later: nightly) |
 | Performance | Load tests against staging with the capacity dataset | tens of minutes | Before a production release that touches queries or jobs |
 
+### 15.3.1 Tools
+
+| Level | Backend | Frontend |
+|---|---|---|
+| Unit and architecture | JUnit 6 in Maven Surefire, classes named `*Test`; Spring Modulith `ApplicationModules.verify()`; ArchUnit | Vitest (`*.test.ts`) |
+| Integration and API | JUnit 6 in Maven Failsafe, classes named `*IT`; Spring Boot test on a random port with `TestRestTemplate`; Testcontainers 2, PostgreSQL 16 (`TestDatabase`, one container per test JVM) | |
+| Contract | `OpenApiSnapshotIT` against `docs/api/openapi.json` | The generated `schema.d.ts` must match (CI) |
+| End to end | | Playwright, later |
+
+`mvn verify` runs all backend levels; `npm test` the frontend unit tests (`make test` runs both).
+
 ## 15.4 Isolation tests (RLS)
 
-Run connected as `bms_app`, never as the owner.
+Run connected as `bms_app`, never as the owner. Built so far: items 1, 2 (reads for every
+table, writes for representative tables), 3, 5 and 9 in `RlsIsolationIT`, which enumerates
+tenant-owned tables from the catalogue and requires a factory row for each; item 4 in
+`TenantBindingIT`; item 6 in `DatabaseRoleGuardIT`; item 7 for the members list and detail in
+`MembersApiIT`.
 
 1. **Catalogue test.** Query `pg_class` and `pg_policy` for every table with a
    `tenant_id` column (plus `tenants`). Each must have `relrowsecurity` and
@@ -72,10 +87,12 @@ Run connected as `bms_app`, never as the owner.
 Fails the build when any rule of ADR-002 is broken: core depending on a vertical, a
 module using another module's internals, one vertical depending on another, the kernel
 depending on anything, or a cycle. The allowed dependency list is chapter 5 section
-5.4.2, kept as data next to the test so a change to the architecture shows up as a change
-to that file in review. A second architecture test enumerates routes and fails on any
-route without a declared permission (FR-IAM-03), and a third fails on any direct system
-clock read outside the kernel.
+5.4.2, kept as data in each module's `package-info.java` (`allowedDependencies`), so a change
+to the architecture shows up in review as a change to that line. `ModularityTest` runs Spring
+Modulith's `verify()` over them and adds an explicit rule that no `core.*` module depends on a
+vertical. `RoutePermissionIT` enumerates routes and fails on any without a declared permission
+(FR-IAM-03), and `ClockArchitectureTest` fails on any direct system clock read outside the
+kernel.
 
 ## 15.6 Money correctness
 
@@ -149,8 +166,8 @@ A pull request cannot merge unless all of these pass (the workflow lives in
 `.github/workflows/`; chapter 10 describes the pipeline):
 
 - lint and type checks (backend and frontend);
-- unit, integration, API, architecture and golden tests against PostgreSQL 16 and Redis 7
-  service containers;
+- unit, integration, API, architecture and golden tests against PostgreSQL 16
+  (Testcontainers; there is no Redis, ADR-008);
 - frontend build and tests;
 - OpenAPI snapshot check;
 - documentation guards: dash guard, ADR citation guard, architecture model validation;
@@ -158,5 +175,4 @@ A pull request cannot merge unless all of these pass (the workflow lives in
 
 ## 15.12 Open items
 
-- Tool choices per test type follow the backend framework decision (pending ADR-010).
 - A mutation testing pass over the calculation code is `Later`.

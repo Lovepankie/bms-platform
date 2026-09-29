@@ -1,0 +1,17 @@
+# Local edge proxy for docker-compose.yml: plain HTTP, same routing as deploy/caddy/Caddyfile.
+# Browsers and curl resolve *.localhost to 127.0.0.1, so http://demo.localhost:8000 reaches the
+# tenant with slug "demo" exactly as <slug>.<base domain> does on a server.
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	@backend path /api/* /healthz /readyz /version
+	handle @backend {
+		reverse_proxy api:8080
+	}
+	handle {
+		reverse_proxy web:8080
+	}
+}

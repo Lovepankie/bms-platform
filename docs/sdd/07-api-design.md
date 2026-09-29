@@ -5,10 +5,9 @@
 ## 7.1 Scope
 
 The HTTP API that the web PWA (staff and member areas), the platform console, payment
-gateways and SMS or USSD aggregators call. The conventions here are independent of the
-backend framework (pending ADR-010); whichever framework is chosen must produce this
-contract. Requirement IDs refer to chapter 3, permissions to chapter 8, tables to
-chapter 6.
+gateways and SMS or USSD aggregators call. It is implemented with Spring MVC (ADR-010);
+`springdoc-openapi` generates the contract document from the code. Requirement IDs refer to
+chapter 3, permissions to chapter 8, tables to chapter 6.
 
 ## 7.2 Hosts, tenant resolution and versioning
 
@@ -22,9 +21,14 @@ chapter 6.
   base domain, not a reserved label (`www`, `api`, `app`, `admin`, `static`, `mail`).
   The slug is resolved with `app_resolve_tenant(slug)` (chapter 6 section 6.3.2). An
   unknown or inactive slug returns 404 `unknown_tenant`.
-- In local and test environments only, with `ALLOW_TENANT_HEADER=true`, the header
-  `X-Tenant: <slug>` is accepted when the host carries no slug. Production configuration
-  refuses the setting at startup.
+- In local development and tests only, the header `X-Tenant: <slug>` is accepted when the
+  host carries no slug (`ALLOW_TENANT_HEADER=true`, on by default in the `dev` profile). The
+  application refuses to start with it set in any profile other than `dev` or `test`. The host
+  always wins over the header.
+- Tenant resolution happens once, in a servlet filter, before authentication. The tenant is
+  then bound to the request's thread and, through the transaction manager, to every database
+  transaction (chapter 6 section 6.3.2). No endpoint takes a tenant id from its body, path or
+  query, and no service chooses one.
 - Every tenant request runs in one database transaction bound to the tenant
   (`set_config('app.tenant_id', ..., true)`), committed before the response is sent. A
   failed commit is never reported as success.
@@ -37,12 +41,13 @@ chapter 6.
 
 ## 7.3 Contract and generated clients
 
-- The API publishes an OpenAPI 3.1 document at `/api/v1/openapi.json` (disabled on
-  production unless the principal is a platform user).
-- CI writes the document to `docs/api/openapi.json` and fails if the committed snapshot
-  differs, so every contract change is visible in review.
-- The frontend's API types are generated from that document (ADR-009). Hand-written
-  request or response types are not allowed.
+- The API publishes an OpenAPI 3.1 document at `/api/v1/openapi.json`
+  (`BMS_OPENAPI_ENABLED`; off on production until it can be restricted to platform users).
+- `OpenApiSnapshotIT` compares the generated document with `docs/api/openapi.json` and fails if
+  they differ, so every contract change is visible in review. `make openapi` regenerates it.
+- The frontend's API types (`frontend/src/api/schema.d.ts`) are generated from that file with
+  `openapi-typescript` and used through `openapi-fetch` (ADR-009); CI fails if they are stale.
+  Hand-written request or response types are not allowed.
 
 ## 7.4 Authentication
 
@@ -63,8 +68,8 @@ cache is cleared when role assignments change).
 1. Resolve tenant from host (7.2).
 2. Verify the access token signature and expiry.
 3. `tid` equals the host's tenant, else 401 `tenant_mismatch`.
-4. Session `sid` is not revoked (Redis set of revoked session ids, falling back to
-   `auth_sessions`), else 401 `session_revoked` (FR-IAM-08).
+4. Session `sid` is not revoked (a primary key lookup in `auth_sessions`; there is no Redis,
+   ADR-008), else 401 `session_revoked` (FR-IAM-08).
 5. User status is `active`.
 6. Tenant not `suspended` for state-changing methods, else 423 `tenant_suspended`.
 7. Route's declared permission is held (chapter 8), else 403 `permission_denied`.
@@ -74,9 +79,12 @@ cache is cleared when role assignments change).
 ### 7.4.3 Development stub
 
 Until real authentication lands, local and test environments may run with
-`AUTH_MODE=dev`, where the principal is read from `X-Dev-User-Id`, `X-Dev-Kind`,
-`X-Dev-Permissions` and `X-Dev-Branch-Ids` headers. Production configuration refuses
-`AUTH_MODE=dev` at startup.
+`AUTH_MODE=dev`, where the principal is read from `X-Dev-User-Id` (a UUID), `X-Dev-Kind`
+(`staff`, the default, or `member`), `X-Dev-Permissions` (comma separated permission keys) and
+`X-Dev-Branch-Ids` (comma separated branch UUIDs, or `*` for all branches) headers. Missing or
+malformed headers leave the request unauthenticated. The application refuses to start with
+`AUTH_MODE=dev` in any profile other than `dev` or `test`; with the default `AUTH_MODE=none`
+every non-public route answers 401 `unauthenticated` until real sign-in lands.
 
 ## 7.5 Request and response conventions
 
@@ -132,16 +140,16 @@ registered.
 
 | Status | When |
 |---|---|
-| 400 | Malformed request (bad JSON, bad UUID, unknown query parameter) |
-| 401 | Not authenticated, token expired, `tenant_mismatch`, `session_revoked` |
+| 400 | `malformed_request`: bad JSON, bad UUID, unknown body field, unknown query parameter |
+| 401 | `unauthenticated`, token expired, `tenant_mismatch`, `session_revoked` |
 | 403 | Authenticated but lacks the permission (`permission_denied`) |
 | 404 | Not found or outside branch scope; `unknown_tenant`; `module_not_enabled` |
-| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`) |
+| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`); `conflict` for any other unique or foreign key violation |
 | 422 | Validation and business rule failures (codes below) |
 | 423 | `tenant_suspended`, `account_locked` |
 | 429 | Rate limited; `Retry-After` header set |
-| 500 | Unexpected; body carries only `request_id` |
-| 503 | Dependency down (database, Redis); readiness fails |
+| 500 | `internal_error`; the body carries only the generic title and the `request_id` |
+| 503 | Dependency down (the database); readiness fails |
 
 Business rule codes used in chapter 3 (each is a 422 unless listed above):
 `validation_failed`, `plan_limit_reached`, `invalid_phone`, `invalid_nin`,
@@ -154,7 +162,13 @@ Business rule codes used in chapter 3 (each is a 422 unless listed above):
 `already_reversed`, `insufficient_balance`, `collateral_secures_open_loan`,
 `branch_has_open_accounts`, `account_has_open_items`, `unknown_placeholder`,
 `blocking_issues_unresolved`, `system_account_not_allowed`, `idempotency_key_reused`,
-`idempotency_key_missing`.
+`idempotency_key_missing`, and from the ledger's posting operation (ADR-004):
+`unbalanced_entry`, `invalid_journal_line`, `account_not_postable`, `currency_mismatch`.
+
+Entries of the `errors` array carry their own `code`: `invalid` (a Bean Validation failure;
+the message says which), `required`, `unknown_branch` (a branch that does not exist, is inactive
+or is outside the caller's scope, deliberately indistinguishable), `invalid_phone`,
+`invalid_nin`. Every response, success or error, carries the `X-Request-Id` header.
 
 ## 7.8 Idempotency (money-moving endpoints)
 
@@ -192,7 +206,8 @@ target row (`SELECT ... FOR UPDATE`) instead, and do not need `If-Match`.
 
 ## 7.10 Rate limits
 
-Enforced in Redis, per tenant:
+Enforced in process by each API instance, per tenant (ADR-008; a PostgreSQL-backed limiter
+replaces this before a second API instance is added):
 
 | Scope | Limit |
 |---|---|
@@ -213,9 +228,12 @@ chapter 8. Paths are relative to `/api/v1`.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/healthz` | Liveness: process up. Outside `/api/v1`. |
-| GET | `/readyz` | Readiness: database and Redis reachable, migrations at head. Outside `/api/v1`. |
-| GET | `/version` | Git SHA and version. Outside `/api/v1`. |
+| GET | `/healthz` | Liveness: process up. Outside `/api/v1`. Body `{"status":"UP"}` only. |
+| GET | `/readyz` | Readiness: database reachable and schema at least the image's newest migration. Outside `/api/v1`. Status only. |
+| GET | `/version` | `{"version", "git_sha"}`. Outside `/api/v1`. |
+
+All other actuator endpoints are disabled. `health` and `info` exist only on the management
+port (8081), which is never published outside the container network.
 
 ### 7.11.2 Authentication (`/auth`)
 
@@ -344,6 +362,11 @@ chapter 8. Paths are relative to `/api/v1`.
 | POST | `/payments/callbacks/{provider}` | public, signature verified | On `api.<base domain>`. FR-PAY-02 |
 
 ### 7.11.11 Lending: members (`/lending/members`)
+
+Built so far (the reference slice, `lending.members`): `POST /lending/members`,
+`GET /lending/members` (cursor pagination ordered by `member_no`, filters `branch_id`,
+`status`, `q`; phone and NIN masked) and `GET /lending/members/{member_id}` (with `ETag`). The
+rest of this table is to be built.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|

@@ -1,0 +1,94 @@
+# Local development stack: `make dev` (or `docker compose up --build`). Same shape as the servers
+# (deploy/compose.yml): the same Postgres init script, the same one-shot migrate step, the same
+# images built locally, and an HTTP-only edge proxy.
+#
+#   http://localhost:8000            the PWA (and /api through the proxy)
+#   http://demo.localhost:8000       the "demo" tenant by host, as on a server
+#   http://localhost:8080            the API directly (for the Vite dev server and curl)
+#   localhost:5432                   PostgreSQL (psql as bms_owner for fixtures)
+#
+# Every value below has a local default so a fresh clone runs without a .env. The defaults are
+# development-only placeholders, not secrets; servers take theirs from /opt/bms/.env.
+
+name: bms-local
+
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_DB: bms
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:-local-superuser}
+      BMS_OWNER_PASSWORD: ${BMS_OWNER_PASSWORD:-local-owner}
+      BMS_APP_PASSWORD: ${BMS_APP_PASSWORD:-local-app}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bms"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    build:
+      context: ./backend
+      args:
+        GIT_SHA: local
+    image: bms-platform-api:local
+    command: ["migrate"]
+    restart: "no"
+    environment:
+      BMS_DB_URL: jdbc:postgresql://postgres:5432/bms
+      BMS_OWNER_USER: bms_owner
+      BMS_OWNER_PASSWORD: ${BMS_OWNER_PASSWORD:-local-owner}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: bms-platform-api:local
+    environment:
+      # dev profile: X-Tenant header and the X-Dev-* authentication stub are accepted.
+      SPRING_PROFILES_ACTIVE: dev
+      BMS_DB_URL: jdbc:postgresql://postgres:5432/bms
+      BMS_APP_USER: bms_app
+      BMS_APP_PASSWORD: ${BMS_APP_PASSWORD:-local-app}
+      BMS_BASE_DOMAIN: localhost
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError
+    mem_limit: 768m
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf ''GET /readyz HTTP/1.0\r\nHost: localhost\r\n\r\n'' >&3 && head -n1 <&3 | grep -q '' 200 '''
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 90s
+
+  web:
+    build:
+      context: ./frontend
+    image: bms-platform-web:local
+
+  proxy:
+    image: caddy:2.11.4-alpine
+    ports:
+      - "${PROXY_PORT:-8000}:80"
+    volumes:
+      - ./deploy/caddy/Caddyfile.local:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - api
+      - web
+
+volumes:
+  pgdata:

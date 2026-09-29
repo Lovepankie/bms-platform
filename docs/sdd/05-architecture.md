@@ -6,8 +6,9 @@
 
 Container and module structure, the dependency rules between modules, and the mapping
 from each structural decision to the ADR that made it. The Containers and Components
-views in `docs/workspace.dsl` are the diagram form of this chapter. The backend framework
-is pending ADR-010; this chapter is written so that it holds for either candidate.
+views in `docs/workspace.dsl` are the diagram form of this chapter. The backend is Java 25,
+Spring Boot 4.1 and Spring Modulith 2.1 (ADR-010); section 5.4.6 maps the logical modules to
+packages.
 
 ## 5.2 Architectural decisions in force
 
@@ -18,11 +19,11 @@ is pending ADR-010; this chapter is written so that it holds for either candidat
 | Shared schema, PostgreSQL row-level security | ADR-003 |
 | Integer minor units, double-entry general ledger | ADR-004 |
 | Documentation lives with the code | ADR-005 |
-| Delivery pipeline: build once, main to staging, tag to production | pending ADR-006 |
+| Delivery pipeline: build once, main to staging, tag to production | ADR-006 |
 | Separate from the offline single-device product | ADR-007 |
-| Background jobs and scheduling on Redis | pending ADR-008 |
+| Background jobs and scheduling on PostgreSQL (db-scheduler); no Redis | ADR-008 |
 | One React PWA with staff and member areas | ADR-009 |
-| Backend language and framework | pending ADR-010 |
+| Backend: Java 25, Spring Boot 4.1, Spring Modulith 2.1, Flyway | ADR-010 |
 | Payment gateway | pending ADR-011 |
 | Credit scoring model beyond the rules-based default | pending ADR-012 |
 | SMS and USSD aggregator | pending ADR-013 |
@@ -31,20 +32,21 @@ is pending ADR-010; this chapter is written so that it holds for either candidat
 
 | Container | Technology | Responsibility |
 |---|---|---|
-| Reverse proxy | Caddy or Nginx (chapter 9) | TLS termination with a wildcard certificate, host routing (`<slug>.`, `app.`, `api.`), static caching headers, request size limits |
-| Web | React 18, TypeScript, Vite, PWA; static files served by a small web server container | Staff area, member area, platform console (ADR-009) |
-| API | Backend framework per pending ADR-010 | All HTTP endpoints in chapter 7; runs every module in one process; one transaction per request |
-| Worker | Same codebase and image as the API, different entry point; Redis-backed queue per pending ADR-008 | Drains the outbox (SMS, email, PDF rendering, report builds), runs scheduled jobs (nightly arrears, interest, reminders, reconciliation, backups trigger) |
-| PostgreSQL 16 | Database | System of record for all tenants (chapter 6) |
-| Redis 7 | Cache and queue | Job queue, rate limits, permission cache, revoked session set. Holds nothing that cannot be rebuilt: losing Redis loses queued jobs, which the outbox re-enqueues |
+| Reverse proxy | Caddy with the Cloudflare DNS module (chapter 9) | TLS termination with a wildcard certificate (DNS-01), host and path routing (`<slug>.`, `app.`, `api.`), security headers, request size limits |
+| Web | React 18, TypeScript, Vite, PWA; static files served by Caddy | Staff area, member area, platform console (ADR-009) |
+| API | Java 25, Spring Boot 4.1, Spring Modulith 2.1 (ADR-010) | All HTTP endpoints in chapter 7; runs every module in one process; one transaction per request, bound to the tenant; also runs the worker role |
+| Worker (a role) | db-scheduler inside the API process, state in PostgreSQL (ADR-008); can move to a second container of the same image with `BMS_SCHEDULER_ENABLED` | Drains the outbox (SMS, email, PDF rendering, report builds), runs scheduled jobs (nightly arrears, interest, reminders, reconciliation, key purge) |
+| Migrate (one-shot) | The API image's `migrate` command | Applies Flyway migrations as `bms_owner` before the application containers switch (ADR-006) |
+| PostgreSQL 16 | Database | System of record for all tenants (chapter 6), and the job store (`scheduled_tasks`, ADR-008) |
 | Object storage | Cloudflare R2 (S3 API) | Generated PDFs, uploads, encrypted database backups |
 
 External systems: SMS and USSD aggregator (pending ADR-013), payment gateway
 (pending ADR-011) connecting to mobile money operators, transactional email provider.
 
 Deployment: one virtual machine per environment (staging, production), all containers
-under Docker Compose, object storage external. Chapter 9 and pending ADR-006 hold the
-detail.
+under Docker Compose, object storage external. There is no Redis: jobs, the outbox and
+session revocation live in PostgreSQL, and rate limits and the permission cache are in process
+(ADR-008). Chapter 9 and ADR-006 hold the detail.
 
 ## 5.4 Module structure
 
@@ -63,7 +65,10 @@ core
   reporting       report catalogue, report runs, export formats
   imports         batches, rows, issues, review queue, commit orchestration
   payments        payment intents, gateway adapters, callbacks, unallocated receipts
+  jobs            db-scheduler tasks, per-tenant job runner (ADR-008)
+  operations      version endpoint, readiness checks, database role guard
 lending           vertical module (ADR-001)
+  manifest        the vertical's registration with the core (section 5.4.3)
   members         members, KYC, next of kin, relationship graph
   products        loan products, versions, fees
   loans           origination, appraisal, schedule, disbursement, repayment, arrears, closure
@@ -133,8 +138,33 @@ The core iterates registries; it never names a vertical.
 ### 5.4.5 Time
 
 A single clock abstraction in `core.kernel` supplies "now" and "business date for tenant
-T". Tests fix it. No module reads the system clock directly; a lint rule or architecture
-test enforces it. Business date is computed in the tenant's timezone.
+T". Tests fix it. No module reads the system clock directly; `ClockArchitectureTest`
+enforces it. Business date is computed in the tenant's timezone.
+
+### 5.4.6 Physical layout (ADR-010)
+
+One Maven project, `backend/`, one deployable. Each module is a Java package under
+`com.rincoltech.bms` whose `package-info.java` declares it with
+`@ApplicationModule(id = "...", allowedDependencies = {...})`; the allowed dependencies of section
+5.4.2 are written there, as data, and `ModularityTest` verifies them with Spring Modulith on every
+build. A module's public API is the types in its base package; its `internal` subpackage is closed
+to other modules.
+
+| Module id | Package | Built so far |
+|---|---|---|
+| `kernel` | `com.rincoltech.bms.kernel` (open) | Tenant context, money, business clock, request id, problem details, phone and NIN normalisation, masking, cursors |
+| `core.tenancy` | `...core.tenancy` | Tenant resolution from the host, the transaction manager that binds `app.tenant_id`, branches, enabled modules, tenant sequences |
+| `core.identity` | `...core.identity` | Principal, `@RequiresPermission`, `@PublicEndpoint`, the permission interceptor, the development authentication stub |
+| `core.audit` | `...core.audit` | `AuditLog.record`, masking identifiers |
+| `core.ledger` | `...core.ledger` | `LedgerPosting.post` (`post_entry`) |
+| `core.jobs` | `...core.jobs` | `TenantJobs`, db-scheduler tasks (ADR-008) |
+| `core.operations` | `...core.operations` | `/version`, the migrations readiness check, the database role guard |
+| `lending.manifest` | `...lending.manifest` | The lending module's registration (`ModuleManifest`) |
+| `lending.members` | `...lending.members` | Members: the reference vertical slice |
+
+Each further logical module of section 5.4.1 becomes a package of the same shape
+(`core.approvals`, `lending.loans`, and so on), and its `package-info.java` states its allowed
+dependencies from section 5.4.2.
 
 ## 5.5 Request flow
 

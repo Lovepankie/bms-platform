@@ -9,9 +9,10 @@ rows in the same tables, isolated by row-level security (ADR-003). Money is inte
 units and every financial event posts to a double-entry general ledger (ADR-004).
 
 This chapter is the logical data model the migrations implement. It is written in
-PostgreSQL types and is independent of the backend framework (pending ADR-010). The
-migration tool (Alembic or Flyway, per pending ADR-010) owns the physical schema; a
-schema drift test compares the migrated database with this chapter's table list.
+PostgreSQL types. The physical schema is owned by Flyway SQL migrations in
+`backend/src/main/resources/db/migration` (ADR-010), applied as `bms_owner` by the one-shot
+migrate container (ADR-006); section 6.9 lists which tables exist so far. A schema drift test
+will compare the migrated database with this chapter's table list.
 
 Requirement IDs in the Notes columns point to chapter 3.
 
@@ -68,8 +69,9 @@ tenant's timezone (`tenants.timezone`, default `Africa/Kampala`). Event instants
 `lending_investment_transactions`, `import_issue_resolutions`.
 
 For these the application role is granted `SELECT, INSERT` only, and a trigger
-`reject_mutation()` raises on `UPDATE` or `DELETE` for every role except during a
-migration run as `bms_owner`. `lending_collection_actions.promise_status` is the one
+`reject_mutation()` raises on `UPDATE` or `DELETE` for every role, `bms_owner` included,
+except in a migration running as `bms_owner` that opts in with
+`SET LOCAL bms.allow_mutation = 'on'`. The helper `bms_make_append_only(table)` attaches it. `lending_collection_actions.promise_status` is the one
 updatable column, granted by column.
 
 ## 6.3 Row-level security and database roles
@@ -78,16 +80,20 @@ updatable column, granted by column.
 
 | Role | Login | Used by | Rights |
 |---|---|---|---|
-| `bms_owner` | yes | Migrations, backup (`pg_dump`), restore | Owns every table and function. Never used by the running API or worker. |
+| `bms_owner` | yes | Migrations, backup (`pg_dump`), restore, onboarding scripts | `NOSUPERUSER BYPASSRLS`. Owns the database, the schema, every table and function. `BYPASSRLS` is required because every table is `FORCE ROW LEVEL SECURITY`: without it `pg_dump` and the `SECURITY DEFINER` resolvers would be filtered by the policy too. Never used by the running API or worker. |
 | `bms_app` | yes | API and worker | `NOSUPERUSER NOBYPASSRLS`. DML per table as granted by migrations. Subject to RLS. |
-| `bms_platform` | yes | Platform console endpoints on `app.<base domain>` | Read and write on platform tables (6.4); no access to tenant-owned tables except through the audited support session path (FR-TEN-07). |
+| `bms_platform` | yes | Platform console endpoints on `app.<base domain>` | Read and write on platform tables (6.4); no access to tenant-owned tables except through the audited support session path (FR-TEN-07). Created with the platform console; until then tenants are onboarded as `bms_owner` (`docs/runbooks/onboard-tenant.md`). |
 
-The API and worker refuse to start if their database user owns any application table or
-has `rolbypassrls` (NFR-SEC-03).
+`bms_owner` and `bms_app` are created by `deploy/postgres/initdb/01-roles.sh` when the database
+volume is first initialised, on servers, in `make dev` and in the integration tests alike. The
+API refuses to start if its database user owns any application table, is a superuser or has
+`rolbypassrls` (NFR-SEC-03; `DatabaseRoleGuard`).
 
 ### 6.3.2 Policy pattern
 
-Applied by the shared migration helper to every tenant-owned table, and to nothing else:
+Applied by the shared migration helper `bms_apply_tenant_rls(table, key default 'tenant_id')`
+to every tenant-owned table, and to nothing else; privileges come from
+`bms_grant_app(table, 'SELECT, INSERT, ...')`:
 
 ```sql
 ALTER TABLE <table> ENABLE ROW LEVEL SECURITY;
@@ -104,6 +110,19 @@ Each transaction binds its tenant first:
 ```sql
 SELECT set_config('app.tenant_id', $1, true);   -- true: transaction-local
 ```
+
+In the application this happens in exactly one place: the transaction manager
+(`TenantBindingTransactionManager`) runs it on the transaction's connection when every
+Spring-managed transaction begins, with the tenant the request's host resolved to. Nothing
+else sets it, so no code path can open a transaction for a different tenant, and a statement
+outside a transaction has no tenant at all. Inserts take `tenant_id` from
+`current_setting('app.tenant_id')::uuid` rather than from a Java value.
+
+With no tenant bound, a query fails: a session that never set the parameter raises
+`unrecognized configuration parameter "app.tenant_id"`, and a pooled session where a previous
+transaction set it raises `invalid input syntax for type uuid: ""` (the transaction-local value
+has reverted to empty). Both are errors, never rows (NFR-ISO-03). A table with no rows returns
+none either way, because the policy is only evaluated against rows.
 
 Two `SECURITY DEFINER` functions, owned by `bms_owner`, with
 `SET search_path = public, pg_temp`, are the only sanctioned way around the policy:
@@ -521,7 +540,9 @@ Index `(tenant_id, account_id)`, `(tenant_id, subledger_type, subledger_id)`.
 Balance enforcement: a constraint trigger
 `CREATE CONSTRAINT TRIGGER journal_entry_balance_check AFTER INSERT ON journal_lines
 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW` checks, at commit, that for the entry every
-currency's debits equal its credits and that there are at least two lines.
+currency's debits equal its credits and that there are at least two lines. A second constraint
+trigger, `journal_entry_has_lines_check`, runs the same check for every inserted
+`journal_entries` row, so an entry with no lines at all cannot commit either.
 
 ### 6.6.2 Default chart of accounts (seeded per lending tenant)
 
@@ -1034,18 +1055,31 @@ erDiagram
 
 ## 6.9 Migrations
 
-- Every schema change is a migration in the repository, applied by the one-shot migrate
-  container before the application containers switch (pending ADR-006;
-  `docs/sdd/10-cicd-pipeline.md`).
+- Every schema change is a Flyway migration in `backend/src/main/resources/db/migration`
+  (`V<n>__<description>.sql`), applied by the one-shot migrate container as `bms_owner` before
+  the application containers switch (ADR-006; `docs/sdd/10-cicd-pipeline.md`). The integration
+  tests apply the same files with the same code. An applied migration is never edited.
 - Migrations are **expand and contract**: a release only adds (tables, nullable columns,
   new CHECK values, indexes built `CONCURRENTLY`); removing or renaming happens in a
   later release after no deployed code uses the old shape. The previous release's code
   must run against the new schema, because rollback swaps containers without reversing
   migrations.
-- A migration that creates a tenant-owned table must call the shared RLS helper and the
-  grant helper; the catalogue test in chapter 15 fails otherwise.
+- A migration that creates a tenant-owned table must call `bms_apply_tenant_rls` and
+  `bms_grant_app` (and `bms_make_append_only` for the tables of 6.2.4); the catalogue test in
+  chapter 15 fails otherwise, and the isolation test asks for a factory row for the new table.
 - Seed data (currencies, plans, roles, permissions, role permissions) is applied by
   migrations and is idempotent.
+
+### 6.9.1 Tables that exist so far
+
+`V1__foundation.sql` creates the helpers, `currencies` and `plans` (seeded), `tenants`,
+`tenant_modules`, `branches`, `users`, `tenant_sequences`, `audit_log`, `idempotency_keys`,
+`gl_accounts`, `gl_periods`, `journal_entries`, `journal_lines` (with both balance triggers),
+`lending_members`, db-scheduler's `scheduled_tasks` (ADR-008; not tenant-owned), the resolvers
+`app_resolve_tenant` and `app_list_active_tenants`, and `bms_seed_lending_chart(tenant)`, which
+seeds the chart of section 6.6.2 and is callable by `bms_owner` only. Every other table in this
+chapter is added by the migration of the feature that first uses it.
+`lending_members.import_row_id` gets its foreign key when the import tables arrive.
 
 ## 6.10 Open items
 

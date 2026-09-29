@@ -1,0 +1,22 @@
+# Static file server inside the web container. Plain HTTP on :8080, reached only from the edge
+# proxy on the internal network.
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	root * /srv
+	encode zstd gzip
+
+	# Hashed assets never change; everything else (index.html, sw.js, the manifest) must be
+	# revalidated so a deploy is picked up at once.
+	@hashed path /assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	header /sw.js Cache-Control "no-cache"
+	header /index.html Cache-Control "no-cache"
+
+	# Single-page app: unknown paths serve index.html and the router takes over.
+	try_files {path} /index.html
+	file_server
+}

@@ -1,0 +1,121 @@
+# Every value that differs per environment comes from an environment variable listed in
+# .env.example at the repository root. Nothing secret has a default here.
+spring:
+  application:
+    name: bms-api
+  main:
+    banner-mode: off
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    # The API always connects as bms_app: NOSUPERUSER, NOBYPASSRLS, owns nothing (ADR-003).
+    # DatabaseRoleGuard refuses to start otherwise (NFR-SEC-03).
+    url: ${BMS_DB_URL:jdbc:postgresql://localhost:5432/bms}
+    username: ${BMS_APP_USER:bms_app}
+    password: ${BMS_APP_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${BMS_DB_POOL_SIZE:10}
+  # Migrations never run on application start: the one-shot `migrate` command runs them as
+  # bms_owner before the application containers switch (ADR-006). spring-boot-flyway is not on
+  # the classpath, so there is no Flyway auto-configuration to switch off.
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: always
+    # Jackson 3 already writes dates and instants as ISO-8601 strings.
+    deserialization:
+      fail-on-unknown-properties: true
+  mvc:
+    problemdetails:
+      enabled: true
+  modulith:
+    # Modules are the packages annotated with @ApplicationModule (kernel, core.*, lending.*).
+    detection-strategy: explicitly-annotated
+
+server:
+  port: 8080
+  shutdown: graceful
+  forward-headers-strategy: native
+  error:
+    whitelabel:
+      enabled: false
+
+# Actuator is locked down. The management port (8081) is never published outside the container
+# network. On the application port only /healthz (liveness) and /readyz (readiness) exist, with
+# no details. Every other endpoint is disabled, not merely unexposed.
+management:
+  server:
+    port: ${BMS_MANAGEMENT_PORT:8081}
+  endpoints:
+    access:
+      default: none
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      access: read-only
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+          additional-path: "server:/healthz"
+        readiness:
+          include: readinessState,db,migrations
+          additional-path: "server:/readyz"
+    info:
+      access: read-only
+  info:
+    git:
+      mode: simple
+    env:
+      enabled: true
+
+info:
+  app:
+    git-sha: ${BMS_GIT_SHA:}
+
+springdoc:
+  api-docs:
+    path: /api/v1/openapi.json
+    enabled: ${BMS_OPENAPI_ENABLED:true}
+  writer-with-order-by-keys: true
+  default-produces-media-type: application/json
+  show-actuator: false
+  packages-to-scan: com.rincoltech.bms
+
+bms:
+  git-sha: ${BMS_GIT_SHA:}
+  tenancy:
+    base-domain: ${BMS_BASE_DOMAIN:localhost}
+    # Only the dev and test profiles may set this; startup fails otherwise (chapter 7 section 7.2).
+    allow-tenant-header: ${ALLOW_TENANT_HEADER:false}
+  auth:
+    # none: every non-public route answers 401 until real authentication lands.
+    # dev: the header stub of chapter 7 section 7.4.3; dev and test profiles only.
+    mode: ${AUTH_MODE:none}
+  database:
+    role-guard: true
+
+# Background jobs on PostgreSQL (ADR-008). BMS_SCHEDULER_ENABLED=false turns polling off in an
+# instance that should only serve HTTP, if a separate worker instance is ever split out.
+db-scheduler:
+  enabled: ${BMS_SCHEDULER_ENABLED:true}
+  table-name: scheduled_tasks
+  threads: 4
+  polling-interval: 10s
+  delay-startup-until-context-ready: true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: server
+# Staging and production: JSON logs with request_id in every line (NFR-OBS-01).
+logging:
+  structured:
+    format:
+      console: ecs

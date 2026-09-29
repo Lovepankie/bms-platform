@@ -1,0 +1,405 @@
+{
+  "components" : {
+    "schemas" : {
+      "CreateMemberRequest" : {
+        "properties" : {
+          "alt_phone" : {
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "description" : "Defaults to the tenant currency",
+            "pattern" : "^[A-Z]{3}$",
+            "type" : "string"
+          },
+          "date_of_birth" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "district" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "first_name" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "full_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "gender" : {
+            "pattern" : "female|male|other|unspecified",
+            "type" : "string"
+          },
+          "id_type" : {
+            "pattern" : "nin|passport|refugee_id|other|none",
+            "type" : "string"
+          },
+          "last_name" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "location" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "marital_status" : {
+            "pattern" : "single|married|divorced|widowed|separated|unknown",
+            "type" : "string"
+          },
+          "monthly_income_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "national_id" : {
+            "description" : "Required when id_type is nin (FR-MEM-03)",
+            "type" : "string"
+          },
+          "occupation" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "officer_user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "other_id_number" : {
+            "maxLength" : 40,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "other_income_source" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "phone" : {
+            "description" : "Any common Uganda form; stored as E.164 (FR-MEM-02)",
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "sub_county" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "village" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "branch_id", "full_name", "id_type", "phone" ]
+      },
+      "Member" : {
+        "properties" : {
+          "alt_phone_e164" : {
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "date_of_birth" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "district" : {
+            "type" : "string"
+          },
+          "first_name" : {
+            "type" : "string"
+          },
+          "full_name" : {
+            "type" : "string"
+          },
+          "gender" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id_type" : {
+            "type" : "string"
+          },
+          "is_blacklisted" : {
+            "type" : "boolean"
+          },
+          "kyc_status" : {
+            "type" : "string"
+          },
+          "last_name" : {
+            "type" : "string"
+          },
+          "location" : {
+            "type" : "string"
+          },
+          "marital_status" : {
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "monthly_income_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "national_id" : {
+            "type" : "string"
+          },
+          "occupation" : {
+            "type" : "string"
+          },
+          "officer_user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "other_id_number" : {
+            "type" : "string"
+          },
+          "other_income_source" : {
+            "type" : "string"
+          },
+          "phone_e164" : {
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "sub_county" : {
+            "type" : "string"
+          },
+          "updated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "village" : {
+            "type" : "string"
+          }
+        }
+      },
+      "MemberListItem" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "full_name" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "is_blacklisted" : {
+            "type" : "boolean"
+          },
+          "kyc_status" : {
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "national_id_masked" : {
+            "type" : "string"
+          },
+          "phone_e164_masked" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "MemberPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MemberListItem"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      }
+    }
+  },
+  "info" : {
+    "title" : "BMS Platform API",
+    "version" : "v1"
+  },
+  "openapi" : "3.1.0",
+  "paths" : {
+    "/api/v1/lending/members" : {
+      "get" : {
+        "operationId" : "listMembers",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MemberPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List members in the caller's branch scope (FR-MEM-11)",
+        "tags" : [ "lending-members" ]
+      },
+      "post" : {
+        "operationId" : "createMember",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateMemberRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Member"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a member (FR-MEM-01)",
+        "tags" : [ "lending-members" ]
+      }
+    },
+    "/api/v1/lending/members/{member_id}" : {
+      "get" : {
+        "operationId" : "getMember",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "member_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Member"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Get one member",
+        "tags" : [ "lending-members" ]
+      }
+    },
+    "/version" : {
+      "get" : {
+        "operationId" : "version",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "additionalProperties" : {
+                    "type" : "string"
+                  },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Running version and git SHA",
+        "tags" : [ "operations" ]
+      }
+    }
+  },
+  "servers" : [ {
+    "url" : "/"
+  } ]
+}

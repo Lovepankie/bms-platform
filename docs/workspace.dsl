@@ -8,7 +8,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
     !docs sdd
     # ADRs are pulled as docs, not via !adrs: the !adrs directive requires filenames
     # beginning with a number (0001-slug.md), but these are named ADR-001-slug.md, which
-    # !adrs cannot parse (NumberFormatException). Same arrangement as rincol-praxis.
+    # !adrs cannot parse (NumberFormatException).
     !docs adr
 
     properties {
@@ -34,11 +34,11 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         # ==================================================================
         bms = softwareSystem "BMS Platform" "Multi-tenant SaaS: platform core plus vertical modules a tenant switches on (ADR-001). Lending is the first vertical." {
 
-            proxy = container "Reverse Proxy" "Terminates TLS with a wildcard certificate; routes <slug>.<base>, app.<base> and api.<base>; request size limits." "Caddy or Nginx (SDD chapter 9)" "edge"
+            proxy = container "Reverse Proxy" "Terminates TLS with one wildcard certificate issued through the DNS-01 challenge; routes <slug>.<base>, app.<base> and api.<base>; security headers; request size limits." "Caddy with the Cloudflare DNS module (SDD chapter 9)" "edge"
 
-            web = container "Web App" "One installable PWA with a staff area, a member area and the platform console, split by route and lazily loaded (ADR-009)." "React 18, TypeScript, Vite, vite-plugin-pwa" "client"
+            web = container "Web App" "One installable PWA with a staff area, a member area and the platform console, split by route and lazily loaded (ADR-009). Static files served by Caddy." "React 18, TypeScript, Vite, vite-plugin-pwa" "client"
 
-            api = container "API" "Modular monolith (ADR-002). REST under /api/v1; one database transaction per request, bound to the tenant (ADR-003)." "Backend framework per pending ADR-010" "app" {
+            api = container "API" "Modular monolith (ADR-002). REST under /api/v1; one database transaction per request, bound to the tenant (ADR-003). Also runs the worker role: db-scheduler jobs on PostgreSQL (ADR-008)." "Java 25, Spring Boot 4.1, Spring Modulith 2.1 (ADR-010)" "app" {
 
                 # ---------------- core ----------------
                 tenancy       = component "Tenancy" "Tenants, plans, subscriptions, module switching, settings, branches. Resolves the tenant from the host and binds app.tenant_id." "core" "core"
@@ -51,6 +51,8 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 reporting     = component "Reporting" "Report catalogue, parameters, report runs, exports." "core" "core"
                 imports       = component "Imports" "Batches, rows, issues, review queue, preview, commit orchestration; templates are registered by modules." "core" "core"
                 payments      = component "Payments" "Payment intents, gateway adapter, verified callbacks, unallocated receipts; booking via registered purpose handlers." "core" "core"
+                jobs          = component "Jobs" "The worker role: db-scheduler tasks with state in PostgreSQL, run one tenant per transaction (ADR-008). Drains the outbox; nightly arrears, interest, reminders, reconciliation, key purge." "core" "core"
+                operations    = component "Operations" "/healthz, /readyz (database and migrations at head), /version; refuses to start as an over-privileged database role." "core" "core"
 
                 # ---------------- lending vertical ----------------
                 members       = component "Lending: Members" "Members, KYC, next of kin, relationship graph and exposure." "lending" "lending"
@@ -62,11 +64,9 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 collections   = component "Lending: Collections" "Due and arrears lists, officer assignment, collection actions, promises to pay." "lending" "lending"
             }
 
-            worker = container "Worker" "Same codebase and image as the API, different entry point. Drains the outbox (SMS, email, PDFs, reports) and runs scheduled jobs (nightly arrears, interest, reminders, reconciliation, backups)." "Redis-backed queue per pending ADR-008" "app"
+            migrate = container "Migrate" "One-shot container run before the application containers switch: applies the Flyway migrations as bms_owner, then exits (ADR-006)." "API image, migrate command" "app"
 
-            db = container "Database" "System of record for all tenants. Shared schema, forced row-level security on every tenant-owned table, double-entry ledger with a deferred balance trigger." "PostgreSQL 16" "store"
-
-            redis = container "Cache and Queue" "Job queue, rate limits, permission cache, revoked sessions. Rebuildable; the outbox re-enqueues lost jobs." "Redis 7" "store"
+            db = container "Database" "System of record for all tenants and the job store. Shared schema, forced row-level security on every tenant-owned table, double-entry ledger with a deferred balance trigger. No Redis (ADR-008)." "PostgreSQL 16" "store"
 
             storage = container "Object Storage" "Generated PDFs, uploads and encrypted database backups. Private buckets; tenant-prefixed keys; signed URLs only." "Cloudflare R2 (S3 API)" "store"
         }
@@ -101,14 +101,8 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.proxy  -> bms.api "Routes /api/v1 and provider callbacks" "HTTP"
         bms.web    -> bms.api "Calls the REST API through the reverse proxy" "JSON over HTTPS"
         bms.api    -> bms.db "Reads and writes, one transaction per request with app.tenant_id bound" "SQL"
-        bms.api    -> bms.redis "Rate limits, permission cache, revoked sessions" "Redis protocol"
         bms.api    -> bms.storage "Stores uploads; issues signed download URLs" "S3 API"
-        bms.worker -> bms.db "Reads the outbox; runs nightly jobs one tenant per transaction" "SQL"
-        bms.worker -> bms.redis "Consumes and schedules jobs" "Redis protocol"
-        bms.worker -> bms.storage "Stores rendered PDFs, report files and encrypted backups" "S3 API"
-        bms.worker -> smsAggregator "Sends SMS" "HTTPS"
-        bms.worker -> paymentGateway "Initiates mobile money collections; polls pending intents; fetches settlement reports" "HTTPS"
-        bms.worker -> emailService "Sends email" "HTTPS"
+        bms.migrate -> bms.db "Applies migrations as bms_owner" "SQL"
         paymentGateway -> mobileMoney "Collects from the payer's wallet"
         smsAggregator  -> bms.proxy "Delivery reports and USSD sessions on api.<base>" "HTTPS"
         paymentGateway -> bms.proxy "Payment callbacks on api.<base>" "HTTPS"
@@ -157,49 +151,65 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         paymentGateway      -> bms.api.payments "Sends payment callbacks" "HTTPS"
         smsAggregator       -> bms.api.notifications "Sends delivery reports" "HTTPS"
         bms.api.tenancy     -> bms.db "Resolves the slug with app_resolve_tenant; binds app.tenant_id"
-        bms.api.identity    -> bms.redis "Revoked sessions, rate limits, permission cache"
+        bms.api.identity    -> bms.db "Reads sessions and role assignments; revocation takes effect at once"
+        bms.api.jobs        -> bms.db "Polls scheduled_tasks; reads the outbox; runs nightly jobs one tenant per transaction" "SQL"
+        bms.api.jobs        -> bms.storage "Stores rendered PDFs and report files" "S3 API"
+        bms.api.jobs        -> smsAggregator "Sends SMS" "HTTPS"
+        bms.api.jobs        -> paymentGateway "Initiates mobile money collections; polls pending intents; fetches settlement reports" "HTTPS"
+        bms.api.jobs        -> emailService "Sends email" "HTTPS"
+        bms.api.operations  -> bms.db "Checks reachability, the applied migration version and its own role"
         bms.api.ledger      -> bms.db "Writes balanced, immutable journal entries"
         bms.api.notifications -> bms.db "Writes notifications and outbox rows"
         bms.api.documents   -> bms.storage "Stores uploads; issues signed URLs"
         bms.api.reporting   -> bms.db "Reads through read-only views"
 
         # ==================================================================
-        # DEPLOYMENT (SDD chapter 9; pending ADR-006)
+        # DEPLOYMENT (SDD chapter 9; ADR-006)
         # ==================================================================
-        deploymentEnvironment "Staging" {
-            deploymentNode "Cloudflare" "DNS for the staging base domain and object storage" {
+        staging = deploymentEnvironment "Staging" {
+            cloudflare = deploymentNode "Cloudflare" "DNS for the staging base domain and object storage" {
                 deploymentNode "R2 staging buckets" "Documents and backups, private" "Cloudflare R2" {
                     containerInstance bms.storage
                 }
+                dns = infrastructureNode "DNS" "A records for <base> and *.<base>; TXT records created by Caddy for the DNS-01 wildcard challenge" "Cloudflare DNS"
             }
-            deploymentNode "Staging VM" "Single cloud VM; auto-deployed on every merge to main" "Hetzner Cloud, Ubuntu LTS" {
-                deploymentNode "Docker Compose" "Pinned image tags built once in CI" "Docker" {
-                    containerInstance bms.proxy
+            github = deploymentNode "GitHub" "Build once per commit on main (ADR-006)" "GitHub Actions" {
+                registry = infrastructureNode "Container registry" "bms-platform-api, -web and -proxy images tagged sha-<short>" "GHCR"
+            }
+            vm = deploymentNode "Staging VM" "Single cloud VM, 4 GB; auto-deployed on every merge to main by deploy.sh" "Hetzner Cloud, Ubuntu LTS" {
+                compose = deploymentNode "Docker Compose" "Pinned image tags built once in CI; migrate runs before the switch" "Docker" {
+                    proxy = containerInstance bms.proxy
                     containerInstance bms.web
                     containerInstance bms.api
-                    containerInstance bms.worker
+                    containerInstance bms.migrate
                     containerInstance bms.db
-                    containerInstance bms.redis
                 }
             }
+            staging.vm.compose.proxy -> staging.cloudflare.dns "Creates DNS-01 challenge records" "Cloudflare API"
+            staging.github.registry -> staging.vm.compose.proxy "Images pulled by deploy.sh with a short-lived token" "HTTPS"
         }
 
-        deploymentEnvironment "Production" {
-            deploymentNode "Cloudflare" "Wildcard DNS for tenant subdomains and object storage" {
+        production = deploymentEnvironment "Production" {
+            cloudflare = deploymentNode "Cloudflare" "Wildcard DNS for tenant subdomains and object storage" {
                 deploymentNode "R2 production buckets" "Documents and nightly encrypted backups, private, 30-day retention" "Cloudflare R2" {
                     containerInstance bms.storage
                 }
+                dns = infrastructureNode "DNS" "A records for <base> and *.<base>; TXT records created by Caddy for the DNS-01 wildcard challenge" "Cloudflare DNS"
             }
-            deploymentNode "Production VM" "Single cloud VM; deployed from a version tag with the same images already proven on staging" "Hetzner Cloud, Ubuntu LTS" {
-                deploymentNode "Docker Compose" "Migrations run as a one-shot container before the app containers switch" "Docker" {
-                    containerInstance bms.proxy
+            github = deploymentNode "GitHub" "Tag vX.Y.Z retags the sha-<short> images; no rebuild (ADR-006)" "GitHub Actions" {
+                registry = infrastructureNode "Container registry" "The images proven on staging, tagged vX.Y.Z" "GHCR"
+            }
+            vm = deploymentNode "Production VM" "Single cloud VM, 4 GB; deployed from a version tag after the dev lead approves" "Hetzner Cloud, Ubuntu LTS" {
+                compose = deploymentNode "Docker Compose" "Migrations run as a one-shot container before the app containers switch; failed health check rolls back" "Docker" {
+                    proxy = containerInstance bms.proxy
                     containerInstance bms.web
                     containerInstance bms.api
-                    containerInstance bms.worker
+                    containerInstance bms.migrate
                     containerInstance bms.db
-                    containerInstance bms.redis
                 }
             }
+            production.vm.compose.proxy -> production.cloudflare.dns "Creates DNS-01 challenge records" "Cloudflare API"
+            production.github.registry -> production.vm.compose.proxy "Images pulled by deploy.sh with a short-lived token" "HTTPS"
         }
     }
 
@@ -210,7 +220,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
             autoLayout lr
         }
 
-        container bms "Containers" "Reverse proxy, web PWA, API, worker, database, cache and queue, object storage." {
+        container bms "Containers" "Reverse proxy, web PWA, API (with the worker role), one-shot migrate, database, object storage. No Redis (ADR-008)." {
             include *
             autoLayout
         }
@@ -245,27 +255,27 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
             bms.api.approvals -> bms.api.loans "Executes the disbursement: schedule generated, loan active"
             bms.api.loans -> bms.api.ledger "Posts the disbursement journal in the same transaction"
             bms.api.loans -> bms.api.notifications "Queues the disbursement SMS"
-            bms.worker -> smsAggregator "Sends the disbursement SMS after commit"
+            bms.api.jobs -> smsAggregator "Sends the disbursement SMS after commit"
             cashier -> bms.web "Records a partial repayment"
             bms.web -> bms.api.loans "POST /lending/loans/{id}/repayments with Idempotency-Key"
             bms.api.loans -> bms.api.ledger "Posts the repayment journal, split by allocation"
             bms.api.loans -> bms.api.documents "Queues the receipt PDF"
-            bms.worker -> bms.storage "Stores the receipt PDF"
-            bms.worker -> smsAggregator "Sends the receipt SMS"
+            bms.api.jobs -> bms.storage "Stores the receipt PDF"
+            bms.api.jobs -> smsAggregator "Sends the receipt SMS"
             autoLayout lr
         }
 
         dynamic bms.api "MobileMoneyRepayment" "A member pays an instalment by mobile money through the gateway (phase 2; pending ADR-011)." {
             member -> bms.web "Chooses Pay, confirms amount and wallet phone"
             bms.web -> bms.api.payments "POST /member/payments with Idempotency-Key"
-            bms.worker -> paymentGateway "Initiates the collection"
+            bms.api.jobs -> paymentGateway "Initiates the collection"
             paymentGateway -> mobileMoney "Prompts the payer's phone"
             member -> mobileMoney "Approves with the wallet PIN"
             paymentGateway -> bms.api.payments "Callback, signature verified"
             bms.api.payments -> paymentGateway "Queries the transaction status before booking"
             bms.api.payments -> bms.api.loans "Books the repayment once, keyed on the provider reference"
             bms.api.loans -> bms.api.ledger "Posts the repayment journal against gateway clearing"
-            bms.worker -> smsAggregator "Sends the receipt SMS"
+            bms.api.jobs -> smsAggregator "Sends the receipt SMS"
             autoLayout lr
         }
 

@@ -1,0 +1,199 @@
+name: Deploy
+
+# The delivery pipeline of ADR-006 (docs/sdd/10-cicd-pipeline.md):
+#
+#   push to main  -> build api, web and proxy images ONCE, tag sha-<short>, push to GHCR
+#                 -> deploy those images to the `staging` environment
+#   tag vX.Y.Z    -> no rebuild: the sha-<short> images of the tagged commit are retagged vX.Y.Z
+#                 -> deploy to the `production` environment (required reviewer: dev lead)
+#
+# Hosts are not provisioned yet: each deploy job checks its environment's HOST and SSH_KEY
+# secrets and, when either is missing, reports a notice and succeeds. Build and push still run.
+#
+# Only pushes to this repository's main branch and version tags trigger it. Pull requests never do,
+# so code from a fork never runs with these secrets or with package write access.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_PREFIX: ghcr.io/rincoltech-solutions-ltd/bms-platform
+
+jobs:
+  meta:
+    name: Resolve tags
+    if: github.repository == 'RincolTech-Solutions-ltd/bms-platform'
+    runs-on: ubuntu-latest
+    outputs:
+      sha_tag: ${{ steps.tags.outputs.sha_tag }}
+      version: ${{ steps.tags.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: tags
+        run: |
+          commit="$(git rev-parse HEAD)"
+          echo "sha_tag=sha-${commit:0:7}" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            if ! printf '%s' "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "::error::Release tags are vMAJOR.MINOR.PATCH; got $GITHUB_REF_NAME"
+              exit 1
+            fi
+            # Only a commit that reached main (and therefore staging) can be released.
+            if ! git merge-base --is-ancestor "$commit" origin/main; then
+              echo "::error::$GITHUB_REF_NAME points at a commit that is not on main"
+              exit 1
+            fi
+            echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build and push ${{ matrix.image }}
+    needs: meta
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - image: api
+            context: backend
+          - image: web
+            context: frontend
+          - image: proxy
+            context: deploy/caddy
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}:${{ needs.meta.outputs.sha_tag }}
+          build-args: GIT_SHA=${{ needs.meta.outputs.sha_tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+
+  deploy-staging:
+    name: Deploy to staging
+    needs: [meta, build]
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: staging
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - id: host
+        env:
+          HOST: ${{ secrets.STAGING_HOST }}
+          KEY: ${{ secrets.STAGING_SSH_KEY }}
+        run: |
+          if [ -z "$HOST" ] || [ -z "$KEY" ]; then
+            echo "::notice title=Staging not provisioned::STAGING_HOST or STAGING_SSH_KEY is not set in the staging environment. Images ${{ needs.meta.outputs.sha_tag }} are pushed; deploy skipped (docs/runbooks/provision-host.md)."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.host.outputs.configured == 'true'
+        uses: actions/checkout@v7
+      - if: steps.host.outputs.configured == 'true'
+        uses: ./.github/actions/ssh-deploy
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          ssh-user: ${{ vars.STAGING_SSH_USER || 'deploy' }}
+          ssh-key: ${{ secrets.STAGING_SSH_KEY }}
+          known-hosts: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+          image-tag: ${{ needs.meta.outputs.sha_tag }}
+          registry-user: ${{ github.actor }}
+          registry-token: ${{ secrets.GITHUB_TOKEN }}
+
+  promote:
+    name: Retag ${{ needs.meta.outputs.sha_tag }} as ${{ needs.meta.outputs.version }}
+    needs: meta
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Retag the images built from main (no rebuild)
+        env:
+          SHA_TAG: ${{ needs.meta.outputs.sha_tag }}
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          for image in api web proxy; do
+            source="${IMAGE_PREFIX}-${image}:${SHA_TAG}"
+            if ! docker buildx imagetools inspect "$source" > /dev/null; then
+              echo "::error::${source} does not exist. Only a commit built from main can be released."
+              exit 1
+            fi
+            docker buildx imagetools create --tag "${IMAGE_PREFIX}-${image}:${VERSION}" "$source"
+          done
+
+  deploy-production:
+    name: Deploy to production
+    needs: [meta, promote]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - id: host
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          KEY: ${{ secrets.PROD_SSH_KEY }}
+        run: |
+          if [ -z "$HOST" ] || [ -z "$KEY" ]; then
+            echo "::notice title=Production not provisioned::PROD_HOST or PROD_SSH_KEY is not set in the production environment. Images ${{ needs.meta.outputs.version }} are tagged; deploy skipped (docs/runbooks/provision-host.md)."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.host.outputs.configured == 'true'
+        uses: actions/checkout@v7
+      - if: steps.host.outputs.configured == 'true'
+        uses: ./.github/actions/ssh-deploy
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          ssh-user: ${{ vars.PROD_SSH_USER || 'deploy' }}
+          ssh-key: ${{ secrets.PROD_SSH_KEY }}
+          known-hosts: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+          image-tag: ${{ needs.meta.outputs.version }}
+          registry-user: ${{ github.actor }}
+          registry-token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,73 @@
+# Edge proxy for staging and production (docs/sdd/09-infrastructure-design.md section 9.5).
+#
+# One wildcard certificate covers every tenant host (<slug>.<base>), the platform host
+# (app.<base>) and the callback host (api.<base>). Wildcards require the ACME DNS-01 challenge:
+# Caddy creates a TXT record through the Cloudflare API with CLOUDFLARE_API_TOKEN, a token scoped
+# to Zone.DNS:Edit on the base domain's zone only. The DNS zone needs:
+#   A   <base>     -> host IPv4        (and AAAA for IPv6 if used)
+#   A   *.<base>   -> host IPv4
+# Environment: BMS_BASE_DOMAIN, ACME_EMAIL, CLOUDFLARE_API_TOKEN (from the host .env).
+{
+	email {$ACME_EMAIL}
+	admin off
+	servers {
+		# Only the proxy's own Docker network hop sits in front of the app.
+		trusted_proxies static private_ranges
+	}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		Permissions-Policy "camera=(self), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+}
+
+(wildcard_tls) {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+		resolvers 1.1.1.1
+	}
+}
+
+{$BMS_BASE_DOMAIN} {
+	import wildcard_tls
+	redir https://app.{$BMS_BASE_DOMAIN}{uri} permanent
+}
+
+*.{$BMS_BASE_DOMAIN} {
+	import wildcard_tls
+	import security_headers
+	encode zstd gzip
+
+	# Uploads are 5 MB at most (chapter 8 section 8.8); a little headroom for multipart framing.
+	request_body {
+		max_size 6MB
+	}
+
+	# api.<base> carries provider callbacks only (chapter 7 section 7.2).
+	@callbackHost host api.{$BMS_BASE_DOMAIN}
+	handle @callbackHost {
+		@callbacks path /api/v1/payments/callbacks/* /api/v1/channels/*
+		handle @callbacks {
+			reverse_proxy api:8080
+		}
+		respond 404
+	}
+
+	# The API and its health and version endpoints. The API resolves the tenant from the Host
+	# header, which Caddy passes through unchanged.
+	@backend path /api/* /healthz /readyz /version
+	handle @backend {
+		reverse_proxy api:8080
+	}
+
+	# Everything else is the PWA.
+	handle {
+		reverse_proxy web:8080
+	}
+}

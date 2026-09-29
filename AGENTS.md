@@ -22,12 +22,22 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
 ## Current state (read before writing code)
 
 - The specification (`docs/`) is complete enough to build the lending MVP.
-- **The backend language and framework are under review** (pending ADR-010). The
-  `backend/` folder holds a partial early scaffold. Do not extend `backend/` until
-  pending ADR-010 is accepted; if it changes the stack, the scaffold is replaced. The data model,
-  API contract, rules and tests in `docs/` are framework-neutral and stand either way.
-- Frontend (ADR-009), data model (chapter 6), API contract (chapter 7) and test design
-  (chapter 15) can be worked on now.
+- **Stack (decided):** Java 25, Spring Boot 4.1, Spring Modulith 2.1, Flyway, PostgreSQL 16
+  with forced row-level security, Maven (ADR-010); background jobs on PostgreSQL with
+  db-scheduler, no Redis (ADR-008); React 18, TypeScript, Vite, vite-plugin-pwa, TanStack
+  Router and Query (ADR-009); build once, `main` to staging, tag to production (ADR-006).
+- **Built (the foundation):** tenant resolution from the host and the transaction hook that
+  binds `app.tenant_id`; the `bms_owner` and `bms_app` roles; migration `V1` with the RLS,
+  grant and append-only helpers and the foundation tables (chapter 6 section 6.9.1); the
+  audit writer; the ledger's `post_entry` with its deferred balance trigger; the per-tenant
+  job runner; locked-down actuator with `/healthz`, `/readyz`, `/version`; the development
+  authentication stub; and **`lending.members` (create, list, get) as the reference vertical
+  slice: copy its shape for every new module.** The PWA skeleton has the staff and member
+  route split and a typed client generated from `docs/api/openapi.json`.
+- The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
+  `mvn verify`; CI runs them on every pull request. Staging and production hosts are not
+  provisioned yet; the deploy jobs skip with a notice until they are
+  (`docs/runbooks/provision-host.md`).
 
 ## Reading order
 
@@ -48,9 +58,12 @@ bms-platform/
 ├── CLAUDE.md            Claude Code specific notes (points here)
 ├── PROCESS.md           work item hierarchy, branches, pull requests, releases
 ├── README.md            what it is, quickstart, doc map
-├── backend/             API and worker source (framework pending ADR-010)
+├── Makefile             dev, seed, test, lint, fmt, migrate, build, openapi
+├── docker-compose.yml   local stack: PostgreSQL, migrate, API, web, proxy
+├── .env.example         every environment variable, placeholders only
+├── backend/             Spring Boot API, modules by package (ADR-010), Flyway migrations
 ├── frontend/            the React PWA: staff area, member area, platform console (ADR-009)
-├── deploy/              host-side deployment files (SDD chapter 9)
+├── deploy/              host-side files: compose.yml, deploy.sh, backup.sh, Caddy, SQL (SDD ch. 9)
 ├── fixtures/            fabricated test data only (pilot register sample)
 ├── docs/
 │   ├── workspace.dsl    Structurizr C4 model; wires in sdd/ and adr/ as one site
@@ -67,8 +80,10 @@ bms-platform/
 
 ## Module map and where each spec lives
 
-Logical modules (ADR-002). Physical package paths follow the framework chosen in
-pending ADR-010. Tables of a vertical are prefixed with its key (`lending_...`).
+Logical modules (ADR-002). Each is a package under `com.rincoltech.bms` declared with
+`@ApplicationModule` in its `package-info.java`, whose `allowedDependencies` are checked by
+`ModularityTest` (chapter 5 sections 5.4.2 and 5.4.6). A module's public API is its base
+package; `internal` is closed. Tables of a vertical are prefixed with its key (`lending_...`).
 
 | Module | Owns | Requirements (ch. 3) | Tables (ch. 6) | Endpoints (ch. 7) |
 |---|---|---|---|---|
@@ -83,6 +98,9 @@ pending ADR-010. Tables of a vertical are prefixed with its key (`lending_...`).
 | `core.reporting` | Report catalogue and runs | RPT; chapter 14 | 6.5 `report_runs` | 7.11.8 |
 | `core.imports` | Import batches, review queue, commit | IMP; chapter 13 | 13.4 | 7.11.9 |
 | `core.payments` | Payment intents, gateway, callbacks | PAY; chapter 12 | 6.5 | 7.11.10 |
+| `core.jobs` | db-scheduler tasks, per-tenant job runner (ADR-008) | 5.4.4 | `scheduled_tasks` | none |
+| `core.operations` | `/version`, readiness, database role guard | NFR-SEC-03 | none | 7.11.1 |
+| `lending.manifest` | The vertical's registration with the core | 5.4.3 | none | none |
 | `lending` members | Members, KYC, next of kin, relationships | MEM | 6.7 | 7.11.11 |
 | `lending` products | Loan products and versions | PRD | 6.7 | 7.11.12 |
 | `lending` loans | Origination, schedules, disbursement, repayments, arrears, closure | ORG, DIS, REP, ARR, LCL; 3.4 | 6.7 | 7.11.13 |
@@ -92,14 +110,45 @@ pending ADR-010. Tables of a vertical are prefixed with its key (`lending_...`).
 | `lending` collections | Due lists, arrears, actions | CLN | 6.7 | 7.11.17 |
 | Member area | Member self-service | MSS; chapter 11 | none | 7.11.18 |
 
+## How to run it
+
+Tools: JDK 25 (Temurin), Maven 3.9, Node 20.19 or later, Docker (the backend integration
+tests start PostgreSQL 16 through Testcontainers).
+
+| Command | Does |
+|---|---|
+| `make dev` | Builds and starts PostgreSQL, the one-shot migrate, the API, the web app and a local proxy, then seeds the fabricated `demo` tenant. PWA on http://localhost:8000, API on http://localhost:8080 |
+| `make seed` | Creates the `demo` tenant (idempotent), as `docs/runbooks/onboard-tenant.md` does on a server |
+| `make test` | `mvn verify` (unit, architecture, formatting, integration on real PostgreSQL) and the frontend tests |
+| `make lint`, `make fmt` | Java formatting check or fix; TypeScript check |
+| `make openapi` | Regenerate `docs/api/openapi.json` and the frontend's typed client after a contract change |
+| `make migrate`, `make psql`, `make down`, `make clean` | Local database chores |
+
+Locally the API runs the `dev` profile: send `X-Tenant: demo` (or use
+http://demo.localhost:8000) and the development principal headers of chapter 7 section 7.4.3,
+for example:
+
+```bash
+curl -s localhost:8080/api/v1/lending/members -H 'X-Tenant: demo' \
+  -H 'X-Dev-User-Id: 00000000-0000-4000-8000-00000000d001' \
+  -H 'X-Dev-Permissions: lending.members.read' -H 'X-Dev-Branch-Ids: *'
+```
+
+For the Vite dev server, `cd frontend && npm install && npm run dev` with `VITE_DEV_TENANT=demo`
+in `frontend/.env.local` (the other `VITE_DEV_*` values are in `.env.example`).
+
 ## Standing rules (hard)
 
 These are not style preferences. A pull request that breaks one is not merged.
 
 1. **Tenant isolation.** Every tenant-owned table has `tenant_id`, forced row-level
-   security with the standard policy, and composite foreign keys on `(tenant_id, x_id)`.
-   Every transaction binds `app.tenant_id` with `set_config(..., true)`. The application
-   never connects as the table owner (ADR-003, chapter 6 section 6.3).
+   security with the standard policy (`bms_apply_tenant_rls` in its migration), and composite
+   foreign keys on `(tenant_id, x_id)`. Every transaction binds `app.tenant_id` with
+   `set_config(..., true)`, and only the transaction manager does it. The tenant comes only
+   from the resolved request (or `TenantJobs` for a job): no service takes a tenant id as a
+   parameter, and inserts take `tenant_id` from `current_setting('app.tenant_id')`. Every
+   query runs inside `@Transactional`. The application never connects as the table owner
+   (ADR-003, chapter 6 section 6.3).
 2. **Money is integers.** Amounts are integer minor units in `_minor` columns with a
    `currency`; rates are basis points in `_bp` columns. No floats for money anywhere
    (ADR-004).
@@ -171,22 +220,22 @@ and delete it later: a commit is permanent.
 
 ## Architecture decision records
 
-Accepted:
+Accepted (this list is the ADR index):
 
 - ADR-001 Platform core plus vertical modules; lending is the first vertical
 - ADR-002 Modular monolith with enforced module boundaries
 - ADR-003 Tenant isolation: shared schema plus PostgreSQL row-level security
 - ADR-004 Money and accounting: integer minor units and a double-entry general ledger
 - ADR-005 Documentation lives with the code
+- ADR-006 Delivery pipeline: build once, main to staging, tag to production, migrations
+  before swap
 - ADR-007 bms-platform and ERP_BMS are separate products
+- ADR-008 Background jobs and scheduling on PostgreSQL with db-scheduler; no Redis
 - ADR-009 Frontend: one React PWA with staff and member areas
+- ADR-010 Backend language and framework: Java 25, Spring Boot 4.1, Spring Modulith 2.1, Flyway
 
 Pending (cite only as "pending ADR-NNN"):
 
-- ADR-006 Delivery pipeline: build once, main to staging, tag to production, migrations
-  before swap
-- ADR-008 Background jobs and scheduling on Redis
-- ADR-010 Backend language and framework (under review)
 - ADR-011 Payment gateway (Pesapal or Interswitch)
 - ADR-012 Credit scoring model beyond the rules-based default
 - ADR-013 SMS and USSD aggregator

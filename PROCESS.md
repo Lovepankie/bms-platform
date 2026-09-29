@@ -120,11 +120,11 @@ makes substantive changes, the escape hatch does not apply.
 
 ## 7. Delivery pipeline
 
-Deterministic and repeatable. The design is recorded in pending ADR-006 and detailed in
+Deterministic and repeatable. The design is recorded in ADR-006 and detailed in
 `docs/sdd/10-cicd-pipeline.md`; this section is the contract developers work to.
 
 ```
-short-lived branch ──PR──> CI (lint, types, tests on PostgreSQL + Redis, frontend build,
+short-lived branch ──PR──> CI (lint, types, tests on PostgreSQL, frontend build,
                               docs guards, model validation)
         │ merge (squash)
         ▼
@@ -167,7 +167,8 @@ commit it and delete it later, because a commit is permanent.
 | `.github/workflows/architecture-model.yml` | `docs/workspace.dsl` validates against the pinned CLI and the static site builds |
 | `.github/workflows/linked-issue-guard.yml` | Every code or architecture pull request closes an issue |
 | `.github/workflows/estimate-guard.yml` | Leaf-only estimates, every item typed, no orphans (runs once the board is configured) |
-| CI pipeline (pending ADR-006) | Lint, types, tests, isolation and boundary tests, golden tests |
+| `.github/workflows/ci.yml` (ADR-006) | Lint, types, tests, isolation and boundary tests, golden tests, contract snapshot, workflow and script checks |
+| `.github/workflows/deploy.yml` (ADR-006) | Images built once on `main` and deployed to staging; version tags retag and deploy to production |
 | `.claude/hooks/surgical-change-guard.py` | Blocks tiny throwaway files and bloated edits made by Claude Code |
 | Branch protection on `main` | Review required, linear history, no force push, no deletion |
 | GitHub Environment `production` | Required reviewer: Hillary |

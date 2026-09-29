@@ -1,0 +1,7 @@
+# Local development only (make dev, docker-compose.yml). Never set on staging or production:
+# both switches below refuse to start outside the dev and test profiles.
+bms:
+  tenancy:
+    allow-tenant-header: true
+  auth:
+    mode: dev
