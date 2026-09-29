@@ -41,7 +41,7 @@ jobs:
 
       - name: Validate the workspace
         run: |
-          docker run --rm -v "$PWD/docs:/work" -w /work "$STRUCTURIZR_CLI" \
+          docker run --rm --user 0:0 -v "$PWD/docs:/work" -w /work "$STRUCTURIZR_CLI" \
             validate -workspace workspace.dsl
 
       - name: Build the static SDD site
@@ -49,7 +49,7 @@ jobs:
           # The generatr image runs as a non-root user; make the output dir
           # writable so it can create build/ inside the runner-owned checkout.
           mkdir -p docs/build/site && chmod -R 777 docs/build
-          docker run --rm -v "$PWD/docs:/var/model" -w /var/model "$SITE_GENERATR" \
+          docker run --rm --user 0:0 -v "$PWD/docs:/var/model" -w /var/model "$SITE_GENERATR" \
             generate-site -w workspace.dsl
           echo "Built $(find docs/build/site -type f | wc -l) files into docs/build/site."
 
