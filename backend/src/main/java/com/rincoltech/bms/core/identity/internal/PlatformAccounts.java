@@ -82,10 +82,11 @@ class PlatformAccounts implements Accounts {
     }
 
     @Override
-    public void recordFailure(UUID id, int failedCount, Instant lockedUntil) {
-        jdbc.sql("UPDATE platform_users SET failed_login_count = ?, locked_until = ? WHERE id = ?")
-                .params(failedCount, lockedUntil == null ? null : Timestamp.from(lockedUntil), id)
-                .update();
+    public Failures recordFailure(UUID id, Instant now, int maxFailures, Instant lockUntil) {
+        return jdbc.sql(Accounts.failureSql("platform_users"))
+                .params(Timestamp.from(now), Timestamp.from(now), maxFailures, Timestamp.from(lockUntil), id)
+                .query(Accounts::failures)
+                .single();
     }
 
     @Override
@@ -112,10 +113,11 @@ class PlatformAccounts implements Accounts {
     }
 
     @Override
-    public void setTotpStep(UUID id, long usedStep) {
-        jdbc.sql("UPDATE platform_users SET totp_last_step = ? WHERE id = ?")
-                .params(usedStep, id)
-                .update();
+    public boolean advanceTotpStep(UUID id, long usedStep) {
+        return jdbc.sql("""
+                                UPDATE platform_users SET totp_last_step = ?
+                                 WHERE id = ? AND (totp_last_step IS NULL OR totp_last_step < ?)
+                                """).params(usedStep, id, usedStep).update() == 1;
     }
 
     @Override
@@ -136,6 +138,7 @@ class PlatformAccounts implements Accounts {
                                 UPDATE platform_user_recovery_codes SET used_at = ?
                                  WHERE id = (SELECT id FROM platform_user_recovery_codes
                                               WHERE platform_user_id = ? AND code_hash = ? AND used_at IS NULL LIMIT 1)
+                                   AND used_at IS NULL
                                 """).params(Timestamp.from(at), id, codeHash).update() == 1;
     }
 

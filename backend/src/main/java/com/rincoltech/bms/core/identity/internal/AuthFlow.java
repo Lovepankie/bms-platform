@@ -76,6 +76,15 @@ class AuthFlow {
             fail(accounts, account, now, "core.auth.sign_in_failed");
             throw invalidCredentials();
         }
+        // The read above took no lock: parallel failures may have locked the account since.
+        account = accounts.byIdForUpdate(account.id()).orElseThrow(AuthFlow::invalidCredentials);
+        if (account.lockedAt(now)) {
+            accounts.audit("core.auth.sign_in_refused_locked", account.id(), Map.of());
+            throw locked();
+        }
+        if (!account.active()) {
+            throw invalidCredentials();
+        }
         if (account.mfaEnabled()) {
             return Outcome.mfa(
                     Step.MFA_REQUIRED, tokens.mfa(account.id(), accounts.tenantId(), accounts.kind(), issuer, now));
@@ -114,11 +123,10 @@ class AuthFlow {
                     Map.of("unused_codes_left", accounts.unusedRecoveryCodes(account.id())));
         } else {
             OptionalLong step = Totp.verify(box.open(account.totpSecret()), code, now, account.totpLastStep());
-            if (step.isEmpty()) {
+            if (step.isEmpty() || !accounts.advanceTotpStep(account.id(), step.getAsLong())) {
                 fail(accounts, account, now, "core.mfa.failed");
                 throw invalidCode(HttpStatus.UNAUTHORIZED);
             }
-            accounts.setTotpStep(account.id(), step.getAsLong());
             method = "totp";
         }
         return signIn(accounts, account.id(), now, issuer, userAgent, List.of(), method);
@@ -189,11 +197,10 @@ class AuthFlow {
                     HttpStatus.CONFLICT, "mfa_not_enrolled", "MFA not enrolled", "Enrol a second factor first.");
         }
         OptionalLong step = Totp.verify(box.open(account.totpSecret()), code, now, account.totpLastStep());
-        if (step.isEmpty()) {
+        if (step.isEmpty() || !accounts.advanceTotpStep(userId, step.getAsLong())) {
             fail(accounts, account, now, "core.mfa.failed");
             throw invalidCode(HttpStatus.UNPROCESSABLE_CONTENT);
         }
-        accounts.setTotpStep(userId, step.getAsLong());
         List<String> codes = issueRecoveryCodes(accounts, userId);
         accounts.audit("core.mfa.recovery_codes_regenerated", userId, Map.of("recovery_codes_issued", codes.size()));
         return codes;
@@ -322,13 +329,15 @@ class AuthFlow {
         return account;
     }
 
-    /** FR-IAM-05: the fifth consecutive failure locks the account for 15 minutes, audited. */
+    /**
+     * FR-IAM-05: the fifth consecutive failure locks the account for 15 minutes, audited. The count
+     * and the lock come back from one atomic statement, so parallel failures cannot be lost.
+     */
     private void fail(Accounts accounts, Account account, Instant now, String action) {
-        int failures = account.failedLoginCount() + 1;
-        boolean lock = failures >= MAX_FAILURES;
-        accounts.recordFailure(account.id(), lock ? 0 : failures, lock ? now.plus(LOCK) : null);
-        accounts.audit(action, account.id(), Map.of("consecutive_failures", failures));
-        if (lock) {
+        Accounts.Failures failures = accounts.recordFailure(account.id(), now, MAX_FAILURES, now.plus(LOCK));
+        accounts.audit(action, account.id(), Map.of("consecutive_failures", failures.consecutive()));
+        // Only the failure that reached the threshold set the lock; later ones keep it.
+        if (failures.consecutive() == MAX_FAILURES) {
             accounts.audit("core.auth.account_locked", account.id(), Map.of("locked_minutes", LOCK.toMinutes()));
         }
     }

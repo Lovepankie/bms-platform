@@ -1,5 +1,7 @@
 package com.rincoltech.bms.core.identity.internal;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -29,10 +31,18 @@ interface Accounts {
 
     Optional<Account> byLogin(String login);
 
-    /** Locks the row for the rest of the transaction. */
+    /**
+     * Locks the account and its credentials for the rest of the transaction, so a concurrent
+     * caller waits and then reads the committed factor state.
+     */
     Optional<Account> byIdForUpdate(UUID id);
 
-    void recordFailure(UUID id, int failedCount, Instant lockedUntil);
+    /**
+     * Counts one more consecutive failure in a single statement, so parallel failures are all
+     * counted (FR-IAM-05). An expired lock starts a new count; the count reaching
+     * {@code maxFailures} sets {@code lockUntil}; a failure while locked keeps the current lock.
+     */
+    Failures recordFailure(UUID id, Instant now, int maxFailures, Instant lockUntil);
 
     void recordSuccess(UUID id, Instant at);
 
@@ -40,7 +50,11 @@ interface Accounts {
 
     void enableTotp(UUID id, byte[] sealedSecret, long usedStep);
 
-    void setTotpStep(UUID id, long usedStep);
+    /**
+     * Records a used TOTP step only when it is later than the last one; false when another
+     * request already used this step or a later one (the code is then refused).
+     */
+    boolean advanceTotpStep(UUID id, long usedStep);
 
     void replaceRecoveryCodes(UUID id, List<String> codeHashes);
 
@@ -56,6 +70,30 @@ interface Accounts {
     void audit(String action, UUID userId, Map<String, Object> data);
 
     SessionStore sessions();
+
+    /**
+     * The {@link #recordFailure} statement for {@code table}; parameters: now, now, the maximum
+     * failures, the lock end, the id. Every expression reads the row being updated, so a waiting
+     * statement re-evaluates against the committed count.
+     */
+    static String failureSql(String table) {
+        return """
+                UPDATE %s SET
+                       failed_login_count = CASE WHEN locked_until <= ? THEN 1 ELSE failed_login_count + 1 END,
+                       locked_until = CASE WHEN locked_until > ? THEN locked_until
+                                           WHEN locked_until IS NULL AND failed_login_count + 1 >= ? THEN ?
+                                           ELSE NULL END
+                 WHERE id = ?
+                RETURNING failed_login_count, locked_until
+                """.formatted(table);
+    }
+
+    static Failures failures(ResultSet rs, int n) throws SQLException {
+        return new Failures(rs.getInt("failed_login_count"), SessionStore.instant(rs.getTimestamp("locked_until")));
+    }
+
+    /** The count and lock after {@link #recordFailure}. */
+    record Failures(int consecutive, Instant lockedUntil) {}
 
     record Account(
             UUID id,

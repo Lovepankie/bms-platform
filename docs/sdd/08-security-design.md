@@ -58,6 +58,20 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
   session in its family (FR-IAM-07).
 - Sign-in errors never reveal whether an account exists; a sign-in for an unknown account costs
   the same password hash as a real one.
+- **Concurrency guarantees.** The factor and lockout rules hold when the same request is sent
+  many times at once (tested by `AuthConcurrencyIT`):
+  - Each failure increments `failed_login_count` and derives `locked_until` in one `UPDATE ...
+    RETURNING` that reads only the row being updated, so parallel failures are all counted and
+    the fifth sets the lock; the decision and the audit use the returned values. A failure after
+    the lock has expired starts a new count. A correct password is checked again against the
+    locked row before a session or MFA token is issued, so it cannot slip past a lock set by
+    parallel failures.
+  - The second factor steps lock the account row and, for staff, the `user_credentials` row
+    (`FOR UPDATE OF u, c`); a waiting request then reads the committed factor state.
+  - A TOTP step is recorded with `UPDATE ... WHERE totp_last_step IS NULL OR totp_last_step < ?`
+    and a code whose update changes no row is refused, so one code signs in or replaces the
+    recovery codes once. A recovery code is consumed with `UPDATE ... WHERE used_at IS NULL` and
+    works only when that update changed a row.
 
 ## 8.3 Role-based access control
 

@@ -50,7 +50,9 @@ Options considered for each part:
 - **TOTP** is RFC 6238 with the defaults every authenticator app supports (HMAC-SHA1, 6 digits,
   30 seconds, 160 bit secret), implemented in place and tested against the RFC vectors. One step
   of drift either side is accepted, and a code is accepted at most once (the last used step is
-  stored). The secret is encrypted with AES-256-GCM under the application data key
+  stored, and advanced only by a conditional update that fails for a step already used, so the
+  rule holds for concurrent requests; the failure counter and the lock are likewise one atomic
+  statement, chapter 8 section 8.2). The secret is encrypted with AES-256-GCM under the application data key
   (`BMS_DATA_KEY`, key id in each ciphertext, chapter 8 section 8.7). Tenant admins and platform
   operators must enrol, at first sign-in if not before; a tenant setting can require it of all
   staff (FR-IAM-06).

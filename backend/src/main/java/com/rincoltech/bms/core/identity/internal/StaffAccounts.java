@@ -92,19 +92,29 @@ class StaffAccounts implements Accounts {
         return found.size() == 1 ? Optional.of(found.getFirst()) : Optional.empty();
     }
 
+    /**
+     * Locks both rows: a waiting caller re-reads the locked rows only, so locking {@code users}
+     * alone would leave it a stale {@code totp_last_step} (a replayed code signing in twice).
+     */
     @Override
     public Optional<Account> byIdForUpdate(UUID id) {
-        return jdbc.sql(SELECT + " AND u.id = ? FOR UPDATE OF u")
+        jdbc.sql("""
+                        INSERT INTO user_credentials (user_id, tenant_id)
+                        SELECT id, current_setting('app.tenant_id')::uuid FROM users WHERE id = ? AND kind = 'staff'
+                        ON CONFLICT (user_id) DO NOTHING
+                        """).param(id).update();
+        return jdbc.sql(SELECT.replace("LEFT JOIN", "JOIN") + " AND u.id = ? FOR UPDATE OF u, c")
                 .param(id)
                 .query(StaffAccounts::map)
                 .optional();
     }
 
     @Override
-    public void recordFailure(UUID id, int failedCount, Instant lockedUntil) {
-        jdbc.sql("UPDATE users SET failed_login_count = ?, locked_until = ? WHERE id = ?")
-                .params(failedCount, lockedUntil == null ? null : Timestamp.from(lockedUntil), id)
-                .update();
+    public Failures recordFailure(UUID id, Instant now, int maxFailures, Instant lockUntil) {
+        return jdbc.sql(Accounts.failureSql("users"))
+                .params(Timestamp.from(now), Timestamp.from(now), maxFailures, Timestamp.from(lockUntil), id)
+                .query(Accounts::failures)
+                .single();
     }
 
     @Override
@@ -134,10 +144,11 @@ class StaffAccounts implements Accounts {
     }
 
     @Override
-    public void setTotpStep(UUID id, long usedStep) {
-        jdbc.sql("UPDATE user_credentials SET totp_last_step = ? WHERE user_id = ?")
-                .params(usedStep, id)
-                .update();
+    public boolean advanceTotpStep(UUID id, long usedStep) {
+        return jdbc.sql("""
+                                UPDATE user_credentials SET totp_last_step = ?
+                                 WHERE user_id = ? AND (totp_last_step IS NULL OR totp_last_step < ?)
+                                """).params(usedStep, id, usedStep).update() == 1;
     }
 
     @Override
@@ -157,6 +168,7 @@ class StaffAccounts implements Accounts {
                                 UPDATE user_recovery_codes SET used_at = ?
                                  WHERE id = (SELECT id FROM user_recovery_codes
                                               WHERE user_id = ? AND code_hash = ? AND used_at IS NULL LIMIT 1)
+                                   AND used_at IS NULL
                                 """).params(Timestamp.from(at), id, codeHash).update() == 1;
     }
 
