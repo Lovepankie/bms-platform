@@ -53,7 +53,7 @@ class KeyMaterial {
         return new SecretBox(Base64.getDecoder().decode(key), properties.dataKeyId());
     }
 
-    /** A new P-256 signing key as a JWK, for provisioning ({@code java -jar bms-api.jar keys}). */
+    /** A new P-256 signing key with a key id, for tests and the ephemeral dev and test key. */
     static ECKey generateSigningKey() {
         try {
             return new ECKeyGenerator(Curve.P_256)

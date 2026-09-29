@@ -93,10 +93,18 @@ bms:
     base-domain: ${BMS_BASE_DOMAIN:localhost}
     # Only the dev and test profiles may set this; startup fails otherwise (chapter 7 section 7.2).
     allow-tenant-header: ${ALLOW_TENANT_HEADER:false}
+    # Origin of one-time links sent to users; defaults to https://{slug}.<base domain>.
+    link-origin: ${BMS_LINK_ORIGIN:}
   auth:
-    # none: every non-public route answers 401 until real authentication lands.
-    # dev: the header stub of chapter 7 section 7.4.3; dev and test profiles only.
+    # Signed-in sessions (bearer access tokens) work in every mode (ADR-014).
+    # none: nothing else. dev: also the header stub of chapter 7 section 7.4.3; dev and test only.
     mode: ${AUTH_MODE:none}
+    # Access token signing key, an EC P-256 private JWK with a kid; required outside dev and test.
+    # Generate with: java -jar bms-api.jar keys
+    signing-jwk: ${BMS_TOKEN_SIGNING_JWK:}
+    # Application data key (32 bytes, base64) and its id; encrypts TOTP secrets (chapter 8 section 8.7).
+    data-key: ${BMS_DATA_KEY:}
+    data-key-id: ${BMS_DATA_KEY_ID:k1}
   database:
     role-guard: true
 

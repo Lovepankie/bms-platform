@@ -4,6 +4,314 @@
  */
 
 export interface paths {
+    "/api/v1/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Requests the caller may decide or made (FR-APR-05) */
+        get: operations["listApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals/{approval_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One request with its payload snapshot */
+        get: operations["getApproval"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals/{approval_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve and execute in the same transaction (FR-APR-02, FR-APR-06, FR-APR-08) */
+        post: operations["approveApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals/{approval_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The maker cancels their own pending request (FR-APR-07) */
+        post: operations["cancelApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals/{approval_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject with a required note (FR-APR-06) */
+        post: operations["rejectApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search the audit log in the caller's branch scope (FR-AUD-04) */
+        get: operations["searchAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-events/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Export matching events as CSV, at most 10,000 rows; the export is audited (FR-AUD-04) */
+        post: operations["exportAuditEvents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out: revokes the session family (FR-IAM-07) */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate the refresh token in the bms_rt cookie (FR-IAM-07) */
+        post: operations["refreshSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/staff/invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set a password with the one-time invitation token (FR-IAM-01) */
+        post: operations["acceptInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/staff/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign in with email or phone and password (FR-IAM-04, FR-IAM-05) */
+        post: operations["staffLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/staff/mfa/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm TOTP enrolment; returns recovery codes once, and tokens when enrolment was forced */
+        post: operations["staffMfaConfirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/staff/mfa/enrol": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start TOTP enrolment; returns the secret once (FR-IAM-06) */
+        post: operations["staffMfaEnrol"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/staff/mfa/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace the recovery codes; returns the new ones once (FR-IAM-11) */
+        post: operations["staffRecoveryCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/staff/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Second factor: TOTP or recovery code (FR-IAM-06, FR-IAM-11) */
+        post: operations["staffMfaVerify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Branches in the caller's scope (FR-BR-04) */
+        get: operations["listBranches"];
+        put?: never;
+        /** Create a branch (FR-BR-01, FR-TEN-04) */
+        post: operations["createBranch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/branches/{branch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one branch */
+        get: operations["getBranch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename a branch or change its location (FR-BR-01) */
+        patch: operations["updateBranch"];
+        trace?: never;
+    };
+    "/api/v1/branches/{branch_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate a branch (FR-BR-01) */
+        post: operations["deactivateBranch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/members": {
         parameters: {
             query?: never;
@@ -39,6 +347,435 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in user, permissions and branches (FR-BR-03) */
+        get: operations["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Platform sign-in, first factor */
+        post: operations["platformLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Platform sign-out */
+        post: operations["platformLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/auth/mfa/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm TOTP enrolment and sign in */
+        post: operations["platformMfaConfirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/auth/mfa/enrol": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start the mandatory TOTP enrolment with the MFA token */
+        post: operations["platformMfaEnrol"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/auth/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Platform sign-in, second factor */
+        post: operations["platformMfaVerify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate the platform refresh token */
+        post: operations["platformRefresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/auth/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set the first password with the one-time setup token */
+        post: operations["platformSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in platform operator */
+        get: operations["platformMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plans with their limits (FR-TEN-04) */
+        get: operations["platformListPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every tenant */
+        get: operations["platformListTenants"];
+        put?: never;
+        /** Create a tenant with head office, modules and an invited first admin (FR-TEN-01) */
+        post: operations["platformCreateTenant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One tenant */
+        get: operations["platformGetTenant"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/modules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Switch modules on or off; data is kept (FR-TEN-03) */
+        put: operations["platformSetModules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume a suspended tenant (FR-TEN-06) */
+        post: operations["platformResumeTenant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move the subscription status (FR-TEN-05) */
+        post: operations["platformSetSubscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suspend: the tenant becomes read only (FR-TEN-06) */
+        post: operations["platformSuspendTenant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/users/{user_id}/mfa/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset the lost second factor of a tenant admin (FR-IAM-12) */
+        post: operations["platformResetAdminMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The fixed role catalogue with permissions (FR-IAM-02) */
+        get: operations["listRoles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tenant settings */
+        get: operations["getSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change tenant settings, audited with before and after (FR-TEN-08) */
+        patch: operations["updateSettings"];
+        trace?: never;
+    };
+    "/api/v1/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Staff users with their roles */
+        get: operations["listUsers"];
+        put?: never;
+        /** Invite a staff user; the one-time link is returned once to the inviting admin (FR-IAM-01) */
+        post: operations["inviteUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one staff user */
+        get: operations["getUser"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a staff user's name or contact */
+        patch: operations["updateUser"];
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate a user and revoke every session (FR-IAM-08) */
+        post: operations["deactivateUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a new invitation link to a user still invited (FR-IAM-01) */
+        post: operations["reissueInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/mfa/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset another user's lost second factor (FR-IAM-12) */
+        post: operations["resetUserMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace a user's roles and branch scopes (FR-IAM-01) */
+        put: operations["setUserRoles"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/version": {
         parameters: {
             query?: never;
@@ -60,6 +797,112 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AcceptInvitationRequest: {
+            password: string;
+            token: string;
+        };
+        Approval: {
+            action_type?: string;
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            can_cancel?: boolean;
+            can_decide?: boolean;
+            currency?: string;
+            /** Format: date-time */
+            decided_at?: string;
+            /** Format: uuid */
+            decided_by?: string;
+            decision_note?: string;
+            execution_error?: string;
+            /** Format: date-time */
+            expires_at?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @description The snapshot executed on approval; detail only (FR-APR-08) */
+            payload?: {
+                [key: string]: Record<string, never>;
+            };
+            /** Format: date-time */
+            requested_at?: string;
+            /** Format: uuid */
+            requested_by?: string;
+            requested_by_name?: string;
+            /** @description pending, approved, rejected, cancelled, expired or stale */
+            status?: string;
+            /** Format: uuid */
+            subject_id?: string;
+            subject_type?: string;
+        };
+        ApprovalDecisionRequest: {
+            /** @description Required to reject */
+            note?: string;
+        };
+        ApprovalPage: {
+            items?: components["schemas"]["Approval"][];
+            next_cursor?: string;
+        };
+        /** @description Identifiers in data are masked (FR-AUD-05) */
+        AuditEvent: {
+            action?: string;
+            actor_kind?: string;
+            /** Format: uuid */
+            actor_user_id?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date-time */
+            created_at?: string;
+            data?: {
+                [key: string]: Record<string, never>;
+            };
+            /** Format: uuid */
+            entity_id?: string;
+            entity_type?: string;
+            /** Format: uuid */
+            id?: string;
+            request_id?: string;
+        };
+        AuditEventPage: {
+            items?: components["schemas"]["AuditEvent"][];
+            next_cursor?: string;
+        };
+        /** @description The same filters as the search */
+        AuditExportRequest: {
+            action?: string;
+            /** Format: uuid */
+            actor_user_id?: string;
+            /** Format: uuid */
+            entity_id?: string;
+            entity_type?: string;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+        };
+        Branch: {
+            code?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            id?: string;
+            is_head_office?: boolean;
+            location?: string;
+            name?: string;
+            status?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        BranchList: {
+            items?: components["schemas"]["Branch"][];
+        };
+        CreateBranchRequest: {
+            code: string;
+            location?: string;
+            name: string;
+        };
         CreateMemberRequest: {
             alt_phone?: string;
             /** Format: uuid */
@@ -89,6 +932,86 @@ export interface components {
             phone: string;
             sub_county?: string;
             village?: string;
+        };
+        CreateTenantRequest: {
+            admin: components["schemas"]["FirstAdminRequest"];
+            /** @description Default UGX */
+            currency?: string;
+            head_office: components["schemas"]["HeadOfficeRequest"];
+            modules?: string[];
+            name: string;
+            plan_code: string;
+            /** @description FR-TEN-02 rules; cannot change later */
+            slug: string;
+            /** @description Default Africa/Kampala */
+            timezone?: string;
+        };
+        CreatedTenant: {
+            admin_invitation?: components["schemas"]["FirstAdminInvitation"];
+            /** Format: uuid */
+            head_office_branch_id?: string;
+            tenant?: components["schemas"]["PlatformTenant"];
+        };
+        /** @description Shown once to the operator, and sent to the admin */
+        FirstAdminInvitation: {
+            /** Format: date-time */
+            expires_at?: string;
+            url?: string;
+            /** Format: uuid */
+            user_id?: string;
+        };
+        /** @description Email or phone (or both) is required */
+        FirstAdminRequest: {
+            /** Format: email */
+            email?: string;
+            full_name: string;
+            phone?: string;
+        };
+        HeadOfficeRequest: {
+            code: string;
+            name: string;
+        };
+        InvitationLink: {
+            /** Format: date-time */
+            expires_at?: string;
+            url?: string;
+        };
+        /** @description Email or phone (or both) is required (FR-IAM-01) */
+        InviteUserRequest: {
+            /** Format: email */
+            email?: string;
+            full_name: string;
+            phone?: string;
+            roles: components["schemas"]["RoleAssignmentRequest"][];
+        };
+        InvitedUser: {
+            invitation?: components["schemas"]["InvitationLink"];
+            user?: components["schemas"]["User"];
+        };
+        Me: {
+            all_branches?: boolean;
+            branches?: components["schemas"]["MeBranch"][];
+            /** Format: uuid */
+            default_branch_id?: string;
+            email?: string;
+            full_name?: string;
+            kind?: string;
+            mfa_enabled?: boolean;
+            mfa_required?: boolean;
+            permissions?: string[];
+            phone_e164?: string;
+            roles?: components["schemas"]["RoleAssignment"][];
+            /** Format: int32 */
+            unused_recovery_codes?: number;
+            /** Format: uuid */
+            user_id?: string;
+        };
+        MeBranch: {
+            code?: string;
+            /** Format: uuid */
+            id?: string;
+            is_head_office?: boolean;
+            name?: string;
         };
         Member: {
             alt_phone_e164?: string;
@@ -147,6 +1070,199 @@ export interface components {
             items?: components["schemas"]["MemberListItem"][];
             next_cursor?: string;
         };
+        MfaConfirmRequest: {
+            code: string;
+            mfa_token?: string;
+        };
+        /** @description mfa_token when enrolment is forced at sign-in; empty when signed in */
+        MfaEnrolRequest: {
+            mfa_token?: string;
+        };
+        MfaEnrolment: {
+            /** @description otpauth URI for a QR code; shown once */
+            otpauth_uri?: string;
+            /** @description Base32 secret for manual entry; shown once */
+            secret?: string;
+        };
+        MfaVerifyRequest: {
+            /** @description A 6 digit TOTP code or a recovery code */
+            code: string;
+            mfa_token: string;
+        };
+        /** @description Limits only; prices are not stored in this repository */
+        Plan: {
+            allowed_modules?: string[];
+            code?: string;
+            /** Format: int32 */
+            max_active_members?: number;
+            /** Format: int32 */
+            max_branches?: number;
+            /** Format: int32 */
+            max_staff_users?: number;
+            name?: string;
+        };
+        PlanList: {
+            items?: components["schemas"]["Plan"][];
+        };
+        PlatformMe: {
+            email?: string;
+            full_name?: string;
+            kind?: string;
+            permissions?: string[];
+            /** Format: uuid */
+            user_id?: string;
+        };
+        PlatformTenant: {
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            modules?: string[];
+            name?: string;
+            /** Format: date */
+            next_status_change_on?: string;
+            plan_code?: string;
+            slug?: string;
+            /** @description active or suspended (read only, FR-TEN-06) */
+            status?: string;
+            subscription_status?: string;
+            timezone?: string;
+        };
+        PlatformTenantList: {
+            items?: components["schemas"]["PlatformTenant"][];
+        };
+        RecoveryCodes: {
+            /** @description Shown once; each works once */
+            recovery_codes?: string[];
+        };
+        RecoveryCodesRequest: {
+            /** @description A current TOTP code */
+            code: string;
+        };
+        Role: {
+            key?: string;
+            mfa_required?: boolean;
+            name?: string;
+            permissions?: string[];
+        };
+        RoleAssignment: {
+            /** Format: uuid */
+            branch_id?: string;
+            role_key?: string;
+            role_name?: string;
+        };
+        /** @description branch_id null means every branch */
+        RoleAssignmentRequest: {
+            /** Format: uuid */
+            branch_id?: string;
+            role_key: string;
+        };
+        RoleCatalogue: {
+            items?: components["schemas"]["Role"][];
+        };
+        SignInRequest: {
+            /** @description Email, or phone for staff */
+            login: string;
+            password: string;
+        };
+        SignInResponse: {
+            access_token?: string;
+            /** Format: int64 */
+            expires_in?: number;
+            mfa_enrolment_required?: boolean;
+            mfa_required?: boolean;
+            mfa_token?: string;
+            /** @description Present once, right after MFA enrolment (FR-IAM-11) */
+            recovery_codes?: string[];
+            status?: string;
+            token_type?: string;
+        };
+        SubscriptionStatusRequest: {
+            /** Format: date */
+            next_status_change_on?: string;
+            status: string;
+        };
+        TenantModulesRequest: {
+            modules: string[];
+        };
+        TenantSettings: {
+            allow_loans_before_kyc_verified?: boolean;
+            appraisal_weights?: {
+                [key: string]: number;
+            };
+            approval_thresholds_minor?: {
+                [key: string]: number;
+            };
+            /** Format: int32 */
+            approval_validity_days?: number;
+            disabled_collateral_types?: string[];
+            display_name?: string;
+            /** Format: int32 */
+            max_active_loans_per_member?: number;
+            receipt_footer?: string;
+            require_mfa_all_staff?: boolean;
+            sms_sender_name?: string;
+            sms_window_end?: string;
+            sms_window_start?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        /** @description Omitted fields are unchanged. The code never changes. */
+        UpdateBranchRequest: {
+            location?: string;
+            name?: string;
+        };
+        UpdateTenantSettingsRequest: {
+            allow_loans_before_kyc_verified?: boolean;
+            /** @description repayment_history, affordability, collateral_cover, exposure; summing to 100 */
+            appraisal_weights?: {
+                [key: string]: number;
+            };
+            /** @description Action type to amount in minor units; below it no checker is needed (FR-APR-04) */
+            approval_thresholds_minor?: {
+                [key: string]: number;
+            };
+            /** Format: int32 */
+            approval_validity_days?: number;
+            disabled_collateral_types?: string[];
+            display_name?: string;
+            /** Format: int32 */
+            max_active_loans_per_member?: number;
+            receipt_footer?: string;
+            require_mfa_all_staff?: boolean;
+            /** @description Subject to aggregator approval */
+            sms_sender_name?: string;
+            sms_window_end?: string;
+            sms_window_start?: string;
+        };
+        /** @description Omitted fields are unchanged */
+        UpdateUserRequest: {
+            /** Format: email */
+            email?: string;
+            full_name?: string;
+            phone?: string;
+        };
+        User: {
+            /** Format: date-time */
+            created_at?: string;
+            email?: string;
+            full_name?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: date-time */
+            last_login_at?: string;
+            mfa_enabled?: boolean;
+            phone_e164?: string;
+            roles?: components["schemas"]["RoleAssignment"][];
+            status?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        UserPage: {
+            items?: components["schemas"]["User"][];
+            next_cursor?: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -156,6 +1272,479 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listApprovals: {
+        parameters: {
+            query?: {
+                status?: string[];
+                action_type?: string[];
+                branch_id?: string[];
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalPage"];
+                };
+            };
+        };
+    };
+    getApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Approval"];
+                };
+            };
+        };
+    };
+    approveApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ApprovalDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Approval"];
+                };
+            };
+        };
+    };
+    cancelApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Approval"];
+                };
+            };
+        };
+    };
+    rejectApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Approval"];
+                };
+            };
+        };
+    };
+    searchAuditEvents: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                actor_user_id?: string;
+                entity_type?: string;
+                entity_id?: string;
+                action?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventPage"];
+                };
+            };
+        };
+    };
+    exportAuditEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuditExportRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    refreshSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                bms_rt?: string;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInResponse"];
+                };
+            };
+        };
+    };
+    acceptInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    staffLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignInRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInResponse"];
+                };
+            };
+        };
+    };
+    staffMfaConfirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInResponse"];
+                };
+            };
+        };
+    };
+    staffMfaEnrol: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MfaEnrolRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrolment"];
+                };
+            };
+        };
+    };
+    staffRecoveryCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecoveryCodesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodes"];
+                };
+            };
+        };
+    };
+    staffMfaVerify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInResponse"];
+                };
+            };
+        };
+    };
+    listBranches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BranchList"];
+                };
+            };
+        };
+    };
+    createBranch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBranchRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branch"];
+                };
+            };
+        };
+    };
+    getBranch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                branch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branch"];
+                };
+            };
+        };
+    };
+    updateBranch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                branch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBranchRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branch"];
+                };
+            };
+        };
+    };
+    deactivateBranch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                branch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branch"];
+                };
+            };
+        };
+    };
     listMembers: {
         parameters: {
             query?: {
@@ -224,6 +1813,663 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Member"];
+                };
+            };
+        };
+    };
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+        };
+    };
+    platformLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignInRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInResponse"];
+                };
+            };
+        };
+    };
+    platformLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    platformMfaConfirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInResponse"];
+                };
+            };
+        };
+    };
+    platformMfaEnrol: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaEnrolRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrolment"];
+                };
+            };
+        };
+    };
+    platformMfaVerify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInResponse"];
+                };
+            };
+        };
+    };
+    platformRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                bms_prt?: string;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInResponse"];
+                };
+            };
+        };
+    };
+    platformSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    platformMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformMe"];
+                };
+            };
+        };
+    };
+    platformListPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanList"];
+                };
+            };
+        };
+    };
+    platformListTenants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantList"];
+                };
+            };
+        };
+    };
+    platformCreateTenant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTenantRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedTenant"];
+                };
+            };
+        };
+    };
+    platformGetTenant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenant"];
+                };
+            };
+        };
+    };
+    platformSetModules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantModulesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenant"];
+                };
+            };
+        };
+    };
+    platformResumeTenant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenant"];
+                };
+            };
+        };
+    };
+    platformSetSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscriptionStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenant"];
+                };
+            };
+        };
+    };
+    platformSuspendTenant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenant"];
+                };
+            };
+        };
+    };
+    platformResetAdminMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleCatalogue"];
+                };
+            };
+        };
+    };
+    getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantSettings"];
+                };
+            };
+        };
+    };
+    updateSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTenantSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantSettings"];
+                };
+            };
+        };
+    };
+    listUsers: {
+        parameters: {
+            query?: {
+                status?: string[];
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPage"];
+                };
+            };
+        };
+    };
+    inviteUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteUserRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitedUser"];
+                };
+            };
+        };
+    };
+    getUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    updateUser: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    deactivateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    reissueInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationLink"];
+                };
+            };
+        };
+    };
+    resetUserMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    setUserRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleAssignmentRequest"][];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
                 };
             };
         };

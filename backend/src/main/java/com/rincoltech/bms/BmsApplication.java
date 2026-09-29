@@ -1,5 +1,6 @@
 package com.rincoltech.bms;
 
+import com.rincoltech.bms.core.identity.ProvisioningKeys;
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.info.Info;
 import io.swagger.v3.oas.annotations.servers.Server;
@@ -12,7 +13,8 @@ import org.springframework.modulith.Modulithic;
  *
  * <p>{@code java -jar bms-api.jar migrate} runs the database migrations as the owner role and
  * exits, without starting the web application. The deploy script runs it as a one-shot container
- * before the application containers switch (ADR-006).
+ * before the application containers switch (ADR-006). {@code java -jar bms-api.jar keys} prints new
+ * sign-in key material for a host env file and exits (chapter 8 section 8.7).
  */
 @SpringBootApplication
 @Modulithic(systemName = "BMS Platform")
@@ -22,6 +24,10 @@ public class BmsApplication {
     public static void main(String[] args) {
         if (args.length > 0 && args[0].equals("migrate")) {
             System.exit(DatabaseMigrator.runFromEnvironment());
+        }
+        if (args.length > 0 && args[0].equals("keys")) {
+            System.out.print(ProvisioningKeys.envLines());
+            return;
         }
         SpringApplication.run(BmsApplication.class, args);
     }

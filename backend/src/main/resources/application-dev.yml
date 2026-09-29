@@ -3,5 +3,7 @@
 bms:
   tenancy:
     allow-tenant-header: true
+    # One-time links point at the local proxy (make dev), not https.
+    link-origin: http://{slug}.localhost:8000
   auth:
     mode: dev
