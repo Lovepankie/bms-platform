@@ -81,7 +81,7 @@ class StaffAuthIT extends IntegrationTest {
         UUID userId = UUID.fromString(user.get("id").asString());
         assertThat(user.get("status").asString()).isEqualTo("invited");
         String url = invited.getBody().get("invitation").get("url").asString();
-        assertThat(url).startsWith("https://" + t.slug() + ".bms.test/accept-invitation#token=");
+        assertThat(url).startsWith("https://" + t.slug() + "-bms-staging.rincoltech.test/accept-invitation#token=");
         Instant expires = Instant.parse(
                 invited.getBody().get("invitation").get("expires_at").asString());
         assertThat(expires)

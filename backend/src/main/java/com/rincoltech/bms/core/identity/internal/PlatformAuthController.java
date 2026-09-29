@@ -38,8 +38,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Platform operator sign-in on {@code app.<base domain>} (chapter 7 section 7.11.3, chapter 8
- * section 8.2): email, password and a mandatory TOTP factor, enrolled at first sign-in. The first
+ * Platform operator sign-in on the platform host, {@code BMS_PLATFORM_HOST} (chapter 7 section
+ * 7.11.3, chapter 8 section 8.2): email, password and a mandatory TOTP factor, enrolled at first sign-in. The first
  * password is set with a one-time setup token issued by {@code deploy/sql/create-platform-user.sql}.
  */
 @RestController

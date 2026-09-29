@@ -2,8 +2,12 @@
 # both switches below refuse to start outside the dev and test profiles.
 bms:
   tenancy:
+    # http://demo.localhost:8000 is the demo tenant; localhost is the platform host (make dev).
+    tenant-host-pattern: "{slug}.localhost"
+    platform-host: localhost
     allow-tenant-header: true
     # One-time links point at the local proxy (make dev), not https.
-    link-origin: http://{slug}.localhost:8000
+    link-scheme: http
+    link-port: 8000
   auth:
     mode: dev

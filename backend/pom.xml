@@ -200,7 +200,7 @@
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <configuration>
                     <!-- Lets the API tests set a Host header, to prove tenant resolution from
-                         <slug>.<base domain>, the production path. -->
+                         the tenant host pattern, the server path. -->
                     <argLine>-Djdk.httpclient.allowRestrictedHeaders=host -Dsun.net.http.allowRestrictedHeaders=true</argLine>
                 </configuration>
                 <executions>

@@ -5,44 +5,44 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 
-/** Host parsing of chapter 7 section 7.2 (FR-TEN-02 reserved labels). */
+/** Slug from the host or, in development only, the X-Tenant header (chapter 7 section 7.2). */
 class TenantResolutionFilterTest {
 
     TenantResolutionFilter filter(boolean allowHeader) {
-        return new TenantResolutionFilter(new TenancyProperties("bms.example", allowHeader, null), null, null);
+        return new TenantResolutionFilter(
+                new TenancyProperties(
+                        "{slug}-bms-staging.rincoltech.com", "bms-staging.rincoltech.com", allowHeader, null, null),
+                null,
+                null);
+    }
+
+    MockHttpServletRequest request(String host, String header) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setServerName(host);
+        if (header != null) {
+            request.addHeader("X-Tenant", header);
+        }
+        return request;
     }
 
     @Test
-    void oneLabelUnderTheBaseDomainIsTheSlug() {
-        assertThat(filter(false).slugFromHost("pilot.bms.example")).contains("pilot");
-        assertThat(filter(false).slugFromHost("PILOT.BMS.EXAMPLE")).contains("pilot");
-    }
-
-    @Test
-    void reservedNestedAndForeignHostsCarryNoSlug() {
-        TenantResolutionFilter f = filter(false);
-        assertThat(f.slugFromHost("app.bms.example")).isEmpty();
-        assertThat(f.slugFromHost("api.bms.example")).isEmpty();
-        assertThat(f.slugFromHost("a.b.bms.example")).isEmpty();
-        assertThat(f.slugFromHost("bms.example")).isEmpty();
-        assertThat(f.slugFromHost("pilot.other.example")).isEmpty();
-        assertThat(f.slugFromHost("-bad.bms.example")).isEmpty();
+    void theSlugComesFromTheTenantHost() {
+        assertThat(filter(false).slugFrom(request("demo-bms-staging.rincoltech.com", null)))
+                .contains("demo");
+        assertThat(filter(false).slugFrom(request("bms-staging.rincoltech.com", null)))
+                .isEmpty();
     }
 
     @Test
     void theTenantHeaderIsIgnoredUnlessAllowed() {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setServerName("localhost");
-        request.addHeader("X-Tenant", "pilot");
-        assertThat(filter(false).slugFrom(request)).isEmpty();
-        assertThat(filter(true).slugFrom(request)).contains("pilot");
+        assertThat(filter(false).slugFrom(request("localhost", "demo"))).isEmpty();
+        assertThat(filter(true).slugFrom(request("localhost", "demo"))).contains("demo");
+        assertThat(filter(true).slugFrom(request("localhost", "Demo"))).isEmpty();
     }
 
     @Test
     void theHostWinsOverTheHeader() {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setServerName("pilot.bms.example");
-        request.addHeader("X-Tenant", "other");
-        assertThat(filter(true).slugFrom(request)).contains("pilot");
+        assertThat(filter(true).slugFrom(request("demo-bms-staging.rincoltech.com", "other")))
+                .contains("demo");
     }
 }

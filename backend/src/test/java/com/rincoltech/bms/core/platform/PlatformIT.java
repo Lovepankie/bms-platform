@@ -128,7 +128,7 @@ class PlatformIT extends IntegrationTest {
         assertThat(tenant.get("subscription_status").asString()).isEqualTo("trial");
         assertThat(tenant.get("modules").toString()).contains("lending");
         assertThat(created.getBody().get("admin_invitation").get("url").asString())
-                .startsWith("https://" + slug + ".bms.test/accept-invitation#token=");
+                .startsWith("https://" + slug + "-bms-staging.rincoltech.test/accept-invitation#token=");
 
         var owner = TestDatabase.owner();
         assertThat(owner.sql("SELECT count(*) FROM gl_accounts WHERE tenant_id = ?")
@@ -157,9 +157,9 @@ class PlatformIT extends IntegrationTest {
                 .isEqualTo("platform");
         assertThat(platformAudits("platform.tenant.created", tenantId)).isEqualTo(1);
 
-        // The tenant is reachable at <slug>.<base domain>.
+        // The tenant is reachable at its host under the tenant host pattern.
         ResponseEntity<JsonNode> onHost =
-                Api.platform(http).onHost(slug + ".bms.test").get("/api/v1/me", null);
+                Api.platform(http).onHost(slug + "-bms-staging.rincoltech.test").get("/api/v1/me", null);
         assertThat(onHost.getBody().get("code").asString()).isEqualTo("unauthenticated");
 
         assertThat(platform.get("/api/v1/platform/tenants", operator.accessToken())
@@ -320,9 +320,18 @@ class PlatformIT extends IntegrationTest {
     void platformAndTenantTokensAndHostsDoNotMix() {
         String slug =
                 create(slug(), List.of()).getBody().get("tenant").get("slug").asString();
-        ResponseEntity<JsonNode> onTenantHost =
-                Api.platform(http).onHost(slug + ".bms.test").get("/api/v1/platform/tenants", operator.accessToken());
+        ResponseEntity<JsonNode> onTenantHost = Api.platform(http)
+                .onHost(slug + "-bms-staging.rincoltech.test")
+                .get("/api/v1/platform/tenants", operator.accessToken());
         assertThat(onTenantHost.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        for (String lookAlike : List.of("localhost.attacker.test", "bms-staging.rincoltech.test", "evil-localhost")) {
+            assertThat(Api.platform(http)
+                            .onHost(lookAlike)
+                            .get("/api/v1/platform/tenants", operator.accessToken())
+                            .getStatusCode())
+                    .as(lookAlike)
+                    .isEqualTo(HttpStatus.NOT_FOUND);
+        }
         assertThat(platform.get("/api/v1/platform/tenants", null)
                         .getBody()
                         .get("code")

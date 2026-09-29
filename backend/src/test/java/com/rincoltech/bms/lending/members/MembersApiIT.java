@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -260,12 +261,33 @@ class MembersApiIT extends IntegrationTest {
         assertThat(off.getBody().get("code").asString()).isEqualTo("module_not_enabled");
     }
 
-    /** The host, not a header, is the production path: <slug>.<base domain>. */
+    /** The host, not a header, is the server path: the tenant host pattern of chapter 7 section 7.2. */
     @Test
     void theTenantResolvesFromTheHost() {
         HttpHeaders h = headers(null, ALL, "*");
-        h.set(HttpHeaders.HOST, t.slug() + ".bms.test");
+        h.set(HttpHeaders.HOST, t.slug() + "-bms-staging.rincoltech.test");
         ResponseEntity<JsonNode> list = get(h, "/api/v1/lending/members");
         assertThat(list.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        h.set(HttpHeaders.HOST, t.slug().toUpperCase() + "-BMS-STAGING.RINCOLTECH.TEST");
+        assertThat(get(h, "/api/v1/lending/members").getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    /** Chapter 7 section 7.2: only the exact tenant host resolves; look-alikes answer 404 unknown_tenant. */
+    @Test
+    void lookAlikeHostsResolveNoTenant() {
+        for (String host : List.of(
+                t.slug() + "-bms-staging.rincoltech.test.attacker.test",
+                "evil-" + t.slug() + "-bms-staging.rincoltech.test.attacker.test",
+                "x." + t.slug() + "-bms-staging.rincoltech.test",
+                t.slug() + ".bms-staging.rincoltech.test",
+                t.slug() + "-bms-staging.other.test",
+                "bms-staging.rincoltech.test")) {
+            HttpHeaders h = headers(null, ALL, "*");
+            h.set(HttpHeaders.HOST, host);
+            ResponseEntity<JsonNode> response = get(h, "/api/v1/lending/members");
+            assertThat(response.getStatusCode()).as(host).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody().get("code").asString()).as(host).isEqualTo("unknown_tenant");
+        }
     }
 }
