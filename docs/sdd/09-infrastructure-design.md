@@ -109,7 +109,7 @@ are capped at 6 MB (5 MB uploads plus framing). HTTP/3 is enabled on UDP 443.
 |---|---|---|---|
 | `bms-platform-api` | `backend/Dockerfile`: Maven build on `maven:3.9-eclipse-temurin-25`, layered jar on `eclipse-temurin:25-jre` | uid 10001 | `/readyz` over bash `/dev/tcp` (the JRE image has no curl) |
 | `bms-platform-web` | `frontend/Dockerfile`: `npm ci && npm run build` on `node:22-alpine`, served by `caddy:2.11-alpine`; also serves `/app-config.json` from `BMS_TENANT_HOST_PATTERN` and `BMS_PLATFORM_HOST` | uid 10001 | `deploy.sh` fetches `/` through the proxy |
-| `bms-platform-proxy` | `deploy/caddy/Dockerfile`: Caddy with the Cloudflare DNS module, `Caddyfile` (production edge) and `Caddyfile.tunnel` (staging origin) | root (binds 80 and 443 on the VM) | container running |
+| `bms-platform-proxy` | `deploy/caddy/Dockerfile` with the `deploy/` context: Caddy with the Cloudflare DNS module, `Caddyfile` (production edge) and `Caddyfile.tunnel` (staging origin), plus the release's host files in `/usr/share/bms-deploy` for the staging puller | root (binds 80 and 443 on the VM) | container running |
 
 Every image is a manifest list for `linux/amd64` and `linux/arm64` (ADR-018). Compilation runs
 once, natively, in a stage pinned to the build machine's platform (a jar and a JavaScript bundle
@@ -146,8 +146,8 @@ migration) with status only, no details.
   container gets `bms_owner`.
 - In GitHub: environment secrets in `production` (chapter 10 section 10.9). The registry credential
   used on the production host is the workflow's own short-lived token. The staging host holds no
-  GitHub or registry credential at all: the packages are public and it pulls anonymously
-  (ADR-018).
+  GitHub credential at all, and no registry credential once the packages are public: it pulls
+  anonymously, and its host files come inside the release's proxy image (ADR-018).
 - Host names: `BMS_TENANT_HOST_PATTERN` and `BMS_PLATFORM_HOST` for the API and the web
   container; on the production VM also `BMS_DNS_ZONE` and `BMS_CALLBACK_HOST` for the proxy; on
   the staging host `CLOUDFLARE_TUNNEL_TOKEN` and `CLOUDFLARED_IMAGE` for cloudflared.
@@ -192,7 +192,7 @@ profile.
 
 ```
 /opt/bms/
-  compose.yml            copied from deploy/ on every deploy (staging: compose.pi-staging.yml)
+  compose.yml            copied from deploy/ on every deploy (staging: compose.pi-staging.yml, from the release image)
   deploy.sh, backup.sh   copied from deploy/ on every deploy
   pull-staging.sh        staging only: the puller, replaced from deploy/ on every deploy
   systemd/               staging only: the unit files, for reference; installed by hand

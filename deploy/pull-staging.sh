@@ -9,9 +9,11 @@
 #      An unchanged pointer is a manifest check only; nothing is downloaded.
 #   2. If that tag is already live (state/current_tag), stop. If it failed before
 #      (state/last_failed_tag), stop too: a broken release is not retried every two minutes.
-#   3. Fetch the repository's deploy/ directory at that exact commit (public tarball over HTTPS) and
-#      install it here: compose.pi-staging.yml as compose.yml, the scripts, postgres/ and sql/.
-#      The host's files therefore always match the release, as they did with the SSH deploy.
+#   3. Copy that release's host files out of its proxy image (/usr/share/bms-deploy, built from the
+#      repository's deploy/ at the same commit) and install them here: compose.pi-staging.yml as
+#      compose.yml, the scripts, postgres/, sql/ and systemd/. The host's files therefore always
+#      match the release, as they did with the SSH deploy, and the host needs no GitHub access
+#      (the repository is private).
 #   4. Run deploy.sh <sha-tag>: migrations before the swap, readiness gate, automatic rollback.
 #   5. On success, keep the images of this and the previous release and remove older ones (the SD
 #      card is small).
@@ -21,7 +23,6 @@
 set -euo pipefail
 exec < /dev/null
 
-REPO="${BMS_REPO:-RincolTech-Solutions-ltd/bms-platform}"
 # The release images compose.yml runs; the pointer lives in the same repositories unless overridden.
 RELEASE_PREFIX="ghcr.io/rincoltech-solutions-ltd/bms-platform"
 POINTER_PREFIX="${BMS_POINTER_PREFIX:-$RELEASE_PREFIX}"
@@ -58,13 +59,14 @@ fi
 if [[ "$tag" == "$(cat state/last_failed_tag 2>/dev/null || true)" ]]; then
     exit 0
 fi
-log "pointer ${POINTER} is ${tag} (live: ${current:-none}); installing host files at ${revision}"
+log "pointer ${POINTER} is ${tag} (live: ${current:-none}); installing host files of ${revision}"
 
+proxy_image="${RELEASE_PREFIX}-proxy:${tag}"
+docker image inspect "$proxy_image" > /dev/null 2>&1 || docker pull --quiet "$proxy_image" > /dev/null
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
-curl --fail --silent --show-error --location --retry 3 \
-    "https://codeload.github.com/${REPO}/tar.gz/${revision}" \
-    | tar -xz -C "$work" --strip-components=1 --wildcards '*/deploy/*'
+container="$(docker create "$proxy_image")"
+trap 'docker rm "$container" > /dev/null 2>&1 || true; rm -rf "$work"' EXIT
+docker cp "$container:/usr/share/bms-deploy" "$work/deploy" > /dev/null
 src="$work/deploy"
 
 # Replace files by rename, so a running script (this one included) keeps its old copy.

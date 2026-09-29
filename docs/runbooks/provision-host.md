@@ -74,7 +74,9 @@ In the repository settings, Environments:
   `PROD_SSH_USER` if the user is not `deploy`; required reviewer Hillary Arinda; deployment
   branches and tags limited to `v*.*.*` tags.
 
-Packages: the three packages are public (ADR-018), which the staging host needs. The production
+Packages: the three packages are made public (ADR-018), so the staging host pulls without a
+credential; if they must stay private, log the staging host's `bms` user in once
+(`docker login ghcr.io` with a token limited to `read:packages`). The production
 deploy still logs in with the workflow's own token, which also works for private packages.
 
 ## 6. First deploy
@@ -163,12 +165,15 @@ host: nothing here issues a certificate.
 
 ### 8.4 First files and the systemd units
 
-The puller replaces the host files from the repository on every release, but the first run needs
-the puller itself and the unit files. From a checkout of `main` on any machine, copy
-`deploy/pull-staging.sh` to `/opt/bms/` (mode 755, owner `bms`) and `deploy/systemd/*` to
-`/etc/systemd/system/`, then:
+The puller replaces the host files from each release's proxy image, but the first run needs the
+puller itself and the unit files. Take them from the current staging image (no checkout needed):
 
 ```bash
+IMG=ghcr.io/rincoltech-solutions-ltd/bms-platform-proxy:staging
+docker pull "$IMG" && cid="$(docker create "$IMG")"
+docker cp "$cid:/usr/share/bms-deploy/pull-staging.sh" /opt/bms/pull-staging.sh
+docker cp "$cid:/usr/share/bms-deploy/systemd/." /etc/systemd/system/
+docker rm "$cid"
 chown bms:bms /opt/bms/pull-staging.sh && chmod 755 /opt/bms/pull-staging.sh
 chmod 644 /etc/systemd/system/bms.slice /etc/systemd/system/bms-pull.service /etc/systemd/system/bms-pull.timer
 systemctl daemon-reload

@@ -75,7 +75,8 @@ jobs:
           - image: web
             context: frontend
           - image: proxy
-            context: deploy/caddy
+            context: deploy
+            file: deploy/caddy/Dockerfile
     steps:
       - uses: actions/checkout@v7
       # Every Dockerfile compiles in a stage pinned to $BUILDPLATFORM (Maven, npm and a Go
@@ -94,6 +95,7 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.file || format('{0}/Dockerfile', matrix.context) }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}:${{ needs.meta.outputs.sha_tag }}

@@ -113,15 +113,19 @@ build the architecture-independent parts natively and only assemble the runtime 
   labels from the pulled `api:staging` image; no separate manifest file is kept.
 - `bms-pull.timer` runs `deploy/pull-staging.sh` every two minutes as the dedicated `bms` user.
   It pulls `api:staging` (a manifest check when nothing moved), and when the named tag is neither
-  live nor the last failed one, it fetches the repository's `deploy/` directory at the labelled
-  commit (the public tarball over HTTPS), installs it, and runs the existing `deploy.sh <sha-tag>`:
+  live nor the last failed one, it copies that release's host files out of its proxy image
+  (`/usr/share/bms-deploy`, built from the repository's `deploy/` at the same commit), installs
+  them, and runs the existing `deploy.sh <sha-tag>`:
   migrations before the swap, the readiness gate and automatic rollback, exactly as before. A
   failed tag is recorded in `state/last_failed_tag` and not retried until someone removes it or
   deploys by hand. After a success it removes release images other than the live and previous
   ones, since the SD card is small.
-- The GHCR packages are public (the repository is public and images hold no secrets), so the host
-  pulls anonymously and holds no registry credential, no deploy key and no GitHub token. Nothing
-  reaches into the host.
+- The host never talks to GitHub itself: the repository is private, so its files reach the host
+  inside the release image rather than as a download. The three GHCR packages are made public
+  (their images hold no secrets), so the host pulls anonymously and holds no registry credential,
+  no deploy key and no GitHub token. If the organisation keeps the packages private, the `bms` user
+  logs in to GHCR once with a token limited to `read:packages`, which Docker stores for the puller.
+  Nothing reaches into the host.
 - The `bms` user is a member of the `docker` group, with no password, no SSH key and no login
   shell. Rootless Docker was not chosen: `cgroup_parent` into a system slice and memory limits
   need the system daemon's cgroup delegation, which rootless mode on Debian does not give without

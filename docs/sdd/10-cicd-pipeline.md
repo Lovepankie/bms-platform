@@ -92,16 +92,18 @@ CI publishes what staging should run, and the host fetches it.
    slow older run never moves staging backwards.
 2. **Timer.** On the host, `bms-pull.timer` starts `bms-pull.service` two minutes after the last
    run ends; it runs `/opt/bms/pull-staging.sh` as the `bms` user.
-3. **Resolve.** The puller pulls `api:staging` (anonymously; the packages are public) and reads
+3. **Resolve.** The puller pulls `api:staging` (anonymously once the packages are public) and reads
    `org.opencontainers.image.version` and `org.opencontainers.image.revision` from the image. It
    refuses labels that do not agree (`version` must be `sha-` plus the first 7 characters of
    `revision`). When the pointer did not move, the pull is a manifest check only.
 4. **Compare.** If the tag equals `state/current_tag`, or `state/last_failed_tag`, the run ends
    silently.
-5. **Host files.** It downloads the repository tarball at the labelled commit from
-   `codeload.github.com` and installs `deploy/compose.pi-staging.yml` as `compose.yml`, the three
-   scripts (by rename, so a running copy is never edited in place), `postgres/`, `sql/` and
-   `systemd/`. The host's files always match the release, as the SSH copy did.
+5. **Host files.** It pulls the release's `proxy:sha-<7>` image, copies `/usr/share/bms-deploy` out
+   of it (the proxy image is built from the `deploy/` context and carries that commit's host
+   files), and installs `compose.pi-staging.yml` as `compose.yml`, the three scripts (by rename,
+   so a running copy is never edited in place), `postgres/`, `sql/` and `systemd/`. The host's
+   files always match the release, as the SSH copy did, without the host reaching the private
+   repository.
 6. **Deploy.** It runs `./deploy.sh sha-<7>` (section 10.7). Exit 3 (another deploy holds the
    lock) is retried on the next run; any other failure writes the tag to `state/last_failed_tag`,
    so a broken release is not retried every two minutes.
@@ -154,7 +156,8 @@ allows 30 seconds; measured locally at under 10).
 - Write access to packages exists only in `build`, `staging-pointer` and `promote`, on pushes to
   `main` and version tags of this repository.
 - The production host holds no registry credential between deploys. The staging host holds none
-  ever: it pulls public packages and a public tarball, and nothing on GitHub can reach it.
+  ever (once the packages are public): its host files come inside the release image, and nothing
+  on GitHub can reach it.
 - The production environment requires the dev lead's approval; branch protection on `main`
   requires review and green checks (`PROCESS.md` section 9).
 

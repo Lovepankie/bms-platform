@@ -9,6 +9,10 @@
 # targets TARGETOS/TARGETARCH; the runtime stage only copies files. Two configurations ship in the
 # image: Caddyfile (the production VM edge, public TLS) and Caddyfile.tunnel (the internal origin
 # behind cloudflared on the ARM64 staging host, plain HTTP), chosen by the compose file's command.
+#
+# The build context is deploy/ (docker build -f deploy/caddy/Dockerfile deploy). The image also
+# carries that release's host files under /usr/share/bms-deploy, from which the staging puller
+# installs them (ADR-018): the repository is private, and the host holds no GitHub credential.
 
 FROM --platform=$BUILDPLATFORM caddy:2.11.4-builder-alpine AS build
 ARG TARGETOS
@@ -18,4 +22,8 @@ RUN GOOS=$TARGETOS GOARCH=$TARGETARCH xcaddy build --output /out/caddy \
 
 FROM caddy:2.11.4-alpine
 COPY --from=build /out/caddy /usr/bin/caddy
-COPY Caddyfile Caddyfile.tunnel /etc/caddy/
+COPY caddy/Caddyfile caddy/Caddyfile.tunnel /etc/caddy/
+COPY compose.pi-staging.yml deploy.sh backup.sh pull-staging.sh /usr/share/bms-deploy/
+COPY postgres /usr/share/bms-deploy/postgres
+COPY sql /usr/share/bms-deploy/sql
+COPY systemd /usr/share/bms-deploy/systemd

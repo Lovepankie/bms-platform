@@ -22,7 +22,7 @@
 #
 # Runs from /opt/bms (the directory holding this script, compose.yml and .env). Registry login, when
 # the packages are private, is done by the caller before this script runs (the production workflow
-# logs in with a short-lived token). The ARM64 staging host pulls public packages anonymously and
+# logs in with a short-lived token). The ARM64 staging host pulls the packages anonymously and
 # is driven by pull-staging.sh on a systemd timer (ADR-018).
 set -euo pipefail
 # Docker commands below never read the caller's stdin (it may be the SSH session).

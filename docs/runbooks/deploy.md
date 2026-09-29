@@ -50,7 +50,7 @@ docker logout ghcr.io
 ```
 
 The files in `/opt/bms` must match the repository at that commit (the production workflow copies
-them from `deploy/`; the staging puller installs them from the commit's tarball). Never edit them
+them from `deploy/`; the staging puller installs them from the release's proxy image). Never edit them
 on the host. On staging, a manual deploy of a tag other than the pointer's is undone by the next
 timer run; stop `bms-pull.timer` first if it must stay.
 

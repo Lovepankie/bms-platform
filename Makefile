@@ -53,7 +53,7 @@ fmt:
 build:
 	docker build --build-arg GIT_SHA=$$(git rev-parse --short HEAD) -t bms-platform-api:local backend
 	docker build -t bms-platform-web:local frontend
-	docker build -t bms-platform-proxy:local deploy/caddy
+	docker build -t bms-platform-proxy:local -f deploy/caddy/Dockerfile deploy
 
 ## Regenerate the committed API contract and the frontend's typed client from it.
 openapi:
