@@ -5,7 +5,7 @@
 --   psql -v email=operator@example.test -v name='Test Operator' -f create-platform-user.sql
 --
 -- The operator then sets a password with POST /api/v1/platform/auth/setup {token, password} on
--- app.<base domain>, and enrols TOTP at first sign-in (mandatory). Only the SHA-256 of the token
+-- the platform host (BMS_PLATFORM_HOST), and enrols TOTP at first sign-in (mandatory). Only the SHA-256 of the token
 -- is stored; the token is shown once, here.
 \set ON_ERROR_STOP on
 

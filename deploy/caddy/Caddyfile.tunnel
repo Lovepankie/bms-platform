@@ -1,5 +1,5 @@
 # Internal origin on the ARM64 staging host (ADR-018, docs/sdd/09-infrastructure-design.md
-# section 9.12). cloudflared terminates nothing here: TLS ends at Cloudflare's edge, and the tunnel
+# section 9.13). cloudflared terminates nothing here: TLS ends at Cloudflare's edge, and the tunnel
 # delivers plain HTTP to this server on the host's private Docker network. No port is published.
 # Same routing as Caddyfile; the API resolves the tenant from the Host header, which cloudflared
 # and Caddy pass through unchanged. Environment: none.

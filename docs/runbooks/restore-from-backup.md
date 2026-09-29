@@ -75,7 +75,7 @@ start as an owner, and cannot read tables it has no grant on.
 
 ```bash
 ./deploy.sh "$IMAGE_TAG"      # migrate is a no-op, or applies migrations newer than the backup
-curl -s https://app.<base>/readyz
+curl -s https://<platform host>/readyz
 ```
 
 Check, as `bms_owner`: row counts of `tenants`, `lending_members` and `journal_entries` against

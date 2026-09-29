@@ -82,7 +82,7 @@ updatable column, granted by column.
 |---|---|---|---|
 | `bms_owner` | yes | Migrations, backup (`pg_dump`), restore, onboarding scripts | `NOSUPERUSER BYPASSRLS`. Owns the database, the schema, every table and function. `BYPASSRLS` is required because every table is `FORCE ROW LEVEL SECURITY`: without it `pg_dump` and the `SECURITY DEFINER` resolvers would be filtered by the policy too. Never used by the running API or worker. |
 | `bms_app` | yes | API and worker | `NOSUPERUSER NOBYPASSRLS`. DML per table as granted by migrations. Subject to RLS. |
-| `bms_platform` | yes | Platform console endpoints on `app.<base domain>` | Read and write on platform tables (6.4); no access to tenant-owned tables except through the audited support session path (FR-TEN-07). Not created yet: until it is, the platform console runs as `bms_app` and changes tenancy tables only through the platform `SECURITY DEFINER` functions of section 6.3.2 (ADR-016). |
+| `bms_platform` | yes | Platform console endpoints on the platform host | Read and write on platform tables (6.4); no access to tenant-owned tables except through the audited support session path (FR-TEN-07). Not created yet: until it is, the platform console runs as `bms_app` and changes tenancy tables only through the platform `SECURITY DEFINER` functions of section 6.3.2 (ADR-016). |
 
 `bms_owner` and `bms_app` are created by `deploy/postgres/initdb/01-roles.sh` when the database
 volume is first initialised, on servers, in `make dev` and in the integration tests alike. The

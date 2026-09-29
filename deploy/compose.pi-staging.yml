@@ -1,5 +1,5 @@
 # Staging stack for the shared ARM64 home host (ADR-018, docs/sdd/09-infrastructure-design.md
-# section 9.12). The puller (pull-staging.sh) installs this file on the host as
+# section 9.13). The puller (pull-staging.sh) installs this file on the host as
 # /opt/bms/compose.yml next to /opt/bms/.env, so deploy.sh, backup.sh and every runbook command
 # work unchanged. Every image is multi-arch and pinned: the application images use IMAGE_TAG
 # (sha-<short>, set by deploy.sh), the others the pinned values in .env. Nothing is built here.

@@ -22,7 +22,9 @@ set -euo pipefail
 exec < /dev/null
 
 REPO="${BMS_REPO:-RincolTech-Solutions-ltd/bms-platform}"
-IMAGE_PREFIX="${BMS_IMAGE_PREFIX:-ghcr.io/rincoltech-solutions-ltd/bms-platform}"
+# The release images compose.yml runs; the pointer lives in the same repositories unless overridden.
+RELEASE_PREFIX="ghcr.io/rincoltech-solutions-ltd/bms-platform"
+POINTER_PREFIX="${BMS_POINTER_PREFIX:-$RELEASE_PREFIX}"
 POINTER="${BMS_POINTER_TAG:-staging}"
 COMPOSE_SOURCE="${BMS_COMPOSE_SOURCE:-compose.pi-staging.yml}"
 
@@ -38,7 +40,7 @@ if ! flock --nonblock 8; then
     exit 0
 fi
 
-pointer_image="${IMAGE_PREFIX}-api:${POINTER}"
+pointer_image="${POINTER_PREFIX}-api:${POINTER}"
 docker pull --quiet "$pointer_image" > /dev/null
 label() { docker image inspect --format "{{ index .Config.Labels \"$1\" }}" "$pointer_image"; }
 tag="$(label org.opencontainers.image.version)"
@@ -94,7 +96,7 @@ esac
 
 log "removing release images other than ${tag} and ${current:-none}"
 docker image ls --format '{{.Repository}}:{{.Tag}}' \
-    | grep -E "^${IMAGE_PREFIX//./\\.}-(api|web|proxy):sha-[0-9a-f]+$" \
+    | grep -E "^${RELEASE_PREFIX//./\\.}-(api|web|proxy):sha-[0-9a-f]+$" \
     | while read -r ref; do
         if [[ "${ref##*:}" != "$tag" && "${ref##*:}" != "$current" ]]; then
             docker image rm "$ref" > /dev/null || true

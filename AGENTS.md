@@ -45,8 +45,10 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   and the PWA's sign-in, MFA, invitation, branch switcher and approvals inbox. No production
   approval action is registered until increment 2.
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
-  `mvn verify`; CI runs them on every pull request. Staging and production hosts are not
-  provisioned yet; the deploy jobs skip with a notice until they are
+  `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
+  Cloudflare Tunnel and pulls every green build of `main` from a `staging` pointer tag; hosts are
+  `{slug}-bms-staging.rincoltech.com` and `bms-staging.rincoltech.com` (ADR-018). The production
+  VM is not provisioned yet; its deploy job skips with a notice until it is
   (`docs/runbooks/provision-host.md`).
 
 ## Reading order
@@ -261,6 +263,8 @@ Accepted (this list is the ADR index):
 - ADR-015 Maker-checker actions are registered by the modules that own them
 - ADR-016 Platform operations run through SECURITY DEFINER functions until the platform role exists
 - ADR-017 The principal types live in the shared kernel
+- ADR-018 Staging on a shared ARM64 host behind a Cloudflare Tunnel, pull-based deploy, hyphenated
+  hosts under the Rincol zone
 
 Pending (cite only as "pending ADR-NNN"):
 

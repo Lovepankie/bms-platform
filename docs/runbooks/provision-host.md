@@ -1,9 +1,10 @@
 # Runbook: provision a host
 
-**Applies to:** a new staging or production VM · **Design:** `docs/sdd/09-infrastructure-design.md` · **Pipeline:** `docs/sdd/10-cicd-pipeline.md`
+**Applies to:** the production VM (sections 1 to 7) and the ARM64 staging host (section 8) · **Design:** `docs/sdd/09-infrastructure-design.md` · **Pipeline:** `docs/sdd/10-cicd-pipeline.md` · **Decisions:** ADR-006, ADR-018
 
-Do staging first, then production, one environment at a time. Nothing here is shared between the
-two environments.
+Staging no longer runs on a cloud VM: it runs on a shared ARM64 host behind a Cloudflare Tunnel
+and pulls its releases (ADR-018). Provision it with section 8 only. Sections 1 to 7 are the
+production VM. Nothing is shared between the two environments.
 
 ## 1. Create the VM
 
@@ -25,29 +26,33 @@ install -d -o deploy -g deploy -m 750 /opt/bms
 ```
 
 Create an SSH key pair for GitHub Actions on your own machine
-(`ssh-keygen -t ed25519 -f bms-staging-deploy -C bms-staging-deploy`), put the public half in
+(`ssh-keygen -t ed25519 -f bms-prod-deploy -C bms-prod-deploy`), put the public half in
 `/home/deploy/.ssh/authorized_keys`, and keep the private half for step 5. Disable password
 authentication in `sshd_config`.
 
 ## 3. DNS and the Cloudflare token
 
-In the Cloudflare zone of the environment's base domain (DNS only, not proxied):
+In the Cloudflare zone `rincoltech.com` (DNS only, not proxied):
 
-- `A <base>` and `A *.<base>` pointing to the VM's IPv4 (and `AAAA` records if IPv6 is used).
+- `A bms`, `A bms-callbacks` and, per tenant, `A <slug>-bms`, pointing to the VM's IPv4 (and
+  `AAAA` records if IPv6 is used). Do not point the apex or a wildcard of the company zone at the
+  VM.
 - An API token with **Zone.DNS:Edit on that zone only**, for Caddy's DNS-01 challenge (the
-  wildcard certificate cannot be issued any other way).
+  wildcard certificate `*.rincoltech.com` cannot be issued any other way).
 
 ## 4. Write `/opt/bms/.env`
 
 As `deploy`, copy `.env.example` from the repository to `/opt/bms/.env`, fill every value, then
 `chmod 600 /opt/bms/.env`. Generate each password and key with `openssl rand -base64 32`; they must
-differ per environment. Set `BMS_ENVIRONMENT`, `BMS_BASE_DOMAIN`, `ACME_EMAIL`,
+differ per environment. Set `BMS_ENVIRONMENT=production`,
+`BMS_TENANT_HOST_PATTERN={slug}-bms.rincoltech.com`, `BMS_PLATFORM_HOST=bms.rincoltech.com`,
+`BMS_DNS_ZONE=rincoltech.com`, `BMS_CALLBACK_HOST=bms-callbacks.rincoltech.com`, `ACME_EMAIL`,
 `CLOUDFLARE_API_TOKEN`, the R2 values (a token scoped to the backup bucket) and
 `BMS_OPENAPI_ENABLED` (`true` on staging, `false` on production). Put a copy of
 `BACKUP_ENCRYPTION_KEY` in the offline store the dev lead keeps (chapter 8 section 8.7).
 
-Add the sign-in keys (ADR-014), which `.env.example` does not list yet: run the API image once with
-the `keys` command and paste its three lines into `/opt/bms/.env`:
+Add the sign-in keys (ADR-014): run the API image once with the `keys` command and paste its three
+lines into `/opt/bms/.env`:
 
 ```bash
 docker run --rm ghcr.io/<owner>/bms-platform-api:<tag> keys
@@ -64,19 +69,16 @@ a copy with the backup key in the offline store.
 
 In the repository settings, Environments:
 
-- `staging` (or `production`): secrets `STAGING_HOST` (or `PROD_HOST`), `STAGING_SSH_KEY` (the
-  private key from step 2), `STAGING_SSH_KNOWN_HOSTS` (run `ssh-keyscan <host>` from a trusted
-  network); optional variable `STAGING_SSH_USER` if the user is not `deploy`.
-- `production` only: required reviewer Hillary Arinda; deployment branches and tags limited to
-  `v*.*.*` tags.
+- `production`: secrets `PROD_HOST`, `PROD_SSH_KEY` (the private key from step 2),
+  `PROD_SSH_KNOWN_HOSTS` (run `ssh-keyscan <host>` from a trusted network); optional variable
+  `PROD_SSH_USER` if the user is not `deploy`; required reviewer Hillary Arinda; deployment
+  branches and tags limited to `v*.*.*` tags.
 
-Packages: the images are pulled with the workflow's own token during each deploy, so private
-packages work without any credential on the host. Making the three packages public (the
-repository is public and the images hold no secrets) also works and allows manual pulls.
+Packages: the three packages are public (ADR-018), which the staging host needs. The production
+deploy still logs in with the workflow's own token, which also works for private packages.
 
 ## 6. First deploy
 
-- Staging: re-run the latest `Deploy` workflow on `main`, or merge any pull request.
 - Production: push a `vX.Y.Z` tag on a commit that is green on staging and approve it.
 
 The first deploy creates the database volume; the postgres container runs
@@ -95,3 +97,109 @@ Run `/opt/bms/backup.sh` once by hand and confirm the file appears in R2. Then s
 monitoring of chapter 9 section 9.11, onboard a fabricated tenant
 (`docs/runbooks/onboard-tenant.md`), and on staging run the isolation checks of chapter 15 against
 two fabricated tenants.
+
+## 8. The ARM64 staging host (shared, behind a Cloudflare Tunnel)
+
+**Host:** the existing Raspberry Pi 4 (8 GB, Debian 13, `linux/arm64`, SD card) at the Rincol home
+site, shared with other workloads. BMS gets about 900 MB of memory, hard-capped by `bms.slice`.
+No inbound port is opened, now or later (ADR-018, chapter 9 section 9.13). Run everything below
+as root unless it says otherwise.
+
+### 8.1 Docker and the `bms` user
+
+```bash
+apt-get update && apt-get -y install ca-certificates curl
+# Docker Engine and the Compose plugin from Docker's apt repository for Debian
+# (docs.docker.com/engine/install/debian); the Debian 13 default is cgroup v2 with the systemd
+# cgroup driver, which bms.slice needs:
+docker info --format '{{.CgroupDriver}} cgroup v{{.CgroupVersion}}'   # expect: systemd cgroup v2
+# The dedicated service user: no password, no SSH key, no login shell. It is in the docker
+# group (not rootless Docker, ADR-018), which makes it root-equivalent on this host: use it for
+# the timer only.
+adduser --system --group --home /opt/bms --shell /usr/sbin/nologin bms
+usermod -aG docker bms
+install -d -o bms -g bms -m 750 /opt/bms /opt/bms/state
+```
+
+### 8.2 The tunnel
+
+In the Cloudflare dashboard, Zero Trust, Networks, Tunnels: create a tunnel named
+`bms-staging` of type cloudflared and copy its **connector token** (it goes into `.env`, step 8.3;
+nothing is installed on the host outside Docker). Then add its public hostnames, each with
+service `http://proxy:8080`:
+
+| Public hostname | Service |
+|---|---|
+| `bms-staging.rincoltech.com` | `http://proxy:8080` |
+| `demo-bms-staging.rincoltech.com` | `http://proxy:8080` (and one per tenant, `docs/runbooks/onboard-tenant.md`) |
+
+The dashboard creates the proxied CNAMEs `bms-staging` and `demo-bms-staging` to
+`<tunnel id>.cfargotunnel.com`. Leave SSL/TLS on Full and the edge certificate as the free
+Universal certificate, which covers `*.rincoltech.com`. Record the tunnel id and the account id;
+onboarding uses them.
+
+### 8.3 Write `/opt/bms/.env`
+
+Copy `.env.example` to `/opt/bms/.env` (owner `bms`, mode 600) and fill it:
+
+```bash
+install -o bms -g bms -m 600 /dev/null /opt/bms/.env
+# then edit it; the staging values:
+BMS_ENVIRONMENT=staging
+BMS_TENANT_HOST_PATTERN={slug}-bms-staging.rincoltech.com
+BMS_PLATFORM_HOST=bms-staging.rincoltech.com
+BMS_OPENAPI_ENABLED=true
+BMS_DB_POOL_SIZE=5
+POSTGRES_IMAGE=postgres:16.15-alpine
+RCLONE_IMAGE=rclone/rclone:1.75.1
+CLOUDFLARED_IMAGE=cloudflare/cloudflared:2026.9.3
+CLOUDFLARE_TUNNEL_TOKEN=<connector token from 8.2>
+# passwords (openssl rand -base64 32 each), the three sign-in keys (section 4), the backup key
+# and the R2 values (prefix staging/), exactly as for any environment
+```
+
+`ACME_EMAIL`, `CLOUDFLARE_API_TOKEN`, `BMS_DNS_ZONE` and `BMS_CALLBACK_HOST` are not used on this
+host: nothing here issues a certificate.
+
+### 8.4 First files and the systemd units
+
+The puller replaces the host files from the repository on every release, but the first run needs
+the puller itself and the unit files. From a checkout of `main` on any machine, copy
+`deploy/pull-staging.sh` to `/opt/bms/` (mode 755, owner `bms`) and `deploy/systemd/*` to
+`/etc/systemd/system/`, then:
+
+```bash
+chown bms:bms /opt/bms/pull-staging.sh && chmod 755 /opt/bms/pull-staging.sh
+chmod 644 /etc/systemd/system/bms.slice /etc/systemd/system/bms-pull.service /etc/systemd/system/bms-pull.timer
+systemctl daemon-reload
+systemctl start bms.slice && systemctl show bms.slice -p MemoryMax    # MemoryMax=943718400
+systemctl enable --now bms-pull.timer
+```
+
+Later changes to the unit files arrive in `/opt/bms/systemd/` with each release; copy them into
+`/etc/systemd/system/` and `systemctl daemon-reload` when a release changes them.
+
+### 8.5 First deploy and checks
+
+The first timer run (two minutes after enabling, or `systemctl start bms-pull.service`) pulls
+`bms-platform-api:staging`, installs the host files of that commit, creates the database volume
+(the postgres container runs `postgres/initdb/01-roles.sh`), migrates and starts the stack.
+
+```bash
+journalctl -u bms-pull.service -n 50 --no-pager
+cat /opt/bms/state/current_tag
+sudo -u bms docker compose --project-name bms -f /opt/bms/compose.yml ps     # no published ports
+systemd-cgls /bms.slice                                                         # every container is here
+curl -s https://bms-staging.rincoltech.com/version
+curl -s -o /dev/null -w '%{http_code}\n' https://demo-bms-staging.rincoltech.com/api/v1/me
+```
+
+Then create the first platform operator and the fabricated `demo` tenant
+(`docs/runbooks/onboard-tenant.md`), and add the nightly backup for the `bms` user:
+
+```bash
+crontab -u bms -e
+15 1 * * * /opt/bms/backup.sh >> /opt/bms/state/backup.log 2>&1
+```
+
+Run `/opt/bms/backup.sh` once as `bms` and confirm the file appears in R2 under `staging/`.

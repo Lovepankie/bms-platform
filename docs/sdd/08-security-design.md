@@ -192,7 +192,7 @@ Notes:
   `role_permissions` equal this table, read from this file (FR-IAM-02). Changing a cell is a
   pull request that changes this chapter and a new migration together.
 
-Platform permissions, held only by platform operators (super admins) on `app.<base domain>`,
+Platform permissions, held only by platform operators (super admins) on the platform host,
 never by a tenant role:
 
 | Permission | Grants |
@@ -314,7 +314,7 @@ GitHub Actions deploy secrets live in the `staging` and `production` environment
 
 - TLS 1.2 or later on every host; HTTP redirects to HTTPS; HSTS with a one year max age.
 - The SPA and the API are same-origin per tenant host, so CORS is not enabled. Callbacks
-  on `api.<base domain>` accept only server-to-server POSTs.
+  on the callback host accept only server-to-server POSTs.
 - Response headers: `Content-Security-Policy` (default-src 'self'; no inline scripts),
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`,
   `Permissions-Policy` denying camera, microphone and geolocation except where a screen

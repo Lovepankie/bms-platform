@@ -34,7 +34,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         # ==================================================================
         bms = softwareSystem "BMS Platform" "Multi-tenant SaaS: platform core plus vertical modules a tenant switches on (ADR-001). Lending is the first vertical." {
 
-            proxy = container "Reverse Proxy" "Terminates TLS with one wildcard certificate issued through the DNS-01 challenge; routes <slug>.<base>, app.<base> and api.<base>; security headers; request size limits." "Caddy with the Cloudflare DNS module (SDD chapter 9)" "edge"
+            proxy = container "Reverse Proxy" "Routes /api to the API and everything else to the PWA for the single-label hosts under rincoltech.com: bms, <slug>-bms and bms-callbacks (ADR-018); security headers; request size limits. Production: terminates TLS with a DNS-01 wildcard certificate. Staging: the internal origin behind the Cloudflare Tunnel, plain HTTP." "Caddy with the Cloudflare DNS module (SDD chapter 9)" "edge"
 
             web = container "Web App" "One installable PWA with a staff area, a member area and the platform console, split by route and lazily loaded (ADR-009). Static files served by Caddy." "React 18, TypeScript, Vite, vite-plugin-pwa" "client"
 
@@ -45,7 +45,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 identity      = component "Identity and Access" "Staff and platform sign-in (argon2id, TOTP with recovery codes, ADR-014), revocable server-side sessions, invitations, roles, permission matrix, per-permission branch scope." "core" "core"
                 audit         = component "Audit" "Append-only audit log written in the same transaction as each change; platform audit log; search and CSV export." "core" "core"
                 approvals     = component "Approvals" "Maker-checker requests with payload snapshots; executes approved actions through actions registered by the owning modules (ADR-015)." "core" "core"
-                platform      = component "Platform Console" "Tenant creation with head office, modules and first admin; module switching; subscriptions and suspension; tenant admin MFA reset. Served on app.<base> to platform operators only (ADR-016)." "core" "core"
+                platform      = component "Platform Console" "Tenant creation with head office, modules and first admin; module switching; subscriptions and suspension; tenant admin MFA reset. Served only on the platform host to platform operators (ADR-016, ADR-018)." "core" "core"
                 ledger        = component "General Ledger" "Chart of accounts, periods, post_entry, reversals, trial balance, subledger reconciliation (ADR-004)." "core" "core"
                 notifications = component "Notifications" "Outgoing message port; a recording fake adapter until providers are chosen. Later: templates, outbox, SMS and email adapters, delivery reports." "core" "core"
                 documents     = component "Documents" "PDF rendering, uploads, object storage keys, signed download URLs." "core" "core"
@@ -105,8 +105,8 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api    -> bms.storage "Stores uploads; issues signed download URLs" "S3 API"
         bms.migrate -> bms.db "Applies migrations as bms_owner" "SQL"
         paymentGateway -> mobileMoney "Collects from the payer's wallet"
-        smsAggregator  -> bms.proxy "Delivery reports and USSD sessions on api.<base>" "HTTPS"
-        paymentGateway -> bms.proxy "Payment callbacks on api.<base>" "HTTPS"
+        smsAggregator  -> bms.proxy "Delivery reports and USSD sessions on the callback host" "HTTPS"
+        paymentGateway -> bms.proxy "Payment callbacks on the callback host" "HTTPS"
 
         # ==================================================================
         # COMPONENT LEVEL (inside the API)
@@ -176,20 +176,22 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.reporting   -> bms.db "Reads through read-only views"
 
         # ==================================================================
-        # DEPLOYMENT (SDD chapter 9; ADR-006)
+        # DEPLOYMENT (SDD chapter 9; ADR-006; staging ADR-018)
         # ==================================================================
         staging = deploymentEnvironment "Staging" {
-            cloudflare = deploymentNode "Cloudflare" "DNS for the staging base domain and object storage" {
-                deploymentNode "R2 staging buckets" "Documents and backups, private" "Cloudflare R2" {
+            cloudflare = deploymentNode "Cloudflare" "Edge TLS, DNS, the tunnel and object storage for staging" {
+                deploymentNode "R2 staging buckets" "Documents and backups under staging/, private" "Cloudflare R2" {
                     containerInstance bms.storage
                 }
-                dns = infrastructureNode "DNS" "A records for <base> and *.<base>; TXT records created by Caddy for the DNS-01 wildcard challenge" "Cloudflare DNS"
+                edge = infrastructureNode "Edge and tunnel" "Proxied CNAMEs bms-staging and <slug>-bms-staging.rincoltech.com to the tunnel; TLS with the free *.rincoltech.com edge certificate; one public hostname per host" "Cloudflare DNS and Tunnel"
             }
-            github = deploymentNode "GitHub" "Build once per commit on main (ADR-006)" "GitHub Actions" {
-                registry = infrastructureNode "Container registry" "bms-platform-api, -web and -proxy images tagged sha-<short>" "GHCR"
+            github = deploymentNode "GitHub" "Build once per commit on main for amd64 and arm64; moves the staging pointer (ADR-006, ADR-018)" "GitHub Actions" {
+                registry = infrastructureNode "Container registry" "Public bms-platform-api, -web and -proxy images tagged sha-<short>, and the staging pointer tag" "GHCR"
             }
-            vm = deploymentNode "Staging VM" "Single cloud VM, 4 GB; auto-deployed on every merge to main by deploy.sh" "Hetzner Cloud, Ubuntu LTS" {
-                compose = deploymentNode "Docker Compose" "Pinned image tags built once in CI; migrate runs before the switch" "Docker" {
+            host = deploymentNode "Staging host" "Shared ARM64 host at a Rincol home site; no inbound port; BMS capped at 900 MB by bms.slice" "Raspberry Pi 4, Debian 13, linux/arm64" {
+                puller = infrastructureNode "Puller" "bms-pull.timer every two minutes: resolves the staging pointer to its sha tag and runs deploy.sh (ADR-018)" "systemd timer, pull-staging.sh"
+                compose = deploymentNode "Docker Compose" "compose.pi-staging.yml: pinned multi-arch images, no published ports, per-container memory limits; migrate runs before the switch" "Docker" {
+                    cloudflared = infrastructureNode "cloudflared" "Holds the outbound tunnel with a connector token; forwards to the internal origin" "cloudflare/cloudflared"
                     proxy = containerInstance bms.proxy
                     containerInstance bms.web
                     containerInstance bms.api
@@ -197,16 +199,17 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                     containerInstance bms.db
                 }
             }
-            staging.vm.compose.proxy -> staging.cloudflare.dns "Creates DNS-01 challenge records" "Cloudflare API"
-            staging.github.registry -> staging.vm.compose.proxy "Images pulled by deploy.sh with a short-lived token" "HTTPS"
+            staging.cloudflare.edge -> staging.host.compose.cloudflared "Visitor requests, over the tunnel the host opened" "HTTPS, Cloudflare Tunnel"
+            staging.host.compose.cloudflared -> staging.host.compose.proxy "Forwards with the original Host header" "HTTP"
+            staging.host.puller -> staging.github.registry "Reads the staging pointer; pulls sha-<short> images anonymously" "HTTPS"
         }
 
         production = deploymentEnvironment "Production" {
-            cloudflare = deploymentNode "Cloudflare" "Wildcard DNS for tenant subdomains and object storage" {
+            cloudflare = deploymentNode "Cloudflare" "DNS for the BMS hosts under rincoltech.com and object storage" {
                 deploymentNode "R2 production buckets" "Documents and nightly encrypted backups, private, 30-day retention" "Cloudflare R2" {
                     containerInstance bms.storage
                 }
-                dns = infrastructureNode "DNS" "A records for <base> and *.<base>; TXT records created by Caddy for the DNS-01 wildcard challenge" "Cloudflare DNS"
+                dns = infrastructureNode "DNS" "A records for bms, bms-callbacks and each <slug>-bms under rincoltech.com; TXT records created by Caddy for the DNS-01 wildcard challenge" "Cloudflare DNS"
             }
             github = deploymentNode "GitHub" "Tag vX.Y.Z retags the sha-<short> images; no rebuild (ADR-006)" "GitHub Actions" {
                 registry = infrastructureNode "Container registry" "The images proven on staging, tagged vX.Y.Z" "GHCR"
@@ -220,7 +223,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                     containerInstance bms.db
                 }
             }
-            production.vm.compose.proxy -> production.cloudflare.dns "Creates DNS-01 challenge records" "Cloudflare API"
+            production.vm.compose.proxy -> production.cloudflare.dns "Creates DNS-01 challenge records for *.rincoltech.com" "Cloudflare API"
             production.github.registry -> production.vm.compose.proxy "Images pulled by deploy.sh with a short-lived token" "HTTPS"
         }
     }
@@ -242,7 +245,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
             autoLayout
         }
 
-        deployment bms "Staging" "StagingDeployment" "One VM, Docker Compose; every merge to main deploys here." {
+        deployment bms "Staging" "StagingDeployment" "A shared ARM64 host behind a Cloudflare Tunnel; it pulls every green build of main (ADR-018)." {
             include *
             autoLayout
         }
