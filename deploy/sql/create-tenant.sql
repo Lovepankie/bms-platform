@@ -1,12 +1,13 @@
--- Onboard one tenant (docs/runbooks/onboard-tenant.md). Runs as bms_owner through psql until the
--- platform console implements FR-TEN-01. Idempotent: an existing slug is reported and left alone.
+-- Onboard one tenant from the host (docs/runbooks/onboard-tenant.md), for local development and
+-- recovery; the normal path is the platform API (FR-TEN-01, POST /api/v1/platform/tenants). Runs
+-- as bms_owner. Idempotent: an existing slug is reported and left alone.
 --
 --   psql -v slug=demo -v name='Demo Lender (fabricated)' -v plan=starter -v currency=UGX \
 --        -v branch_code=HQ -v branch_name='Head Office' -v lending=true -f create-tenant.sql
 --
 -- Creates, in one transaction: the tenant, its head office branch, the lending module switch and
--- the default lending chart of accounts, plus an audit row. Staff users arrive with the identity
--- module; until then local development uses the AUTH_MODE=dev headers.
+-- the default lending chart of accounts, plus an audit row. Invite its first admin with
+-- invite-tenant-admin.sql (make seed does both).
 \set ON_ERROR_STOP on
 
 SELECT EXISTS (SELECT 1 FROM tenants WHERE slug = :'slug') AS tenant_exists \gset

@@ -46,6 +46,20 @@ differ per environment. Set `BMS_ENVIRONMENT`, `BMS_BASE_DOMAIN`, `ACME_EMAIL`,
 `BMS_OPENAPI_ENABLED` (`true` on staging, `false` on production). Put a copy of
 `BACKUP_ENCRYPTION_KEY` in the offline store the dev lead keeps (chapter 8 section 8.7).
 
+Add the sign-in keys (ADR-014), which `.env.example` does not list yet: run the API image once with
+the `keys` command and paste its three lines into `/opt/bms/.env`:
+
+```bash
+docker run --rm ghcr.io/<owner>/bms-platform-api:<tag> keys
+# BMS_TOKEN_SIGNING_JWK='{"kty":"EC",...}'
+# BMS_DATA_KEY=...
+# BMS_DATA_KEY_ID=k1
+```
+
+The API refuses to start without them. Generate them per environment and never copy them between
+staging and production; losing `BMS_DATA_KEY` makes every enrolled TOTP secret unreadable, so keep
+a copy with the backup key in the offline store.
+
 ## 5. GitHub
 
 In the repository settings, Environments:

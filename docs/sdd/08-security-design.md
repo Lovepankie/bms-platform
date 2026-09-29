@@ -29,12 +29,35 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
 | Member | Phone plus 5 digit PIN, set after an SMS one-time code | 5 failures, 30 minutes | Access 15 minutes, refresh idle 30 days |
 
 - Passwords and PINs are hashed with argon2id (memory 64 MiB, iterations 3,
-  parallelism 1, tuned so one hash takes about 100 ms on the production host).
-- One-time codes and refresh tokens are stored as SHA-256 hashes only.
-- TOTP secrets are encrypted at rest with the application data key (8.7).
+  parallelism 1, tuned so one hash takes about 100 ms on the production host). Passwords are
+  10 to 128 characters and are refused when they are on the common password list
+  (`backend/src/main/resources/common-passwords.txt`) or equal the sign-in name (ADR-014).
+- One-time codes, invitation and setup tokens, recovery codes and refresh tokens are stored as
+  SHA-256 hashes only.
+- TOTP secrets are encrypted at rest with the application data key (8.7). TOTP is RFC 6238
+  (HMAC-SHA1, 6 digits, 30 seconds); one step of drift is accepted and each code works once.
+  Enrolment is forced at first sign-in for roles that require it (`roles.mfa_required`: the
+  tenant admin) and for platform operators, and for all staff when the tenant setting
+  `require_mfa_all_staff` is on (FR-IAM-06).
+- **Recovery codes** (FR-IAM-11): enrolment issues ten single-use codes, shown once. A code is
+  accepted in place of a TOTP code; the user can replace all of them with a current TOTP code.
+  Failed codes count toward the lockout.
+- **Lost second factor** (FR-IAM-12): another tenant admin resets it (`POST
+  /users/{user_id}/mfa/reset`, `core.users.manage`); a tenant admin cannot reset their own. For a
+  tenant whose only admin is locked out, a platform operator resets that admin through the
+  platform API. A reset clears the secret and the codes, ends every session of the user, and is
+  audited. It is deliberately not a maker-checker action (section 8.4, ADR-014).
+- **Invitations** (FR-IAM-01): a 256 bit one-time token, valid 72 hours, in the link's fragment so
+  it never reaches a server log. The link is shown once to the inviting admin (audited as
+  `core.invitation.link_revealed`, without the token) and sent through the notification port;
+  until a provider is chosen that port records messages only, so no flow waits for one.
+- Access tokens are ES256 JWS signed with the key of section 8.7; the 5 minute MFA token between
+  the password and the second factor is signed with the same key and cannot be used as an access
+  token.
 - Refresh token rotation with reuse detection: presenting a rotated token revokes every
   session in its family (FR-IAM-07).
-- Sign-in errors never reveal whether an account exists.
+- Sign-in errors never reveal whether an account exists; a sign-in for an unknown account costs
+  the same password hash as a real one.
 
 ## 8.3 Role-based access control
 
@@ -147,15 +170,32 @@ Notes:
 - Branch managers approve loans, but never one they submitted or appraised (FR-APR-03).
 - Write-off approval is deliberately restricted to the tenant admin, the most senior
   role, because write-off removes an asset from the books.
-- The matrix is seeded from a single source file and a test asserts the seeded
-  `role_permissions` equal this table (FR-IAM-02). Changing a cell is a pull request
-  that changes this chapter and the seed together.
+- The matrix is seeded by migration V2 and `PermissionMatrixIT` asserts the seeded
+  `role_permissions` equal this table, read from this file (FR-IAM-02). Changing a cell is a
+  pull request that changes this chapter and a new migration together.
+
+Platform permissions, held only by platform operators (super admins) on `app.<base domain>`,
+never by a tenant role:
+
+| Permission | Grants |
+|---|---|
+| `platform.tenants.read` | List plans and tenants, read one tenant |
+| `platform.tenants.manage` | Create tenants, switch modules, move subscriptions, suspend and resume, reset a tenant admin's second factor |
 
 ### 8.3.3 Enforcement
 
-- Every route declares exactly one permission, or is explicitly marked public. A route
-  test enumerates all routes and fails on any undeclared route (FR-IAM-03).
-- The permission check and the branch scope check happen before any business logic.
+- Every route declares exactly one permission (`@RequiresPermission`), or is explicitly marked
+  public (`@PublicEndpoint`), or open to any signed-in principal of one kind
+  (`@AuthenticatedEndpoint`, for `/me`, sign-out and the caller's own recovery codes). A route
+  test enumerates all routes and fails on any undeclared route, and `PermissionMatrixIT` proves
+  that for every route a principal holding every permission except the route's own gets 403
+  (FR-IAM-03).
+- The permission check happens before any business logic; the branch scope check applies the
+  scope of that permission to the target record (a record outside it answers 404), or to the list
+  filter (NFR-ISO-04). Branch scope is per permission: the scope of the role assignment that
+  grants it.
+- A denial on a money-moving permission (`permissions.is_money_moving`) is audited
+  (`core.permission.denied`, FR-AUD-03).
 - The member area checks ownership on every read: the record's `member_id` must equal the
   principal's member. Records not owned return 404.
 - The frontend hides what the user cannot do, based on `/me`. That is a convenience; the
@@ -183,6 +223,15 @@ CHECK constraint as well as the service.
 | `member_branch_transfer` | `lending.members.update` | `lending.members.transfer_approve` | No |
 | `import_commit` | `core.imports.manage` | `core.imports.approve_commit` | No |
 | `member_credit_refund` | `lending.repayments.create` | `lending.credits.refund_approve` | Yes |
+
+Action types are contributed by the modules that own them (ADR-015): each is a registered
+`ApprovalAction` whose maker and checker permissions must equal its row above. Every
+`/approvals` route declares `core.approvals.read`; approving and rejecting then need the action's
+checker permission in the request's branch, and cancelling needs to be the maker. A pending
+request expires 7 days after it was made (a nightly task marks it `expired`).
+
+Resetting a user's second factor (FR-IAM-12) is not in this table on purpose: a tenant whose only
+admin lost their phone has no second person who can sign in to check the reset (ADR-014).
 
 Loan approval itself (`lending.loans.approve`) is the checker step of loan origination,
 with the stricter rule that the approver is neither the submitter nor the appraiser.
@@ -219,8 +268,10 @@ the lending module is switched on (runbook `docs/runbooks/`, onboarding a tenant
   chapter 6 section 6.2.4 reject UPDATE and DELETE for the application role.
 - Platform operator actions go to `platform_audit_log`, which tenants cannot read and
   which survives tenant deletion.
-- Security events (sign-in outcomes, lockouts, MFA changes, permission denials on
-  money-moving endpoints, role changes) are audited (FR-AUD-03).
+- Security events (sign-in outcomes, lockouts, MFA enrolment, failed codes, recovery code use
+  and replacement, MFA resets, invitation links shown, refresh token reuse, permission denials
+  on money-moving endpoints, role changes, deactivations) are audited (FR-AUD-03). Platform
+  operators' sign-in events and tenant operations go to `platform_audit_log`.
 - The auditor role has read access to the audit log and every report but no write
   permission anywhere.
 
@@ -229,13 +280,15 @@ the lending module is switched on (runbook `docs/runbooks/`, onboarding a tenant
 | Secret | Where it lives | Rotation |
 |---|---|---|
 | Database passwords (`bms_owner`, `bms_app`, `bms_platform`) | Host env file, mode 600, owned by the deploy user | On staff change, and yearly |
-| Access token signing key pair | Host env file; public keys published with `kid` | Yearly; two keys valid during rotation |
-| Application data key (encrypts TOTP secrets and any other field-level encrypted value) | Host env file | Key id stored with each ciphertext; re-encryption job on rotation |
+| Access token signing key pair (`BMS_TOKEN_SIGNING_JWK`, an EC P-256 private JWK with its `kid`) | Host env file | Yearly; two keys valid during rotation (one is configured today) |
+| Application data key (`BMS_DATA_KEY`, 32 bytes base64, and `BMS_DATA_KEY_ID`; encrypts TOTP secrets and any other field-level encrypted value) | Host env file | Key id stored with each ciphertext; re-encryption job on rotation |
 | Object storage credentials | Host env file; bucket-scoped token | Yearly |
 | SMS aggregator and payment gateway credentials | Host env file | Per provider policy |
 | Backup encryption key | Host env file and an offline copy held by the dev lead | On staff change |
 
 No secret is ever committed. `.env.example` lists every variable with a placeholder.
+`java -jar bms-api.jar keys` prints a new signing key and data key for a host env file; outside
+the dev and test profiles the API refuses to start without them (ADR-014).
 GitHub Actions deploy secrets live in the `staging` and `production` environments
 (`docs/sdd/09-infrastructure-design.md`, `docs/sdd/10-cicd-pipeline.md`).
 

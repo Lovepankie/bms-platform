@@ -34,6 +34,16 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   authentication stub; and **`lending.members` (create, list, get) as the reference vertical
   slice: copy its shape for every new module.** The PWA skeleton has the staff and member
   route split and a typed client generated from `docs/api/openapi.json`.
+- **Built (increment 1, issue #7):** migration `V2` (role and permission catalogue seeded from
+  chapter 8, credentials, recovery codes, invitations, sessions, role assignments, settings,
+  subscriptions, approval requests, platform tables and functions); staff and platform sign-in
+  with argon2id, TOTP, recovery codes and admin MFA reset, revocable sessions (ADR-014);
+  invitations whose one-time link is shown to the inviting admin; per-permission branch scope
+  (ADR-017); branches, settings, plan limits and the suspended tenant; the maker-checker
+  mechanism with actions registered by their modules (ADR-015); the platform console API
+  (ADR-016); audit search and CSV export; the notification port with a recording fake adapter;
+  and the PWA's sign-in, MFA, invitation, branch switcher and approvals inbox. No production
+  approval action is registered until increment 2.
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging and production hosts are not
   provisioned yet; the deploy jobs skip with a notice until they are
@@ -87,11 +97,12 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 
 | Module | Owns | Requirements (ch. 3) | Tables (ch. 6) | Endpoints (ch. 7) |
 |---|---|---|---|---|
-| `core.kernel` | Money, rates, clock, tenant context, errors | 3.4 R-ROUND | none | none |
+| `core.kernel` | Money, rates, clock, tenant context, principal and route declarations, errors | 3.4 R-ROUND | none | none |
 | `core.tenancy` | Tenants, plans, subscriptions, modules, settings, branches | TEN, BR | 6.4, 6.5 | 7.11.3, 7.11.4 |
 | `core.identity` | Users, credentials, sessions, roles, permissions | IAM | 6.4, 6.5 | 7.11.2, 7.11.4 |
 | `core.audit` | Audit log | AUD | 6.5 `audit_log` | 7.11.4 |
 | `core.approvals` | Maker-checker | APR | 6.5 `approval_requests` | 7.11.5 |
+| `core.platform` | Platform console: tenant creation, modules, subscriptions | TEN | 6.4, 6.5 | 7.11.3 |
 | `core.ledger` | Chart of accounts, periods, journals, reconciliation | GL | 6.6 | 7.11.6 |
 | `core.notifications` | Templates, outbox, SMS and email adapters | NTF | 6.5 | 7.11.7 |
 | `core.documents` | PDFs, uploads, object storage, signed URLs | DOC | 6.5 `documents` | 7.11.7 |
@@ -124,9 +135,11 @@ tests start PostgreSQL 16 through Testcontainers).
 | `make openapi` | Regenerate `docs/api/openapi.json` and the frontend's typed client after a contract change |
 | `make migrate`, `make psql`, `make down`, `make clean` | Local database chores |
 
-Locally the API runs the `dev` profile: send `X-Tenant: demo` (or use
-http://demo.localhost:8000) and the development principal headers of chapter 7 section 7.4.3,
-for example:
+Locally the API runs the `dev` profile. `make seed` prints a one-time link for the fabricated
+demo tenant's admin (open it, set a password, sign in at `/sign-in` and enrol TOTP) and a setup
+token for a fabricated platform operator. For curl, send `X-Tenant: demo` (or use
+http://demo.localhost:8000) and either a bearer token or the development principal headers of
+chapter 7 section 7.4.3, for example:
 
 ```bash
 curl -s localhost:8080/api/v1/lending/members -H 'X-Tenant: demo' \
@@ -135,7 +148,8 @@ curl -s localhost:8080/api/v1/lending/members -H 'X-Tenant: demo' \
 ```
 
 For the Vite dev server, `cd frontend && npm install && npm run dev` with `VITE_DEV_TENANT=demo`
-in `frontend/.env.local` (the other `VITE_DEV_*` values are in `.env.example`).
+in `frontend/.env.local`. The PWA signs in for real; the other `VITE_DEV_*` values in
+`.env.example` are no longer read.
 
 In a Claude cloud session, `.claude/hooks/cloud-setup.sh` installs JDK 25 (Ubuntu
 `openjdk-25-jdk-headless`) and starts Docker at session start (the sandbox ships Java 21).
@@ -242,6 +256,11 @@ Accepted (this list is the ADR index):
 - ADR-008 Background jobs and scheduling on PostgreSQL with db-scheduler; no Redis
 - ADR-009 Frontend: one React PWA with staff and member areas
 - ADR-010 Backend language and framework: Java 25, Spring Boot 4.1, Spring Modulith 2.1, Flyway
+- ADR-014 Staff authentication: argon2id, TOTP with recovery codes, signed access tokens and
+  server-side sessions
+- ADR-015 Maker-checker actions are registered by the modules that own them
+- ADR-016 Platform operations run through SECURITY DEFINER functions until the platform role exists
+- ADR-017 The principal types live in the shared kernel
 
 Pending (cite only as "pending ADR-NNN"):
 

@@ -67,6 +67,7 @@ core
   payments        payment intents, gateway adapters, callbacks, unallocated receipts
   jobs            db-scheduler tasks, per-tenant job runner (ADR-008)
   operations      version endpoint, readiness checks, database role guard
+  platform        platform console API: tenant creation, modules, subscriptions (ADR-016)
 lending           vertical module (ADR-001)
   manifest        the vertical's registration with the core (section 5.4.3)
   members         members, KYC, next of kin, relationship graph
@@ -87,7 +88,12 @@ Arrows read "may call the public interface of".
 ```
 every module          -> core.kernel
 core.* (non-kernel)   -> core.tenancy, core.identity, core.audit
-core.approvals        -> (executes through a registry the verticals register into; never imports them)
+                         (except that core.audit and core.tenancy depend on no other core module
+                          but core.audit, so identity can write audit rows without a cycle, ADR-017)
+core.identity         -> core.tenancy, core.audit, core.notifications
+core.approvals        -> core.tenancy, core.audit, core.jobs
+                         (executes through a registry the verticals register into; never imports them, ADR-015)
+core.platform         -> core.tenancy, core.identity, core.audit (the platform console, ADR-016)
 core.imports          -> core.ledger, core.documents   (templates register into it)
 core.payments         -> core.ledger, core.notifications (booking is delegated through a registry)
 core.reporting        -> core.documents
@@ -114,7 +120,8 @@ registers into through its manifest at startup:
 | Registry (core) | What the vertical registers | Example |
 |---|---|---|
 | Module manifest | Module key, routers, permissions, default chart of accounts entries, notification templates | `lending` |
-| Approval executors | One executor per action type it owns | `loan_disbursement` executes the disbursement |
+| Approval actions | One `ApprovalAction` bean per action type it owns (ADR-015) | `loan_disbursement` executes the disbursement |
+| Branch deactivation guards | Whether a branch still has open accounts of the module | Loans, savings, investments |
 | Import templates | Parser, classifier, normaliser, committer | `pilot_loan_register_v1` |
 | Payment purposes | Booking handler per purpose | `lending.loan_repayment` books a repayment |
 | Report definitions | Report key, parameters, permission, query | `lending.par` |
@@ -152,10 +159,13 @@ to other modules.
 
 | Module id | Package | Built so far |
 |---|---|---|
-| `kernel` | `com.rincoltech.bms.kernel` (open) | Tenant context, money, business clock, request id, problem details, phone and NIN normalisation, masking, cursors |
-| `core.tenancy` | `...core.tenancy` | Tenant resolution from the host, the transaction manager that binds `app.tenant_id`, branches, enabled modules, tenant sequences |
-| `core.identity` | `...core.identity` | Principal, `@RequiresPermission`, `@PublicEndpoint`, the permission interceptor, the development authentication stub |
-| `core.audit` | `...core.audit` | `AuditLog.record`, masking identifiers |
+| `kernel` | `com.rincoltech.bms.kernel` (open) | Tenant context, the principal with per-permission branch scope and the route declarations (`@RequiresPermission`, `@PublicEndpoint`, `@AuthenticatedEndpoint`, ADR-017), money, business clock, request id, problem details, `If-Match` versions, phone and NIN normalisation, masking, cursors |
+| `core.tenancy` | `...core.tenancy` | Tenant resolution from the host (active and suspended), the transaction manager that binds `app.tenant_id`, the suspended tenant guard, branches, settings, plan limits, enabled modules, tenant sequences |
+| `core.identity` | `...core.identity` | Staff and platform sign-in, TOTP and recovery codes, sessions, the authentication filter and permission interceptor, invitations, users and roles, `/me`, the development authentication stub (ADR-014) |
+| `core.audit` | `...core.audit` | `AuditLog.record`, `PlatformAuditLog`, masking identifiers, audit search and CSV export |
+| `core.approvals` | `...core.approvals` | `Approvals.request`, the `ApprovalAction` registry, the queue and decisions, nightly expiry (ADR-015) |
+| `core.notifications` | `...core.notifications` | The `Notifier` port and a recording fake adapter; no provider yet |
+| `core.platform` | `...core.platform` | The platform console API: tenants, modules, subscriptions, admin MFA reset (ADR-016) |
 | `core.ledger` | `...core.ledger` | `LedgerPosting.post` (`post_entry`) |
 | `core.jobs` | `...core.jobs` | `TenantJobs`, db-scheduler tasks (ADR-008) |
 | `core.operations` | `...core.operations` | `/version`, the migrations readiness check, the database role guard |
