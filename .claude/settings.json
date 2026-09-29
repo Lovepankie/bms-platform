@@ -2,9 +2,15 @@
   "permissions": {
     "deny": [
       "Edit(.env)",
-      "Edit(.env.*)",
       "Edit(**/.env)",
-      "Edit(**/.env.*)",
+      "Edit(**/.env.staging)",
+      "Edit(.env.staging)",
+      "Edit(**/.env.production)",
+      "Edit(.env.production)",
+      "Edit(**/.env.*.local)",
+      "Edit(.env.*.local)",
+      "Edit(**/.env.local)",
+      "Edit(.env.local)",
       "Edit(secrets/**)",
       "Bash(rm -rf*)",
       "Bash(git config --global*)"
