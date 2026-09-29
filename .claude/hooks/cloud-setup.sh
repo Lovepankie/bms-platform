@@ -13,7 +13,7 @@ set -uo pipefail
 SUDO=""
 [ "$(id -u)" -eq 0 ] || SUDO="sudo -n"
 
-jdk_home() { ls -d /usr/lib/jvm/java-25-openjdk-* 2>/dev/null | head -1; }
+jdk_home() { find /usr/lib/jvm -maxdepth 1 -name "java-25-openjdk-*" 2>/dev/null | head -1; }
 
 if [ -z "$(jdk_home)" ]; then
   # Some preinstalled PPAs return 403 under the egress policy; the Ubuntu archive still updates.
