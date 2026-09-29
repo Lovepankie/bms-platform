@@ -72,6 +72,10 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
     and a code whose update changes no row is refused, so one code signs in or replaces the
     recovery codes once. A recovery code is consumed with `UPDATE ... WHERE used_at IS NULL` and
     works only when that update changed a row.
+  - A refresh locks its session row, so of N parallel refreshes with one token exactly one
+    rotates; the others find it rotated and revoke the family as a reuse.
+  - Approving locks the approval request row and executes only while it is pending, so parallel
+    approvals execute the action once (`ApprovalsIT`).
 
 ## 8.3 Role-based access control
 

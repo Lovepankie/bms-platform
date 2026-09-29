@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
@@ -129,6 +131,24 @@ class ApprovalsIT extends IntegrationTest {
                         .query(Long.class)
                         .single())
                 .isEqualTo(1);
+    }
+
+    /** FR-APR-06: approvals sent at once by two checkers execute the action exactly once. */
+    @Test
+    void concurrentApprovalsExecuteTheActionOnce() throws Exception {
+        UUID subject = UUID.randomUUID();
+        UUID approval = pending(cashier, subject);
+        AtomicInteger turn = new AtomicInteger();
+
+        List<HttpStatusCode> statuses =
+                Api.race(8, () -> approve(turn.getAndIncrement() % 2 == 0 ? manager : tenantAdmin, approval));
+
+        assertThat(Api.count(statuses, HttpStatus.OK))
+                .as("statuses %s", statuses)
+                .isEqualTo(1);
+        assertThat(Api.count(statuses, HttpStatus.CONFLICT)).isEqualTo(7);
+        assertThat(action.executionsOf(subject)).isEqualTo(1);
+        assertThat(status(approval)).isEqualTo("approved");
     }
 
     /** FR-APR-02: the maker cannot approve, and the database refuses it too. */

@@ -8,17 +8,9 @@ import com.rincoltech.bms.testsupport.Api;
 import com.rincoltech.bms.testsupport.Api.Role;
 import com.rincoltech.bms.testsupport.Api.Session;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,37 +48,6 @@ class AuthConcurrencyIT extends IntegrationTest {
         adminSession = api.signIn(admin, adminEmail, Api.PASSWORD, null);
     }
 
-    /** Releases {@code n} calls at once and returns their statuses. */
-    static List<HttpStatusCode> race(int n, Supplier<ResponseEntity<JsonNode>> call) throws Exception {
-        ExecutorService pool = Executors.newFixedThreadPool(n);
-        try {
-            CountDownLatch ready = new CountDownLatch(n);
-            CountDownLatch go = new CountDownLatch(1);
-            List<Future<HttpStatusCode>> futures = new ArrayList<>();
-            for (int i = 0; i < n; i++) {
-                Callable<HttpStatusCode> task = () -> {
-                    ready.countDown();
-                    go.await();
-                    return call.get().getStatusCode();
-                };
-                futures.add(pool.submit(task));
-            }
-            assertThat(ready.await(30, TimeUnit.SECONDS)).isTrue();
-            go.countDown();
-            List<HttpStatusCode> statuses = new ArrayList<>();
-            for (Future<HttpStatusCode> f : futures) {
-                statuses.add(f.get(60, TimeUnit.SECONDS));
-            }
-            return statuses;
-        } finally {
-            pool.shutdownNow();
-        }
-    }
-
-    static long count(List<HttpStatusCode> statuses, HttpStatus status) {
-        return statuses.stream().filter(s -> s.value() == status.value()).count();
-    }
-
     String mfaToken() {
         return api.login(adminEmail, Api.PASSWORD).getBody().get("mfa_token").asString();
     }
@@ -107,11 +68,13 @@ class AuthConcurrencyIT extends IntegrationTest {
         long before = sessions(admin);
         String code = Api.totp(adminSession.totpSecret(), Instant.now());
 
-        List<HttpStatusCode> statuses = race(
+        List<HttpStatusCode> statuses = Api.race(
                 PARALLEL,
                 () -> api.post("/api/v1/auth/staff/mfa/verify", Map.of("mfa_token", mfaToken, "code", code), null));
 
-        assertThat(count(statuses, HttpStatus.OK)).as("statuses %s", statuses).isEqualTo(1);
+        assertThat(Api.count(statuses, HttpStatus.OK))
+                .as("statuses %s", statuses)
+                .isEqualTo(1);
         assertThat(sessions(admin) - before).isEqualTo(1);
     }
 
@@ -122,11 +85,13 @@ class AuthConcurrencyIT extends IntegrationTest {
         String code = adminSession.recoveryCodes().getFirst();
         long before = sessions(admin);
 
-        List<HttpStatusCode> statuses = race(
+        List<HttpStatusCode> statuses = Api.race(
                 PARALLEL,
                 () -> api.post("/api/v1/auth/staff/mfa/verify", Map.of("mfa_token", mfaToken, "code", code), null));
 
-        assertThat(count(statuses, HttpStatus.OK)).as("statuses %s", statuses).isEqualTo(1);
+        assertThat(Api.count(statuses, HttpStatus.OK))
+                .as("statuses %s", statuses)
+                .isEqualTo(1);
         assertThat(sessions(admin) - before).isEqualTo(1);
         assertThat(TestDatabase.owner()
                         .sql("SELECT count(*) FROM user_recovery_codes WHERE user_id = ? AND used_at IS NULL")
@@ -142,12 +107,14 @@ class AuthConcurrencyIT extends IntegrationTest {
         Api.allowTotpReuse(admin);
         String code = Api.totp(adminSession.totpSecret(), Instant.now());
 
-        List<HttpStatusCode> statuses = race(
+        List<HttpStatusCode> statuses = Api.race(
                 PARALLEL,
                 () -> api.post(
                         "/api/v1/auth/staff/mfa/recovery-codes", Map.of("code", code), adminSession.accessToken()));
 
-        assertThat(count(statuses, HttpStatus.OK)).as("statuses %s", statuses).isEqualTo(1);
+        assertThat(Api.count(statuses, HttpStatus.OK))
+                .as("statuses %s", statuses)
+                .isEqualTo(1);
         assertThat(TestDatabase.owner()
                         .sql("SELECT count(*) FROM user_recovery_codes WHERE user_id = ?")
                         .param(admin)
@@ -166,10 +133,10 @@ class AuthConcurrencyIT extends IntegrationTest {
         UUID cashier = Api.staff(t, email, new Role("cashier", t.headOffice()));
 
         List<HttpStatusCode> statuses =
-                race(WRONG_PASSWORDS, () -> api.login(email, "Wrong-Password-" + UUID.randomUUID()));
+                Api.race(WRONG_PASSWORDS, () -> api.login(email, "Wrong-Password-" + UUID.randomUUID()));
 
-        long refusedLocked = count(statuses, HttpStatus.LOCKED);
-        assertThat(count(statuses, HttpStatus.UNAUTHORIZED) + refusedLocked)
+        long refusedLocked = Api.count(statuses, HttpStatus.LOCKED);
+        assertThat(Api.count(statuses, HttpStatus.UNAUTHORIZED) + refusedLocked)
                 .as("statuses %s", statuses)
                 .isEqualTo(WRONG_PASSWORDS);
         Map<String, Object> row = TestDatabase.owner()
@@ -200,9 +167,9 @@ class AuthConcurrencyIT extends IntegrationTest {
         UUID operator = Api.platformUser(email);
 
         List<HttpStatusCode> statuses =
-                race(WRONG_PASSWORDS, () -> platform.login(email, "Wrong-Password-" + UUID.randomUUID()));
+                Api.race(WRONG_PASSWORDS, () -> platform.login(email, "Wrong-Password-" + UUID.randomUUID()));
 
-        long refusedLocked = count(statuses, HttpStatus.LOCKED);
+        long refusedLocked = Api.count(statuses, HttpStatus.LOCKED);
         Map<String, Object> row = TestDatabase.owner()
                 .sql("SELECT failed_login_count, locked_until > now() AS locked FROM platform_users WHERE id = ?")
                 .param(operator)
@@ -226,11 +193,32 @@ class AuthConcurrencyIT extends IntegrationTest {
         Api.allowTotpReuse(operator);
         String code = Api.totp(first.totpSecret(), Instant.now());
 
-        List<HttpStatusCode> statuses = race(
+        List<HttpStatusCode> statuses = Api.race(
                 PARALLEL,
                 () -> platform.post(
                         "/api/v1/platform/auth/mfa/verify", Map.of("mfa_token", mfaToken, "code", code), null));
 
-        assertThat(count(statuses, HttpStatus.OK)).as("statuses %s", statuses).isEqualTo(1);
+        assertThat(Api.count(statuses, HttpStatus.OK))
+                .as("statuses %s", statuses)
+                .isEqualTo(1);
+    }
+
+    /** FR-IAM-07: one refresh token presented N times at once rotates once; the rest are reuse. */
+    @Test
+    void oneRefreshTokenRotatesOnceUnderConcurrentRefreshes() throws Exception {
+        String refreshToken = adminSession.refreshToken();
+
+        List<HttpStatusCode> statuses = Api.race(PARALLEL, () -> api.refresh(refreshToken));
+
+        assertThat(Api.count(statuses, HttpStatus.OK))
+                .as("statuses %s", statuses)
+                .isEqualTo(1);
+        assertThat(Api.count(statuses, HttpStatus.UNAUTHORIZED)).isEqualTo(PARALLEL - 1);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM auth_sessions WHERE user_id = ? AND revoked_at IS NULL")
+                        .param(admin)
+                        .query(Long.class)
+                        .single())
+                .isZero();
     }
 }

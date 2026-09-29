@@ -9,6 +9,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.apache.commons.codec.binary.Base32;
@@ -17,6 +24,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import tools.jackson.databind.JsonNode;
@@ -176,6 +184,39 @@ public final class Api {
                 .orElseThrow();
         assertThat(cookie).contains("HttpOnly").contains("Secure").contains("SameSite=Strict");
         return cookie.substring(cookie.indexOf('=') + 1, cookie.indexOf(';'));
+    }
+
+    // ---- Concurrency ---------------------------------------------------------------------
+
+    /** Releases {@code n} calls at once and returns their statuses. */
+    public static List<HttpStatusCode> race(int n, Supplier<ResponseEntity<JsonNode>> call) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        try {
+            CountDownLatch ready = new CountDownLatch(n);
+            CountDownLatch go = new CountDownLatch(1);
+            List<Future<HttpStatusCode>> futures = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                Callable<HttpStatusCode> task = () -> {
+                    ready.countDown();
+                    go.await();
+                    return call.get().getStatusCode();
+                };
+                futures.add(pool.submit(task));
+            }
+            assertThat(ready.await(30, TimeUnit.SECONDS)).isTrue();
+            go.countDown();
+            List<HttpStatusCode> statuses = new ArrayList<>();
+            for (Future<HttpStatusCode> f : futures) {
+                statuses.add(f.get(60, TimeUnit.SECONDS));
+            }
+            return statuses;
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    public static long count(List<HttpStatusCode> statuses, HttpStatus status) {
+        return statuses.stream().filter(s -> s.value() == status.value()).count();
     }
 
     // ---- Fixtures -------------------------------------------------------------------------
