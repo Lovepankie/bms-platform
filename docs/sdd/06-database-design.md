@@ -721,14 +721,22 @@ Indexes: `(tenant_id, phone_e164)`, `(tenant_id, branch_id, status)`, trigram GI
 | `link_method` | `text` | [`nin`, `phone`, `manual`] |
 | `link_status` | `text NOT NULL DEFAULT 'none'` | [`none`, `suggested`, `confirmed`, `rejected`]. FR-MEM-07. |
 
-`CHECK (linked_member_id IS NULL OR linked_member_id <> member_id)`. Index
-`(tenant_id, linked_member_id)`, `(tenant_id, national_id)`, `(tenant_id, phone_e164)`.
+`CHECK (linked_member_id IS NULL OR linked_member_id <> member_id)` and
+`CHECK ((linked_member_id IS NULL) = (link_method IS NULL))`; composite foreign keys to
+`lending_members` for both `member_id` and `linked_member_id`. Index `(tenant_id, member_id)`,
+`(tenant_id, linked_member_id)`, `(tenant_id, national_id)`, `(tenant_id, phone_e164)`. Unlike most
+tenant tables, `bms_app` holds DELETE here: a next of kin is removable personal data.
 
 The relationship graph for FR-MEM-08 and the exposure rule in 3.18.1 is the union of:
 `lending_next_of_kin` edges with `link_status IN ('confirmed')` or `link_method = 'nin'`,
 and `lending_loan_guarantors` edges. A read-only view `lending_member_links_v`
-(`member_id`, `related_member_id`, `link_kind` [`names_as_kin`, `named_as_kin_by`,
-`guarantees`, `guaranteed_by`]) exposes it to services and reports.
+(`tenant_id`, `member_id`, `related_member_id`, `link_kind` [`names_as_kin`, `named_as_kin_by`,
+`guarantees`, `guaranteed_by`], `source_id`) exposes it to services and reports. `source_id` is
+the row the edge comes from (the next of kin, or the guarantee), so a reader joins back to it
+exactly even when two rows link the same pair of members. The view is `security_invoker`: a
+plain view runs with its owner's rights and would bypass the tenant policy (ADR-003).
+`V3__next_of_kin.sql` creates it with the next of kin edges; the guarantee edges join in
+increment 4.
 
 ### `lending_loan_products` and `lending_loan_product_versions`
 
@@ -1128,6 +1136,7 @@ seeds the chart of section 6.6.2 and is callable by `bms_owner` only. `V2__tenan
 of section 6.3.2. Every other table in this chapter is added by the migration of the feature that
 first uses it.
 `lending_members.import_row_id` gets its foreign key when the import tables arrive.
+`V3__next_of_kin.sql` (#11) creates `lending_next_of_kin` and `lending_member_links_v`.
 
 ## 6.10 Open items
 

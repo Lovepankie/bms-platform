@@ -170,7 +170,7 @@ to other modules.
 | `core.jobs` | `...core.jobs` | `TenantJobs`, db-scheduler tasks (ADR-008) |
 | `core.operations` | `...core.operations` | `/version`, the migrations readiness check, the database role guard |
 | `lending.manifest` | `...lending.manifest` | The lending module's registration (`ModuleManifest`) |
-| `lending.members` | `...lending.members` | Members: the reference vertical slice; edit, duplicate check, KYC decision, blacklist, status (#10) |
+| `lending.members` | `...lending.members` | Members: the reference vertical slice; edit, duplicate check, KYC decision, blacklist, status (#10); next of kin, links and the relationship panel (#11) |
 
 Each further logical module of section 5.4.1 becomes a package of the same shape
 (`core.approvals`, `lending.loans`, and so on), and its `package-info.java` states its allowed

@@ -87,6 +87,17 @@ class RlsIsolationIT {
         owner.sql("INSERT INTO tenant_sequences (tenant_id, sequence_key, next_value) VALUES (?, 'rls_fixture', 1)")
                 .param(t.tenantId())
                 .update();
+        // A next of kin linked to a second member, so lending_member_links_v has rows too.
+        UUID kinMember = UUID.randomUUID();
+        insertMember(t, kinMember, "Test Kin 01", null);
+        owner.sql("""
+                        INSERT INTO lending_next_of_kin (id, tenant_id, member_id, full_name, relationship,
+                                                         linked_member_id, link_method, link_status)
+                        SELECT ?, tenant_id, id, 'Test Kin 01', 'sibling', ?, 'nin', 'confirmed'
+                          FROM lending_members WHERE tenant_id = ? AND id <> ? LIMIT 1
+                        """)
+                .params(UUID.randomUUID(), kinMember, t.tenantId(), kinMember)
+                .update();
         owner.sql(
                         "INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type) VALUES (?, ?, 'system', 'test.fixture.created', 'test')")
                 .params(UUID.randomUUID(), t.tenantId())
@@ -253,6 +264,22 @@ class RlsIsolationIT {
                 .query(Long.class)
                 .single();
         assertThat(own).isEqualTo(total).isPositive();
+    }
+
+    /**
+     * NFR-ISO-02 for views: the catalogue lists tables only, so each view over tenant data is
+     * checked here. A view without security_invoker runs as its owner and would leak.
+     */
+    @Test
+    void theRelationshipViewShowsOnlyTheBoundTenant() throws SQLException {
+        long ofB = asApp(
+                a.tenantId(),
+                c -> count(c, "SELECT count(*) FROM lending_member_links_v WHERE tenant_id = ?", b.tenantId()));
+        long ofA = asApp(
+                a.tenantId(),
+                c -> count(c, "SELECT count(*) FROM lending_member_links_v WHERE tenant_id = ?", a.tenantId()));
+        assertThat(ofB).isZero();
+        assertThat(ofA).isPositive();
     }
 
     @Test

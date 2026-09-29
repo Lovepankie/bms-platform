@@ -56,7 +56,8 @@ tenant-owned tables from the catalogue and requires a factory row for each; item
 `TenantBindingIT`; item 6 in `DatabaseRoleGuardIT`; item 7 for the members list and detail in
 `MembersApiIT`, for branches in `TenancyAdminIT`, for the approval queue in `ApprovalsIT` and for
 the audit log in `AuditSearchIT`. The platform tables of chapter 6 section 6.4 carry no tenant
-policy by design and are left out of the catalogue query.
+policy by design and are left out of the catalogue query. The catalogue lists tables only, so each view over tenant
+data gets its own read test (`lending_member_links_v` in `RlsIsolationIT`).
 
 ### 15.4.1 Identity, tenancy and approvals (increment 1)
 

@@ -198,7 +198,7 @@ Business rule codes used in chapter 3 (each is a 422 unless listed above):
 `approver_conflict`, `subject_changed`, `approval_expired`, `period_closed`,
 `payment_method_unmapped`, `value_date_in_future`, `has_repayments`,
 `already_reversed`, `insufficient_balance`, `collateral_secures_open_loan`,
-`branch_has_open_accounts`, `account_has_open_items`, `unknown_placeholder`,
+`branch_has_open_accounts`, `account_has_open_items`, `next_of_kin_required`, `unknown_placeholder`,
 `blocking_issues_unresolved`, `system_account_not_allowed`, `idempotency_key_reused`,
 `idempotency_key_missing`, and from the ledger's posting operation (ADR-004):
 `unbalanced_entry`, `invalid_journal_line`, `account_not_postable`, `currency_mismatch`; and
@@ -431,7 +431,8 @@ Built so far (the reference slice, `lending.members`): `POST /lending/members`,
 (#10) `PATCH /lending/members/{member_id}`, `POST /lending/members/duplicate-check`,
 `POST .../kyc/verify` and `POST .../blacklist`. The PATCH and the two state changes require
 `If-Match` (section 7.9) and return the new `ETag`. Loan number search waits for loans
-(increment 4). The rest of this table is to be built.
+(increment 4). Then (#11) the next of kin routes and `GET .../relationships`. The rest of this
+table is to be built.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
@@ -441,10 +442,10 @@ Built so far (the reference slice, `lending.members`): `POST /lending/members`,
 | GET, PATCH | `/lending/members/{member_id}` | read / `lending.members.update` | PATCH: omitted fields unchanged; branch not editable (FR-BR-06); `status` per FR-MEM-10; same NIN and phone rules as create |
 | POST | `/lending/members/{member_id}/kyc/verify` | `lending.members.verify_kyc` | `{decision: verified or rejected, note}`; only from `pending_verification`, else 409 `invalid_status_transition`; `note` required to reject |
 | POST | `/lending/members/{member_id}/blacklist` | `lending.members.blacklist` | `{is_blacklisted, reason}`; `reason` required to blacklist; lifting clears the stored reason (the audit row keeps it) |
-| GET, POST | `/lending/members/{member_id}/next-of-kin` | read / update | FR-MEM-06 |
-| PATCH, DELETE | `/lending/next-of-kin/{kin_id}` | `lending.members.update` | Cannot delete the last next of kin of a KYC-complete member |
-| POST | `/lending/next-of-kin/{kin_id}/link` | `lending.members.update` | `{decision: confirm or reject}` for suggested links. FR-MEM-07 |
-| GET | `/lending/members/{member_id}/relationships` | `lending.members.read` | Graph with exposure. FR-MEM-08 |
+| GET, POST | `/lending/members/{member_id}/next-of-kin` | read / update | FR-MEM-06. POST resolves the link (FR-MEM-07); `is_primary: true` moves the primary flag to the new row |
+| PATCH, DELETE | `/lending/next-of-kin/{kin_id}` | `lending.members.update` | Both require `If-Match`. A changed NIN or phone re-resolves the link. DELETE of the last next of kin of a member in `pending_verification` or `verified` returns 422 `next_of_kin_required` |
+| POST | `/lending/next-of-kin/{kin_id}/link` | `lending.members.update` | `{decision: confirm or reject}`, `If-Match`; only for `suggested` links, else 409 `invalid_status_transition`. FR-MEM-07 |
+| GET | `/lending/members/{member_id}/relationships` | `lending.members.read` | `{member_id, names_as_kin, named_as_kin_by}`; a namer outside the caller's scope shows only `member_no`. Guarantees and exposure join in increment 4. FR-MEM-08 |
 | GET, POST | `/lending/members/{member_id}/documents` | read / update | FR-MEM-09 |
 | POST | `/lending/members/{member_id}/portal-invite` | `lending.members.update` | Sends activation SMS. FR-IAM-09 |
 | GET | `/lending/members/{member_id}/credits` | `lending.members.read` | Overpayment credits |
