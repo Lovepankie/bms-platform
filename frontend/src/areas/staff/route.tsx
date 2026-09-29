@@ -1,44 +1,89 @@
-import { useQuery } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
-import { fetchHealth, listMembers } from '../../api/client';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, Outlet, createLazyRoute, useNavigate } from '@tanstack/react-router';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { api, fetchMe } from '../../api/client';
+import { ALL_BRANCHES, initialBranch, loadBranch, saveBranch } from '../../auth/branch';
+import { getAccessToken, refreshSession, setAccessToken, subscribe } from '../../auth/session';
+import { StaffContext } from './context';
 
-function StaffHome() {
-  const health = useQuery({ queryKey: ['health'], queryFn: fetchHealth });
-  const members = useQuery({ queryKey: ['members'], queryFn: () => listMembers(50) });
+// The staff area layout: restores the session from the refresh cookie, shows who is signed in,
+// and holds the branch switcher (FR-BR-03). Switching the branch changes what lists show without
+// signing out or changing the URL. What a user cannot do is hidden using /me; the API decides.
+
+function useAccessToken() {
+  return useSyncExternalStore(subscribe, getAccessToken);
+}
+
+function StaffLayout() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const token = useAccessToken();
+  const [restoring, setRestoring] = useState(token === null);
+
+  useEffect(() => {
+    if (token !== null) return;
+    void refreshSession().then((ok) => {
+      setRestoring(false);
+      if (!ok) void navigate({ to: '/sign-in' });
+    });
+  }, [token, navigate]);
+
+  const me = useQuery({ queryKey: ['me', token], queryFn: fetchMe, enabled: token !== null });
+  const [branch, setBranch] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (me.data) setBranch(initialBranch(me.data, loadBranch(me.data.user_id ?? '')));
+  }, [me.data]);
+
+  if (restoring || !me.data) {
+    return <p>{me.isError ? 'Could not load your profile.' : 'Loading'}</p>;
+  }
+
+  const profile = me.data;
+  function choose(selection: string) {
+    setBranch(selection);
+    saveBranch(profile.user_id ?? '', selection);
+  }
+
+  async function signOut() {
+    await api.POST('/api/v1/auth/logout');
+    setAccessToken(null);
+    queryClient.clear();
+    await navigate({ to: '/sign-in' });
+  }
+
+  const canSeeApprovals = (profile.permissions ?? []).includes('core.approvals.read');
+  const recoveryCodesLeft = profile.unused_recovery_codes ?? 0;
 
   return (
-    <main>
-      <h1>Staff area</h1>
-      <p>
-        API: <strong>{health.data ?? 'checking'}</strong>
-      </p>
-      <h2>Members</h2>
-      {members.isPending && <p>Loading members</p>}
-      {members.isError && <p>Could not load members. Is the API running with a dev tenant?</p>}
-      {members.data && (
-        <table>
-          <thead>
-            <tr>
-              <th>Member no</th>
-              <th>Name</th>
-              <th>Phone</th>
-              <th>KYC</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(members.data.items ?? []).map((m) => (
-              <tr key={m.id}>
-                <td>{m.member_no}</td>
-                <td>{m.full_name}</td>
-                <td>{m.phone_e164_masked}</td>
-                <td>{m.kyc_status}</td>
-              </tr>
+    <StaffContext.Provider value={{ me: profile, branch }}>
+      <header style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+        <strong>{profile.full_name}</strong>
+        <label>
+          Branch{' '}
+          <select value={branch ?? ''} onChange={(e) => choose(e.target.value)}>
+            {profile.all_branches && <option value={ALL_BRANCHES}>All branches</option>}
+            {(profile.branches ?? []).map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.code} {b.name}
+              </option>
             ))}
-          </tbody>
-        </table>
+          </select>
+        </label>
+        <nav style={{ display: 'flex', gap: 12 }}>
+          <Link to="/staff">Home</Link>
+          {canSeeApprovals && <Link to="/staff/approvals">Approvals</Link>}
+        </nav>
+        <button onClick={() => void signOut()}>Sign out</button>
+      </header>
+      {profile.mfa_enabled && recoveryCodesLeft <= 2 && (
+        <p role="status">
+          You have {recoveryCodesLeft} recovery codes left. Ask an admin to reset your MFA if you run out.
+        </p>
       )}
-    </main>
+      <Outlet />
+    </StaffContext.Provider>
   );
 }
 
-export const Route = createLazyRoute('/staff')({ component: StaffHome });
+export const Route = createLazyRoute('/staff')({ component: StaffLayout });
