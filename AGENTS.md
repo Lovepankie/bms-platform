@@ -137,6 +137,15 @@ curl -s localhost:8080/api/v1/lending/members -H 'X-Tenant: demo' \
 For the Vite dev server, `cd frontend && npm install && npm run dev` with `VITE_DEV_TENANT=demo`
 in `frontend/.env.local` (the other `VITE_DEV_*` values are in `.env.example`).
 
+In a Claude cloud session, `.claude/hooks/cloud-setup.sh` installs JDK 25 (Ubuntu
+`openjdk-25-jdk-headless`) and starts Docker at session start (the sandbox ships Java 21).
+If `java -version` still shows 21, run `bash .claude/hooks/cloud-setup.sh` and
+`export JAVA_HOME=$(find /usr/lib/jvm -maxdepth 1 -name 'java-25-openjdk-*' | head -1)` then
+`export PATH=$JAVA_HOME/bin:$PATH` (two statements: in one `export`, `$JAVA_HOME` is
+expanded before it is set). Shell state does not persist between tool calls, so set both
+in the same command as the build.
+See `docs/runbooks/cloud-agent-sessions.md`.
+
 ## Standing rules (hard)
 
 These are not style preferences. A pull request that breaks one is not merged.
