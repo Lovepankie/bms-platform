@@ -386,6 +386,41 @@
         },
         "required" : [ "branch_id", "full_name", "id_type", "phone" ]
       },
+      "CreateNextOfKinRequest" : {
+        "properties" : {
+          "full_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "is_primary" : {
+            "type" : "boolean"
+          },
+          "location" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "national_id" : {
+            "type" : "string"
+          },
+          "phone" : {
+            "description" : "Any common Uganda form; stored as E.164",
+            "type" : "string"
+          },
+          "relationship" : {
+            "pattern" : "spouse|parent|child|sibling|relative|friend|employer|other",
+            "type" : "string"
+          },
+          "relationship_text" : {
+            "description" : "The original wording, for example from the import",
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "full_name", "relationship" ]
+      },
       "CreateTenantRequest" : {
         "properties" : {
           "admin" : {
@@ -852,6 +887,26 @@
           }
         }
       },
+      "MemberRelationships" : {
+        "properties" : {
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "named_as_kin_by" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RelatedMember"
+            },
+            "type" : "array"
+          },
+          "names_as_kin" : {
+            "items" : {
+              "$ref" : "#/components/schemas/NextOfKin"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "MfaConfirmRequest" : {
         "properties" : {
           "code" : {
@@ -899,6 +954,85 @@
           }
         },
         "required" : [ "code", "mfa_token" ]
+      },
+      "NextOfKin" : {
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "full_name" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "is_primary" : {
+            "type" : "boolean"
+          },
+          "link_method" : {
+            "description" : "nin, phone or manual; null when not linked",
+            "type" : "string"
+          },
+          "link_status" : {
+            "description" : "none, suggested, confirmed or rejected (FR-MEM-07)",
+            "type" : "string"
+          },
+          "linked_member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "linked_member_no" : {
+            "type" : "string"
+          },
+          "location" : {
+            "type" : "string"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "national_id" : {
+            "type" : "string"
+          },
+          "phone_e164" : {
+            "type" : "string"
+          },
+          "relationship" : {
+            "type" : "string"
+          },
+          "relationship_text" : {
+            "type" : "string"
+          },
+          "updated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "NextOfKinLinkDecision" : {
+        "properties" : {
+          "decision" : {
+            "pattern" : "confirm|reject",
+            "type" : "string"
+          }
+        },
+        "required" : [ "decision" ]
+      },
+      "NextOfKinList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/NextOfKin"
+            },
+            "type" : "array"
+          }
+        }
       },
       "Plan" : {
         "description" : "Limits only; prices are not stored in this repository",
@@ -1038,6 +1172,26 @@
           }
         },
         "required" : [ "code" ]
+      },
+      "RelatedMember" : {
+        "properties" : {
+          "full_name" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "in_scope" : {
+            "type" : "boolean"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "relationship" : {
+            "type" : "string"
+          }
+        }
       },
       "Role" : {
         "properties" : {
@@ -1337,6 +1491,39 @@
           },
           "village" : {
             "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
+      "UpdateNextOfKinRequest" : {
+        "description" : "Omitted fields are unchanged",
+        "properties" : {
+          "full_name" : {
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "is_primary" : {
+            "type" : "boolean"
+          },
+          "location" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "national_id" : {
+            "type" : "string"
+          },
+          "phone" : {
+            "type" : "string"
+          },
+          "relationship" : {
+            "pattern" : "spouse|parent|child|sibling|relative|friend|employer|other",
+            "type" : "string"
+          },
+          "relationship_text" : {
+            "maxLength" : 60,
             "minLength" : 0,
             "type" : "string"
           }
@@ -2429,6 +2616,214 @@
           }
         },
         "summary" : "Verify or reject a member's KYC (FR-MEM-05)",
+        "tags" : [ "lending-members" ]
+      }
+    },
+    "/api/v1/lending/members/{member_id}/next-of-kin" : {
+      "get" : {
+        "operationId" : "listNextOfKin",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "member_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NextOfKinList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List a member's next of kin (FR-MEM-06)",
+        "tags" : [ "lending-members" ]
+      },
+      "post" : {
+        "operationId" : "createNextOfKin",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "member_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateNextOfKinRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NextOfKin"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add a next of kin; links a member by NIN, suggests by phone (FR-MEM-06, FR-MEM-07)",
+        "tags" : [ "lending-members" ]
+      }
+    },
+    "/api/v1/lending/members/{member_id}/relationships" : {
+      "get" : {
+        "operationId" : "getMemberRelationships",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "member_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MemberRelationships"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The member's relationship panel (FR-MEM-08)",
+        "tags" : [ "lending-members" ]
+      }
+    },
+    "/api/v1/lending/next-of-kin/{kin_id}" : {
+      "delete" : {
+        "operationId" : "deleteNextOfKin",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "kin_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove a next of kin; the last one of a KYC-complete member stays",
+        "tags" : [ "lending-members" ]
+      },
+      "patch" : {
+        "operationId" : "updateNextOfKin",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "kin_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateNextOfKinRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NextOfKin"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit a next of kin",
+        "tags" : [ "lending-members" ]
+      }
+    },
+    "/api/v1/lending/next-of-kin/{kin_id}/link" : {
+      "post" : {
+        "operationId" : "decideNextOfKinLink",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "kin_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NextOfKinLinkDecision"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NextOfKin"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Confirm or reject a suggested link (FR-MEM-07)",
         "tags" : [ "lending-members" ]
       }
     },

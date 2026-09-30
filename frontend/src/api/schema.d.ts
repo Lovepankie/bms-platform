@@ -399,6 +399,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/members/{member_id}/next-of-kin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a member's next of kin (FR-MEM-06) */
+        get: operations["listNextOfKin"];
+        put?: never;
+        /** Add a next of kin; links a member by NIN, suggests by phone (FR-MEM-06, FR-MEM-07) */
+        post: operations["createNextOfKin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/members/{member_id}/relationships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The member's relationship panel (FR-MEM-08) */
+        get: operations["getMemberRelationships"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/next-of-kin/{kin_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a next of kin; the last one of a KYC-complete member stays */
+        delete: operations["deleteNextOfKin"];
+        options?: never;
+        head?: never;
+        /** Edit a next of kin */
+        patch: operations["updateNextOfKin"];
+        trace?: never;
+    };
+    "/api/v1/lending/next-of-kin/{kin_id}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm or reject a suggested link (FR-MEM-07) */
+        post: operations["decideNextOfKinLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -992,6 +1062,17 @@ export interface components {
             sub_county?: string;
             village?: string;
         };
+        CreateNextOfKinRequest: {
+            full_name: string;
+            is_primary?: boolean;
+            location?: string;
+            national_id?: string;
+            /** @description Any common Uganda form; stored as E.164 */
+            phone?: string;
+            relationship: string;
+            /** @description The original wording, for example from the import */
+            relationship_text?: string;
+        };
         CreateTenantRequest: {
             admin: components["schemas"]["FirstAdminRequest"];
             /** @description Default UGX */
@@ -1161,6 +1242,12 @@ export interface components {
             items?: components["schemas"]["MemberListItem"][];
             next_cursor?: string;
         };
+        MemberRelationships: {
+            /** Format: uuid */
+            member_id?: string;
+            named_as_kin_by?: components["schemas"]["RelatedMember"][];
+            names_as_kin?: components["schemas"]["NextOfKin"][];
+        };
         MfaConfirmRequest: {
             code: string;
             mfa_token?: string;
@@ -1179,6 +1266,38 @@ export interface components {
             /** @description A 6 digit TOTP code or a recovery code */
             code: string;
             mfa_token: string;
+        };
+        NextOfKin: {
+            /** Format: date-time */
+            created_at?: string;
+            full_name?: string;
+            /** Format: uuid */
+            id?: string;
+            is_primary?: boolean;
+            /** @description nin, phone or manual; null when not linked */
+            link_method?: string;
+            /** @description none, suggested, confirmed or rejected (FR-MEM-07) */
+            link_status?: string;
+            /** Format: uuid */
+            linked_member_id?: string;
+            linked_member_no?: string;
+            location?: string;
+            /** Format: uuid */
+            member_id?: string;
+            national_id?: string;
+            phone_e164?: string;
+            relationship?: string;
+            relationship_text?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        NextOfKinLinkDecision: {
+            decision: string;
+        };
+        NextOfKinList: {
+            items?: components["schemas"]["NextOfKin"][];
         };
         /** @description Limits only; prices are not stored in this repository */
         Plan: {
@@ -1230,6 +1349,14 @@ export interface components {
         RecoveryCodesRequest: {
             /** @description A current TOTP code */
             code: string;
+        };
+        RelatedMember: {
+            full_name?: string;
+            /** Format: uuid */
+            id?: string;
+            in_scope?: boolean;
+            member_no?: string;
+            relationship?: string;
         };
         Role: {
             key?: string;
@@ -1332,6 +1459,16 @@ export interface components {
             status?: string;
             sub_county?: string;
             village?: string;
+        };
+        /** @description Omitted fields are unchanged */
+        UpdateNextOfKinRequest: {
+            full_name?: string;
+            is_primary?: boolean;
+            location?: string;
+            national_id?: string;
+            phone?: string;
+            relationship?: string;
+            relationship_text?: string;
         };
         UpdateTenantSettingsRequest: {
             allow_loans_before_kyc_verified?: boolean;
@@ -2041,6 +2178,154 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Member"];
+                };
+            };
+        };
+    };
+    listNextOfKin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextOfKinList"];
+                };
+            };
+        };
+    };
+    createNextOfKin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNextOfKinRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextOfKin"];
+                };
+            };
+        };
+    };
+    getMemberRelationships: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberRelationships"];
+                };
+            };
+        };
+    };
+    deleteNextOfKin: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                kin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateNextOfKin: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                kin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNextOfKinRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextOfKin"];
+                };
+            };
+        };
+    };
+    decideNextOfKinLink: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                kin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NextOfKinLinkDecision"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextOfKin"];
                 };
             };
         };

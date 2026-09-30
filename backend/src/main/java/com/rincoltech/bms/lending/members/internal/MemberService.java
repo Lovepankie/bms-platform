@@ -50,6 +50,7 @@ class MemberService implements MemberLookup {
     private final TenantSequences sequences;
     private final AuditLog audit;
     private final PlanLimits planLimits;
+    private final NextOfKinRepository kin;
 
     MemberService(
             MemberRepository members,
@@ -57,13 +58,15 @@ class MemberService implements MemberLookup {
             CurrentTenant currentTenant,
             TenantSequences sequences,
             AuditLog audit,
-            PlanLimits planLimits) {
+            PlanLimits planLimits,
+            NextOfKinRepository kin) {
         this.members = members;
         this.branches = branches;
         this.currentTenant = currentTenant;
         this.sequences = sequences;
         this.audit = audit;
         this.planLimits = planLimits;
+        this.kin = kin;
     }
 
     /** FR-MEM-01, FR-MEM-02, FR-MEM-03, FR-TEN-04, FR-AUD-01. One transaction: number, row and audit row. */
@@ -124,6 +127,7 @@ class MemberService implements MemberLookup {
             after.put("confirmed_not_duplicate", true);
         }
         audit.record(AuditLog.Entry.created("lending.member.created", "lending.member", id, request.branchId(), after));
+        linkKin(id, request.branchId(), nin, phone);
 
         return members.findById(id).orElseThrow();
     }
@@ -213,16 +217,7 @@ class MemberService implements MemberLookup {
                 before.version());
         Map<String, Object> was = new LinkedHashMap<>();
         Map<String, Object> now = new LinkedHashMap<>();
-        for (RecordComponent c : MemberResponse.class.getRecordComponents()) {
-            Object x = read(c, before);
-            Object y = read(c, after);
-            if (!Objects.equals(x, y)) {
-                String key =
-                        c.getName().replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase();
-                was.put(key, x);
-                now.put(key, y);
-            }
-        }
+        changes(before, after, was, now);
         if (now.isEmpty()) {
             return before;
         }
@@ -230,6 +225,13 @@ class MemberService implements MemberLookup {
             now.put("confirmed_not_duplicate", true);
         }
         members.update(after);
+        if (now.containsKey("national_id") || now.containsKey("phone_e164")) {
+            linkKin(
+                    memberId,
+                    before.branchId(),
+                    now.containsKey("national_id") ? nin : null,
+                    now.containsKey("phone_e164") ? phone : null);
+        }
         audit.record(
                 new AuditLog.Entry("lending.member.updated", "lending.member", memberId, before.branchId(), was, now));
         return members.findById(memberId).orElseThrow();
@@ -336,11 +338,37 @@ class MemberService implements MemberLookup {
         return member;
     }
 
-    private static Object read(RecordComponent c, MemberResponse m) {
-        try {
-            return c.getAccessor().invoke(m);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException(e);
+    /**
+     * FR-MEM-07 backward: next of kin that other members named and that match this member's NIN
+     * or phone are linked or suggested; one audit row on this member lists them.
+     */
+    private void linkKin(UUID memberId, UUID branchId, String nin, String phone) {
+        List<UUID> touched = kin.linkToMember(memberId, nin, phone);
+        if (!touched.isEmpty()) {
+            audit.record(AuditLog.Entry.created(
+                    "lending.member.kin_links_found",
+                    "lending.member",
+                    memberId,
+                    branchId,
+                    Map.of("next_of_kin_ids", touched)));
+        }
+    }
+
+    /** The fields of two versions of a record that differ, snake_case keys, for an audit row (FR-AUD-01). */
+    static <R extends Record> void changes(R before, R after, Map<String, Object> was, Map<String, Object> now) {
+        for (RecordComponent c : before.getClass().getRecordComponents()) {
+            try {
+                Object x = c.getAccessor().invoke(before);
+                Object y = c.getAccessor().invoke(after);
+                if (!Objects.equals(x, y)) {
+                    String key =
+                            c.getName().replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase();
+                    was.put(key, x);
+                    now.put(key, y);
+                }
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException(e);
+            }
         }
     }
 
@@ -395,15 +423,15 @@ class MemberService implements MemberLookup {
         }
     }
 
-    private static ApiException required(String field, String message) {
+    static ApiException required(String field, String message) {
         return ApiException.validation(List.of(new FieldProblem(field, "required", message)));
     }
 
-    private static ApiException invalidTransition(String detail) {
+    static ApiException invalidTransition(String detail) {
         return new ApiException(HttpStatus.CONFLICT, "invalid_status_transition", "Invalid status transition", detail);
     }
 
-    private static ApiException invalidNin() {
+    static ApiException invalidNin() {
         return new ApiException(
                 HttpStatus.UNPROCESSABLE_CONTENT,
                 "invalid_nin",
@@ -412,15 +440,15 @@ class MemberService implements MemberLookup {
                 List.of(new FieldProblem("national_id", "invalid_nin", "Not a valid NIN.")));
     }
 
-    private static String blankToNull(String s) {
+    static String blankToNull(String s) {
         return s == null || s.isBlank() ? null : s.trim();
     }
 
-    private static <T> T given(T value, T current) {
+    static <T> T given(T value, T current) {
         return value == null ? current : value;
     }
 
-    private static ApiException invalidPhone(String field) {
+    static ApiException invalidPhone(String field) {
         return new ApiException(
                 HttpStatus.UNPROCESSABLE_CONTENT,
                 "invalid_phone",
