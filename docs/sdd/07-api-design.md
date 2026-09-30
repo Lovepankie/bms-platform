@@ -427,17 +427,20 @@ endpoint.
 
 Built so far (the reference slice, `lending.members`): `POST /lending/members`,
 `GET /lending/members` (cursor pagination ordered by `member_no`, filters `branch_id`,
-`status`, `q`; phone and NIN masked) and `GET /lending/members/{member_id}` (with `ETag`). The
-rest of this table is to be built.
+`status`, `q`; phone and NIN masked) and `GET /lending/members/{member_id}` (with `ETag`); then
+(#10) `PATCH /lending/members/{member_id}`, `POST /lending/members/duplicate-check`,
+`POST .../kyc/verify` and `POST .../blacklist`. The PATCH and the two state changes require
+`If-Match` (section 7.9) and return the new `ETag`. Loan number search waits for loans
+(increment 4). The rest of this table is to be built.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET | `/lending/members` | `lending.members.read` | `q` searches member no, name, phone, NIN, loan no. FR-MEM-11 |
-| POST | `/lending/members/duplicate-check` | `lending.members.create` | `{full_name, phone, national_id}` returns candidates. FR-MEM-04 |
-| POST | `/lending/members` | `lending.members.create` | FR-MEM-01 |
-| GET, PATCH | `/lending/members/{member_id}` | read / `lending.members.update` | |
-| POST | `/lending/members/{member_id}/kyc/verify` | `lending.members.verify_kyc` | `{decision: verified or rejected, note}` |
-| POST | `/lending/members/{member_id}/blacklist` | `lending.members.blacklist` | `{is_blacklisted, reason}` |
+| POST | `/lending/members/duplicate-check` | `lending.members.create` | `{full_name, phone, national_id}`, at least one. Returns up to 20 candidates across the tenant with `match_reasons` (`nin`, `phone`, `name`: trigram similarity at least 0.6). A candidate outside the caller's `lending.members.read` scope carries only `member_no`, `match_reasons` and `in_scope: false`. FR-MEM-04 |
+| POST | `/lending/members` | `lending.members.create` | FR-MEM-01. A phone already on another member returns 409 `duplicate_phone` unless `confirmed_not_duplicate: true` (FR-MEM-04) |
+| GET, PATCH | `/lending/members/{member_id}` | read / `lending.members.update` | PATCH: omitted fields unchanged; branch not editable (FR-BR-06); `status` per FR-MEM-10; same NIN and phone rules as create |
+| POST | `/lending/members/{member_id}/kyc/verify` | `lending.members.verify_kyc` | `{decision: verified or rejected, note}`; only from `pending_verification`, else 409 `invalid_status_transition`; `note` required to reject |
+| POST | `/lending/members/{member_id}/blacklist` | `lending.members.blacklist` | `{is_blacklisted, reason}`; `reason` required to blacklist; lifting clears the stored reason (the audit row keeps it) |
 | GET, POST | `/lending/members/{member_id}/next-of-kin` | read / update | FR-MEM-06 |
 | PATCH, DELETE | `/lending/next-of-kin/{kin_id}` | `lending.members.update` | Cannot delete the last next of kin of a KYC-complete member |
 | POST | `/lending/next-of-kin/{kin_id}/link` | `lending.members.update` | `{decision: confirm or reject}` for suggested links. FR-MEM-07 |

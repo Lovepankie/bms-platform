@@ -330,6 +330,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/members/duplicate-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Find likely duplicates before registering (FR-MEM-04) */
+        post: operations["checkMemberDuplicates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/members/{member_id}": {
         parameters: {
             query?: never;
@@ -341,6 +358,41 @@ export interface paths {
         get: operations["getMember"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a member or change their status (FR-MEM-10) */
+        patch: operations["updateMember"];
+        trace?: never;
+    };
+    "/api/v1/lending/members/{member_id}/blacklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Blacklist a member or lift it (FR-MEM-13) */
+        post: operations["setMemberBlacklist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/members/{member_id}/kyc/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify or reject a member's KYC (FR-MEM-05) */
+        post: operations["decideMemberKyc"];
         delete?: never;
         options?: never;
         head?: never;
@@ -880,6 +932,11 @@ export interface components {
             /** Format: date-time */
             to?: string;
         };
+        BlacklistRequest: {
+            is_blacklisted: boolean;
+            /** @description Required when blacklisting (FR-MEM-13) */
+            reason?: string;
+        };
         Branch: {
             code?: string;
             /** Format: date-time */
@@ -907,6 +964,8 @@ export interface components {
             alt_phone?: string;
             /** Format: uuid */
             branch_id: string;
+            /** @description True after the user confirmed that a member with the same phone is a different person (FR-MEM-04) */
+            confirmed_not_duplicate?: boolean;
             /** @description Defaults to the tenant currency */
             currency?: string;
             /** Format: date */
@@ -952,6 +1011,28 @@ export interface components {
             head_office_branch_id?: string;
             tenant?: components["schemas"]["PlatformTenant"];
         };
+        DuplicateCandidate: {
+            /** Format: uuid */
+            branch_id?: string;
+            full_name?: string;
+            /** Format: uuid */
+            id?: string;
+            in_scope?: boolean;
+            /** @description Any of nin, phone, name */
+            match_reasons?: string[];
+            member_no?: string;
+            national_id_masked?: string;
+            phone_e164_masked?: string;
+        };
+        /** @description At least one field is required (FR-MEM-04) */
+        DuplicateCheckRequest: {
+            full_name?: string;
+            national_id?: string;
+            phone?: string;
+        };
+        DuplicateCheckResponse: {
+            candidates?: components["schemas"]["DuplicateCandidate"][];
+        };
         /** @description Shown once to the operator, and sent to the admin */
         FirstAdminInvitation: {
             /** Format: date-time */
@@ -988,6 +1069,11 @@ export interface components {
             invitation?: components["schemas"]["InvitationLink"];
             user?: components["schemas"]["User"];
         };
+        KycDecisionRequest: {
+            decision: string;
+            /** @description Required when rejected */
+            note?: string;
+        };
         Me: {
             all_branches?: boolean;
             branches?: components["schemas"]["MeBranch"][];
@@ -1015,6 +1101,7 @@ export interface components {
         };
         Member: {
             alt_phone_e164?: string;
+            blacklist_reason?: string;
             /** Format: uuid */
             branch_id?: string;
             /** Format: date-time */
@@ -1031,6 +1118,10 @@ export interface components {
             id_type?: string;
             is_blacklisted?: boolean;
             kyc_status?: string;
+            /** Format: date-time */
+            kyc_verified_at?: string;
+            /** Format: uuid */
+            kyc_verified_by?: string;
             last_name?: string;
             location?: string;
             marital_status?: string;
@@ -1212,6 +1303,35 @@ export interface components {
         UpdateBranchRequest: {
             location?: string;
             name?: string;
+        };
+        /** @description Omitted fields are unchanged */
+        UpdateMemberRequest: {
+            alt_phone?: string;
+            /** @description As on create, when the new phone belongs to another member (FR-MEM-04) */
+            confirmed_not_duplicate?: boolean;
+            /** Format: date */
+            date_of_birth?: string;
+            district?: string;
+            first_name?: string;
+            full_name?: string;
+            gender?: string;
+            id_type?: string;
+            last_name?: string;
+            location?: string;
+            marital_status?: string;
+            /** Format: int64 */
+            monthly_income_minor?: number;
+            national_id?: string;
+            occupation?: string;
+            /** Format: uuid */
+            officer_user_id?: string;
+            other_id_number?: string;
+            other_income_source?: string;
+            phone?: string;
+            /** @description FR-MEM-10 */
+            status?: string;
+            sub_county?: string;
+            village?: string;
         };
         UpdateTenantSettingsRequest: {
             allow_loans_before_kyc_verified?: boolean;
@@ -1795,6 +1915,30 @@ export interface operations {
             };
         };
     };
+    checkMemberDuplicates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DuplicateCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateCheckResponse"];
+                };
+            };
+        };
+    };
     getMember: {
         parameters: {
             query?: never;
@@ -1805,6 +1949,90 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+        };
+    };
+    updateMember: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+        };
+    };
+    setMemberBlacklist: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlacklistRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+        };
+    };
+    decideMemberKyc: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KycDecisionRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

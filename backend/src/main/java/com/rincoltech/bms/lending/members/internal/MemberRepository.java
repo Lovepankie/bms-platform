@@ -6,8 +6,10 @@ import com.rincoltech.bms.lending.members.internal.MemberApi.MemberResponse;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,9 +30,13 @@ class MemberRepository {
     private static final String COLUMNS = """
             id, branch_id, member_no, full_name, first_name, last_name, phone_e164, alt_phone_e164, id_type,
             national_id, other_id_number, date_of_birth, gender, marital_status, district, sub_county, village,
-            location, occupation, other_income_source, monthly_income_minor, currency, kyc_status, status,
-            is_blacklisted, officer_user_id, source, created_at, updated_at, version
+            location, occupation, other_income_source, monthly_income_minor, currency, kyc_status, kyc_verified_by,
+            kyc_verified_at, status, is_blacklisted, blacklist_reason, officer_user_id, source, created_at, updated_at,
+            version
             """;
+
+    /** Trigram similarity at or above which a name counts as a likely duplicate (FR-MEM-04). */
+    static final double NAME_SIMILARITY = 0.6;
 
     private final JdbcClient jdbc;
 
@@ -91,11 +97,109 @@ class MemberRepository {
                 .single();
     }
 
-    Optional<String> memberNoByNationalId(String nationalId) {
-        return jdbc.sql("SELECT member_no FROM lending_members WHERE national_id = ?")
-                .param(nationalId)
+    /** The row, locked for the rest of the transaction (chapter 7 section 7.9). */
+    Optional<MemberResponse> lockById(UUID id) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM lending_members WHERE id = ? FOR UPDATE")
+                .param(id)
+                .query(MemberRepository::mapDetail)
+                .optional();
+    }
+
+    /** Writes the editable columns from {@code m}; branch, number, KYC and blacklist change elsewhere. */
+    void update(MemberResponse m) {
+        jdbc.sql("""
+                        UPDATE lending_members SET full_name = :fullName, first_name = :firstName, last_name = :lastName,
+                            phone_e164 = :phoneE164, alt_phone_e164 = :altPhoneE164, id_type = :idType,
+                            national_id = :nationalId, other_id_number = :otherIdNumber, date_of_birth = :dateOfBirth,
+                            gender = :gender, marital_status = :maritalStatus, district = :district,
+                            sub_county = :subCounty, village = :village, location = :location, occupation = :occupation,
+                            other_income_source = :otherIncomeSource, monthly_income_minor = :monthlyIncomeMinor,
+                            officer_user_id = :officerUserId, status = :status, updated_at = now(), version = version + 1
+                        WHERE id = :id
+                        """).paramSource(m).update();
+    }
+
+    /** {@code verifiedBy} is set only for {@code verified}; the audit row names who rejected. */
+    void decideKyc(UUID id, boolean verified, UUID decidedBy) {
+        jdbc.sql("""
+                        UPDATE lending_members SET kyc_status = CASE WHEN :verified THEN 'verified' ELSE 'rejected' END,
+                            kyc_verified_by = CASE WHEN :verified THEN :by END,
+                            kyc_verified_at = CASE WHEN :verified THEN now() END,
+                            updated_at = now(), version = version + 1
+                        WHERE id = :id
+                        """)
+                .param("verified", verified)
+                .param("by", decidedBy)
+                .param("id", id)
+                .update();
+    }
+
+    void setBlacklist(UUID id, boolean blacklisted, String reason) {
+        jdbc.sql("UPDATE lending_members SET is_blacklisted = ?, blacklist_reason = ?, updated_at = now(),"
+                        + " version = version + 1 WHERE id = ?")
+                .params(blacklisted, reason, id)
+                .update();
+    }
+
+    /** @param excludeId the member being edited, or {@code null} on create */
+    Optional<String> memberNoByNationalId(String nationalId, UUID excludeId) {
+        return jdbc.sql("SELECT member_no FROM lending_members WHERE national_id = ? AND id IS DISTINCT FROM ?::uuid")
+                .params(nationalId, excludeId)
                 .query(String.class)
                 .optional();
+    }
+
+    /** A likely duplicate with the reasons it matched: any of {@code nin}, {@code phone}, {@code name}. */
+    record Candidate(
+            UUID id,
+            String memberNo,
+            String fullName,
+            UUID branchId,
+            String phoneE164,
+            String nationalId,
+            List<String> reasons) {}
+
+    /**
+     * Likely duplicates across the whole tenant (FR-MEM-04), NIN matches first, then phone.
+     * A null argument matches nothing; {@code excludeId} is the member being edited, or null.
+     */
+    List<Candidate> duplicateCandidates(String fullName, String phoneE164, String nationalId, UUID excludeId) {
+        return jdbc.sql("""
+                        SELECT id, member_no, full_name, branch_id, phone_e164, national_id,
+                               coalesce(national_id = :nin, false) AS by_nin,
+                               coalesce(phone_e164 = :phone, false) AS by_phone,
+                               coalesce(full_name % :name AND similarity(full_name, :name) >= :similarity, false) AS by_name
+                        FROM lending_members
+                        WHERE (national_id = :nin OR phone_e164 = :phone
+                               OR (full_name % :name AND similarity(full_name, :name) >= :similarity))
+                          AND id IS DISTINCT FROM CAST(:exclude AS uuid)
+                        ORDER BY by_nin DESC, by_phone DESC, member_no
+                        LIMIT 20
+                        """)
+                .param("nin", nationalId, Types.VARCHAR)
+                .param("phone", phoneE164, Types.VARCHAR)
+                .param("name", fullName, Types.VARCHAR)
+                .param("similarity", NAME_SIMILARITY)
+                .param("exclude", excludeId)
+                .query((rs, n) -> new Candidate(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("member_no"),
+                        rs.getString("full_name"),
+                        rs.getObject("branch_id", UUID.class),
+                        rs.getString("phone_e164"),
+                        rs.getString("national_id"),
+                        reasons(rs)))
+                .list();
+    }
+
+    private static List<String> reasons(ResultSet rs) throws SQLException {
+        List<String> reasons = new ArrayList<>();
+        for (String reason : List.of("nin", "phone", "name")) {
+            if (rs.getBoolean("by_" + reason)) {
+                reasons.add(reason);
+            }
+        }
+        return List.copyOf(reasons);
     }
 
     /**
@@ -165,8 +269,11 @@ class MemberRepository {
                 rs.getObject("monthly_income_minor", Long.class),
                 rs.getString("currency"),
                 rs.getString("kyc_status"),
+                rs.getObject("kyc_verified_by", UUID.class),
+                instant(rs.getTimestamp("kyc_verified_at")),
                 rs.getString("status"),
                 rs.getBoolean("is_blacklisted"),
+                rs.getString("blacklist_reason"),
                 rs.getObject("officer_user_id", UUID.class),
                 rs.getString("source"),
                 instant(rs.getTimestamp("created_at")),

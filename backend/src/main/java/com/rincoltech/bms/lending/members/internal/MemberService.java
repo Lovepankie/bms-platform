@@ -9,18 +9,29 @@ import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
+import com.rincoltech.bms.kernel.Masking;
 import com.rincoltech.bms.kernel.NationalIds;
 import com.rincoltech.bms.kernel.PhoneNumbers;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.lending.members.MemberLookup;
+import com.rincoltech.bms.lending.members.internal.MemberApi.BlacklistRequest;
 import com.rincoltech.bms.lending.members.internal.MemberApi.CreateMemberRequest;
+import com.rincoltech.bms.lending.members.internal.MemberApi.DuplicateCandidate;
+import com.rincoltech.bms.lending.members.internal.MemberApi.DuplicateCheckRequest;
+import com.rincoltech.bms.lending.members.internal.MemberApi.DuplicateCheckResponse;
+import com.rincoltech.bms.lending.members.internal.MemberApi.KycDecisionRequest;
 import com.rincoltech.bms.lending.members.internal.MemberApi.MemberListItem;
 import com.rincoltech.bms.lending.members.internal.MemberApi.MemberPage;
 import com.rincoltech.bms.lending.members.internal.MemberApi.MemberResponse;
+import com.rincoltech.bms.lending.members.internal.MemberApi.UpdateMemberRequest;
+import com.rincoltech.bms.lending.members.internal.MemberRepository.Candidate;
 import com.rincoltech.bms.lending.members.internal.MemberRepository.NewMember;
+import java.lang.reflect.RecordComponent;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -68,7 +79,8 @@ class MemberService implements MemberLookup {
         String altPhone = request.altPhone() == null || request.altPhone().isBlank()
                 ? null
                 : PhoneNumbers.normaliseUganda(request.altPhone()).orElseThrow(() -> invalidPhone("alt_phone"));
-        String nin = checkIdentity(request);
+        String nin = checkIdentity(request.idType(), request.nationalId(), request.otherIdNumber(), null);
+        checkPhoneShared(phone, null, request.confirmedNotDuplicate());
         planLimits.checkRoomFor(PlanLimits.MAX_ACTIVE_MEMBERS, members.countActive());
 
         UUID id = UUID.randomUUID();
@@ -108,6 +120,9 @@ class MemberService implements MemberLookup {
         after.put("phone_e164", phone);
         after.put("national_id", nin);
         after.put("branch_id", request.branchId());
+        if (Boolean.TRUE.equals(request.confirmedNotDuplicate())) {
+            after.put("confirmed_not_duplicate", true);
+        }
         audit.record(AuditLog.Entry.created("lending.member.created", "lending.member", id, request.branchId(), after));
 
         return members.findById(id).orElseThrow();
@@ -136,6 +151,199 @@ class MemberService implements MemberLookup {
                 .orElseThrow(ApiException::notFound);
     }
 
+    /**
+     * FR-MEM-01 to FR-MEM-04 on edit, FR-MEM-10, FR-AUD-01. Omitted fields are unchanged; the audit
+     * row carries only the fields that changed. Exiting a member will also require no open loan,
+     * savings or investment account (FR-MEM-10); none exists before increment 4, so that check
+     * arrives with the accounts.
+     */
+    @Transactional
+    MemberResponse update(UUID memberId, String ifMatch, UpdateMemberRequest r) {
+        MemberResponse before = lockForChange(memberId, "lending.members.update", ifMatch);
+        String phone = r.phone() == null
+                ? before.phoneE164()
+                : PhoneNumbers.normaliseUganda(r.phone()).orElseThrow(() -> invalidPhone("phone"));
+        String altPhone = r.altPhone() == null
+                ? before.altPhoneE164()
+                : r.altPhone().isBlank()
+                        ? null
+                        : PhoneNumbers.normaliseUganda(r.altPhone()).orElseThrow(() -> invalidPhone("alt_phone"));
+        String idType = given(r.idType(), before.idType());
+        String otherId = given(r.otherIdNumber(), before.otherIdNumber());
+        boolean identityEdited = r.idType() != null || r.nationalId() != null || r.otherIdNumber() != null;
+        String nin = identityEdited
+                ? checkIdentity(idType, given(r.nationalId(), before.nationalId()), otherId, memberId)
+                : before.nationalId();
+        if (!phone.equals(before.phoneE164())) {
+            checkPhoneShared(phone, memberId, r.confirmedNotDuplicate());
+        }
+        MemberResponse after = new MemberResponse(
+                before.id(),
+                before.branchId(),
+                before.memberNo(),
+                r.fullName() == null ? before.fullName() : r.fullName().trim(),
+                given(r.firstName(), before.firstName()),
+                given(r.lastName(), before.lastName()),
+                phone,
+                altPhone,
+                idType,
+                nin,
+                otherId,
+                given(r.dateOfBirth(), before.dateOfBirth()),
+                given(r.gender(), before.gender()),
+                given(r.maritalStatus(), before.maritalStatus()),
+                given(r.district(), before.district()),
+                given(r.subCounty(), before.subCounty()),
+                given(r.village(), before.village()),
+                given(r.location(), before.location()),
+                given(r.occupation(), before.occupation()),
+                given(r.otherIncomeSource(), before.otherIncomeSource()),
+                given(r.monthlyIncomeMinor(), before.monthlyIncomeMinor()),
+                before.currency(),
+                before.kycStatus(),
+                before.kycVerifiedBy(),
+                before.kycVerifiedAt(),
+                given(r.status(), before.status()),
+                before.isBlacklisted(),
+                before.blacklistReason(),
+                given(r.officerUserId(), before.officerUserId()),
+                before.source(),
+                before.createdAt(),
+                before.updatedAt(),
+                before.version());
+        Map<String, Object> was = new LinkedHashMap<>();
+        Map<String, Object> now = new LinkedHashMap<>();
+        for (RecordComponent c : MemberResponse.class.getRecordComponents()) {
+            Object x = read(c, before);
+            Object y = read(c, after);
+            if (!Objects.equals(x, y)) {
+                String key =
+                        c.getName().replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase();
+                was.put(key, x);
+                now.put(key, y);
+            }
+        }
+        if (now.isEmpty()) {
+            return before;
+        }
+        if (Boolean.TRUE.equals(r.confirmedNotDuplicate()) && now.containsKey("phone_e164")) {
+            now.put("confirmed_not_duplicate", true);
+        }
+        members.update(after);
+        audit.record(
+                new AuditLog.Entry("lending.member.updated", "lending.member", memberId, before.branchId(), was, now));
+        return members.findById(memberId).orElseThrow();
+    }
+
+    /**
+     * FR-MEM-04: likely duplicates across the tenant. A match outside the caller's read scope
+     * shows only its member number and reasons, the same disclosure as {@code duplicate_nin}.
+     */
+    @Transactional(readOnly = true)
+    DuplicateCheckResponse duplicateCheck(DuplicateCheckRequest r) {
+        String name = blankToNull(r.fullName());
+        String phone = blankToNull(r.phone()) == null
+                ? null
+                : PhoneNumbers.normaliseUganda(r.phone()).orElseThrow(() -> invalidPhone("phone"));
+        String nin = blankToNull(r.nationalId()) == null
+                ? null
+                : NationalIds.normaliseNin(r.nationalId()).orElseThrow(MemberService::invalidNin);
+        if (name == null && phone == null && nin == null) {
+            throw required("full_name", "Give at least one of full_name, phone or national_id.");
+        }
+        Principal principal = CurrentPrincipal.require();
+        return new DuplicateCheckResponse(members.duplicateCandidates(name, phone, nin, null).stream()
+                .map(c -> principal.may("lending.members.read", c.branchId())
+                        ? new DuplicateCandidate(
+                                c.id(),
+                                c.memberNo(),
+                                c.fullName(),
+                                c.branchId(),
+                                Masking.lastFour(c.phoneE164()),
+                                Masking.lastFour(c.nationalId()),
+                                c.reasons(),
+                                true)
+                        : new DuplicateCandidate(null, c.memberNo(), null, null, null, null, c.reasons(), false))
+                .toList());
+    }
+
+    /** FR-MEM-05: a member pending verification is verified or rejected (a note is required to reject). */
+    @Transactional
+    MemberResponse decideKyc(UUID memberId, String ifMatch, KycDecisionRequest r) {
+        boolean verified = "verified".equals(r.decision());
+        String note = blankToNull(r.note());
+        if (!verified && note == null) {
+            throw required("note", "A note is required to reject.");
+        }
+        MemberResponse before = lockForChange(memberId, "lending.members.verify_kyc", ifMatch);
+        if (!"pending_verification".equals(before.kycStatus())) {
+            throw invalidTransition(
+                    "KYC is " + before.kycStatus() + "; only a member pending verification can be decided.");
+        }
+        members.decideKyc(memberId, verified, CurrentPrincipal.require().userId());
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("kyc_status", r.decision());
+        after.put("note", note);
+        audit.record(new AuditLog.Entry(
+                "lending.member.kyc_" + r.decision(),
+                "lending.member",
+                memberId,
+                before.branchId(),
+                Map.of("kyc_status", before.kycStatus()),
+                after));
+        return members.findById(memberId).orElseThrow();
+    }
+
+    /** FR-MEM-13. Lifting the flag clears the stored reason; the audit row keeps both. */
+    @Transactional
+    MemberResponse setBlacklist(UUID memberId, String ifMatch, BlacklistRequest r) {
+        String reason = blankToNull(r.reason());
+        if (r.isBlacklisted() && reason == null) {
+            throw required("reason", "A reason is required to blacklist a member.");
+        }
+        MemberResponse before = lockForChange(memberId, "lending.members.blacklist", ifMatch);
+        if (before.isBlacklisted() == r.isBlacklisted()) {
+            throw invalidTransition(
+                    "The member is already " + (before.isBlacklisted() ? "blacklisted." : "not blacklisted."));
+        }
+        members.setBlacklist(memberId, r.isBlacklisted(), r.isBlacklisted() ? reason : null);
+        Map<String, Object> was = new LinkedHashMap<>();
+        was.put("is_blacklisted", before.isBlacklisted());
+        was.put("blacklist_reason", before.blacklistReason());
+        Map<String, Object> now = new LinkedHashMap<>();
+        now.put("is_blacklisted", r.isBlacklisted());
+        now.put("reason", reason);
+        audit.record(new AuditLog.Entry(
+                r.isBlacklisted() ? "lending.member.blacklisted" : "lending.member.blacklist_lifted",
+                "lending.member",
+                memberId,
+                before.branchId(),
+                was,
+                now));
+        return members.findById(memberId).orElseThrow();
+    }
+
+    /** Locks the member for a change: If-Match first, then scope (404 outside it), then version. */
+    private MemberResponse lockForChange(UUID memberId, String permission, String ifMatch) {
+        int expected = Versions.fromIfMatch(ifMatch);
+        Principal principal = CurrentPrincipal.require();
+        MemberResponse member = members.lockById(memberId)
+                .filter(m -> principal.may(permission, m.branchId()))
+                .orElseThrow(ApiException::notFound);
+        if (member.version() != expected) {
+            throw Versions.conflict(member.version());
+        }
+        return member;
+    }
+
+    private static Object read(RecordComponent c, MemberResponse m) {
+        try {
+            return c.getAccessor().invoke(m);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Optional<MemberSummary> find(UUID memberId) {
@@ -150,24 +358,16 @@ class MemberService implements MemberLookup {
                         m.isBlacklisted()));
     }
 
-    private String checkIdentity(CreateMemberRequest request) {
-        if (!"nin".equals(request.idType())) {
-            if (!"none".equals(request.idType())
-                    && (request.otherIdNumber() == null
-                            || request.otherIdNumber().isBlank())) {
-                throw ApiException.validation(
-                        List.of(new FieldProblem("other_id_number", "required", "Required for this id_type.")));
+    /** The normalised NIN for {@code nin}, else null. {@code excludeId} is the member being edited. */
+    private String checkIdentity(String idType, String nationalId, String otherIdNumber, UUID excludeId) {
+        if (!"nin".equals(idType)) {
+            if (!"none".equals(idType) && (otherIdNumber == null || otherIdNumber.isBlank())) {
+                throw required("other_id_number", "Required for this id_type.");
             }
             return null;
         }
-        String nin = NationalIds.normaliseNin(request.nationalId())
-                .orElseThrow(() -> new ApiException(
-                        HttpStatus.UNPROCESSABLE_CONTENT,
-                        "invalid_nin",
-                        "Invalid national ID number",
-                        "The NIN must match C[MF] followed by 12 letters or digits.",
-                        List.of(new FieldProblem("national_id", "invalid_nin", "Not a valid NIN."))));
-        members.memberNoByNationalId(nin).ifPresent(existing -> {
+        String nin = NationalIds.normaliseNin(nationalId).orElseThrow(MemberService::invalidNin);
+        members.memberNoByNationalId(nin, excludeId).ifPresent(existing -> {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "duplicate_nin",
@@ -175,6 +375,49 @@ class MemberService implements MemberLookup {
                     "Member " + existing + " already has this NIN.");
         });
         return nin;
+    }
+
+    /** FR-MEM-04: a phone already on another member needs the user's word that this is a different person. */
+    private void checkPhoneShared(String phone, UUID excludeId, Boolean confirmed) {
+        if (Boolean.TRUE.equals(confirmed)) {
+            return;
+        }
+        List<String> holders = members.duplicateCandidates(null, phone, null, excludeId).stream()
+                .map(Candidate::memberNo)
+                .toList();
+        if (!holders.isEmpty()) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "duplicate_phone",
+                    "Phone already registered",
+                    "Member " + String.join(", ", holders)
+                            + " already has this phone. Confirm this is a different person to continue.");
+        }
+    }
+
+    private static ApiException required(String field, String message) {
+        return ApiException.validation(List.of(new FieldProblem(field, "required", message)));
+    }
+
+    private static ApiException invalidTransition(String detail) {
+        return new ApiException(HttpStatus.CONFLICT, "invalid_status_transition", "Invalid status transition", detail);
+    }
+
+    private static ApiException invalidNin() {
+        return new ApiException(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "invalid_nin",
+                "Invalid national ID number",
+                "The NIN must match C[MF] followed by 12 letters or digits.",
+                List.of(new FieldProblem("national_id", "invalid_nin", "Not a valid NIN.")));
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
+    }
+
+    private static <T> T given(T value, T current) {
+        return value == null ? current : value;
     }
 
     private static ApiException invalidPhone(String field) {
