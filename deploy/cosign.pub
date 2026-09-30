@@ -1,19 +1,4 @@
-# PLACEHOLDER, not a real cosign public key.
-#
-# deploy.sh refuses to deploy until this file holds a real cosign public key that matches
-# COSIGN_PRIVATE_KEY (ADR-018, docs/runbooks/provision-host.md section "Image signing"). That is
-# deliberate: a placeholder must fail closed, never verify anything.
-#
-# The owner generates the real pair once, on a machine that is not this repository's CI (the
-# private key must never be committed or pasted into a chat session):
-#
-#   cosign generate-key-pair
-#
-# This writes cosign.key (password protected) and cosign.pub in the current directory. Then:
-#
-#   1. Replace this file with the generated cosign.pub, committed as deploy/cosign.pub.
-#   2. Add repository secrets COSIGN_PRIVATE_KEY (the full contents of cosign.key) and
-#      COSIGN_PASSWORD (the password chosen at generation) so deploy.yml's build job can sign
-#      each pushed image.
-#   3. Delete the local cosign.key once the secret is stored; keep the password in the team's
-#      secret manager, not in this repository.
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAERhJSM8FERnM7Z2IzHxMSpRiWIPsA
+33CLOGq05PWc5Ux6DJfhjQcQ+IYl/XQMryamWD1f2NkefAOgSsSSJJNf5Q==
+-----END PUBLIC KEY-----
