@@ -233,6 +233,15 @@ now logs a notice when the shipped units differ from the installed ones, ADR-018
 
 ### 8.5 First deploy and checks
 
+If the hosted runners are unavailable (for example the organisation's private-repo minutes are used up),
+the first images can be built without them and without putting any secret on the shared Pi. Ship the
+exact commit to the host with `git archive`, `docker build --platform linux/arm64` there as `bms` with
+the labels the puller reads (`org.opencontainers.image.version=sha-<7>` and `revision=<40 hex>`), then
+`docker save` each image and copy it to a trusted workstation. From the workstation: `crane push` it, sign the
+pushed digest with **cosign v2.4.1** (the puller verifies with that version; a newer cosign writes a format
+it cannot read) and `--tlog-upload=false`, verify, and only then `crane tag` the three `staging` pointers.
+The registry write token and the signing key never leave the workstation.
+
 The first timer run (two minutes after enabling, or `systemctl start bms-pull.service`) pulls
 `bms-platform-api:staging`, installs the host files of that commit, creates the database volume
 (the postgres container runs `postgres/initdb/01-roles.sh`), migrates and starts the stack.

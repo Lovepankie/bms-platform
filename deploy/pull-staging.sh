@@ -87,6 +87,7 @@ resolve_digest() {
 verify_signature() {
     local digest_ref="$1"
     docker run --rm \
+        --user "$(id -u):$(id -g)" \
         --volume "$ROOT/cosign.pub:/cosign.pub:ro" \
         --volume "${DOCKER_CONFIG:-$HOME/.docker}:/home/nonroot/.docker:ro" \
         --env DOCKER_CONFIG=/home/nonroot/.docker \
@@ -125,6 +126,9 @@ done
 for dir in postgres sql systemd; do
     cp -R "$src/$dir" "$release_dir/$dir"
 done
+# The unit runs with UMask=0077, but the postgres container (another uid) must read initdb/ and sql/.
+# Both hold no secrets, only scripts and SQL.
+chmod -R a+rX "$release_dir/postgres" "$release_dir/sql"
 
 status=0
 BMS_STATE_DIR="$ROOT/state" BMS_COSIGN_PUBKEY="$ROOT/cosign.pub" BMS_ENV_FILE="$ROOT/.env" \
