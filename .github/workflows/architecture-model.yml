@@ -21,6 +21,7 @@ name: Architecture model
 
 on:
   push:
+    branches: [main]
     paths: ["docs/workspace.dsl", "docs/sdd/**", "docs/adr/**"]
   pull_request:
     paths: ["docs/workspace.dsl", "docs/sdd/**", "docs/adr/**"]
@@ -31,13 +32,26 @@ permissions:
 
 env:
   STRUCTURIZR_CLI: structurizr/cli:2024.09.19
-  SITE_GENERATR: ghcr.io/avisi-cloud/structurizr-site-generatr:latest
+  # Pinned by digest (ADR-018 finding L8): this image has no version tags, so a tag reference is the
+  # publisher's `latest` today and whatever they push tomorrow, on the same self-hosted runner that
+  # later holds the deploy token (H1). Re-pin deliberately: `docker buildx imagetools inspect
+  # ghcr.io/avisi-cloud/structurizr-site-generatr:latest` and take the index digest.
+  SITE_GENERATR: ghcr.io/avisi-cloud/structurizr-site-generatr@sha256:dc91858de351d430e92fb0f72c1580e7827f52c37f67d1dcd8a3b4d23b34c472
 
 jobs:
   model:
     runs-on: [self-hosted, hillary-pi]
     steps:
       - uses: actions/checkout@v7
+
+      - name: Assert the Docker daemon is rootless
+        # ADR-018 finding L9: see ci.yml's delivery job for why this must be checked before any
+        # --user 0:0 step on this self-hosted runner.
+        run: |
+          if ! docker info --format '{{.SecurityOptions}}' | grep -q 'name=rootless'; then
+            echo "::error::the Docker daemon on this runner is not rootless; refusing to run --user 0:0 steps"
+            exit 1
+          fi
 
       - name: Validate the workspace
         run: |

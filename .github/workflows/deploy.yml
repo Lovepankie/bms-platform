@@ -3,12 +3,14 @@ name: Deploy
 # The delivery pipeline of ADR-006 and ADR-018 (docs/sdd/10-cicd-pipeline.md):
 #
 #   push to main  -> build api, web and proxy images ONCE, for linux/amd64 and linux/arm64, tag
-#                    sha-<short>, push to GHCR
+#                    sha-<short>, push to GHCR, sign each pushed digest with cosign
 #                 -> move the `staging` pointer tag to those images. The ARM64 staging host sits
 #                    behind a Cloudflare Tunnel and cannot be reached from here: its systemd timer
-#                    (deploy/pull-staging.sh) sees the pointer move and deploys the sha-<short> tag
-#                    the image's labels name (ADR-018). No SSH key, no inbound access.
-#   tag vX.Y.Z    -> no rebuild: the sha-<short> images of the tagged commit are retagged vX.Y.Z
+#                    (deploy/pull-staging.sh) sees the pointer move, verifies the cosign signatures
+#                    and deploys the sha-<short> tag the image's labels name (ADR-018). No SSH key,
+#                    no inbound access.
+#   tag vX.Y.Z    -> no rebuild: the sha-<short> images of the tagged commit are retagged vX.Y.Z (the
+#                    cosign signature, made against the manifest digest, already covers the new tag)
 #                 -> deploy to the `production` environment (required reviewer: dev lead) over SSH
 #
 # The production VM is not provisioned yet: its deploy job checks the environment's HOST and
@@ -16,6 +18,15 @@ name: Deploy
 #
 # Only pushes to this repository's main branch and version tags trigger it. Pull requests never do,
 # so code from a fork never runs with these secrets or with package write access.
+#
+# Every job below runs on the GitHub-hosted `ubuntu-latest` runner: a fresh, ephemeral virtual
+# machine that is destroyed after the job. The self-hosted `hillary-pi` runner, which lives on the
+# staging host itself, runs only the read-only checks in ci.yml, dash-guard.yml,
+# adr-citation-guard.yml, architecture-model.yml, linked-issue-guard.yml and estimate-guard.yml. It
+# never sees `packages: write`, a registry credential or a deploy secret (pending ADR-018 amendment,
+# finding H1 of docs/reviews/pr-21-adversarial-review.md): a persistent runner that also executes
+# unreviewed pull request code cannot be trusted with a token that a job on the same machine, on a
+# later push, could read back out of its own state.
 
 on:
   push:
@@ -32,7 +43,7 @@ jobs:
   meta:
     name: Resolve tags
     if: github.repository == 'RincolTech-Solutions-ltd/bms-platform'
-    runs-on: [self-hosted, hillary-pi]
+    runs-on: ubuntu-latest
     outputs:
       sha_tag: ${{ steps.tags.outputs.sha_tag }}
       version: ${{ steps.tags.outputs.version }}
@@ -61,7 +72,7 @@ jobs:
     name: Build and push ${{ matrix.image }}
     needs: meta
     if: github.ref_type == 'branch'
-    runs-on: [self-hosted, hillary-pi]
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
@@ -80,10 +91,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # Every Dockerfile compiles in a stage pinned to $BUILDPLATFORM (Maven, npm and a Go
-      # cross-compile run natively on the ARM64 runner), and the per-target runtime stages have no
-      # RUN step, so the amd64 images are assembled without emulation. QEMU is deliberately not
-      # registered: it needs privileges the walled runner does not have (ADR-018). A future RUN
-      # step in a runtime stage must therefore be avoided, or the amd64 build will fail loudly.
+      # cross-compile run natively where possible), and the per-target runtime stages have no RUN
+      # step, so no emulated code ever executes. This hosted runner is amd64 only, so QEMU is
+      # registered to let buildx assemble the linux/arm64 manifest (layer copies only, still no
+      # emulated RUN); unlike the walled Pi runner, the hosted one is allowed the privilege
+      # (owner decision H1, pending ADR-018 amendment).
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -92,7 +107,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       # The version and revision labels are what the staging host's puller reads from the
       # `staging` pointer to find the release and the commit of its host files (ADR-018).
-      - uses: docker/build-push-action@v7
+      - id: push
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file || format('{0}/Dockerfile', matrix.context) }}
@@ -104,14 +120,32 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.meta.outputs.sha_tag }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,scope=${{ matrix.image }},mode=max
+      # H2: sign the pushed manifest by digest with a private key. --tlog-upload=false keeps the
+      # signature out of the public Rekor transparency log (a public log entry would name this
+      # private repository's images and commit shas). The signature is an OCI artifact pushed next
+      # to the image in GHCR, so it needs the same packages: write used to push the image.
+      - name: Sign the image digest with cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: "v2.4.1"
+      - env:
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          echo "$COSIGN_PRIVATE_KEY" > cosign.key
+          cosign sign --key cosign.key --tlog-upload=false --yes \
+            "${IMAGE_PREFIX}-${{ matrix.image }}@${DIGEST}"
+          rm -f cosign.key
 
   staging-pointer:
     name: Point staging at ${{ needs.meta.outputs.sha_tag }}
     needs: [meta, build]
     if: github.ref_type == 'branch'
-    runs-on: [self-hosted, hillary-pi]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
       group: staging-pointer
@@ -134,13 +168,27 @@ jobs:
           SHA_TAG: ${{ needs.meta.outputs.sha_tag }}
         run: |
           # Never move the pointer backwards: a run that finishes after a newer commit's run leaves
-          # the pointer where it is.
-          pointer="$(docker buildx imagetools inspect "${IMAGE_PREFIX}-api:staging" --format '{{ json .Image }}' 2>/dev/null \
-            | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d.get("linux/amd64", d); print(((d.get("config") or {}).get("Labels") or {}).get("org.opencontainers.image.revision", ""))' || true)"
+          # the pointer where it is. ADR-018 finding L1: fail closed. A parse error used to be
+          # swallowed by `|| true`, which moved the pointer as if there were no existing one; now
+          # only "the tag does not exist yet" is treated that way, and any other inspect or parse
+          # failure stops the job instead of overwriting a pointer we could not read.
+          if inspect_out="$(docker buildx imagetools inspect "${IMAGE_PREFIX}-api:staging" --format '{{ json .Image }}' 2>&1)"; then
+            pointer="$(printf '%s' "$inspect_out" \
+              | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d.get("linux/amd64", d); print(((d.get("config") or {}).get("Labels") or {}).get("org.opencontainers.image.revision", ""))')"
+          elif printf '%s' "$inspect_out" | grep -qiE 'not found|manifest unknown|no such manifest'; then
+            pointer=""
+          else
+            echo "::error::could not inspect ${IMAGE_PREFIX}-api:staging: ${inspect_out}"
+            exit 1
+          fi
           if [ -n "$pointer" ] && [ "$pointer" != "$GITHUB_SHA" ] && git merge-base --is-ancestor "$GITHUB_SHA" "$pointer" 2>/dev/null; then
             echo "::notice::staging already points at ${pointer}, which is newer than ${GITHUB_SHA}; left as it is."
             exit 0
           fi
+          # imagetools create only points a new tag at the existing manifest; it does not rebuild
+          # or re-push content, so the cosign signature made against the sha-<short> digest in the
+          # build job already covers whatever tag names that same digest, staging included. Nothing
+          # to re-sign here.
           for image in api web proxy; do
             docker buildx imagetools create --tag "${IMAGE_PREFIX}-${image}:staging" "${IMAGE_PREFIX}-${image}:${SHA_TAG}"
           done
@@ -150,7 +198,7 @@ jobs:
     name: Retag ${{ needs.meta.outputs.sha_tag }} as ${{ needs.meta.outputs.version }}
     needs: meta
     if: github.ref_type == 'tag'
-    runs-on: [self-hosted, hillary-pi]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
@@ -167,6 +215,8 @@ jobs:
           SHA_TAG: ${{ needs.meta.outputs.sha_tag }}
           VERSION: ${{ needs.meta.outputs.version }}
         run: |
+          # As in staging-pointer: the version tag names the same manifest digest the build job
+          # signed, so cosign verification of the version tag succeeds without re-signing.
           for image in api web proxy; do
             source="${IMAGE_PREFIX}-${image}:${SHA_TAG}"
             if ! docker buildx imagetools inspect "$source" > /dev/null; then
@@ -180,7 +230,7 @@ jobs:
     name: Deploy to production
     needs: [meta, promote]
     if: github.ref_type == 'tag'
-    runs-on: [self-hosted, hillary-pi]
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
     concurrency:

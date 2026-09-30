@@ -36,6 +36,14 @@ server:
   port: 8080
   shutdown: graceful
   forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      # ADR-018 finding M1: the native strategy installs Tomcat's RemoteIpValve, whose host-header
+      # defaults to X-Forwarded-Host and is trusted from the private Docker network the tunnel's
+      # Caddy runs on. Tenant and platform host resolution must read only Host, so this names a
+      # header nothing ever sends: getServerName() can no longer be overridden by a client-supplied
+      # X-Forwarded-Host, on staging or anywhere else.
+      host-header: x-bms-unused-forwarded-host
   error:
     whitelabel:
       enabled: false

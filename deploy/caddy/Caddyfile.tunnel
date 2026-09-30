@@ -30,12 +30,19 @@
 		max_size 6MB
 	}
 
+	# ADR-018 finding M1: cloudflared is in trusted_proxies above, so Caddy would otherwise keep
+	# whatever X-Forwarded-Host a client sent instead of setting it from the Host it resolved.
+	# Overwrite it in both blocks so nothing downstream, the API included, ever sees a forged value.
 	@backend path /api/* /healthz /readyz /version
 	handle @backend {
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			header_up X-Forwarded-Host {host}
+		}
 	}
 
 	handle {
-		reverse_proxy web:8080
+		reverse_proxy web:8080 {
+			header_up X-Forwarded-Host {host}
+		}
 	}
 }

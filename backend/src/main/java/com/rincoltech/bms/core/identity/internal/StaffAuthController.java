@@ -102,7 +102,9 @@ class StaffAuthController {
 
     @PostMapping("/refresh")
     @PublicEndpoint
-    @Operation(summary = "Rotate the refresh token in the bms_rt cookie (FR-IAM-07)", operationId = "refreshSession")
+    @Operation(
+            summary = "Rotate the refresh token in the __Host-bms_rt cookie (FR-IAM-07)",
+            operationId = "refreshSession")
     ResponseEntity<SignInResponse> refresh(
             @CookieValue(name = AuthApi.STAFF_COOKIE, required = false) String refreshToken, HttpServletRequest http) {
         return respond(flow.refresh(accounts, refreshToken, http.getServerName(), agent(http)));

@@ -25,13 +25,17 @@ contract (chapter 6 section 6.9), so the previous release runs on the newer sche
 2. Preferred, through the pipeline: production, re-run the `Deploy to production` job of the
    last good tag's run (or push a new patch tag on the last good commit); staging, revert the
    bad commit on `main`, which moves the pointer to a new tag that the host deploys.
-3. Direct, on the host, when minutes matter:
+3. Direct, on the host, when minutes matter. A rollback deploys a release older than the one live,
+   which `deploy.sh` otherwise refuses (ADR-018 finding L1), so mark it deliberate first:
 
    ```bash
+   touch /opt/bms/state/allow_downgrade
    cd /opt/bms && ./deploy.sh v1.4.2     # production: the last good tag
    # staging, as bms: stop the timer first, or the next run redeploys the pointer's tag
    systemctl stop bms-pull.timer          # as root
+   touch /opt/bms/state/allow_downgrade
    cd /opt/bms && ./deploy.sh sha-<last good 7>
+   rm -f /opt/bms/state/allow_downgrade    # back to the normal, fail-closed default
    ```
 
    The migrate step is a no-op (the schema is already ahead) and the switch happens as usual. On

@@ -9,6 +9,7 @@ name: ADR citation guard
 
 on:
   push:
+    branches: [main]
     paths: ["docs/**", "AGENTS.md", "README.md"]
   pull_request:
     paths: ["docs/**", "AGENTS.md", "README.md"]

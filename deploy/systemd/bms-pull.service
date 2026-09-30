@@ -16,6 +16,18 @@ ExecStart=/opt/bms/pull-staging.sh
 # The readiness gate waits longer on a Pi, where the JVM starts in about a minute.
 Environment=READY_TIMEOUT=360
 TimeoutStartSec=25min
+# Hardening (ADR-018 finding L2): none of this bounds the root Docker socket the bms user talks to
+# (docker group membership is root-equivalent on this host regardless), but it costs nothing and
+# narrows what a bug in this script, as opposed to a container it starts, could do to the host.
 NoNewPrivileges=yes
 PrivateTmp=yes
-ProtectSystem=full
+PrivateDevices=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/bms
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+UMask=0077

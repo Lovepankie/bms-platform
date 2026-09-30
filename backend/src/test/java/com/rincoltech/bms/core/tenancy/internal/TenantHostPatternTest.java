@@ -44,6 +44,8 @@ class TenantHostPatternTest {
                 "admin-bms-staging.rincoltech.com",
                 "demo_x-bms-staging.rincoltech.com",
                 "demo-bms-staging.rincoltech.com:443",
+                "http://demo-bms-staging.rincoltech.com",
+                "xn--demo-bms-staging.rincoltech.com",
                 "rincoltech.com",
                 ""
             })
@@ -68,6 +70,18 @@ class TenantHostPatternTest {
         assertThat(staging.isValidSlug("www")).isFalse();
         assertThat(staging.isValidSlug("ab")).isFalse();
         assertThat(staging.isValidSlug(null)).isFalse();
+    }
+
+    @Test
+    void aceLookingSlugsAreReserved() {
+        // ADR-018 finding L4: any slug shaped like an IDNA ACE prefix (hyphens at positions 3 and
+        // 4) is refused, not only the "xn--" in use today, so a punycode A-label can never become a
+        // tenant slug that browsers might render as different Unicode.
+        assertThat(staging.isValidSlug("xn--demo")).isFalse();
+        assertThat(staging.isValidSlug("ab--cdef")).isFalse();
+        assertThat(staging.isValidSlug("ab--c")).isFalse();
+        assertThat(staging.isValidSlug("abc-def")).isTrue();
+        assertThat(staging.isValidSlug("a-b--c")).isTrue();
     }
 
     @ParameterizedTest

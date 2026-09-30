@@ -30,11 +30,16 @@ systemctl list-timers bms-pull.timer
 ```
 
 - Nothing happens after a merge: check the pointer moved (the `Point staging at sha-<7>` job) and
-  that `docker pull ghcr.io/rincoltech-solutions-ltd/bms-platform-api:staging` works on the host
-  (the packages must be public).
-- `state/last_failed_tag` holds the tag: that release failed and is not retried. Fix forward with
-  a new merge (a new tag is tried at once), or retry the same one with
-  `rm /opt/bms/state/last_failed_tag`.
+  that `docker pull ghcr.io/rincoltech-solutions-ltd/bms-platform-api:staging` works on the host as
+  `bms` (the packages are private; `bms` needs the `read:packages` login of
+  `docs/runbooks/provision-host.md` section 8.1a).
+- `state/last_failed_tag` holds the tag: that release failed and is not retried. Check
+  `state/history.log` for why: `failed-signature` means a cosign verification did not pass (check
+  `/opt/bms/cosign.pub` is the real key, not the placeholder); `refused-downgrade` means the release
+  was built before the one already live (`touch /opt/bms/state/allow_downgrade` to deploy it
+  anyway). Fix forward with a new merge (a new tag is tried at once), or retry the same one with
+  `rm /opt/bms/state/last_failed_tag`. `releases/<tag>/` on the host keeps that release's files for
+  inspection until the next successful deploy cleans it up.
 - To pause staging deploys: `systemctl stop bms-pull.timer` (and `start` to resume).
 
 ## Manual deploy (only when the pipeline is unavailable)
@@ -57,6 +62,10 @@ timer run; stop `bms-pull.timer` first if it must stay.
 ## Reading the result
 
 - Exit 0: live; `state/current_tag` holds the tag.
+- Exit 1 with `failed-signature`: a cosign verification did not pass. Nothing was pulled beyond the
+  manifest and nothing changed (ADR-018 finding H2).
+- Exit 1 with `refused-downgrade`: the release is older than the one already live and
+  `state/allow_downgrade` does not exist (ADR-018 finding L1).
 - Exit 1 with `failed-migration` in `state/history.log`: the migration failed and nothing was
   switched. Fix forward with a new migration in a pull request.
 - Exit 1 with `failed-health` then `rolled-back-to`: the new release did not become ready and the

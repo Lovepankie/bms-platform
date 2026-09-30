@@ -1,15 +1,17 @@
 # Production VM stack (docs/sdd/09-infrastructure-design.md, ADR-006). The ARM64 staging host uses
 # compose.pi-staging.yml instead (ADR-018). Lives on the host
-# as /opt/bms/compose.yml next to /opt/bms/.env; deploy.sh drives it. Every image is a pinned tag:
-# the application images use IMAGE_TAG (sha-<short> or vX.Y.Z, set by deploy.sh), the others use
-# the pinned values in .env. Nothing is ever built on the host.
+# as /opt/bms/compose.yml next to /opt/bms/.env; deploy.sh drives it. The application images are
+# named by API_IMAGE, WEB_IMAGE and PROXY_IMAGE, set by deploy.sh after it verifies each image's
+# cosign signature and resolves it to its digest (image@sha256:..., ADR-018 finding H2), so the
+# bytes verified are the bytes run; the others use the pinned values in .env. Nothing is ever built
+# on the host.
 #
 # Secrets reach only the service that needs them: the API gets the bms_app password and never the
 # owner's; only the one-shot migrate container gets bms_owner.
 
 name: bms
 
-x-app-image: &api-image ghcr.io/rincoltech-solutions-ltd/bms-platform-api:${IMAGE_TAG:?IMAGE_TAG is set by deploy.sh}
+x-app-image: &api-image ${API_IMAGE:?API_IMAGE is set by deploy.sh}
 
 services:
   postgres:
@@ -94,7 +96,7 @@ services:
       start_period: 90s
 
   web:
-    image: ghcr.io/rincoltech-solutions-ltd/bms-platform-web:${IMAGE_TAG:?}
+    image: ${WEB_IMAGE:?WEB_IMAGE is set by deploy.sh}
     restart: unless-stopped
     environment:
       BMS_TENANT_HOST_PATTERN: ${BMS_TENANT_HOST_PATTERN:?}
@@ -102,7 +104,7 @@ services:
     mem_limit: 64m
 
   proxy:
-    image: ghcr.io/rincoltech-solutions-ltd/bms-platform-proxy:${IMAGE_TAG:?}
+    image: ${PROXY_IMAGE:?PROXY_IMAGE is set by deploy.sh}
     restart: unless-stopped
     environment:
       BMS_DNS_ZONE: ${BMS_DNS_ZONE:?}

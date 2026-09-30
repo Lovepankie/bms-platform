@@ -96,6 +96,22 @@ curl -s -X PUT "$CF/accounts/$ACCOUNT_ID/cfd_tunnel/$TUNNEL_ID/configurations" -
 cloudflared picks up the new configuration within seconds; nothing changes on the host. To remove
 a tenant host, delete the DNS record and run step 2 with a `map(select(.hostname != $host))` only.
 
+**Check the whole ingress before writing it (ADR-018 finding M6).** The `PUT` above replaces the
+entire configuration, so one bad edit can misroute every host, not just the new one. Before the
+final `curl -X PUT`, confirm:
+
+```bash
+# The catch-all (last) rule has no hostname and returns 404; every other rule points at the proxy.
+jq -e '.config.ingress[-1] | has("hostname") | not and (.service == "http_status:404")' tunnel-config.json
+jq -e '[.config.ingress[:-1][] | .service == "http://proxy:8080"] | all' tunnel-config.json
+```
+
+Both must print `true`. A rule pointing anywhere else (`postgres:5432`, `api:8081`, a raw IP) would
+expose the database or the actuator to the internet the moment the tunnel started routing it; the
+two networks in `compose.pi-staging.yml` (ADR-018) mean cloudflared could not reach either even if
+the ingress rule existed, but a correct ingress configuration is still the first control, not the
+second.
+
 **Production VM.** Add `A <slug>-bms` pointing at the VM (DNS only); the wildcard certificate
 already covers it (`docs/runbooks/provision-host.md` section 3).
 

@@ -79,7 +79,7 @@ platform host is `localhost`.
 | Token | Form | Lifetime | Transport |
 |---|---|---|---|
 | Access token | Signed JWT (asymmetric signature, `kid` header for rotation) | 15 minutes | `Authorization: Bearer <token>`; held in memory by the SPA, never in local storage |
-| Refresh token | 256-bit random, stored hashed (`auth_sessions.refresh_token_hash`) | Staff idle 12 hours, absolute 7 days; members idle 30 days, absolute 90 days | Cookie `bms_rt`, `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth` on the tenant host |
+| Refresh token | 256-bit random, stored hashed (`auth_sessions.refresh_token_hash`) | Staff idle 12 hours, absolute 7 days; members idle 30 days, absolute 90 days | Cookie `__Host-bms_rt`, `HttpOnly; Secure; SameSite=Strict; Path=/` on the tenant host |
 
 Access token claims: `sub` (user id), `tid` (tenant id; absent for platform operators), `knd`
 (`staff`, `member` or `platform`), `sid` (session id), `iat`, `exp`, `iss` (the request host),
@@ -88,8 +88,14 @@ factor the API hands out a 5 minute MFA token (`pur=mfa`, no `sid`) that is acce
 MFA endpoints. Permissions and branch scope are not in the token; they are loaded per request
 from the role assignments (the 60 second cache this section allows is not built yet).
 
-Platform operators use the same design with their own cookie, `bms_prt`, scoped to
-`/api/v1/platform/auth`, idle 2 hours and absolute 12 hours.
+Platform operators use the same design with their own cookie, `__Host-bms_prt`, idle 2 hours and
+absolute 12 hours. Both cookie names carry the `__Host-` prefix (ADR-018 finding M2, since staging,
+production and the company site now share the `rincoltech.com` zone): the browser accepts a
+`__Host-` cookie only with `Secure`, `Path=/` and no `Domain` attribute, so no sibling host on the
+zone can set one that reaches this origin's cookie jar. `Path=/` means the browser now attaches the
+cookie to every request to the host, not only its own auth path; each refresh and sign-out endpoint
+is still reached at its own dedicated route, which is the only scoping that ever mattered server
+side.
 
 ### 7.4.2 Per-request checks, in order
 
@@ -293,7 +299,7 @@ port (8081), which is never published outside the container network.
 | POST | `/auth/logout` | authenticated staff | Revokes the session family; clears the cookie |
 | GET | `/me` | authenticated staff | User, roles, permissions, `all_branches`, the branches to switch between, the default branch, MFA state and unused recovery codes. FR-BR-03 |
 
-The refresh token never appears in a response body: it is the `bms_rt` cookie of section 7.4.1.
+The refresh token never appears in a response body: it is the `__Host-bms_rt` cookie of section 7.4.1.
 
 ### 7.11.3 Platform (the platform host, `/platform`, platform users only)
 
@@ -301,7 +307,7 @@ The refresh token never appears in a response body: it is the `bms_rt` cookie of
 |---|---|---|---|
 | POST | `/platform/auth/setup` | public (setup token) | `{token, password}`: first password, with the token from `deploy/sql/create-platform-user.sql` |
 | POST | `/platform/auth/login`, `/platform/auth/mfa/verify`, `/platform/auth/mfa/enrol`, `/platform/auth/mfa/confirm` | public (mfa_token) | As the staff endpoints; TOTP is mandatory and enrolled at first sign-in |
-| POST | `/platform/auth/refresh` | refresh cookie `bms_prt` | |
+| POST | `/platform/auth/refresh` | refresh cookie `__Host-bms_prt` | |
 | POST | `/platform/auth/logout` | authenticated platform | |
 | GET | `/platform/me` | authenticated platform | |
 | GET | `/platform/plans` | `platform.tenants.read` | Limits only, no prices. FR-TEN-04 |

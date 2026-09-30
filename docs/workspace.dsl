@@ -186,7 +186,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 edge = infrastructureNode "Edge and tunnel" "Proxied CNAMEs bms-staging and <slug>-bms-staging.rincoltech.com to the tunnel; TLS with the free *.rincoltech.com edge certificate; one public hostname per host" "Cloudflare DNS and Tunnel"
             }
             github = deploymentNode "GitHub" "Build once per commit on main for amd64 and arm64; moves the staging pointer (ADR-006, ADR-018)" "GitHub Actions" {
-                registry = infrastructureNode "Container registry" "Public bms-platform-api, -web and -proxy images tagged sha-<short>, and the staging pointer tag" "GHCR"
+                registry = infrastructureNode "Container registry" "Private bms-platform-api, -web and -proxy images tagged sha-<short>, and the staging pointer tag; each signed by digest with cosign" "GHCR"
             }
             host = deploymentNode "Staging host" "Shared ARM64 host at a Rincol home site; no inbound port; BMS capped at 900 MB by bms.slice" "Raspberry Pi 4, Debian 13, linux/arm64" {
                 puller = infrastructureNode "Puller" "bms-pull.timer every two minutes: resolves the staging pointer to its sha tag and runs deploy.sh (ADR-018)" "systemd timer, pull-staging.sh"

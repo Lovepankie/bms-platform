@@ -77,6 +77,16 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - name: Assert the Docker daemon is rootless
+        # ADR-018 finding L9: --user 0:0 below is safe only because container uid 0 maps to the
+        # unprivileged runner user under rootless Docker. If this runner's daemon were ever the
+        # system one, the same flag would bind-mount the workspace as real root, so fail before any
+        # such step runs rather than trust that the host is still configured the way ADR-018 says.
+        run: |
+          if ! docker info --format '{{.SecurityOptions}}' | grep -q 'name=rootless'; then
+            echo "::error::the Docker daemon on this runner is not rootless; refusing to run --user 0:0 steps"
+            exit 1
+          fi
       - name: actionlint
         # --user 0:0: under the runner's rootless Docker, container root is the unprivileged runner
         # user on the host, the only identity that can read the workspace (ADR-018).
@@ -85,7 +95,9 @@ jobs:
         run: docker run --rm --user 0:0 -v "$PWD:/repo" -w /repo koalaman/shellcheck:v0.10.0 deploy/*.sh deploy/postgres/initdb/*.sh
       - name: Compose files parse
         env:
-          IMAGE_TAG: sha-0000000
+          API_IMAGE: ghcr.io/rincoltech-solutions-ltd/bms-platform-api:sha-0000000
+          WEB_IMAGE: ghcr.io/rincoltech-solutions-ltd/bms-platform-web:sha-0000000
+          PROXY_IMAGE: ghcr.io/rincoltech-solutions-ltd/bms-platform-proxy:sha-0000000
           POSTGRES_IMAGE: postgres:16.15-alpine
           POSTGRES_SUPERUSER_PASSWORD: ci-placeholder
           BMS_OWNER_PASSWORD: ci-placeholder

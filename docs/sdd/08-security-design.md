@@ -319,8 +319,10 @@ GitHub Actions deploy secrets live in the `staging` and `production` environment
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`,
   `Permissions-Policy` denying camera, microphone and geolocation except where a screen
   needs the camera for document capture.
-- The refresh cookie is `HttpOnly; Secure; SameSite=Strict` and scoped to the auth path,
-  which removes the cross-site request forgery route to it.
+- The refresh cookie is `HttpOnly; Secure; SameSite=Strict; Path=/`, named with the `__Host-`
+  prefix (ADR-018 finding M2), which removes the cross-site request forgery route to it and, since
+  staging, production and the company site share one zone, stops a sibling host on that zone from
+  setting a same-named cookie that would reach it.
 - Uploads: allowed types JPEG, PNG, PDF; maximum 5 MB; type detected from content, not
   the file name; images are re-encoded to strip metadata; files are stored in object
   storage, never on the application host's disk.

@@ -351,6 +351,34 @@ class PlatformIT extends IntegrationTest {
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    // JUSTIFICATION-A3: one regression test for ADR-018 finding M1, beside the test it extends;
+    // reuses the existing Api helper, no new mechanism.
+    /** ADR-018 finding M1: a forged X-Forwarded-Host changes neither the tenant nor the platform gate. */
+    @Test
+    void foreignXForwardedHostChangesNeitherTheTenantNorThePlatformGate() {
+        String slug =
+                create(slug(), List.of()).getBody().get("tenant").get("slug").asString();
+        String tenantHost = slug + "-bms-staging.rincoltech.test";
+
+        ResponseEntity<JsonNode> spoofedToPlatform = Api.platform(http)
+                .onHost(tenantHost)
+                .call(
+                        HttpMethod.GET,
+                        "/api/v1/platform/tenants",
+                        null,
+                        operator.accessToken(),
+                        Map.of("X-Forwarded-Host", "localhost"));
+        assertThat(spoofedToPlatform.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+        ResponseEntity<JsonNode> spoofedToTenant = platform.call(
+                HttpMethod.GET,
+                "/api/v1/platform/tenants",
+                null,
+                operator.accessToken(),
+                Map.of("X-Forwarded-Host", tenantHost));
+        assertThat(spoofedToTenant.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
     /** The job tenant list of FR-TEN-03, read the way a vertical's job reads it. */
     static final class JdbcCheck {
         static List<UUID> moduleTenants(String module) {

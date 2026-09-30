@@ -114,7 +114,9 @@ public final class Api {
     }
 
     private String cookieName() {
-        return tenantSlug == null ? "bms_prt" : "bms_rt";
+        // __Host- prefixed (ADR-018 finding M2): kept in sync with AuthApi.STAFF_COOKIE /
+        // AuthApi.PLATFORM_COOKIE, which this test-support class cannot reference directly.
+        return tenantSlug == null ? "__Host-bms_prt" : "__Host-bms_rt";
     }
 
     public ResponseEntity<JsonNode> login(String login, String password) {
@@ -182,7 +184,11 @@ public final class Api {
                 .filter(c -> c.startsWith(cookieName() + "="))
                 .findFirst()
                 .orElseThrow();
-        assertThat(cookie).contains("HttpOnly").contains("Secure").contains("SameSite=Strict");
+        assertThat(cookie)
+                .contains("HttpOnly")
+                .contains("Secure")
+                .contains("SameSite=Strict")
+                .contains("Path=/");
         return cookie.substring(cookie.indexOf('=') + 1, cookie.indexOf(';'));
     }
 

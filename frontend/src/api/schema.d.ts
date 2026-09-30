@@ -149,7 +149,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Rotate the refresh token in the bms_rt cookie (FR-IAM-07) */
+        /** Rotate the refresh token in the __Host-bms_rt cookie (FR-IAM-07) */
         post: operations["refreshSession"];
         delete?: never;
         options?: never;
@@ -1471,7 +1471,7 @@ export interface operations {
             header?: never;
             path?: never;
             cookie?: {
-                bms_rt?: string;
+                "__Host-bms_rt"?: string;
             };
         };
         requestBody?: never;
@@ -1957,7 +1957,7 @@ export interface operations {
             header?: never;
             path?: never;
             cookie?: {
-                bms_prt?: string;
+                "__Host-bms_prt"?: string;
             };
         };
         requestBody?: never;

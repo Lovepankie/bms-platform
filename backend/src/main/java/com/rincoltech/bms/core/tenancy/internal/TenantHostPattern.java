@@ -81,11 +81,20 @@ final class TenantHostPattern {
                 "bms.tenancy.tenant-host-pattern (BMS_TENANT_HOST_PATTERN) '" + raw + "' is invalid: " + why);
     }
 
+    /** True when characters 3 and 4 are both hyphens, the ACE prefix shape IDNA reserves (RFC 5890),
+     * of which {@code xn--} is the only one in use today; reserving the whole shape refuses any
+     * future one too, and any slug that would otherwise be a punycode A-label some browsers render
+     * as different Unicode (ADR-018 finding L4). */
+    private static boolean hasAcePrefixShape(String slug) {
+        return slug.length() > 3 && slug.charAt(2) == '-' && slug.charAt(3) == '-';
+    }
+
     /** FR-TEN-02 plus: the slug's host label stays within 63 characters under this pattern. */
     boolean isValidSlug(String slug) {
         return slug != null
                 && SLUG.matcher(slug).matches()
                 && !RESERVED_SLUGS.contains(slug)
+                && !hasAcePrefixShape(slug)
                 && slug.length() + labelRest <= 63;
     }
 

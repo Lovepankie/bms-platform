@@ -74,10 +74,16 @@ In the repository settings, Environments:
   `PROD_SSH_USER` if the user is not `deploy`; required reviewer Hillary Arinda; deployment
   branches and tags limited to `v*.*.*` tags.
 
-Packages: the three packages are made public (ADR-018), so the staging host pulls without a
-credential; if they must stay private, log the staging host's `bms` user in once
-(`docker login ghcr.io` with a token limited to `read:packages`). The production
-deploy still logs in with the workflow's own token, which also works for private packages.
+Packages: the three packages stay **private** (ADR-018 finding M5: the api image is the whole
+application jar, the web image the whole bundle, and the proxy image carries the deploy scripts and
+SQL, none of which a private repository should publish just to save one credential). The staging
+host's `bms` user logs in to GHCR once with a token scoped to `read:packages` only
+(section 8.1a); Docker stores it under `bms`'s `~/.docker/config.json` and the puller and
+`deploy.sh` reuse it for every pull and every cosign verification. The production deploy still logs
+in with the workflow's own short-lived token.
+
+Also add repository secrets `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD` (ADR-018 finding H2): see
+section 8.1a for how to generate them.
 
 ## 6. First deploy
 
@@ -123,6 +129,42 @@ usermod -aG docker bms
 install -d -o bms -g bms -m 750 /opt/bms /opt/bms/state
 ```
 
+### 8.1a Image signing and the registry token (ADR-018 findings H2, M5)
+
+Generate the cosign key pair once, on a machine that is not this repository's CI (the private key
+must never be committed or pasted into a chat session or a pull request):
+
+```bash
+cosign generate-key-pair
+# writes cosign.key (password protected) and cosign.pub in the current directory
+```
+
+Then:
+
+1. Commit the generated `cosign.pub` as `deploy/cosign.pub` in a pull request (it replaces the
+   placeholder that says, in the file itself, that it is not a real key and must fail closed).
+2. Add repository secrets `COSIGN_PRIVATE_KEY` (the full contents of `cosign.key`) and
+   `COSIGN_PASSWORD` (the password chosen above), so `deploy.yml`'s build job can sign every image
+   it pushes. Delete the local `cosign.key` once the secret is stored; keep the password in the
+   team's secret manager, not in this repository.
+3. Copy the same `cosign.pub` onto the staging host, outside any release (the puller must verify a
+   release's signature against a key that release cannot supply):
+
+   ```bash
+   scp deploy/cosign.pub bms@<staging-host>:/opt/bms/cosign.pub
+   ```
+
+   `pull-staging.sh` refuses every release until this file exists; it is never overwritten by the
+   puller. Rotating the key later is the same two steps, done by hand, never automated.
+
+Packages stay private (ADR-018 finding M5), so `bms` also logs in to GHCR once, with a token scoped
+to `read:packages` only (a classic PAT or a fine-grained token on this repository), which Docker
+remembers:
+
+```bash
+echo "$READ_PACKAGES_TOKEN" | sudo -u bms docker login ghcr.io --username <github-user> --password-stdin
+```
+
 ### 8.2 The tunnel
 
 In the Cloudflare dashboard, Zero Trust, Networks, Tunnels: create a tunnel named
@@ -166,14 +208,15 @@ host: nothing here issues a certificate.
 ### 8.4 First files and the systemd units
 
 The puller replaces the host files from each release's proxy image, but the first run needs the
-puller itself and the unit files. Take them from the current staging image (no checkout needed):
+puller itself and the unit files. Take them from the current staging image, as `bms` since the
+packages are private and only `bms`'s Docker config holds the `read:packages` login (section 8.1a):
 
 ```bash
 IMG=ghcr.io/rincoltech-solutions-ltd/bms-platform-proxy:staging
-docker pull "$IMG" && cid="$(docker create "$IMG")"
-docker cp "$cid:/usr/share/bms-deploy/pull-staging.sh" /opt/bms/pull-staging.sh
+sudo -u bms docker pull "$IMG" && cid="$(sudo -u bms docker create "$IMG")"
+sudo -u bms docker cp "$cid:/usr/share/bms-deploy/pull-staging.sh" /opt/bms/pull-staging.sh
 docker cp "$cid:/usr/share/bms-deploy/systemd/." /etc/systemd/system/
-docker rm "$cid"
+sudo -u bms docker rm "$cid"
 chown bms:bms /opt/bms/pull-staging.sh && chmod 755 /opt/bms/pull-staging.sh
 chmod 644 /etc/systemd/system/bms.slice /etc/systemd/system/bms-pull.service /etc/systemd/system/bms-pull.timer
 systemctl daemon-reload
@@ -181,8 +224,12 @@ systemctl start bms.slice && systemctl show bms.slice -p MemoryMax    # MemoryMa
 systemctl enable --now bms-pull.timer
 ```
 
+Confirm `/opt/bms/cosign.pub` exists (section 8.1a) before starting the timer: the puller refuses
+every release without it, by design.
+
 Later changes to the unit files arrive in `/opt/bms/systemd/` with each release; copy them into
-`/etc/systemd/system/` and `systemctl daemon-reload` when a release changes them.
+`/etc/systemd/system/` and `systemctl daemon-reload` when a release changes them (`bms-pull.service`
+now logs a notice when the shipped units differ from the installed ones, ADR-018 finding L2).
 
 ### 8.5 First deploy and checks
 

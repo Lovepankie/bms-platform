@@ -144,10 +144,13 @@ migration) with status only, no details.
   committed; never copied between environments. Compose passes each service only the variables
   it needs: the API gets the `bms_app` password and never the owner's; only the `migrate`
   container gets `bms_owner`.
-- In GitHub: environment secrets in `production` (chapter 10 section 10.9). The registry credential
-  used on the production host is the workflow's own short-lived token. The staging host holds no
-  GitHub credential at all, and no registry credential once the packages are public: it pulls
-  anonymously, and its host files come inside the release's proxy image (ADR-018).
+- In GitHub: environment secrets in `production` (chapter 10 section 10.9), plus repository secrets
+  `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD`, used only by `deploy.yml`'s build job to sign each
+  image it pushes (ADR-018 finding H2). The registry credential used on the production host is the
+  workflow's own short-lived token. The three GHCR packages stay private (ADR-018 finding M5): the
+  staging host holds no GitHub credential, but its `bms` user logs in to GHCR once with a token
+  scoped to `read:packages`, which Docker remembers for every pull. Its host files still come inside
+  the release's proxy image, never from GitHub directly.
 - Host names: `BMS_TENANT_HOST_PATTERN` and `BMS_PLATFORM_HOST` for the API and the web
   container; on the production VM also `BMS_DNS_ZONE` and `BMS_CALLBACK_HOST` for the proxy; on
   the staging host `CLOUDFLARE_TUNNEL_TOKEN` and `CLOUDFLARED_IMAGE` for cloudflared.
@@ -192,19 +195,26 @@ profile.
 
 ```
 /opt/bms/
-  compose.yml            copied from deploy/ on every deploy (staging: compose.pi-staging.yml, from the release image)
-  deploy.sh, backup.sh   copied from deploy/ on every deploy
-  pull-staging.sh        staging only: the puller, replaced from deploy/ on every deploy
+  compose.yml            production: copied from deploy/ on every deploy. Staging: refreshed from
+                          releases/<tag>/ only after deploy.sh succeeds (ADR-018 finding M3)
+  deploy.sh, backup.sh   as above
+  pull-staging.sh        staging only: the puller; also refreshed only after a successful deploy
+  releases/<tag>/        staging only: each release's host files, staged before deploy.sh runs;
+                          the previous one to two releases are kept for inspection and rollback
+  current                staging only: symlink to the live releases/<tag>/, updated only on success
+  cosign.pub             the signing public key (ADR-018 finding H2): committed at deploy/cosign.pub,
+                          provisioned once by hand, never replaced by a release
   systemd/               staging only: the unit files, for reference; installed by hand
   postgres/initdb/       copied from deploy/ on every deploy
   sql/                   onboarding scripts (docs/runbooks/onboard-tenant.md)
   .env                   written once by hand (docs/runbooks/provision-host.md); mode 600
-  state/current_tag      the live release
+  state/current_tag, current_created   the live release and when it was built (for the downgrade guard)
   state/history.log      every deploy, rollback and failure with its time
   state/last_backup_ok   time of the last good backup
   state/deploy.lock      one deploy at a time
   state/last_failed_tag  staging only: a release the puller will not retry
   state/pull.lock        staging only: one puller run at a time
+  state/allow_downgrade  staging only: presence lets deploy.sh accept a release built before the live one
   backups/               transient; each encrypted dump is deleted after upload
 ```
 
@@ -233,7 +243,13 @@ Staging runs on an ARM64 host that already exists at a Rincol home site: a Raspb
   publishes nothing. cloudflared dials out to Cloudflare with the connector token
   `CLOUDFLARE_TUNNEL_TOKEN` and forwards each public hostname to `http://proxy:8080`, keeping the
   original `Host`, which the API resolves the tenant from. TLS ends at Cloudflare; no certificate
-  or DNS token lives on the host. Caddy trusts `Cf-Connecting-Ip` from the private network only.
+  or DNS token lives on the host. Caddy trusts `Cf-Connecting-Ip` from the private network only, and
+  overwrites `X-Forwarded-Host` from that same resolved `Host` in both its proxy blocks (ADR-018
+  finding M1): the API's Tomcat is also configured to ignore any `X-Forwarded-Host`, so a request's
+  tenant and platform resolution can only ever come from `Host`.
+- **Two networks.** `edge` (cloudflared, proxy) and `internal` (proxy, api, web, postgres, migrate):
+  cloudflared can reach only `proxy:8080`, never PostgreSQL or the API's management port, whatever a
+  tunnel ingress rule or an onboarding token change gets wrong (ADR-018 finding M6).
 - **Public hostnames.** The tunnel carries `bms-staging.rincoltech.com` and one entry per tenant,
   `<slug>-bms-staging.rincoltech.com`, each with a proxied CNAME to `<tunnel id>.cfargotunnel.com`
   (`docs/runbooks/onboard-tenant.md`).
@@ -241,7 +257,7 @@ Staging runs on an ARM64 host that already exists at a Rincol home site: a Raspb
 
   | Container | Limit | Notes |
   |---|---|---|
-  | `api` | 448 MB | Serial GC, C1 only (`TieredStopAtLevel=1`), heap at most 50 percent, metaspace 160 MB, code cache 48 MB, 512 KB stacks, 24 Tomcat threads, pool of 5. Measured at about 235 MB after start. |
+  | `api` | 448 MB | Serial GC, C1 only (`TieredStopAtLevel=1`), heap at most 50 percent, metaspace 128 MB (ADR-018 finding L6: was 160 MB, leaving too little headroom), code cache 48 MB, 512 KB stacks, 24 Tomcat threads, pool of 5. Measured at about 235 MB after start. |
   | `postgres` | 176 MB | `shared_buffers=48MB`, `effective_cache_size=128MB`, `work_mem=2MB`, `max_connections=20`, longer checkpoints to spare the SD card. |
   | `cloudflared` | 48 MB | |
   | `proxy`, `web` | 32 MB each | Caddy |
