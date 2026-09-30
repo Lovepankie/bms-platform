@@ -1,0 +1,199 @@
+# Staging stack for the shared ARM64 home host (ADR-018, docs/sdd/09-infrastructure-design.md
+# section 9.13). The puller (pull-staging.sh) installs this file on the host as
+# /opt/bms/compose.yml next to /opt/bms/.env, so deploy.sh, backup.sh and every runbook command
+# work unchanged. Every image is multi-arch and pinned: the application images are named by
+# API_IMAGE, WEB_IMAGE and PROXY_IMAGE, set by deploy.sh after it verifies each image's cosign
+# signature against the committed deploy/cosign.pub and resolves it to its digest
+# (image@sha256:..., ADR-018 finding H2), so the bytes verified are the bytes run. The others use
+# the pinned values in .env. Nothing is built here.
+#
+# No service publishes a port. The only way in is the Cloudflare Tunnel: cloudflared dials out to
+# Cloudflare, which terminates TLS for *.rincoltech.com, and delivers plain HTTP to one internal
+# origin, the proxy service (Caddyfile.tunnel), which serves the PWA and proxies /api to the API.
+#
+# Two internal networks (ADR-018 finding M6): cloudflared reaches only the proxy, never postgres or
+# the api's management port, so a wrong tunnel ingress rule or a leaked onboarding token cannot
+# expose the database or the actuator directly.
+#
+# Memory budget: about 900 MB for all of BMS staging on a host it shares with other workloads.
+# Every container runs under the systemd slice bms.slice (deploy/systemd/bms.slice), whose
+# MemoryMax=900M is the hard cap for the whole stack, including the one-shot migrate container.
+# The per-container limits below add up to 736 MB steady, 896 MB while a migration runs:
+#
+#   postgres 176  api 448  web 32  proxy 32  cloudflared 48  (migrate 160, only during a deploy)
+
+name: bms
+
+x-app-image: &api-image ${API_IMAGE:?API_IMAGE is set by deploy.sh}
+
+networks:
+  edge:
+  internal:
+
+x-capped: &capped
+  restart: unless-stopped
+  cgroup_parent: bms.slice
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    # The host's storage is an SD card: keep container logs small.
+    driver: local
+    options:
+      max-size: 5m
+      max-file: "2"
+
+services:
+  postgres:
+    <<: *capped
+    image: ${POSTGRES_IMAGE:?pin it in .env}
+    networks: [internal]
+    # No cap_drop here: the official image's entrypoint starts as root to chown and initialise the
+    # data volume before it drops to the postgres user, so it still needs the default capability set
+    # (ADR-018 finding L3 lists api, web, proxy and cloudflared, not postgres, for this reason).
+    environment:
+      POSTGRES_DB: bms
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?}
+      BMS_OWNER_PASSWORD: ${BMS_OWNER_PASSWORD:?}
+      BMS_APP_PASSWORD: ${BMS_APP_PASSWORD:?}
+    # Sized for fabricated staging data inside 176 MB; fewer writes to the SD card.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=48MB
+      - -c
+      - effective_cache_size=128MB
+      - -c
+      - work_mem=2MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - max_connections=20
+      - -c
+      - wal_buffers=4MB
+      - -c
+      - checkpoint_timeout=15min
+      - -c
+      - max_wal_size=256MB
+    mem_limit: 176m
+    cpus: 1.0
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bms"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  # One-shot: `docker compose run --rm migrate`, run by deploy.sh before the app switches.
+  migrate:
+    image: *api-image
+    profiles: ["migrate"]
+    command: ["migrate"]
+    restart: "no"
+    cgroup_parent: bms.slice
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    networks: [internal]
+    environment:
+      BMS_DB_URL: jdbc:postgresql://postgres:5432/bms
+      BMS_OWNER_USER: bms_owner
+      BMS_OWNER_PASSWORD: ${BMS_OWNER_PASSWORD:?}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError
+    mem_limit: 160m
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *capped
+    image: *api-image
+    networks: [internal]
+    cap_drop: [ALL]
+    environment:
+      SPRING_PROFILES_ACTIVE: server
+      BMS_DB_URL: jdbc:postgresql://postgres:5432/bms
+      BMS_APP_USER: bms_app
+      BMS_APP_PASSWORD: ${BMS_APP_PASSWORD:?}
+      BMS_DB_POOL_SIZE: ${BMS_DB_POOL_SIZE:-5}
+      BMS_TENANT_HOST_PATTERN: ${BMS_TENANT_HOST_PATTERN:?}
+      BMS_PLATFORM_HOST: ${BMS_PLATFORM_HOST:?}
+      BMS_SCHEDULER_ENABLED: ${BMS_SCHEDULER_ENABLED:-true}
+      BMS_OPENAPI_ENABLED: ${BMS_OPENAPI_ENABLED:-true}
+      BMS_TOKEN_SIGNING_JWK: ${BMS_TOKEN_SIGNING_JWK:?}
+      BMS_DATA_KEY: ${BMS_DATA_KEY:?}
+      BMS_DATA_KEY_ID: ${BMS_DATA_KEY_ID:-k1}
+      # A small JVM for a 448 MB container: serial GC, C1 only (less memory and CPU on a Pi, slower
+      # peak throughput, which staging does not need), a capped code cache and few request threads.
+      # Metaspace is 128m rather than 160m (ADR-018 finding L6): heap (224m) + metaspace (128m) +
+      # code cache (48m) is 400m, leaving about 48m of headroom for thread stacks, GC structures,
+      # direct buffers and the JDBC driver before the 448m container limit.
+      JAVA_TOOL_OPTIONS: >-
+        -XX:MaxRAMPercentage=50 -XX:InitialRAMPercentage=20 -XX:MaxMetaspaceSize=128m
+        -XX:ReservedCodeCacheSize=48m -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xss512k
+        -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/urandom
+      SERVER_TOMCAT_THREADS_MAX: "24"
+    mem_limit: 448m
+    cpus: 2.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf ''GET /readyz HTTP/1.0\r\nHost: localhost\r\n\r\n'' >&3 && head -n1 <&3 | grep -q '' 200 '''
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      # The JVM starts in about a minute on a Pi 4.
+      start_period: 180s
+
+  web:
+    <<: *capped
+    image: ${WEB_IMAGE:?WEB_IMAGE is set by deploy.sh}
+    networks: [internal]
+    cap_drop: [ALL]
+    read_only: true
+    environment:
+      BMS_TENANT_HOST_PATTERN: ${BMS_TENANT_HOST_PATTERN:?}
+      BMS_PLATFORM_HOST: ${BMS_PLATFORM_HOST:?}
+    mem_limit: 32m
+    cpus: 0.5
+
+  # The one internal origin of the tunnel: the proxy image with its tunnel configuration. On both
+  # networks, since it is the only service the edge network's cloudflared may reach (ADR-018 M6).
+  proxy:
+    <<: *capped
+    image: ${PROXY_IMAGE:?PROXY_IMAGE is set by deploy.sh}
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile.tunnel", "--adapter", "caddyfile"]
+    networks: [edge, internal]
+    user: "10001:10001"
+    cap_drop: [ALL]
+    read_only: true
+    mem_limit: 32m
+    cpus: 0.5
+    depends_on:
+      - api
+      - web
+
+  cloudflared:
+    <<: *capped
+    image: ${CLOUDFLARED_IMAGE:?pin it in .env}
+    command: ["tunnel", "--no-autoupdate", "run"]
+    networks: [edge]
+    cap_drop: [ALL]
+    environment:
+      # The tunnel's connector token (Cloudflare Zero Trust, Networks, Tunnels). Its public
+      # hostnames point at http://proxy:8080 (docs/runbooks/provision-host.md section 8).
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?}
+    mem_limit: 48m
+    cpus: 0.5
+    depends_on:
+      - proxy
+
+volumes:
+  pgdata:

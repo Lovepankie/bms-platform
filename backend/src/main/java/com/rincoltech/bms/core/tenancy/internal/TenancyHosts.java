@@ -7,27 +7,26 @@ import org.springframework.stereotype.Component;
 class TenancyHosts implements PlatformHost {
 
     private final TenancyProperties properties;
-    private final TenantResolutionFilter hostRules;
+    private final TenantHostPattern tenantHosts;
 
     TenancyHosts(TenancyProperties properties) {
         this.properties = properties;
-        this.hostRules = new TenantResolutionFilter(properties, null, null);
+        this.tenantHosts = properties.hostPattern();
     }
 
     @Override
     public boolean servesPlatform(String host) {
-        return hostRules.slugFromHost(host).isEmpty();
+        return host != null && host.equalsIgnoreCase(properties.platformHost());
     }
 
     @Override
     public boolean isValidSlug(String slug) {
-        return slug != null
-                && TenantResolutionFilter.SLUG.matcher(slug).matches()
-                && !TenancyProperties.RESERVED_LABELS.contains(slug);
+        return tenantHosts.isValidSlug(slug);
     }
 
     @Override
     public String tenantOrigin(String slug) {
-        return properties.linkOrigin().replace("{slug}", slug);
+        Integer port = properties.linkPort();
+        return properties.linkScheme() + "://" + tenantHosts.hostFor(slug) + (port == null ? "" : ":" + port);
     }
 }

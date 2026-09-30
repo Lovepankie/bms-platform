@@ -1,12 +1,16 @@
-# Edge proxy for staging and production (docs/sdd/09-infrastructure-design.md section 9.5).
+# Edge proxy for the production VM (docs/sdd/09-infrastructure-design.md section 9.5). The ARM64
+# staging host does not use this file: it sits behind a Cloudflare Tunnel and runs
+# Caddyfile.tunnel from the same image (ADR-018).
 #
-# One wildcard certificate covers every tenant host (<slug>.<base>), the platform host
-# (app.<base>) and the callback host (api.<base>). Wildcards require the ACME DNS-01 challenge:
-# Caddy creates a TXT record through the Cloudflare API with CLOUDFLARE_API_TOKEN, a token scoped
-# to Zone.DNS:Edit on the base domain's zone only. The DNS zone needs:
-#   A   <base>     -> host IPv4        (and AAAA for IPv6 if used)
-#   A   *.<base>   -> host IPv4
-# Environment: BMS_BASE_DOMAIN, ACME_EMAIL, CLOUDFLARE_API_TOKEN (from the host .env).
+# Hosts are single labels under one zone (ADR-018): the platform console BMS_PLATFORM_HOST (for
+# example bms.rincoltech.com), tenants on BMS_TENANT_HOST_PATTERN (for example
+# {slug}-bms.rincoltech.com) and provider callbacks on BMS_CALLBACK_HOST. One wildcard certificate,
+# *.<BMS_DNS_ZONE>, covers them all. Wildcards require the ACME DNS-01 challenge: Caddy creates a
+# TXT record through the Cloudflare API with CLOUDFLARE_API_TOKEN, a token scoped to Zone.DNS:Edit
+# on that zone only. Each BMS host gets its own DNS record pointing at the VM; the zone apex and
+# the zone's other names are not served here. Unknown hosts reach the API and the PWA, which
+# answer 404 unknown_tenant and an "unknown address" page.
+# Environment: BMS_DNS_ZONE, BMS_CALLBACK_HOST, ACME_EMAIL, CLOUDFLARE_API_TOKEN (from the host .env).
 {
 	email {$ACME_EMAIL}
 	admin off
@@ -34,12 +38,7 @@
 	}
 }
 
-{$BMS_BASE_DOMAIN} {
-	import wildcard_tls
-	redir https://app.{$BMS_BASE_DOMAIN}{uri} permanent
-}
-
-*.{$BMS_BASE_DOMAIN} {
+*.{$BMS_DNS_ZONE} {
 	import wildcard_tls
 	import security_headers
 	encode zstd gzip
@@ -49,8 +48,8 @@
 		max_size 6MB
 	}
 
-	# api.<base> carries provider callbacks only (chapter 7 section 7.2).
-	@callbackHost host api.{$BMS_BASE_DOMAIN}
+	# The callback host carries provider callbacks only (chapter 7 section 7.2).
+	@callbackHost host {$BMS_CALLBACK_HOST}
 	handle @callbackHost {
 		@callbacks path /api/v1/payments/callbacks/* /api/v1/channels/*
 		handle @callbacks {

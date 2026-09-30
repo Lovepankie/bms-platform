@@ -1616,7 +1616,7 @@
         "operationId" : "refreshSession",
         "parameters" : [ {
           "in" : "cookie",
-          "name" : "bms_rt",
+          "name" : "__Host-bms_rt",
           "required" : false,
           "schema" : {
             "type" : "string"
@@ -1634,7 +1634,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Rotate the refresh token in the bms_rt cookie (FR-IAM-07)",
+        "summary" : "Rotate the refresh token in the __Host-bms_rt cookie (FR-IAM-07)",
         "tags" : [ "auth" ]
       }
     },
@@ -2219,7 +2219,7 @@
         "operationId" : "platformRefresh",
         "parameters" : [ {
           "in" : "cookie",
-          "name" : "bms_prt",
+          "name" : "__Host-bms_prt",
           "required" : false,
           "schema" : {
             "type" : "string"

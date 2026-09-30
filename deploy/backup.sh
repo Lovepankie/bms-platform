@@ -24,7 +24,12 @@ set +a
 : "${R2_SECRET_ACCESS_KEY:?}" "${R2_BACKUP_BUCKET:?}" "${RCLONE_IMAGE:?}"
 
 IMAGE_TAG="$(cat state/current_tag)"
-export IMAGE_TAG
+# compose.yml names its application images by API_IMAGE, WEB_IMAGE and PROXY_IMAGE (ADR-018
+# finding H2). This backup only execs into the already-running postgres, so it does not need a
+# freshly verified digest; deploy.sh is what resolves and verifies them before anything switches.
+export API_IMAGE="ghcr.io/rincoltech-solutions-ltd/bms-platform-api:${IMAGE_TAG}"
+export WEB_IMAGE="ghcr.io/rincoltech-solutions-ltd/bms-platform-web:${IMAGE_TAG}"
+export PROXY_IMAGE="ghcr.io/rincoltech-solutions-ltd/bms-platform-proxy:${IMAGE_TAG}"
 COMPOSE=(docker compose --project-name bms --file compose.yml)
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 NAME="bms-${BMS_ENVIRONMENT}-${STAMP}.dump.enc"
@@ -38,8 +43,18 @@ log "dumping and encrypting to backups/${NAME}"
     | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_ENCRYPTION_KEY \
     > "backups/${NAME}"
 
+# ADR-018 finding L5: bms.slice is the hard memory cap for the whole staging stack; this run was
+# outside it, so a large upload could take memory from the containers the slice is meant to
+# protect. --memory 64m is well over rclone's normal footprint for one backup file. Production has
+# no such slice (dedicated VM), so this applies only on staging.
+RCLONE_CGROUP_ARGS=()
+if [[ "$BMS_ENVIRONMENT" == "staging" ]]; then
+    RCLONE_CGROUP_ARGS=(--cgroup-parent bms.slice --memory 64m)
+fi
+
 rclone() {
     docker run --rm \
+        "${RCLONE_CGROUP_ARGS[@]}" \
         --volume "$PWD/backups:/backups:ro" \
         --env RCLONE_CONFIG_R2_TYPE=s3 \
         --env RCLONE_CONFIG_R2_PROVIDER=Cloudflare \

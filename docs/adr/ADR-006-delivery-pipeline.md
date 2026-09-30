@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted (2026-09-29)
+Accepted (2026-09-29). Superseded in part by ADR-018 (2026-09-29): staging runs on a shared ARM64
+host behind a Cloudflare Tunnel and pulls its releases from a `staging` pointer tag instead of
+being deployed over SSH, and images are built for `linux/amd64` and `linux/arm64`. The production
+path below is unchanged.
 
 ## Context
 

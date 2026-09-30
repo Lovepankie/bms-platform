@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted (2026-09-29)
+Accepted (2026-09-29). Host names refined by ADR-018 (2026-09-29): tenant and platform hosts are
+single labels under the `rincoltech.com` zone, configured at run time, not `<slug>.<base domain>`
+and `app.<base domain>`.
 
 ## Context
 

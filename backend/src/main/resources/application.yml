@@ -36,6 +36,14 @@ server:
   port: 8080
   shutdown: graceful
   forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      # ADR-018 finding M1: the native strategy installs Tomcat's RemoteIpValve, whose host-header
+      # defaults to X-Forwarded-Host and is trusted from the private Docker network the tunnel's
+      # Caddy runs on. Tenant and platform host resolution must read only Host, so this names a
+      # header nothing ever sends: getServerName() can no longer be overridden by a client-supplied
+      # X-Forwarded-Host, on staging or anywhere else.
+      host-header: x-bms-unused-forwarded-host
   error:
     whitelabel:
       enabled: false
@@ -90,11 +98,13 @@ springdoc:
 bms:
   git-sha: ${BMS_GIT_SHA:}
   tenancy:
-    base-domain: ${BMS_BASE_DOMAIN:localhost}
+    # Chapter 7 section 7.2. Required outside the dev and test profiles; startup fails on a missing
+    # or invalid value. Tenant hosts are one label under the zone, for example
+    # {slug}-bms-staging.rincoltech.com; the platform console has its own host.
+    tenant-host-pattern: ${BMS_TENANT_HOST_PATTERN:}
+    platform-host: ${BMS_PLATFORM_HOST:}
     # Only the dev and test profiles may set this; startup fails otherwise (chapter 7 section 7.2).
     allow-tenant-header: ${ALLOW_TENANT_HEADER:false}
-    # Origin of one-time links sent to users; defaults to https://{slug}.<base domain>.
-    link-origin: ${BMS_LINK_ORIGIN:}
   auth:
     # Signed-in sessions (bearer access tokens) work in every mode (ADR-014).
     # none: nothing else. dev: also the header stub of chapter 7 section 7.4.3; dev and test only.

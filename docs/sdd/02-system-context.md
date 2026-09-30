@@ -23,7 +23,7 @@ diagram of this chapter.
 
 | Actor | Description | Channel |
 |---|---|---|
-| Platform operator | Runs the platform: creates tenants, manages plans and subscriptions, monitors, supports. Holds the super admin role. | Platform console on `app.<base domain>` |
+| Platform operator | Runs the platform: creates tenants, manages plans and subscriptions, monitors, supports. Holds the super admin role. | Platform console on the platform host (`bms.rincoltech.com`) |
 | Tenant admin | Owner or general manager of a tenant. Configures the tenant, users, products, settings. | Staff area |
 | Branch manager | Approves loans and checker actions for their branches, supervises collections. | Staff area |
 | Loan officer | Registers members, captures applications, appraises, follows up arrears in the field. | Staff area, often on an Android phone |
@@ -49,12 +49,15 @@ Full permissions per role are in chapter 8.
 
 ## 2.4 Tenancy model at the boundary
 
-- Each tenant is reached at `<slug>.<base domain>`. A branch is not a URL; staff switch
-  branch inside the app (FR-BR-03).
-- The platform console is on `app.<base domain>`; gateway and aggregator callbacks arrive
-  on `api.<base domain>`.
-- The product's own domain is not yet registered; configuration calls it the base domain,
-  and documents use the reserved `.invalid` suffix in examples.
+- Each tenant is reached at its own host, one label under the Rincol zone:
+  `<slug>-bms.rincoltech.com` in production, `<slug>-bms-staging.rincoltech.com` on staging
+  (chapter 7 section 7.2, ADR-018). A branch is not a URL; staff switch branch inside the app
+  (FR-BR-03).
+- The platform console is on `bms.rincoltech.com` (staging `bms-staging.rincoltech.com`); gateway
+  and aggregator callbacks arrive on `bms-callbacks.rincoltech.com`.
+- BMS is a Rincol product served under the company's `rincoltech.com` zone; there is no separate
+  product domain (ADR-018). The host names are configuration (`BMS_TENANT_HOST_PATTERN`,
+  `BMS_PLATFORM_HOST`).
 
 ## 2.5 Constraints
 

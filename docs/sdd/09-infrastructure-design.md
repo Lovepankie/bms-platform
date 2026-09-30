@@ -15,25 +15,26 @@ puts releases on these hosts is chapter 10 and ADR-006. The step-by-step procedu
 |---|---|---|---|
 | Local | A developer's machine, `docker-compose.yml` at the repository root (`make dev`) | The developer | Fabricated; the `demo` tenant from `make seed` |
 | CI | GitHub-hosted Ubuntu runners; PostgreSQL 16 in Testcontainers | Every pull request and push to `main` | Fabricated, per test |
-| Staging | One cloud VM (Hetzner Cloud, Ubuntu LTS), `/opt/bms` | Every merge to `main`, automatically | Fabricated tenants only (chapter 15 section 15.8) |
+| Staging | A shared ARM64 host at a Rincol home site (Raspberry Pi 4, Debian 13), `/opt/bms`, behind a Cloudflare Tunnel (section 9.13, ADR-018) | Every green build of `main`: the host pulls the `staging` pointer | Fabricated tenants only (chapter 15 section 15.8) |
 | Production | One cloud VM (Hetzner Cloud, Ubuntu LTS), `/opt/bms` | A `vX.Y.Z` tag, after the dev lead approves | Real tenants |
 
-Staging and production are separate VMs with separate databases, separate `.env` files,
-separate R2 prefixes and separate GitHub Environments. Nothing is shared between them. Neither
-host is provisioned yet; until they are, deploy jobs skip with a notice (ADR-006).
+Staging and production are separate hosts with separate databases, separate `.env` files,
+separate R2 prefixes and separate host names. Nothing is shared between them. Sections 9.3 to 9.5
+describe the production VM (ADR-006), which is not provisioned yet; until it is, its deploy job
+skips with a notice. Staging differs as section 9.13 describes (ADR-018).
 
-## 9.3 Topology of one environment
+## 9.3 Topology of the production VM
 
 ```
                  Internet (HTTPS 443, HTTP 80 redirects)
                                   |
-            DNS: <base> and *.<base>  ->  VM public IPv4 (Cloudflare DNS, not proxied)
+     DNS: bms, bms-callbacks, <slug>-bms (.rincoltech.com)  ->  VM public IPv4 (not proxied)
                                   |
 +--------------------------------- VM (Docker Compose project "bms") -----------------------+
 |                                                                                            |
 |  proxy (Caddy + Cloudflare DNS module)  :80 :443   wildcard TLS, security headers          |
 |     |  /api/*, /healthz, /readyz, /version  ->  api:8080                                   |
-|     |  api.<base>: provider callbacks only  ->  api:8080                                   |
+|     |  callback host: provider callbacks only -> api:8080                                  |
 |     |  everything else                      ->  web:8080                                   |
 |     v                                                                                      |
 |  api (Spring Boot, bms_app)  :8080 app, :8081 management (never published)                 |
@@ -52,7 +53,7 @@ host is provisioned yet; until they are, deploy jobs skip with a notice (ADR-006
 Only the proxy publishes ports. The API, web and database are reachable only on the Compose
 network. There is no Redis (ADR-008).
 
-## 9.4 Sizing: a 4 GB VM
+## 9.4 Sizing: a 4 GB VM (production)
 
 The starting size is a 2 vCPU, 4 GB, 40 GB disk VM per environment (for example Hetzner
 CX22). Memory is budgeted with container limits so one runaway process cannot starve the rest:
@@ -72,30 +73,30 @@ larger limits, not a second host.
 
 ## 9.5 Edge proxy, DNS and TLS
 
-**Why a custom proxy image.** Every tenant is a subdomain (`<slug>.<base>`), plus `app.<base>`
-for the platform console and `api.<base>` for provider callbacks (chapter 7 section 7.2). One
-wildcard certificate for `*.<base>` covers them all, including tenants created later, with no
-per-tenant certificate step. Let's Encrypt issues wildcard certificates only through the
-**ACME DNS-01 challenge**: Caddy must create a `_acme-challenge` TXT record in the base domain's
-DNS zone. The stock Caddy image has no DNS provider modules, so `deploy/caddy/Dockerfile` builds
-Caddy with exactly one, `caddy-dns/cloudflare`, and bakes in `deploy/caddy/Caddyfile`. The image
-is built and tagged with the api and web images, so a release pins all three.
+**Host names** (ADR-018, chapter 7 section 7.2). Every BMS host is one label under the Rincol zone,
+`rincoltech.com`: the platform console `bms.rincoltech.com`, tenants `<slug>-bms.rincoltech.com`,
+provider callbacks `bms-callbacks.rincoltech.com`; staging uses `bms-staging`,
+`<slug>-bms-staging` and `bms-staging-callbacks`. One label deep means one wildcard certificate,
+`*.rincoltech.com`, covers them all, including tenants created later, with no per-tenant
+certificate step. The API and the PWA read the pattern and the platform host from
+`BMS_TENANT_HOST_PATTERN` and `BMS_PLATFORM_HOST`.
 
-**DNS records** (Cloudflare zone of the base domain; records DNS only, not proxied, so Caddy
-terminates TLS itself):
+**Why a custom proxy image (production VM).** Let's Encrypt issues wildcard certificates only
+through the **ACME DNS-01 challenge**: Caddy must create a `_acme-challenge` TXT record in the
+zone. The stock Caddy image has no DNS provider modules, so `deploy/caddy/Dockerfile` builds
+Caddy with exactly one, `caddy-dns/cloudflare`, and bakes in `deploy/caddy/Caddyfile`, whose one
+site is `*.<BMS_DNS_ZONE>`. The image is built and tagged with the api and web images, so a
+release pins all three. It also carries `Caddyfile.tunnel`, the staging host's internal origin
+(section 9.13).
 
-| Record | Value |
-|---|---|
-| `A <base>` | VM IPv4 (the apex redirects to `app.<base>`) |
-| `A *.<base>` | VM IPv4 |
-| `AAAA` for both | VM IPv6, if used |
+**DNS records on the production path** (Cloudflare zone `rincoltech.com`; records DNS only, not
+proxied, so Caddy terminates TLS itself): an `A` (and `AAAA` if used) record for
+`bms`, `bms-callbacks` and each `<slug>-bms` pointing at the VM. The zone apex and the company's
+other names are not served by BMS. Staging's records are proxied CNAMEs to its tunnel instead
+(section 9.13).
 
-Staging uses its own base domain (for example `staging.<product domain>`, with
-`*.staging.<product domain>`), so staging and production certificates, cookies and hosts never
-overlap.
-
-**Token.** `CLOUDFLARE_API_TOKEN` is a Cloudflare API token scoped to `Zone.DNS:Edit` on the base
-domain's zone only, stored in the host `.env`. It cannot read or change anything else.
+**Token.** `CLOUDFLARE_API_TOKEN` is a Cloudflare API token scoped to `Zone.DNS:Edit` on the zone
+only, stored in the production host's `.env` only. It cannot read or change anything else.
 
 **Routing and headers** (`deploy/caddy/Caddyfile`): HSTS for one year, `nosniff`,
 `Referrer-Policy: same-origin`, a restrictive `Permissions-Policy`, and a Content Security
@@ -107,8 +108,13 @@ are capped at 6 MB (5 MB uploads plus framing). HTTP/3 is enabled on UDP 443.
 | Image | Built from | Runs as | Health |
 |---|---|---|---|
 | `bms-platform-api` | `backend/Dockerfile`: Maven build on `maven:3.9-eclipse-temurin-25`, layered jar on `eclipse-temurin:25-jre` | uid 10001 | `/readyz` over bash `/dev/tcp` (the JRE image has no curl) |
-| `bms-platform-web` | `frontend/Dockerfile`: `npm ci && npm run build` on `node:22-alpine`, served by `caddy:2.11-alpine` | uid 10001 | `deploy.sh` fetches `/` through the proxy |
-| `bms-platform-proxy` | `deploy/caddy/Dockerfile` | root (binds 80 and 443) | container running |
+| `bms-platform-web` | `frontend/Dockerfile`: `npm ci && npm run build` on `node:22-alpine`, served by `caddy:2.11-alpine`; also serves `/app-config.json` from `BMS_TENANT_HOST_PATTERN` and `BMS_PLATFORM_HOST` | uid 10001 | `deploy.sh` fetches `/` through the proxy |
+| `bms-platform-proxy` | `deploy/caddy/Dockerfile` with the `deploy/` context: Caddy with the Cloudflare DNS module, `Caddyfile` (production edge) and `Caddyfile.tunnel` (staging origin), plus the release's host files in `/usr/share/bms-deploy` for the staging puller | root (binds 80 and 443 on the VM) | container running |
+
+Every image is a manifest list for `linux/amd64` and `linux/arm64` (ADR-018). Compilation runs
+once, natively, in a stage pinned to the build machine's platform (a jar and a JavaScript bundle
+are the same on every architecture; Caddy is cross-compiled by Go); the per-target runtime stages
+contain no `RUN` step, so nothing executes under emulation.
 | PostgreSQL | `postgres:16.x-alpine`, pinned in the host `.env` (`POSTGRES_IMAGE`) | postgres | `pg_isready` |
 
 The API image carries two commands: the default starts the application; `migrate` applies the
@@ -138,8 +144,16 @@ migration) with status only, no details.
   committed; never copied between environments. Compose passes each service only the variables
   it needs: the API gets the `bms_app` password and never the owner's; only the `migrate`
   container gets `bms_owner`.
-- In GitHub: environment secrets in `staging` and `production` (chapter 10 section 10.9). The
-  registry credential used on the host is the workflow's own short-lived token.
+- In GitHub: environment secrets in `production` (chapter 10 section 10.9), plus repository secrets
+  `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD`, used only by `deploy.yml`'s build job to sign each
+  image it pushes (ADR-018 finding H2). The registry credential used on the production host is the
+  workflow's own short-lived token. The three GHCR packages stay private (ADR-018 finding M5): the
+  staging host holds no GitHub credential, but its `bms` user logs in to GHCR once with a token
+  scoped to `read:packages`, which Docker remembers for every pull. Its host files still come inside
+  the release's proxy image, never from GitHub directly.
+- Host names: `BMS_TENANT_HOST_PATTERN` and `BMS_PLATFORM_HOST` for the API and the web
+  container; on the production VM also `BMS_DNS_ZONE` and `BMS_CALLBACK_HOST` for the proxy; on
+  the staging host `CLOUDFLARE_TUNNEL_TOKEN` and `CLOUDFLARED_IMAGE` for cloudflared.
 - Production refuses development switches at startup: `ALLOW_TENANT_HEADER` and `AUTH_MODE=dev`
   are accepted only in the `dev` and `test` profiles, and the servers run the `server` profile.
 
@@ -170,7 +184,8 @@ the dev lead (chapter 8 section 8.7). The restore procedure and the quarterly dr
 ## 9.11 Monitoring and alerts
 
 To be configured when the hosts are provisioned (NFR-OBS-04): an external uptime check on
-`https://app.<base>/healthz` and on one tenant host every minute; an alert when
+`https://<platform host>/healthz` (staging `https://bms-staging.rincoltech.com/healthz`) and on one
+tenant host every minute; an alert when
 `state/last_backup_ok` is older than 26 hours; disk above 70 percent; failed db-scheduler
 executions (`scheduled_tasks.consecutive_failures > 0`); the nightly job failure alerts of
 chapter 5. The API logs JSON (ECS format) with the request id on every line in the `server`
@@ -180,22 +195,91 @@ profile.
 
 ```
 /opt/bms/
-  compose.yml            copied from deploy/ on every deploy
-  deploy.sh, backup.sh   copied from deploy/ on every deploy
+  compose.yml            production: copied from deploy/ on every deploy. Staging: refreshed from
+                          releases/<tag>/ only after deploy.sh succeeds (ADR-018 finding M3)
+  deploy.sh, backup.sh   as above
+  pull-staging.sh        staging only: the puller; also refreshed only after a successful deploy
+  releases/<tag>/        staging only: each release's host files, staged before deploy.sh runs;
+                          the previous one to two releases are kept for inspection and rollback
+  current                staging only: symlink to the live releases/<tag>/, updated only on success
+  cosign.pub             the signing public key (ADR-018 finding H2): committed at deploy/cosign.pub,
+                          provisioned once by hand, never replaced by a release
+  systemd/               staging only: the unit files, for reference; installed by hand
   postgres/initdb/       copied from deploy/ on every deploy
   sql/                   onboarding scripts (docs/runbooks/onboard-tenant.md)
   .env                   written once by hand (docs/runbooks/provision-host.md); mode 600
-  state/current_tag      the live release
+  state/current_tag, current_created   the live release and when it was built (for the downgrade guard)
   state/history.log      every deploy, rollback and failure with its time
   state/last_backup_ok   time of the last good backup
   state/deploy.lock      one deploy at a time
+  state/last_failed_tag  staging only: a release the puller will not retry
+  state/pull.lock        staging only: one puller run at a time
+  state/allow_downgrade  staging only: presence lets deploy.sh accept a release built before the live one
   backups/               transient; each encrypted dump is deleted after upload
 ```
 
-## 9.13 Open items
+## 9.13 Staging: a shared ARM64 host behind a Cloudflare Tunnel
+
+Staging runs on an ARM64 host that already exists at a Rincol home site: a Raspberry Pi 4 with
+8 GB, Debian 13 and SD card storage, shared with an unrelated edge workload and a capped CI runner
+(ADR-018). BMS may use about 900 MB of it, hard-capped. The site has no inbound ports.
+
+```
+ Visitor --HTTPS--> Cloudflare edge (TLS for *.rincoltech.com; proxied CNAMEs:
+                    bms-staging, <slug>-bms-staging  ->  <tunnel id>.cfargotunnel.com)
+                                  ^
+                                  | outbound-only tunnel, opened by cloudflared
++------------- ARM64 host, Docker Compose project "bms", all in bms.slice (900 MB) ----------+
+|  cloudflared  --http-->  proxy :8080 (Caddyfile.tunnel; security headers, 6 MB bodies)      |
+|                             |  /api/*, /healthz, /readyz, /version  ->  api:8080            |
+|                             |  everything else                       ->  web:8080            |
+|  api (bms_app)   postgres (volume pgdata)   web   migrate (one-shot, bms_owner)             |
+|  bms-pull.timer (every 2 min) -> pull-staging.sh -> deploy.sh <sha-tag>                     |
++--------------------------------------------------------------------------------------------+
+        | nightly backup.sh (pg_dump, encrypted)  ->  Cloudflare R2: bms-backups/staging/
+```
+
+- **No published port.** `deploy/compose.pi-staging.yml` (installed as `/opt/bms/compose.yml`)
+  publishes nothing. cloudflared dials out to Cloudflare with the connector token
+  `CLOUDFLARE_TUNNEL_TOKEN` and forwards each public hostname to `http://proxy:8080`, keeping the
+  original `Host`, which the API resolves the tenant from. TLS ends at Cloudflare; no certificate
+  or DNS token lives on the host. Caddy trusts `Cf-Connecting-Ip` from the private network only, and
+  overwrites `X-Forwarded-Host` from that same resolved `Host` in both its proxy blocks (ADR-018
+  finding M1): the API's Tomcat is also configured to ignore any `X-Forwarded-Host`, so a request's
+  tenant and platform resolution can only ever come from `Host`.
+- **Two networks.** `edge` (cloudflared, proxy) and `internal` (proxy, api, web, postgres, migrate):
+  cloudflared can reach only `proxy:8080`, never PostgreSQL or the API's management port, whatever a
+  tunnel ingress rule or an onboarding token change gets wrong (ADR-018 finding M6).
+- **Public hostnames.** The tunnel carries `bms-staging.rincoltech.com` and one entry per tenant,
+  `<slug>-bms-staging.rincoltech.com`, each with a proxied CNAME to `<tunnel id>.cfargotunnel.com`
+  (`docs/runbooks/onboard-tenant.md`).
+- **Memory budget.** Container limits, and the slice that caps them all:
+
+  | Container | Limit | Notes |
+  |---|---|---|
+  | `api` | 448 MB | Serial GC, C1 only (`TieredStopAtLevel=1`), heap at most 50 percent, metaspace 128 MB (ADR-018 finding L6: was 160 MB, leaving too little headroom), code cache 48 MB, 512 KB stacks, 24 Tomcat threads, pool of 5. Measured at about 235 MB after start. |
+  | `postgres` | 176 MB | `shared_buffers=48MB`, `effective_cache_size=128MB`, `work_mem=2MB`, `max_connections=20`, longer checkpoints to spare the SD card. |
+  | `cloudflared` | 48 MB | |
+  | `proxy`, `web` | 32 MB each | Caddy |
+  | `migrate` | 160 MB | Only while a deploy runs, next to the old API |
+  | **Total** | 736 MB steady, 896 MB during a deploy | `bms.slice`: `MemoryMax=900M`, `MemoryHigh=860M`, no swap, `CPUQuota=250%` |
+
+  Every container is started with `cgroup_parent: bms.slice`, so the slice is a hard cap for the
+  whole stack: under pressure the kernel reclaims and then kills inside BMS, never in the other
+  workloads.
+- **SD card.** Container logs use the `local` driver capped at 2 x 5 MB per container; the puller
+  removes release images other than the live and previous ones; PostgreSQL checkpoints every 15
+  minutes. The nightly backup to R2 (section 9.10) is the recovery path if the card fails.
+- **Deploy.** Pull-based (chapter 10 section 10.5): `bms-pull.timer` runs `pull-staging.sh` every
+  two minutes as the `bms` user (a member of the `docker` group, no password or SSH key).
+- **Sizing is for fabricated data** and a handful of testers. Response times on staging do not
+  predict production.
+
+## 9.14 Open items
 
 - Confirm the hosting region against the data protection requirement for processing outside
   Uganda before production data arrives (NFR-DP-07); record the outcome in an ADR.
-- Choose the production and staging base domains and create the Cloudflare zone and tokens.
+- Create the production Cloudflare token scoped to the `rincoltech.com` zone when the production
+  VM is provisioned.
 - Registry retention for old `sha-*` images.
 - Off-host log shipping and an error tracker (NFR-OBS-03).

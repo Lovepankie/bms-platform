@@ -56,7 +56,6 @@ services:
       BMS_DB_URL: jdbc:postgresql://postgres:5432/bms
       BMS_APP_USER: bms_app
       BMS_APP_PASSWORD: ${BMS_APP_PASSWORD:-local-app}
-      BMS_BASE_DOMAIN: localhost
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError
     mem_limit: 768m
     ports:

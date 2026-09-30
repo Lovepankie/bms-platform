@@ -18,10 +18,18 @@ final class AuthApi {
 
     private AuthApi() {}
 
-    static final String STAFF_COOKIE = "bms_rt";
-    static final String STAFF_COOKIE_PATH = "/api/v1/auth";
-    static final String PLATFORM_COOKIE = "bms_prt";
-    static final String PLATFORM_COOKIE_PATH = "/api/v1/platform/auth";
+    // ADR-018 finding M2: staging, production and the company site now share one registrable
+    // domain (rincoltech.com), so SameSite=Strict alone no longer keeps a sibling host from
+    // setting a same-named cookie that reaches this one (cookie tossing). The __Host- prefix
+    // closes that: a browser accepts a __Host- cookie only with Secure, Path=/ and no Domain
+    // attribute, so no sibling host can set one that matches. Path=/ means the cookie now travels
+    // with every request to the origin, not just its auth path; the scoping that used to live in
+    // the cookie's Path attribute now lives only in routing (each endpoint below is still reached
+    // at its own dedicated path), which is what "the server check" already was.
+    static final String STAFF_COOKIE = "__Host-bms_rt";
+    static final String STAFF_COOKIE_PATH = "/";
+    static final String PLATFORM_COOKIE = "__Host-bms_prt";
+    static final String PLATFORM_COOKIE_PATH = "/";
 
     @Schema(name = "SignInRequest")
     record SignInRequest(
@@ -103,7 +111,11 @@ final class AuthApi {
         return response.body(body);
     }
 
-    /** {@code HttpOnly; Secure; SameSite=Strict}, scoped to the auth path (chapter 8 section 8.8). */
+    /**
+     * {@code HttpOnly; Secure; SameSite=Strict; Path=/} (chapter 8 section 8.8). The name carries
+     * the {@code __Host-} prefix (ADR-018 finding M2), so the browser also refuses to accept this
+     * cookie unless it has exactly this shape, from exactly this origin.
+     */
     static String cookie(String name, String value, String path, Duration maxAge) {
         return ResponseCookie.from(name, value)
                 .httpOnly(true)

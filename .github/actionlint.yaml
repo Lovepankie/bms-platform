@@ -1,0 +1,4 @@
+# Custom labels of the organisation's self-hosted runner (ADR-018, SDD 10.3).
+self-hosted-runner:
+  labels:
+    - hillary-pi

@@ -11,16 +11,36 @@ chapter 3, permissions to chapter 8, tables to chapter 6.
 
 ## 7.2 Hosts, tenant resolution and versioning
 
-| Host | Serves | Tenant |
-|---|---|---|
-| `<slug>.<base domain>` | Staff area, member area, tenant API | Resolved from the slug |
-| `app.<base domain>` | Platform console and platform API (`/api/v1/platform/...`) | None; platform users only |
-| `api.<base domain>` | Gateway and aggregator callbacks only | Resolved from the callback payload (chapter 12) |
+Hosts are single DNS labels under the Rincol zone, with hyphens, so the one free Cloudflare edge
+certificate for `*.rincoltech.com` covers every one of them, including tenants created later
+(ADR-018). They are configuration, not code:
 
-- The tenant is resolved from the `Host` header: exactly one DNS label directly under the
-  base domain, not a reserved label (`www`, `api`, `app`, `admin`, `static`, `mail`).
-  The slug is resolved with `app_resolve_tenant(slug)` (chapter 6 section 6.3.2). An
-  unknown or inactive slug returns 404 `unknown_tenant`.
+| Host | Staging | Production (later) | Serves | Tenant |
+|---|---|---|---|---|
+| Tenant host, `BMS_TENANT_HOST_PATTERN` | `{slug}-bms-staging.rincoltech.com` | `{slug}-bms.rincoltech.com` | Staff area, member area, tenant API | Resolved from the slug |
+| Platform host, `BMS_PLATFORM_HOST` | `bms-staging.rincoltech.com` | `bms.rincoltech.com` | Platform console and platform API (`/api/v1/platform/...`) | None; platform users only |
+| Callback host | `bms-staging-callbacks.rincoltech.com` | `bms-callbacks.rincoltech.com` | Gateway and aggregator callbacks only | Resolved from the callback payload (chapter 12) |
+
+In local development the pattern is `{slug}.localhost` (`http://demo.localhost:8000`) and the
+platform host is `localhost`.
+
+- The API validates both values at startup and refuses to start on a missing or invalid one: the
+  pattern contains exactly one `{slug}`, inside the leftmost label (so the host is one label under
+  the zone); every other label is a valid DNS label; the platform host is a host name that does not
+  match the pattern.
+- The tenant is resolved from the `Host` header by exact match against the pattern, compared
+  case-insensitively: the text between the pattern's prefix and suffix must be a valid slug
+  (FR-TEN-02: 3 to 63 lower case letters, digits and hyphens, no edge hyphen, not a reserved label
+  `www`, `api`, `app`, `admin`, `static`, `mail`) whose host label stays within 63 characters.
+  A trailing dot, a port in the name, extra labels on either side
+  (`x.demo-bms-staging.rincoltech.com`, `demo-bms-staging.rincoltech.com.attacker.com`) or another
+  zone carry no slug. The slug is resolved with `app_resolve_tenant(slug)` (chapter 6 section
+  6.3.2). An unknown host, an unknown slug or an inactive tenant returns 404 `unknown_tenant`.
+- One-time links (invitations, the first tenant admin's link) are built from the pattern:
+  `https://<the tenant's host>/accept-invitation#token=...`.
+- The PWA applies the same rules to its own host to choose the console, a tenant or an "unknown
+  address" page. It reads the two values at run time from `/app-config.json`, which the web
+  container serves from its environment, so one image serves every environment.
 - In local development and tests only, the header `X-Tenant: <slug>` is accepted when the
   host carries no slug (`ALLOW_TENANT_HEADER=true`, on by default in the `dev` profile). The
   application refuses to start with it set in any profile other than `dev` or `test`. The host
@@ -39,8 +59,8 @@ chapter 3, permissions to chapter 8, tables to chapter 6.
 - Member portal endpoints live under `/api/v1/member/...` and accept only member
   principals, scoped to the member's own records.
 - Platform endpoints live under `/api/v1/platform/...`. They resolve no tenant, are served only on
-  a host that names no tenant (on a tenant host they answer 404), and accept only platform
-  operator tokens (ADR-016).
+  the platform host (on any other host they answer 404), and accept only platform operator tokens
+  (ADR-016, ADR-018).
 
 ## 7.3 Contract and generated clients
 
@@ -59,7 +79,7 @@ chapter 3, permissions to chapter 8, tables to chapter 6.
 | Token | Form | Lifetime | Transport |
 |---|---|---|---|
 | Access token | Signed JWT (asymmetric signature, `kid` header for rotation) | 15 minutes | `Authorization: Bearer <token>`; held in memory by the SPA, never in local storage |
-| Refresh token | 256-bit random, stored hashed (`auth_sessions.refresh_token_hash`) | Staff idle 12 hours, absolute 7 days; members idle 30 days, absolute 90 days | Cookie `bms_rt`, `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth` on the tenant host |
+| Refresh token | 256-bit random, stored hashed (`auth_sessions.refresh_token_hash`) | Staff idle 12 hours, absolute 7 days; members idle 30 days, absolute 90 days | Cookie `__Host-bms_rt`, `HttpOnly; Secure; SameSite=Strict; Path=/` on the tenant host |
 
 Access token claims: `sub` (user id), `tid` (tenant id; absent for platform operators), `knd`
 (`staff`, `member` or `platform`), `sid` (session id), `iat`, `exp`, `iss` (the request host),
@@ -68,8 +88,14 @@ factor the API hands out a 5 minute MFA token (`pur=mfa`, no `sid`) that is acce
 MFA endpoints. Permissions and branch scope are not in the token; they are loaded per request
 from the role assignments (the 60 second cache this section allows is not built yet).
 
-Platform operators use the same design with their own cookie, `bms_prt`, scoped to
-`/api/v1/platform/auth`, idle 2 hours and absolute 12 hours.
+Platform operators use the same design with their own cookie, `__Host-bms_prt`, idle 2 hours and
+absolute 12 hours. Both cookie names carry the `__Host-` prefix (ADR-018 finding M2, since staging,
+production and the company site now share the `rincoltech.com` zone): the browser accepts a
+`__Host-` cookie only with `Secure`, `Path=/` and no `Domain` attribute, so no sibling host on the
+zone can set one that reaches this origin's cookie jar. `Path=/` means the browser now attaches the
+cookie to every request to the host, not only its own auth path; each refresh and sign-out endpoint
+is still reached at its own dedicated route, which is the only scoping that ever mattered server
+side.
 
 ### 7.4.2 Per-request checks, in order
 
@@ -146,8 +172,8 @@ Errors use RFC 9457 problem details, `Content-Type: application/problem+json`:
 ```
 
 `code` is the stable, machine-readable identifier the frontend switches on; `title` and
-`detail` are for people. The `type` URI host is a placeholder until the product domain is
-registered.
+`detail` are for people. The `type` URI host is a placeholder until the problem type pages are
+published under the platform host.
 
 | Status | When |
 |---|---|
@@ -273,15 +299,15 @@ port (8081), which is never published outside the container network.
 | POST | `/auth/logout` | authenticated staff | Revokes the session family; clears the cookie |
 | GET | `/me` | authenticated staff | User, roles, permissions, `all_branches`, the branches to switch between, the default branch, MFA state and unused recovery codes. FR-BR-03 |
 
-The refresh token never appears in a response body: it is the `bms_rt` cookie of section 7.4.1.
+The refresh token never appears in a response body: it is the `__Host-bms_rt` cookie of section 7.4.1.
 
-### 7.11.3 Platform (`app.<base domain>`, `/platform`, platform users only)
+### 7.11.3 Platform (the platform host, `/platform`, platform users only)
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | POST | `/platform/auth/setup` | public (setup token) | `{token, password}`: first password, with the token from `deploy/sql/create-platform-user.sql` |
 | POST | `/platform/auth/login`, `/platform/auth/mfa/verify`, `/platform/auth/mfa/enrol`, `/platform/auth/mfa/confirm` | public (mfa_token) | As the staff endpoints; TOTP is mandatory and enrolled at first sign-in |
-| POST | `/platform/auth/refresh` | refresh cookie `bms_prt` | |
+| POST | `/platform/auth/refresh` | refresh cookie `__Host-bms_prt` | |
 | POST | `/platform/auth/logout` | authenticated platform | |
 | GET | `/platform/me` | authenticated platform | |
 | GET | `/platform/plans` | `platform.tenants.read` | Limits only, no prices. FR-TEN-04 |
@@ -395,7 +421,7 @@ endpoint.
 | GET | `/payments/intents/{intent_id}` | initiator or `core.payments.read` | Polled by the UI |
 | GET | `/payments/unallocated` | `core.payments.read` | FR-PAY-04 |
 | POST | `/payments/unallocated/{receipt_id}/allocate` | `core.payments.allocate` | **M** |
-| POST | `/payments/callbacks/{provider}` | public, signature verified | On `api.<base domain>`. FR-PAY-02 |
+| POST | `/payments/callbacks/{provider}` | public, signature verified | On the callback host. FR-PAY-02 |
 
 ### 7.11.11 Lending: members (`/lending/members`)
 
@@ -529,7 +555,7 @@ rest of this table is to be built.
 | GET | `/member/documents` | Own receipts and statements |
 | POST | `/member/documents/{document_id}/download-url` | |
 
-### 7.11.19 Channel callbacks (`api.<base domain>`, public, verified)
+### 7.11.19 Channel callbacks (the callback host, public, verified)
 
 | Method | Path | Notes |
 |---|---|---|

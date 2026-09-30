@@ -20,7 +20,7 @@ on Android phones, which is covered by the same PWA rules (ADR-009, chapter 4 se
 
 ### 11.2.1 Access
 
-- The member opens `https://<tenant slug>.<base domain>/` and chooses "Member". The
+- The member opens `https://<tenant slug>-bms.rincoltech.com/` (the tenant host, chapter 7 section 7.2) and chooses "Member". The
   tenant's branding (display name, logo) comes from tenant settings.
 - First use: portal activation (FR-IAM-09): phone number, SMS one-time code, set a 5
   digit PIN. Staff trigger an invitation SMS with a link from the member record, or the

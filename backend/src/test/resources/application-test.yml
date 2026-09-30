@@ -1,6 +1,9 @@
 bms:
   tenancy:
-    base-domain: bms.test
+    # Hyphenated hosts under one zone, as on staging (ADR-018). TestRestTemplate calls localhost,
+    # which is the platform host here.
+    tenant-host-pattern: "{slug}-bms-staging.rincoltech.test"
+    platform-host: localhost
     allow-tenant-header: true
   auth:
     mode: dev

@@ -128,8 +128,8 @@ short-lived branch ──PR──> CI (lint, types, tests on PostgreSQL, fronten
                               docs guards, model validation)
         │ merge (squash)
         ▼
-      main ──> build images once, tag sha-<short>, push to the registry
-        │      ──> deploy the same images to STAGING automatically
+      main ──> build images once (amd64 and arm64), tag sha-<short>, push to the registry
+        │      ──> move the `staging` pointer; the STAGING host pulls and deploys them (ADR-018)
         │
         │ git tag vX.Y.Z on a commit already green on staging
         ▼
@@ -168,7 +168,7 @@ commit it and delete it later, because a commit is permanent.
 | `.github/workflows/linked-issue-guard.yml` | Every code or architecture pull request closes an issue |
 | `.github/workflows/estimate-guard.yml` | Leaf-only estimates, every item typed, no orphans (runs once the board is configured) |
 | `.github/workflows/ci.yml` (ADR-006) | Lint, types, tests, isolation and boundary tests, golden tests, contract snapshot, workflow and script checks |
-| `.github/workflows/deploy.yml` (ADR-006) | Images built once on `main` and deployed to staging; version tags retag and deploy to production |
+| `.github/workflows/deploy.yml` (ADR-006, ADR-018) | Images built once on `main` for amd64 and arm64, and the `staging` pointer moved for the staging host to pull; version tags retag and deploy to production |
 | `.claude/hooks/surgical-change-guard.py` | Blocks tiny throwaway files and bloated edits made by Claude Code |
 | Branch protection on `main` | Review required, linear history, no force push, no deletion |
 | GitHub Environment `production` | Required reviewer: Hillary |

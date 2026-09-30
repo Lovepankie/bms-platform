@@ -4,7 +4,9 @@
 
 Accepted (2026-09-29). Implements the platform API of chapter 7 section 7.11.3 in MVP increment 1
 (issue #7). To be superseded when the `bms_platform` database role and its connection pool are
-introduced (chapter 6 section 6.3.1).
+introduced (chapter 6 section 6.3.1). Superseded in part by ADR-018 (2026-09-29): the platform
+API is served only on the configured platform host (`BMS_PLATFORM_HOST`), not on any host that
+names no tenant.
 
 ## Context
 

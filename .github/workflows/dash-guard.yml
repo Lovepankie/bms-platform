@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   dash-guard:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, hillary-pi]
     steps:
       - uses: actions/checkout@v7
         with:

@@ -9,6 +9,7 @@ name: ADR citation guard
 
 on:
   push:
+    branches: [main]
     paths: ["docs/**", "AGENTS.md", "README.md"]
   pull_request:
     paths: ["docs/**", "AGENTS.md", "README.md"]
@@ -19,7 +20,7 @@ permissions:
 
 jobs:
   citations:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, hillary-pi]
     steps:
       - uses: actions/checkout@v7
       - name: Check every ADR citation resolves or is marked pending

@@ -53,7 +53,7 @@ runs:
       env:
         TARGET: ${{ inputs.ssh-user }}@${{ inputs.host }}
       run: |
-        tar -C deploy -czf - compose.yml deploy.sh backup.sh postgres sql \
+        tar -C deploy -czf - compose.yml deploy.sh backup.sh postgres sql cosign.pub \
           | ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes "$TARGET" \
               'mkdir -p /opt/bms && tar -xzf - -C /opt/bms && chmod 755 /opt/bms/deploy.sh /opt/bms/backup.sh'
 

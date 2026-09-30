@@ -41,7 +41,13 @@ Flyway history and every grant to `bms_app`.
 `bms` database, then deploy:
 
 ```bash
+# compose.yml names its application images by API_IMAGE, WEB_IMAGE and PROXY_IMAGE (ADR-018
+# finding H2); postgres does not need a verified digest to be started or restored into, so a plain
+# tag reference is enough here (deploy.sh, in step 4, resolves and verifies them properly).
 export IMAGE_TAG=<the tag to run, the one live at backup time or later>
+export API_IMAGE="ghcr.io/rincoltech-solutions-ltd/bms-platform-api:${IMAGE_TAG}"
+export WEB_IMAGE="ghcr.io/rincoltech-solutions-ltd/bms-platform-web:${IMAGE_TAG}"
+export PROXY_IMAGE="ghcr.io/rincoltech-solutions-ltd/bms-platform-proxy:${IMAGE_TAG}"
 docker compose --project-name bms -f compose.yml up --detach --wait postgres
 docker compose --project-name bms -f compose.yml exec -T postgres \
   pg_restore -U bms_owner -d bms --exit-on-error < backups/restore.dump
@@ -53,6 +59,9 @@ investigation until the dev lead decides otherwise.
 
 ```bash
 export IMAGE_TAG="$(cat state/current_tag)"
+export API_IMAGE="ghcr.io/rincoltech-solutions-ltd/bms-platform-api:${IMAGE_TAG}"
+export WEB_IMAGE="ghcr.io/rincoltech-solutions-ltd/bms-platform-web:${IMAGE_TAG}"
+export PROXY_IMAGE="ghcr.io/rincoltech-solutions-ltd/bms-platform-proxy:${IMAGE_TAG}"
 C=(docker compose --project-name bms -f compose.yml)
 "${C[@]}" exec -T postgres psql -U postgres -d postgres -c "CREATE DATABASE bms_restored OWNER bms_owner"
 "${C[@]}" exec -T postgres pg_restore -U bms_owner -d bms_restored --exit-on-error < backups/restore.dump
@@ -75,7 +84,7 @@ start as an owner, and cannot read tables it has no grant on.
 
 ```bash
 ./deploy.sh "$IMAGE_TAG"      # migrate is a no-op, or applies migrations newer than the backup
-curl -s https://app.<base>/readyz
+curl -s https://<platform host>/readyz
 ```
 
 Check, as `bms_owner`: row counts of `tenants`, `lending_members` and `journal_entries` against

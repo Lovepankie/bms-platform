@@ -50,7 +50,7 @@ accepted can be recognised.
    sending window, calls `send`, stores `provider_message_id` and `segments`, sets
    `sent`.
 3. Failure: retry at 1, 5 and 30 minutes, then `failed` (FR-NTF-05).
-4. Delivery report callback on `api.<base domain>/api/v1/channels/sms/{provider}/delivery-reports`:
+4. Delivery report callback on `<callback host>/api/v1/channels/sms/{provider}/delivery-reports`:
    verify, look up by `provider_message_id`, update status to `delivered` or
    `undelivered`. Unknown ids are logged and ignored.
 
@@ -82,7 +82,7 @@ member/staff -> API: POST /payments/intents (Idempotency-Key)
 API: create intent (created) -> commit
 worker: initiate_collection -> intent pending (provider_reference stored)
 payer approves on phone
-gateway -> api.<base>/api/v1/payments/callbacks/{provider}
+gateway -> <callback host>/api/v1/payments/callbacks/{provider}
 API (no tenant yet): verify_callback -> parse -> app_resolve_payment_intent(provider, ref)
     unknown ref -> unmatched_gateway_callbacks (platform queue), 200 OK
     known ref   -> bind tenant -> store payment_callbacks row
@@ -144,7 +144,7 @@ EmailProvider
 ```
 
 Used for staff invitations, password resets and report-ready notices. SPF, DKIM and
-DMARC for the product domain are set up with the domain (chapter 9).
+DMARC for the sending domain are set up with the mail provider (chapter 9).
 
 ## 12.7 Configuration
 

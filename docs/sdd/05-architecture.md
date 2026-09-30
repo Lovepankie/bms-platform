@@ -201,7 +201,7 @@ frontend/src/
     staff/      routes per module: members, loans, collateral, savings, investments,
                 collections, ledger, reports, imports, approvals, admin
     member/     home, loans, savings, investments, pay, documents
-    platform/   tenant management (served on app.<base domain>)
+    platform/   tenant management (served on the platform host)
   components/   shared UI (shadcn/ui based), money and date formatters
   offline/      IndexedDB caches and draft storage (chapter 4 section 4.8)
   i18n/         translation files

@@ -1,6 +1,6 @@
 /**
- * The platform console API on {@code app.<base domain>} (chapter 7 section 7.11.3): tenant
- * creation with plan, modules, head office and first tenant admin (FR-TEN-01), module switching
+ * The platform console API on the platform host, {@code BMS_PLATFORM_HOST} (chapter 7 section
+ * 7.11.3): tenant creation with plan, modules, head office and first tenant admin (FR-TEN-01), module switching
  * (FR-TEN-03), subscription status and suspension (FR-TEN-05, FR-TEN-06), and the MFA reset of a
  * tenant's only admin (FR-IAM-12). Only platform operators reach it. It changes tenants through
  * the SECURITY DEFINER platform functions of migration V2 (ADR-016), and acts inside one tenant

@@ -3,7 +3,7 @@
 -- (FR-TEN-01). Runs as bms_owner. Prints the one-time link, valid 72 hours; only its SHA-256 is
 -- stored. Idempotent for an email that is already a staff user of the tenant.
 --
---   psql -v slug=demo -v email=owner@example.test -v name='Test Owner' -v origin=https://demo.<base> \
+--   psql -v slug=demo -v email=owner@example.test -v name='Test Owner' -v origin=https://demo-bms-staging.rincoltech.com \
 --        -f invite-tenant-admin.sql
 \set ON_ERROR_STOP on
 

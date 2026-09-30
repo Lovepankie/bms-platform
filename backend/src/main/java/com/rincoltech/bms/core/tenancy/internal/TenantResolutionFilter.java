@@ -9,7 +9,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -27,14 +26,14 @@ class TenantResolutionFilter extends OncePerRequestFilter {
     /** Request attribute holding the resolved tenant's status, {@code active} or {@code suspended}. */
     static final String STATUS_ATTRIBUTE = "bms.tenant.status";
 
-    static final Pattern SLUG = Pattern.compile("^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])$");
-
     private final TenancyProperties properties;
+    private final TenantHostPattern hosts;
     private final JdbcClient jdbc;
     private final ObjectMapper mapper;
 
     TenantResolutionFilter(TenancyProperties properties, JdbcClient jdbc, ObjectMapper mapper) {
         this.properties = properties;
+        this.hosts = properties.hostPattern();
         this.jdbc = jdbc;
         this.mapper = mapper;
     }
@@ -43,7 +42,7 @@ class TenantResolutionFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
         // Tenant-free paths: health, version, the contract document and the platform API
-        // (/api/v1/platform, served on app.<base domain>, which resolves no tenant).
+        // (/api/v1/platform, served on the platform host, which resolves no tenant).
         return !path.startsWith("/api/v1/")
                 || path.startsWith("/api/v1/openapi.json")
                 || path.equals("/api/v1/platform")
@@ -75,35 +74,17 @@ class TenantResolutionFilter extends OncePerRequestFilter {
     }
 
     Optional<String> slugFrom(HttpServletRequest request) {
-        Optional<String> fromHost = slugFromHost(request.getServerName());
+        Optional<String> fromHost = hosts.slugFromHost(request.getServerName());
         if (fromHost.isPresent()) {
             return fromHost;
         }
         if (properties.allowTenantHeader()) {
             String header = request.getHeader(TENANT_HEADER);
-            if (header != null && SLUG.matcher(header).matches()) {
+            if (header != null && TenantHostPattern.SLUG.matcher(header).matches()) {
                 return Optional.of(header);
             }
         }
         return Optional.empty();
-    }
-
-    Optional<String> slugFromHost(String host) {
-        if (host == null) {
-            return Optional.empty();
-        }
-        String h = host.toLowerCase();
-        String suffix = "." + properties.baseDomain();
-        if (!h.endsWith(suffix)) {
-            return Optional.empty();
-        }
-        String label = h.substring(0, h.length() - suffix.length());
-        if (label.contains(".")
-                || TenancyProperties.RESERVED_LABELS.contains(label)
-                || !SLUG.matcher(label).matches()) {
-            return Optional.empty();
-        }
-        return Optional.of(label);
     }
 
     private Optional<Resolved> resolve(String slug) {
