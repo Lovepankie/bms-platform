@@ -7,6 +7,11 @@ interface ObjectStorage {
 
     void put(String key, byte[] bytes, String contentType);
 
-    /** A URL that serves the object until {@code ttl} passes, and refuses it after. */
-    String signedGetUrl(String key, Duration ttl);
+    /**
+     * A URL that serves the object until {@code ttl} passes, and refuses it after. It is always served
+     * as a download ({@code Content-Disposition: attachment}) named {@code downloadName}, with
+     * {@code contentType} (the sniffed type) and {@code Cache-Control: private, no-store}, so a stored
+     * file never renders inline from the storage origin (Hillary's #23 review, blocker 3).
+     */
+    String signedGetUrl(String key, Duration ttl, String downloadName, String contentType);
 }

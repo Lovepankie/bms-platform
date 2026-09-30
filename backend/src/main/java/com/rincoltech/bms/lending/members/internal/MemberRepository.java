@@ -246,14 +246,22 @@ class MemberRepository {
 
     /**
      * FR-MEM-05: {@code incomplete} becomes {@code pending_verification} once name, phone, NIN or
-     * other ID, a location, at least one next of kin and an ID front image are all present. True
-     * when this call moved the member.
+     * other ID, a location, at least one next of kin and an ID front image are all present. A
+     * {@code rejected} member re-enters too: this runs only after a new edit, kin or document, so it
+     * is always a resubmission after the rejection (Hillary's #23 review, blocker 1). Returns the
+     * status the member moved from, empty when nothing moved.
      */
-    boolean markKycCompleteIfReady(UUID id) {
-        return jdbc.sql("""
+    Optional<String> markKycCompleteIfReady(UUID id) {
+        // The row is locked by the read, so the status we report is the one the update moved from.
+        String before = jdbc.sql("SELECT kyc_status FROM lending_members WHERE id = ? FOR UPDATE")
+                .param(id)
+                .query(String.class)
+                .optional()
+                .orElse(null);
+        boolean moved = jdbc.sql("""
                         UPDATE lending_members m SET kyc_status = 'pending_verification', updated_at = now(),
                             version = version + 1
-                        WHERE m.id = ? AND m.kyc_status = 'incomplete'
+                        WHERE m.id = ? AND m.kyc_status IN ('incomplete', 'rejected')
                           AND btrim(m.full_name) <> '' AND m.phone_e164 IS NOT NULL
                           AND ((m.id_type = 'nin' AND m.national_id IS NOT NULL)
                                OR (m.id_type IN ('passport', 'refugee_id', 'other')
@@ -264,6 +272,7 @@ class MemberRepository {
                           AND EXISTS (SELECT 1 FROM lending_member_documents d
                                        WHERE d.member_id = m.id AND d.doc_kind = 'id_front')
                         """).param(id).update() == 1;
+        return moved ? Optional.ofNullable(before) : Optional.empty();
     }
 
     void insertDocument(UUID id, UUID memberId, String docKind, UUID documentId, UUID uploadedBy) {

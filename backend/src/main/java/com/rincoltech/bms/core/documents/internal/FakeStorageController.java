@@ -30,15 +30,21 @@ class FakeStorageController {
     @GetMapping(FakeObjectStorage.PATH)
     @PublicEndpoint
     ResponseEntity<byte[]> get(
-            @RequestParam("key") String key, @RequestParam("expires") long expires, @RequestParam("sig") String sig) {
-        FakeObjectStorage.StoredObject object = storage.read(key, expires, sig)
+            @RequestParam("key") String key,
+            @RequestParam("expires") long expires,
+            @RequestParam("name") String name,
+            @RequestParam("sig") String sig) {
+        FakeObjectStorage.StoredObject object = storage.read(key, expires, name, sig)
                 .orElseThrow(() -> new ApiException(
                         HttpStatus.FORBIDDEN,
                         "signature_invalid",
                         "Access denied",
                         "The link is invalid or has expired."));
+        // Test parity with R2's presign: a download, never inline, never cached.
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(object.contentType()))
+                .header("Content-Disposition", StorageConfiguration.attachment(name))
+                .header("Cache-Control", StorageConfiguration.NO_STORE)
                 .body(object.bytes());
     }
 }

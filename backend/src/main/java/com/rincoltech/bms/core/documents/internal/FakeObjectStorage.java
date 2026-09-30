@@ -39,16 +39,18 @@ class FakeObjectStorage implements ObjectStorage {
     }
 
     @Override
-    public String signedGetUrl(String key, Duration ttl) {
+    public String signedGetUrl(String key, Duration ttl, String downloadName, String contentType) {
         long expires = clock.now().plus(ttl).getEpochSecond();
-        return PATH + "?key=" + URLEncoder.encode(key, StandardCharsets.UTF_8) + "&expires=" + expires + "&sig="
-                + sign(key, expires);
+        return PATH + "?key=" + URLEncoder.encode(key, StandardCharsets.UTF_8) + "&expires=" + expires
+                + "&name=" + URLEncoder.encode(downloadName, StandardCharsets.UTF_8)
+                + "&sig=" + sign(key + "\n" + downloadName, expires);
     }
 
     /** The object when the signature matches and has not expired; empty otherwise. */
-    Optional<StoredObject> read(String key, long expires, String sig) {
+    Optional<StoredObject> read(String key, long expires, String name, String sig) {
         boolean signed = MessageDigest.isEqual(
-                sign(key, expires).getBytes(StandardCharsets.US_ASCII), sig.getBytes(StandardCharsets.US_ASCII));
+                sign(key + "\n" + name, expires).getBytes(StandardCharsets.US_ASCII),
+                sig.getBytes(StandardCharsets.US_ASCII));
         if (!signed || clock.now().getEpochSecond() > expires) {
             return Optional.empty();
         }

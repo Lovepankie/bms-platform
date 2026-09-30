@@ -63,10 +63,14 @@ class R2ObjectStorage implements ObjectStorage {
     }
 
     @Override
-    public String signedGetUrl(String key, Duration ttl) {
+    public String signedGetUrl(String key, Duration ttl, String downloadName, String contentType) {
         return presigner
                 .presignGetObject(p -> p.signatureDuration(ttl)
-                        .getObjectRequest(g -> g.bucket(bucket).key(key)))
+                        .getObjectRequest(g -> g.bucket(bucket)
+                                .key(key)
+                                .responseContentDisposition(StorageConfiguration.attachment(downloadName))
+                                .responseContentType(contentType)
+                                .responseCacheControl(StorageConfiguration.NO_STORE)))
                 .url()
                 .toString();
     }

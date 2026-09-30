@@ -170,6 +170,11 @@ class MemberDocumentsIT extends IntegrationTest {
                 downloadUrl(documentId, headers(ALL, "*")).getBody().get("url").asString();
         ResponseEntity<byte[]> file = fetch(url);
         assertThat(file.getStatusCode()).isEqualTo(HttpStatus.OK);
+        // #23 review, blocker 3: a download under a server-made name, never inline, never cached.
+        assertThat(file.getHeaders().getFirst("Content-Disposition"))
+                .isEqualTo("attachment; filename=\"upload-" + documentId + ".jpg\"");
+        assertThat(file.getHeaders().getFirst("Cache-Control")).isEqualTo("private, no-store");
+        assertThat(file.getHeaders().getContentType().toString()).isEqualTo("image/jpeg");
         assertThat(contains(file.getBody(), "Exif")).isFalse();
         assertThat(contains(file.getBody(), "TEST-GPS")).isFalse();
         assertThat(ImageIO.read(new java.io.ByteArrayInputStream(file.getBody()))
@@ -256,9 +261,11 @@ class MemberDocumentsIT extends IntegrationTest {
         long past = Instant.now().minusSeconds(1).getEpochSecond();
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(FAKE_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-        String sig = HexFormat.of().formatHex(mac.doFinal((key + "\n" + past).getBytes(StandardCharsets.UTF_8)));
+        String name = "upload-" + documentId + ".png";
+        String sig = HexFormat.of()
+                .formatHex(mac.doFinal((key + "\n" + name + "\n" + past).getBytes(StandardCharsets.UTF_8)));
         String expired = "/api/v1/storage/fake?key=" + URLEncoder.encode(key, StandardCharsets.UTF_8) + "&expires="
-                + past + "&sig=" + sig;
+                + past + "&name=" + URLEncoder.encode(name, StandardCharsets.UTF_8) + "&sig=" + sig;
         assertThat(fetch(expired).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
         long issuedAudits = TestDatabase.owner()
@@ -293,6 +300,35 @@ class MemberDocumentsIT extends IntegrationTest {
                 .query(Long.class)
                 .single();
         assertThat(audits).isEqualTo(1);
+    }
+
+    /** #23 review, blocker 1: a rejected member re-enters pending_verification with a new document, audited as a resubmission. */
+    @Test
+    void aRejectedMemberCanResubmitWithANewDocument() throws Exception {
+        String id = member("Test Borrower 06", "0700000006", "CMTEST0000006A", "Test Village C");
+        Map<String, Object> kin = Map.of("full_name", "Test Kin 06", "relationship", "sibling");
+        http.exchange(
+                "/api/v1/lending/members/" + id + "/next-of-kin",
+                HttpMethod.POST,
+                new HttpEntity<>(kin, headers(ALL, "*")),
+                JsonNode.class);
+        upload(id, "id_front", png(10, 10), "front.png");
+        assertThat(kycStatus(id)).isEqualTo("pending_verification");
+        TestDatabase.owner()
+                .sql("UPDATE lending_members SET kyc_status = 'rejected' WHERE id = ?::uuid")
+                .param(id)
+                .update();
+
+        upload(id, "id_front", png(12, 12), "front-clearer.png");
+
+        assertThat(kycStatus(id)).isEqualTo("pending_verification");
+        long resubmitted = TestDatabase.owner()
+                .sql(
+                        "SELECT count(*) FROM audit_log WHERE entity_id = ?::uuid AND action = 'lending.member.kyc_resubmitted'")
+                .param(id)
+                .query(Long.class)
+                .single();
+        assertThat(resubmitted).isEqualTo(1);
     }
 
     String kycStatus(String memberId) {

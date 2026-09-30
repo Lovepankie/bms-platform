@@ -329,6 +329,16 @@ GitHub Actions deploy secrets live in the `staging` and `production` environment
   small compressed file cannot exhaust memory; files are stored in object storage, never on the
   application host's disk. Tomcat reads past an over-limit upload (`max-swallow-size` 8 MB) so
   the client gets the 413 body instead of a reset connection.
+- PDFs are stored as uploaded: only images are re-encoded, so a PDF's embedded JavaScript,
+  launch actions or links are not removed. The control is how files are served: every signed
+  download URL (R2 presign and the test fake alike) carries `Content-Disposition: attachment` with
+  a server-generated name (`<doc_type>-<document id>.<ext>`), the sniffed content type and
+  `Cache-Control: private, no-store`, so nothing renders inline from the storage origin and a PDF
+  opens only in the reader the user chooses. Rejecting PDFs with `/JavaScript` or `/Launch` is a
+  possible future tightening.
+- When a server has no R2 settings at all, the application still starts: document upload and
+  download answer 503 `storage_unavailable` until R2 is configured, so an automatic deploy to a
+  host without a bucket cannot crash-loop the service. A partial R2 setting still fails startup.
 
 ## 8.9 Personal data handling
 

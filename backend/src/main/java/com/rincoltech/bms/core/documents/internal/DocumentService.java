@@ -182,7 +182,7 @@ class DocumentService implements Documents {
                 .param(documentId)
                 .query(String.class)
                 .single();
-        String url = storage.signedGetUrl(key, URL_TTL);
+        String url = storage.signedGetUrl(key, URL_TTL, downloadName(d), d.contentType());
         audit.record(AuditLog.Entry.created(
                 "core.document.download_url_issued",
                 "core.document",
@@ -190,6 +190,18 @@ class DocumentService implements Documents {
                 d.branchId(),
                 Map.of("subject_type", d.subjectType(), "subject_id", d.subjectId())));
         return new DownloadUrl(url, clock.now().plus(URL_TTL));
+    }
+
+    /** A name the server makes up (doc type + id + an extension for the sniffed type), never the uploader's. */
+    static String downloadName(StoredDocument d) {
+        String ext = switch (d.contentType()) {
+            case "application/pdf" -> ".pdf";
+            case "image/jpeg" -> ".jpg";
+            case "image/png" -> ".png";
+            case "image/webp" -> ".webp";
+            default -> "";
+        };
+        return d.docType().replaceAll("[^A-Za-z0-9_-]", "_") + "-" + d.id() + ext;
     }
 
     /** 404 when missing; 403 when the owning module says the caller may not read the subject (FR-DOC-03). */

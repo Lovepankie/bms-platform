@@ -356,19 +356,19 @@ class MemberService implements MemberLookup {
     }
 
     /**
-     * FR-MEM-05: moves an incomplete member to {@code pending_verification} once every input is
-     * present. Called after each change that can complete it (member edit, next of kin, ID image).
+     * FR-MEM-05: moves an incomplete member, or a rejected one resubmitting, to
+     * {@code pending_verification} once every input is present. Called after each change that can complete it (member edit, next of kin, ID image).
      */
     void recheckKyc(UUID memberId, UUID branchId) {
-        if (members.markKycCompleteIfReady(memberId)) {
-            audit.record(new AuditLog.Entry(
-                    "lending.member.kyc_complete",
-                    "lending.member",
-                    memberId,
-                    branchId,
-                    Map.of("kyc_status", "incomplete"),
-                    Map.of("kyc_status", "pending_verification")));
-        }
+        members.markKycCompleteIfReady(memberId)
+                .ifPresent(from -> audit.record(new AuditLog.Entry(
+                        // A rejected member's new edit or document is a resubmission, audited as such.
+                        "rejected".equals(from) ? "lending.member.kyc_resubmitted" : "lending.member.kyc_complete",
+                        "lending.member",
+                        memberId,
+                        branchId,
+                        Map.of("kyc_status", from),
+                        Map.of("kyc_status", "pending_verification"))));
     }
 
     /** The fields of two versions of a record that differ, snake_case keys, for an audit row (FR-AUD-01). */
