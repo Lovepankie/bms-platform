@@ -157,6 +157,9 @@ services:
     image: ${WEB_IMAGE:?WEB_IMAGE is set by deploy.sh}
     networks: [internal]
     cap_drop: [ALL]
+    # The caddy binary carries the file capability cap_net_bind_service; with every capability
+    # dropped the kernel refuses to exec it (EPERM). Adding back this one is enough.
+    cap_add: [NET_BIND_SERVICE]
     read_only: true
     environment:
       BMS_TENANT_HOST_PATTERN: ${BMS_TENANT_HOST_PATTERN:?}
@@ -173,6 +176,9 @@ services:
     networks: [edge, internal]
     user: "10001:10001"
     cap_drop: [ALL]
+    # The caddy binary carries the file capability cap_net_bind_service; with every capability
+    # dropped the kernel refuses to exec it (EPERM). Adding back this one is enough.
+    cap_add: [NET_BIND_SERVICE]
     read_only: true
     mem_limit: 32m
     cpus: 0.5
