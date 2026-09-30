@@ -125,6 +125,12 @@ services:
       BMS_TOKEN_SIGNING_JWK: ${BMS_TOKEN_SIGNING_JWK:?}
       BMS_DATA_KEY: ${BMS_DATA_KEY:?}
       BMS_DATA_KEY_ID: ${BMS_DATA_KEY_ID:-k1}
+      # Documents bucket (chapter 12 section 12.5): its own token, never the backup one. The API
+      # refuses to start with any of these empty.
+      R2_ENDPOINT: ${R2_ENDPOINT:?}
+      R2_DOCUMENTS_ACCESS_KEY_ID: ${R2_DOCUMENTS_ACCESS_KEY_ID:?}
+      R2_DOCUMENTS_SECRET_ACCESS_KEY: ${R2_DOCUMENTS_SECRET_ACCESS_KEY:?}
+      R2_DOCUMENTS_BUCKET: ${R2_DOCUMENTS_BUCKET:?}
       # A small JVM for a 448 MB container: serial GC, C1 only (less memory and CPU on a Pi, slower
       # peak throughput, which staging does not need), a capped code cache and few request threads.
       # Metaspace is 128m rather than 160m (ADR-018 finding L6): heap (224m) + metaspace (128m) +

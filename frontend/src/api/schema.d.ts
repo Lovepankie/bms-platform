@@ -312,6 +312,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Document metadata (permission on the subject) */
+        get: operations["getDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/download-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A 5 minute signed download URL (FR-DOC-03) */
+        post: operations["createDocumentDownloadUrl"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/members": {
         parameters: {
             query?: never;
@@ -376,6 +410,24 @@ export interface paths {
         put?: never;
         /** Blacklist a member or lift it (FR-MEM-13) */
         post: operations["setMemberBlacklist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/members/{member_id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a member's documents */
+        get: operations["listMemberDocuments"];
+        put?: never;
+        /** Upload a member document: JPEG, PNG or PDF, 5 MB (FR-MEM-09) */
+        post: operations["uploadMemberDocument"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1092,6 +1144,11 @@ export interface components {
             head_office_branch_id?: string;
             tenant?: components["schemas"]["PlatformTenant"];
         };
+        DownloadUrl: {
+            /** Format: date-time */
+            expires_at?: string;
+            url?: string;
+        };
         DuplicateCandidate: {
             /** Format: uuid */
             branch_id?: string;
@@ -1224,6 +1281,21 @@ export interface components {
             /** Format: int32 */
             version?: number;
             village?: string;
+        };
+        MemberDocument: {
+            content_type?: string;
+            /** Format: date-time */
+            created_at?: string;
+            doc_kind?: string;
+            /** Format: uuid */
+            document_id?: string;
+            /** Format: int64 */
+            size_bytes?: number;
+            /** Format: uuid */
+            uploaded_by?: string;
+        };
+        MemberDocumentList: {
+            items?: components["schemas"]["MemberDocument"][];
         };
         MemberListItem: {
             /** Format: uuid */
@@ -1395,6 +1467,24 @@ export interface components {
             recovery_codes?: string[];
             status?: string;
             token_type?: string;
+        };
+        StoredDocument: {
+            /** Format: uuid */
+            branch_id?: string;
+            content_type?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            doc_type?: string;
+            /** Format: uuid */
+            id?: string;
+            sha256?: string;
+            /** Format: int64 */
+            size_bytes?: number;
+            /** Format: uuid */
+            subject_id?: string;
+            subject_type?: string;
         };
         SubscriptionStatusRequest: {
             /** Format: date */
@@ -2002,6 +2092,50 @@ export interface operations {
             };
         };
     };
+    getDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredDocument"];
+                };
+            };
+        };
+    };
+    createDocumentDownloadUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadUrl"];
+                };
+            };
+        };
+    };
     listMembers: {
         parameters: {
             query?: {
@@ -2150,6 +2284,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Member"];
+                };
+            };
+        };
+    };
+    listMemberDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberDocumentList"];
+                };
+            };
+        };
+    };
+    uploadMemberDocument: {
+        parameters: {
+            query: {
+                doc_kind: string;
+            };
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberDocument"];
                 };
             };
         };

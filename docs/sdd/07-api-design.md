@@ -181,6 +181,8 @@ published under the platform host.
 | 401 | `unauthenticated`, `token_expired`, `tenant_mismatch`, `session_revoked`, `session_expired`, `invalid_credentials` (sign-in), `invalid_mfa_code` (sign-in), `mfa_token_invalid` |
 | 403 | Authenticated but lacks the permission (`permission_denied`) |
 | 404 | Not found or outside branch scope; `unknown_tenant`; `module_not_enabled` |
+| 413 | `file_too_large`: an upload over 5 MB (chapter 8 section 8.8) |
+| 415 | `unsupported_file_type`: an upload that is not JPEG, PNG or PDF by content |
 | 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, `approval_already_pending`, `mfa_already_enrolled`, `mfa_not_enrolled`, `mfa_enrolment_not_started`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`, `duplicate_email`, `duplicate_phone`, `duplicate_branch_code`, `duplicate_slug`); `conflict` for any other unique or foreign key violation |
 | 422 | Validation and business rule failures (codes below) |
 | 423 | `tenant_suspended`, `account_locked` |
@@ -198,7 +200,7 @@ Business rule codes used in chapter 3 (each is a 422 unless listed above):
 `approver_conflict`, `subject_changed`, `approval_expired`, `period_closed`,
 `payment_method_unmapped`, `value_date_in_future`, `has_repayments`,
 `already_reversed`, `insufficient_balance`, `collateral_secures_open_loan`,
-`branch_has_open_accounts`, `account_has_open_items`, `next_of_kin_required`, `unknown_placeholder`,
+`branch_has_open_accounts`, `account_has_open_items`, `next_of_kin_required`, `image_too_large`, `unknown_placeholder`,
 `blocking_issues_unresolved`, `system_account_not_allowed`, `idempotency_key_reused`,
 `idempotency_key_missing`, and from the ledger's posting operation (ADR-004):
 `unbalanced_entry`, `invalid_journal_line`, `account_not_postable`, `currency_mismatch`; and
@@ -382,9 +384,12 @@ endpoint.
 | PUT | `/notification-templates/{event_key}/{channel}` | `core.notification_templates.manage` | FR-NTF-03 |
 | POST | `/notification-templates/{event_key}/{channel}/preview` | `core.notification_templates.manage` | Renders with fabricated sample data |
 | GET | `/notifications` | `core.notifications.read` | Send log with status |
-| GET | `/documents/{document_id}` | permission on the subject | Metadata |
-| POST | `/documents/{document_id}/download-url` | permission on the subject | Returns a 5 minute signed URL. FR-DOC-03 |
-| POST | `/documents` | `lending.members.update` or `lending.collateral.manage` | Multipart upload (images, PDF, 5 MB max) |
+| GET | `/documents/{document_id}` | permission on the subject | Metadata. Declared "authenticated" (staff); the owning module's `DocumentAccess` decides, 403 `permission_denied` when it says no |
+| POST | `/documents/{document_id}/download-url` | permission on the subject | `{url, expires_at}`, 5 minutes; every issue is audited (`core.document.download_url_issued`). FR-DOC-03 |
+
+Uploads go through the subject's own route (`POST /lending/members/{member_id}/documents` now, the
+collateral route next), so each carries its one matrix permission and branch check; there is no
+generic `POST /documents`. Built (#12): these two routes and the member document routes.
 
 ### 7.11.8 Reports
 
@@ -431,8 +436,8 @@ Built so far (the reference slice, `lending.members`): `POST /lending/members`,
 (#10) `PATCH /lending/members/{member_id}`, `POST /lending/members/duplicate-check`,
 `POST .../kyc/verify` and `POST .../blacklist`. The PATCH and the two state changes require
 `If-Match` (section 7.9) and return the new `ETag`. Loan number search waits for loans
-(increment 4). Then (#11) the next of kin routes and `GET .../relationships`. The rest of this
-table is to be built.
+(increment 4). Then (#11) the next of kin routes and `GET .../relationships`, and (#12) the member
+document routes. The rest of this table is to be built.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
@@ -446,7 +451,7 @@ table is to be built.
 | PATCH, DELETE | `/lending/next-of-kin/{kin_id}` | `lending.members.update` | Both require `If-Match`. A changed NIN or phone re-resolves the link. DELETE of the last next of kin of a member in `pending_verification` or `verified` returns 422 `next_of_kin_required` |
 | POST | `/lending/next-of-kin/{kin_id}/link` | `lending.members.update` | `{decision: confirm or reject}`, `If-Match`; only for `suggested` links, else 409 `invalid_status_transition`. FR-MEM-07 |
 | GET | `/lending/members/{member_id}/relationships` | `lending.members.read` | `{member_id, names_as_kin, named_as_kin_by}`; a namer outside the caller's scope shows only `member_no`. Guarantees and exposure join in increment 4. FR-MEM-08 |
-| GET, POST | `/lending/members/{member_id}/documents` | read / update | FR-MEM-09 |
+| GET, POST | `/lending/members/{member_id}/documents` | read / update | FR-MEM-09. POST is multipart: `doc_kind` (`id_front`, `id_back`, `photo`, `other`) and `file`; an `id_front` can complete KYC (FR-MEM-05) |
 | POST | `/lending/members/{member_id}/portal-invite` | `lending.members.update` | Sends activation SMS. FR-IAM-09 |
 | GET | `/lending/members/{member_id}/credits` | `lending.members.read` | Overpayment credits |
 | POST | `/lending/members/{member_id}/credits/refund` | `lending.repayments.create` | **M A**. FR-REP-04a |

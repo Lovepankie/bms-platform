@@ -324,8 +324,11 @@ GitHub Actions deploy secrets live in the `staging` and `production` environment
   staging, production and the company site share one zone, stops a sibling host on that zone from
   setting a same-named cookie that would reach it.
 - Uploads: allowed types JPEG, PNG, PDF; maximum 5 MB; type detected from content, not
-  the file name; images are re-encoded to strip metadata; files are stored in object
-  storage, never on the application host's disk.
+  the file name; images are re-encoded to strip metadata (JPEG at quality 0.92, so small print
+  stays legible); a canvas over 40 megapixels is refused before decoding (`image_too_large`), so a
+  small compressed file cannot exhaust memory; files are stored in object storage, never on the
+  application host's disk. Tomcat reads past an over-limit upload (`max-swallow-size` 8 MB) so
+  the client gets the 413 body instead of a reset connection.
 
 ## 8.9 Personal data handling
 

@@ -33,6 +33,7 @@ class ModularityTest {
                         "core.tenancy",
                         "core.identity",
                         "core.audit",
+                        "core.documents",
                         "core.ledger",
                         "core.jobs",
                         "core.operations",

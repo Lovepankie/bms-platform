@@ -112,6 +112,10 @@ jobs:
           CLOUDFLARED_IMAGE: cloudflare/cloudflared:2026.9.3
           BMS_TOKEN_SIGNING_JWK: ci-placeholder
           BMS_DATA_KEY: ci-placeholder
+          R2_ENDPOINT: https://ci-placeholder.invalid
+          R2_DOCUMENTS_ACCESS_KEY_ID: ci-placeholder
+          R2_DOCUMENTS_SECRET_ACCESS_KEY: ci-placeholder
+          R2_DOCUMENTS_BUCKET: ci-placeholder
         run: |
           docker compose -f deploy/compose.yml config --quiet
           docker compose -f deploy/compose.pi-staging.yml config --quiet

@@ -3,6 +3,11 @@
 spring:
   application:
     name: bms-api
+  # Uploads (chapter 8 section 8.8): 5 MB per file; the request allows for the form overhead.
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   main:
     banner-mode: off
   threads:
@@ -37,6 +42,9 @@ server:
   shutdown: graceful
   forward-headers-strategy: native
   tomcat:
+    # Read past an over-limit upload so the client gets the 413 file_too_large body instead of a
+    # reset connection; the 6 MB request cap still bounds it (chapter 8 section 8.8).
+    max-swallow-size: 8MB
     remoteip:
       # ADR-018 finding M1: the native strategy installs Tomcat's RemoteIpValve, whose host-header
       # defaults to X-Forwarded-Host and is trusted from the private Docker network the tunnel's
@@ -117,6 +125,15 @@ bms:
     data-key-id: ${BMS_DATA_KEY_ID:k1}
   database:
     role-guard: true
+  # Documents (chapter 12 section 12.5). r2 on servers; fake (in memory, self-signed URLs) only in
+  # the dev and test profiles, and startup fails otherwise.
+  storage:
+    provider: ${OBJECT_STORAGE:r2}
+    r2:
+      endpoint: ${R2_ENDPOINT:}
+      access-key-id: ${R2_DOCUMENTS_ACCESS_KEY_ID:}
+      secret-access-key: ${R2_DOCUMENTS_SECRET_ACCESS_KEY:}
+      bucket: ${R2_DOCUMENTS_BUCKET:}
 
 # Background jobs on PostgreSQL (ADR-008). BMS_SCHEDULER_ENABLED=false turns polling off in an
 # instance that should only serve HTTP, if a separate worker instance is ever split out.

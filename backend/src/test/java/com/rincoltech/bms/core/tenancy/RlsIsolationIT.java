@@ -98,6 +98,24 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), kinMember, t.tenantId(), kinMember)
                 .update();
+        UUID document = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO documents (id, tenant_id, doc_type, subject_type, subject_id, object_key, content_type,
+                                               size_bytes, sha256)
+                        VALUES (?, ?, 'upload', 'lending.member', ?, ?, 'application/pdf', 5, repeat('0', 64))
+                        """)
+                .params(
+                        document,
+                        t.tenantId(),
+                        kinMember,
+                        "tenants/" + t.tenantId() + "/upload/rls/" + document + ".pdf")
+                .update();
+        owner.sql("""
+                        INSERT INTO lending_member_documents (id, tenant_id, member_id, doc_kind, document_id, uploaded_by)
+                        VALUES (?, ?, ?, 'other', ?, ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), kinMember, document, user)
+                .update();
         owner.sql(
                         "INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type) VALUES (?, ?, 'system', 'test.fixture.created', 'test')")
                 .params(UUID.randomUUID(), t.tenantId())

@@ -7,6 +7,10 @@ bms:
     allow-tenant-header: true
   auth:
     mode: dev
+  storage:
+    provider: fake
+    # Fixed so a test can sign an expired URL itself (FR-DOC-03).
+    fake-secret: test-only-fake-storage-secret
     # argon2id at test cost. The PHC string carries its parameters, so every hash still verifies;
     # other profiles use the chapter 8 cost (64 MiB, 3 iterations).
     argon2-memory-kib: 4096

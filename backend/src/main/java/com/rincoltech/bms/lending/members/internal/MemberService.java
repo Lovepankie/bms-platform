@@ -225,6 +225,7 @@ class MemberService implements MemberLookup {
             now.put("confirmed_not_duplicate", true);
         }
         members.update(after);
+        recheckKyc(memberId, before.branchId());
         if (now.containsKey("national_id") || now.containsKey("phone_e164")) {
             linkKin(
                     memberId,
@@ -351,6 +352,22 @@ class MemberService implements MemberLookup {
                     memberId,
                     branchId,
                     Map.of("next_of_kin_ids", touched)));
+        }
+    }
+
+    /**
+     * FR-MEM-05: moves an incomplete member to {@code pending_verification} once every input is
+     * present. Called after each change that can complete it (member edit, next of kin, ID image).
+     */
+    void recheckKyc(UUID memberId, UUID branchId) {
+        if (members.markKycCompleteIfReady(memberId)) {
+            audit.record(new AuditLog.Entry(
+                    "lending.member.kyc_complete",
+                    "lending.member",
+                    memberId,
+                    branchId,
+                    Map.of("kyc_status", "incomplete"),
+                    Map.of("kyc_status", "pending_verification")));
         }
     }
 
