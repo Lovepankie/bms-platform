@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -128,7 +129,11 @@ class CollateralService {
                 null,
                 null,
                 1);
-        repo.insert(c, principal.userId());
+        try {
+            repo.insert(c, principal.userId());
+        } catch (DuplicateKeyException e) {
+            throw alreadyPledged();
+        }
         repo.insertEvent(c.id(), event("registered", null, custody, location, null, null, clock.now(), null));
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("member_id", member.id());
@@ -213,7 +218,11 @@ class CollateralService {
         if (now.isEmpty()) {
             return before;
         }
-        repo.update(after);
+        try {
+            repo.update(after);
+        } catch (DuplicateKeyException e) {
+            throw alreadyPledged();
+        }
         audit.record(new AuditLog.Entry("lending.collateral.updated", SUBJECT, id, before.branchId(), was, now));
         return repo.find(id).orElseThrow();
     }
@@ -403,12 +412,17 @@ class CollateralService {
     private void checkNotPledged(String type, String reference, UUID excludeId) {
         if (reference != null
                 && repo.activeDuplicate(type, reference, excludeId).isPresent()) {
-            throw new ApiException(
-                    HttpStatus.CONFLICT,
-                    "collateral_already_pledged",
-                    "Collateral already pledged",
-                    "An item of this type with this reference is already registered and not released.");
+            throw alreadyPledged();
         }
+    }
+
+    /** Also the answer when the unique index catches a concurrent registration (FR-COL-01). */
+    private static ApiException alreadyPledged() {
+        return new ApiException(
+                HttpStatus.CONFLICT,
+                "collateral_already_pledged",
+                "Collateral already pledged",
+                "An item of this type with this reference is already registered and not released.");
     }
 
     private static void requireVehiclePlate(String type, String reference) {

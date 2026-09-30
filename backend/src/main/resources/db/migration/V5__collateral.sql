@@ -38,6 +38,11 @@ CREATE TABLE lending_collateral_items (
 );
 CREATE INDEX lending_collateral_items_reference
     ON lending_collateral_items (tenant_id, collateral_type, reference_no_normalised);
+-- FR-COL-01 (interim until loans): one active pledge per type and reference. The service checks
+-- first for a friendly error; this index closes the race between two concurrent registrations.
+CREATE UNIQUE INDEX lending_collateral_items_one_active
+    ON lending_collateral_items (tenant_id, collateral_type, reference_no_normalised)
+    WHERE reference_no_normalised IS NOT NULL AND custody_status NOT IN ('released', 'disposed');
 CREATE INDEX lending_collateral_items_member ON lending_collateral_items (tenant_id, member_id);
 CREATE INDEX lending_collateral_items_list ON lending_collateral_items (tenant_id, branch_id, created_at, id);
 SELECT bms_apply_tenant_rls('lending_collateral_items');

@@ -6,9 +6,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -231,7 +238,12 @@ class CollateralIT extends IntegrationTest {
                 "/api/v1/approvals/" + approval + "/approve",
                 headers(officer, OFFICER + ",lending.collateral.release_approve", "*", null),
                 Map.of("note", "checked"));
-        assertThat(self.getStatusCode()).isNotEqualTo(HttpStatus.OK);
+        assertThat(self.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(self.getBody().get("code").asString()).isEqualTo("self_approval_forbidden");
+        JsonNode afterSelf = send(HttpMethod.GET, path(id), headers(officer, OFFICER, "*", null), null)
+                .getBody();
+        assertThat(afterSelf.get("item").get("custody_status").asString()).isEqualTo("in_custody");
+        assertThat(afterSelf.get("events").findValuesAsString("event_type")).doesNotContain("released");
 
         ResponseEntity<JsonNode> approved = send(
                 HttpMethod.POST,
@@ -297,5 +309,174 @@ class CollateralIT extends IntegrationTest {
                                 Map.of("description", "Test changed"))
                         .getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    String requestRelease(String id, String ifMatch) {
+        ResponseEntity<JsonNode> r = send(
+                HttpMethod.POST,
+                path(id) + "/release",
+                headers(officer, OFFICER, "*", ifMatch),
+                Map.of("collected_by", "Test Borrower 01"));
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        return r.getBody().get("approval_id").asString();
+    }
+
+    ResponseEntity<JsonNode> event(String id, String ifMatch, Map<String, Object> body) {
+        return send(HttpMethod.POST, path(id) + "/events", headers(officer, OFFICER, "*", ifMatch), body);
+    }
+
+    /** FR-COL-01: the unique index closes the check-then-insert race; exactly one registration wins. */
+    @Test
+    void concurrentRegistrationsOfOnePlateLeaveOneItem() throws Exception {
+        int n = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<ResponseEntity<JsonNode>>> results = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            Callable<ResponseEntity<JsonNode>> task = () -> {
+                start.await();
+                return register("vehicle", "UXX 002X", null, null);
+            };
+            results.add(pool.submit(task));
+        }
+        start.countDown();
+        int created = 0;
+        for (Future<ResponseEntity<JsonNode>> f : results) {
+            ResponseEntity<JsonNode> r = f.get();
+            if (r.getStatusCode() == HttpStatus.CREATED) {
+                created++;
+            } else {
+                assertThat(r.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                assertThat(r.getBody().get("code").asString()).isEqualTo("collateral_already_pledged");
+            }
+        }
+        pool.shutdown();
+        assertThat(created).isEqualTo(1);
+        long rows = TestDatabase.owner()
+                .sql(
+                        "SELECT count(*) FROM lending_collateral_items WHERE tenant_id = ? AND reference_no_normalised = 'UXX002X'")
+                .param(t.tenantId())
+                .query(Long.class)
+                .single();
+        assertThat(rows).isEqualTo(1);
+    }
+
+    /** FR-COL-04: nothing can be released that is already released, seized or disposed. */
+    @Test
+    void releaseIsRefusedFromReleasedSeizedAndDisposed() {
+        String seized = register("other", "TEST-SEIZED-01", null, null)
+                .getBody()
+                .get("id")
+                .asString();
+        event(seized, "\"1\"", Map.of("event_type", "seized"));
+        ResponseEntity<JsonNode> fromSeized = send(
+                HttpMethod.POST,
+                path(seized) + "/release",
+                headers(officer, OFFICER, "*", "\"2\""),
+                Map.of("collected_by", "Test Borrower 01"));
+        assertThat(fromSeized.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(fromSeized.getBody().get("code").asString()).isEqualTo("invalid_status_transition");
+
+        event(seized, "\"2\"", Map.of("event_type", "disposed"));
+        ResponseEntity<JsonNode> fromDisposed = send(
+                HttpMethod.POST,
+                path(seized) + "/release",
+                headers(officer, OFFICER, "*", "\"3\""),
+                Map.of("collected_by", "Test Borrower 01"));
+        assertThat(fromDisposed.getBody().get("code").asString()).isEqualTo("invalid_status_transition");
+
+        String released = register("other", "TEST-RELEASED-01", null, null)
+                .getBody()
+                .get("id")
+                .asString();
+        String approval = requestRelease(released, "\"1\"");
+        send(
+                HttpMethod.POST,
+                "/api/v1/approvals/" + approval + "/approve",
+                headers(UUID.randomUUID(), MANAGER, "*", null),
+                Map.of("note", "checked"));
+        ResponseEntity<JsonNode> again = send(
+                HttpMethod.POST,
+                path(released) + "/release",
+                headers(officer, OFFICER, "*", "\"2\""),
+                Map.of("collected_by", "Test Borrower 01"));
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(again.getBody().get("code").asString()).isEqualTo("invalid_status_transition");
+    }
+
+    /** Chapter 7 section 7.9 and chapter 8: a stale version is 409; a maker without release_request is 403. */
+    @Test
+    void releaseNeedsTheCurrentVersionAndTheMakerPermission() {
+        String id = register("other", "TEST-VERSION-01", null, null)
+                .getBody()
+                .get("id")
+                .asString();
+        ResponseEntity<JsonNode> stale = send(
+                HttpMethod.POST,
+                path(id) + "/release",
+                headers(officer, OFFICER, "*", "\"9\""),
+                Map.of("collected_by", "Test Borrower 01"));
+        assertThat(stale.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(stale.getBody().get("code").asString()).isEqualTo("version_conflict");
+
+        ResponseEntity<JsonNode> noPermission = send(
+                HttpMethod.POST,
+                path(id) + "/release",
+                headers(officer, "lending.collateral.read,lending.collateral.manage", "*", "\"1\""),
+                Map.of("collected_by", "Test Borrower 01"));
+        assertThat(noPermission.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(noPermission.getBody().get("code").asString()).isEqualTo("permission_denied");
+    }
+
+    /** A checker scoped to another branch cannot see the request: 404, and nothing is released. */
+    @Test
+    void aCheckerOutsideTheBranchCannotDecide() {
+        String id = register("other", "TEST-SCOPE-01", null, null)
+                .getBody()
+                .get("id")
+                .asString();
+        String approval = requestRelease(id, "\"1\"");
+        ResponseEntity<JsonNode> outside = send(
+                HttpMethod.POST,
+                "/api/v1/approvals/" + approval + "/approve",
+                headers(UUID.randomUUID(), MANAGER, t.secondBranch().toString(), null),
+                Map.of("note", "checked"));
+        assertThat(outside.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(send(HttpMethod.GET, path(id), headers(officer, OFFICER, "*", null), null)
+                        .getBody()
+                        .get("item")
+                        .get("custody_status")
+                        .asString())
+                .isEqualTo("pledged");
+    }
+
+    /** FR-APR-08: seized between request and approval, the request goes stale: a clean 422, no release. */
+    @Test
+    void anItemSeizedAfterTheRequestIsNotReleased() {
+        String id = register("other", "TEST-RACE-01", null, null)
+                .getBody()
+                .get("id")
+                .asString();
+        String approval = requestRelease(id, "\"1\"");
+        assertThat(event(id, "\"1\"", Map.of("event_type", "seized")).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        ResponseEntity<JsonNode> approved = send(
+                HttpMethod.POST,
+                "/api/v1/approvals/" + approval + "/approve",
+                headers(UUID.randomUUID(), MANAGER, "*", null),
+                Map.of("note", "checked"));
+        assertThat(approved.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(approved.getBody().get("code").asString()).isEqualTo("subject_changed");
+        JsonNode detail = send(HttpMethod.GET, path(id), headers(officer, OFFICER, "*", null), null)
+                .getBody();
+        assertThat(detail.get("item").get("custody_status").asString()).isEqualTo("seized");
+        assertThat(detail.get("events").findValuesAsString("event_type")).doesNotContain("released");
+        String status = TestDatabase.owner()
+                .sql("SELECT status FROM approval_requests WHERE id = ?::uuid")
+                .param(approval)
+                .query(String.class)
+                .single();
+        assertThat(status).isEqualTo("stale");
     }
 }

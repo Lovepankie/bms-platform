@@ -265,6 +265,7 @@ Accepted (this list is the ADR index):
 - ADR-017 The principal types live in the shared kernel
 - ADR-018 Staging on a shared ARM64 host behind a Cloudflare Tunnel, pull-based deploy, hyphenated
   hosts under the Rincol zone
+- ADR-019 Collateral release as an approval action, and the interim duplicate pledge rule (proposed, #24)
 
 Pending (cite only as "pending ADR-NNN"):
 

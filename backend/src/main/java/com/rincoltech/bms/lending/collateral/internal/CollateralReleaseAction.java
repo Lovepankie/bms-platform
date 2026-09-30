@@ -61,12 +61,16 @@ class CollateralReleaseAction implements ApprovalAction {
         return repo.find(subjectId).map(CollateralResponse::version);
     }
 
-    /** Checked again here: the item may have been seized between request and approval. */
+    /**
+     * Checked again here. In practice a custody change between request and approval bumps the
+     * version, so the request goes stale ({@code subject_changed}) before this runs.
+     */
     @Override
     public void execute(Execution e) {
         CollateralResponse c = repo.lock(e.subjectId()).orElseThrow();
         if (!CollateralService.RELEASABLE.contains(c.custodyStatus())) {
-            throw new IllegalStateException("An item that is " + c.custodyStatus() + " cannot be released.");
+            // A clean 409 in the approval's execution error, not an internal error in the log.
+            throw CollateralService.invalidTransition("An item that is " + c.custodyStatus() + " cannot be released.");
         }
         repo.update(CollateralService.withCustody(c, "released", null));
         String collectedBy = (String) e.payload().get("collected_by");

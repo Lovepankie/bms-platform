@@ -880,7 +880,9 @@ guarantor equal to the borrower.
 Index `(tenant_id, collateral_type, reference_no_normalised)` for FR-COL-01 duplicate
 pledge detection. `CHECK (collateral_type <> 'vehicle' OR reference_no_normalised IS NOT NULL)` and
 `CHECK (custody_status <> 'in_custody' OR storage_location IS NOT NULL)`; composite keys to the
-branch and the member.
+branch and the member. Partial unique index `(tenant_id, collateral_type, reference_no_normalised)`
+where the reference is set and `custody_status` is not `released` or `disposed`: one active pledge
+per reference, enforced under concurrency (interim until loans, ADR-019).
 
 ### `lending_collateral_valuations`
 
