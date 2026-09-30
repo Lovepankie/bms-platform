@@ -261,6 +261,292 @@
           }
         }
       },
+      "Collateral" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "collateral_type" : {
+            "type" : "string"
+          },
+          "collateral_value_minor" : {
+            "description" : "FR-COL-02: the latest valuation's forced sale value, else the estimate",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "custody_status" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "estimated_value_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "owner_name" : {
+            "type" : "string"
+          },
+          "owner_relationship" : {
+            "type" : "string"
+          },
+          "reference_no" : {
+            "type" : "string"
+          },
+          "reference_no_normalised" : {
+            "type" : "string"
+          },
+          "storage_location" : {
+            "type" : "string"
+          },
+          "updated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "CollateralDetail" : {
+        "properties" : {
+          "events" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CollateralEvent"
+            },
+            "type" : "array"
+          },
+          "item" : {
+            "$ref" : "#/components/schemas/Collateral"
+          },
+          "valuations" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CollateralValuation"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "CollateralDocument" : {
+        "properties" : {
+          "content_type" : {
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "document_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "size_bytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "CollateralDocumentList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CollateralDocument"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "CollateralEvent" : {
+        "properties" : {
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "counterparty_name" : {
+            "type" : "string"
+          },
+          "event_type" : {
+            "type" : "string"
+          },
+          "from_status" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "location" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "occurred_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "recorded_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "to_status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CollateralEventRequest" : {
+        "properties" : {
+          "counterparty_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "event_type" : {
+            "pattern" : "received_into_custody|moved|seized|disposed|note",
+            "type" : "string"
+          },
+          "location" : {
+            "description" : "Required for received_into_custody and moved",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "note" : {
+            "description" : "Required for note",
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "occurred_at" : {
+            "description" : "Defaults to now; not in the future",
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "event_type" ]
+      },
+      "CollateralPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Collateral"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CollateralReleaseOutcome" : {
+        "properties" : {
+          "approval_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "executed" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "CollateralReleaseRequest" : {
+        "properties" : {
+          "collected_by" : {
+            "description" : "Who collects the item or document",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "note" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "collected_by" ]
+      },
+      "CollateralValuation" : {
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "forced_sale_value_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "market_value_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "recorded_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "valued_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "valuer_name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CollateralValuationRequest" : {
+        "properties" : {
+          "forced_sale_value_minor" : {
+            "description" : "At most the market value",
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "market_value_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "note" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "valued_on" : {
+            "description" : "Not after today (business date)",
+            "format" : "date",
+            "type" : "string"
+          },
+          "valuer_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "market_value_minor", "valued_on" ]
+      },
       "CreateBranchRequest" : {
         "properties" : {
           "code" : {
@@ -280,6 +566,55 @@
           }
         },
         "required" : [ "code", "name" ]
+      },
+      "CreateCollateralRequest" : {
+        "properties" : {
+          "collateral_type" : {
+            "pattern" : "land_title|vehicle_logbook|vehicle|national_id|household_item|other",
+            "type" : "string"
+          },
+          "custody_status" : {
+            "description" : "Default pledged (the owner keeps it)",
+            "pattern" : "pledged|in_custody",
+            "type" : "string"
+          },
+          "description" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "estimated_value_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "owner_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "owner_relationship" : {
+            "pattern" : "self|spouse|other",
+            "type" : "string"
+          },
+          "reference_no" : {
+            "description" : "Title, logbook, plate or ID number as written; required for vehicle",
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "storage_location" : {
+            "description" : "Required when in_custody",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "collateral_type", "description", "member_id" ]
       },
       "CreateMemberRequest" : {
         "properties" : {
@@ -1485,6 +1820,35 @@
           }
         }
       },
+      "UpdateCollateralRequest" : {
+        "description" : "Omitted fields are unchanged",
+        "properties" : {
+          "description" : {
+            "maxLength" : 300,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "estimated_value_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "owner_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "owner_relationship" : {
+            "pattern" : "self|spouse|other",
+            "type" : "string"
+          },
+          "reference_no" : {
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
       "UpdateMemberRequest" : {
         "description" : "Omitted fields are unchanged",
         "properties" : {
@@ -2480,6 +2844,376 @@
         },
         "summary" : "A 5 minute signed download URL (FR-DOC-03)",
         "tags" : [ "documents" ]
+      }
+    },
+    "/api/v1/lending/collateral" : {
+      "get" : {
+        "operationId" : "listCollateral",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "member_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "custody_status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollateralPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List collateral in the caller's branch scope",
+        "tags" : [ "lending-collateral" ]
+      },
+      "post" : {
+        "operationId" : "createCollateral",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateCollateralRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Collateral"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a collateral item (FR-COL-01)",
+        "tags" : [ "lending-collateral" ]
+      }
+    },
+    "/api/v1/lending/collateral/{collateral_id}" : {
+      "get" : {
+        "operationId" : "getCollateral",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "collateral_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollateralDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "An item with its valuations and custody timeline",
+        "tags" : [ "lending-collateral" ]
+      },
+      "patch" : {
+        "operationId" : "updateCollateral",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "collateral_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateCollateralRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Collateral"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit a collateral item",
+        "tags" : [ "lending-collateral" ]
+      }
+    },
+    "/api/v1/lending/collateral/{collateral_id}/documents" : {
+      "get" : {
+        "operationId" : "listCollateralDocuments",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "collateral_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollateralDocumentList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List an item's photos and scans",
+        "tags" : [ "lending-collateral" ]
+      },
+      "post" : {
+        "operationId" : "uploadCollateralDocument",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "collateral_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "required" : [ "file" ],
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollateralDocument"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Upload a photo or scan: JPEG, PNG or PDF, 5 MB (FR-COL-01)",
+        "tags" : [ "lending-collateral" ]
+      }
+    },
+    "/api/v1/lending/collateral/{collateral_id}/events" : {
+      "post" : {
+        "operationId" : "recordCollateralEvent",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "collateral_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CollateralEventRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollateralDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record a custody change other than release (FR-COL-03)",
+        "tags" : [ "lending-collateral" ]
+      }
+    },
+    "/api/v1/lending/collateral/{collateral_id}/release" : {
+      "post" : {
+        "operationId" : "requestCollateralRelease",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "collateral_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CollateralReleaseRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollateralReleaseOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request release, decided by a checker (FR-COL-04)",
+        "tags" : [ "lending-collateral" ]
+      }
+    },
+    "/api/v1/lending/collateral/{collateral_id}/valuations" : {
+      "post" : {
+        "operationId" : "addCollateralValuation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "collateral_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CollateralValuationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollateralValuation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record a valuation (FR-COL-02)",
+        "tags" : [ "lending-collateral" ]
       }
     },
     "/api/v1/lending/members" : {

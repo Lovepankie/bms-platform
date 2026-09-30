@@ -1,5 +1,7 @@
 package com.rincoltech.bms.core.tenancy;
 
+import java.util.Set;
+
 /** Typed reads of the bound tenant's settings (chapter 6 table {@code tenant_settings}). */
 public interface TenantSettings {
 
@@ -11,4 +13,7 @@ public interface TenantSettings {
 
     /** FR-IAM-06: every staff user must use TOTP, not only the roles that require it. */
     boolean requireMfaAllStaff();
+
+    /** FR-COL-05: collateral types this tenant does not accept; empty when unset. */
+    Set<String> disabledCollateralTypes();
 }

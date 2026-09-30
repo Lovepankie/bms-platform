@@ -116,6 +116,27 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), kinMember, document, user)
                 .update();
+        UUID collateral = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO lending_collateral_items (id, tenant_id, branch_id, member_id, collateral_type,
+                                                              description, currency, custody_status)
+                        VALUES (?, ?, ?, ?, 'household_item', 'Test fridge', 'UGX', 'pledged')
+                        """)
+                .params(collateral, t.tenantId(), t.headOffice(), kinMember)
+                .update();
+        owner.sql("""
+                        INSERT INTO lending_collateral_valuations (id, tenant_id, collateral_id, valued_on,
+                                                                   market_value_minor, recorded_by)
+                        VALUES (?, ?, ?, DATE '2026-01-15', 100000, ?)
+                        """).params(UUID.randomUUID(), t.tenantId(), collateral, user).update();
+        owner.sql("""
+                        INSERT INTO lending_collateral_events (id, tenant_id, collateral_id, event_type, to_status,
+                                                               occurred_at, recorded_by)
+                        VALUES (?, ?, ?, 'registered', 'pledged', now(), ?)
+                        """).params(UUID.randomUUID(), t.tenantId(), collateral, user).update();
+        owner.sql("INSERT INTO lending_collateral_documents (tenant_id, collateral_id, document_id) VALUES (?, ?, ?)")
+                .params(t.tenantId(), collateral, document)
+                .update();
         owner.sql(
                         "INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type) VALUES (?, ?, 'system', 'test.fixture.created', 'test')")
                 .params(UUID.randomUUID(), t.tenantId())

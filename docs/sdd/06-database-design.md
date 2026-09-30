@@ -878,7 +878,9 @@ guarantor equal to the borrower.
 | `storage_location` | `varchar(200)` | Required when `in_custody`. |
 
 Index `(tenant_id, collateral_type, reference_no_normalised)` for FR-COL-01 duplicate
-pledge detection.
+pledge detection. `CHECK (collateral_type <> 'vehicle' OR reference_no_normalised IS NOT NULL)` and
+`CHECK (custody_status <> 'in_custody' OR storage_location IS NOT NULL)`; composite keys to the
+branch and the member.
 
 ### `lending_collateral_valuations`
 
@@ -1142,6 +1144,9 @@ first uses it.
 `lending_members.import_row_id` gets its foreign key when the import tables arrive.
 `V3__next_of_kin.sql` (#11) creates `lending_next_of_kin` and `lending_member_links_v`.
 `V4__documents.sql` (#12) creates `documents` and `lending_member_documents`.
+`V5__collateral.sql` (#13) creates `lending_collateral_items`, `lending_collateral_valuations`
+(SELECT and INSERT only), `lending_collateral_events` (append-only) and
+`lending_collateral_documents`. `lending_loan_collateral` waits for `lending_loans` (increment 4).
 
 ## 6.10 Open items
 

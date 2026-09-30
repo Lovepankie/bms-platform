@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -114,6 +115,12 @@ class SettingsService implements TenantSettings {
     @Transactional(readOnly = true)
     public boolean requireMfaAllStaff() {
         return current().requireMfaAllStaff();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<String> disabledCollateralTypes() {
+        return Set.copyOf(current().disabledCollateralTypes());
     }
 
     private Stored load(boolean forUpdate) {
