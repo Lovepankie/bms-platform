@@ -91,6 +91,7 @@ install -m 644 "${DOCKER_CONFIG:-$HOME/.docker}/config.json" "$ROOT/dockercfg/co
 verify_signature() {
     local digest_ref="$1"
     docker run --rm \
+        --user "$(id -u):$(id -g)" \
         --volume "$ROOT/cosign.pub:/cosign.pub:ro" \
         --volume "$ROOT/dockercfg:/home/nonroot/.docker:ro" \
         --env DOCKER_CONFIG=/home/nonroot/.docker \
