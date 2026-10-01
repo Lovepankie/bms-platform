@@ -7,7 +7,7 @@ interface ObjectStorage {
 
     void put(String key, byte[] bytes, String contentType);
 
-    /** Removes an object; used when the transaction that stored it rolls back (#29). */
+    /** Removes an object; used when the transaction that stored it rolls back. */
     void delete(String key);
 
     /**

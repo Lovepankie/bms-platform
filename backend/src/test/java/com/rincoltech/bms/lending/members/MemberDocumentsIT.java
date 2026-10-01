@@ -12,11 +12,18 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.imageio.ImageIO;
@@ -360,20 +367,6 @@ class MemberDocumentsIT extends IntegrationTest {
         assertThat(r.getBody().get("code").asString()).isEqualTo("image_too_large");
     }
 
-    /** #29: at most 10 documents per member and kind. */
-    @Test
-    void aMemberKeepsAtMostTenDocumentsOfAKind() throws Exception {
-        String id = member("Test Borrower 23", "0700000023", null, null);
-        byte[] tiny = png(4, 4);
-        for (int i = 0; i < 10; i++) {
-            assertThat(upload(id, "other", tiny, "o.png").getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        }
-        ResponseEntity<JsonNode> eleventh = upload(id, "other", tiny, "o.png");
-        assertThat(eleventh.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat(eleventh.getBody().get("code").asString()).isEqualTo("document_limit_reached");
-        assertThat(upload(id, "photo", tiny, "p.png").getStatusCode()).isEqualTo(HttpStatus.CREATED);
-    }
-
     /** #29, NFR-ISO-05: another tenant asking for this document's URL gets 404, never a URL. */
     @Test
     void anotherTenantCannotGetADownloadUrl() throws Exception {
@@ -402,14 +395,38 @@ class MemberDocumentsIT extends IntegrationTest {
         return h;
     }
 
+    /** The permissions the chapter 8 matrix seeds for a role (the real set, not a hand-picked one). */
+    static String permissionsOf(String role) {
+        return TestDatabase.owner()
+                .sql("SELECT string_agg(permission_key, ',') FROM role_permissions WHERE role_key = ?")
+                .param(role)
+                .query(String.class)
+                .single();
+    }
+
+    HttpHeaders as(UUID user, String permissions, String branches) {
+        HttpHeaders h = as(user, permissions);
+        h.set("X-Dev-Branch-Ids", branches);
+        return h;
+    }
+
+    long audits(String action, String documentId) {
+        return TestDatabase.owner()
+                .sql("SELECT count(*) FROM audit_log WHERE action = ? AND entity_id = ?::uuid")
+                .params(action, documentId)
+                .query(Long.class)
+                .single();
+    }
+
     /**
-     * #29, Hillary's decision (option 2): ID images need lending.members.verify_kyc. A branch
-     * manager gets the URL and the download is audited with who, which member and which document; a
-     * cashier and an auditor (lending.members.read, no verify_kyc, chapter 8 matrix) get a clean 403
-     * on ID images but can still download a photo.
+     * Chapter 8 section 8.3.2: ID images need lending.members.verify_kyc. Each role signs in with
+     * the permission set the matrix seeds for it. A branch manager gets the URL (audited with who,
+     * which member and which document); a cashier and an auditor get a clean 403 on both ID images,
+     * each denial audited, and still download a photo; a branch manager of another branch is
+     * refused too.
      */
     @Test
-    void idImagesNeedVerifyKycAndEveryDownloadIsAudited() throws Exception {
+    void idImagesNeedVerifyKycPerRoleAndPerBranch() throws Exception {
         String id = member("Test Borrower 25", "0700000025", null, null);
         String front = upload(id, "id_front", png(4, 4), "f.png")
                 .getBody()
@@ -423,22 +440,34 @@ class MemberDocumentsIT extends IntegrationTest {
                 .getBody()
                 .get("document_id")
                 .asString();
+        String managerPermissions = permissionsOf("branch_manager");
+        assertThat(managerPermissions).contains("lending.members.verify_kyc");
 
         UUID manager = UUID.randomUUID();
-        ResponseEntity<JsonNode> managerUrl =
-                downloadUrl(front, as(manager, "lending.members.read,lending.members.verify_kyc"));
-        assertThat(managerUrl.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(downloadUrl(front, as(manager, managerPermissions)).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
         Map<String, Object> row =
                 TestDatabase.owner().sql("""
-                        SELECT actor_user_id, entity_id, data::text AS data FROM audit_log
+                        SELECT actor_user_id, data::text AS data FROM audit_log
                          WHERE action = 'core.document.download_url_issued' AND entity_id = ?::uuid
                         """).param(front).query().singleRow();
         assertThat(row.get("actor_user_id")).isEqualTo(manager);
-        assertThat(row.get("entity_id").toString()).isEqualTo(front);
         assertThat((String) row.get("data")).contains(id);
 
+        ResponseEntity<JsonNode> otherBranch = downloadUrl(
+                front,
+                as(UUID.randomUUID(), managerPermissions, t.secondBranch().toString()));
+        assertThat(otherBranch.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(otherBranch.getBody().has("url")).isFalse();
+
+        long deniedBefore = audits("core.document.access_denied", front);
         for (String role : new String[] {"cashier", "auditor"}) {
-            HttpHeaders h = as(UUID.randomUUID(), "lending.members.read");
+            String permissions = permissionsOf(role);
+            assertThat(permissions)
+                    .as("the %s set in the matrix", role)
+                    .contains("lending.members.read")
+                    .doesNotContain("lending.members.verify_kyc");
+            HttpHeaders h = as(UUID.randomUUID(), permissions);
             for (String idImage : new String[] {front, back}) {
                 ResponseEntity<JsonNode> denied = downloadUrl(idImage, h);
                 assertThat(denied.getStatusCode()).as(role + " on an ID image").isEqualTo(HttpStatus.FORBIDDEN);
@@ -448,6 +477,145 @@ class MemberDocumentsIT extends IntegrationTest {
             assertThat(downloadUrl(photo, h).getStatusCode())
                     .as(role + " on a photo")
                     .isEqualTo(HttpStatus.OK);
+
+            // The list shows ID images only to those who may open them.
+            JsonNode listed = http.exchange(
+                            "/api/v1/lending/members/" + id + "/documents",
+                            HttpMethod.GET,
+                            new HttpEntity<>(h),
+                            JsonNode.class)
+                    .getBody()
+                    .get("items");
+            assertThat(listed.findValuesAsString("doc_kind")).as(role + " list").containsExactly("photo");
         }
+        assertThat(audits("core.document.access_denied", front) - deniedBefore).isEqualTo(2);
+
+        JsonNode managerList = http.exchange(
+                        "/api/v1/lending/members/" + id + "/documents",
+                        HttpMethod.GET,
+                        new HttpEntity<>(as(manager, managerPermissions)),
+                        JsonNode.class)
+                .getBody()
+                .get("items");
+        assertThat(managerList.findValuesAsString("doc_kind"))
+                .containsExactlyInAnyOrder("id_front", "id_back", "photo");
+    }
+
+    /** A member document with no link row has no known kind: denied, never read on the weaker permission. */
+    @Test
+    void aDocumentWithNoKnownKindIsDenied() throws Exception {
+        String id = member("Test Borrower 26", "0700000026", null, null);
+        UUID orphanRow = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO documents (id, tenant_id, branch_id, doc_type, subject_type, subject_id, object_key,
+                                               content_type, size_bytes, sha256)
+                        VALUES (?, ?, ?, 'upload', 'lending.member', ?::uuid, ?, 'image/png', 4, repeat('0', 64))
+                        """)
+                .params(
+                        orphanRow,
+                        t.tenantId(),
+                        t.headOffice(),
+                        id,
+                        "tenants/" + t.tenantId() + "/upload/x/" + orphanRow + ".png")
+                .update();
+        ResponseEntity<JsonNode> r =
+                downloadUrl(orphanRow.toString(), as(UUID.randomUUID(), permissionsOf("branch_manager")));
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(r.getBody().has("url")).isFalse();
+    }
+
+    long links(String memberId, String kind, boolean active) {
+        return TestDatabase.owner()
+                .sql(
+                        "SELECT count(*) FROM lending_member_documents WHERE member_id = ?::uuid AND doc_kind = ? AND (superseded_at IS NULL) = ?")
+                .params(memberId, kind, active)
+                .query(Long.class)
+                .single();
+    }
+
+    /** An upload beyond ten of a kind supersedes the oldest (kept for audit); a wrong file can always be replaced. */
+    @Test
+    void theEleventhDocumentOfAKindSupersedesTheOldest() throws Exception {
+        String id = member("Test Borrower 23", "0700000023", null, null);
+        byte[] tiny = png(4, 4);
+        String first = upload(id, "id_front", tiny, "o.png")
+                .getBody()
+                .get("document_id")
+                .asString();
+        for (int i = 1; i < 10; i++) {
+            assertThat(upload(id, "id_front", tiny, "o.png").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        }
+        ResponseEntity<JsonNode> eleventh = upload(id, "id_front", tiny, "o.png");
+        assertThat(eleventh.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(links(id, "id_front", true)).isEqualTo(10);
+        assertThat(links(id, "id_front", false)).isEqualTo(1);
+        String supersededDocument = TestDatabase.owner()
+                .sql(
+                        "SELECT document_id::text FROM lending_member_documents WHERE member_id = ?::uuid AND superseded_at IS NOT NULL")
+                .param(id)
+                .query(String.class)
+                .single();
+        assertThat(supersededDocument).isEqualTo(first);
+        // Kept for the audit trail: those who may read it can still open the superseded file.
+        assertThat(downloadUrl(first, as(UUID.randomUUID(), permissionsOf("branch_manager")))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    /** The limit holds under concurrency: the member row lock serialises one member's uploads. */
+    @Test
+    void concurrentUploadsNeverLeaveMoreThanTenActive() throws Exception {
+        String id = member("Test Borrower 27", "0700000027", null, null);
+        byte[] tiny = png(4, 4);
+        int n = 14;
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<HttpStatus>> results = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            Callable<HttpStatus> task = () -> {
+                start.await();
+                return HttpStatus.valueOf(
+                        upload(id, "other", tiny, "o.png").getStatusCode().value());
+            };
+            results.add(pool.submit(task));
+        }
+        start.countDown();
+        for (Future<HttpStatus> f : results) {
+            assertThat(f.get()).isEqualTo(HttpStatus.CREATED);
+        }
+        pool.shutdown();
+        assertThat(links(id, "other", true)).isEqualTo(10);
+        assertThat(links(id, "other", false)).isEqualTo(4);
+    }
+
+    /** A small upload that grows past 5 MB when re-encoded is refused: the stored bytes obey the limit. */
+    @Test
+    void anImageThatGrowsPastTheLimitWhenReEncodedIsRefused() throws Exception {
+        String id = member("Test Borrower 28", "0700000028", null, null);
+        BufferedImage noise = new BufferedImage(3600, 2700, BufferedImage.TYPE_INT_RGB);
+        java.util.Random random = new java.util.Random(7);
+        for (int y = 0; y < noise.getHeight(); y++) {
+            for (int x = 0; x < noise.getWidth(); x++) {
+                noise.setRGB(x, y, random.nextInt(0xFFFFFF));
+            }
+        }
+        ByteArrayOutputStream small = new ByteArrayOutputStream();
+        javax.imageio.ImageWriter writer =
+                ImageIO.getImageWritersByFormatName("jpeg").next();
+        javax.imageio.ImageWriteParam param = writer.getDefaultWriteParam();
+        param.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
+        param.setCompressionQuality(0.4f); // measured: 3.2 MB in, 7.6 MB after re-encoding at 0.92
+        try (javax.imageio.stream.ImageOutputStream out = ImageIO.createImageOutputStream(small)) {
+            writer.setOutput(out);
+            writer.write(null, new javax.imageio.IIOImage(noise, null, null), param);
+        } finally {
+            writer.dispose();
+        }
+        assertThat(small.size()).as("the upload itself is under the limit").isLessThan(5 * 1024 * 1024);
+
+        ResponseEntity<JsonNode> r = upload(id, "photo", small.toByteArray(), "noise.jpg");
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
+        assertThat(r.getBody().get("code").asString()).isEqualTo("file_too_large");
     }
 }

@@ -2,6 +2,7 @@ package com.rincoltech.bms.lending.members.internal;
 
 import com.rincoltech.bms.core.documents.DocumentAccess;
 import com.rincoltech.bms.kernel.Principal;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -36,16 +37,17 @@ class MemberDocumentAccess implements DocumentAccess {
     }
 
     /**
-     * #29 (Hillary's decision, option 2): ID images (id_front, id_back) need
-     * lending.members.verify_kyc in the member's branch, the people who verify KYC; photo and other
-     * documents stay on lending.members.read. Cashiers and auditors therefore get 403 on ID images.
+     * ID images (id_front, id_back) need lending.members.verify_kyc in the member's branch, the
+     * people who verify KYC; photo and other documents need lending.members.read (chapter 8 section
+     * 8.3.2). A document with no member link row has no known kind and is denied: fail closed.
      */
     @Override
     public boolean canRead(Principal principal, UUID subjectId, UUID documentId) {
-        String permission =
-                members.documentKind(documentId).filter(ID_IMAGES::contains).isPresent()
-                        ? "lending.members.verify_kyc"
-                        : "lending.members.read";
+        Optional<String> kind = members.documentKind(documentId);
+        if (kind.isEmpty()) {
+            return false;
+        }
+        String permission = ID_IMAGES.contains(kind.get()) ? "lending.members.verify_kyc" : "lending.members.read";
         return members.findById(subjectId)
                 .filter(m -> principal.may(permission, m.branchId()))
                 .isPresent();

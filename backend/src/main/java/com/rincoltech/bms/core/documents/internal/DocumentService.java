@@ -41,9 +41,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * FR-DOC-02, FR-DOC-03 and the upload rules of chapter 8 section 8.8. Uploads are checked by
@@ -59,7 +62,7 @@ class DocumentService implements Documents {
     /** Bounds decoding: a small compressed image can declare a huge canvas. */
     static final long MAX_PIXELS = 16_000_000L;
 
-    /** Image re-encodes at once; the staging host is a shared ARM board (#29). */
+    /** Image re-encodes at once; the staging host is a shared ARM board. */
     static final int MAX_CONCURRENT_REENCODES = 2;
 
     static final long REENCODE_WAIT_SECONDS = 10;
@@ -119,10 +122,21 @@ class DocumentService implements Documents {
     private final List<DocumentAccess> access;
     private final AuditLog audit;
     private final BusinessClock clock;
-    private final Semaphore reencodes = new Semaphore(MAX_CONCURRENT_REENCODES);
+    /** Package-private so a test can exhaust the slots. */
+    final Semaphore reencodes = new Semaphore(MAX_CONCURRENT_REENCODES);
+
+    /** Writes a denial's audit row in its own transaction, so it survives the refused request. */
+    private final TransactionTemplate ownTransaction;
 
     DocumentService(
-            JdbcClient jdbc, ObjectStorage storage, List<DocumentAccess> access, AuditLog audit, BusinessClock clock) {
+            JdbcClient jdbc,
+            ObjectStorage storage,
+            List<DocumentAccess> access,
+            AuditLog audit,
+            BusinessClock clock,
+            PlatformTransactionManager transactionManager) {
+        this.ownTransaction = new TransactionTemplate(transactionManager);
+        this.ownTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.jdbc = jdbc;
         this.storage = storage;
         this.access = List.copyOf(access);
@@ -133,7 +147,12 @@ class DocumentService implements Documents {
     @Override
     @Transactional
     public StoredDocument upload(Upload upload) {
-        byte[] raw = upload.bytes();
+        return store(prepare(upload.bytes()), upload.subjectType(), upload.subjectId(), upload.branchId());
+    }
+
+    /** No transaction here: the wait for a re-encode slot must not hold a database connection. */
+    @Override
+    public Prepared prepare(byte[] raw) {
         if (raw == null || raw.length == 0) {
             throw ApiException.validation(List.of(new FieldProblem("file", "required", "The file is empty.")));
         }
@@ -143,15 +162,20 @@ class DocumentService implements Documents {
         Kind kind = Kind.of(raw);
         byte[] stored = kind.imageFormat == null ? raw : reencodeBounded(raw, kind.imageFormat);
         if (stored.length > MAX_BYTES) {
-            // Re-encoding can grow a file; the stored bytes obey the same limit (#29).
+            // Re-encoding can grow a file; the stored bytes obey the same limit.
             throw fileTooLarge();
         }
+        return new Prepared(stored, kind.contentType, kind.extension, sha256(stored));
+    }
+
+    @Override
+    @Transactional
+    public StoredDocument store(Prepared prepared, String subjectType, UUID subjectId, UUID branchId) {
         UUID id = UUID.randomUUID();
         ZonedDateTime at = clock.now().atZone(ZoneOffset.UTC);
         String key = "tenants/%s/upload/%04d/%02d/%s.%s"
-                .formatted(TenantContext.require(), at.getYear(), at.getMonthValue(), id, kind.extension);
-        String sha256 = sha256(stored);
-        storage.put(key, stored, kind.contentType);
+                .formatted(TenantContext.require(), at.getYear(), at.getMonthValue(), id, prepared.extension());
+        storage.put(key, prepared.bytes(), prepared.contentType());
         deleteIfRolledBack(key);
         jdbc.sql("""
                         INSERT INTO documents (id, tenant_id, branch_id, doc_type, subject_type, subject_id, object_key,
@@ -160,22 +184,22 @@ class DocumentService implements Documents {
                         """)
                 .params(
                         id,
-                        upload.branchId(),
-                        upload.subjectType(),
-                        upload.subjectId(),
+                        branchId,
+                        subjectType,
+                        subjectId,
                         key,
-                        kind.contentType,
-                        stored.length,
-                        sha256,
+                        prepared.contentType(),
+                        prepared.bytes().length,
+                        prepared.sha256(),
                         CurrentPrincipal.require().userId())
                 .update();
         Map<String, Object> after = new LinkedHashMap<>();
-        after.put("subject_type", upload.subjectType());
-        after.put("subject_id", upload.subjectId());
-        after.put("content_type", kind.contentType);
-        after.put("size_bytes", stored.length);
-        after.put("sha256", sha256);
-        audit.record(AuditLog.Entry.created("core.document.uploaded", "core.document", id, upload.branchId(), after));
+        after.put("subject_type", subjectType);
+        after.put("subject_id", subjectId);
+        after.put("content_type", prepared.contentType());
+        after.put("size_bytes", prepared.bytes().length);
+        after.put("sha256", prepared.sha256());
+        audit.record(AuditLog.Entry.created("core.document.uploaded", "core.document", id, branchId, after));
         return find(id).orElseThrow();
     }
 
@@ -231,6 +255,13 @@ class DocumentService implements Documents {
                 .filter(a -> a.subjectType().equals(d.subjectType()))
                 .anyMatch(a -> a.canRead(principal, d.subjectId(), d.id()));
         if (!allowed) {
+            // Denied attempts are audited too (who tried, which subject, which document).
+            ownTransaction.executeWithoutResult(status -> audit.record(AuditLog.Entry.created(
+                    "core.document.access_denied",
+                    "core.document",
+                    d.id(),
+                    d.branchId(),
+                    Map.of("subject_type", d.subjectType(), "subject_id", d.subjectId()))));
             throw new ApiException(
                     HttpStatus.FORBIDDEN,
                     "permission_denied",
@@ -311,7 +342,7 @@ class DocumentService implements Documents {
         }
     }
 
-    /** The object is stored before the row commits; a rollback removes it again, so none is orphaned (#29). */
+    /** The object is stored before the row commits; a rollback removes it again. */
     private void deleteIfRolledBack(String key) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             return;
@@ -319,7 +350,9 @@ class DocumentService implements Documents {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCompletion(int status) {
-                if (status == STATUS_COMMITTED) {
+                // Only a known rollback: after an unknown outcome the row may have committed, and a
+                // row without its object is worse than an orphan (the sweeper issue covers orphans).
+                if (status != STATUS_ROLLED_BACK) {
                     return;
                 }
                 try {

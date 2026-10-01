@@ -189,7 +189,10 @@ Notes:
 - Member ID images (`id_front`, `id_back`) need `lending.members.verify_kyc` in the member's
   branch, so tenant admins and branch managers, the people who verify KYC; photos and other member
   documents need `lending.members.read`. Cashiers and auditors get 403 on ID images. Every
-  download URL issued is audited with the user, the member and the document. If auditors need the
+  download URL issued is audited with the user, the member and the document, and so is every
+  denied attempt (`core.document.access_denied`, written in its own transaction). The member's
+  document list shows ID images only to those who may open them, and a document with no known
+  kind is denied (fail closed). If auditors need the
   images later, a read-only audit permission is added then (#29, decided by the dev lead).
 - Write-off approval is deliberately restricted to the tenant admin, the most senior
   role, because write-off removes an asset from the books.
@@ -332,8 +335,10 @@ GitHub Actions deploy secrets live in the `staging` and `production` environment
   the file name; images are re-encoded to strip metadata (JPEG at quality 0.92, so small print
   stays legible); a canvas over 16 megapixels is refused before decoding (`image_too_large`), at most two images
   are re-encoded at once (a caller that waits 10 seconds gets 503 `uploads_busy`), the re-encoded
-  bytes obey the same 5 MB limit, an object whose transaction rolls back is deleted again so none is
-  orphaned, and a member keeps at most 10 documents per kind (#29), so a
+  bytes obey the same 5 MB limit, an object whose transaction is known to have rolled back is deleted again (an
+  unknown outcome keeps it, and a sweeper for the remaining orphans is issue #39), and a member keeps at
+  most 10 active documents per kind: a newer upload supersedes the oldest, which stays for the audit
+  trail, so a wrong file can always be replaced, so a
   small compressed file cannot exhaust memory; files are stored in object storage, never on the
   application host's disk. Tomcat reads past an over-limit upload (`max-swallow-size` 8 MB) so
   the client gets the 413 body instead of a reset connection.
