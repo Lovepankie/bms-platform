@@ -167,6 +167,7 @@ to other modules.
 | `core.notifications` | `...core.notifications` | The `Notifier` port and a recording fake adapter; no provider yet |
 | `core.platform` | `...core.platform` | The platform console API: tenants, modules, subscriptions, admin MFA reset (ADR-016) |
 | `core.ledger` | `...core.ledger` | `LedgerPosting.post` (`post_entry`) |
+| `core.documents` | `...core.documents` | `Documents` (upload, find), the `DocumentAccess` registry, the object storage port with the R2 adapter and the dev and test fake, signed download URLs (#12) |
 | `core.jobs` | `...core.jobs` | `TenantJobs`, db-scheduler tasks (ADR-008) |
 | `core.operations` | `...core.operations` | `/version`, the migrations readiness check, the database role guard |
 | `lending.manifest` | `...lending.manifest` | The lending module's registration (`ModuleManifest`) |

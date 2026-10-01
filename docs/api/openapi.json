@@ -476,6 +476,17 @@
           }
         }
       },
+      "DownloadUrl" : {
+        "properties" : {
+          "expires_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        }
+      },
       "DuplicateCandidate" : {
         "properties" : {
           "branch_id" : {
@@ -838,6 +849,42 @@
           },
           "village" : {
             "type" : "string"
+          }
+        }
+      },
+      "MemberDocument" : {
+        "properties" : {
+          "content_type" : {
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "doc_kind" : {
+            "type" : "string"
+          },
+          "document_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "size_bytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "uploaded_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "MemberDocumentList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MemberDocument"
+            },
+            "type" : "array"
           }
         }
       },
@@ -1296,6 +1343,46 @@
             "type" : "string"
           },
           "token_type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "StoredDocument" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "content_type" : {
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "doc_type" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sha256" : {
+            "type" : "string"
+          },
+          "size_bytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "subject_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "subject_type" : {
             "type" : "string"
           }
         }
@@ -2339,6 +2426,62 @@
         "tags" : [ "branches" ]
       }
     },
+    "/api/v1/documents/{document_id}" : {
+      "get" : {
+        "operationId" : "getDocument",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "document_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StoredDocument"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Document metadata (permission on the subject)",
+        "tags" : [ "documents" ]
+      }
+    },
+    "/api/v1/documents/{document_id}/download-url" : {
+      "post" : {
+        "operationId" : "createDocumentDownloadUrl",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "document_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DownloadUrl"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A 5 minute signed download URL (FR-DOC-03)",
+        "tags" : [ "documents" ]
+      }
+    },
     "/api/v1/lending/members" : {
       "get" : {
         "operationId" : "listMembers",
@@ -2571,6 +2714,83 @@
           }
         },
         "summary" : "Blacklist a member or lift it (FR-MEM-13)",
+        "tags" : [ "lending-members" ]
+      }
+    },
+    "/api/v1/lending/members/{member_id}/documents" : {
+      "get" : {
+        "operationId" : "listMemberDocuments",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "member_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MemberDocumentList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List a member's documents",
+        "tags" : [ "lending-members" ]
+      },
+      "post" : {
+        "operationId" : "uploadMemberDocument",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "member_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "doc_kind",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "required" : [ "file" ],
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MemberDocument"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Upload a member document: JPEG, PNG or PDF, 5 MB (FR-MEM-09)",
         "tags" : [ "lending-members" ]
       }
     },

@@ -47,7 +47,10 @@ As `deploy`, copy `.env.example` from the repository to `/opt/bms/.env`, fill ev
 differ per environment. Set `BMS_ENVIRONMENT=production`,
 `BMS_TENANT_HOST_PATTERN={slug}-bms.rincoltech.com`, `BMS_PLATFORM_HOST=bms.rincoltech.com`,
 `BMS_DNS_ZONE=rincoltech.com`, `BMS_CALLBACK_HOST=bms-callbacks.rincoltech.com`, `ACME_EMAIL`,
-`CLOUDFLARE_API_TOKEN`, the R2 values (a token scoped to the backup bucket) and
+`CLOUDFLARE_API_TOKEN`, the R2 values (a token scoped to the backup bucket), the documents bucket
+values `R2_DOCUMENTS_BUCKET`, `R2_DOCUMENTS_ACCESS_KEY_ID` and `R2_DOCUMENTS_SECRET_ACCESS_KEY` (a
+private bucket per environment and a second token scoped to it only; the API refuses to start
+without them, chapter 12 section 12.5) and
 `BMS_OPENAPI_ENABLED` (`true` on staging, `false` on production). Put a copy of
 `BACKUP_ENCRYPTION_KEY` in the offline store the dev lead keeps (chapter 8 section 8.7).
 
@@ -199,7 +202,9 @@ RCLONE_IMAGE=rclone/rclone:1.75.1
 CLOUDFLARED_IMAGE=cloudflare/cloudflared:2026.9.3
 CLOUDFLARE_TUNNEL_TOKEN=<connector token from 8.2>
 # passwords (openssl rand -base64 32 each), the three sign-in keys (section 4), the backup key
-# and the R2 values (prefix staging/), exactly as for any environment
+# and the R2 values (prefix staging/), exactly as for any environment, plus the staging documents
+# bucket and its own scoped token: R2_DOCUMENTS_BUCKET, R2_DOCUMENTS_ACCESS_KEY_ID,
+# R2_DOCUMENTS_SECRET_ACCESS_KEY (the API refuses to start without them)
 ```
 
 `ACME_EMAIL`, `CLOUDFLARE_API_TOKEN`, `BMS_DNS_ZONE` and `BMS_CALLBACK_HOST` are not used on this

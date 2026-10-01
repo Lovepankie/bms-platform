@@ -31,6 +31,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
@@ -146,9 +148,22 @@ class PermissionMatrixIT extends IntegrationTest {
             h.add(
                     "X-Dev-Permissions",
                     all.stream().filter(p -> !p.equals(required.value())).collect(Collectors.joining(",")));
-            h.setContentType(MediaType.APPLICATION_JSON);
             h.setAccept(List.of(MediaType.ALL));
-            ResponseEntity<JsonNode> response = http.exchange(path, method, new HttpEntity<>("{}", h), JsonNode.class);
+            // A well-formed request in the media type the route declares (JSON unless it says
+            // otherwise, as uploads do), so only the missing permission can refuse it.
+            boolean multipart = e.getKey().getConsumesCondition().getConsumableMediaTypes().stream()
+                    .anyMatch(MediaType.MULTIPART_FORM_DATA::includes);
+            Object body;
+            if (multipart) {
+                MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
+                form.add("placeholder", "x");
+                h.setContentType(MediaType.MULTIPART_FORM_DATA);
+                body = form;
+            } else {
+                h.setContentType(MediaType.APPLICATION_JSON);
+                body = "{}";
+            }
+            ResponseEntity<JsonNode> response = http.exchange(path, method, new HttpEntity<>(body, h), JsonNode.class);
             assertThat(response.getStatusCode())
                     .as("%s %s without %s", method, pattern, required.value())
                     .isEqualTo(HttpStatus.FORBIDDEN);

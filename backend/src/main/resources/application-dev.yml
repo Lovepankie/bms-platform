@@ -11,3 +11,5 @@ bms:
     link-port: 8000
   auth:
     mode: dev
+  storage:
+    provider: fake

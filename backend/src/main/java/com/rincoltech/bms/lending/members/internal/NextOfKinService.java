@@ -41,11 +41,13 @@ class NextOfKinService {
     private final MemberRepository members;
     private final NextOfKinRepository kin;
     private final AuditLog audit;
+    private final MemberService memberService;
 
-    NextOfKinService(MemberRepository members, NextOfKinRepository kin, AuditLog audit) {
+    NextOfKinService(MemberRepository members, NextOfKinRepository kin, AuditLog audit, MemberService memberService) {
         this.members = members;
         this.kin = kin;
         this.audit = audit;
+        this.memberService = memberService;
     }
 
     @Transactional(readOnly = true)
@@ -93,6 +95,7 @@ class NextOfKinService {
         after.put("link_status", link.status());
         audit.record(AuditLog.Entry.created(
                 "lending.next_of_kin.created", "lending.next_of_kin", k.id(), member.branchId(), after));
+        memberService.recheckKyc(memberId, member.branchId());
         return kin.find(k.id()).orElseThrow();
     }
 

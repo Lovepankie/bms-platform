@@ -154,6 +154,13 @@ Each adapter reads its settings from environment variables documented in `.env.e
 the recording fake adapter, which is the default in local and test environments and is
 refused in production.
 
+Object storage (#12): `OBJECT_STORAGE` is `r2` (default) or `fake`, and `fake` refuses to start
+outside the dev and test profiles. `r2` needs `R2_ENDPOINT`, `R2_DOCUMENTS_ACCESS_KEY_ID`,
+`R2_DOCUMENTS_SECRET_ACCESS_KEY` and `R2_DOCUMENTS_BUCKET`, a token scoped to the documents bucket
+only (never the backup token), and startup fails if any is empty. The fake keeps objects in
+memory and serves its own signed URLs at `/api/v1/storage/fake` (HMAC over key and expiry), so
+expiry and tampering behave as with R2 without a local bucket.
+
 ## 12.8 Testing integrations
 
 - Fakes implement each interface and record calls; unit and API tests use them.

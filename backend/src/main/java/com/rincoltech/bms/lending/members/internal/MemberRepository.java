@@ -244,6 +244,66 @@ class MemberRepository {
         return statement.query(MemberRepository::mapListItem).list();
     }
 
+    /**
+     * FR-MEM-05: {@code incomplete} becomes {@code pending_verification} once name, phone, NIN or
+     * other ID, a location, at least one next of kin and an ID front image are all present. A
+     * {@code rejected} member re-enters too: this runs only after a new edit, kin or document, so it
+     * is always a resubmission after the rejection (Hillary's #23 review, blocker 1). Returns the
+     * status the member moved from, empty when nothing moved.
+     */
+    Optional<String> markKycCompleteIfReady(UUID id) {
+        // The row is locked by the read, so the status we report is the one the update moved from.
+        String before = jdbc.sql("SELECT kyc_status FROM lending_members WHERE id = ? FOR UPDATE")
+                .param(id)
+                .query(String.class)
+                .optional()
+                .orElse(null);
+        boolean moved = jdbc.sql("""
+                        UPDATE lending_members m SET kyc_status = 'pending_verification', updated_at = now(),
+                            version = version + 1
+                        WHERE m.id = ? AND m.kyc_status IN ('incomplete', 'rejected')
+                          AND btrim(m.full_name) <> '' AND m.phone_e164 IS NOT NULL
+                          AND ((m.id_type = 'nin' AND m.national_id IS NOT NULL)
+                               OR (m.id_type IN ('passport', 'refugee_id', 'other')
+                                   AND coalesce(btrim(m.other_id_number), '') <> ''))
+                          AND coalesce(nullif(btrim(m.location), ''), nullif(btrim(m.district), ''),
+                                       nullif(btrim(m.sub_county), ''), nullif(btrim(m.village), '')) IS NOT NULL
+                          AND EXISTS (SELECT 1 FROM lending_next_of_kin k WHERE k.member_id = m.id)
+                          AND EXISTS (SELECT 1 FROM lending_member_documents d
+                                       WHERE d.member_id = m.id AND d.doc_kind = 'id_front')
+                        """).param(id).update() == 1;
+        return moved ? Optional.ofNullable(before) : Optional.empty();
+    }
+
+    void insertDocument(UUID id, UUID memberId, String docKind, UUID documentId, UUID uploadedBy) {
+        jdbc.sql("""
+                        INSERT INTO lending_member_documents (id, tenant_id, member_id, doc_kind, document_id, uploaded_by)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?)
+                        """).params(id, memberId, docKind, documentId, uploadedBy).update();
+    }
+
+    /** A member's documents, newest first, with the stored file's metadata. */
+    record MemberDocumentRow(
+            UUID documentId, String docKind, String contentType, long sizeBytes, Instant createdAt, UUID uploadedBy) {}
+
+    List<MemberDocumentRow> documents(UUID memberId) {
+        return jdbc.sql("""
+                        SELECT md.document_id, md.doc_kind, d.content_type, d.size_bytes, md.created_at, md.uploaded_by
+                          FROM lending_member_documents md JOIN documents d ON d.id = md.document_id
+                         WHERE md.member_id = ?
+                         ORDER BY md.created_at DESC, md.id
+                        """)
+                .param(memberId)
+                .query((rs, n) -> new MemberDocumentRow(
+                        rs.getObject("document_id", UUID.class),
+                        rs.getString("doc_kind"),
+                        rs.getString("content_type"),
+                        rs.getLong("size_bytes"),
+                        instant(rs.getTimestamp("created_at")),
+                        rs.getObject("uploaded_by", UUID.class)))
+                .list();
+    }
+
     private static MemberResponse mapDetail(ResultSet rs, int n) throws SQLException {
         return new MemberResponse(
                 rs.getObject("id", UUID.class),

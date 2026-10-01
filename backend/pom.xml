@@ -30,6 +30,7 @@
         <palantir-java-format.version>2.100.0</palantir-java-format.version>
         <nimbus-jose-jwt.version>10.10</nimbus-jose-jwt.version>
         <bouncycastle.version>1.86</bouncycastle.version>
+        <awssdk.version>2.55.7</awssdk.version>
     </properties>
 
     <dependencyManagement>
@@ -38,6 +39,13 @@
                 <groupId>org.springframework.modulith</groupId>
                 <artifactId>spring-modulith-bom</artifactId>
                 <version>${spring-modulith.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${awssdk.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -113,6 +121,18 @@
         <dependency>
             <groupId>commons-codec</groupId>
             <artifactId>commons-codec</artifactId>
+        </dependency>
+        <!-- Object storage for documents (chapter 12 section 12.5): Cloudflare R2 over the S3 API.
+             Synchronous client only; the Netty async client is not needed. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>

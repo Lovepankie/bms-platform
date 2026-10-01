@@ -84,6 +84,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             case METHOD_NOT_ALLOWED -> "method_not_allowed";
             case UNSUPPORTED_MEDIA_TYPE -> "unsupported_media_type";
             case NOT_ACCEPTABLE -> "not_acceptable";
+            // Multipart over spring.servlet.multipart limits (chapter 8 section 8.8).
+            case CONTENT_TOO_LARGE -> "file_too_large";
             default -> status.is5xxServerError() ? "internal_error" : "request_failed";
         };
         ProblemDetail problem = Problems.of(status, code, status.getReasonPhrase(), status.getReasonPhrase() + ".");

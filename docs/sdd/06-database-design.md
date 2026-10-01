@@ -456,6 +456,9 @@ The worker's dispatcher reads pending rows across tenants through
 `subject_type text`, `subject_id uuid`, `object_key text NOT NULL UNIQUE`
 (`tenants/<tenant_id>/<doc_type>/<yyyy>/<mm>/<id>.<ext>`), `content_type text NOT NULL`,
 `size_bytes bigint NOT NULL`, `sha256 char(64) NOT NULL`, `created_by uuid`.
+`CHECK (object_key LIKE 'tenants/' || tenant_id::text || '/%')` ties the key to the row's own
+tenant. Index `(tenant_id, subject_type, subject_id)`. A document is written once: `bms_app` holds
+SELECT and INSERT only. `sha256` is of the stored bytes, after images are re-encoded.
 
 ### `report_runs` (RLS)
 
@@ -702,7 +705,8 @@ Indexes: `(tenant_id, phone_e164)`, `(tenant_id, branch_id, status)`, trigram GI
 
 (std, no `version`) `member_id uuid NOT NULL`, `doc_kind text NOT NULL` [`id_front`,
 `id_back`, `photo`, `other`], `document_id uuid NOT NULL` (FK `documents`),
-`uploaded_by uuid NOT NULL`.
+`uploaded_by uuid NOT NULL`. `UNIQUE (tenant_id, document_id)`; composite keys to
+`lending_members` and `documents`; `bms_app` SELECT and INSERT only.
 
 ### `lending_next_of_kin`
 
@@ -1137,6 +1141,7 @@ of section 6.3.2. Every other table in this chapter is added by the migration of
 first uses it.
 `lending_members.import_row_id` gets its foreign key when the import tables arrive.
 `V3__next_of_kin.sql` (#11) creates `lending_next_of_kin` and `lending_member_links_v`.
+`V4__documents.sql` (#12) creates `documents` and `lending_member_documents`.
 
 ## 6.10 Open items
 
