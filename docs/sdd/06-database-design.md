@@ -789,6 +789,12 @@ increment 4.
 `paid_upfront`]. `CHECK` that exactly one of `amount_minor`, `rate_bp` is set to match
 `calc_method`.
 
+Versions and fees are insert-only for `bms_app` (FR-PRD-04); the product row is updated only to
+point at its current version and to archive it. The version row's CHECKs carry the parts of
+R-TERM, R-RATE and R-PEN a row can express (frequency present exactly for instalments, the
+allocation order a permutation, the penalty fields matching the method); the rest is checked by
+the service before the insert.
+
 ### `lending_loans`
 
 One row from application to closure. Terms are copied from the product version at
@@ -1153,6 +1159,8 @@ first uses it.
 (SELECT and INSERT only), `lending_collateral_events` (append-only) and
 `lending_collateral_documents`. `lending_loan_collateral` waits for `lending_loans` (increment 4).
 `V6__member_document_supersede.sql` (#29) adds the supersede columns to `lending_member_documents`.
+`V7__loan_products.sql` (#40) creates `lending_loan_products`, `lending_loan_product_versions` and
+`lending_loan_product_fees`.
 
 ## 6.10 Open items
 

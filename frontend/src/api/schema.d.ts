@@ -451,6 +451,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/loan-products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List loan products with their current version */
+        get: operations["listLoanProducts"];
+        put?: never;
+        /** Create a loan product and its version 1 (FR-PRD-01) */
+        post: operations["createLoanProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loan-products/schedule-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview a schedule for terms, saved or not (FR-PRD-03) */
+        post: operations["previewLoanSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loan-products/{product_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A product with its current version and history */
+        get: operations["getLoanProduct"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loan-products/{product_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a product (FR-PRD-05) */
+        post: operations["archiveLoanProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loan-products/{product_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Edit a product by writing a new version (FR-PRD-04) */
+        post: operations["createLoanProductVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/members": {
         parameters: {
             query?: never;
@@ -1325,6 +1411,11 @@ export interface components {
             /** @description Required when in_custody */
             storage_location?: string;
         };
+        CreateLoanProductRequest: {
+            code: string;
+            name: string;
+            terms: components["schemas"]["LoanProductTerms"];
+        };
         CreateMemberRequest: {
             alt_phone?: string;
             /** Format: uuid */
@@ -1454,6 +1545,126 @@ export interface components {
             decision: string;
             /** @description Required when rejected */
             note?: string;
+        };
+        LoanProduct: {
+            code?: string;
+            /** Format: date-time */
+            created_at?: string;
+            current_version?: components["schemas"]["LoanProductVersion"];
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            status?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /** Format: int32 */
+            version?: number;
+            /** @description Every version, newest first; only on the detail response */
+            versions?: components["schemas"]["LoanProductVersion"][];
+        };
+        LoanProductFee: {
+            /**
+             * Format: int64
+             * @description For flat
+             */
+            amount_minor?: number;
+            calc_method: string;
+            fee_type: string;
+            name: string;
+            /**
+             * Format: int32
+             * @description For percent_of_principal
+             */
+            rate_bp?: number;
+            timing: string;
+        };
+        LoanProductList: {
+            items?: components["schemas"]["LoanProduct"][];
+        };
+        LoanProductTerms: {
+            /** @description A permutation of penalty, fee, interest, principal; that order by default */
+            allocation_order?: string[];
+            /** Format: int32 */
+            default_term_count: number;
+            fees?: components["schemas"]["LoanProductFee"][];
+            flat_early_settlement_rebate?: boolean;
+            /** @description Required for instalments */
+            instalment_frequency?: string;
+            interest_method: string;
+            /** Format: int32 */
+            interest_rate_bp: number;
+            /** Format: int64 */
+            max_principal_minor: number;
+            /** Format: int32 */
+            max_term_count: number;
+            /**
+             * Format: int32
+             * @description 15000 is 1.5 times the principal
+             */
+            min_collateral_cover_bp?: number;
+            /** Format: int64 */
+            min_principal_minor: number;
+            /** Format: int32 */
+            min_term_count: number;
+            /** Format: int32 */
+            penalty_cap_bp?: number;
+            /** Format: int64 */
+            penalty_flat_minor?: number;
+            /** Format: int32 */
+            penalty_grace_days?: number;
+            penalty_method?: string;
+            penalty_period_unit?: string;
+            /** Format: int32 */
+            penalty_rate_bp?: number;
+            rate_unit: string;
+            repayment_pattern: string;
+            requires_collateral?: boolean;
+            requires_guarantor?: boolean;
+            term_unit: string;
+        };
+        /** @description Every version, newest first; only on the detail response */
+        LoanProductVersion: {
+            allocation_order?: string[];
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            /** Format: int32 */
+            default_term_count?: number;
+            fees?: components["schemas"]["LoanProductFee"][];
+            flat_early_settlement_rebate?: boolean;
+            /** Format: uuid */
+            id?: string;
+            instalment_frequency?: string;
+            interest_method?: string;
+            /** Format: int32 */
+            interest_rate_bp?: number;
+            /** Format: int64 */
+            max_principal_minor?: number;
+            /** Format: int32 */
+            max_term_count?: number;
+            /** Format: int32 */
+            min_collateral_cover_bp?: number;
+            /** Format: int64 */
+            min_principal_minor?: number;
+            /** Format: int32 */
+            min_term_count?: number;
+            /** Format: int32 */
+            penalty_cap_bp?: number;
+            /** Format: int64 */
+            penalty_flat_minor?: number;
+            /** Format: int32 */
+            penalty_grace_days?: number;
+            penalty_method?: string;
+            penalty_period_unit?: string;
+            /** Format: int32 */
+            penalty_rate_bp?: number;
+            rate_unit?: string;
+            repayment_pattern?: string;
+            requires_collateral?: boolean;
+            requires_guarantor?: boolean;
+            term_unit?: string;
+            /** Format: int32 */
+            version_no?: number;
         };
         Me: {
             all_branches?: boolean;
@@ -1693,6 +1904,63 @@ export interface components {
         };
         RoleCatalogue: {
             items?: components["schemas"]["Role"][];
+        };
+        SchedulePreview: {
+            /**
+             * Format: int64
+             * @description Fees taken from the principal at disbursement
+             */
+            deducted_at_disbursement_minor?: number;
+            items?: components["schemas"]["SchedulePreviewItem"][];
+            /**
+             * Format: int64
+             * @description Principal minus fees deducted at disbursement
+             */
+            net_disbursed_minor?: number;
+            /**
+             * Format: int64
+             * @description Fees collected before disbursement
+             */
+            paid_upfront_minor?: number;
+            /** Format: int64 */
+            total_due_minor?: number;
+            /** Format: int64 */
+            total_fees_minor?: number;
+            /** Format: int64 */
+            total_interest_minor?: number;
+            /** Format: int64 */
+            total_principal_minor?: number;
+        };
+        SchedulePreviewItem: {
+            /** Format: date */
+            due_date?: string;
+            /** Format: int64 */
+            fee_minor?: number;
+            /** Format: int64 */
+            interest_minor?: number;
+            /** Format: int32 */
+            no?: number;
+            /** Format: int64 */
+            principal_minor?: number;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        /** @description Terms as typed on the product form, saved or not */
+        SchedulePreviewRequest: {
+            /** Format: date */
+            disbursement_date: string;
+            fees?: components["schemas"]["LoanProductFee"][];
+            instalment_frequency?: string;
+            interest_method: string;
+            /** Format: int32 */
+            interest_rate_bp: number;
+            /** Format: int64 */
+            principal_minor: number;
+            rate_unit: string;
+            repayment_pattern: string;
+            /** Format: int32 */
+            term_count: number;
+            term_unit: string;
         };
         SignInRequest: {
             /** @description Email, or phone for staff */
@@ -2618,6 +2886,148 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CollateralValuation"];
+                };
+            };
+        };
+    };
+    listLoanProducts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanProductList"];
+                };
+            };
+        };
+    };
+    createLoanProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLoanProductRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanProduct"];
+                };
+            };
+        };
+    };
+    previewLoanSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchedulePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchedulePreview"];
+                };
+            };
+        };
+    };
+    getLoanProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanProduct"];
+                };
+            };
+        };
+    };
+    archiveLoanProduct: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanProduct"];
+                };
+            };
+        };
+    };
+    createLoanProductVersion: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoanProductTerms"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanProduct"];
                 };
             };
         };
