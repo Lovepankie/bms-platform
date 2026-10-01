@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-10-01) in pull request #24 (issue #13). Builds on ADR-015. Implements FR-COL-01 and
+Accepted (2026-10-01, merged in pull request #24, issue #13). Builds on ADR-015. Implements FR-COL-01 and
 FR-COL-04 in MVP increment 3.
 
 ## Context
