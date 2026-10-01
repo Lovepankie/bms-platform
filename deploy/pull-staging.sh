@@ -134,7 +134,7 @@ done
 chmod -R a+rX "$release_dir/postgres" "$release_dir/sql"
 
 status=0
-BMS_STATE_DIR="$ROOT/state" BMS_COSIGN_PUBKEY="$ROOT/cosign.pub" BMS_ENV_FILE="$ROOT/.env" \
+DOCKER_CONFIG="$ROOT/dockercfg" BMS_STATE_DIR="$ROOT/state" BMS_COSIGN_PUBKEY="$ROOT/cosign.pub" BMS_ENV_FILE="$ROOT/.env" \
     BMS_EDGE_SERVICES="cloudflared" \
     "$release_dir/deploy.sh" "$tag" || status=$?
 case "$status" in

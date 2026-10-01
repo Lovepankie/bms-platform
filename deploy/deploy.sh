@@ -87,11 +87,19 @@ resolve_digest() {
     docker image inspect --format '{{ index .RepoDigests 0 }}' "$tag_ref"
 }
 
+# The cosign image runs as uid 65532 and cannot read this user's private Docker login (mode 600), so
+# the registry pull fails with UNAUTHORIZED. Give it a readable copy inside the state directory,
+# whose parent only this user can enter.
+install -d -m 755 "$STATE_DIR/dockercfg"
+if [[ -f "${DOCKER_CONFIG:-$HOME/.docker}/config.json" ]]; then
+    install -m 644 "${DOCKER_CONFIG:-$HOME/.docker}/config.json" "$STATE_DIR/dockercfg/config.json"
+fi
+
 verify_signature() {
     local digest_ref="$1"
     docker run --rm \
         --volume "$COSIGN_PUBKEY:/cosign.pub:ro" \
-        --volume "${DOCKER_CONFIG:-$HOME/.docker}:/home/nonroot/.docker:ro" \
+        --volume "$STATE_DIR/dockercfg:/home/nonroot/.docker:ro" \
         --env DOCKER_CONFIG=/home/nonroot/.docker \
         "$COSIGN_IMAGE" verify --key /cosign.pub --insecure-ignore-tlog=true "$digest_ref" \
         > /dev/null 2>&1
