@@ -28,6 +28,9 @@ class MemberDocumentService {
     static final String SUBJECT = "lending.member";
     static final Set<String> KINDS = Set.of("id_front", "id_back", "photo", "other");
 
+    /** Per member and kind, so the store cannot grow without bound through one member (#29). */
+    static final int MAX_PER_KIND = 10;
+
     @Schema(name = "MemberDocument")
     record MemberDocument(
             UUID documentId, String docKind, String contentType, long sizeBytes, Instant createdAt, UUID uploadedBy) {}
@@ -55,6 +58,11 @@ class MemberDocumentService {
                     List.of(new FieldProblem("doc_kind", "invalid", "One of id_front, id_back, photo, other.")));
         }
         MemberResponse member = inScope(memberId, "lending.members.update");
+        if (members.countDocuments(memberId, docKind) >= MAX_PER_KIND) {
+            throw ApiException.rule(
+                    "document_limit_reached",
+                    "A member keeps at most " + MAX_PER_KIND + " documents of each kind (#29).");
+        }
         StoredDocument stored = documents.upload(new Documents.Upload(SUBJECT, memberId, member.branchId(), bytes));
         UUID uploader = CurrentPrincipal.require().userId();
         members.insertDocument(UUID.randomUUID(), memberId, docKind, stored.id(), uploader);

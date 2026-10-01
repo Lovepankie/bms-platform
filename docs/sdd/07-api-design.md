@@ -189,7 +189,7 @@ published under the platform host.
 | 428 | `precondition_required`: a `PATCH` without `If-Match` (section 7.9) |
 | 429 | Rate limited; `Retry-After` header set |
 | 500 | `internal_error`; the body carries only the generic title and the `request_id` |
-| 503 | Dependency down (the database); readiness fails |
+| 503 | Dependency down (the database); readiness fails; `uploads_busy` (image re-encoding is at capacity, retry shortly); `storage_unavailable` (document storage not configured) |
 
 Business rule codes used in chapter 3 (each is a 422 unless listed above):
 `validation_failed`, `plan_limit_reached`, `invalid_phone`, `invalid_nin`,
@@ -385,7 +385,7 @@ endpoint.
 | POST | `/notification-templates/{event_key}/{channel}/preview` | `core.notification_templates.manage` | Renders with fabricated sample data |
 | GET | `/notifications` | `core.notifications.read` | Send log with status |
 | GET | `/documents/{document_id}` | permission on the subject | Metadata. Declared "authenticated" (staff); the owning module's `DocumentAccess` decides, 403 `permission_denied` when it says no |
-| POST | `/documents/{document_id}/download-url` | permission on the subject | `{url, expires_at}`, 5 minutes; every issue is audited (`core.document.download_url_issued`). FR-DOC-03 |
+| POST | `/documents/{document_id}/download-url` | permission on the subject | `{url, expires_at}`, 5 minutes; every issue is audited (`core.document.download_url_issued`). Member ID images (`id_front`, `id_back`) need `lending.members.verify_kyc` (chapter 8). FR-DOC-03 |
 
 Uploads go through the subject's own route (`POST /lending/members/{member_id}/documents` now, the
 collateral route next), so each carries its one matrix permission and branch check; there is no

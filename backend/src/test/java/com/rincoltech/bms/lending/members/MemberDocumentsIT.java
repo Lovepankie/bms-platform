@@ -338,4 +338,116 @@ class MemberDocumentsIT extends IntegrationTest {
                 .query(String.class)
                 .single();
     }
+
+    /** #29: an empty file is a 422; JPEG bytes named .pdf are stored as JPEG (type from content). */
+    @Test
+    void emptyFilesAreRefusedAndJpegsAreJpegsWhateverTheirName() throws Exception {
+        String id = member("Test Borrower 21", "0700000021", null, null);
+        ResponseEntity<JsonNode> empty = upload(id, "other", new byte[0], "empty.pdf");
+        assertThat(empty.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+
+        ResponseEntity<JsonNode> jpeg = upload(id, "other", jpegWithExif(), "statement.pdf");
+        assertThat(jpeg.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(jpeg.getBody().get("content_type").asString()).isEqualTo("image/jpeg");
+    }
+
+    /** #29: the decode bound is 16 megapixels now (a 20 MP canvas is refused before decoding). */
+    @Test
+    void canvasesOverSixteenMegapixelsAreRefused() throws Exception {
+        String id = member("Test Borrower 22", "0700000022", null, null);
+        ResponseEntity<JsonNode> r = upload(id, "photo", png(5000, 4000), "big.png");
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(r.getBody().get("code").asString()).isEqualTo("image_too_large");
+    }
+
+    /** #29: at most 10 documents per member and kind. */
+    @Test
+    void aMemberKeepsAtMostTenDocumentsOfAKind() throws Exception {
+        String id = member("Test Borrower 23", "0700000023", null, null);
+        byte[] tiny = png(4, 4);
+        for (int i = 0; i < 10; i++) {
+            assertThat(upload(id, "other", tiny, "o.png").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        }
+        ResponseEntity<JsonNode> eleventh = upload(id, "other", tiny, "o.png");
+        assertThat(eleventh.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(eleventh.getBody().get("code").asString()).isEqualTo("document_limit_reached");
+        assertThat(upload(id, "photo", tiny, "p.png").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    /** #29, NFR-ISO-05: another tenant asking for this document's URL gets 404, never a URL. */
+    @Test
+    void anotherTenantCannotGetADownloadUrl() throws Exception {
+        String id = member("Test Borrower 24", "0700000024", null, null);
+        String documentId = upload(id, "other", png(4, 4), "o.png")
+                .getBody()
+                .get("document_id")
+                .asString();
+        TestDatabase.Fixture other = TestDatabase.tenant("docs-other", true);
+        HttpHeaders h = new HttpHeaders();
+        h.add("X-Tenant", other.slug());
+        h.add("X-Dev-User-Id", UUID.randomUUID().toString());
+        h.add("X-Dev-Permissions", ALL);
+        h.add("X-Dev-Branch-Ids", "*");
+        ResponseEntity<JsonNode> r = downloadUrl(documentId, h);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(r.getBody().has("url")).isFalse();
+    }
+
+    HttpHeaders as(UUID user, String permissions) {
+        HttpHeaders h = new HttpHeaders();
+        h.add("X-Tenant", t.slug());
+        h.add("X-Dev-User-Id", user.toString());
+        h.add("X-Dev-Permissions", permissions);
+        h.add("X-Dev-Branch-Ids", "*");
+        return h;
+    }
+
+    /**
+     * #29, Hillary's decision (option 2): ID images need lending.members.verify_kyc. A branch
+     * manager gets the URL and the download is audited with who, which member and which document; a
+     * cashier and an auditor (lending.members.read, no verify_kyc, chapter 8 matrix) get a clean 403
+     * on ID images but can still download a photo.
+     */
+    @Test
+    void idImagesNeedVerifyKycAndEveryDownloadIsAudited() throws Exception {
+        String id = member("Test Borrower 25", "0700000025", null, null);
+        String front = upload(id, "id_front", png(4, 4), "f.png")
+                .getBody()
+                .get("document_id")
+                .asString();
+        String back = upload(id, "id_back", png(4, 4), "b.png")
+                .getBody()
+                .get("document_id")
+                .asString();
+        String photo = upload(id, "photo", png(4, 4), "p.png")
+                .getBody()
+                .get("document_id")
+                .asString();
+
+        UUID manager = UUID.randomUUID();
+        ResponseEntity<JsonNode> managerUrl =
+                downloadUrl(front, as(manager, "lending.members.read,lending.members.verify_kyc"));
+        assertThat(managerUrl.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> row =
+                TestDatabase.owner().sql("""
+                        SELECT actor_user_id, entity_id, data::text AS data FROM audit_log
+                         WHERE action = 'core.document.download_url_issued' AND entity_id = ?::uuid
+                        """).param(front).query().singleRow();
+        assertThat(row.get("actor_user_id")).isEqualTo(manager);
+        assertThat(row.get("entity_id").toString()).isEqualTo(front);
+        assertThat((String) row.get("data")).contains(id);
+
+        for (String role : new String[] {"cashier", "auditor"}) {
+            HttpHeaders h = as(UUID.randomUUID(), "lending.members.read");
+            for (String idImage : new String[] {front, back}) {
+                ResponseEntity<JsonNode> denied = downloadUrl(idImage, h);
+                assertThat(denied.getStatusCode()).as(role + " on an ID image").isEqualTo(HttpStatus.FORBIDDEN);
+                assertThat(denied.getBody().get("code").asString()).isEqualTo("permission_denied");
+                assertThat(denied.getBody().has("url")).isFalse();
+            }
+            assertThat(downloadUrl(photo, h).getStatusCode())
+                    .as(role + " on a photo")
+                    .isEqualTo(HttpStatus.OK);
+        }
+    }
 }

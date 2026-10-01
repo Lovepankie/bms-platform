@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -34,10 +36,14 @@ import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageInputStream;
 import javax.imageio.stream.ImageOutputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * FR-DOC-02, FR-DOC-03 and the upload rules of chapter 8 section 8.8. Uploads are checked by
@@ -47,9 +53,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class DocumentService implements Documents {
 
+    private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
+
     static final int MAX_BYTES = 5 * 1024 * 1024;
     /** Bounds decoding: a small compressed image can declare a huge canvas. */
-    static final long MAX_PIXELS = 40_000_000L;
+    static final long MAX_PIXELS = 16_000_000L;
+
+    /** Image re-encodes at once; the staging host is a shared ARM board (#29). */
+    static final int MAX_CONCURRENT_REENCODES = 2;
+
+    static final long REENCODE_WAIT_SECONDS = 10;
 
     static final Duration URL_TTL = Duration.ofMinutes(5);
 
@@ -106,6 +119,7 @@ class DocumentService implements Documents {
     private final List<DocumentAccess> access;
     private final AuditLog audit;
     private final BusinessClock clock;
+    private final Semaphore reencodes = new Semaphore(MAX_CONCURRENT_REENCODES);
 
     DocumentService(
             JdbcClient jdbc, ObjectStorage storage, List<DocumentAccess> access, AuditLog audit, BusinessClock clock) {
@@ -127,13 +141,18 @@ class DocumentService implements Documents {
             throw fileTooLarge();
         }
         Kind kind = Kind.of(raw);
-        byte[] stored = kind.imageFormat == null ? raw : reencode(raw, kind.imageFormat);
+        byte[] stored = kind.imageFormat == null ? raw : reencodeBounded(raw, kind.imageFormat);
+        if (stored.length > MAX_BYTES) {
+            // Re-encoding can grow a file; the stored bytes obey the same limit (#29).
+            throw fileTooLarge();
+        }
         UUID id = UUID.randomUUID();
         ZonedDateTime at = clock.now().atZone(ZoneOffset.UTC);
         String key = "tenants/%s/upload/%04d/%02d/%s.%s"
                 .formatted(TenantContext.require(), at.getYear(), at.getMonthValue(), id, kind.extension);
         String sha256 = sha256(stored);
         storage.put(key, stored, kind.contentType);
+        deleteIfRolledBack(key);
         jdbc.sql("""
                         INSERT INTO documents (id, tenant_id, branch_id, doc_type, subject_type, subject_id, object_key,
                                                content_type, size_bytes, sha256, created_by)
@@ -210,7 +229,7 @@ class DocumentService implements Documents {
         var principal = CurrentPrincipal.require();
         boolean allowed = access.stream()
                 .filter(a -> a.subjectType().equals(d.subjectType()))
-                .anyMatch(a -> a.canRead(principal, d.subjectId()));
+                .anyMatch(a -> a.canRead(principal, d.subjectId(), d.id()));
         if (!allowed) {
             throw new ApiException(
                     HttpStatus.FORBIDDEN,
@@ -236,7 +255,7 @@ class DocumentService implements Documents {
             try {
                 reader.setInput(in, true, true);
                 if ((long) reader.getWidth(0) * reader.getHeight(0) > MAX_PIXELS) {
-                    throw ApiException.rule("image_too_large", "The image is larger than 40 megapixels.");
+                    throw ApiException.rule("image_too_large", "The image is larger than 16 megapixels.");
                 }
                 image = reader.read(0);
             } finally {
@@ -264,6 +283,52 @@ class DocumentService implements Documents {
             // Truncated files, CMYK JPEGs and anything else the decoder refuses.
             throw unsupported();
         }
+    }
+
+    /**
+     * Bounds memory and CPU on a small host: at most {@link #MAX_CONCURRENT_REENCODES} images are
+     * decoded at once; a caller that waits {@link #REENCODE_WAIT_SECONDS} seconds gets a 503.
+     */
+    private byte[] reencodeBounded(byte[] raw, String format) {
+        boolean acquired;
+        try {
+            acquired = reencodes.tryAcquire(REENCODE_WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            acquired = false;
+        }
+        if (!acquired) {
+            throw new ApiException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "uploads_busy",
+                    "Uploads busy",
+                    "Too many images are being processed; try again shortly.");
+        }
+        try {
+            return reencode(raw, format);
+        } finally {
+            reencodes.release();
+        }
+    }
+
+    /** The object is stored before the row commits; a rollback removes it again, so none is orphaned (#29). */
+    private void deleteIfRolledBack(String key) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_COMMITTED) {
+                    return;
+                }
+                try {
+                    storage.delete(key);
+                } catch (RuntimeException e) {
+                    log.warn("could not delete object {} after a rollback", key, e);
+                }
+            }
+        });
     }
 
     static ApiException unsupported() {

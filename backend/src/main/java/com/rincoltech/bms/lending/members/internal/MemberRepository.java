@@ -275,6 +275,20 @@ class MemberRepository {
         return moved ? Optional.ofNullable(before) : Optional.empty();
     }
 
+    Optional<String> documentKind(UUID documentId) {
+        return jdbc.sql("SELECT doc_kind FROM lending_member_documents WHERE document_id = ?")
+                .param(documentId)
+                .query(String.class)
+                .optional();
+    }
+
+    long countDocuments(UUID memberId, String docKind) {
+        return jdbc.sql("SELECT count(*) FROM lending_member_documents WHERE member_id = ? AND doc_kind = ?")
+                .params(memberId, docKind)
+                .query(Long.class)
+                .single();
+    }
+
     void insertDocument(UUID id, UUID memberId, String docKind, UUID documentId, UUID uploadedBy) {
         jdbc.sql("""
                         INSERT INTO lending_member_documents (id, tenant_id, member_id, doc_kind, document_id, uploaded_by)

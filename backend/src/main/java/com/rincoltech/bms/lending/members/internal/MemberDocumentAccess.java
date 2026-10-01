@@ -2,6 +2,7 @@ package com.rincoltech.bms.lending.members.internal;
 
 import com.rincoltech.bms.core.documents.DocumentAccess;
 import com.rincoltech.bms.kernel.Principal;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -13,6 +14,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 class MemberDocumentAccess implements DocumentAccess {
+
+    static final Set<String> ID_IMAGES = Set.of("id_front", "id_back");
 
     private final MemberRepository members;
 
@@ -29,6 +32,22 @@ class MemberDocumentAccess implements DocumentAccess {
     public boolean canRead(Principal principal, UUID subjectId) {
         return members.findById(subjectId)
                 .filter(m -> principal.may("lending.members.read", m.branchId()))
+                .isPresent();
+    }
+
+    /**
+     * #29 (Hillary's decision, option 2): ID images (id_front, id_back) need
+     * lending.members.verify_kyc in the member's branch, the people who verify KYC; photo and other
+     * documents stay on lending.members.read. Cashiers and auditors therefore get 403 on ID images.
+     */
+    @Override
+    public boolean canRead(Principal principal, UUID subjectId, UUID documentId) {
+        String permission =
+                members.documentKind(documentId).filter(ID_IMAGES::contains).isPresent()
+                        ? "lending.members.verify_kyc"
+                        : "lending.members.read";
+        return members.findById(subjectId)
+                .filter(m -> principal.may(permission, m.branchId()))
                 .isPresent();
     }
 }

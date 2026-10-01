@@ -186,6 +186,11 @@ Notes:
 - A loan officer running `lending.reports.collections` sees only loans where they are
   the responsible officer; branch managers and above see their branch scope.
 - Branch managers approve loans, but never one they submitted or appraised (FR-APR-03).
+- Member ID images (`id_front`, `id_back`) need `lending.members.verify_kyc` in the member's
+  branch, so tenant admins and branch managers, the people who verify KYC; photos and other member
+  documents need `lending.members.read`. Cashiers and auditors get 403 on ID images. Every
+  download URL issued is audited with the user, the member and the document. If auditors need the
+  images later, a read-only audit permission is added then (#29, decided by the dev lead).
 - Write-off approval is deliberately restricted to the tenant admin, the most senior
   role, because write-off removes an asset from the books.
 - The matrix is seeded by migration V2 and `PermissionMatrixIT` asserts the seeded
@@ -325,7 +330,10 @@ GitHub Actions deploy secrets live in the `staging` and `production` environment
   setting a same-named cookie that would reach it.
 - Uploads: allowed types JPEG, PNG, PDF; maximum 5 MB; type detected from content, not
   the file name; images are re-encoded to strip metadata (JPEG at quality 0.92, so small print
-  stays legible); a canvas over 40 megapixels is refused before decoding (`image_too_large`), so a
+  stays legible); a canvas over 16 megapixels is refused before decoding (`image_too_large`), at most two images
+  are re-encoded at once (a caller that waits 10 seconds gets 503 `uploads_busy`), the re-encoded
+  bytes obey the same 5 MB limit, an object whose transaction rolls back is deleted again so none is
+  orphaned, and a member keeps at most 10 documents per kind (#29), so a
   small compressed file cannot exhaust memory; files are stored in object storage, never on the
   application host's disk. Tomcat reads past an over-limit upload (`max-swallow-size` 8 MB) so
   the client gets the 413 body instead of a reset connection.
