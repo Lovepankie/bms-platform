@@ -346,6 +346,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/collateral": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List collateral in the caller's branch scope */
+        get: operations["listCollateral"];
+        put?: never;
+        /** Register a collateral item (FR-COL-01) */
+        post: operations["createCollateral"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/collateral/{collateral_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An item with its valuations and custody timeline */
+        get: operations["getCollateral"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a collateral item */
+        patch: operations["updateCollateral"];
+        trace?: never;
+    };
+    "/api/v1/lending/collateral/{collateral_id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List an item's photos and scans */
+        get: operations["listCollateralDocuments"];
+        put?: never;
+        /** Upload a photo or scan: JPEG, PNG or PDF, 5 MB (FR-COL-01) */
+        post: operations["uploadCollateralDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/collateral/{collateral_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a custody change other than release (FR-COL-03) */
+        post: operations["recordCollateralEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/collateral/{collateral_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request release, decided by a checker (FR-COL-04) */
+        post: operations["requestCollateralRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/collateral/{collateral_id}/valuations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a valuation (FR-COL-02) */
+        post: operations["addCollateralValuation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/members": {
         parameters: {
             query?: never;
@@ -1077,10 +1182,148 @@ export interface components {
         BranchList: {
             items?: components["schemas"]["Branch"][];
         };
+        Collateral: {
+            /** Format: uuid */
+            branch_id?: string;
+            collateral_type?: string;
+            /**
+             * Format: int64
+             * @description FR-COL-02: the latest valuation's forced sale value, else the estimate
+             */
+            collateral_value_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            custody_status?: string;
+            description?: string;
+            /** Format: int64 */
+            estimated_value_minor?: number;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            member_id?: string;
+            owner_name?: string;
+            owner_relationship?: string;
+            reference_no?: string;
+            reference_no_normalised?: string;
+            storage_location?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        CollateralDetail: {
+            events?: components["schemas"]["CollateralEvent"][];
+            item?: components["schemas"]["Collateral"];
+            valuations?: components["schemas"]["CollateralValuation"][];
+        };
+        CollateralDocument: {
+            content_type?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            document_id?: string;
+            /** Format: int64 */
+            size_bytes?: number;
+        };
+        CollateralDocumentList: {
+            items?: components["schemas"]["CollateralDocument"][];
+        };
+        CollateralEvent: {
+            /** Format: uuid */
+            approval_request_id?: string;
+            counterparty_name?: string;
+            event_type?: string;
+            from_status?: string;
+            /** Format: uuid */
+            id?: string;
+            location?: string;
+            note?: string;
+            /** Format: date-time */
+            occurred_at?: string;
+            /** Format: uuid */
+            recorded_by?: string;
+            to_status?: string;
+        };
+        CollateralEventRequest: {
+            counterparty_name?: string;
+            event_type: string;
+            /** @description Required for received_into_custody and moved */
+            location?: string;
+            /** @description Required for note */
+            note?: string;
+            /**
+             * Format: date-time
+             * @description Defaults to now; not in the future
+             */
+            occurred_at?: string;
+        };
+        CollateralPage: {
+            items?: components["schemas"]["Collateral"][];
+            next_cursor?: string;
+        };
+        CollateralReleaseOutcome: {
+            /** Format: uuid */
+            approval_id?: string;
+            executed?: boolean;
+        };
+        CollateralReleaseRequest: {
+            /** @description Who collects the item or document */
+            collected_by: string;
+            note?: string;
+        };
+        CollateralValuation: {
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: int64 */
+            forced_sale_value_minor?: number;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int64 */
+            market_value_minor?: number;
+            note?: string;
+            /** Format: uuid */
+            recorded_by?: string;
+            /** Format: date */
+            valued_on?: string;
+            valuer_name?: string;
+        };
+        CollateralValuationRequest: {
+            /**
+             * Format: int64
+             * @description At most the market value
+             */
+            forced_sale_value_minor?: number;
+            /** Format: int64 */
+            market_value_minor: number;
+            note?: string;
+            /**
+             * Format: date
+             * @description Not after today (business date)
+             */
+            valued_on: string;
+            valuer_name?: string;
+        };
         CreateBranchRequest: {
             code: string;
             location?: string;
             name: string;
+        };
+        CreateCollateralRequest: {
+            collateral_type: string;
+            /** @description Default pledged (the owner keeps it) */
+            custody_status?: string;
+            description: string;
+            /** Format: int64 */
+            estimated_value_minor?: number;
+            /** Format: uuid */
+            member_id: string;
+            owner_name?: string;
+            owner_relationship?: string;
+            /** @description Title, logbook, plate or ID number as written; required for vehicle */
+            reference_no?: string;
+            /** @description Required when in_custody */
+            storage_location?: string;
         };
         CreateMemberRequest: {
             alt_phone?: string;
@@ -1520,6 +1763,15 @@ export interface components {
         UpdateBranchRequest: {
             location?: string;
             name?: string;
+        };
+        /** @description Omitted fields are unchanged */
+        UpdateCollateralRequest: {
+            description?: string;
+            /** Format: int64 */
+            estimated_value_minor?: number;
+            owner_name?: string;
+            owner_relationship?: string;
+            reference_no?: string;
         };
         /** @description Omitted fields are unchanged */
         UpdateMemberRequest: {
@@ -2132,6 +2384,240 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DownloadUrl"];
+                };
+            };
+        };
+    };
+    listCollateral: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                member_id?: string;
+                type?: string[];
+                custody_status?: string[];
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollateralPage"];
+                };
+            };
+        };
+    };
+    createCollateral: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCollateralRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Collateral"];
+                };
+            };
+        };
+    };
+    getCollateral: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collateral_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollateralDetail"];
+                };
+            };
+        };
+    };
+    updateCollateral: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                collateral_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCollateralRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Collateral"];
+                };
+            };
+        };
+    };
+    listCollateralDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collateral_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollateralDocumentList"];
+                };
+            };
+        };
+    };
+    uploadCollateralDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collateral_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollateralDocument"];
+                };
+            };
+        };
+    };
+    recordCollateralEvent: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                collateral_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollateralEventRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollateralDetail"];
+                };
+            };
+        };
+    };
+    requestCollateralRelease: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                collateral_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollateralReleaseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollateralReleaseOutcome"];
+                };
+            };
+        };
+    };
+    addCollateralValuation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collateral_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollateralValuationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollateralValuation"];
                 };
             };
         };

@@ -200,7 +200,7 @@ Business rule codes used in chapter 3 (each is a 422 unless listed above):
 `approver_conflict`, `subject_changed`, `approval_expired`, `period_closed`,
 `payment_method_unmapped`, `value_date_in_future`, `has_repayments`,
 `already_reversed`, `insufficient_balance`, `collateral_secures_open_loan`,
-`branch_has_open_accounts`, `account_has_open_items`, `next_of_kin_required`, `image_too_large`, `unknown_placeholder`,
+`branch_has_open_accounts`, `account_has_open_items`, `next_of_kin_required`, `image_too_large`, `collateral_type_disabled`, `unknown_placeholder`,
 `blocking_issues_unresolved`, `system_account_not_allowed`, `idempotency_key_reused`,
 `idempotency_key_missing`, and from the ledger's posting operation (ADR-004):
 `unbalanced_entry`, `invalid_journal_line`, `account_not_postable`, `currency_mismatch`; and
@@ -498,6 +498,11 @@ document routes. The rest of this table is to be built.
 | POST | `/lending/loans/{loan_id}/documents/{doc_type}` | `lending.loans.read` | Generates statement, schedule, or agreement PDF |
 
 ### 7.11.14 Lending: collateral (`/lending/collateral`)
+
+Built (#13): every route below, and `GET, POST .../{collateral_id}/documents` (photos and scans,
+multipart like member documents). `GET .../{collateral_id}` returns `{item, valuations, events}`
+with the item's `ETag`; PATCH, events and release require `If-Match`. Release answers 202 with
+`{executed, approval_id}` (there is no threshold). The `loan_status` filter waits for loans.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
