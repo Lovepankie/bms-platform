@@ -16,4 +16,7 @@ public interface TenantSettings {
 
     /** FR-COL-05: collateral types this tenant does not accept; empty when unset. */
     Set<String> disabledCollateralTypes();
+
+    /** FR-MEM-05: whether a loan may be submitted for a member whose KYC is not verified (default false). */
+    boolean allowLoansBeforeKycVerified();
 }

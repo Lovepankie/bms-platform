@@ -634,6 +634,43 @@
         },
         "required" : [ "code", "name", "terms" ]
       },
+      "CreateLoanRequest" : {
+        "properties" : {
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "proposed_disbursement_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "purpose_category" : {
+            "pattern" : "business|school_fees|medical|agriculture|household|construction|other",
+            "type" : "string"
+          },
+          "purpose_text" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "requested_principal_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "requested_term_count" : {
+            "description" : "Defaults to the product's default term",
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "member_id", "product_id", "purpose_category", "requested_principal_minor" ]
+      },
       "CreateMemberRequest" : {
         "properties" : {
           "alt_phone" : {
@@ -1020,6 +1057,298 @@
         },
         "required" : [ "decision" ]
       },
+      "Loan" : {
+        "properties" : {
+          "appraised_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "approved_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "approved_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "approved_principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "approved_term_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cancelled_reason" : {
+            "type" : "string"
+          },
+          "channel" : {
+            "type" : "string"
+          },
+          "collateral" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanPledge"
+            },
+            "type" : "array"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "guarantors" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanGuarantor"
+            },
+            "type" : "array"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "instalment_frequency" : {
+            "type" : "string"
+          },
+          "interest_method" : {
+            "type" : "string"
+          },
+          "interest_rate_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "loan_no" : {
+            "type" : "string"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "officer_user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "product_code" : {
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "product_version_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "proposed_disbursement_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "provisional_schedule" : {
+            "description" : "FR-ORG-03: from the requested terms and the proposed (else today's) date; display only",
+            "items" : {
+              "$ref" : "#/components/schemas/LoanScheduleItem"
+            },
+            "type" : "array"
+          },
+          "purpose_category" : {
+            "type" : "string"
+          },
+          "purpose_text" : {
+            "type" : "string"
+          },
+          "rate_unit" : {
+            "type" : "string"
+          },
+          "rejected_reason" : {
+            "type" : "string"
+          },
+          "repayment_pattern" : {
+            "type" : "string"
+          },
+          "requested_principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "requested_term_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "submitted_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "submitted_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "term_unit" : {
+            "type" : "string"
+          },
+          "updated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "LoanGuarantor" : {
+        "properties" : {
+          "guaranteed_amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "relationship" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "LoanGuarantorInput" : {
+        "properties" : {
+          "guaranteed_amount_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "relationship" : {
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "guaranteed_amount_minor", "member_id" ]
+      },
+      "LoanListItem" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "loan_no" : {
+            "type" : "string"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "officer_user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "purpose_category" : {
+            "type" : "string"
+          },
+          "requested_principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "requested_term_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "LoanNoteRequest" : {
+        "properties" : {
+          "note" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "note" ]
+      },
+      "LoanPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanListItem"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "LoanPledge" : {
+        "properties" : {
+          "collateral_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "collateral_type" : {
+            "type" : "string"
+          },
+          "collateral_value_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "pledged_value_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "LoanPledgeInput" : {
+        "properties" : {
+          "collateral_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "pledged_value_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "collateral_id", "pledged_value_minor" ]
+      },
       "LoanProduct" : {
         "properties" : {
           "code" : {
@@ -1329,6 +1658,66 @@
           "version_no" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        }
+      },
+      "LoanScheduleItem" : {
+        "description" : "FR-ORG-03: from the requested terms and the proposed (else today's) date; display only",
+        "properties" : {
+          "due_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "fee_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "LoanStatusChange" : {
+        "properties" : {
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "changed_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "from_status" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "to_status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "LoanStatusHistory" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanStatusChange"
+            },
+            "type" : "array"
           }
         }
       },
@@ -2086,6 +2475,28 @@
         },
         "required" : [ "disbursement_date", "interest_method", "interest_rate_bp", "principal_minor", "rate_unit", "repayment_pattern", "term_count", "term_unit" ]
       },
+      "SetLoanCollateralRequest" : {
+        "properties" : {
+          "collateral" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanPledgeInput"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "collateral" ]
+      },
+      "SetLoanGuarantorsRequest" : {
+        "properties" : {
+          "guarantors" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanGuarantorInput"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "guarantors" ]
+      },
       "SignInRequest" : {
         "properties" : {
           "login" : {
@@ -2300,6 +2711,34 @@
             "maxLength" : 60,
             "minLength" : 0,
             "type" : "string"
+          }
+        }
+      },
+      "UpdateLoanRequest" : {
+        "description" : "Draft only; omitted fields are unchanged",
+        "properties" : {
+          "proposed_disbursement_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "purpose_category" : {
+            "pattern" : "business|school_fees|medical|agriculture|household|construction|other",
+            "type" : "string"
+          },
+          "purpose_text" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "requested_principal_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "requested_term_count" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
           }
         }
       },
@@ -3851,6 +4290,427 @@
         },
         "summary" : "Edit a product by writing a new version (FR-PRD-04)",
         "tags" : [ "lending-products" ]
+      }
+    },
+    "/api/v1/lending/loans" : {
+      "get" : {
+        "operationId" : "listLoans",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "member_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "officer_user_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List loans in the caller's branch scope",
+        "tags" : [ "lending-loans" ]
+      },
+      "post" : {
+        "operationId" : "createLoan",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateLoanRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Loan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Create a draft application (FR-ORG-01)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}" : {
+      "get" : {
+        "operationId" : "getLoan",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Loan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A loan with guarantors, collateral and its provisional schedule",
+        "tags" : [ "lending-loans" ]
+      },
+      "patch" : {
+        "operationId" : "updateLoan",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateLoanRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Loan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit a draft application",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/cancel" : {
+      "post" : {
+        "operationId" : "cancelLoan",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoanNoteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Loan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cancel an application with a reason",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/collateral" : {
+      "put" : {
+        "operationId" : "setLoanCollateral",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SetLoanCollateralRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Loan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set a draft's pledged collateral (FR-ORG-02)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/guarantors" : {
+      "put" : {
+        "operationId" : "setLoanGuarantors",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SetLoanGuarantorsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Loan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set a draft's guarantors (FR-ORG-02)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/return" : {
+      "post" : {
+        "operationId" : "returnLoan",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoanNoteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Loan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Return an application to draft with a note",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/status-history" : {
+      "get" : {
+        "operationId" : "getLoanStatusHistory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanStatusHistory"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every status move of a loan",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/submit" : {
+      "post" : {
+        "operationId" : "submitLoan",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Loan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Submit a draft, freezing its terms (FR-ORG-03)",
+        "tags" : [ "lending-loans" ]
       }
     },
     "/api/v1/lending/members" : {

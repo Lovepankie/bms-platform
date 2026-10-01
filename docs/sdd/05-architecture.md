@@ -172,6 +172,7 @@ to other modules.
 | `core.operations` | `...core.operations` | `/version`, the migrations readiness check, the database role guard |
 | `lending.manifest` | `...lending.manifest` | The lending module's registration (`ModuleManifest`) |
 | `lending.collateral` | `...lending.collateral` | The collateral register: items, valuations, the append-only custody timeline, photos and scans, and `collateral_release` as an approval action (#13) |
+| `lending.loans` | `...lending.loans` | Origination so far: draft, edit, guarantors, collateral pledges, submit, return, cancel, the status history; registers `CollateralPledges` so pledged items are not released (#41) |
 | `lending.products` | `...lending.products` | Loan products with immutable versions and fees, archive; `ScheduleCalculator`, the public home of rules R-ROUND, R-TERM, R-RATE, R-FLAT and R-DECL; the schedule preview (#40) |
 | `lending.members` | `...lending.members` | Members: the reference vertical slice; edit, duplicate check, KYC decision, blacklist, status (#10); next of kin, links and the relationship panel (#11) |
 

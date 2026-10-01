@@ -154,6 +154,31 @@ class RlsIsolationIT {
                             calc_method, amount_minor, timing)
                         VALUES (?, ?, ?, 'Test fee', 'processing', 'flat', 1000, 'paid_upfront')
                         """).params(UUID.randomUUID(), t.tenantId(), productVersion).update();
+        UUID loan = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO lending_loans (id, tenant_id, branch_id, loan_no, member_id, product_version_id,
+                            officer_user_id, status, channel, purpose_category, currency, requested_principal_minor,
+                            requested_term_count, term_unit, interest_method, interest_rate_bp, rate_unit, repayment_pattern)
+                        VALUES (?, ?, ?, 'LN999999', ?, ?, ?, 'draft', 'staff', 'business', 'UGX', 100000, 1, 'month',
+                                'flat', 1000, 'per_term', 'bullet')
+                        """)
+                .params(loan, t.tenantId(), t.headOffice(), kinMember, productVersion, user)
+                .update();
+        owner.sql(
+                        "INSERT INTO lending_loan_status_history (id, tenant_id, loan_id, to_status) VALUES (?, ?, ?, 'draft')")
+                .params(UUID.randomUUID(), t.tenantId(), loan)
+                .update();
+        UUID guarantor = UUID.randomUUID();
+        insertMember(t, guarantor, "Test Guarantor 01", null);
+        owner.sql("""
+                        INSERT INTO lending_loan_guarantors (id, tenant_id, loan_id, guarantor_member_id,
+                            guaranteed_amount_minor, status)
+                        VALUES (?, ?, ?, ?, 50000, 'active')
+                        """).params(UUID.randomUUID(), t.tenantId(), loan, guarantor).update();
+        owner.sql("""
+                        INSERT INTO lending_loan_collateral (id, tenant_id, loan_id, collateral_id, pledged_value_minor)
+                        VALUES (?, ?, ?, ?, 50000)
+                        """).params(UUID.randomUUID(), t.tenantId(), loan, collateral).update();
         owner.sql(
                         "INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type) VALUES (?, ?, 'system', 'test.fixture.created', 'test')")
                 .params(UUID.randomUUID(), t.tenantId())

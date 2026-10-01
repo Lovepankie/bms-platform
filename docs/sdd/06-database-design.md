@@ -844,7 +844,11 @@ creation and replaced by the approved terms at approval.
 
 Indexes: `(tenant_id, member_id)`, `(tenant_id, branch_id, status)`,
 `(tenant_id, officer_user_id, status)`, `(tenant_id, status, next_due_date)`,
-`(tenant_id, status, days_past_due) WHERE status = 'active'`.
+`(tenant_id, status, days_past_due) WHERE status = 'active'`. The approver CHECK is named
+`lending_loans_approver_is_not_submitter_or_appraiser`. Guarantor and pledge rows of a draft are
+replaced as a whole, so `bms_app` holds DELETE on those two tables only; a pledged item secures one
+open loan at a time (`collateral_already_pledged`), and the collateral register asks the loans
+module through `CollateralPledges` before any release (FR-COL-04).
 
 ### `lending_loan_status_history` (append-only)
 
@@ -1161,7 +1165,9 @@ first uses it.
 `lending_collateral_documents`. `lending_loan_collateral` waits for `lending_loans` (increment 4).
 `V6__member_document_supersede.sql` (#29) adds the supersede columns to `lending_member_documents`.
 `V7__loan_products.sql` (#40) creates `lending_loan_products`, `lending_loan_product_versions` and
-`lending_loan_product_fees`.
+`lending_loan_product_fees`. `V8__loan_applications.sql` (#41) creates `lending_loans` with every
+column of this section, `lending_loan_status_history` (append-only), `lending_loan_guarantors` and
+`lending_loan_collateral`.
 
 ## 6.10 Open items
 

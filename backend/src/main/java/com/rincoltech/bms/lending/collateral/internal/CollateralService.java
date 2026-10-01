@@ -15,6 +15,7 @@ import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.Versions;
+import com.rincoltech.bms.lending.collateral.CollateralPledges;
 import com.rincoltech.bms.lending.collateral.internal.CollateralApi.CollateralDetail;
 import com.rincoltech.bms.lending.collateral.internal.CollateralApi.CollateralPage;
 import com.rincoltech.bms.lending.collateral.internal.CollateralApi.CollateralResponse;
@@ -70,6 +71,7 @@ class CollateralService {
     private final Documents documents;
     private final AuditLog audit;
     private final BusinessClock clock;
+    private final List<CollateralPledges> pledges;
 
     CollateralService(
             CollateralRepository repo,
@@ -79,7 +81,8 @@ class CollateralService {
             Approvals approvals,
             Documents documents,
             AuditLog audit,
-            BusinessClock clock) {
+            BusinessClock clock,
+            List<CollateralPledges> pledges) {
         this.repo = repo;
         this.members = members;
         this.settings = settings;
@@ -88,6 +91,7 @@ class CollateralService {
         this.documents = documents;
         this.audit = audit;
         this.clock = clock;
+        this.pledges = List.copyOf(pledges);
     }
 
     /** FR-COL-01, FR-COL-05. The item sits in the member's home branch. */
@@ -314,6 +318,11 @@ class CollateralService {
         CollateralResponse c = lockForChange(id, "lending.collateral.release_request", ifMatch);
         if (!RELEASABLE.contains(c.custodyStatus())) {
             throw invalidTransition("An item that is " + c.custodyStatus() + " cannot be released.");
+        }
+        if (pledges.stream().anyMatch(p -> p.securesOpenLoan(id))) {
+            throw ApiException.rule(
+                    "collateral_secures_open_loan",
+                    "The item secures a loan that is not closed, cancelled or rejected.");
         }
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("collected_by", r.collectedBy().trim());
