@@ -84,12 +84,15 @@ resolve_digest() {
     docker pull --quiet "$tag_ref" > /dev/null
     docker image inspect --format '{{ index .RepoDigests 0 }}' "$tag_ref"
 }
+# The cosign image runs as uid 65532 and cannot read this user's private Docker login, so give it a
+# readable copy of the registry credentials. It lives under $ROOT, which only this user can enter.
+install -d -m 755 "$ROOT/dockercfg"
+install -m 644 "${DOCKER_CONFIG:-$HOME/.docker}/config.json" "$ROOT/dockercfg/config.json"
 verify_signature() {
     local digest_ref="$1"
     docker run --rm \
-        --user "$(id -u):$(id -g)" \
         --volume "$ROOT/cosign.pub:/cosign.pub:ro" \
-        --volume "${DOCKER_CONFIG:-$HOME/.docker}:/home/nonroot/.docker:ro" \
+        --volume "$ROOT/dockercfg:/home/nonroot/.docker:ro" \
         --env DOCKER_CONFIG=/home/nonroot/.docker \
         "$COSIGN_IMAGE" verify --key /cosign.pub --insecure-ignore-tlog=true "$digest_ref" \
         > /dev/null 2>&1
