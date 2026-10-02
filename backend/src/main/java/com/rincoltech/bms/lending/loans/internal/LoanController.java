@@ -35,9 +35,31 @@ import org.springframework.web.bind.annotation.RestController;
 class LoanController {
 
     private final LoanService service;
+    private final AppraisalService appraisals;
 
-    LoanController(LoanService service) {
+    LoanController(LoanService service, AppraisalService appraisals) {
         this.service = service;
+        this.appraisals = appraisals;
+    }
+
+    @PostMapping("/{loan_id}/appraisals")
+    @RequiresPermission("lending.loans.appraise")
+    @Operation(
+            summary = "Appraise: score, exposure and an immutable snapshot (FR-ORG-04, FR-ORG-05)",
+            operationId = "appraiseLoan")
+    ResponseEntity<AppraisalService.Appraisal> appraise(
+            @PathVariable("loan_id") UUID id,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody AppraisalService.AppraisalRequest request) {
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .body(appraisals.appraise(id, ifMatch, request));
+    }
+
+    @GetMapping("/{loan_id}/appraisals")
+    @RequiresPermission("lending.loans.read")
+    @Operation(summary = "A loan's appraisals, newest first", operationId = "listLoanAppraisals")
+    AppraisalService.AppraisalList appraisals(@PathVariable("loan_id") UUID id) {
+        return appraisals.list(id);
     }
 
     @GetMapping

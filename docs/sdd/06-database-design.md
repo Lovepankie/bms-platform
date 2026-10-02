@@ -1176,6 +1176,8 @@ first uses it.
 `lending_loan_product_fees`. `V8__loan_applications.sql` (#41) creates `lending_loans` with every
 column of this section, `lending_loan_status_history` (append-only), `lending_loan_guarantors` and
 `lending_loan_collateral`, with the one-open-pledge index and the draft-only triggers.
+`V9__loan_appraisals.sql` (#42) creates `lending_loan_appraisals` (append-only: `SELECT` and
+`INSERT` only).
 
 ## 6.10 Open items
 

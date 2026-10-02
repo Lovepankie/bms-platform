@@ -84,6 +84,13 @@ class MemberRepository {
                         """).paramSource(m).update();
     }
 
+    List<UUID> linkedMembers(UUID memberId) {
+        return jdbc.sql("SELECT DISTINCT related_member_id FROM lending_member_links_v WHERE member_id = ?")
+                .param(memberId)
+                .query(UUID.class)
+                .list();
+    }
+
     Optional<MemberResponse> findById(UUID id) {
         return jdbc.sql("SELECT " + COLUMNS + " FROM lending_members WHERE id = ?")
                 .param(id)

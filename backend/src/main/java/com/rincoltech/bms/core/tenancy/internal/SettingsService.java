@@ -129,6 +129,12 @@ class SettingsService implements TenantSettings {
         return current().allowLoansBeforeKycVerified();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Integer> appraisalWeights() {
+        return Map.copyOf(current().appraisalWeights());
+    }
+
     private Stored load(boolean forUpdate) {
         return jdbc.sql("SELECT settings::text AS settings, version FROM tenant_settings"
                         + (forUpdate ? " FOR UPDATE" : ""))

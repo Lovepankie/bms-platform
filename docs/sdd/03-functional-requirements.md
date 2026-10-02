@@ -501,6 +501,12 @@ Band: A 75 to 100, B 60 to 74, C 45 to 59, D below 45. Flags are shown with the 
 `MULTIPLE_ACTIVE_LOANS`, `COLLATERAL_BELOW_PRODUCT_MINIMUM`, `NEW_MEMBER` (registered
 less than 30 days ago).
 
+Recommendation stored with the score: band A or B `approve`, band C `review`, band D `decline`.
+Exposure (FR-ORG-05) counts loans in `submitted`, `appraised`, `approved` or `active`; linked
+parties are the FR-MEM-08 links plus this loan's guarantors and the borrowers of loans the member
+guarantees. Until the daily DPD snapshots exist (increment 6) no maximum DPD is recorded per
+loan, so every closed loan counts as closed on time in the repayment history rule.
+
 ## 3.19 Disbursement and repayment schedule (DIS)
 
 | ID | Requirement | Acceptance criteria | Phase |

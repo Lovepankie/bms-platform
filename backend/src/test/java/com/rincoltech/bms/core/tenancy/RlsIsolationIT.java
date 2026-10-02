@@ -179,6 +179,11 @@ class RlsIsolationIT {
                         INSERT INTO lending_loan_collateral (id, tenant_id, loan_id, collateral_id, pledged_value_minor)
                         VALUES (?, ?, ?, ?, 50000)
                         """).params(UUID.randomUUID(), t.tenantId(), loan, collateral).update();
+        owner.sql("""
+                        INSERT INTO lending_loan_appraisals (id, tenant_id, loan_id, appraised_by, score, band,
+                            components, flags, exposure, weights, recommendation)
+                        VALUES (?, ?, ?, ?, 50, 'C', '{}', '{}', '{}', '{}', 'review')
+                        """).params(UUID.randomUUID(), t.tenantId(), loan, user).update();
         owner.sql(
                         "INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type) VALUES (?, ?, 'system', 'test.fixture.created', 'test')")
                 .params(UUID.randomUUID(), t.tenantId())

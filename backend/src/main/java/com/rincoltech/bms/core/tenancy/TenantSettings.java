@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.tenancy;
 
+import java.util.Map;
 import java.util.Set;
 
 /** Typed reads of the bound tenant's settings (chapter 6 table {@code tenant_settings}). */
@@ -19,4 +20,7 @@ public interface TenantSettings {
 
     /** FR-MEM-05: whether a loan may be submitted for a member whose KYC is not verified (default false). */
     boolean allowLoansBeforeKycVerified();
+
+    /** FR-ORG-04: the maximum points of each score component, chapter 3 section 3.18.1 defaults. */
+    Map<String, Integer> appraisalWeights();
 }

@@ -400,7 +400,15 @@ class MemberService implements MemberLookup {
                         m.fullName(),
                         m.kycStatus(),
                         m.status(),
-                        m.isBlacklisted()));
+                        m.isBlacklisted(),
+                        m.createdAt(),
+                        m.monthlyIncomeMinor()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UUID> linkedMembers(UUID memberId) {
+        return members.linkedMembers(memberId);
     }
 
     /** The normalised NIN for {@code nin}, else null. {@code excludeId} is the member being edited. */

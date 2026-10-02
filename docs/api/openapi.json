@@ -1210,6 +1210,101 @@
           }
         }
       },
+      "LoanAppraisal" : {
+        "properties" : {
+          "appraised_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "band" : {
+            "type" : "string"
+          },
+          "components" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "declared_monthly_income_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "exposure" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          },
+          "flags" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "monthly_obligations_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "recommendation" : {
+            "type" : "string"
+          },
+          "score" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "visit_notes" : {
+            "type" : "string"
+          },
+          "weights" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          }
+        }
+      },
+      "LoanAppraisalList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanAppraisal"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "LoanAppraisalRequest" : {
+        "properties" : {
+          "declared_monthly_income_minor" : {
+            "description" : "Defaults to the member's declared monthly income",
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "monthly_obligations_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "visit_notes" : {
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
       "LoanGuarantor" : {
         "properties" : {
           "guaranteed_amount_minor" : {
@@ -4472,6 +4567,77 @@
           }
         },
         "summary" : "Edit a draft application",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/appraisals" : {
+      "get" : {
+        "operationId" : "listLoanAppraisals",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanAppraisalList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A loan's appraisals, newest first",
+        "tags" : [ "lending-loans" ]
+      },
+      "post" : {
+        "operationId" : "appraiseLoan",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoanAppraisalRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanAppraisal"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Appraise: score, exposure and an immutable snapshot (FR-ORG-04, FR-ORG-05)",
         "tags" : [ "lending-loans" ]
       }
     },

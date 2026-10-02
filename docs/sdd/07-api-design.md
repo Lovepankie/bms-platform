@@ -491,7 +491,17 @@ runs the pledge checks again and adds `member_blacklisted`, `guarantor_not_activ
 `guarantor_blacklisted`; it also stores today as the proposed disbursement date when none was
 given. The provisional schedule includes the version's `added_to_loan` fees, so it equals the
 product preview. Money fields accept at most 10^15 minor units. `PATCH` with `purpose_text: ""`
-clears the text. Appraisal and decision arrive with #42 and #43.
+clears the text.
+
+Built (#42): `POST` and `GET .../appraisals`. The POST takes
+`{declared_monthly_income_minor?, monthly_obligations_minor?, visit_notes?}` with `If-Match` on
+the loan, on a `submitted` or `appraised` loan (else 409 `invalid_status_transition`), and returns
+201 with the stored snapshot: `score`, `band`, `components`, `flags`, `exposure`
+(`own_loans`, `guaranteed_loans`, `linked_party_loans`, each with `loan_no`, `status`,
+`outstanding_minor`, `days_past_due`), `weights` and `recommendation`. Income defaults to the
+member's declared monthly income. The first appraisal moves the loan to `appraised`; a later one
+records a new snapshot and the latest appraiser. The GET lists newest first. The decision
+arrives with #43.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|

@@ -573,6 +573,24 @@ export interface paths {
         patch: operations["updateLoan"];
         trace?: never;
     };
+    "/api/v1/lending/loans/{loan_id}/appraisals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A loan's appraisals, newest first */
+        get: operations["listLoanAppraisals"];
+        put?: never;
+        /** Appraise: score, exposure and an immutable snapshot (FR-ORG-04, FR-ORG-05) */
+        post: operations["appraiseLoan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/loans/{loan_id}/cancel": {
         parameters: {
             query?: never;
@@ -1763,6 +1781,48 @@ export interface components {
             updated_at?: string;
             /** Format: int32 */
             version?: number;
+        };
+        LoanAppraisal: {
+            /** Format: uuid */
+            appraised_by?: string;
+            band?: string;
+            components?: {
+                [key: string]: Record<string, never>;
+            };
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: int64 */
+            declared_monthly_income_minor?: number;
+            exposure?: {
+                [key: string]: Record<string, never>;
+            };
+            flags?: string[];
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            loan_id?: string;
+            /** Format: int64 */
+            monthly_obligations_minor?: number;
+            recommendation?: string;
+            /** Format: int32 */
+            score?: number;
+            visit_notes?: string;
+            weights?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        LoanAppraisalList: {
+            items?: components["schemas"]["LoanAppraisal"][];
+        };
+        LoanAppraisalRequest: {
+            /**
+             * Format: int64
+             * @description Defaults to the member's declared monthly income
+             */
+            declared_monthly_income_minor?: number;
+            /** Format: int64 */
+            monthly_obligations_minor?: number;
+            visit_notes?: string;
         };
         LoanGuarantor: {
             /** Format: int64 */
@@ -3456,6 +3516,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    listLoanAppraisals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanAppraisalList"];
+                };
+            };
+        };
+    };
+    appraiseLoan: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoanAppraisalRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanAppraisal"];
                 };
             };
         };
