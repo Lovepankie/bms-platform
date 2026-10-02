@@ -1157,7 +1157,7 @@
             "type" : "string"
           },
           "provisional_schedule" : {
-            "description" : "FR-ORG-03: from the requested terms and the proposed (else today's) date; display only",
+            "description" : "FR-ORG-03, FR-ORG-06: from the requested (once approved, the approved) terms and the proposed (else today's) date; display only",
             "items" : {
               "$ref" : "#/components/schemas/LoanScheduleItem"
             },
@@ -1304,6 +1304,33 @@
             "type" : "string"
           }
         }
+      },
+      "LoanDecisionRequest" : {
+        "properties" : {
+          "approved_principal_minor" : {
+            "description" : "Approve only; defaults to the requested principal, never above it",
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "approved_term_count" : {
+            "description" : "Approve only; defaults to the requested term, never above it",
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "decision" : {
+            "pattern" : "approve|reject",
+            "type" : "string"
+          },
+          "note" : {
+            "description" : "Required on reject",
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "decision" ]
       },
       "LoanGuarantor" : {
         "properties" : {
@@ -1761,7 +1788,7 @@
         }
       },
       "LoanScheduleItem" : {
-        "description" : "FR-ORG-03: from the requested terms and the proposed (else today's) date; display only",
+        "description" : "FR-ORG-03, FR-ORG-06: from the requested (once approved, the approved) terms and the proposed (else today's) date; display only",
         "properties" : {
           "due_date" : {
             "format" : "date",
@@ -4728,6 +4755,51 @@
           }
         },
         "summary" : "Set a draft's pledged collateral (FR-ORG-02)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/decision" : {
+      "post" : {
+        "operationId" : "decideLoan",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoanDecisionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Loan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Approve at or below the requested terms, or reject with a reason (FR-ORG-06, FR-APR-03)",
         "tags" : [ "lending-loans" ]
       }
     },

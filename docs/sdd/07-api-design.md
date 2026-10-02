@@ -500,8 +500,18 @@ the loan, on a `submitted` or `appraised` loan (else 409 `invalid_status_transit
 (`own_loans`, `guaranteed_loans`, `linked_party_loans`, each with `loan_no`, `status`,
 `outstanding_minor`, `days_past_due`), `weights` and `recommendation`. Income defaults to the
 member's declared monthly income. The first appraisal moves the loan to `appraised`; a later one
-records a new snapshot and the latest appraiser. The GET lists newest first. The decision
-arrives with #43.
+records a new snapshot and the latest appraiser. The GET lists newest first.
+
+Built (#43): `POST .../decision` with `If-Match`, on an `appraised` loan. `approve` takes
+`approved_principal_minor` and `approved_term_count` (each defaults to the requested value) and
+stores them with the approver; the loan's `provisional_schedule` then previews the approved
+terms. `reject` requires `note`. Codes (422 unless stated): `self_approval_forbidden` (the
+approver submitted or appraised the loan, FR-APR-03), `above_requested_principal`,
+`above_requested_term`, `below_product_minimum`, `member_blacklisted`, `kyc_not_verified`,
+`collateral_below_product_minimum` (cover measured against the approved principal),
+`max_active_loans_reached`, and 409 `invalid_status_transition`. The nightly task
+`lending.loan-approval-expiry` cancels an approval older than `approval_validity_days` with
+reason `approval_expired` (FR-ORG-08), audited with actor kind `system`.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|

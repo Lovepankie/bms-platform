@@ -11,6 +11,7 @@
             "kernel",
             "core.tenancy",
             "core.audit",
+            "core.jobs",
             "lending.members",
             "lending.products",
             "lending.collateral"

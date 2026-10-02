@@ -544,7 +544,7 @@ class LoanService {
                 })
                 .toList();
         List<ScheduleItem> schedule =
-                Set.of("draft", "submitted", "appraised").contains(l.status()) ? provisional(l) : List.of();
+                Set.of("draft", "submitted", "appraised", "approved").contains(l.status()) ? provisional(l) : List.of();
         return new LoanResponse(
                 l.id(),
                 l.loanNo(),
@@ -590,7 +590,8 @@ class LoanService {
     /**
      * FR-ORG-03: display only, from the loan's own copied terms and its version's fees, so it
      * matches the product preview and a later product edit cannot change it. Dates run from the
-     * proposed disbursement date; a draft without one uses today, and submit stores it.
+     * proposed disbursement date; a draft without one uses today, and submit stores it. Once
+     * approved it previews the approved principal and term (FR-ORG-06).
      */
     private List<ScheduleItem> provisional(Loan l) {
         return scheduleOf(l).stream()
@@ -605,13 +606,14 @@ class LoanService {
                 l.interestRateBp(),
                 l.rateUnit(),
                 l.termUnit(),
-                l.requestedTermCount(),
+                l.approvedTermCount() != null ? l.approvedTermCount() : l.requestedTermCount(),
                 l.repaymentPattern(),
                 l.instalmentFrequency());
+        long principal = l.approvedPrincipalMinor() != null ? l.approvedPrincipalMinor() : l.requestedPrincipalMinor();
         return ScheduleCalculator.schedule(
                 terms,
-                l.requestedPrincipalMinor(),
-                products.addedFeesMinor(l.productVersionId(), l.requestedPrincipalMinor()),
+                principal,
+                products.addedFeesMinor(l.productVersionId(), principal),
                 l.proposedDisbursementDate() != null ? l.proposedDisbursementDate() : today());
     }
 

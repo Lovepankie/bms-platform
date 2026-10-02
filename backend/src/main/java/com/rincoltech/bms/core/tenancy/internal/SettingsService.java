@@ -135,6 +135,18 @@ class SettingsService implements TenantSettings {
         return Map.copyOf(current().appraisalWeights());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public int approvalValidityDays() {
+        return current().approvalValidityDays();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Integer maxActiveLoansPerMember() {
+        return current().maxActiveLoansPerMember();
+    }
+
     private Stored load(boolean forUpdate) {
         return jdbc.sql("SELECT settings::text AS settings, version FROM tenant_settings"
                         + (forUpdate ? " FOR UPDATE" : ""))

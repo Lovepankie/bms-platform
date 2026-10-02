@@ -2,6 +2,7 @@ package com.rincoltech.bms.lending.loans.internal;
 
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.CreateLoanRequest;
+import com.rincoltech.bms.lending.loans.internal.LoanApi.DecisionRequest;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.GuarantorsRequest;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.LoanPage;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.LoanResponse;
@@ -36,10 +37,12 @@ class LoanController {
 
     private final LoanService service;
     private final AppraisalService appraisals;
+    private final DecisionService decisions;
 
-    LoanController(LoanService service, AppraisalService appraisals) {
+    LoanController(LoanService service, AppraisalService appraisals, DecisionService decisions) {
         this.service = service;
         this.appraisals = appraisals;
+        this.decisions = decisions;
     }
 
     @PostMapping("/{loan_id}/appraisals")
@@ -147,6 +150,18 @@ class LoanController {
             @RequestHeader(name = "If-Match", required = false) String ifMatch,
             @Valid @RequestBody NoteRequest request) {
         return withETag(service.returnForCorrection(id, ifMatch, request.note()));
+    }
+
+    @PostMapping("/{loan_id}/decision")
+    @RequiresPermission("lending.loans.approve")
+    @Operation(
+            summary = "Approve at or below the requested terms, or reject with a reason (FR-ORG-06, FR-APR-03)",
+            operationId = "decideLoan")
+    ResponseEntity<LoanResponse> decide(
+            @PathVariable("loan_id") UUID id,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody DecisionRequest request) {
+        return withETag(decisions.decide(id, ifMatch, request));
     }
 
     @PostMapping("/{loan_id}/cancel")

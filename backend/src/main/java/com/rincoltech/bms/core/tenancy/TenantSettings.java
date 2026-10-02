@@ -23,4 +23,10 @@ public interface TenantSettings {
 
     /** FR-ORG-04: the maximum points of each score component, chapter 3 section 3.18.1 defaults. */
     Map<String, Integer> appraisalWeights();
+
+    /** FR-ORG-08: days an approved loan may wait for disbursement before it expires (default 14). */
+    int approvalValidityDays();
+
+    /** FR-ORG-07: the most active loans one member may hold; null when the tenant sets no limit. */
+    Integer maxActiveLoansPerMember();
 }

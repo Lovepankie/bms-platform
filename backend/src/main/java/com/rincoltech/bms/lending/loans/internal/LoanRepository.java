@@ -373,6 +373,23 @@ class LoanRepository {
                 .list();
     }
 
+    /** FR-ORG-07: the member's active loans. */
+    int activeLoans(UUID memberId) {
+        return jdbc.sql("SELECT count(*) FROM lending_loans WHERE member_id = ? AND status = 'active'")
+                .param(memberId)
+                .query(Integer.class)
+                .single();
+    }
+
+    /** FR-ORG-08: approved loans still waiting for disbursement after the validity period, locked. */
+    List<Loan> overdueApprovals(int validityDays) {
+        return jdbc.sql("SELECT * FROM lending_loans WHERE status = 'approved'"
+                        + " AND approved_at < now() - make_interval(days => ?) FOR UPDATE")
+                .param(validityDays)
+                .query(LoanRepository::map)
+                .list();
+    }
+
     /** A re-appraisal of an appraised loan: the latest appraiser, no status change. */
     void reappraised(UUID loanId, UUID by) {
         jdbc.sql("UPDATE lending_loans SET appraised_by = ?, updated_at = now(), version = version + 1 WHERE id = ?")

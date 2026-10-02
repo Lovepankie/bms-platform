@@ -625,6 +625,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/loans/{loan_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve at or below the requested terms, or reject with a reason (FR-ORG-06, FR-APR-03) */
+        post: operations["decideLoan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/loans/{loan_id}/guarantors": {
         parameters: {
             query?: never;
@@ -1760,7 +1777,7 @@ export interface components {
             product_version_id?: string;
             /** Format: date */
             proposed_disbursement_date?: string;
-            /** @description FR-ORG-03: from the requested terms and the proposed (else today's) date; display only */
+            /** @description FR-ORG-03, FR-ORG-06: from the requested (once approved, the approved) terms and the proposed (else today's) date; display only */
             provisional_schedule?: components["schemas"]["LoanScheduleItem"][];
             purpose_category?: string;
             purpose_text?: string;
@@ -1823,6 +1840,21 @@ export interface components {
             /** Format: int64 */
             monthly_obligations_minor?: number;
             visit_notes?: string;
+        };
+        LoanDecisionRequest: {
+            /**
+             * Format: int64
+             * @description Approve only; defaults to the requested principal, never above it
+             */
+            approved_principal_minor?: number;
+            /**
+             * Format: int32
+             * @description Approve only; defaults to the requested term, never above it
+             */
+            approved_term_count?: number;
+            decision: string;
+            /** @description Required on reject */
+            note?: string;
         };
         LoanGuarantor: {
             /** Format: int64 */
@@ -2005,7 +2037,7 @@ export interface components {
             /** Format: int32 */
             version_no?: number;
         };
-        /** @description FR-ORG-03: from the requested terms and the proposed (else today's) date; display only */
+        /** @description FR-ORG-03, FR-ORG-06: from the requested (once approved, the approved) terms and the proposed (else today's) date; display only */
         LoanScheduleItem: {
             /** Format: date */
             due_date?: string;
@@ -3612,6 +3644,34 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SetLoanCollateralRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    decideLoan: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoanDecisionRequest"];
             };
         };
         responses: {
