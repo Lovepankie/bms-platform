@@ -2,6 +2,7 @@ package com.rincoltech.bms.lending.loans.internal;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -17,13 +18,16 @@ final class LoanApi {
 
     static final String PURPOSES = "business|school_fees|medical|agriculture|household|construction|other";
 
+    /** The largest amount any money field accepts, in minor units (the same bound as loan products). */
+    static final long MAX_MONEY_MINOR = 1_000_000_000_000_000L;
+
     private LoanApi() {}
 
     @Schema(name = "CreateLoanRequest")
     record CreateLoanRequest(
             @NotNull UUID memberId,
             @NotNull UUID productId,
-            @NotNull @Positive Long requestedPrincipalMinor,
+            @NotNull @Positive @Max(MAX_MONEY_MINOR) Long requestedPrincipalMinor,
 
             @Positive @Schema(description = "Defaults to the product's default term")
             Integer requestedTermCount,
@@ -34,7 +38,7 @@ final class LoanApi {
 
     @Schema(name = "UpdateLoanRequest", description = "Draft only; omitted fields are unchanged")
     record UpdateLoanRequest(
-            @Positive Long requestedPrincipalMinor,
+            @Positive @Max(MAX_MONEY_MINOR) Long requestedPrincipalMinor,
             @Positive Integer requestedTermCount,
             @Pattern(regexp = PURPOSES) String purposeCategory,
             @Size(max = 300) String purposeText,
@@ -43,7 +47,7 @@ final class LoanApi {
     @Schema(name = "LoanGuarantorInput")
     record GuarantorInput(
             @NotNull UUID memberId,
-            @NotNull @Positive Long guaranteedAmountMinor,
+            @NotNull @Positive @Max(MAX_MONEY_MINOR) Long guaranteedAmountMinor,
             @Size(max = 60) String relationship) {}
 
     @Schema(name = "SetLoanGuarantorsRequest")
@@ -51,7 +55,10 @@ final class LoanApi {
 
     @Schema(name = "LoanPledgeInput")
     record PledgeInput(
-            @NotNull UUID collateralId, @NotNull @Positive Long pledgedValueMinor) {}
+            @NotNull UUID collateralId,
+
+            @NotNull @Positive @Max(MAX_MONEY_MINOR) @Schema(description = "At most the item's value")
+            Long pledgedValueMinor) {}
 
     @Schema(name = "SetLoanCollateralRequest")
     record PledgesRequest(@NotNull @Valid List<PledgeInput> collateral) {}

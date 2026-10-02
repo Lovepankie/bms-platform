@@ -462,6 +462,24 @@ a `lending_loan_status_history` row.
 | FR-ORG-08 | An approved loan not disbursed within the tenant setting `approval_validity_days` (default 14) shall expire to `cancelled` with reason `approval_expired`. | Nightly job tested. | MVP |
 | FR-ORG-09 | A member shall apply for a loan from the portal, creating a `draft` with channel `portal` that appears in the assigned officer's queue. | Portal applications cannot skip appraisal. | P2 |
 
+Origination rules that follow from the table above:
+
+- One open loan per item (FR-COL-01, ADR-019). A collateral item secures at most one loan that is
+  not cancelled, rejected or closed. A draft holds its pledges from the moment they are set, and a
+  loan returned for correction keeps them: the officer is still assembling that application.
+  Cancelling, rejecting or closing the loan releases them. A written-off loan keeps its
+  collateral, because it is being recovered.
+- Pledged value (FR-ORG-02). A pledge states at most the item's value (latest forced sale value,
+  else the estimate). A product that requires collateral accepts valued items only.
+- What submit checks and what it leaves (FR-ORG-03, FR-ORG-07). Submit checks again, as they
+  stand at that moment, the borrower and each guarantor (active, not blacklisted) and each
+  pledged item (the borrower's, held, in the loan's currency, valued, free). It does not measure
+  adequacy: the collateral cover against the product minimum is checked at approval (FR-ORG-07),
+  and a guarantor's capacity is not measured at all in the MVP. A limit on how much one member may
+  guarantee across loans is an open question for the product owner.
+- Dates. A proposed disbursement date is today or later. A loan submitted without one takes the
+  submission date, so the provisional schedule stops moving.
+
 ### 3.18.1 Credit score (default model)
 
 The scoring model is a rules-based default, pending ADR-012 for any statistical model.

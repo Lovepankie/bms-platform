@@ -1,13 +1,20 @@
 package com.rincoltech.bms.lending.loans;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +23,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
@@ -88,6 +96,7 @@ class LoanApplicationIT extends IntegrationTest {
         terms.put("max_principal_minor", 5_000_000);
         terms.put("requires_guarantor", guarantor);
         terms.put("requires_collateral", collateral);
+        terms.put("min_collateral_cover_bp", collateral ? 10_000 : null);
         return send(
                         HttpMethod.POST,
                         "/api/v1/lending/loan-products",
@@ -126,7 +135,7 @@ class LoanApplicationIT extends IntegrationTest {
         body.put("requested_term_count", term);
         body.put("purpose_category", "business");
         body.put("purpose_text", "Test stock");
-        body.put("proposed_disbursement_date", "2026-03-16");
+        body.put("proposed_disbursement_date", "2030-03-16");
         return asOfficer(HttpMethod.POST, LOANS, null, body);
     }
 
@@ -165,7 +174,7 @@ class LoanApplicationIT extends IntegrationTest {
         assertThat(l.get("member_no").asString()).isEqualTo("M000001");
         assertThat(l.get("product_code").asString()).isEqualTo("BULLET");
         JsonNode item = l.get("provisional_schedule").get(0);
-        assertThat(item.get("due_date").asString()).isEqualTo("2026-04-16");
+        assertThat(item.get("due_date").asString()).isEqualTo("2030-04-16");
         assertThat(item.get("total_minor").asLong()).isEqualTo(600_000);
         JsonNode history = asOfficer(
                         HttpMethod.GET, LOANS + "/" + l.get("id").asString() + "/status-history", null, null)
@@ -391,6 +400,316 @@ class LoanApplicationIT extends IntegrationTest {
         assertThat(l.get("interest_rate_bp").asInt()).isEqualTo(2000);
         assertThat(l.get("provisional_schedule").get(0).get("interest_minor").asLong())
                 .isEqualTo(100_000);
+    }
+
+    void item(String sql, String id) {
+        TestDatabase.owner()
+                .sql("UPDATE lending_collateral_items SET " + sql + " WHERE id = ?::uuid")
+                .param(id)
+                .update();
+    }
+
+    void memberRow(String sql, String id) {
+        TestDatabase.owner()
+                .sql("UPDATE lending_members SET " + sql + " WHERE id = ?::uuid")
+                .param(id)
+                .update();
+    }
+
+    static Map<String, Object> pledge(String item, long value) {
+        return Map.of("collateral", List.of(Map.of("collateral_id", item, "pledged_value_minor", value)));
+    }
+
+    static String code(ResponseEntity<JsonNode> response) {
+        return response.getBody().get("code").asString();
+    }
+
+    /**
+     * FR-COL-01 under concurrency: two drafts pledge the same item at the same moment. The item's
+     * row lock makes them take turns, so exactly one wins and the other sees the pledge.
+     */
+    @Test
+    void twoLoansPledgingOneItemAtOnceGiveOneWinner() throws Exception {
+        String product = product("RACE", false, false);
+        String borrower = member("Test Borrower 11", "0700000011", t.headOffice(), true);
+        String item = collateralItem(borrower, "TEST-PLEDGE-11");
+        List<String> loans = List.of(
+                apply(borrower, product, 500_000, null).getBody().get("id").asString(),
+                apply(borrower, product, 500_000, null).getBody().get("id").asString());
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
+            List<Future<HttpStatusCode>> results = loans.stream()
+                    .map(loan -> pool.submit(() -> {
+                        start.await();
+                        return asOfficer(
+                                        HttpMethod.PUT,
+                                        LOANS + "/" + loan + "/collateral",
+                                        "\"1\"",
+                                        pledge(item, 1_000_000))
+                                .getStatusCode();
+                    }))
+                    .toList();
+            start.countDown();
+            List<HttpStatusCode> statuses = new ArrayList<>();
+            for (Future<HttpStatusCode> r : results) {
+                statuses.add(r.get(30, TimeUnit.SECONDS));
+            }
+            assertThat(statuses).containsExactlyInAnyOrder(HttpStatus.OK, HttpStatus.CONFLICT);
+        }
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM lending_loan_collateral WHERE collateral_id = ?::uuid"
+                                + " AND released_at IS NULL")
+                        .param(item)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+    }
+
+    /** A pledge states at most the item's value, and a secured product takes valued items only. */
+    @Test
+    void aPledgeCannotExceedTheItemsValue() {
+        String secured = product("VALUED", false, true);
+        String borrower = member("Test Borrower 12", "0700000012", t.headOffice(), true);
+        String item = collateralItem(borrower, "TEST-PLEDGE-12");
+        String loan =
+                apply(borrower, secured, 500_000, null).getBody().get("id").asString();
+        String path = LOANS + "/" + loan + "/collateral";
+
+        ResponseEntity<JsonNode> over = asOfficer(HttpMethod.PUT, path, "\"1\"", pledge(item, 2_000_001));
+        assertThat(over.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        JsonNode problem = over.getBody().get("errors").get(0);
+        assertThat(problem.get("field").asString()).isEqualTo("collateral[0].pledged_value_minor");
+        assertThat(problem.get("code").asString()).isEqualTo("pledge_exceeds_value");
+        assertThat(asOfficer(HttpMethod.PUT, path, "\"1\"", pledge(item, Long.MAX_VALUE))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+
+        item("estimated_value_minor = NULL", item);
+        assertThat(asOfficer(HttpMethod.PUT, path, "\"1\"", pledge(item, 1_000_000))
+                        .getBody()
+                        .get("errors")
+                        .findValuesAsString("code"))
+                .containsExactly("collateral_not_valued");
+        item("estimated_value_minor = 2000000, currency = 'USD'", item);
+        assertThat(asOfficer(HttpMethod.PUT, path, "\"1\"", pledge(item, 1_000_000))
+                        .getBody()
+                        .get("errors")
+                        .findValuesAsString("code"))
+                .containsExactly("currency_mismatch");
+        item("currency = 'UGX', custody_status = 'seized'", item);
+        assertThat(asOfficer(HttpMethod.PUT, path, "\"1\"", pledge(item, 1_000_000))
+                        .getBody()
+                        .get("errors")
+                        .findValuesAsString("code"))
+                .containsExactly("collateral_not_held");
+        item("custody_status = 'in_custody'", item);
+        assertThat(asOfficer(HttpMethod.PUT, path, "\"1\"", pledge(item, 2_000_000))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    /** FR-ORG-03: submit checks everything again as it stands now, each refusal with its own code. */
+    @Test
+    void submitChecksAgainWhatTheDraftCollected() {
+        String product = product("RECHECK", true, true);
+        String borrower = member("Test Borrower 13", "0700000013", t.headOffice(), true);
+        String guarantor = member("Test Guarantor 13", "0700000113", t.headOffice(), true);
+        String item = collateralItem(borrower, "TEST-PLEDGE-13");
+        String loan =
+                apply(borrower, product, 500_000, null).getBody().get("id").asString();
+        String path = LOANS + "/" + loan;
+        asOfficer(
+                HttpMethod.PUT,
+                path + "/guarantors",
+                "\"1\"",
+                Map.of("guarantors", List.of(Map.of("member_id", guarantor, "guaranteed_amount_minor", 200_000))));
+        asOfficer(HttpMethod.PUT, path + "/collateral", "\"2\"", pledge(item, 1_000_000));
+
+        item("custody_status = 'released'", item);
+        ResponseEntity<JsonNode> gone = asOfficer(HttpMethod.POST, path + "/submit", "\"3\"", null);
+        assertThat(gone.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(gone)).isEqualTo("collateral_not_held");
+        item("custody_status = 'in_custody', estimated_value_minor = 900000", item);
+        assertThat(code(asOfficer(HttpMethod.POST, path + "/submit", "\"3\"", null)))
+                .isEqualTo("pledge_exceeds_value");
+        item("estimated_value_minor = 2000000", item);
+
+        memberRow("status = 'exited'", guarantor);
+        assertThat(code(asOfficer(HttpMethod.POST, path + "/submit", "\"3\"", null)))
+                .isEqualTo("guarantor_not_active");
+        memberRow("status = 'active', is_blacklisted = true, blacklist_reason = 'Test: fixture'", guarantor);
+        assertThat(code(asOfficer(HttpMethod.POST, path + "/submit", "\"3\"", null)))
+                .isEqualTo("guarantor_blacklisted");
+        memberRow("is_blacklisted = false, blacklist_reason = NULL", guarantor);
+
+        memberRow("is_blacklisted = true, blacklist_reason = 'Test: fixture'", borrower);
+        assertThat(code(asOfficer(HttpMethod.POST, path + "/submit", "\"3\"", null)))
+                .isEqualTo("member_blacklisted");
+        memberRow("is_blacklisted = false, blacklist_reason = NULL, status = 'exited'", borrower);
+        assertThat(code(asOfficer(HttpMethod.POST, path + "/submit", "\"3\"", null)))
+                .isEqualTo("member_not_active");
+        memberRow("status = 'active'", borrower);
+
+        ResponseEntity<JsonNode> submitted = asOfficer(HttpMethod.POST, path + "/submit", "\"3\"", null);
+        assertThat(submitted.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(asOfficer(HttpMethod.POST, path + "/submit", "\"4\"", null).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    /** Guarantors and pledges are frozen with the loan: the database refuses a change once it is not a draft. */
+    @Test
+    void pledgesAndGuarantorsChangeOnlyOnADraft() {
+        String product = product("FROZEN", false, false);
+        String borrower = member("Test Borrower 14", "0700000014", t.headOffice(), true);
+        String other = member("Test Guarantor 14", "0700000114", t.headOffice(), true);
+        String item = collateralItem(borrower, "TEST-PLEDGE-14");
+        String loan =
+                apply(borrower, product, 500_000, null).getBody().get("id").asString();
+        String path = LOANS + "/" + loan;
+        asOfficer(HttpMethod.PUT, path + "/collateral", "\"1\"", pledge(item, 1_000_000));
+        asOfficer(HttpMethod.POST, path + "/submit", "\"2\"", null);
+
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("UPDATE lending_loan_collateral SET pledged_value_minor = 5 WHERE loan_id = ?::uuid")
+                        .param(loan)
+                        .update())
+                .hasMessageContaining("only on a draft loan");
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("INSERT INTO lending_loan_guarantors (id, tenant_id, loan_id, guarantor_member_id,"
+                                + " guaranteed_amount_minor, status) VALUES (?, ?, ?::uuid, ?::uuid, 1000, 'active')")
+                        .params(UUID.randomUUID(), t.tenantId(), loan, other)
+                        .update())
+                .hasMessageContaining("only on a draft loan");
+
+        // Cancelling releases the pledge (the one change allowed later) and frees the item for another loan.
+        send(
+                HttpMethod.POST,
+                path + "/cancel",
+                as(UUID.randomUUID(), managerPerms, "*", "\"3\""),
+                Map.of("note", "Test: member withdrew"));
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM lending_loan_collateral WHERE loan_id = ?::uuid"
+                                + " AND released_at IS NOT NULL")
+                        .param(loan)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+        String next =
+                apply(borrower, product, 500_000, null).getBody().get("id").asString();
+        assertThat(asOfficer(HttpMethod.PUT, LOANS + "/" + next + "/collateral", "\"1\"", pledge(item, 1_000_000))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    /** FR-ORG-03: the schedule carries the version's added fees, and submit fixes the date it runs from. */
+    @Test
+    void theProvisionalScheduleCarriesFeesAndAFixedDate() {
+        Map<String, Object> terms = new LinkedHashMap<>();
+        terms.put("interest_method", "flat");
+        terms.put("interest_rate_bp", 2000);
+        terms.put("rate_unit", "per_term");
+        terms.put("term_unit", "month");
+        terms.put("min_term_count", 1);
+        terms.put("max_term_count", 3);
+        terms.put("default_term_count", 1);
+        terms.put("repayment_pattern", "bullet");
+        terms.put("min_principal_minor", 100_000);
+        terms.put("max_principal_minor", 5_000_000);
+        terms.put(
+                "fees",
+                List.of(Map.of(
+                        "name",
+                        "Test insurance",
+                        "fee_type",
+                        "insurance",
+                        "calc_method",
+                        "percent_of_principal",
+                        "rate_bp",
+                        200,
+                        "timing",
+                        "added_to_loan")));
+        String product = send(
+                        HttpMethod.POST,
+                        "/api/v1/lending/loan-products",
+                        as(UUID.randomUUID(), adminPerms, "*", null),
+                        Map.of("code", "FEES", "name", "Test FEES", "terms", terms))
+                .getBody()
+                .get("id")
+                .asString();
+        String borrower = member("Test Borrower 15", "0700000015", t.headOffice(), true);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("member_id", borrower);
+        body.put("product_id", product);
+        body.put("requested_principal_minor", 500_000);
+        body.put("purpose_category", "business");
+        body.put("purpose_text", "Test stock");
+        JsonNode draft = asOfficer(HttpMethod.POST, LOANS, null, body).getBody();
+        assertThat(draft.get("proposed_disbursement_date").isNull()).isTrue();
+        JsonNode item = draft.get("provisional_schedule").get(0);
+        assertThat(item.get("fee_minor").asLong()).isEqualTo(10_000);
+        assertThat(item.get("total_minor").asLong()).isEqualTo(610_000);
+
+        String path = LOANS + "/" + draft.get("id").asString();
+        Map<String, Object> past = Map.of("proposed_disbursement_date", "2020-01-01");
+        assertThat(asOfficer(HttpMethod.PATCH, path, "\"1\"", past)
+                        .getBody()
+                        .get("errors")
+                        .findValuesAsString("code"))
+                .containsExactly("in_the_past");
+        JsonNode cleared = asOfficer(HttpMethod.PATCH, path, "\"1\"", Map.of("purpose_text", ""))
+                .getBody();
+        assertThat(cleared.get("purpose_text").isNull()).isTrue();
+
+        JsonNode submitted =
+                asOfficer(HttpMethod.POST, path + "/submit", "\"2\"", null).getBody();
+        assertThat(submitted.get("proposed_disbursement_date").isNull()).isFalse();
+    }
+
+    /** Every change needs the current version, and another tenant never sees the loan. */
+    @Test
+    void changesNeedTheVersionAndStayInsideTheTenant() {
+        String product = product("VERSIONS", false, false);
+        String borrower = member("Test Borrower 16", "0700000016", t.headOffice(), true);
+        String loan =
+                apply(borrower, product, 500_000, null).getBody().get("id").asString();
+        String path = LOANS + "/" + loan;
+        Map<String, Object> note = Map.of("note", "Test: note");
+        List<Object[]> calls = List.of(
+                new Object[] {HttpMethod.PATCH, path, Map.of("requested_term_count", 2)},
+                new Object[] {HttpMethod.PUT, path + "/guarantors", Map.of("guarantors", List.of())},
+                new Object[] {HttpMethod.PUT, path + "/collateral", Map.of("collateral", List.of())},
+                new Object[] {HttpMethod.POST, path + "/submit", null},
+                new Object[] {HttpMethod.POST, path + "/cancel", note});
+        for (Object[] c : calls) {
+            assertThat(asOfficer((HttpMethod) c[0], (String) c[1], null, c[2]).getStatusCode())
+                    .as("%s %s without If-Match", c[0], c[1])
+                    .isEqualTo(HttpStatus.PRECONDITION_REQUIRED);
+            assertThat(code(asOfficer((HttpMethod) c[0], (String) c[1], "\"9\"", c[2])))
+                    .as("%s %s with a stale version", c[0], c[1])
+                    .isEqualTo("version_conflict");
+        }
+        HttpHeaders manager = as(UUID.randomUUID(), managerPerms, "*", null);
+        assertThat(send(HttpMethod.POST, path + "/return", manager, note).getStatusCode())
+                .isEqualTo(HttpStatus.PRECONDITION_REQUIRED);
+        assertThat(code(send(
+                        HttpMethod.POST, path + "/return", as(UUID.randomUUID(), managerPerms, "*", "\"9\""), note)))
+                .isEqualTo("version_conflict");
+
+        Map<String, Object> unknown = new LinkedHashMap<>();
+        unknown.put("member_id", UUID.randomUUID());
+        unknown.put("product_id", product);
+        unknown.put("requested_principal_minor", 500_000);
+        unknown.put("purpose_category", "business");
+        assertThat(asOfficer(HttpMethod.POST, LOANS, null, unknown)
+                        .getBody()
+                        .get("errors")
+                        .findValuesAsString("code"))
+                .containsExactly("unknown_member");
+
+        TestDatabase.Fixture other = TestDatabase.tenant("loans-other", true);
+        HttpHeaders foreign = as(officer, officerPerms, "*", null);
+        foreign.set("X-Tenant", other.slug());
+        assertThat(send(HttpMethod.GET, path, foreign, null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     /** NFR-ISO-04: a loan outside the caller's branches is a 404 and absent from the list. */

@@ -12,6 +12,12 @@ public interface ProductCatalog {
     /** A specific version, for loans that keep the terms they were created with (FR-PRD-04). */
     Optional<ProductTerms> version(UUID productVersionId);
 
+    /**
+     * The version's fees with timing {@code added_to_loan} for a principal (FR-PRD-02), so a loan's
+     * schedule carries the same fees as the product preview.
+     */
+    long addedFeesMinor(UUID productVersionId, long principalMinor);
+
     record ProductTerms(
             UUID productId,
             String productCode,

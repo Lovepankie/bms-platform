@@ -1819,7 +1819,10 @@ export interface components {
         LoanPledgeInput: {
             /** Format: uuid */
             collateral_id: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description At most the item's value
+             */
             pledged_value_minor: number;
         };
         LoanProduct: {

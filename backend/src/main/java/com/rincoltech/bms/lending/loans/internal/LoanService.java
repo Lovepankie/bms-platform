@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -110,6 +111,7 @@ class LoanService {
         }
         int term = r.requestedTermCount() == null ? product.defaults().termCount() : r.requestedTermCount();
         checkAgainstProduct(product, r.requestedPrincipalMinor(), term);
+        requireNotPast(r.proposedDisbursementDate());
         var t = product.defaults();
         Loan loan = new Loan(
                 UUID.randomUUID(),
@@ -216,6 +218,7 @@ class LoanService {
         checkAgainstProduct(versionOf(before), principal, term);
         String purpose = r.purposeCategory() == null ? before.purposeCategory() : r.purposeCategory();
         String text = r.purposeText() == null ? before.purposeText() : blankToNull(r.purposeText());
+        requireNotPast(r.proposedDisbursementDate());
         LocalDate proposed =
                 r.proposedDisbursementDate() == null ? before.proposedDisbursementDate() : r.proposedDisbursementDate();
         repo.updateDraft(id, principal, term, purpose, text, proposed);
@@ -262,51 +265,47 @@ class LoanService {
         if (!problems.isEmpty()) {
             throw ApiException.validation(problems);
         }
+        List<GuarantorRow> was = repo.guarantors(id);
         repo.replaceGuarantors(id, rows);
         repo.touch(id);
-        audit.record(AuditLog.Entry.created(
+        audit.record(new AuditLog.Entry(
                 "lending.loan.guarantors_set",
                 "lending.loan",
                 id,
                 loan.branchId(),
-                Map.of(
-                        "guarantor_member_ids",
-                        rows.stream().map(GuarantorRow::memberId).toList())));
+                Map.of("guarantors", was.stream().map(LoanService::auditView).toList()),
+                Map.of("guarantors", rows.stream().map(LoanService::auditView).toList())));
         return get(id);
     }
 
     /**
      * FR-ORG-02: replaces the draft's pledged collateral. Items come from the borrower's register,
-     * held (pledged or in custody), in the loan's currency, and pledged to no other open loan.
+     * held (pledged or in custody), in the loan's currency, pledged at no more than their value and
+     * to no other open loan. Each item's row is locked first, in id order, so two loans cannot take
+     * the same item at once and a release cannot slip between the check and the write.
      */
     @Transactional
     LoanResponse setPledges(UUID id, String ifMatch, List<PledgeInput> input) {
         Loan loan = lockForChange(id, "lending.loans.create", ifMatch);
         requireStatus(loan, Set.of("draft"));
+        ProductTerms product = versionOf(loan);
+        Map<UUID, CollateralSummary> items =
+                lockItems(input.stream().map(PledgeInput::collateralId).toList());
         List<FieldProblem> problems = new ArrayList<>();
         Set<UUID> seen = new HashSet<>();
         List<PledgeRow> rows = new ArrayList<>();
         for (int i = 0; i < input.size(); i++) {
             PledgeInput p = input.get(i);
-            String field = "collateral[" + i + "].collateral_id";
-            CollateralSummary item = collateral.find(p.collateralId()).orElse(null);
+            String prefix = "collateral[" + i + "].";
             if (!seen.add(p.collateralId())) {
-                problems.add(new FieldProblem(field, "duplicate", "Listed twice."));
-            } else if (item == null || !item.memberId().equals(loan.memberId())) {
-                problems.add(new FieldProblem(field, "unknown_collateral", "No such item in the borrower's register."));
-            } else if (!item.custodyStatus().equals("pledged")
-                    && !item.custodyStatus().equals("in_custody")) {
-                problems.add(
-                        new FieldProblem(field, "collateral_not_held", "The item is " + item.custodyStatus() + "."));
-            } else if (!item.currency().equals(loan.currency())) {
-                problems.add(
-                        new FieldProblem(field, "currency_mismatch", "The item is valued in " + item.currency() + "."));
+                problems.add(new FieldProblem(prefix + "collateral_id", "duplicate", "Listed twice."));
+                continue;
+            }
+            Refusal refusal = pledgeRefusal(loan, product, items.get(p.collateralId()), p.pledgedValueMinor());
+            if (refusal != null) {
+                problems.add(new FieldProblem(prefix + refusal.field(), refusal.code(), refusal.message()));
             } else if (repo.pledgedElsewhere(p.collateralId(), id)) {
-                throw new ApiException(
-                        HttpStatus.CONFLICT,
-                        "collateral_already_pledged",
-                        "Collateral already pledged",
-                        "The item already secures another open loan.");
+                throw alreadyPledged();
             } else {
                 rows.add(new PledgeRow(p.collateralId(), p.pledgedValueMinor()));
             }
@@ -314,36 +313,130 @@ class LoanService {
         if (!problems.isEmpty()) {
             throw ApiException.validation(problems);
         }
-        repo.replacePledges(id, rows);
+        List<PledgeRow> was = repo.pledges(id);
+        try {
+            repo.replacePledges(id, rows);
+        } catch (DuplicateKeyException e) {
+            // The one-open-pledge index: the backstop behind the lock and the check above.
+            throw alreadyPledged();
+        }
         repo.touch(id);
-        audit.record(AuditLog.Entry.created(
+        audit.record(new AuditLog.Entry(
                 "lending.loan.collateral_set",
                 "lending.loan",
                 id,
                 loan.branchId(),
-                Map.of(
-                        "collateral_ids",
-                        rows.stream().map(PledgeRow::collateralId).toList())));
+                Map.of("collateral", was.stream().map(LoanService::auditView).toList()),
+                Map.of("collateral", rows.stream().map(LoanService::auditView).toList())));
         return get(id);
     }
 
+    /** Why an item cannot back a loan; {@code field} is the pledge input field the problem belongs to. */
+    private record Refusal(String field, String code, String message) {}
+
+    /** The pledge rules, applied when the pledge is set and again at submit (the item may have changed since). */
+    private static Refusal pledgeRefusal(Loan loan, ProductTerms product, CollateralSummary item, long pledgedValue) {
+        if (item == null || !item.memberId().equals(loan.memberId())) {
+            return new Refusal("collateral_id", "unknown_collateral", "No such item in the borrower's register.");
+        }
+        if (!item.custodyStatus().equals("pledged") && !item.custodyStatus().equals("in_custody")) {
+            return new Refusal("collateral_id", "collateral_not_held", "The item is " + item.custodyStatus() + ".");
+        }
+        if (!item.currency().equals(loan.currency())) {
+            return new Refusal("collateral_id", "currency_mismatch", "The item is valued in " + item.currency() + ".");
+        }
+        if (item.collateralValueMinor() == null) {
+            // Cover (FR-ORG-07) is measured from pledged values, so a secured product takes valued items only.
+            return product.requiresCollateral()
+                    ? new Refusal("collateral_id", "collateral_not_valued", "The item has no valuation or estimate.")
+                    : null;
+        }
+        if (pledgedValue > item.collateralValueMinor()) {
+            return new Refusal(
+                    "pledged_value_minor",
+                    "pledge_exceeds_value",
+                    "The item is valued at " + item.collateralValueMinor() + ".");
+        }
+        return null;
+    }
+
+    /** Locks the items in id order (one order for every caller, so two pledges cannot deadlock). */
+    private Map<UUID, CollateralSummary> lockItems(List<UUID> ids) {
+        Map<UUID, CollateralSummary> items = new LinkedHashMap<>();
+        ids.stream()
+                .distinct()
+                .sorted()
+                .forEach(cid -> collateral.lockForPledge(cid).ifPresent(item -> items.put(cid, item)));
+        return items;
+    }
+
+    private static ApiException alreadyPledged() {
+        return new ApiException(
+                HttpStatus.CONFLICT,
+                "collateral_already_pledged",
+                "Collateral already pledged",
+                "The item already secures another open loan.");
+    }
+
+    private static Map<String, Object> auditView(PledgeRow p) {
+        return Map.of("collateral_id", p.collateralId(), "pledged_value_minor", p.pledgedValueMinor());
+    }
+
+    private static Map<String, Object> auditView(GuarantorRow g) {
+        return Map.of("member_id", g.memberId(), "guaranteed_amount_minor", g.amountMinor());
+    }
+
     /**
-     * FR-ORG-03: freezes the terms. Refused when the product needs a guarantor or collateral that
-     * the draft lacks, or when the member's KYC is not verified (FR-MEM-05, unless the tenant
-     * allows it).
+     * FR-ORG-03: freezes the terms. Everything the draft collected is checked again as it stands
+     * now: the borrower and each guarantor are active and not blacklisted, each pledged item is
+     * still the borrower's, held, in the loan's currency, valued and free, the product's guarantor
+     * and collateral requirements are met, and the member's KYC is verified (FR-MEM-05, unless the
+     * tenant allows it). Each refusal has its own code. A loan with no proposed disbursement date
+     * takes today's, so the dates it quotes stop moving.
      */
     @Transactional
     LoanResponse submit(UUID id, String ifMatch) {
         Loan loan = lockForChange(id, "lending.loans.create", ifMatch);
         requireStatus(loan, Set.of("draft"));
         ProductTerms product = versionOf(loan);
-        if (product.requiresGuarantor() && repo.guarantors(id).isEmpty()) {
+        MemberSummary member = members.find(loan.memberId()).orElseThrow();
+        if (!member.status().equals("active")) {
+            throw ApiException.rule("member_not_active", "The member is " + member.status() + ".");
+        }
+        if (member.blacklisted()) {
+            throw ApiException.rule("member_blacklisted", "The member is blacklisted.");
+        }
+        List<GuarantorRow> guarantors = repo.guarantors(id);
+        if (product.requiresGuarantor() && guarantors.isEmpty()) {
             throw ApiException.rule("guarantor_required", "The product requires at least one guarantor.");
         }
-        if (product.requiresCollateral() && repo.pledges(id).isEmpty()) {
+        for (GuarantorRow g : guarantors) {
+            MemberSummary guarantor = members.find(g.memberId()).orElseThrow();
+            if (!guarantor.status().equals("active")) {
+                throw ApiException.rule(
+                        "guarantor_not_active",
+                        "Guarantor " + guarantor.memberNo() + " is " + guarantor.status() + ".");
+            }
+            if (guarantor.blacklisted()) {
+                throw ApiException.rule(
+                        "guarantor_blacklisted", "Guarantor " + guarantor.memberNo() + " is blacklisted.");
+            }
+        }
+        List<PledgeRow> pledges = repo.pledges(id);
+        if (product.requiresCollateral() && pledges.isEmpty()) {
             throw ApiException.rule("collateral_required", "The product requires pledged collateral.");
         }
-        MemberSummary member = members.find(loan.memberId()).orElseThrow();
+        Map<UUID, CollateralSummary> items =
+                lockItems(pledges.stream().map(PledgeRow::collateralId).toList());
+        for (PledgeRow p : pledges) {
+            Refusal refusal = pledgeRefusal(loan, product, items.get(p.collateralId()), p.pledgedValueMinor());
+            if (refusal != null) {
+                throw ApiException.rule(refusal.code(), refusal.message());
+            }
+            if (repo.pledgedElsewhere(p.collateralId(), id)) {
+                throw alreadyPledged();
+            }
+        }
         if (!member.kycStatus().equals("verified") && !settings.allowLoansBeforeKycVerified()) {
             throw ApiException.rule("kyc_not_verified", "The member's KYC is " + member.kycStatus() + ".");
         }
@@ -351,6 +444,9 @@ class LoanService {
         Map<String, Object> columns = new LinkedHashMap<>();
         columns.put("submitted_by", user);
         columns.put("submitted_at", LoanRepository.NOW);
+        if (loan.proposedDisbursementDate() == null) {
+            columns.put("proposed_disbursement_date", today());
+        }
         repo.move(id, "draft", "submitted", user, null, columns);
         audit.record(transition(loan, "lending.loan.submitted", "draft", "submitted", null));
         return get(id);
@@ -448,7 +544,7 @@ class LoanService {
                 })
                 .toList();
         List<ScheduleItem> schedule =
-                Set.of("draft", "submitted", "appraised").contains(l.status()) ? provisional(l, product) : List.of();
+                Set.of("draft", "submitted", "appraised").contains(l.status()) ? provisional(l) : List.of();
         return new LoanResponse(
                 l.id(),
                 l.loanNo(),
@@ -491,11 +587,19 @@ class LoanService {
                 l.version());
     }
 
-    /** FR-ORG-03: display only, from the loan's own copied terms, so a later product edit cannot change it. */
-    private List<ScheduleItem> provisional(Loan l, ProductTerms product) {
-        LocalDate from = l.proposedDisbursementDate() != null
-                ? l.proposedDisbursementDate()
-                : clock.today(currentTenant.profile().timezone());
+    /**
+     * FR-ORG-03: display only, from the loan's own copied terms and its version's fees, so it
+     * matches the product preview and a later product edit cannot change it. Dates run from the
+     * proposed disbursement date; a draft without one uses today, and submit stores it.
+     */
+    private List<ScheduleItem> provisional(Loan l) {
+        return scheduleOf(l).stream()
+                .map(i -> new ScheduleItem(
+                        i.no(), i.dueDate(), i.principalMinor(), i.interestMinor(), i.feeMinor(), i.totalMinor()))
+                .toList();
+    }
+
+    List<ScheduleCalculator.Item> scheduleOf(Loan l) {
         var terms = new ScheduleCalculator.Terms(
                 l.interestMethod(),
                 l.interestRateBp(),
@@ -504,10 +608,23 @@ class LoanService {
                 l.requestedTermCount(),
                 l.repaymentPattern(),
                 l.instalmentFrequency());
-        return ScheduleCalculator.schedule(terms, l.requestedPrincipalMinor(), 0, from).stream()
-                .map(i -> new ScheduleItem(
-                        i.no(), i.dueDate(), i.principalMinor(), i.interestMinor(), i.feeMinor(), i.totalMinor()))
-                .toList();
+        return ScheduleCalculator.schedule(
+                terms,
+                l.requestedPrincipalMinor(),
+                products.addedFeesMinor(l.productVersionId(), l.requestedPrincipalMinor()),
+                l.proposedDisbursementDate() != null ? l.proposedDisbursementDate() : today());
+    }
+
+    private LocalDate today() {
+        return clock.today(currentTenant.profile().timezone());
+    }
+
+    /** A proposed disbursement date is today or later. */
+    private void requireNotPast(LocalDate proposed) {
+        if (proposed != null && proposed.isBefore(today())) {
+            throw ApiException.validation(
+                    List.of(new FieldProblem("proposed_disbursement_date", "in_the_past", "Must be today or later.")));
+        }
     }
 
     private Loan inScope(UUID id, String permission) {

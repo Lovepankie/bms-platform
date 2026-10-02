@@ -659,6 +659,7 @@
           },
           "requested_principal_minor" : {
             "format" : "int64",
+            "maximum" : 1000000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
@@ -1234,6 +1235,7 @@
         "properties" : {
           "guaranteed_amount_minor" : {
             "format" : "int64",
+            "maximum" : 1000000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
@@ -1342,7 +1344,9 @@
             "type" : "string"
           },
           "pledged_value_minor" : {
+            "description" : "At most the item's value",
             "format" : "int64",
+            "maximum" : 1000000000000000,
             "minimum" : 0,
             "type" : "integer"
           }
@@ -2732,6 +2736,7 @@
           },
           "requested_principal_minor" : {
             "format" : "int64",
+            "maximum" : 1000000000000000,
             "minimum" : 0,
             "type" : "integer"
           },

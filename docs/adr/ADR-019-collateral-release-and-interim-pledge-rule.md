@@ -50,3 +50,23 @@ frees the reference.
 
 **Watch for:** increment 4 must replace the interim index if one item may back several loans, and
 must add the open-loan check to both the release request and `execute`.
+
+## Amendment: the rule once loans exist (2026-10-02, issue #41)
+
+Accepted with increment 4. The product question left open above is decided: **an item secures at
+most one open loan.**
+
+- A pledge is a `lending_loan_collateral` row; it is open while `released_at` is null. A pledge is
+  released when its loan becomes `cancelled`, `rejected` or `closed`. A `written_off` loan keeps
+  its pledges (the collateral is being recovered). A draft holds its pledges, and a loan returned
+  for correction keeps them.
+- Setting a draft's pledges and submitting it lock each item row (in id order) before checking,
+  and the release request and `CollateralReleaseAction.execute` lock the same row before they ask
+  `CollateralPledges`. A pledge and a release of one item, or two pledges of it, therefore run one
+  after the other.
+- The partial unique index `lending_loan_collateral_one_open_pledge (tenant_id, collateral_id)
+  WHERE released_at IS NULL` is the backstop, mapped to the same 409 `collateral_already_pledged`.
+- The interim index on the register (one live item per type and reference) stays: it is about
+  registering the same asset twice, which the one-open-loan rule does not cover.
+
+A two-thread test pledges one item to two drafts at once and expects one 200 and one 409.

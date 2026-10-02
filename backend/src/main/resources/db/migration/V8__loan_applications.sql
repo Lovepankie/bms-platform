@@ -138,7 +138,67 @@ CREATE TABLE lending_loan_collateral (
     FOREIGN KEY (tenant_id, loan_id) REFERENCES lending_loans (tenant_id, id),
     FOREIGN KEY (tenant_id, collateral_id) REFERENCES lending_collateral_items (tenant_id, id)
 );
+-- One open loan per item (FR-COL-01, ADR-019): the service locks the item and checks first; this
+-- index is the backstop. A pledge is released (released_at set) when its loan is cancelled,
+-- rejected or closed; a written-off loan keeps its collateral for recovery.
+CREATE UNIQUE INDEX lending_loan_collateral_one_open_pledge ON lending_loan_collateral (tenant_id, collateral_id)
+    WHERE released_at IS NULL;
 CREATE INDEX lending_loan_collateral_item ON lending_loan_collateral (tenant_id, collateral_id);
 SELECT bms_apply_tenant_rls('lending_loan_collateral');
 -- DELETE: a draft's pledge list is replaced as a whole (PUT .../collateral).
 SELECT bms_grant_app('lending_loan_collateral', 'SELECT, INSERT, UPDATE, DELETE');
+
+-- ---------------------------------------------------------------------------------------------
+-- Guarantors and pledges change only while the loan is a draft (FR-ORG-03 freezes them at submit).
+-- The service checks this; these triggers hold it for every writer. The one change allowed later
+-- is the release: a pledge's released_at, or a guarantor's status, with the rest of the row intact.
+-- ---------------------------------------------------------------------------------------------
+
+CREATE FUNCTION lending_loan_require_draft(p_loan_id uuid) RETURNS void
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_status text;
+BEGIN
+    SELECT status INTO v_status FROM lending_loans WHERE id = p_loan_id;
+    IF v_status IS DISTINCT FROM 'draft' THEN
+        RAISE EXCEPTION 'guarantors and pledges change only on a draft loan (loan is %)', coalesce(v_status, 'missing')
+            USING ERRCODE = 'check_violation';
+    END IF;
+END;
+$$;
+
+CREATE FUNCTION lending_loan_collateral_guard() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        PERFORM lending_loan_require_draft(OLD.loan_id);
+        RETURN OLD;
+    END IF;
+    IF TG_OP = 'UPDATE' AND NEW.loan_id = OLD.loan_id AND NEW.collateral_id = OLD.collateral_id
+            AND NEW.pledged_value_minor = OLD.pledged_value_minor THEN
+        RETURN NEW;
+    END IF;
+    PERFORM lending_loan_require_draft(NEW.loan_id);
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER lending_loan_collateral_guard BEFORE INSERT OR UPDATE OR DELETE ON lending_loan_collateral
+    FOR EACH ROW EXECUTE FUNCTION lending_loan_collateral_guard();
+
+CREATE FUNCTION lending_loan_guarantors_guard() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        PERFORM lending_loan_require_draft(OLD.loan_id);
+        RETURN OLD;
+    END IF;
+    IF TG_OP = 'UPDATE' AND NEW.loan_id = OLD.loan_id AND NEW.guarantor_member_id = OLD.guarantor_member_id
+            AND NEW.guaranteed_amount_minor = OLD.guaranteed_amount_minor THEN
+        RETURN NEW;
+    END IF;
+    PERFORM lending_loan_require_draft(NEW.loan_id);
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER lending_loan_guarantors_guard BEFORE INSERT OR UPDATE OR DELETE ON lending_loan_guarantors
+    FOR EACH ROW EXECUTE FUNCTION lending_loan_guarantors_guard();

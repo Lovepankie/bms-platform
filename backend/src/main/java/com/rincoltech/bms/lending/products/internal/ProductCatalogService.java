@@ -39,6 +39,17 @@ class ProductCatalogService implements ProductCatalog {
                 .flatMap(row -> terms(row, productVersionId));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public long addedFeesMinor(UUID productVersionId, long principalMinor) {
+        return repo.fees(productVersionId).stream()
+                .filter(f -> f.timing().equals("added_to_loan"))
+                .mapToLong(f -> f.calcMethod().equals("flat")
+                        ? f.amountMinor()
+                        : ScheduleCalculator.percentOf(principalMinor, f.rateBp()))
+                .reduce(0, Math::addExact);
+    }
+
     private Optional<ProductTerms> terms(Row row, UUID versionId) {
         return repo.versions(row.id()).stream()
                 .filter(v -> v.id().equals(versionId))

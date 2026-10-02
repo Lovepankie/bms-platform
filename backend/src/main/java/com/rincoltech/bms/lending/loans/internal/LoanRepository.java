@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -19,8 +20,12 @@ import org.springframework.stereotype.Repository;
 @Repository
 class LoanRepository {
 
-    /** Statuses in which a loan holds its collateral (FR-COL-04). */
-    static final List<String> OPEN = List.of("draft", "submitted", "appraised", "approved", "active");
+    /**
+     * Statuses that end a loan's hold on its collateral (FR-COL-04): the pledges are released when
+     * the loan reaches one. Written off is not among them (the collateral is being recovered), and
+     * a restructured loan hands its pledges to the loan that replaces it when restructure is built.
+     */
+    static final Set<String> RELEASES_PLEDGES = Set.of("cancelled", "rejected", "closed");
 
     private final JdbcClient jdbc;
 
@@ -129,6 +134,12 @@ class LoanRepository {
         });
         sql.append(" WHERE id = :id");
         jdbc.sql(sql.toString()).params(p).update();
+        if (RELEASES_PLEDGES.contains(to)) {
+            jdbc.sql("UPDATE lending_loan_collateral SET released_at = now(), updated_at = now(), version = version + 1"
+                            + " WHERE loan_id = ? AND released_at IS NULL")
+                    .param(id)
+                    .update();
+        }
         jdbc.sql("""
                         INSERT INTO lending_loan_status_history (id, tenant_id, loan_id, from_status, to_status, changed_by, reason)
                         VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?)
@@ -218,15 +229,17 @@ class LoanRepository {
         }
     }
 
-    /** True when another open loan holds this item (FR-COL-01, FR-COL-04). */
+    /**
+     * True when another loan holds an unreleased pledge on this item (FR-COL-01, FR-COL-04). The
+     * caller holds the item's row lock, so the answer cannot change under it.
+     */
     boolean pledgedElsewhere(UUID collateralId, UUID exceptLoanId) {
         return jdbc.sql("""
-                        SELECT count(*) FROM lending_loan_collateral lc JOIN lending_loans l ON l.id = lc.loan_id
-                         WHERE lc.collateral_id = :collateral AND lc.released_at IS NULL AND l.status IN (:open)
-                           AND l.id IS DISTINCT FROM CAST(:except AS uuid)
+                        SELECT count(*) FROM lending_loan_collateral lc
+                         WHERE lc.collateral_id = :collateral AND lc.released_at IS NULL
+                           AND lc.loan_id IS DISTINCT FROM CAST(:except AS uuid)
                         """)
                         .param("collateral", collateralId)
-                        .param("open", OPEN)
                         .param("except", exceptLoanId)
                         .query(Long.class)
                         .single()

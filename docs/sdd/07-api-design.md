@@ -485,7 +485,13 @@ officer cancels only their own draft; a holder of `lending.loans.approve` cancel
 not yet disbursed. Codes: `member_not_active`, `product_archived`, `below_product_minimum`,
 `above_product_maximum`, `guarantor_required`, `collateral_required`, `kyc_not_verified`,
 `collateral_already_pledged` (409); field codes `guarantor_is_borrower`, `unknown_collateral`,
-`collateral_not_held`. Appraisal and decision arrive with #42 and #43.
+`collateral_not_held`, `currency_mismatch`, `collateral_not_valued`, `pledge_exceeds_value`
+(on `pledged_value_minor`) and `in_the_past` (a proposed disbursement date before today). Submit
+runs the pledge checks again and adds `member_blacklisted`, `guarantor_not_active` and
+`guarantor_blacklisted`; it also stores today as the proposed disbursement date when none was
+given. The provisional schedule includes the version's `added_to_loan` fees, so it equals the
+product preview. Money fields accept at most 10^15 minor units. `PATCH` with `purpose_text: ""`
+clears the text. Appraisal and decision arrive with #42 and #43.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|

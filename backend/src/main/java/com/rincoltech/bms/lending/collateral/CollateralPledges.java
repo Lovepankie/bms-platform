@@ -9,6 +9,10 @@ import java.util.UUID;
  */
 public interface CollateralPledges {
 
-    /** True while a loan that is not closed, cancelled, rejected or written off holds the item. */
+    /**
+     * True while an unreleased pledge holds the item. A pledge is released when its loan is
+     * cancelled, rejected or closed; a written-off loan keeps its collateral for recovery. The
+     * caller holds the item's row lock (the release paths lock it before they ask).
+     */
     boolean securesOpenLoan(UUID collateralId);
 }
