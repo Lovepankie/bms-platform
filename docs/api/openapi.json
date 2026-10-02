@@ -1064,6 +1064,7 @@
           "amount_minor" : {
             "description" : "For flat",
             "format" : "int64",
+            "maximum" : 1000000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
@@ -1081,8 +1082,9 @@
             "type" : "string"
           },
           "rate_bp" : {
-            "description" : "For percent_of_principal",
+            "description" : "For percent_of_principal; at most 10000",
             "format" : "int32",
+            "maximum" : 10000,
             "minimum" : 0,
             "type" : "integer"
           },
@@ -1144,22 +1146,26 @@
           },
           "max_principal_minor" : {
             "format" : "int64",
+            "maximum" : 1000000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
           "max_term_count" : {
             "format" : "int32",
+            "maximum" : 3660,
             "minimum" : 1,
             "type" : "integer"
           },
           "min_collateral_cover_bp" : {
-            "description" : "15000 is 1.5 times the principal",
+            "description" : "15000 is 1.5 times the principal; required when collateral is required",
             "format" : "int32",
+            "maximum" : 1000000,
             "minimum" : 0,
             "type" : "integer"
           },
           "min_principal_minor" : {
             "format" : "int64",
+            "maximum" : 1000000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
@@ -1170,11 +1176,13 @@
           },
           "penalty_cap_bp" : {
             "format" : "int32",
+            "maximum" : 1000000,
             "minimum" : 0,
             "type" : "integer"
           },
           "penalty_flat_minor" : {
             "format" : "int64",
+            "maximum" : 1000000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
@@ -1193,6 +1201,7 @@
           },
           "penalty_rate_bp" : {
             "format" : "int32",
+            "maximum" : 100000,
             "minimum" : 0,
             "type" : "integer"
           },
@@ -2026,6 +2035,7 @@
         "description" : "Terms as typed on the product form, saved or not",
         "properties" : {
           "disbursement_date" : {
+            "description" : "Between 2000-01-01 and 2100-12-31",
             "format" : "date",
             "type" : "string"
           },
@@ -2051,6 +2061,7 @@
           },
           "principal_minor" : {
             "format" : "int64",
+            "maximum" : 1000000000000000,
             "minimum" : 0,
             "type" : "integer"
           },

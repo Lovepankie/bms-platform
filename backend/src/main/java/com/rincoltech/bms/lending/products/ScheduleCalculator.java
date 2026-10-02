@@ -161,7 +161,9 @@ public final class ScheduleCalculator {
         long balance = principalMinor;
         for (int k = 0; k < n; k++) {
             interest[k] = round(BigDecimal.valueOf(balance).multiply(i, MC));
-            principal[k] = k == n - 1 ? balance : instalment - interest[k];
+            // Clamped to [0, balance]: at a very high rate on a tiny principal the rounded instalment
+            // can fall below the rounded interest, and a principal part is never negative.
+            principal[k] = k == n - 1 ? balance : Math.clamp(instalment - interest[k], 0, balance);
             balance -= principal[k];
         }
     }

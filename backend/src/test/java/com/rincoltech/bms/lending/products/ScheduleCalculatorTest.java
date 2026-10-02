@@ -195,4 +195,18 @@ class ScheduleCalculatorTest {
             assertThat(s.getFirst().dueDate()).isAfter(D);
         }
     }
+
+    /** R-DECL on 1, 2 and 3 minor units at the highest rate: no part is negative and principal sums exactly. */
+    @Test
+    void aTinyPrincipalAtAVeryHighRateNeverGoesNegative() {
+        for (long principal = 1; principal <= 3; principal++) {
+            Terms terms = new Terms("declining", 100_000, "per_month", "month", 12, "instalments", "monthly");
+            List<Item> items = ScheduleCalculator.schedule(terms, principal, 0, LocalDate.of(2026, 3, 16));
+            assertThat(items).allSatisfy(i -> {
+                assertThat(i.principalMinor()).isNotNegative();
+                assertThat(i.interestMinor()).isNotNegative();
+            });
+            assertThat(items.stream().mapToLong(Item::principalMinor).sum()).isEqualTo(principal);
+        }
+    }
 }

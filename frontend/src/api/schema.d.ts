@@ -1573,7 +1573,7 @@ export interface components {
             name: string;
             /**
              * Format: int32
-             * @description For percent_of_principal
+             * @description For percent_of_principal; at most 10000
              */
             rate_bp?: number;
             timing: string;
@@ -1599,7 +1599,7 @@ export interface components {
             max_term_count: number;
             /**
              * Format: int32
-             * @description 15000 is 1.5 times the principal
+             * @description 15000 is 1.5 times the principal; required when collateral is required
              */
             min_collateral_cover_bp?: number;
             /** Format: int64 */
@@ -1947,7 +1947,10 @@ export interface components {
         };
         /** @description Terms as typed on the product form, saved or not */
         SchedulePreviewRequest: {
-            /** Format: date */
+            /**
+             * Format: date
+             * @description Between 2000-01-01 and 2100-12-31
+             */
             disbursement_date: string;
             fees?: components["schemas"]["LoanProductFee"][];
             instalment_frequency?: string;

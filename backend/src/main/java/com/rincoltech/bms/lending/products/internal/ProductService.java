@@ -18,15 +18,18 @@ import com.rincoltech.bms.lending.products.internal.ProductApi.ProductList;
 import com.rincoltech.bms.lending.products.internal.ProductApi.Terms;
 import com.rincoltech.bms.lending.products.internal.ProductApi.Version;
 import com.rincoltech.bms.lending.products.internal.ProductRepository.Row;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Loan products (FR-PRD-01 to FR-PRD-05). Products are tenant-wide, so the route permission is
@@ -37,15 +40,19 @@ import org.springframework.transaction.annotation.Transactional;
 class ProductService {
 
     static final List<String> DEFAULT_ALLOCATION = List.of("penalty", "fee", "interest", "principal");
+    static final LocalDate EARLIEST_PREVIEW_DATE = LocalDate.of(2000, 1, 1);
+    static final LocalDate LATEST_PREVIEW_DATE = LocalDate.of(2100, 12, 31);
 
     private final ProductRepository repo;
     private final CurrentTenant currentTenant;
     private final AuditLog audit;
+    private final ObjectMapper mapper;
 
-    ProductService(ProductRepository repo, CurrentTenant currentTenant, AuditLog audit) {
+    ProductService(ProductRepository repo, CurrentTenant currentTenant, AuditLog audit, ObjectMapper mapper) {
         this.repo = repo;
         this.currentTenant = currentTenant;
         this.audit = audit;
+        this.mapper = mapper;
     }
 
     @Transactional(readOnly = true)
@@ -62,21 +69,30 @@ class ProductService {
     @Transactional
     Product create(CreateProductRequest r) {
         if (repo.codeExists(r.code())) {
-            throw new ApiException(
-                    HttpStatus.CONFLICT,
-                    "duplicate_product_code",
-                    "Duplicate product code",
-                    "A loan product with code " + r.code() + " already exists.");
+            throw duplicateCode(r.code());
         }
         UUID user = CurrentPrincipal.require().userId();
         UUID id = UUID.randomUUID();
         Version v = toVersion(r.terms(), 1);
-        repo.insertProduct(id, r.code(), r.name().trim(), user);
+        try {
+            repo.insertProduct(id, r.code(), r.name().trim(), user);
+        } catch (DuplicateKeyException e) {
+            // Two creates of the same code at once: the unique key decides, with the same answer.
+            throw duplicateCode(r.code());
+        }
         repo.insertVersion(id, v, user);
         repo.linkFirstVersion(id, v.id());
         audit.record(
-                AuditLog.Entry.created("lending.product.created", "lending.product", id, null, summary(r.code(), v)));
+                AuditLog.Entry.created("lending.product.created", "lending.product", id, null, terms(r.code(), v)));
         return get(id);
+    }
+
+    private static ApiException duplicateCode(String code) {
+        return new ApiException(
+                HttpStatus.CONFLICT,
+                "duplicate_product_code",
+                "Duplicate product code",
+                "A loan product with code " + code + " already exists.");
     }
 
     /** FR-PRD-04: editing a product writes a new version; loans keep the version they were created with. */
@@ -88,7 +104,7 @@ class ProductService {
         repo.insertVersion(id, v, user);
         repo.setCurrentVersion(id, v.id());
         audit.record(AuditLog.Entry.created(
-                "lending.product.version_created", "lending.product", id, null, summary(product.code(), v)));
+                "lending.product.version_created", "lending.product", id, null, terms(product.code(), v)));
         return get(id);
     }
 
@@ -109,6 +125,20 @@ class ProductService {
 
     /** FR-PRD-03: the same calculator as real schedules, on terms that need not be saved yet. */
     Preview preview(PreviewRequest r) {
+        if (r.disbursementDate().isBefore(EARLIEST_PREVIEW_DATE)
+                || r.disbursementDate().isAfter(LATEST_PREVIEW_DATE)) {
+            throw ApiException.validation(List.of(
+                    new FieldProblem("disbursement_date", "invalid", "Must be between 2000-01-01 and 2100-12-31.")));
+        }
+        try {
+            return previewOf(r);
+        } catch (ArithmeticException e) {
+            // The request bounds keep real inputs far from overflow; this is the last line of defence.
+            throw ApiException.rule("amount_out_of_range", "The amounts are too large to compute.");
+        }
+    }
+
+    private Preview previewOf(PreviewRequest r) {
         List<Fee> fees = r.fees() == null ? List.of() : r.fees();
         checkFees(fees);
         ScheduleCalculator.Terms terms = new ScheduleCalculator.Terms(
@@ -127,7 +157,7 @@ class ProductService {
                     "fees", "invalid", "Fees deducted at disbursement must be less than the principal.")));
         }
         List<Item> items = ScheduleCalculator.schedule(terms, r.principalMinor(), added, r.disbursementDate());
-        long interest = items.stream().mapToLong(Item::interestMinor).sum();
+        long interest = items.stream().mapToLong(Item::interestMinor).reduce(0, Math::addExact);
         return new Preview(
                 items.stream()
                         .map(i -> new PreviewItem(
@@ -141,7 +171,7 @@ class ProductService {
                 r.principalMinor(),
                 interest,
                 added,
-                r.principalMinor() + interest + added,
+                Math.addExact(Math.addExact(r.principalMinor(), interest), added),
                 deducted,
                 upfront,
                 r.principalMinor() - deducted);
@@ -153,7 +183,7 @@ class ProductService {
                 .mapToLong(f -> f.calcMethod().equals("flat")
                         ? f.amountMinor()
                         : ScheduleCalculator.percentOf(principalMinor, f.rateBp()))
-                .sum();
+                .reduce(0, Math::addExact);
     }
 
     private Product assemble(Row row, boolean withHistory) {
@@ -220,11 +250,16 @@ class ProductService {
                     new FieldProblem("penalty_rate_bp", "required", "Required for percent_of_overdue_per_period."));
         }
         boolean collateral = Boolean.TRUE.equals(t.requiresCollateral());
+        if (collateral && t.minCollateralCoverBp() == null) {
+            problems.add(new FieldProblem(
+                    "min_collateral_cover_bp", "required", "Required when the product requires collateral."));
+        }
         List<Fee> fees = t.fees() == null ? List.of() : t.fees();
         if (!problems.isEmpty()) {
             throw ApiException.validation(problems);
         }
         checkFees(fees);
+        checkFeesLeaveADisbursement(fees, t.minPrincipalMinor());
         return new Version(
                 UUID.randomUUID(),
                 versionNo,
@@ -288,16 +323,39 @@ class ProductService {
         }
     }
 
-    private static Map<String, Object> summary(String code, Version v) {
+    /**
+     * FR-PRD-02: fees deducted at disbursement must leave something to disburse. The smallest
+     * principal is the worst case (a flat fee does not shrink with it), so the check runs there
+     * and names the fee that takes the total to the principal or past it.
+     */
+    private static void checkFeesLeaveADisbursement(List<Fee> fees, long minPrincipalMinor) {
+        long deducted = 0;
+        for (int i = 0; i < fees.size(); i++) {
+            Fee f = fees.get(i);
+            if (!f.timing().equals("deducted_at_disbursement")) {
+                continue;
+            }
+            deducted = Math.addExact(
+                    deducted,
+                    f.calcMethod().equals("flat")
+                            ? f.amountMinor()
+                            : ScheduleCalculator.percentOf(minPrincipalMinor, f.rateBp()));
+            if (deducted >= minPrincipalMinor) {
+                throw ApiException.validation(List.of(new FieldProblem(
+                        "fees[" + i + "]",
+                        "fees_exceed_principal",
+                        "Fees deducted at disbursement must total less than min_principal_minor.")));
+            }
+        }
+    }
+
+    /** The whole version in the audit row, so a later reader can see exactly which term or fee changed. */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> terms(String code, Version v) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("code", code);
-        m.put("version_no", v.versionNo());
-        m.put("interest_method", v.interestMethod());
-        m.put("interest_rate_bp", v.interestRateBp());
-        m.put("rate_unit", v.rateUnit());
-        m.put("term_unit", v.termUnit());
-        m.put("repayment_pattern", v.repaymentPattern());
-        m.put("fees", v.fees().size());
+        m.putAll(mapper.convertValue(v, Map.class));
+        m.remove("created_at");
         return m;
     }
 }

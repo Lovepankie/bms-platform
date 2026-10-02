@@ -63,6 +63,8 @@ CREATE TABLE lending_loan_product_versions (
     requires_guarantor           boolean     NOT NULL DEFAULT false,
     created_by                   uuid        NOT NULL,
     UNIQUE (tenant_id, id),
+    -- The target of the product's current-version key, so a product can only point at its own version.
+    UNIQUE (tenant_id, product_id, id),
     UNIQUE (product_id, version_no),
     FOREIGN KEY (tenant_id, product_id) REFERENCES lending_loan_products (tenant_id, id),
     CHECK (1 <= min_term_count AND min_term_count <= default_term_count AND default_term_count <= max_term_count),
@@ -70,6 +72,8 @@ CREATE TABLE lending_loan_product_versions (
     CHECK ((repayment_pattern = 'instalments') = (instalment_frequency IS NOT NULL)),
     CHECK (allocation_order @> ARRAY['penalty', 'fee', 'interest', 'principal']
            AND cardinality(allocation_order) = 4),
+    -- FR-ORG-07 compares the pledged cover with this at approval, so a secured product must state it.
+    CHECK (NOT requires_collateral OR min_collateral_cover_bp IS NOT NULL),
     CHECK ((penalty_method = 'none') = (penalty_period_unit IS NULL)),
     CHECK ((penalty_method = 'flat_per_period') = (penalty_flat_minor IS NOT NULL)),
     CHECK ((penalty_method = 'percent_of_overdue_per_period') = (penalty_rate_bp IS NOT NULL))
@@ -79,7 +83,8 @@ SELECT bms_apply_tenant_rls('lending_loan_product_versions');
 SELECT bms_grant_app('lending_loan_product_versions', 'SELECT, INSERT');
 
 ALTER TABLE lending_loan_products
-    ADD FOREIGN KEY (tenant_id, current_version_id) REFERENCES lending_loan_product_versions (tenant_id, id);
+    ADD FOREIGN KEY (tenant_id, id, current_version_id)
+        REFERENCES lending_loan_product_versions (tenant_id, product_id, id);
 
 -- ---------------------------------------------------------------------------------------------
 -- lending_loan_product_fees (FR-PRD-02)
@@ -95,7 +100,7 @@ CREATE TABLE lending_loan_product_fees (
     fee_type           text        NOT NULL CHECK (fee_type IN ('application', 'processing', 'insurance', 'other')),
     calc_method        text        NOT NULL CHECK (calc_method IN ('flat', 'percent_of_principal')),
     amount_minor       bigint      CHECK (amount_minor > 0),
-    rate_bp            integer     CHECK (rate_bp > 0),
+    rate_bp            integer     CHECK (rate_bp BETWEEN 1 AND 10000),
     timing             text        NOT NULL CHECK (timing IN ('deducted_at_disbursement', 'added_to_loan', 'paid_upfront')),
     UNIQUE (tenant_id, id),
     FOREIGN KEY (tenant_id, product_version_id) REFERENCES lending_loan_product_versions (tenant_id, id),

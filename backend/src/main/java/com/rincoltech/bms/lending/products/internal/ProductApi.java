@@ -24,6 +24,12 @@ final class ProductApi {
     static final String PATTERNS = "bullet|instalments";
     static final String FREQUENCIES = "daily|weekly|fortnightly|monthly";
 
+    /** The largest amount any money field accepts, in minor units; far above any real loan, far below overflow. */
+    static final long MAX_MONEY_MINOR = 1_000_000_000_000_000L;
+
+    /** A percentage fee is at most the whole principal. */
+    static final long MAX_FEE_RATE_BP = 10_000;
+
     private ProductApi() {}
 
     @Schema(name = "LoanProductFee")
@@ -36,9 +42,10 @@ final class ProductApi {
             @NotNull @Pattern(regexp = "flat|percent_of_principal")
             String calcMethod,
 
-            @Positive @Schema(description = "For flat") Long amountMinor,
+            @Positive @Max(MAX_MONEY_MINOR) @Schema(description = "For flat")
+            Long amountMinor,
 
-            @Positive @Schema(description = "For percent_of_principal")
+            @Positive @Max(MAX_FEE_RATE_BP) @Schema(description = "For percent_of_principal; at most 10000")
             Integer rateBp,
 
             @NotNull @Pattern(regexp = "deducted_at_disbursement|added_to_loan|paid_upfront")
@@ -52,15 +59,15 @@ final class ProductApi {
             @NotNull @Pattern(regexp = RATE_UNITS) String rateUnit,
             @NotNull @Pattern(regexp = TERM_UNITS) String termUnit,
             @NotNull @Min(1) Integer minTermCount,
-            @NotNull @Min(1) Integer maxTermCount,
+            @NotNull @Min(1) @Max(3660) Integer maxTermCount,
             @NotNull @Min(1) Integer defaultTermCount,
             @NotNull @Pattern(regexp = PATTERNS) String repaymentPattern,
 
             @Pattern(regexp = FREQUENCIES) @Schema(description = "Required for instalments")
             String instalmentFrequency,
 
-            @NotNull @Positive Long minPrincipalMinor,
-            @NotNull @Positive Long maxPrincipalMinor,
+            @NotNull @Positive @Max(MAX_MONEY_MINOR) Long minPrincipalMinor,
+            @NotNull @Positive @Max(MAX_MONEY_MINOR) Long maxPrincipalMinor,
 
             @Schema(description = "A permutation of penalty, fee, interest, principal; that order by default")
             List<String> allocationOrder,
@@ -70,13 +77,15 @@ final class ProductApi {
 
             @PositiveOrZero Integer penaltyGraceDays,
             @Pattern(regexp = TERM_UNITS) String penaltyPeriodUnit,
-            @Positive Long penaltyFlatMinor,
-            @Positive Integer penaltyRateBp,
-            @Positive Integer penaltyCapBp,
+            @Positive @Max(MAX_MONEY_MINOR) Long penaltyFlatMinor,
+            @Positive @Max(100000) Integer penaltyRateBp,
+            @Positive @Max(1000000) Integer penaltyCapBp,
             Boolean flatEarlySettlementRebate,
             Boolean requiresCollateral,
 
-            @Positive @Schema(description = "15000 is 1.5 times the principal")
+            @Positive
+            @Max(1000000)
+            @Schema(description = "15000 is 1.5 times the principal; required when collateral is required")
             Integer minCollateralCoverBp,
 
             Boolean requiresGuarantor,
@@ -100,8 +109,10 @@ final class ProductApi {
             @NotNull @Pattern(regexp = PATTERNS) String repaymentPattern,
             @Pattern(regexp = FREQUENCIES) String instalmentFrequency,
             @Valid List<Fee> fees,
-            @NotNull @Positive Long principalMinor,
-            @NotNull LocalDate disbursementDate) {}
+            @NotNull @Positive @Max(MAX_MONEY_MINOR) Long principalMinor,
+
+            @NotNull @Schema(description = "Between 2000-01-01 and 2100-12-31")
+            LocalDate disbursementDate) {}
 
     @Schema(name = "LoanProductVersion")
     record Version(

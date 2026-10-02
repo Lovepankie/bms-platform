@@ -749,7 +749,8 @@ increment 4.
 
 `lending_loan_products`: (std) `code varchar(20) NOT NULL` (`UNIQUE (tenant_id, code)`),
 `name varchar(100) NOT NULL`, `status text NOT NULL` [`active`, `archived`],
-`current_version_id uuid`.
+`current_version_id uuid` (`FOREIGN KEY (tenant_id, id, current_version_id)` to the versions'
+`UNIQUE (tenant_id, product_id, id)`, so a product can only point at one of its own versions).
 
 `lending_loan_product_versions` (immutable once referenced by a loan; FR-PRD-04):
 
@@ -776,7 +777,7 @@ increment 4.
 | `penalty_cap_bp` | `integer` | |
 | `flat_early_settlement_rebate` | `boolean NOT NULL DEFAULT false` | R-PAYOFF |
 | `requires_collateral` | `boolean NOT NULL DEFAULT false` | |
-| `min_collateral_cover_bp` | `integer` | For example 15000 = 1.5 times principal. |
+| `min_collateral_cover_bp` | `integer` | For example 15000 = 1.5 times principal. `CHECK`: NOT NULL when `requires_collateral`. |
 | `requires_guarantor` | `boolean NOT NULL DEFAULT false` | |
 | `created_by` | `uuid NOT NULL` | |
 
@@ -785,7 +786,7 @@ increment 4.
 (std, no `version`) `product_version_id uuid NOT NULL`, `name varchar(60) NOT NULL`,
 `fee_type text NOT NULL` [`application`, `processing`, `insurance`, `other`],
 `calc_method text NOT NULL` [`flat`, `percent_of_principal`], `amount_minor bigint`,
-`rate_bp integer`, `timing text NOT NULL` [`deducted_at_disbursement`, `added_to_loan`,
+`rate_bp integer` (`CHECK (rate_bp BETWEEN 1 AND 10000)`), `timing text NOT NULL` [`deducted_at_disbursement`, `added_to_loan`,
 `paid_upfront`]. `CHECK` that exactly one of `amount_minor`, `rate_bp` is set to match
 `calc_method`.
 

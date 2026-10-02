@@ -414,6 +414,21 @@ gateway-neutral; chapter 12 defines the adapter.
 | FR-PRD-05 | A product can be archived, which stops new applications but keeps existing loans. | Tested. | MVP |
 | FR-PRD-06 | A product can be restricted to certain branches. | An application at another branch cannot select it. | P2 |
 
+Product rules that follow from the table above:
+
+- Bounds. Money fields accept at most 10^15 minor units and a percentage fee at most 10,000 bp
+  (the whole principal); an amount the arithmetic cannot hold is refused with
+  `amount_out_of_range`, never a server error.
+- Fees and disbursement (FR-PRD-02). At save, the fees deducted at disbursement, computed at the
+  product's minimum principal, must total strictly less than that principal
+  (`fees_exceed_principal` on the fee that crosses it), so no product can be saved whose smallest
+  loan disburses nothing.
+- Cover (FR-PRD-01, FR-ORG-07). A product that requires collateral must state
+  `min_collateral_cover_bp`.
+- No effective dating in the MVP (FR-PRD-04). A new version is current the moment it is saved:
+  applications created from then on copy it, and loans already created keep theirs. Scheduling a
+  version for a future date is `Later`.
+
 ## 3.18 Loan origination: application, appraisal, approval (ORG)
 
 Loan statuses and transitions:
