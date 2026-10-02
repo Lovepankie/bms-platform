@@ -63,6 +63,11 @@ class R2ObjectStorage implements ObjectStorage {
     }
 
     @Override
+    public void delete(String key) {
+        s3.deleteObject(b -> b.bucket(bucket).key(key));
+    }
+
+    @Override
     public String signedGetUrl(String key, Duration ttl, String downloadName, String contentType) {
         return presigner
                 .presignGetObject(p -> p.signatureDuration(ttl)

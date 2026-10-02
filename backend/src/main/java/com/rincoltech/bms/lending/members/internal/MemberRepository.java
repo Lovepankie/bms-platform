@@ -270,9 +270,34 @@ class MemberRepository {
                                        nullif(btrim(m.sub_county), ''), nullif(btrim(m.village), '')) IS NOT NULL
                           AND EXISTS (SELECT 1 FROM lending_next_of_kin k WHERE k.member_id = m.id)
                           AND EXISTS (SELECT 1 FROM lending_member_documents d
-                                       WHERE d.member_id = m.id AND d.doc_kind = 'id_front')
+                                       WHERE d.member_id = m.id AND d.doc_kind = 'id_front'
+                                         AND d.superseded_at IS NULL)
                         """).param(id).update() == 1;
         return moved ? Optional.ofNullable(before) : Optional.empty();
+    }
+
+    Optional<String> documentKind(UUID documentId) {
+        return jdbc.sql("SELECT doc_kind FROM lending_member_documents WHERE document_id = ?")
+                .param(documentId)
+                .query(String.class)
+                .optional();
+    }
+
+    /** The member's active (not superseded) documents of a kind, oldest first. */
+    List<UUID> activeDocumentLinks(UUID memberId, String docKind) {
+        return jdbc.sql("""
+                        SELECT id FROM lending_member_documents
+                         WHERE member_id = ? AND doc_kind = ? AND superseded_at IS NULL
+                         ORDER BY created_at, id
+                        """).params(memberId, docKind).query(UUID.class).list();
+    }
+
+    /** Soft-supersede: the row and its file stay for the audit trail. */
+    void supersede(UUID linkId, UUID byLinkId) {
+        jdbc.sql(
+                        "UPDATE lending_member_documents SET superseded_at = now(), superseded_by = ? WHERE id = ? AND superseded_at IS NULL")
+                .params(byLinkId, linkId)
+                .update();
     }
 
     void insertDocument(UUID id, UUID memberId, String docKind, UUID documentId, UUID uploadedBy) {
@@ -290,7 +315,7 @@ class MemberRepository {
         return jdbc.sql("""
                         SELECT md.document_id, md.doc_kind, d.content_type, d.size_bytes, md.created_at, md.uploaded_by
                           FROM lending_member_documents md JOIN documents d ON d.id = md.document_id
-                         WHERE md.member_id = ?
+                         WHERE md.member_id = ? AND md.superseded_at IS NULL
                          ORDER BY md.created_at DESC, md.id
                         """)
                 .param(memberId)

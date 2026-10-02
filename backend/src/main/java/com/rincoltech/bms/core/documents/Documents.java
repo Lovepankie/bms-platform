@@ -14,6 +14,18 @@ public interface Documents {
      */
     StoredDocument upload(Upload upload);
 
+    /**
+     * The checks and the image re-encode of {@link #upload}, with no transaction: call it before
+     * opening one, so a database connection is never held while waiting for a re-encode slot.
+     */
+    Prepared prepare(byte[] bytes);
+
+    /** Stores and records a prepared file in the caller's transaction. */
+    StoredDocument store(Prepared prepared, String subjectType, UUID subjectId, UUID branchId);
+
+    /** A checked file ready to store: the bytes as they will be kept, their type and checksum. */
+    record Prepared(byte[] bytes, String contentType, String extension, String sha256) {}
+
     Optional<StoredDocument> find(UUID documentId);
 
     /** @param subjectType the owning module's key, for example {@code lending.member} */

@@ -16,6 +16,10 @@ class UnconfiguredObjectStorage implements ObjectStorage {
         throw unavailable();
     }
 
+    /** Nothing was ever stored here. */
+    @Override
+    public void delete(String key) {}
+
     @Override
     public String signedGetUrl(String key, Duration ttl, String downloadName, String contentType) {
         throw unavailable();

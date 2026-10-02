@@ -39,6 +39,16 @@ class FakeObjectStorage implements ObjectStorage {
     }
 
     @Override
+    public void delete(String key) {
+        objects.remove(key);
+    }
+
+    /** For tests: how many objects the fake holds. */
+    int objectCount() {
+        return objects.size();
+    }
+
+    @Override
     public String signedGetUrl(String key, Duration ttl, String downloadName, String contentType) {
         long expires = clock.now().plus(ttl).getEpochSecond();
         return PATH + "?key=" + URLEncoder.encode(key, StandardCharsets.UTF_8) + "&expires=" + expires

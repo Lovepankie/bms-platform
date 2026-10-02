@@ -705,8 +705,11 @@ Indexes: `(tenant_id, phone_e164)`, `(tenant_id, branch_id, status)`, trigram GI
 
 (std, no `version`) `member_id uuid NOT NULL`, `doc_kind text NOT NULL` [`id_front`,
 `id_back`, `photo`, `other`], `document_id uuid NOT NULL` (FK `documents`),
-`uploaded_by uuid NOT NULL`. `UNIQUE (tenant_id, document_id)`; composite keys to
-`lending_members` and `documents`; `bms_app` SELECT and INSERT only.
+`uploaded_by uuid NOT NULL`, `superseded_at timestamptz`, `superseded_by uuid` (FK to this table; both
+set together, once, when a newer upload of the same kind replaces the row). `UNIQUE (tenant_id,
+document_id)`; composite keys to `lending_members` and `documents`; `bms_app` SELECT and INSERT,
+plus UPDATE on the two supersede columns only. Partial index on active rows
+`(tenant_id, member_id, doc_kind, created_at) WHERE superseded_at IS NULL`.
 
 ### `lending_next_of_kin`
 
@@ -1149,6 +1152,7 @@ first uses it.
 `V5__collateral.sql` (#13) creates `lending_collateral_items`, `lending_collateral_valuations`
 (SELECT and INSERT only), `lending_collateral_events` (append-only) and
 `lending_collateral_documents`. `lending_loan_collateral` waits for `lending_loans` (increment 4).
+`V6__member_document_supersede.sql` (#29) adds the supersede columns to `lending_member_documents`.
 
 ## 6.10 Open items
 

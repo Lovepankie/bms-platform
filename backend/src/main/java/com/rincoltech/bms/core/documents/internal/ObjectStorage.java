@@ -7,6 +7,9 @@ interface ObjectStorage {
 
     void put(String key, byte[] bytes, String contentType);
 
+    /** Removes an object; used when the transaction that stored it rolls back. */
+    void delete(String key);
+
     /**
      * A URL that serves the object until {@code ttl} passes, and refuses it after. It is always served
      * as a download ({@code Content-Disposition: attachment}) named {@code downloadName}, with
