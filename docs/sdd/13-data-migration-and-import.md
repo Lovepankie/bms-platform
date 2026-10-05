@@ -533,11 +533,11 @@ transaction that is rolled back, and prints the same report.
 | Export | Becomes |
 |---|---|
 | Branches, categories, units, suppliers, credit buyers | Created when no existing one matches (branch code, or name ignoring case) |
-| Products | Matched by code trimmed and ignoring case (data dictionary rule 1); a duplicate is one product and is reported. New products take the master's prices with an `initial` history row; an existing one whose prices differ takes them with an `import` row |
-| Sales, restocks, usage and damage | Historical documents and movements, no journals, keyed by `source_ref` in `retail_import_refs` |
+| Products | Matched by code normalised as the catalogue normalises it (`RetailCatalogue.normaliseCode`, review F9) and ignoring case (data dictionary rule 1); a duplicate is one product and is reported. New products take the master's prices with an `initial` history row; an existing one whose prices differ takes them with an `import` row |
+| Sales, restocks, usage and damage | Historical documents and movements, no journals, keyed by `source_ref` in `retail_import_refs`; each movement's `business_date` is the source row's sale, purchase or usage date in the tenant's zone, so valuation `as_of` and daily profit read them by business date |
 | Restocks of kind `adjustment` or `return` | `adjustment` or `return` movements, not purchases, with no supplier payable |
 | Restock price changes | An `import` history row where consecutive restocks of a product changed its cost or sell price |
-| Balances | One `legacy_balance` movement per branch and product, equal to the source quantity less the balance the imported history left, so the derived balance equals the source exactly; then one opening journal per branch (debit `inventory`, credit `opening_balance_equity`) for the positive balances at the product's current cost |
+| Balances | One `legacy_balance` movement per branch and product, equal to the source quantity less the balance the imported history left, so the derived balance equals the source exactly, dated with the import date as its business date; then one opening journal per branch, dated the same day, (debit `inventory`, credit `opening_balance_equity`) for the positive balances at the product's current cost |
 
 **Never guess, never lose a row (13.2).** A row with an unknown product or branch code, a missing
 or malformed field, a duplicate `source_ref`, a duplicate product code or a duplicate balance is

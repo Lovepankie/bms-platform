@@ -43,11 +43,14 @@ dictionary section 4. For each tab:
 3. Give every sales, restock and usage row a `source_ref` built from the tab, the row number and a
    short hash of its content, for example `sales:1234:9f2c41ab`. Keep the same rule for every
    export so a re-run recognises rows already imported.
-4. Mark the restock rows whose supplier text means a stock-take as `"kind": "adjustment"` (signed per
+4. Product codes may be copied as they are: the importer normalises them exactly as the catalogue
+   does (a no-break space at either end or a full-width letter does not make a second code), and
+   reports a code with a special space or a control character inside.
+5. Mark the restock rows whose supplier text means a stock-take as `"kind": "adjustment"` (signed per
    branch) and customer returns as `"kind": "return"`. Everything else is `"purchase"`.
-5. Write `balances.jsonl` from the product master's per-branch quantity columns: one row per branch
+6. Write `balances.jsonl` from the product master's per-branch quantity columns: one row per branch
    and product, including zeros and negatives.
-6. Do not export the cash book tabs (expenses, banking, withdrawals, advances, daily savings) or the
+7. Do not export the cash book tabs (expenses, banking, withdrawals, advances, daily savings) or the
    tabs of internal advances; they are out of the first release (pending ADR-022).
 
 Check the files are UTF-8 and every line is one JSON object:
@@ -136,6 +139,21 @@ docker compose --project-name bms -f compose.yml run --rm --no-deps \
 Each file is one transaction. Then, signed in as the tenant admin, open the valuation and the daily
 profit for a day you know from the source, and compare them with the source.
 
+**Dates.** Every imported movement carries a business date (SDD chapter 6 section 6.11.4): a sale,
+restock, adjustment, return or usage row the date of its source row in the tenant's zone, and the
+legacy balances the import date, which is also the date of the opening journals. So:
+
+- The valuation without `as_of`, or `as_of` the import date or later, equals the source's current
+  quantities at current cost; the revaluation difference is zero except where a branch has
+  negative balances (they are valued but not in the opening journal).
+- The valuation `as_of` a date before the import counts the imported history only, by business
+  date, and the inventory account is still zero then. It is not the shop's stock on that day: the
+  source never recorded its opening stock, which the legacy balance supplies on the import date. A
+  branch can even show a negative value there. Use it to check the history, not as a past
+  valuation.
+- The daily profit of any day counts the imported sales by sale date and the usage by its date,
+  exactly like live ones.
+
 ## 6. Re-run safely
 
 The import is idempotent:
@@ -147,6 +165,10 @@ The import is idempotent:
   equals the source is reported (`legacy balance already written ... correct it with a stock-take`),
   never silently changed.
 - The opening journal is posted once per branch (`already posted, not posted again`).
+
+A re-run of the same export prints the same report with every count under `existing` and writes no
+row; a dry run writes no row either (both checked end to end on a throwaway database for issue #71,
+with the fabricated `fixtures/retail/import-sample/`).
 
 So after a failure (`result: FAILED: <file>: <reason>`, exit status 1), fix the cause and run the
 same command again: the files that committed are skipped row by row and the run continues where it
