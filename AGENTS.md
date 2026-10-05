@@ -9,7 +9,7 @@ agent working in this repository.
 enterprises in Uganda and East Africa. It is a **platform core plus vertical modules**
 that a tenant switches on (ADR-001). The first vertical, being built now, is **lending**
 (microfinance and money lending: members, loans, collateral, savings, investments,
-collections). Retail is a later vertical and is not built now.
+collections). Retail is the second vertical and is being built now (ADR-020, story #50).
 
 This repository holds the application code and, under `docs/`, the complete specification:
 the System Design Document, the decision log (ADRs), the Structurizr architecture model,

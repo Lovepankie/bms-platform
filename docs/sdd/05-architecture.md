@@ -24,6 +24,7 @@ packages.
 | Background jobs and scheduling on PostgreSQL (db-scheduler); no Redis | ADR-008 |
 | One React PWA with staff and member areas | ADR-009 |
 | Backend: Java 25, Spring Boot 4.1, Spring Modulith 2.1, Flyway | ADR-010 |
+| Retail vertical brought forward; stock as append-only movements; retail events post to the ledger | ADR-020 |
 | Payment gateway | pending ADR-011 |
 | Credit scoring model beyond the rules-based default | pending ADR-012 |
 | SMS and USSD aggregator | pending ADR-013 |
