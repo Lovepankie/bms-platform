@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.stock;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,8 +18,13 @@ import java.util.UUID;
  */
 public interface StockLedger {
 
-    /** @return the new movement ids, in the order given */
-    List<UUID> record(List<Movement> movements);
+    /**
+     * @param businessDate the event's business date, the date its journal entry carries: the
+     *     purchase's {@code purchased_on}, the sale's {@code sale_date}, the usage's {@code
+     *     occurred_on}, or the void's or stock-take commit's date. Valuation {@code as_of} reads it.
+     * @return the new movement ids, in the order given
+     */
+    List<UUID> record(LocalDate businessDate, List<Movement> movements);
 
     /** The movements a source document wrote, in the order they were recorded. */
     List<Recorded> bySource(String sourceType, UUID sourceId);

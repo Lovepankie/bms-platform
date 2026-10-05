@@ -216,19 +216,21 @@ class SalesService {
                 1);
         repo.insert(header);
         lines.forEach(l -> repo.insertLine(id, l));
-        stock.record(lines.stream()
-                .map(l -> new Movement(
-                        branch,
-                        l.productId(),
-                        "sale",
-                        l.qty().negate(),
-                        l.unitCostMinor(),
-                        SALE,
-                        id,
-                        l.id(),
-                        null,
-                        null))
-                .toList());
+        stock.record(
+                saleDate,
+                lines.stream()
+                        .map(l -> new Movement(
+                                branch,
+                                l.productId(),
+                                "sale",
+                                l.qty().negate(),
+                                l.unitCostMinor(),
+                                SALE,
+                                id,
+                                l.id(),
+                                null,
+                                null))
+                        .toList());
         Leg receivable = Leg.debit(accountFor(r.paymentMethod()), total);
         if (credit) {
             receivable = receivable.withSubledger(SALE, id);
@@ -319,20 +321,22 @@ class SalesService {
         }
         String reason = r.reason().trim();
         List<Recorded> moved = stock.bySource(SALE, id);
-        stock.record(moved.stream()
-                .map(m -> new Movement(
-                        m.branchId(),
-                        m.productId(),
-                        "return",
-                        m.qty().negate(),
-                        m.unitCostMinor(),
-                        SALE_VOID,
-                        id,
-                        m.sourceLineId(),
-                        m.id(),
-                        reason))
-                .toList());
         LocalDate today = clock.today(tenant.profile().timezone());
+        stock.record(
+                today,
+                moved.stream()
+                        .map(m -> new Movement(
+                                m.branchId(),
+                                m.productId(),
+                                "return",
+                                m.qty().negate(),
+                                m.unitCostMinor(),
+                                SALE_VOID,
+                                id,
+                                m.sourceLineId(),
+                                m.id(),
+                                reason))
+                        .toList());
         if (h.saleEntryId() != null) {
             books.reverse(h.saleEntryId(), today, "Void " + s.saleNo(), "retail.sale_void:" + id);
         }

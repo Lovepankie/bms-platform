@@ -135,7 +135,7 @@ class UsageService {
                     null,
                     reason));
         }
-        stock.record(movements);
+        stock.record(on, movements);
         UUID entry = books.post(new Posting(
                         branch,
                         on,

@@ -34,10 +34,10 @@ class ReportsRepository {
             long sellMinor) {}
 
     /**
-     * Quantity per branch and product: the balance now, or the sum of movements up to the end of
-     * {@code asOf} in the tenant's zone. Rows of zero are left out.
+     * Quantity per branch and product: the balance now, or the sum of movements whose business date
+     * is on or before {@code asOf}, the basis the journals use (review F4). Rows of zero are left out.
      */
-    List<Holding> holdings(List<UUID> branchIds, LocalDate asOf, String zone) {
+    List<Holding> holdings(List<UUID> branchIds, LocalDate asOf) {
         Map<String, Object> params = new LinkedHashMap<>();
         String quantities;
         if (asOf == null) {
@@ -45,9 +45,8 @@ class ReportsRepository {
         } else {
             quantities = """
                     SELECT branch_id, product_id, sum(qty) AS qty FROM retail_stock_movements
-                     WHERE (occurred_at AT TIME ZONE :zone)::date <= :asOf
+                     WHERE business_date <= :asOf
                      GROUP BY branch_id, product_id""";
-            params.put("zone", zone);
             params.put("asOf", Date.valueOf(asOf));
         }
         StringBuilder sql = new StringBuilder("SELECT q.branch_id, q.product_id, p.code, p.description, u.name AS unit,"

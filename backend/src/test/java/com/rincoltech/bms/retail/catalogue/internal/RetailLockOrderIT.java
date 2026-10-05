@@ -66,9 +66,9 @@ class RetailLockOrderIT extends IntegrationTest {
                 s.execute("SET LOCAL lock_timeout = '2s'");
             }
             try (PreparedStatement insert = writer.prepareStatement("""
-                    INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, branch_id, product_id, kind, qty,
+                    INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, business_date, branch_id, product_id, kind, qty,
                         unit_cost_minor, source_type)
-                    VALUES (gen_random_uuid(), current_setting('app.tenant_id')::uuid, now(), ?, ?, 'adjustment', 1, 0,
+                    VALUES (gen_random_uuid(), current_setting('app.tenant_id')::uuid, now(), current_date, ?, ?, 'adjustment', 1, 0,
                         'test.lock')
                     """)) {
                 insert.setObject(1, t.headOffice());

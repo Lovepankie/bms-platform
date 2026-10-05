@@ -47,3 +47,19 @@ ALTER TABLE retail_usage_lines
     ADD CONSTRAINT retail_usage_lines_cost_range CHECK (unit_cost_minor <= 10000000000000);
 ALTER TABLE retail_stocktake_lines
     ADD CONSTRAINT retail_stocktake_lines_cost_range CHECK (coalesce(unit_cost_minor, 0) <= 10000000000000);
+
+-- ---------------------------------------------------------------------------------------------
+-- F4: a stock movement carries the business date of its event (the purchase's purchased_on, the
+-- sale's sale_date, the usage report's occurred_on, the void's and the stock-take commit's date),
+-- the same date its journal entry carries, so a valuation as_of a past date reads quantities and
+-- the inventory account on one basis. Rows written before this migration take the date they
+-- were recorded on in the pilot's zone. The append-only trigger is lifted for the backfill only.
+-- ---------------------------------------------------------------------------------------------
+
+ALTER TABLE retail_stock_movements ADD COLUMN business_date date;
+ALTER TABLE retail_stock_movements DISABLE TRIGGER reject_mutation;
+UPDATE retail_stock_movements SET business_date = (occurred_at AT TIME ZONE 'Africa/Kampala')::date;
+ALTER TABLE retail_stock_movements ENABLE TRIGGER reject_mutation;
+ALTER TABLE retail_stock_movements ALTER COLUMN business_date SET NOT NULL;
+CREATE INDEX retail_stock_movements_business_date
+    ON retail_stock_movements (tenant_id, business_date, branch_id, product_id);

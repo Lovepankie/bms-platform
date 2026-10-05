@@ -1290,7 +1290,8 @@ are all zero is not posted.
 | Column | Type | Notes |
 |---|---|---|
 | `id`, `tenant_id`, `created_at` | standard | |
-| `occurred_at` | timestamptz | From the kernel clock |
+| `occurred_at` | timestamptz | From the kernel clock: when it was recorded |
+| `business_date` | date | The event's business date, the date its journal entry carries: `purchased_on`, `sale_date`, usage `occurred_on`, or the void's or stock-take commit's date (V14, review F4). Rows recorded before V14 took their `occurred_at` date in Africa/Kampala. Valuation `as_of` filters on it |
 | `branch_id`, `product_id` | uuid | Composite FKs |
 | `kind` | text | `opening`, `purchase`, `return` (positive); `sale`, `usage`, `damage` (negative); `adjustment`, `legacy_balance` (either sign). CHECK on the sign |
 | `qty` | numeric(14,3) | Signed, never zero |
@@ -1385,7 +1386,7 @@ has a CHECK of at most 10^13 minor units (V14, review F7), the bound the API val
 ### 6.11.3 Valuation and profit (FR-RET-09, FR-RET-10; #54)
 
 No table: `retail.reports` reads the tables above. Valuation per branch and product is the
-balance (or, with `as_of`, the sum of movements up to the end of that day in the tenant's zone)
+balance (or, with `as_of`, the sum of movements whose `business_date` is on or before that day, the same basis as the journals' `entry_date`, review F4)
 times the product's **current** cost and sell price (ADR-020 decision 6), rounded half up per row;
 totals are sums of rows. A row whose value does not fit a long is flagged `amount_out_of_range` and left out of the totals rather than failing the report. With `retail.profit.read` each branch also shows the `inventory` account
 balance (entries dated on or before the valuation date, through `LedgerAccounts.balanceByBranch`)

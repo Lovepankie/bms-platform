@@ -267,8 +267,8 @@ class StockService {
                             + " has moved since it was counted, so the count no longer matches the shelf."
                             + " Please recount these lines in a new stock-take.");
         }
-        ledger.record(movements);
         LocalDate today = clock.today(tenant.profile().timezone());
+        ledger.record(today, movements);
         Optional<PostedEntry> entry = books.post(new Posting(
                 s.branchId(),
                 today,

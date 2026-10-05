@@ -203,9 +203,9 @@ class RlsIsolationIT {
                         """).params(UUID.randomUUID(), t.tenantId(), retailProduct).update();
         // Retail tables (migration V11, ADR-020).
         owner.sql("""
-                        INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, branch_id, product_id, kind, qty,
+                        INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, business_date, branch_id, product_id, kind, qty,
                                                             unit_cost_minor, source_type)
-                        VALUES (?, ?, now(), ?, ?, 'opening', 2, 100, 'test')
+                        VALUES (?, ?, now(), current_date, ?, ?, 'opening', 2, 100, 'test')
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), t.headOffice(), retailProduct)
                 .update();

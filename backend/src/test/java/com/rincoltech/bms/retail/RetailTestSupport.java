@@ -107,9 +107,9 @@ public final class RetailTestSupport {
     public void importedBalance(UUID branchId, UUID productId, String qty) {
         TestDatabase.owner()
                 .sql("""
-                        INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, branch_id, product_id, kind, qty,
+                        INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, business_date, branch_id, product_id, kind, qty,
                             unit_cost_minor, source_type, historical)
-                        VALUES (gen_random_uuid(), ?, now(), ?, ?, 'legacy_balance', CAST(? AS numeric), 0, 'retail.import',
+                        VALUES (gen_random_uuid(), ?, now(), current_date, ?, ?, 'legacy_balance', CAST(? AS numeric), 0, 'retail.import',
                             true)
                         """)
                 .params(tenant.tenantId(), branchId, productId, qty)

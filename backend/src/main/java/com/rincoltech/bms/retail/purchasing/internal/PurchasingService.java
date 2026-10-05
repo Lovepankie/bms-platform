@@ -233,7 +233,7 @@ class PurchasingService {
                         null));
             }
         }
-        stock.record(movements);
+        stock.record(r.purchasedOn(), movements);
         valueByBranch.forEach((branch, value) -> {
             Leg pay = Leg.credit(accountFor(r.paymentMethod()), value);
             if (r.paymentMethod().equals("credit")) {

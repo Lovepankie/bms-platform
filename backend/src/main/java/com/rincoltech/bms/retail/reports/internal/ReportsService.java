@@ -61,7 +61,7 @@ class ReportsService {
         boolean cost = principal.hasPermission(PROFIT_READ);
         List<ValuationRow> rows = new ArrayList<>();
         Map<UUID, long[]> byBranch = new LinkedHashMap<>();
-        for (Holding h : repo.holdings(filter, asOf, tenant.profile().timezone().getId())) {
+        for (Holding h : repo.holdings(filter, asOf)) {
             long[] t = byBranch.computeIfAbsent(h.branchId(), b -> new long[2]);
             Long expected;
             Long atCost;

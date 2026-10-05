@@ -7,6 +7,7 @@ import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -34,7 +35,7 @@ class JdbcStockLedger implements StockLedger {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<UUID> record(List<Movement> movements) {
+    public List<UUID> record(LocalDate businessDate, List<Movement> movements) {
         UUID[] ids = new UUID[movements.size()];
         Integer[] order = new Integer[movements.size()];
         for (int i = 0; i < order.length; i++) {
@@ -60,14 +61,15 @@ class JdbcStockLedger implements StockLedger {
             }
             UUID id = UUID.randomUUID();
             jdbc.sql("""
-                            INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, branch_id, product_id, kind, qty,
+                            INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, business_date, branch_id, product_id, kind, qty,
                                 unit_cost_minor, source_type, source_id, source_line_id, reverses_movement_id, note,
                                 recorded_by)
-                            VALUES (:id, current_setting('app.tenant_id')::uuid, :at, :branch, :product, :kind, :qty,
+                            VALUES (:id, current_setting('app.tenant_id')::uuid, :at, :businessDate, :branch, :product, :kind, :qty,
                                 :cost, :sourceType, :sourceId, :sourceLineId, :reverses, :note, :by)
                             """)
                     .param("id", id)
                     .param("at", now)
+                    .param("businessDate", java.sql.Date.valueOf(businessDate))
                     .param("branch", m.branchId())
                     .param("product", m.productId())
                     .param("kind", m.kind())
