@@ -2441,6 +2441,75 @@
         },
         "required" : [ "name" ]
       },
+      "RetailDailyProfit" : {
+        "properties" : {
+          "cost_of_sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "profit_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDailyProfitRow"
+            },
+            "type" : "array"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "usage_cost_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailDailyProfitRow" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cost_of_sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "gross_profit_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "profit_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "usage_cost_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "RetailOpenSale" : {
         "properties" : {
           "balance_minor" : {
@@ -3533,6 +3602,111 @@
           }
         },
         "required" : [ "kind", "lines", "reason" ]
+      },
+      "RetailValuation" : {
+        "properties" : {
+          "as_of" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "branches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailValuationBranch"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "expected_sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailValuationRow"
+            },
+            "type" : "array"
+          },
+          "value_at_cost_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailValuationBranch" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "expected_sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "inventory_account_minor" : {
+            "description" : "Present only with retail.profit.read; the inventory account's balance for the branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "revaluation_difference_minor" : {
+            "description" : "Present only with retail.profit.read; value at cost less the inventory account: the revaluation difference of ADR-020 decision 8",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value_at_cost_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailValuationRow" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "cost_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "expected_sales_minor" : {
+            "description" : "qty times the current sell price",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "negative" : {
+            "type" : "boolean"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "type" : "string"
+          },
+          "sell_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "value_at_cost_minor" : {
+            "description" : "Present only with retail.profit.read; qty times the current cost",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
       },
       "RetailVoidRequest" : {
         "properties" : {
@@ -7488,6 +7662,92 @@
         },
         "summary" : "Record a restock: prices, history, movements and journals in one transaction (FR-RET-06); M",
         "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/reports/profit/daily" : {
+      "get" : {
+        "operationId" : "getRetailDailyProfit",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailDailyProfit"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Profit per branch per day (FR-RET-10)",
+        "tags" : [ "retail-reports" ]
+      }
+    },
+    "/api/v1/retail/reports/valuation" : {
+      "get" : {
+        "operationId" : "getRetailValuation",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "as_of",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailValuation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Stock value at cost and expected sales at price, per branch and product (FR-RET-09)",
+        "tags" : [ "retail-reports" ]
       }
     },
     "/api/v1/retail/sales" : {

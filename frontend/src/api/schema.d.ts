@@ -1281,6 +1281,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/reports/profit/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Profit per branch per day (FR-RET-10) */
+        get: operations["getRetailDailyProfit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/reports/valuation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stock value at cost and expected sales at price, per branch and product (FR-RET-09) */
+        get: operations["getRetailValuation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/sales": {
         parameters: {
             query?: never;
@@ -2593,6 +2627,38 @@ export interface components {
             contact?: string;
             name: string;
         };
+        RetailDailyProfit: {
+            /** Format: int64 */
+            cost_of_sales_minor?: number;
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            /** Format: int64 */
+            profit_minor?: number;
+            rows?: components["schemas"]["RetailDailyProfitRow"][];
+            /** Format: int64 */
+            sales_minor?: number;
+            /** Format: date */
+            to?: string;
+            /** Format: int64 */
+            usage_cost_minor?: number;
+        };
+        RetailDailyProfitRow: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: int64 */
+            cost_of_sales_minor?: number;
+            /** Format: date */
+            date?: string;
+            /** Format: int64 */
+            gross_profit_minor?: number;
+            /** Format: int64 */
+            profit_minor?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+            /** Format: int64 */
+            usage_cost_minor?: number;
+        };
         RetailOpenSale: {
             /** Format: int64 */
             balance_minor?: number;
@@ -3102,6 +3168,69 @@ export interface components {
              */
             occurred_on?: string;
             reason: string;
+        };
+        RetailValuation: {
+            /** Format: date */
+            as_of?: string;
+            branches?: components["schemas"]["RetailValuationBranch"][];
+            currency?: string;
+            /** Format: int64 */
+            expected_sales_minor?: number;
+            rows?: components["schemas"]["RetailValuationRow"][];
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            value_at_cost_minor?: number;
+        };
+        RetailValuationBranch: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: int64 */
+            expected_sales_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; the inventory account's balance for the branch
+             */
+            inventory_account_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; value at cost less the inventory account: the revaluation difference of ADR-020 decision 8
+             */
+            revaluation_difference_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            value_at_cost_minor?: number;
+        };
+        RetailValuationRow: {
+            /** Format: uuid */
+            branch_id?: string;
+            code?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            cost_minor?: number;
+            description?: string;
+            /**
+             * Format: int64
+             * @description qty times the current sell price
+             */
+            expected_sales_minor?: number;
+            negative?: boolean;
+            /** Format: uuid */
+            product_id?: string;
+            qty?: string;
+            /** Format: int64 */
+            sell_minor?: number;
+            unit?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; qty times the current cost
+             */
+            value_at_cost_minor?: number;
         };
         RetailVoidRequest: {
             reason: string;
@@ -5639,6 +5768,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailPurchase"];
+                };
+            };
+        };
+    };
+    getRetailDailyProfit: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailDailyProfit"];
+                };
+            };
+        };
+    };
+    getRetailValuation: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                as_of?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailValuation"];
                 };
             };
         };

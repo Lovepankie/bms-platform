@@ -127,6 +127,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `retail.stock` | Stock movements and balances, stock-takes, usage and damage, reconciliation; retail posting and idempotency helpers | RET-03, RET-07, RET-08, RET-11 | 6.11 | 7.11.20 |
 | `retail.sales` | Sales with snapshots, voids, credit buyers, payments | RET-04, RET-05, RET-11 | 6.11 | 7.11.20 |
 | `retail.purchasing` | Suppliers, restocks that set prices atomically | RET-06, RET-11 | 6.11 | 7.11.20 |
+| `retail.reports` | Valuation, revaluation difference, daily profit | RET-09, RET-10 | 6.11.3 | 7.11.20 |
 
 ## How to run it
 

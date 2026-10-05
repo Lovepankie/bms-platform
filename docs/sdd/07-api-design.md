@@ -652,6 +652,13 @@ Built (#53, purchasing, usage and payments):
 | POST | `/retail/sales/{sale_id}/payments` | `retail.sale.create` | **M**. `{amount_minor, method: cash, mobile_money or bank, paid_on?}`; `{payment, sale_paid_minor, sale_balance_minor}`; 422 `payment_exceeds_balance`, `sale_not_payable`. FR-RET-05 |
 | GET | `/retail/sales/{sale_id}/payments` | `retail.sale.read` | |
 
+Built (#54, reports):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/reports/valuation` | `retail.stock.read` | `branch_id` (repeatable, scoped), `as_of` (not in the future). `{as_of, currency, rows: [{branch_id, product_id, code, description, unit, qty, negative, sell_minor, expected_sales_minor, cost_minor*, value_at_cost_minor*}], branches: [{branch_id, expected_sales_minor, value_at_cost_minor*, inventory_account_minor*, revaluation_difference_minor*}], expected_sales_minor, value_at_cost_minor*}`. FR-RET-09 |
+| GET | `/retail/reports/profit/daily` | `retail.profit.read` | `branch_id` (repeatable, scoped), `from`, `to` (default the last 30 days, at most 366). `{from, to, currency, rows: [{branch_id, date, sales_minor, cost_of_sales_minor, gross_profit_minor, usage_cost_minor, profit_minor}], sales_minor, cost_of_sales_minor, usage_cost_minor, profit_minor}`. FR-RET-10 |
+
 ## 7.12 Example: record a repayment
 
 ```http

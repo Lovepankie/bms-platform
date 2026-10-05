@@ -1365,3 +1365,16 @@ time) and `line_cost_minor`. Each line writes a `usage` or `damage` movement.
 `sale_id`, `amount_minor > 0`, `currency`, `method` (`cash`, `mobile_money`, `bank`), `paid_on`,
 `journal_entry_id`. Each payment raises `retail_sales.paid_minor` under the sale's row lock; the
 CHECK `paid_minor <= total_minor` makes an overpayment impossible.
+
+### 6.11.3 Valuation and profit (FR-RET-09, FR-RET-10; #54)
+
+No table: `retail.reports` reads the tables above. Valuation per branch and product is the
+balance (or, with `as_of`, the sum of movements up to the end of that day in the tenant's zone)
+times the product's **current** cost and sell price (ADR-020 decision 6), rounded half up per row;
+totals are sums of rows. With `retail.profit.read` each branch also shows the `inventory` account
+balance (entries dated on or before the valuation date, through `LedgerAccounts.balanceByBranch`)
+and the revaluation difference, value at cost less that balance, which is the expected result of
+relieving inventory at current cost (ADR-020 decision 8) and is reported, never treated as an
+error. Daily profit per branch and day is `retail_sales.total_minor` less `cost_total_minor` over
+completed (not voided) sales by `sale_date`, less `retail_usage_reports.cost_total_minor` by
+`occurred_on`; snapshots only, never current prices.
