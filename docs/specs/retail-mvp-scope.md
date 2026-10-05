@@ -18,7 +18,7 @@ The module is generic. A second retail tenant is the module switch plus a catalo
    every change leaves a history row.
 3. Sales snapshot cost and price. Profit never depends on today's price.
 4. Every financial event posts to the ledger in the same transaction (ADR-004).
-5. Overselling is refused by default, as in the pilot's current app. A tenant setting can allow negative stock, which is then flagged (ADR-020).
+5. Overselling is refused, as in the pilot's current app. There is no setting to allow it (ADR-020).
 6. No client names, personal data or real figures in this repository. Real data is imported
    from outside it; the golden test uses a fabricated fixture.
 
@@ -42,7 +42,7 @@ to R3 have merged. Target: usable on staging by 2026-10-07.
 |---|---|
 | FR-RET-01 | Products with category, unit of measure, current cost and sell price, active flag. Categories and units are managed per tenant. |
 | FR-RET-02 | Price history: every change to cost or sell price records old and new values, who, when and the source (restock, manual edit, import). |
-| FR-RET-03 | Stock movements are append-only. Balance per branch and product is derived and reconciled. A sale or usage above the branch's available stock is refused unless the tenant setting allows negative stock; negative balances are flagged. |
+| FR-RET-03 | Stock movements are append-only. Balance per branch and product is derived and reconciled. A sale or usage above the branch's available stock is always refused. Negative balances can only come from imported history and are flagged for the first stock-take. |
 | FR-RET-04 | A sale has lines, a branch taken from the user's context, a payment method or credit, an optional buyer, and snapshots of unit cost and unit price. A unit price not above the product's cost is refused unless the user holds `retail.price.below_cost`. Shop staff record sales for their assigned branch only. A void reverses the movement and the journal. |
 | FR-RET-05 | A credit sale records the buyer and a proposed payment date. Payments against it reduce the trade debtor balance and may be partial. |
 | FR-RET-06 | A restock records the supplier and per-branch quantities. Cost and sell price on its lines update the product and the history in the same transaction. |
@@ -78,12 +78,11 @@ trade creditors, SMS receipts, returns other than a void. The cash book is likel
 
 ## 6. Open questions for the pilot
 
-1. Should overselling stay refused, as the current app does, or allowed and flagged?
-2. Which roles may void a sale, edit a price, and commit a stock-take?
-3. Do credit sales need an approval above a limit?
-4. Which branches trade, and which are only cash points?
-5. Which units and categories are authoritative where the source has near duplicates?
-6. When is the cutover, and who counts stock first?
+1. Which roles may void a sale, edit a price, and commit a stock-take?
+2. Do credit sales need an approval above a limit?
+3. Which branches trade, and which are only cash points?
+4. Which units and categories are authoritative where the source has near duplicates?
+5. When is the cutover, and who counts stock first?
 
 ## 7. Parity baseline and other data shapes
 

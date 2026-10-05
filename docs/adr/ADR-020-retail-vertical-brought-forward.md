@@ -37,12 +37,10 @@ does not touch lending packages.
    transaction, and a reconciliation job checks it against the sum of movements. Nothing edits
    a balance directly; a stock-take writes an adjustment movement. Transfers between branches
    are reserved and not in the first release.
-4. **Overselling is refused by default.** The tenant setting `retail.allow_negative_stock`
-   defaults to false, matching the pilot's current app, which refuses a sale or a usage report
-   larger than the branch's available stock. A tenant can switch it on; a negative balance is then
-   flagged on every stock view until a purchase or stock-take corrects it. Negative running
-   balances seen in imported history come from stock that was never recorded, not from policy;
-   the legacy balance movement (decision 9) absorbs them.
+4. **Overselling is refused.** A sale, usage report or damage report larger than the branch's
+   available stock is refused, as in the pilot's current app. There is no setting to allow it.
+   A negative balance can only come from imported history (stock that was never recorded); it is
+   flagged for the first stock-take, and the legacy balance movement (decision 9) absorbs it.
 5. **Prices live on the product and are written by the event that changes them.** The product
    holds the current `cost_minor` and `sell_minor`. `retail_price_history` is append-only. A
    restock line that carries a price sets it in the same transaction as the movement (latest
