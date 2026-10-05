@@ -80,4 +80,27 @@ class KernelTest {
         assertThat(Cursor.decode(Cursor.encode("M000042"))).contains("M000042");
         assertThat(Cursor.decode(null)).isEmpty();
     }
+
+    /** Review F8: the shared cursor parser refuses anything but a sort key, a bar and a UUID. */
+    @ParameterizedTest
+    @ValueSource(strings = {"foo", "foo|bar", "|", "2026-01-01T00:00:00Z|not-a-uuid"})
+    void aMalformedCursorIsRefusedWith400(String raw) {
+        assertThatThrownBy(() -> Cursor.decodeKey(Cursor.encode(raw)))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue("code", "malformed_request");
+    }
+
+    @Test
+    void aCursorKeyRoundTripsAndChecksItsTimestamp() {
+        UUID id = UUID.randomUUID();
+        Cursor.Key key =
+                Cursor.decodeKey(Cursor.encode("2026-01-01T00:00:00Z|" + id)).orElseThrow();
+        assertThat(key.id()).isEqualTo(id);
+        assertThat(key.at()).isEqualTo(java.time.Instant.parse("2026-01-01T00:00:00Z"));
+        assertThatThrownBy(() -> Cursor.decodeKey(Cursor.encode("NB-1|" + id))
+                        .orElseThrow()
+                        .at())
+                .isInstanceOf(ApiException.class);
+        assertThat(Cursor.decodeKey(null)).isEmpty();
+    }
 }

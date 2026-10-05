@@ -44,7 +44,13 @@ class ModularityTest {
                         "lending.loans",
                         "lending.manifest",
                         "lending.members",
-                        "lending.products");
+                        "lending.products",
+                        "retail.catalogue",
+                        "retail.manifest",
+                        "retail.purchasing",
+                        "retail.reports",
+                        "retail.sales",
+                        "retail.stock");
     }
 
     /** ADR-001: the core never depends on a vertical, whatever a package-info might allow. */
@@ -61,6 +67,26 @@ class ModularityTest {
             assertThat(targets)
                     .as("dependencies of %s", module.getIdentifier())
                     .noneMatch(t -> t.startsWith("lending.") || t.startsWith("retail."));
+        }
+    }
+
+    /** ADR-020: retail uses core modules only and never depends on a lending package. */
+    @Test
+    void retailNeverDependsOnLending() {
+        List<String> retail =
+                identifiers().stream().filter(id -> id.startsWith("retail.")).toList();
+        assertThat(retail).isNotEmpty();
+        for (ApplicationModule module : MODULES) {
+            if (!module.getIdentifier().toString().startsWith("retail.")) {
+                continue;
+            }
+            List<String> targets = module.getDirectDependencies(MODULES).stream()
+                    .map(ApplicationModuleDependency::getTargetModule)
+                    .map(m -> m.getIdentifier().toString())
+                    .toList();
+            assertThat(targets)
+                    .as("dependencies of %s", module.getIdentifier())
+                    .noneMatch(t -> t.startsWith("lending."));
         }
     }
 

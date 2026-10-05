@@ -174,7 +174,7 @@ class PlatformIT extends IntegrationTest {
     void invalidTenantsAreRefused() {
         assertThat(create("admin", List.of()).getBody().get("code").asString()).isEqualTo("validation_failed");
         assertThat(create("-bad-", List.of()).getBody().get("code").asString()).isEqualTo("validation_failed");
-        assertThat(create(slug(), List.of("retail")).getBody().get("code").asString())
+        assertThat(create(slug(), List.of("hospitality")).getBody().get("code").asString())
                 .isEqualTo("validation_failed");
         String slug = slug();
         assertThat(create(slug, List.of()).getStatusCode()).isEqualTo(HttpStatus.CREATED);

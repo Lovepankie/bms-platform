@@ -22,6 +22,17 @@ public interface LedgerPosting {
 
     PostedEntry post(EntryRequest request);
 
+    /**
+     * Posts the reversal of a posted entry (ADR-004: corrections are reversals): the same branch,
+     * accounts, amounts and source, each debit turned into a credit and the reverse, with
+     * {@code reverses_entry_id} set. An entry is reversed at most once, and a reversal is not
+     * reversed ({@code already_reversed}, 409, FR-GL-04); the database's unique key on
+     * {@code reverses_entry_id} closes the race.
+     */
+    PostedEntry reverse(ReversalRequest request);
+
+    record ReversalRequest(UUID entryId, LocalDate entryDate, String reference, String memo, String idempotencyKey) {}
+
     record EntryRequest(
             UUID branchId,
             LocalDate entryDate,

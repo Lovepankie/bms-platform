@@ -91,6 +91,7 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
 | Accountant | staff | Books, reconciliation, period close | Usually all branches |
 | Auditor | staff | Internal or external auditor, read only | Usually all branches |
 | Member | member | Borrower, saver, investor | Own records only |
+| Sales | staff | Retail shop staff: sells, reports usage, reads stock (ADR-020) | Assigned branches |
 
 A user may hold several roles, each with its own branch scope. The effective permission
 set is the union; the branch scope applies per role (a user who is branch manager at A
@@ -99,87 +100,99 @@ and loan officer at B approves loans only at A).
 ### 8.3.2 Permission matrix
 
 `Y` = granted. Blank = not granted. TA tenant admin, BM branch manager, LO loan officer,
-CA cashier, AC accountant, AU auditor, ME member. Super admin acts only through the
+CA cashier, AC accountant, AU auditor, ME member, SA sales (the retail shop role, ADR-020). Super admin acts only through the
 platform API and holds no tenant permissions.
 
-| Permission | TA | BM | LO | CA | AC | AU | ME |
-|---|---|---|---|---|---|---|---|
-| `core.settings.read` | Y | Y | | | Y | Y | |
-| `core.settings.manage` | Y | | | | | | |
-| `core.branches.read` | Y | Y | Y | Y | Y | Y | |
-| `core.branches.manage` | Y | | | | | | |
-| `core.users.read` | Y | Y | | | | Y | |
-| `core.users.manage` | Y | | | | | | |
-| `core.audit.read` | Y | Y | | | Y | Y | |
-| `core.audit.export` | Y | | | | | Y | |
-| `core.approvals.read` | Y | Y | Y | Y | Y | Y | |
-| `core.ledger.read` | Y | Y | | | Y | Y | |
-| `core.ledger_accounts.manage` | Y | | | | Y | | |
-| `core.journals.create` | Y | | | | Y | | |
-| `core.journals.approve` | Y | | | | Y | | |
-| `core.periods.close` | Y | | | | Y | | |
-| `core.periods.approve_close` | Y | | | | Y | | |
-| `core.payment_methods.manage` | Y | | | | Y | | |
-| `core.notifications.read` | Y | Y | | | | Y | |
-| `core.notification_templates.manage` | Y | | | | | | |
-| `core.imports.manage` | Y | | | | Y | | |
-| `core.imports.approve_commit` | Y | | | | Y | | |
-| `core.payments.read` | Y | Y | | Y | Y | Y | |
-| `core.payments.collect` | Y | Y | | Y | | | |
-| `core.payments.allocate` | Y | | | Y | Y | | |
-| `core.reports.financial` | Y | Y | | | Y | Y | |
-| `core.reports.audit` | Y | | | | | Y | |
-| `lending.members.read` | Y | Y | Y | Y | Y | Y | |
-| `lending.members.create` | Y | Y | Y | | | | |
-| `lending.members.update` | Y | Y | Y | | | | |
-| `lending.members.verify_kyc` | Y | Y | | | | | |
-| `lending.members.blacklist` | Y | Y | | | | | |
-| `lending.members.transfer_approve` | Y | | | | | | |
-| `lending.products.read` | Y | Y | Y | Y | Y | Y | |
-| `lending.products.manage` | Y | | | | | | |
-| `lending.loans.read` | Y | Y | Y | Y | Y | Y | |
-| `lending.loans.create` | Y | Y | Y | | | | |
-| `lending.loans.appraise` | Y | Y | Y | | | | |
-| `lending.loans.approve` | Y | Y | | | | | |
-| `lending.loans.cancel` | Y | Y | Y | | | | |
-| `lending.disbursements.request` | Y | Y | | Y | | | |
-| `lending.disbursements.authorise` | Y | Y | | | Y | | |
-| `lending.repayments.create` | Y | Y | | Y | | | |
-| `lending.repayments.reverse_request` | Y | Y | | Y | Y | | |
-| `lending.repayments.reverse_approve` | Y | Y | | | Y | | |
-| `lending.credits.refund_approve` | Y | Y | | | Y | | |
-| `lending.charges.waive_request` | Y | Y | | | Y | | |
-| `lending.charges.waive_approve` | Y | Y | | | Y | | |
-| `lending.loans.write_off_request` | Y | | | | Y | | |
-| `lending.loans.write_off_approve` | Y | | | | | | |
-| `lending.loans.restructure_request` | Y | Y | | | | | |
-| `lending.loans.restructure_approve` | Y | | | | Y | | |
-| `lending.collateral.read` | Y | Y | Y | Y | Y | Y | |
-| `lending.collateral.manage` | Y | Y | Y | | | | |
-| `lending.collateral.release_request` | Y | Y | Y | | | | |
-| `lending.collateral.release_approve` | Y | Y | | | | | |
-| `lending.savings.read` | Y | Y | Y | Y | Y | Y | |
-| `lending.savings.open` | Y | Y | Y | | | | |
-| `lending.savings.deposit` | Y | Y | | Y | | | |
-| `lending.savings.withdraw` | Y | Y | | Y | | | |
-| `lending.savings.withdraw_approve` | Y | Y | | | Y | | |
-| `lending.savings_products.manage` | Y | | | | | | |
-| `lending.investments.read` | Y | Y | Y | Y | Y | Y | |
-| `lending.investments.open` | Y | Y | Y | | | | |
-| `lending.investments.fund` | Y | Y | | Y | | | |
-| `lending.investments.payout` | Y | Y | | Y | | | |
-| `lending.investments.early_withdraw_approve` | Y | Y | | | Y | | |
-| `lending.investment_products.manage` | Y | | | | | | |
-| `lending.collections.read` | Y | Y | Y | Y | Y | Y | |
-| `lending.collections.log_action` | Y | Y | Y | Y | | | |
-| `lending.collections.assign` | Y | Y | | | | | |
-| `lending.reports.portfolio` | Y | Y | | | Y | Y | |
-| `lending.reports.collections` | Y | Y | Y | Y | Y | Y | |
-| `lending.reports.members` | Y | Y | | | | Y | |
-| `lending.reports.compliance` | Y | | | | Y | Y | |
-| `member.self.read` | | | | | | | Y |
-| `member.self.apply` | | | | | | | Y |
-| `member.self.pay` | | | | | | | Y |
+| Permission | TA | BM | LO | CA | AC | AU | ME | SA |
+|---|---|---|---|---|---|---|---|---|
+| `core.settings.read` | Y | Y | | | Y | Y | | |
+| `core.settings.manage` | Y | | | | | | | |
+| `core.branches.read` | Y | Y | Y | Y | Y | Y | | |
+| `core.branches.manage` | Y | | | | | | | |
+| `core.users.read` | Y | Y | | | | Y | | |
+| `core.users.manage` | Y | | | | | | | |
+| `core.audit.read` | Y | Y | | | Y | Y | | |
+| `core.audit.export` | Y | | | | | Y | | |
+| `core.approvals.read` | Y | Y | Y | Y | Y | Y | | |
+| `core.ledger.read` | Y | Y | | | Y | Y | | |
+| `core.ledger_accounts.manage` | Y | | | | Y | | | |
+| `core.journals.create` | Y | | | | Y | | | |
+| `core.journals.approve` | Y | | | | Y | | | |
+| `core.periods.close` | Y | | | | Y | | | |
+| `core.periods.approve_close` | Y | | | | Y | | | |
+| `core.payment_methods.manage` | Y | | | | Y | | | |
+| `core.notifications.read` | Y | Y | | | | Y | | |
+| `core.notification_templates.manage` | Y | | | | | | | |
+| `core.imports.manage` | Y | | | | Y | | | |
+| `core.imports.approve_commit` | Y | | | | Y | | | |
+| `core.payments.read` | Y | Y | | Y | Y | Y | | |
+| `core.payments.collect` | Y | Y | | Y | | | | |
+| `core.payments.allocate` | Y | | | Y | Y | | | |
+| `core.reports.financial` | Y | Y | | | Y | Y | | |
+| `core.reports.audit` | Y | | | | | Y | | |
+| `lending.members.read` | Y | Y | Y | Y | Y | Y | | |
+| `lending.members.create` | Y | Y | Y | | | | | |
+| `lending.members.update` | Y | Y | Y | | | | | |
+| `lending.members.verify_kyc` | Y | Y | | | | | | |
+| `lending.members.blacklist` | Y | Y | | | | | | |
+| `lending.members.transfer_approve` | Y | | | | | | | |
+| `lending.products.read` | Y | Y | Y | Y | Y | Y | | |
+| `lending.products.manage` | Y | | | | | | | |
+| `lending.loans.read` | Y | Y | Y | Y | Y | Y | | |
+| `lending.loans.create` | Y | Y | Y | | | | | |
+| `lending.loans.appraise` | Y | Y | Y | | | | | |
+| `lending.loans.approve` | Y | Y | | | | | | |
+| `lending.loans.cancel` | Y | Y | Y | | | | | |
+| `lending.disbursements.request` | Y | Y | | Y | | | | |
+| `lending.disbursements.authorise` | Y | Y | | | Y | | | |
+| `lending.repayments.create` | Y | Y | | Y | | | | |
+| `lending.repayments.reverse_request` | Y | Y | | Y | Y | | | |
+| `lending.repayments.reverse_approve` | Y | Y | | | Y | | | |
+| `lending.credits.refund_approve` | Y | Y | | | Y | | | |
+| `lending.charges.waive_request` | Y | Y | | | Y | | | |
+| `lending.charges.waive_approve` | Y | Y | | | Y | | | |
+| `lending.loans.write_off_request` | Y | | | | Y | | | |
+| `lending.loans.write_off_approve` | Y | | | | | | | |
+| `lending.loans.restructure_request` | Y | Y | | | | | | |
+| `lending.loans.restructure_approve` | Y | | | | Y | | | |
+| `lending.collateral.read` | Y | Y | Y | Y | Y | Y | | |
+| `lending.collateral.manage` | Y | Y | Y | | | | | |
+| `lending.collateral.release_request` | Y | Y | Y | | | | | |
+| `lending.collateral.release_approve` | Y | Y | | | | | | |
+| `lending.savings.read` | Y | Y | Y | Y | Y | Y | | |
+| `lending.savings.open` | Y | Y | Y | | | | | |
+| `lending.savings.deposit` | Y | Y | | Y | | | | |
+| `lending.savings.withdraw` | Y | Y | | Y | | | | |
+| `lending.savings.withdraw_approve` | Y | Y | | | Y | | | |
+| `lending.savings_products.manage` | Y | | | | | | | |
+| `lending.investments.read` | Y | Y | Y | Y | Y | Y | | |
+| `lending.investments.open` | Y | Y | Y | | | | | |
+| `lending.investments.fund` | Y | Y | | Y | | | | |
+| `lending.investments.payout` | Y | Y | | Y | | | | |
+| `lending.investments.early_withdraw_approve` | Y | Y | | | Y | | | |
+| `lending.investment_products.manage` | Y | | | | | | | |
+| `lending.collections.read` | Y | Y | Y | Y | Y | Y | | |
+| `lending.collections.log_action` | Y | Y | Y | Y | | | | |
+| `lending.collections.assign` | Y | Y | | | | | | |
+| `lending.reports.portfolio` | Y | Y | | | Y | Y | | |
+| `lending.reports.collections` | Y | Y | Y | Y | Y | Y | | |
+| `lending.reports.members` | Y | Y | | | | Y | | |
+| `lending.reports.compliance` | Y | | | | Y | Y | | |
+| `member.self.read` | | | | | | | Y | |
+| `member.self.apply` | | | | | | | Y | |
+| `member.self.pay` | | | | | | | Y | |
+| `retail.catalogue.manage` | Y | | | | | | | |
+| `retail.price.edit` | Y | | | | | | | |
+| `retail.price.below_cost` | | | | | | | | |
+| `retail.customer.manage` | Y | | | | | | | Y |
+| `retail.sale.create` | Y | | | | | | | Y |
+| `retail.sale.read` | Y | | | | | | | Y |
+| `retail.sale.void` | Y | | | | | | | |
+| `retail.stock.read` | Y | | | | | | | Y |
+| `retail.stocktake.commit` | Y | | | | | | | |
+| `retail.purchase.create` | Y | | | | | | | |
+| `retail.usage.report` | Y | | | | | | | Y |
+| `retail.profit.read` | Y | | | | | | | |
 
 Notes:
 
@@ -194,6 +207,20 @@ Notes:
   document list shows ID images only to those who may open them, and a document with no known
   kind is denied (fail closed). If auditors need the
   images later, a read-only audit permission is added then (#29, decided by the dev lead).
+- Retail (ADR-020): the admin role is the tenant admin, who holds every `retail.*` permission
+  except `retail.price.below_cost`; the sales role (`retail_sales`) holds sale create and read,
+  stock read, usage report and customer manage, scoped to its assigned branches. Lending roles hold no retail permission. Cost, cost
+  snapshot, valuation at cost and profit fields are omitted from responses (absent, not null)
+  unless the caller holds `retail.profit.read`, and the profit routes refuse without it. On a
+  branch-bound row the permission must cover that row's branch (`principal.may`, ADR-017), so a
+  user with profit read at branch A only sees no cost on branch B's stock, movements, sales or
+  valuation (review F5); tenant-wide products and price history need it in any branch. The sales
+  role holds no `core.*` permission; the PWA reads the user's branches from `/me`.
+- `retail.price.below_cost` (issue #64, ADR-020 decision 5) lets a sale line be priced at or below
+  the product's cost. It is in the catalogue (migration V13) but no default role holds it, not even
+  the tenant admin: it is meant for a custom role, and roles are not yet tenant-editable, so today
+  no user holds it. Without it such a sale is refused with 422 `price_below_cost`, and the message
+  never carries the cost.
 - Write-off approval is deliberately restricted to the tenant admin, the most senior
   role, because write-off removes an asset from the books.
 - The matrix is seeded by migration V2 and `PermissionMatrixIT` asserts the seeded

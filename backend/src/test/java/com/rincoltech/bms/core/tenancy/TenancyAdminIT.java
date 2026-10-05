@@ -253,6 +253,33 @@ class TenancyAdminIT extends IntegrationTest {
                 .isEqualTo(HttpStatus.FORBIDDEN);
     }
 
+    /**
+     * Issue #64: the retired key {@code retail_allow_negative_stock} may still be stored for an
+     * existing tenant; reads and writes ignore it and it is no longer part of the contract.
+     * JUSTIFICATION-A3: a new test case needs its own method; no existing test covers stored keys.
+     */
+    @Test
+    void aRetiredStoredSettingsKeyIsIgnored() {
+        TestDatabase.owner().sql("""
+                        INSERT INTO tenant_settings (id, tenant_id, settings)
+                        VALUES (?, ?, CAST('{"retail_allow_negative_stock": true}' AS jsonb))
+                        ON CONFLICT (tenant_id) DO UPDATE SET settings = EXCLUDED.settings
+                        """).params(UUID.randomUUID(), t.tenantId()).update();
+
+        ResponseEntity<JsonNode> current = api.get("/api/v1/settings", admin.accessToken());
+        assertThat(current.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(current.getBody().has("retail_allow_negative_stock")).isFalse();
+
+        ResponseEntity<JsonNode> changed = api.call(
+                HttpMethod.PATCH,
+                "/api/v1/settings",
+                Map.of("receipt_footer", "Thank you"),
+                admin.accessToken(),
+                Map.of("If-Match", current.getHeaders().getETag()));
+        assertThat(changed.getStatusCode()).as("%s", changed.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(changed.getBody().has("retail_allow_negative_stock")).isFalse();
+    }
+
     /** FR-TEN-06: a suspended tenant reads and signs in, but every write returns 423. */
     @Test
     void aSuspendedTenantIsReadOnly() {

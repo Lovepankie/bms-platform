@@ -1175,6 +1175,389 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List product categories */
+        get: operations["listRetailCategories"];
+        put?: never;
+        /** Create a product category (FR-RET-01) */
+        post: operations["createRetailCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Credit buyers */
+        get: operations["listRetailCustomers"];
+        put?: never;
+        /** Add a credit buyer (FR-RET-05) */
+        post: operations["createRetailCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/customers/{customer_id}/balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What a credit buyer owes (FR-RET-05) */
+        get: operations["getRetailCustomerBalance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search products by code or description; with branch_id each row has that branch's balance */
+        get: operations["listRetailProducts"];
+        put?: never;
+        /** Create a product with its first prices (FR-RET-01) */
+        post: operations["createRetailProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products/{product_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A product */
+        get: operations["getRetailProduct"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a product's non-price fields */
+        patch: operations["updateRetailProduct"];
+        trace?: never;
+    };
+    "/api/v1/retail/products/{product_id}/price-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every price change of a product (FR-RET-02) */
+        get: operations["getRetailPriceHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products/{product_id}/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Edit prices by hand, with a history row (FR-RET-02) */
+        post: operations["editRetailPrices"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/purchases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Purchases */
+        get: operations["listRetailPurchases"];
+        put?: never;
+        /** Record a restock: prices, history, movements and journals in one transaction (FR-RET-06); M */
+        post: operations["createRetailPurchase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/reports/profit/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Profit per branch per day (FR-RET-10) */
+        get: operations["getRetailDailyProfit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/reports/valuation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stock value at cost and expected sales at price, per branch and product (FR-RET-09) */
+        get: operations["getRetailValuation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/sales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sales in the caller's branch scope */
+        get: operations["listRetailSales"];
+        put?: never;
+        /** Record a sale: snapshots, stock and journals in one transaction (FR-RET-04); M */
+        post: operations["createRetailSale"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/sales/{sale_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A sale with its lines */
+        get: operations["getRetailSale"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/sales/{sale_id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Payments against a sale */
+        get: operations["listRetailSalePayments"];
+        put?: never;
+        /** Record a payment against a credit sale, partial allowed (FR-RET-05); M */
+        post: operations["payRetailSale"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/sales/{sale_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a sale by reversal (FR-RET-04) */
+        post: operations["voidRetailSale"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/stock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A branch's stock balances, negatives flagged (FR-RET-03) */
+        get: operations["listRetailStock"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/stock/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stock movements in the caller's branch scope */
+        get: operations["listRetailStockMovements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/stocktakes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a count; returns the variance per line (FR-RET-08) */
+        post: operations["createRetailStocktake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/stocktakes/{stocktake_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A stock-take, draft or committed */
+        get: operations["getRetailStocktake"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/stocktakes/{stocktake_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Write the adjustment movements and post the variance (FR-RET-08) */
+        post: operations["commitRetailStocktake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/suppliers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Suppliers */
+        get: operations["listRetailSuppliers"];
+        put?: never;
+        /** Add a supplier (FR-RET-06) */
+        post: operations["createRetailSupplier"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List units of measure */
+        get: operations["listRetailUnits"];
+        put?: never;
+        /** Create a unit of measure (FR-RET-01) */
+        post: operations["createRetailUnit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report stock used or damaged, valued at cost (FR-RET-07); M */
+        post: operations["reportRetailUsage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/roles": {
         parameters: {
             query?: never;
@@ -1648,6 +2031,19 @@ export interface components {
             relationship: string;
             /** @description The original wording, for example from the import */
             relationship_text?: string;
+        };
+        CreateRetailProductRequest: {
+            /** Format: uuid */
+            category_id: string;
+            /** @description Unique ignoring case and surrounding spaces */
+            code: string;
+            /** Format: int64 */
+            cost_minor: number;
+            description: string;
+            /** Format: int64 */
+            sell_minor: number;
+            /** Format: uuid */
+            unit_id: string;
         };
         CreateTenantRequest: {
             admin: components["schemas"]["FirstAdminRequest"];
@@ -2282,6 +2678,657 @@ export interface components {
             member_no?: string;
             relationship?: string;
         };
+        RetailBranchQty: {
+            /** Format: uuid */
+            branch_id: string;
+            /** @example 10 */
+            qty: string;
+        };
+        RetailCategory: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+        };
+        RetailCategoryList: {
+            items?: components["schemas"]["RetailCategory"][];
+        };
+        RetailCategoryRequest: {
+            name: string;
+        };
+        RetailCustomer: {
+            contact?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+        };
+        /** @description Credit sales in the caller's branch scope */
+        RetailCustomerBalance: {
+            /** Format: int64 */
+            balance_minor?: number;
+            currency?: string;
+            /** Format: uuid */
+            customer_id?: string;
+            open_sales?: components["schemas"]["RetailOpenSale"][];
+        };
+        RetailCustomerList: {
+            items?: components["schemas"]["RetailCustomer"][];
+        };
+        RetailCustomerRequest: {
+            contact?: string;
+            name: string;
+        };
+        RetailDailyProfit: {
+            /** Format: int64 */
+            cost_of_sales_minor?: number;
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            /** Format: int64 */
+            profit_minor?: number;
+            rows?: components["schemas"]["RetailDailyProfitRow"][];
+            /** Format: int64 */
+            sales_minor?: number;
+            /** Format: date */
+            to?: string;
+            /** Format: int64 */
+            usage_cost_minor?: number;
+        };
+        RetailDailyProfitRow: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: int64 */
+            cost_of_sales_minor?: number;
+            /** Format: date */
+            date?: string;
+            /** Format: int64 */
+            gross_profit_minor?: number;
+            /** Format: int64 */
+            profit_minor?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+            /** Format: int64 */
+            usage_cost_minor?: number;
+        };
+        RetailOpenSale: {
+            /** Format: int64 */
+            balance_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            due_date?: string;
+            /** Format: int64 */
+            paid_minor?: number;
+            /** Format: date */
+            sale_date?: string;
+            /** Format: uuid */
+            sale_id?: string;
+            sale_no?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailPayment: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            journal_entry_id?: string;
+            method?: string;
+            /** Format: date */
+            paid_on?: string;
+            /** Format: uuid */
+            sale_id?: string;
+        };
+        RetailPaymentList: {
+            items?: components["schemas"]["RetailPayment"][];
+        };
+        RetailPaymentRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            method: string;
+            /**
+             * Format: date
+             * @description Defaults to today; not before the sale, not in the future
+             */
+            paid_on?: string;
+        };
+        RetailPaymentResult: {
+            payment?: components["schemas"]["RetailPayment"];
+            /** Format: int64 */
+            sale_balance_minor?: number;
+            /** Format: int64 */
+            sale_paid_minor?: number;
+        };
+        RetailPriceChange: {
+            /** Format: date-time */
+            at?: string;
+            /** Format: uuid */
+            by?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            new_cost_minor?: number;
+            /** Format: int64 */
+            new_sell_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            old_cost_minor?: number;
+            /** Format: int64 */
+            old_sell_minor?: number;
+            reason?: string;
+            /** @description initial, manual, purchase or import */
+            source?: string;
+            /** Format: uuid */
+            source_id?: string;
+        };
+        /** @description At least one price; FR-RET-02 */
+        RetailPriceEditRequest: {
+            /** Format: int64 */
+            cost_minor?: number;
+            reason: string;
+            /** Format: int64 */
+            sell_minor?: number;
+        };
+        RetailPriceHistory: {
+            items?: components["schemas"]["RetailPriceChange"][];
+        };
+        RetailProduct: {
+            active?: boolean;
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
+            code?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            cost_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            description?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @description True when the branch balance is below zero */
+            negative?: boolean;
+            /** @description The branch balance, when branch_id was given */
+            qty?: string;
+            /** Format: int64 */
+            sell_minor?: number;
+            unit?: string;
+            /** Format: uuid */
+            unit_id?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        RetailProductPage: {
+            items?: components["schemas"]["RetailProduct"][];
+            next_cursor?: string;
+        };
+        RetailPurchase: {
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            lines?: components["schemas"]["RetailPurchaseLine"][];
+            note?: string;
+            payment_method?: string;
+            purchase_no?: string;
+            /** Format: date */
+            purchased_on?: string;
+            /** Format: uuid */
+            supplier_id?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailPurchaseLine: {
+            code?: string;
+            /** Format: int64 */
+            cost_minor?: number;
+            description?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int32 */
+            line_no?: number;
+            /** Format: int64 */
+            line_total_minor?: number;
+            /** Format: uuid */
+            product_id?: string;
+            qty_by_branch?: components["schemas"]["RetailPurchaseLineBranch"][];
+            qty_total?: string;
+            /** Format: int64 */
+            sell_minor?: number;
+        };
+        RetailPurchaseLineBranch: {
+            /** Format: uuid */
+            branch_id?: string;
+            qty?: string;
+        };
+        RetailPurchaseLineRequest: {
+            /**
+             * Format: int64
+             * @description Unit cost; becomes the product's cost
+             */
+            cost_minor: number;
+            /** Format: uuid */
+            product_id: string;
+            qty_by_branch: components["schemas"]["RetailBranchQty"][];
+            /**
+             * Format: int64
+             * @description When given, becomes the product's sell price
+             */
+            sell_minor?: number;
+        };
+        RetailPurchasePage: {
+            items?: components["schemas"]["RetailPurchase"][];
+            next_cursor?: string;
+        };
+        RetailPurchaseRequest: {
+            lines: components["schemas"]["RetailPurchaseLineRequest"][];
+            note?: string;
+            payment_method: string;
+            /**
+             * Format: date
+             * @description Not in the future
+             */
+            purchased_on: string;
+            /**
+             * Format: uuid
+             * @description Required for a credit purchase
+             */
+            supplier_id?: string;
+        };
+        RetailSale: {
+            /** Format: int64 */
+            balance_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            buyer_contact?: string;
+            buyer_name?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            cost_total_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: uuid */
+            customer_id?: string;
+            /** Format: date */
+            due_date?: string;
+            historical?: boolean;
+            /** Format: uuid */
+            id?: string;
+            lines?: components["schemas"]["RetailSaleLine"][];
+            /** Format: int64 */
+            paid_minor?: number;
+            payment_method?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            profit_minor?: number;
+            /** Format: date */
+            sale_date?: string;
+            sale_no?: string;
+            status?: string;
+            /** Format: int64 */
+            total_minor?: number;
+            /** Format: int32 */
+            version?: number;
+            void_reason?: string;
+            /** Format: date-time */
+            voided_at?: string;
+            /** Format: uuid */
+            voided_by?: string;
+        };
+        RetailSaleLine: {
+            code?: string;
+            description?: string;
+            /** Format: uuid */
+            id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            line_cost_minor?: number;
+            /** Format: int32 */
+            line_no?: number;
+            /** Format: int64 */
+            line_total_minor?: number;
+            /** Format: uuid */
+            product_id?: string;
+            qty?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            unit_cost_minor?: number;
+            /** Format: int64 */
+            unit_price_minor?: number;
+        };
+        RetailSaleLineRequest: {
+            /** Format: uuid */
+            product_id: string;
+            /** @example 2.5 */
+            qty: string;
+            /**
+             * Format: int64
+             * @description Defaults to the product's sell price
+             */
+            unit_price_minor?: number;
+        };
+        RetailSalePage: {
+            items?: components["schemas"]["RetailSale"][];
+            next_cursor?: string;
+        };
+        RetailSaleRequest: {
+            /**
+             * Format: uuid
+             * @description Defaults to the caller's one branch
+             */
+            branch_id?: string;
+            buyer_contact?: string;
+            buyer_name?: string;
+            /** Format: uuid */
+            customer_id?: string;
+            /**
+             * Format: date
+             * @description Proposed payment date of a credit sale
+             */
+            due_date?: string;
+            lines: components["schemas"]["RetailSaleLineRequest"][];
+            payment_method: string;
+            /**
+             * Format: date
+             * @description Defaults to today; not in the future
+             */
+            sale_date?: string;
+        };
+        RetailStockMovement: {
+            /** Format: date-time */
+            at?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: uuid */
+            by?: string;
+            historical?: boolean;
+            /** Format: uuid */
+            id?: string;
+            kind?: string;
+            note?: string;
+            /** Format: uuid */
+            product_id?: string;
+            qty?: string;
+            /** Format: uuid */
+            reverses_movement_id?: string;
+            /** Format: uuid */
+            source_id?: string;
+            source_type?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            unit_cost_minor?: number;
+        };
+        RetailStockMovementPage: {
+            items?: components["schemas"]["RetailStockMovement"][];
+            next_cursor?: string;
+        };
+        RetailStockPage: {
+            /** Format: uuid */
+            branch_id?: string;
+            items?: components["schemas"]["RetailStockRow"][];
+            next_cursor?: string;
+        };
+        RetailStockRow: {
+            code?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            cost_minor?: number;
+            description?: string;
+            /** @description Below zero: flagged until a purchase or stock-take corrects it (ADR-020 decision 4) */
+            negative?: boolean;
+            /** Format: uuid */
+            product_id?: string;
+            qty?: string;
+            /** Format: int64 */
+            sell_minor?: number;
+            unit?: string;
+        };
+        RetailStocktake: {
+            /** Format: uuid */
+            adjustment_entry_id?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date-time */
+            committed_at?: string;
+            /** Format: uuid */
+            committed_by?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            /** Format: uuid */
+            id?: string;
+            lines?: components["schemas"]["RetailStocktakeLine"][];
+            note?: string;
+            status?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        RetailStocktakeLine: {
+            code?: string;
+            /** @description The adjustment written at commit: counted less expected, the variance measured when the count was taken; null for a draft */
+            committed_variance_qty?: string;
+            counted_qty?: string;
+            description?: string;
+            /** @description The balance when the count was recorded */
+            expected_qty?: string;
+            /** Format: uuid */
+            product_id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            unit_cost_minor?: number;
+            /** @description counted less expected */
+            variance_qty?: string;
+        };
+        RetailStocktakeLineRequest: {
+            /** @example 12.5 */
+            counted_qty: string;
+            /** Format: uuid */
+            product_id: string;
+        };
+        RetailStocktakeRequest: {
+            /**
+             * Format: uuid
+             * @description Defaults to the caller's one branch
+             */
+            branch_id?: string;
+            lines: components["schemas"]["RetailStocktakeLineRequest"][];
+            note?: string;
+        };
+        RetailSupplier: {
+            active?: boolean;
+            contact?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+        };
+        RetailSupplierList: {
+            items?: components["schemas"]["RetailSupplier"][];
+        };
+        RetailSupplierRequest: {
+            contact?: string;
+            name: string;
+        };
+        RetailUnit: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+        };
+        RetailUnitList: {
+            items?: components["schemas"]["RetailUnit"][];
+        };
+        RetailUnitRequest: {
+            name: string;
+        };
+        RetailUsageLine: {
+            code?: string;
+            description?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            line_cost_minor?: number;
+            /** Format: int32 */
+            line_no?: number;
+            /** Format: uuid */
+            product_id?: string;
+            qty?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            unit_cost_minor?: number;
+        };
+        RetailUsageLineRequest: {
+            /** Format: uuid */
+            product_id: string;
+            /** @example 1.5 */
+            qty: string;
+        };
+        RetailUsageReport: {
+            /** Format: uuid */
+            branch_id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            cost_total_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            kind?: string;
+            lines?: components["schemas"]["RetailUsageLine"][];
+            /** Format: date */
+            occurred_on?: string;
+            reason?: string;
+        };
+        RetailUsageRequest: {
+            /**
+             * Format: uuid
+             * @description Defaults to the caller's one branch
+             */
+            branch_id?: string;
+            kind: string;
+            lines: components["schemas"]["RetailUsageLineRequest"][];
+            /**
+             * Format: date
+             * @description Defaults to today; not in the future
+             */
+            occurred_on?: string;
+            reason: string;
+        };
+        RetailValuation: {
+            /** Format: date */
+            as_of?: string;
+            branches?: components["schemas"]["RetailValuationBranch"][];
+            currency?: string;
+            /** Format: int64 */
+            expected_sales_minor?: number;
+            rows?: components["schemas"]["RetailValuationRow"][];
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            value_at_cost_minor?: number;
+        };
+        RetailValuationBranch: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: int64 */
+            expected_sales_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; the inventory account's balance for the branch
+             */
+            inventory_account_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; value at cost less the inventory account: the revaluation difference of ADR-020 decision 8
+             */
+            revaluation_difference_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            value_at_cost_minor?: number;
+        };
+        RetailValuationRow: {
+            /** @description True when qty times a price is too large to hold; the row's values are absent and left out of the totals */
+            amount_out_of_range?: boolean;
+            /** Format: uuid */
+            branch_id?: string;
+            code?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            cost_minor?: number;
+            description?: string;
+            /**
+             * Format: int64
+             * @description qty times the current sell price; absent when amount_out_of_range
+             */
+            expected_sales_minor?: number;
+            negative?: boolean;
+            /** Format: uuid */
+            product_id?: string;
+            qty?: string;
+            /** Format: int64 */
+            sell_minor?: number;
+            unit?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; qty times the current cost
+             */
+            value_at_cost_minor?: number;
+        };
+        RetailVoidRequest: {
+            reason: string;
+        };
         Role: {
             key?: string;
             mfa_required?: boolean;
@@ -2497,6 +3544,16 @@ export interface components {
             phone?: string;
             relationship?: string;
             relationship_text?: string;
+        };
+        /** @description Omitted fields are unchanged; prices change only through /prices */
+        UpdateRetailProductRequest: {
+            active?: boolean;
+            /** Format: uuid */
+            category_id?: string;
+            code?: string;
+            description?: string;
+            /** Format: uuid */
+            unit_id?: string;
         };
         UpdateTenantSettingsRequest: {
             allow_loans_before_kyc_verified?: boolean;
@@ -4567,6 +5624,753 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    listRetailCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCategoryList"];
+                };
+            };
+        };
+    };
+    createRetailCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCategoryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCategory"];
+                };
+            };
+        };
+    };
+    listRetailCustomers: {
+        parameters: {
+            query?: {
+                query?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomerList"];
+                };
+            };
+        };
+    };
+    createRetailCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomer"];
+                };
+            };
+        };
+    };
+    getRetailCustomerBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomerBalance"];
+                };
+            };
+        };
+    };
+    listRetailProducts: {
+        parameters: {
+            query?: {
+                query?: string;
+                category_id?: string;
+                active?: boolean;
+                branch_id?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProductPage"];
+                };
+            };
+        };
+    };
+    createRetailProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRetailProductRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    getRetailProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    updateRetailProduct: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRetailProductRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    getRetailPriceHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPriceHistory"];
+                };
+            };
+        };
+    };
+    editRetailPrices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPriceEditRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    listRetailPurchases: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                supplier_id?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchasePage"];
+                };
+            };
+        };
+    };
+    createRetailPurchase: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPurchaseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchase"];
+                };
+            };
+        };
+    };
+    getRetailDailyProfit: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailDailyProfit"];
+                };
+            };
+        };
+    };
+    getRetailValuation: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                as_of?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailValuation"];
+                };
+            };
+        };
+    };
+    listRetailSales: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                customer_id?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSalePage"];
+                };
+            };
+        };
+    };
+    createRetailSale: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSaleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSale"];
+                };
+            };
+        };
+    };
+    getRetailSale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSale"];
+                };
+            };
+        };
+    };
+    listRetailSalePayments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPaymentList"];
+                };
+            };
+        };
+    };
+    payRetailSale: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPaymentResult"];
+                };
+            };
+        };
+    };
+    voidRetailSale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailVoidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSale"];
+                };
+            };
+        };
+    };
+    listRetailStock: {
+        parameters: {
+            query?: {
+                branch_id?: string;
+                query?: string;
+                negative_only?: boolean;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStockPage"];
+                };
+            };
+        };
+    };
+    listRetailStockMovements: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                product_id?: string;
+                from?: string;
+                to?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStockMovementPage"];
+                };
+            };
+        };
+    };
+    createRetailStocktake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailStocktakeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStocktake"];
+                };
+            };
+        };
+    };
+    getRetailStocktake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stocktake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStocktake"];
+                };
+            };
+        };
+    };
+    commitRetailStocktake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stocktake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStocktake"];
+                };
+            };
+        };
+    };
+    listRetailSuppliers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierList"];
+                };
+            };
+        };
+    };
+    createRetailSupplier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSupplierRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplier"];
+                };
+            };
+        };
+    };
+    listRetailUnits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailUnitList"];
+                };
+            };
+        };
+    };
+    createRetailUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailUnitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailUnit"];
+                };
+            };
+        };
+    };
+    reportRetailUsage: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailUsageRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailUsageReport"];
+                };
             };
         };
     };

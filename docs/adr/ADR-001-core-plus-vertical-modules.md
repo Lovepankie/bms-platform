@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted (2026-09-29)
+Accepted (2026-09-29). The sequencing of the retail vertical is amended by ADR-020: retail is
+built now rather than after the lending MVP.
 
 ## Context
 
