@@ -367,7 +367,11 @@ public class RetailImporter {
             ImportReport.Counts c = report.file(file.name);
             Map<String, Integer> firstLine = new HashMap<>();
             each(file, row -> {
-                String code = normalisedCode(row, row.requiredText("code", 40));
+                // The length is checked on the normal form, which NFKC can make longer (issue #73).
+                String code = normalisedCode(row, row.requiredText("code", Integer.MAX_VALUE));
+                if (code.codePointCount(0, code.length()) > 40) {
+                    throw row.problem("code is longer than 40 characters after normalisation");
+                }
                 String key = code.toLowerCase(Locale.ROOT);
                 Integer first = firstLine.putIfAbsent(key, row.line());
                 if (first != null) {
@@ -399,7 +403,10 @@ public class RetailImporter {
                 } else {
                     c.existing++;
                     if (product.changed()) {
-                        report.anomaly(file.name, row.line(), "product " + code + " existed; its prices were updated");
+                        report.anomaly(
+                                file.name,
+                                row.line(),
+                                "product " + code + " existed with other prices; its prices were left unchanged");
                     }
                 }
             });
@@ -720,7 +727,10 @@ public class RetailImporter {
                                     + b.product().code() + " has movements recorded outside the import");
                 }
                 BigDecimal legacy = b.qty().subtract(balance);
-                if (legacy.signum() != 0) {
+                if (legacy.signum() == 0) {
+                    // Nothing to write: the history already gives the source balance, on every run.
+                    c.existing++;
+                } else {
                     stock.recordHistorical(
                             importDate,
                             List.of(new HistoricalMovement(
@@ -734,8 +744,8 @@ public class RetailImporter {
                                     null,
                                     null,
                                     "Legacy balance from the import")));
+                    c.written++;
                 }
-                c.written++;
             }
             for (Position p : positions.values()) {
                 if (!covered.contains(p.branchId() + "|" + p.productId())

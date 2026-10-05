@@ -82,26 +82,11 @@ class JdbcCatalogueHistory implements CatalogueHistory {
                 .optional()
                 .orElse(null);
         if (existing != null) {
-            CatalogueApi.Product locked = repo.lock(existing).orElseThrow();
-            if (locked.costMinor() == costMinor && locked.sellMinor() == sellMinor) {
-                return new Ensured(existing, false, false);
-            }
-            repo.setPrices(existing, costMinor, sellMinor);
-            repo.insertHistory(
-                    new PriceChange(
-                            UUID.randomUUID(),
-                            null,
-                            null,
-                            "import",
-                            null,
-                            locked.costMinor(),
-                            costMinor,
-                            locked.sellMinor(),
-                            sellMinor,
-                            currency,
-                            "Product master import"),
-                    existing);
-            return new Ensured(existing, false, true);
+            // A re-run never changes an existing product's prices (issue #73): a price edited in the
+            // app between two runs is kept, and no history row is written.
+            CatalogueApi.Product current = repo.find(existing).orElseThrow();
+            boolean differs = current.costMinor() != costMinor || current.sellMinor() != sellMinor;
+            return new Ensured(existing, false, differs);
         }
         UUID id = UUID.randomUUID();
         jdbc.sql("""

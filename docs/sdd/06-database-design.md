@@ -1439,8 +1439,9 @@ as `bms_app` under the tenant's row-level security:
   legacy balance, on the same basis as the inventory account, which is still empty then.
 - **Product codes** are normalised by `RetailCatalogue.normaliseCode`, as the catalogue API does
   (review F9), before they are matched or stored.
-- **Prices**: each product takes its cost and sell price from the product master, with an
-  `initial` history row. An `import` history row, dated at the restock, is written only where two
+- **Prices**: each new product takes its cost and sell price from the product master, with an
+  `initial` history row; an existing product's prices are never changed by the import, and no
+  history row is written for it (#73). An `import` history row, dated at the restock, is written only where two
   consecutive restocks of a product carried different prices.
 - **The opening journal**: one per branch (section 6.11.2), for the positive balances only.
 

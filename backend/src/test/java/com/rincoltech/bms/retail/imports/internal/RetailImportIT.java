@@ -371,6 +371,111 @@ class RetailImportIT extends IntegrationTest {
                 .isEqualTo(2);
     }
 
+    /**
+     * Issue #73: a re-run never changes an existing product's prices. A price edited in the app
+     * between two runs is kept, no history row is written, the product counts as existing and the
+     * difference is reported. The re-run still writes one audit row per file.
+     */
+    @Test
+    void reRunKeepsPricesEditedInTheApp(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve("categories.jsonl"), "{\"name\": \"Test Category\"}\n");
+        Files.writeString(dir.resolve("units.jsonl"), "{\"name\": \"piece\"}\n");
+        Files.writeString(dir.resolve("products.jsonl"), """
+                {"code": "TE-1", "description": "Test kettle", "category": "Test Category", "unit": "piece", "cost_minor": 1000, "sell_minor": 1500}
+                """);
+        ImportReport first = importer.run(t.slug(), dir, false);
+        assertThat(first.failed()).as(first.render()).isFalse();
+        assertThat(first.counts("products.jsonl")).containsExactly(1, 1, 0, 0);
+        UUID product = owner.sql("SELECT id FROM retail_products WHERE tenant_id = ? AND code = 'TE-1'")
+                .param(t.tenantId())
+                .query(UUID.class)
+                .single();
+
+        assertThat(api.post(
+                                "/products/" + product + "/prices",
+                                Map.of("cost_minor", 1_200, "sell_minor", 1_800, "reason", "Test edit"),
+                                ADMIN)
+                        .getStatusCode()
+                        .is2xxSuccessful())
+                .isTrue();
+        long history = count("SELECT count(*) FROM retail_price_history WHERE tenant_id = ?");
+        long audits = audits();
+
+        ImportReport again = importer.run(t.slug(), dir, false);
+
+        assertThat(again.failed()).as(again.render()).isFalse();
+        assertThat(again.counts("products.jsonl")).containsExactly(1, 0, 1, 0);
+        assertThat(again.anomalies())
+                .anyMatch(a -> a.startsWith(
+                        "products.jsonl:1: product TE-1 existed with other prices; its prices were left unchanged"));
+        assertThat(owner.sql("SELECT cost_minor, sell_minor FROM retail_products WHERE id = ?")
+                        .param(product)
+                        .query((rs, n) -> new long[] {rs.getLong(1), rs.getLong(2)})
+                        .single())
+                .containsExactly(1_200L, 1_800L);
+        assertThat(count("SELECT count(*) FROM retail_price_history WHERE tenant_id = ?"))
+                .isEqualTo(history);
+        assertThat(audits()).isEqualTo(audits + RetailImporter.FILES.size());
+    }
+
+    /** Issue #73: a balance the history already gives (zero legacy delta) is existing on every run. */
+    @Test
+    void zeroDeltaBalancesCountAsExisting(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve("categories.jsonl"), "{\"name\": \"Test Category\"}\n");
+        Files.writeString(dir.resolve("units.jsonl"), "{\"name\": \"piece\"}\n");
+        Files.writeString(dir.resolve("products.jsonl"), """
+                {"code": "TZ-1", "description": "Test cup one", "category": "Test Category", "unit": "piece", "cost_minor": 100, "sell_minor": 150}
+                {"code": "TZ-2", "description": "Test cup two", "category": "Test Category", "unit": "piece", "cost_minor": 100, "sell_minor": 150}
+                {"code": "TZ-3", "description": "Test cup three", "category": "Test Category", "unit": "piece", "cost_minor": 100, "sell_minor": 150}
+                """);
+        Files.writeString(dir.resolve("sales.jsonl"), """
+                {"source_ref": "S1", "branch": "HQ", "product_code": "TZ-1", "qty": "2", "unit_price_minor": 150, "unit_cost_minor": 100, "payment_method": "cash", "sold_at": "2026-09-01T10:00:00"}
+                """);
+        Files.writeString(dir.resolve("balances.jsonl"), """
+                {"branch": "HQ", "product_code": "TZ-1", "qty": "-2"}
+                {"branch": "HQ", "product_code": "TZ-2", "qty": "0"}
+                {"branch": "HQ", "product_code": "TZ-3", "qty": "4"}
+                """);
+
+        ImportReport first = importer.run(t.slug(), dir, false);
+        assertThat(first.failed()).as(first.render()).isFalse();
+        assertThat(first.counts("balances.jsonl")).containsExactly(3, 1, 2, 0);
+        assertThat(first.checksumLine()).contains("match=yes");
+
+        ImportReport again = importer.run(t.slug(), dir, false);
+        assertThat(again.failed()).as(again.render()).isFalse();
+        assertThat(again.counts("balances.jsonl")).containsExactly(3, 0, 3, 0);
+        assertThat(count("SELECT count(*) FROM retail_stock_movements WHERE tenant_id = ? AND kind = 'legacy_balance'"))
+                .isEqualTo(1);
+    }
+
+    /** Issue #73: the 40 character limit applies to the normal form, and an over-long one skips the row. */
+    @Test
+    void checksTheCodeLengthAfterNormalisation(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve("categories.jsonl"), "{\"name\": \"Test Category\"}\n");
+        Files.writeString(dir.resolve("units.jsonl"), "{\"name\": \"piece\"}\n");
+        // U+FDFA is one character that NFKC expands to eighteen: 40 raw, 57 normalised.
+        Files.writeString(dir.resolve("products.jsonl"), """
+                {"code": "%s\\ufdfa", "description": "Test long code", "category": "Test Category", "unit": "piece", "cost_minor": 100, "sell_minor": 150}
+                {"code": "TL-1", "description": "Test short code", "category": "Test Category", "unit": "piece", "cost_minor": 100, "sell_minor": 150}
+                """.formatted("L".repeat(39)));
+
+        ImportReport report = importer.run(t.slug(), dir, false);
+
+        assertThat(report.failed()).as(report.render()).isFalse();
+        assertThat(report.counts("products.jsonl")).containsExactly(2, 1, 0, 1);
+        assertThat(report.anomalies())
+                .anyMatch(a -> a.startsWith("products.jsonl:1: code is longer than 40 characters after normalisation"));
+    }
+
+    private long audits() {
+        return owner.sql(
+                        "SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'retail.import.file_imported'")
+                .param(t.tenantId())
+                .query(Long.class)
+                .single();
+    }
+
     private long rows(UUID tenantId) {
         return owner.sql(TABLES_SQL).param("t", tenantId).query(Long.class).single();
     }

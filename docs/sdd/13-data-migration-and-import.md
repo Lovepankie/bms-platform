@@ -525,7 +525,10 @@ tenant by slug through `core.jobs` (only an active tenant with retail switched o
 through the retail modules' history ports, so every insert is under the tenant's row-level security.
 Each file is one transaction, in the order branches, categories, units, products, suppliers,
 customers, purchases, sales, usage, balances. A file that fails stops the run; the files before it
-stay committed and a re-run skips what they wrote. `--dry-run` runs every file inside one outer
+stay committed and a re-run skips what they wrote. The tables written are append-only, so a wrong
+committed run is reversed by restoring the verified pre-import backup, never by editing rows
+(`docs/runbooks/import-retail.md`, "If the real run was wrong"). Every committed file, on every
+run, writes one `retail.import.file_imported` audit row with its counts. `--dry-run` runs every file inside one outer
 transaction that is rolled back, and prints the same report.
 
 **What it writes** (chapter 6 section 6.11.4):
@@ -533,11 +536,11 @@ transaction that is rolled back, and prints the same report.
 | Export | Becomes |
 |---|---|
 | Branches, categories, units, suppliers, credit buyers | Created when no existing one matches (branch code, or name ignoring case) |
-| Products | Matched by code normalised as the catalogue normalises it (`RetailCatalogue.normaliseCode`, review F9) and ignoring case (data dictionary rule 1); a duplicate is one product and is reported. New products take the master's prices with an `initial` history row; an existing one whose prices differ takes them with an `import` row |
+| Products | Matched by code normalised as the catalogue normalises it (`RetailCatalogue.normaliseCode`, review F9) and ignoring case (data dictionary rule 1); a duplicate is one product and is reported. New products take the master's prices with an `initial` history row. An existing product is never changed, prices included, and gets no history row, so a price edited in the app between two runs stays (#73); when the master's prices differ, the report lists it as information. The code is at most 40 characters after normalisation; a longer one is a skipped row |
 | Sales, restocks, usage and damage | Historical documents and movements, no journals, keyed by `source_ref` in `retail_import_refs`; each movement's `business_date` is the source row's sale, purchase or usage date in the tenant's zone, so valuation `as_of` and daily profit read them by business date |
 | Restocks of kind `adjustment` or `return` | `adjustment` or `return` movements, not purchases, with no supplier payable |
 | Restock price changes | An `import` history row where consecutive restocks of a product changed its cost or sell price |
-| Balances | One `legacy_balance` movement per branch and product, equal to the source quantity less the balance the imported history left, so the derived balance equals the source exactly, dated with the import date as its business date; then one opening journal per branch, dated the same day, (debit `inventory`, credit `opening_balance_equity`) for the positive balances at the product's current cost |
+| Balances | One `legacy_balance` movement per branch and product, equal to the source quantity less the balance the imported history left, so the derived balance equals the source exactly, dated with the import date as its business date; then one opening journal per branch, dated the same day, (debit `inventory`, credit `opening_balance_equity`) for the positive balances at the product's current cost. A balance the history already gives (a zero difference) writes nothing and counts as existing |
 
 **Never guess, never lose a row (13.2).** A row with an unknown product or branch code, a missing
 or malformed field, a duplicate `source_ref`, a duplicate product code or a duplicate balance is
@@ -559,4 +562,7 @@ an unknown product code, 34 restock rows including an adjustment and a return, 1
 balances including a negative one) on PostgreSQL as `bms_app`, and checks: every balance equals the
 source; the valuation and one day's profit from the R4 reports include the imported history like
 live data; exactly three opening journals, balanced, per branch; no other journal; a re-run adds
-no row; a dry run writes nothing and prints the same report; another tenant is untouched.
+no row; a dry run writes nothing and prints the same report; another tenant is untouched. Further
+cases (#73): a price edited through the API between two runs survives the re-run with no new
+history row and the product counted as existing; a zero-difference balance is existing on both
+runs; a code that NFKC makes longer than 40 characters is a skipped row, not a failed file.
