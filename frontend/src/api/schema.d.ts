@@ -3205,6 +3205,8 @@ export interface components {
             value_at_cost_minor?: number;
         };
         RetailValuationRow: {
+            /** @description True when qty times a price is too large to hold; the row's values are absent and left out of the totals */
+            amount_out_of_range?: boolean;
             /** Format: uuid */
             branch_id?: string;
             code?: string;
@@ -3216,7 +3218,7 @@ export interface components {
             description?: string;
             /**
              * Format: int64
-             * @description qty times the current sell price
+             * @description qty times the current sell price; absent when amount_out_of_range
              */
             expected_sales_minor?: number;
             negative?: boolean;

@@ -1378,12 +1378,16 @@ time) and `line_cost_minor`. Each line writes a `usage` or `damage` movement.
 `journal_entry_id`. Each payment raises `retail_sales.paid_minor` under the sale's row lock; the
 CHECK `paid_minor <= total_minor` makes an overpayment impossible.
 
+Every retail unit amount a request can set (product and purchase cost and sell price, sale line
+price and cost snapshot, payment amount, movement, usage and stock-take unit cost, price history)
+has a CHECK of at most 10^13 minor units (V14, review F7), the bound the API validates.
+
 ### 6.11.3 Valuation and profit (FR-RET-09, FR-RET-10; #54)
 
 No table: `retail.reports` reads the tables above. Valuation per branch and product is the
 balance (or, with `as_of`, the sum of movements up to the end of that day in the tenant's zone)
 times the product's **current** cost and sell price (ADR-020 decision 6), rounded half up per row;
-totals are sums of rows. With `retail.profit.read` each branch also shows the `inventory` account
+totals are sums of rows. A row whose value does not fit a long is flagged `amount_out_of_range` and left out of the totals rather than failing the report. With `retail.profit.read` each branch also shows the `inventory` account
 balance (entries dated on or before the valuation date, through `LedgerAccounts.balanceByBranch`)
 and the revaluation difference, value at cost less that balance, which is the expected result of
 relieving inventory at current cost (ADR-020 decision 8) and is reported, never treated as an

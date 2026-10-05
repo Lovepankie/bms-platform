@@ -826,6 +826,7 @@
           },
           "cost_minor" : {
             "format" : "int64",
+            "maximum" : 10000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
@@ -836,6 +837,7 @@
           },
           "sell_minor" : {
             "format" : "int64",
+            "maximum" : 10000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
@@ -2597,6 +2599,7 @@
         "properties" : {
           "amount_minor" : {
             "format" : "int64",
+            "maximum" : 10000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
@@ -2680,6 +2683,7 @@
         "properties" : {
           "cost_minor" : {
             "format" : "int64",
+            "maximum" : 10000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
@@ -2690,6 +2694,7 @@
           },
           "sell_minor" : {
             "format" : "int64",
+            "maximum" : 10000000000000,
             "minimum" : 0,
             "type" : "integer"
           }
@@ -2887,6 +2892,7 @@
           "cost_minor" : {
             "description" : "Unit cost; becomes the product's cost",
             "format" : "int64",
+            "maximum" : 10000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
@@ -2905,6 +2911,7 @@
           "sell_minor" : {
             "description" : "When given, becomes the product's sell price",
             "format" : "int64",
+            "maximum" : 10000000000000,
             "minimum" : 0,
             "type" : "integer"
           }
@@ -3108,6 +3115,7 @@
           "unit_price_minor" : {
             "description" : "Defaults to the product's sell price",
             "format" : "int64",
+            "maximum" : 10000000000000,
             "minimum" : 0,
             "type" : "integer"
           }
@@ -3664,6 +3672,10 @@
       },
       "RetailValuationRow" : {
         "properties" : {
+          "amount_out_of_range" : {
+            "description" : "True when qty times a price is too large to hold; the row's values are absent and left out of the totals",
+            "type" : "boolean"
+          },
           "branch_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -3680,7 +3692,7 @@
             "type" : "string"
           },
           "expected_sales_minor" : {
-            "description" : "qty times the current sell price",
+            "description" : "qty times the current sell price; absent when amount_out_of_range",
             "format" : "int64",
             "type" : "integer"
           },

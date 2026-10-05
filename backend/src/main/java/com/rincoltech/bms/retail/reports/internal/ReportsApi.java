@@ -24,8 +24,14 @@ final class ReportsApi {
             boolean negative,
             long sellMinor,
 
-            @Schema(description = "qty times the current sell price")
-            long expectedSalesMinor,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "qty times the current sell price; absent when amount_out_of_range")
+            Long expectedSalesMinor,
+
+            @Schema(
+                    description =
+                            "True when qty times a price is too large to hold; the row's values are absent and left out of the totals")
+            boolean amountOutOfRange,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)
             Long costMinor,

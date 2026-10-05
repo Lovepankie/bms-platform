@@ -1,7 +1,9 @@
 package com.rincoltech.bms.retail.catalogue.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -47,8 +49,12 @@ final class CatalogueApi {
             @NotBlank @Size(max = 300) String description,
             @NotNull UUID categoryId,
             @NotNull UUID unitId,
-            @NotNull @PositiveOrZero Long costMinor,
-            @NotNull @PositiveOrZero Long sellMinor) {}
+
+            @NotNull @PositiveOrZero @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            Long costMinor,
+
+            @NotNull @PositiveOrZero @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            Long sellMinor) {}
 
     @Schema(
             name = "UpdateRetailProductRequest",
@@ -62,8 +68,12 @@ final class CatalogueApi {
 
     @Schema(name = "RetailPriceEditRequest", description = "At least one price; FR-RET-02")
     record PriceEditRequest(
-            @PositiveOrZero Long costMinor,
-            @PositiveOrZero Long sellMinor,
+            @PositiveOrZero @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            Long costMinor,
+
+            @PositiveOrZero @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            Long sellMinor,
+
             @NotBlank @Size(max = 300) String reason) {}
 
     @Schema(name = "RetailProduct")

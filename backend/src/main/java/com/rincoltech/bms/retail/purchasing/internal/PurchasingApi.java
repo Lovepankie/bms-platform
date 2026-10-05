@@ -1,8 +1,10 @@
 package com.rincoltech.bms.retail.purchasing.internal;
 
+import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -43,10 +45,15 @@ final class PurchasingApi {
     record PurchaseLineRequest(
             @NotNull UUID productId,
 
-            @NotNull @PositiveOrZero @Schema(description = "Unit cost; becomes the product's cost")
+            @NotNull
+            @PositiveOrZero
+            @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            @Schema(description = "Unit cost; becomes the product's cost")
             Long costMinor,
 
-            @PositiveOrZero @Schema(description = "When given, becomes the product's sell price")
+            @PositiveOrZero
+            @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            @Schema(description = "When given, becomes the product's sell price")
             Long sellMinor,
 
             @NotEmpty @Size(max = 50) List<@Valid @NotNull BranchQty> qtyByBranch) {}

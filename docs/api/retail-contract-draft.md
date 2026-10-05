@@ -60,7 +60,7 @@ except `retail.price.below_cost`, which no default role holds.
 
 | Method and path | Purpose | Notes |
 |---|---|---|
-| `GET /reports/valuation?branchId=&asOf=` | Stock value at cost and expected sales at price | rows plus totals; cost columns need `retail.profit.read` |
+| `GET /reports/valuation?branchId=&asOf=` | Stock value at cost and expected sales at price | rows plus totals; cost columns need `retail.profit.read`; a row too large to value has `amountOutOfRange: true` and is left out of the totals |
 | `GET /reports/profit/daily?branchId=&from=&to=` | Profit per branch per day | needs `retail.profit.read` |
 
 \* present only with `retail.profit.read`.

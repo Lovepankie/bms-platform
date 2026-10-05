@@ -84,6 +84,62 @@ class RetailInputGuardsIT extends IntegrationTest {
                 .hasMessageContaining("retail_products_code_check");
     }
 
+    /**
+     * F7: every amount in minor units is bounded at 10^13 by validation and by a database CHECK; a
+     * product of value beyond a long is 422 amount_out_of_range on a sale; and one such product
+     * leaves the valuation report working for every other row.
+     */
+    @Test
+    void amountsAreBoundedAndOverflowIsNot500() {
+        Map<String, Object> huge = product("BIG-1");
+        huge.put("cost_minor", 10_000_000_000_001L);
+        ResponseEntity<JsonNode> refused = api.post("/products", huge, ADMIN);
+        assertThat(refused.getStatusCode()).as("%s", refused.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(refused.getBody().get("errors").get(0).get("field").asString())
+                .isEqualTo("cost_minor");
+
+        UUID normal = api.product("OK-1", 100, 200);
+        api.stockUp(t.headOffice(), normal, "10");
+        UUID big = api.product("BIG-2", 10_000_000_000_000L, 10_000_000_000_000L);
+        api.importedBalance(t.headOffice(), big, "90000000000");
+
+        Map<String, Object> sale = new LinkedHashMap<>();
+        sale.put("branch_id", t.headOffice());
+        sale.put("payment_method", "cash");
+        sale.put("lines", java.util.List.of(Map.of("product_id", big, "qty", "90000000000")));
+        ResponseEntity<JsonNode> overflow =
+                api.postKeyed("/sales", sale, ADMIN, "*", UUID.randomUUID().toString());
+        assertThat(overflow.getStatusCode()).as("%s", overflow.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(overflow.getBody().get("code").asString()).isEqualTo("amount_out_of_range");
+
+        ResponseEntity<JsonNode> valuation = api.get("/reports/valuation", ADMIN);
+        assertThat(valuation.getStatusCode()).as("%s", valuation.getBody()).isEqualTo(HttpStatus.OK);
+        JsonNode rows = valuation.getBody().get("rows");
+        assertThat(rows).hasSize(2);
+        for (JsonNode row : rows) {
+            if (row.get("code").asString().equals("OK-1")) {
+                assertThat(row.get("value_at_cost_minor").asLong()).isEqualTo(1_000);
+                assertThat(row.get("amount_out_of_range").asBoolean()).isFalse();
+            } else {
+                assertThat(row.get("amount_out_of_range").asBoolean()).isTrue();
+                assertThat(row.has("value_at_cost_minor")).isFalse();
+            }
+        }
+        assertThat(valuation.getBody().get("value_at_cost_minor").asLong()).isEqualTo(1_000);
+
+        UUID category = api.category("Test Category Raw Amount");
+        UUID unit = api.unit("u-rawamt");
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("""
+                                INSERT INTO retail_products (id, tenant_id, code, description, category_id, unit_id,
+                                    cost_minor, sell_minor, currency)
+                                VALUES (gen_random_uuid(), ?, 'RAW-AMT', 'Test raw', ?, ?, 10000000000001, 2, 'UGX')
+                                """)
+                        .params(t.tenantId(), category, unit)
+                        .update())
+                .hasMessageContaining("retail_products_cost_minor_range");
+    }
+
     Map<String, Object> product(String code) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("code", code);

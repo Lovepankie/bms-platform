@@ -19,3 +19,31 @@ ALTER TABLE retail_products ADD CONSTRAINT retail_products_code_check CHECK (
     AND code !~ '[[:cntrl:]]'
     AND code !~ '[ ­؜ ᠎ -‏ -  -⁤　﻿]'
 );
+
+-- ---------------------------------------------------------------------------------------------
+-- F7: every unit amount a request can set is at most 10^13 minor units, the bound the API
+-- validates (RetailCatalogue.MAX_AMOUNT_MINOR). Totals are not bounded here: they are sums of
+-- bounded values and the application refuses one that does not fit (amount_out_of_range).
+-- ---------------------------------------------------------------------------------------------
+
+ALTER TABLE retail_products
+    ADD CONSTRAINT retail_products_cost_minor_range CHECK (cost_minor <= 10000000000000),
+    ADD CONSTRAINT retail_products_sell_minor_range CHECK (sell_minor <= 10000000000000);
+ALTER TABLE retail_price_history
+    ADD CONSTRAINT retail_price_history_amount_range CHECK (
+        new_cost_minor <= 10000000000000 AND new_sell_minor <= 10000000000000
+        AND coalesce(old_cost_minor, 0) <= 10000000000000 AND coalesce(old_sell_minor, 0) <= 10000000000000);
+ALTER TABLE retail_purchase_lines
+    ADD CONSTRAINT retail_purchase_lines_amount_range CHECK (
+        cost_minor <= 10000000000000 AND coalesce(sell_minor, 0) <= 10000000000000);
+ALTER TABLE retail_sale_lines
+    ADD CONSTRAINT retail_sale_lines_amount_range CHECK (
+        unit_price_minor <= 10000000000000 AND unit_cost_minor <= 10000000000000);
+ALTER TABLE retail_sale_payments
+    ADD CONSTRAINT retail_sale_payments_amount_range CHECK (amount_minor <= 10000000000000);
+ALTER TABLE retail_stock_movements
+    ADD CONSTRAINT retail_stock_movements_cost_range CHECK (unit_cost_minor <= 10000000000000);
+ALTER TABLE retail_usage_lines
+    ADD CONSTRAINT retail_usage_lines_cost_range CHECK (unit_cost_minor <= 10000000000000);
+ALTER TABLE retail_stocktake_lines
+    ADD CONSTRAINT retail_stocktake_lines_cost_range CHECK (coalesce(unit_cost_minor, 0) <= 10000000000000);

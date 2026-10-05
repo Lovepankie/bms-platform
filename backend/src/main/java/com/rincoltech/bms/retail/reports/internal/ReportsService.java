@@ -62,11 +62,22 @@ class ReportsService {
         List<ValuationRow> rows = new ArrayList<>();
         Map<UUID, long[]> byBranch = new LinkedHashMap<>();
         for (Holding h : repo.holdings(filter, asOf, tenant.profile().timezone().getId())) {
-            long expected = Quantities.value(h.qty(), h.sellMinor());
-            long atCost = Quantities.value(h.qty(), h.costMinor());
             long[] t = byBranch.computeIfAbsent(h.branchId(), b -> new long[2]);
-            t[0] = Math.addExact(t[0], expected);
-            t[1] = Math.addExact(t[1], atCost);
+            Long expected;
+            Long atCost;
+            try {
+                expected = Quantities.value(h.qty(), h.sellMinor());
+                atCost = Quantities.value(h.qty(), h.costMinor());
+            } catch (ArithmeticException e) {
+                // Review F7: one row too large to value leaves the report working for the others; it
+                // is flagged and left out of the totals.
+                expected = null;
+                atCost = null;
+            }
+            if (expected != null) {
+                t[0] = Math.addExact(t[0], expected);
+                t[1] = Math.addExact(t[1], atCost);
+            }
             rows.add(new ValuationRow(
                     h.branchId(),
                     h.productId(),
@@ -77,6 +88,7 @@ class ReportsService {
                     h.qty().signum() < 0,
                     h.sellMinor(),
                     expected,
+                    expected == null,
                     cost ? h.costMinor() : null,
                     cost ? atCost : null));
         }

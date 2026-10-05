@@ -1,9 +1,11 @@
 package com.rincoltech.bms.retail.sales.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -35,7 +37,9 @@ final class SalesApi {
             @NotNull @Positive @Digits(integer = 11, fraction = 3) @Schema(type = "string", example = "2.500")
             BigDecimal qty,
 
-            @PositiveOrZero @Schema(description = "Defaults to the product's sell price")
+            @PositiveOrZero
+            @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            @Schema(description = "Defaults to the product's sell price")
             Long unitPriceMinor) {}
 
     @Schema(name = "RetailSaleRequest")
@@ -138,7 +142,8 @@ final class SalesApi {
 
     @Schema(name = "RetailPaymentRequest")
     record PaymentRequest(
-            @NotNull @Positive Long amountMinor,
+            @NotNull @Positive @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            Long amountMinor,
 
             @NotNull @Pattern(regexp = "cash|mobile_money|bank")
             String method,

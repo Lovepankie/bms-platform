@@ -41,6 +41,21 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                         "Parameter '" + e.getName() + "' has the wrong format."));
     }
 
+    /**
+     * Exact long arithmetic on minor units ({@code Math.addExact}, {@code longValueExact}) overflowed:
+     * the amounts in the request, or computed from it, are too large to hold (review F7).
+     */
+    @ExceptionHandler(ArithmeticException.class)
+    ResponseEntity<ProblemDetail> handleArithmetic(ArithmeticException e) {
+        log.warn("Amount out of range: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .body(Problems.of(
+                        HttpStatus.UNPROCESSABLE_CONTENT,
+                        "amount_out_of_range",
+                        "Amount out of range",
+                        "An amount in this request, or computed from it, is too large."));
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ProblemDetail> handleIntegrity(DataIntegrityViolationException e) {
         log.warn(

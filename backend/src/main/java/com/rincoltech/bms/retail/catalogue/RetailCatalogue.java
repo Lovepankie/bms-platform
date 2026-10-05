@@ -11,6 +11,12 @@ import java.util.UUID;
  */
 public interface RetailCatalogue {
 
+    /**
+     * The largest amount in minor units any retail request may carry: 10^13 (review F7). Bean
+     * Validation refuses more with 422, and the database CHECKs of migration V14 match it.
+     */
+    long MAX_AMOUNT_MINOR = 10_000_000_000_000L;
+
     Optional<ProductSnapshot> find(UUID productId);
 
     /**
