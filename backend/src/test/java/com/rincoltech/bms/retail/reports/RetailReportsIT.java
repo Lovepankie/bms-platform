@@ -188,13 +188,19 @@ class RetailReportsIT extends IntegrationTest {
      */
     @Test
     void profitComesFromTheSaleLinesAndTheHeaderIsGuarded() {
-        long before = api.get("/reports/profit/daily", ADMIN).getBody().get("profit_minor").asLong();
+        long before = api.get("/reports/profit/daily", ADMIN)
+                .getBody()
+                .get("profit_minor")
+                .asLong();
         TestDatabase.owner()
                 .sql("DO $$ BEGIN PERFORM set_config('bms.allow_mutation', 'on', true);"
                         + " UPDATE retail_sales SET cost_total_minor = 0 WHERE tenant_id = '" + t.tenantId()
                         + "'; END $$")
                 .update();
-        assertThat(api.get("/reports/profit/daily", ADMIN).getBody().get("profit_minor").asLong())
+        assertThat(api.get("/reports/profit/daily", ADMIN)
+                        .getBody()
+                        .get("profit_minor")
+                        .asLong())
                 .isEqualTo(before);
 
         for (String change : new String[] {
@@ -218,13 +224,11 @@ class RetailReportsIT extends IntegrationTest {
             assertThat(refused).as(change).isTrue();
         }
         api.stockUp(t.headOffice(), b, "4");
-        assertThatThrownBy(() -> TestDatabase.owner()
-                        .sql("""
+        assertThatThrownBy(
+                        () -> TestDatabase.owner().sql("""
                                 UPDATE retail_stocktake_lines SET counted_qty = counted_qty + 1
                                  WHERE tenant_id = ? AND committed_variance_qty IS NOT NULL
-                                """)
-                        .param(t.tenantId())
-                        .update())
+                                """).param(t.tenantId()).update())
                 .rootCause()
                 .hasMessageContaining("committed");
     }

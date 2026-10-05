@@ -114,7 +114,7 @@ class PurchasingRepository {
                         SELECT id, purchase_no, supplier_id, purchased_on, payment_method, currency, total_minor, note,
                                created_at, created_by
                           FROM retail_purchases WHERE id = ?
-                        """).param(id).query((rs, n) -> header(rs)).optional().map(this::withLines);
+                        """).param(id).query((rs, n) -> header(rs)).optional().map(p -> withLines(p, null));
     }
 
     /** {@code branchIds} null means every branch; otherwise purchases that moved stock into one of them. */
@@ -160,11 +160,17 @@ class PurchasingRepository {
         sql.append(" ORDER BY p.created_at, p.id LIMIT :limit");
         params.put("limit", limit);
         return jdbc.sql(sql.toString()).params(params).query((rs, n) -> header(rs)).list().stream()
-                .map(this::withLines)
+                .map(p -> withLines(p, branchIds))
                 .toList();
     }
 
-    private Purchase withLines(Purchase p) {
+    /**
+     * The purchase with its lines. For a branch-scoped caller ({@code branchIds} not null) only the
+     * scoped branches' quantities are shown, and each line's quantity and total and the purchase
+     * total are recomputed from them, rounded per branch as the purchase was (review F11); a line
+     * with no quantity in scope is left out.
+     */
+    private Purchase withLines(Purchase p, List<UUID> branchIds) {
         List<PurchaseLine> lines = jdbc
                 .sql("""
                         SELECT l.id, l.line_no, l.product_id, pr.code, pr.description, l.cost_minor, l.sell_minor,
@@ -206,7 +212,12 @@ class PurchasingRepository {
                                         rs.getObject("branch_id", UUID.class),
                                         Quantities.format(rs.getBigDecimal("qty"))))
                                 .list()))
+                .map(l -> branchIds == null ? l : scoped(l, branchIds))
+                .filter(l -> !l.qtyByBranch().isEmpty())
                 .toList();
+        long total = branchIds == null
+                ? p.totalMinor()
+                : lines.stream().mapToLong(PurchaseLine::lineTotalMinor).reduce(0, Math::addExact);
         return new Purchase(
                 p.id(),
                 p.purchaseNo(),
@@ -214,11 +225,34 @@ class PurchasingRepository {
                 p.purchasedOn(),
                 p.paymentMethod(),
                 p.currency(),
-                p.totalMinor(),
+                total,
                 p.note(),
                 lines,
                 p.createdAt(),
                 p.createdBy());
+    }
+
+    private static PurchaseLine scoped(PurchaseLine l, List<UUID> branchIds) {
+        List<LineBranch> inScope = l.qtyByBranch().stream()
+                .filter(b -> branchIds.contains(b.branchId()))
+                .toList();
+        BigDecimal qty = BigDecimal.ZERO;
+        long value = 0;
+        for (LineBranch b : inScope) {
+            qty = qty.add(new BigDecimal(b.qty()));
+            value = Math.addExact(value, Quantities.value(new BigDecimal(b.qty()), l.costMinor()));
+        }
+        return new PurchaseLine(
+                l.id(),
+                l.lineNo(),
+                l.productId(),
+                l.code(),
+                l.description(),
+                l.costMinor(),
+                l.sellMinor(),
+                Quantities.format(qty),
+                value,
+                inScope);
     }
 
     private static Purchase header(ResultSet rs) throws SQLException {

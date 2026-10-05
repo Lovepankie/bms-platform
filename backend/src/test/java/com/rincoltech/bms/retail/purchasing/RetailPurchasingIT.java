@@ -287,6 +287,43 @@ class RetailPurchasingIT extends IntegrationTest {
         assertThat(qty(t.headOffice())).isEqualTo("6.000");
     }
 
+    /**
+     * Review F11: a purchase splits 10 to head office and 40 to branch two at 1,000. A buyer scoped
+     * to head office sees the purchase with head office's line only: qty 10 and 10,000, not 50 and
+     * 50,000; an all-branch buyer sees the whole document.
+     */
+    @Test
+    void aBranchScopedBuyerSeesOnlyTheirBranchesInThePurchaseList() {
+        Map<UUID, String> qty = new LinkedHashMap<>();
+        qty.put(t.headOffice(), "10");
+        qty.put(t.secondBranch(), "40");
+        assertThat(buy(purchase("cash", null, List.of(line(product, 1_000L, null, qty))))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+
+        JsonNode scoped = api.call(
+                        org.springframework.http.HttpMethod.GET,
+                        "/purchases",
+                        null,
+                        "retail.purchase.create",
+                        t.headOffice().toString(),
+                        Map.of())
+                .getBody()
+                .get("items")
+                .get(0);
+        assertThat(scoped.get("total_minor").asLong()).isEqualTo(10_000);
+        JsonNode l = scoped.get("lines").get(0);
+        assertThat(l.get("qty_total").asString()).isEqualTo("10.000");
+        assertThat(l.get("line_total_minor").asLong()).isEqualTo(10_000);
+        assertThat(l.get("qty_by_branch")).hasSize(1);
+        assertThat(l.get("qty_by_branch").get(0).get("branch_id").asString())
+                .isEqualTo(t.headOffice().toString());
+
+        JsonNode all = api.get("/purchases", ADMIN).getBody().get("items").get(0);
+        assertThat(all.get("total_minor").asLong()).isEqualTo(50_000);
+        assertThat(all.get("lines").get(0).get("qty_by_branch")).hasSize(2);
+    }
+
     String qty(UUID branch) {
         return api.get("/stock?branch_id=" + branch, ADMIN)
                 .getBody()
