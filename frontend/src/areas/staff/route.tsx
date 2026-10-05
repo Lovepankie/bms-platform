@@ -1,10 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, createLazyRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { api, fetchMe } from '../../api/client';
+import { api, fetchMe, type Me } from '../../api/client';
+import { mockMe, setMockProfitAccess } from '../../api/retail-mock';
+import { retailMockEnabled } from '../../api/retail';
 import { ALL_BRANCHES, initialBranch, loadBranch, saveBranch } from '../../auth/branch';
 import { getAccessToken, refreshSession, setAccessToken, subscribe } from '../../auth/session';
 import { StaffContext } from './context';
+import { canSeeProfit, showRetail } from './retail/permissions';
 
 // The staff area layout: restores the session from the refresh cookie, shows who is signed in,
 // and holds the branch switcher (FR-BR-03). Switching the branch changes what lists show without
@@ -18,17 +21,21 @@ function StaffLayout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const token = useAccessToken();
-  const [restoring, setRestoring] = useState(token === null);
+  // VITE_RETAIL_MOCK=1: a fake session so the retail screens run without a backend.
+  const mock = retailMockEnabled();
+  const [restoring, setRestoring] = useState(token === null && !mock);
 
   useEffect(() => {
-    if (token !== null) return;
+    if (token !== null || mock) return;
     void refreshSession().then((ok) => {
       setRestoring(false);
       if (!ok) void navigate({ to: '/sign-in' });
     });
-  }, [token, navigate]);
+  }, [token, navigate, mock]);
 
-  const me = useQuery({ queryKey: ['me', token], queryFn: fetchMe, enabled: token !== null });
+  const me = useQuery({ queryKey: ['me', token], queryFn: (): Promise<Me> => (mock ? Promise.resolve(mockMe(import.meta.env.VITE_RETAIL_MOCK_ROLE)) : fetchMe()),
+    enabled: token !== null || mock,
+  });
   const [branch, setBranch] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,6 +47,7 @@ function StaffLayout() {
   }
 
   const profile = me.data;
+  if (mock) setMockProfitAccess(canSeeProfit(profile));
   function choose(selection: string) {
     setBranch(selection);
     saveBranch(profile.user_id ?? '', selection);
@@ -73,6 +81,7 @@ function StaffLayout() {
         <nav style={{ display: 'flex', gap: 12 }}>
           <Link to="/staff">Home</Link>
           {canSeeApprovals && <Link to="/staff/approvals">Approvals</Link>}
+          {showRetail(profile) && <Link to="/staff/retail">Retail</Link>}
         </nav>
         <button onClick={() => void signOut()}>Sign out</button>
       </header>

@@ -15,3 +15,19 @@ export function formatMinor(minor: number, currency: string): string {
   const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return `${negative ? '-' : ''}${currency} ${grouped}${fraction}`;
 }
+
+/**
+ * Parses what a person typed ("12000", "1,500", "12.50" for two-decimal currencies) into integer
+ * minor units, or null when it is not a valid non-negative amount. No floating point is used.
+ */
+export function parseMinor(text: string, currency: string): number | null {
+  const exponent = EXPONENTS[currency];
+  if (exponent === undefined) throw new Error(`unknown currency ${currency}`);
+  const clean = text.trim().replace(/,/g, '');
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(clean);
+  if (!match) return null;
+  const fraction = match[2] ?? '';
+  if (fraction.length > exponent) return null;
+  const minor = Number(`${match[1]}${fraction.padEnd(exponent, '0')}`);
+  return Number.isSafeInteger(minor) ? minor : null;
+}
