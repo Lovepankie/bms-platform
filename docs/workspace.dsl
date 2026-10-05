@@ -63,6 +63,9 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 savings       = component "Lending: Savings" "Savings products, accounts, deposits, withdrawals, interest." "lending" "lending"
                 investments   = component "Lending: Investments" "Fixed-term investments, returns, maturity, payout and rollover." "lending" "lending"
                 collections   = component "Lending: Collections" "Due and arrears lists, officer assignment, collection actions, promises to pay." "lending" "lending"
+
+                # ---------------- retail vertical (ADR-020) ----------------
+                retailCatalogue = component "Retail: Catalogue" "Categories, units, products with current cost and sell price; append-only price history written with every price change." "retail" "retail"
             }
 
             migrate = container "Migrate" "One-shot container run before the application containers switch: applies the Flyway migrations as bms_owner, then exits (ADR-006)." "API image, migrate command" "app"
@@ -158,6 +161,11 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.payments    -> paymentGateway "Queries transaction status before booking a callback" "HTTPS"
         paymentGateway      -> bms.api.payments "Sends payment callbacks" "HTTPS"
         smsAggregator       -> bms.api.notifications "Sends delivery reports" "HTTPS"
+
+        bms.web -> bms.api.retailCatalogue "Manages categories, units and products; edits prices"
+        bms.api.retailCatalogue -> bms.api.audit "Writes audit rows"
+        bms.api.retailCatalogue -> bms.api.tenancy "Reads the tenant currency"
+        bms.api.retailCatalogue -> bms.db "Products and the append-only price history"
         bms.api.tenancy     -> bms.db "Resolves the slug with app_resolve_tenant_status; binds app.tenant_id"
         bms.api.tenancy     -> bms.api.audit "Audits branch and settings changes"
         bms.api.identity    -> bms.db "Reads sessions and role assignments; revocation takes effect at once"
@@ -245,7 +253,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
             autoLayout
         }
 
-        component bms.api "ApiComponents" "Core modules and the lending vertical inside the modular monolith. Core never depends on lending; the arrows from core to lending are registry calls (ADR-002)." {
+        component bms.api "ApiComponents" "Core modules, the lending vertical and the retail vertical inside the modular monolith. Core never depends on a vertical and retail never depends on lending; the arrows from core to lending are registry calls (ADR-002, ADR-020)." {
             include *
             autoLayout
         }
@@ -346,6 +354,11 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
             }
             element "lending" {
                 background #8E24AA
+                color #ffffff
+                shape Component
+            }
+            element "retail" {
+                background #00897B
                 color #ffffff
                 shape Component
             }

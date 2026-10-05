@@ -46,8 +46,15 @@ import tools.jackson.databind.JsonNode;
 class PermissionMatrixIT extends IntegrationTest {
 
     static final Path CHAPTER_8 = Path.of("../docs/sdd/08-security-design.md");
-    static final List<String> COLUMNS =
-            List.of("tenant_admin", "branch_manager", "loan_officer", "cashier", "accountant", "auditor", "member");
+    static final List<String> COLUMNS = List.of(
+            "tenant_admin",
+            "branch_manager",
+            "loan_officer",
+            "cashier",
+            "accountant",
+            "auditor",
+            "member",
+            "retail_sales");
     static final Pattern ROW = Pattern.compile("^\\| `([a-z_]+\\.[a-z_]+\\.[a-z_]+)` \\|(.*)\\|\\s*$");
 
     @Autowired
@@ -98,7 +105,7 @@ class PermissionMatrixIT extends IntegrationTest {
         Map<String, Set<String>> expected = matrix();
         TestDatabase.Fixture t = TestDatabase.tenant("matrix", true);
         Api api = Api.tenant(http, t.slug());
-        for (String role : COLUMNS.subList(0, 6)) {
+        for (String role : COLUMNS.stream().filter(c -> !c.equals("member")).toList()) {
             String email = Api.email(role.replace("_", ""));
             UUID branch = role.equals("tenant_admin") ? null : t.headOffice();
             UUID id = Api.staff(t, email, new Role(role, branch));
@@ -114,7 +121,7 @@ class PermissionMatrixIT extends IntegrationTest {
     /** FR-IAM-03: for each declared permission, lacking exactly that one gets 403. */
     @Test
     void everyRouteRefusesAPrincipalWithoutItsPermission() {
-        TestDatabase.Fixture t = TestDatabase.tenant("routes", true);
+        TestDatabase.Fixture t = TestDatabase.tenant("routes", true, true);
         List<String> all = TestDatabase.owner()
                 .sql("SELECT key FROM permissions")
                 .query(String.class)

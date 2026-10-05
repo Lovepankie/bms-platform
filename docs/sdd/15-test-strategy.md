@@ -77,6 +77,16 @@ The maker-checker tests use a test-only action type registered in the test sourc
 (`TestApprovalAction`, requested with a cashier's permission and decided with a branch manager's),
 because no production action exists before increment 2 (ADR-015).
 
+### 15.4.2 Retail (ADR-020)
+
+Every retail table gets its factory row in `RlsIsolationIT`, so the catalogue, cross-tenant read,
+write and unbound-session tests cover it without a separate suite.
+
+| Test | Proves |
+|---|---|
+| `RetailCatalogueIT` (#51) | Products with an `initial` history row and audit; codes unique ignoring case; a manual price edit and its history row commit together and need `retail.price.edit`; PATCH never changes a price; a user signed in with the `retail_sales` role holds exactly the sales column and receives no cost field at all (absent, not null) on products and price history; a tenant without the module gets `module_not_enabled`; switching the module on seeds the retail chart once and shares cash, bank and opening balance equity with the lending chart; price history rejects UPDATE and DELETE for `bms_app` (no privilege) and the owner (trigger) (FR-RET-01, FR-RET-02, FR-RET-13, FR-RET-14) |
+| `ModularityTest` | Adds `retailNeverDependsOnLending`: no `retail.*` module has a direct dependency on a `lending.*` module (ADR-020) |
+
 1. **Catalogue test.** Query `pg_class` and `pg_policy` for every table with a
    `tenant_id` column (plus `tenants`). Each must have `relrowsecurity` and
    `relforcerowsecurity` true and a `tenant_isolation` policy whose expression uses
@@ -111,8 +121,8 @@ module using another module's internals, one vertical depending on another, the 
 depending on anything, or a cycle. The allowed dependency list is chapter 5 section
 5.4.2, kept as data in each module's `package-info.java` (`allowedDependencies`), so a change
 to the architecture shows up in review as a change to that line. `ModularityTest` runs Spring
-Modulith's `verify()` over them and adds an explicit rule that no `core.*` module depends on a
-vertical. `RoutePermissionIT` enumerates routes and fails on any without a declared permission
+Modulith's `verify()` over them and adds explicit rules that no `core.*` module depends on a
+vertical and that no `retail.*` module depends on a `lending.*` module (ADR-020). `RoutePermissionIT` enumerates routes and fails on any without a declared permission
 (FR-IAM-03), `ClockArchitectureTest` fails on any direct system clock read outside the
 kernel, and `SecurityArchitectureTest` fails when a module other than identity sets the current
 principal or one other than tenancy binds a request's tenant (ADR-017).

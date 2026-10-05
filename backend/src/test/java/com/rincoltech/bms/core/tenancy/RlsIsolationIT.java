@@ -179,6 +179,28 @@ class RlsIsolationIT {
                         INSERT INTO lending_loan_collateral (id, tenant_id, loan_id, collateral_id, pledged_value_minor)
                         VALUES (?, ?, ?, ?, 50000)
                         """).params(UUID.randomUUID(), t.tenantId(), loan, collateral).update();
+        // Retail tables (migration V10, ADR-020).
+        UUID retailCategory = UUID.randomUUID();
+        UUID retailUnit = UUID.randomUUID();
+        UUID retailProduct = UUID.randomUUID();
+        owner.sql("INSERT INTO retail_categories (id, tenant_id, name) VALUES (?, ?, 'Test Category')")
+                .params(retailCategory, t.tenantId())
+                .update();
+        owner.sql("INSERT INTO retail_units (id, tenant_id, name) VALUES (?, ?, 'pcs')")
+                .params(retailUnit, t.tenantId())
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_products (id, tenant_id, code, description, category_id, unit_id, cost_minor,
+                                                     sell_minor, currency)
+                        VALUES (?, ?, 'RLS-1', 'Test Product', ?, ?, 100, 150, 'UGX')
+                        """)
+                .params(retailProduct, t.tenantId(), retailCategory, retailUnit)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_price_history (id, tenant_id, product_id, source, new_cost_minor, new_sell_minor,
+                                                          currency)
+                        VALUES (?, ?, ?, 'initial', 100, 150, 'UGX')
+                        """).params(UUID.randomUUID(), t.tenantId(), retailProduct).update();
         owner.sql(
                         "INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type) VALUES (?, ?, 'system', 'test.fixture.created', 'test')")
                 .params(UUID.randomUUID(), t.tenantId())

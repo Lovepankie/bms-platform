@@ -1140,6 +1140,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List product categories */
+        get: operations["listRetailCategories"];
+        put?: never;
+        /** Create a product category (FR-RET-01) */
+        post: operations["createRetailCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search products by code or description */
+        get: operations["listRetailProducts"];
+        put?: never;
+        /** Create a product with its first prices (FR-RET-01) */
+        post: operations["createRetailProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products/{product_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A product */
+        get: operations["getRetailProduct"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a product's non-price fields */
+        patch: operations["updateRetailProduct"];
+        trace?: never;
+    };
+    "/api/v1/retail/products/{product_id}/price-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every price change of a product (FR-RET-02) */
+        get: operations["getRetailPriceHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products/{product_id}/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Edit prices by hand, with a history row (FR-RET-02) */
+        post: operations["editRetailPrices"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List units of measure */
+        get: operations["listRetailUnits"];
+        put?: never;
+        /** Create a unit of measure (FR-RET-01) */
+        post: operations["createRetailUnit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/roles": {
         parameters: {
             query?: never;
@@ -1613,6 +1719,19 @@ export interface components {
             relationship: string;
             /** @description The original wording, for example from the import */
             relationship_text?: string;
+        };
+        CreateRetailProductRequest: {
+            /** Format: uuid */
+            category_id: string;
+            /** @description Unique ignoring case and surrounding spaces */
+            code: string;
+            /** Format: int64 */
+            cost_minor: number;
+            description: string;
+            /** Format: int64 */
+            sell_minor: number;
+            /** Format: uuid */
+            unit_id: string;
         };
         CreateTenantRequest: {
             admin: components["schemas"]["FirstAdminRequest"];
@@ -2190,6 +2309,98 @@ export interface components {
             member_no?: string;
             relationship?: string;
         };
+        RetailCategory: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+        };
+        RetailCategoryList: {
+            items?: components["schemas"]["RetailCategory"][];
+        };
+        RetailCategoryRequest: {
+            name: string;
+        };
+        RetailPriceChange: {
+            /** Format: date-time */
+            at?: string;
+            /** Format: uuid */
+            by?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            new_cost_minor?: number;
+            /** Format: int64 */
+            new_sell_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            old_cost_minor?: number;
+            /** Format: int64 */
+            old_sell_minor?: number;
+            reason?: string;
+            /** @description initial, manual, purchase or import */
+            source?: string;
+            /** Format: uuid */
+            source_id?: string;
+        };
+        /** @description At least one price; FR-RET-02 */
+        RetailPriceEditRequest: {
+            /** Format: int64 */
+            cost_minor?: number;
+            reason: string;
+            /** Format: int64 */
+            sell_minor?: number;
+        };
+        RetailPriceHistory: {
+            items?: components["schemas"]["RetailPriceChange"][];
+        };
+        RetailProduct: {
+            active?: boolean;
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
+            code?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            cost_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            description?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int64 */
+            sell_minor?: number;
+            unit?: string;
+            /** Format: uuid */
+            unit_id?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        RetailProductPage: {
+            items?: components["schemas"]["RetailProduct"][];
+            next_cursor?: string;
+        };
+        RetailUnit: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+        };
+        RetailUnitList: {
+            items?: components["schemas"]["RetailUnit"][];
+        };
+        RetailUnitRequest: {
+            name: string;
+        };
         Role: {
             key?: string;
             mfa_required?: boolean;
@@ -2405,6 +2616,16 @@ export interface components {
             phone?: string;
             relationship?: string;
             relationship_text?: string;
+        };
+        /** @description Omitted fields are unchanged; prices change only through /prices */
+        UpdateRetailProductRequest: {
+            active?: boolean;
+            /** Format: uuid */
+            category_id?: string;
+            code?: string;
+            description?: string;
+            /** Format: uuid */
+            unit_id?: string;
         };
         UpdateTenantSettingsRequest: {
             allow_loans_before_kyc_verified?: boolean;
@@ -4397,6 +4618,242 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    listRetailCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCategoryList"];
+                };
+            };
+        };
+    };
+    createRetailCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCategoryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCategory"];
+                };
+            };
+        };
+    };
+    listRetailProducts: {
+        parameters: {
+            query?: {
+                query?: string;
+                category_id?: string;
+                active?: boolean;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProductPage"];
+                };
+            };
+        };
+    };
+    createRetailProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRetailProductRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    getRetailProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    updateRetailProduct: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRetailProductRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    getRetailPriceHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPriceHistory"];
+                };
+            };
+        };
+    };
+    editRetailPrices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPriceEditRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    listRetailUnits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailUnitList"];
+                };
+            };
+        };
+    };
+    createRetailUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailUnitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailUnit"];
+                };
             };
         };
     };

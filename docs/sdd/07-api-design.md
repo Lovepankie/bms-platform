@@ -600,6 +600,27 @@ with the item's `ETag`; PATCH, events and release require `If-Match`. Release an
 | POST | `/channels/sms/{provider}/delivery-reports` | FR-NTF-05 |
 | POST | `/channels/ussd/{provider}` | Session callback. FR-MSS-07 (Later) |
 
+### 7.11.20 Retail (`/retail`, ADR-020)
+
+Refused with 404 `module_not_enabled` unless the tenant has the retail module switched on. The
+draft `docs/api/retail-contract-draft.md` is replaced by this section and the generated
+`openapi.json`; as everywhere in this API, JSON fields and query parameters are snake_case
+(`cost_minor`, `branch_id`), where the draft wrote camelCase. Quantities are decimal strings with up
+to three places (`"3.500"`). Fields marked `*` are **absent** from the body, not null, for a caller
+without `retail.profit.read` (ADR-020 decision 10).
+
+Built (#51, catalogue):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/categories`, `/retail/units` | `retail.stock.read` | `{items: [{id, name}]}` |
+| POST | `/retail/categories`, `/retail/units` | `retail.catalogue.manage` | `{name}`; 409 `duplicate_category`, `duplicate_unit` (names ignore case). FR-RET-01 |
+| GET | `/retail/products` | `retail.stock.read` | Filters `query` (code or description), `category_id`, `active`; `limit`, `cursor`, ordered by code. Row: `{id, code, description, category_id, category, unit_id, unit, sell_minor, cost_minor*, currency, active, version}` |
+| POST | `/retail/products` | `retail.catalogue.manage` | `{code, description, category_id, unit_id, cost_minor, sell_minor}`; writes the `initial` history row; 409 `duplicate_product_code`. FR-RET-01 |
+| GET, PATCH | `/retail/products/{product_id}` | read / `retail.catalogue.manage` | PATCH needs `If-Match` and edits `code`, `description`, `category_id`, `unit_id`, `active` only; a price in the body is 400 |
+| POST | `/retail/products/{product_id}/prices` | `retail.price.edit` | `{cost_minor?, sell_minor?, reason}`; at least one price; 422 `price_unchanged`; writes a `manual` history row and audit. FR-RET-02 |
+| GET | `/retail/products/{product_id}/price-history` | `retail.stock.read` | `{items: [{id, at, by, source, source_id, old_cost_minor*, new_cost_minor*, old_sell_minor, new_sell_minor, currency, reason}]}` |
+
 ## 7.12 Example: record a repayment
 
 ```http

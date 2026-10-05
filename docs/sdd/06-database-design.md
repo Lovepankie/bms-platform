@@ -1176,6 +1176,12 @@ first uses it.
 `lending_loan_product_fees`. `V8__loan_applications.sql` (#41) creates `lending_loans` with every
 column of this section, `lending_loan_status_history` (append-only), `lending_loan_guarantors` and
 `lending_loan_collateral`, with the one-open-pledge index and the draft-only triggers.
+`V9` is taken by the lending appraisal work (#42). Retail migrations (ADR-020) share the one
+Flyway sequence and take the next free number when they merge: `V10__retail_catalogue.sql` (#51)
+adds `retail` to every plan's allowed modules, seeds the retail permissions and the `retail_sales`
+role, creates `retail_categories`, `retail_units`, `retail_products` and `retail_price_history`
+(append-only), and adds `bms_seed_retail_chart(tenant)` (section 6.11.1), which the platform
+functions now call when the module is switched on.
 
 ## 6.10 Open items
 
@@ -1184,3 +1190,69 @@ column of this section, `lending_loan_status_history` (append-only), `lending_lo
 - Whether the pilot tenant needs more than one currency (all design supports it; seed and
   UI assume the tenant currency only).
 - Accrual accounting and provisioning tables, deferred by ADR-004.
+
+## 6.11 Retail tables (RLS; prefix `retail_`, ADR-020)
+
+Every table below is tenant-owned, has forced row-level security with the standard policy, and
+references its parents by composite keys on `(tenant_id, id)`. Money is `bigint` minor units with a
+`currency`; quantities are `numeric(14,3)` so metres and rolls are exact.
+
+### 6.11.1 Default retail chart of accounts
+
+Seeded by `bms_seed_retail_chart(tenant)` when the platform switches the module on (from
+`platform_create_tenant` or `platform_set_tenant_modules`). A code or `system_key` the tenant has
+already (from the lending chart of section 6.6.2, or an earlier switch) is kept, so a tenant with
+both verticals has one cash, one bank and one opening balance equity account, and switching the
+module on again adds nothing. `S` marks `is_system_controlled`.
+
+| Code | Name | Type | `system_key` | S |
+|---|---|---|---|---|
+| 1000 | Assets | asset (header) | | |
+| 1010 | Cash on hand | asset | `cash_on_hand` | |
+| 1020 | Bank | asset | `bank` | |
+| 1035 | Mobile money | asset | `mobile_money` | |
+| 1200 | Trade debtors | asset | `trade_debtors` | S |
+| 1300 | Inventory | asset | `inventory` | S |
+| 2000 | Liabilities | liability (header) | | |
+| 2100 | Trade creditors | liability | `trade_creditors` | S |
+| 3000 | Equity | equity (header) | | |
+| 3030 | Opening balance equity | equity | `opening_balance_equity` | |
+| 4000 | Income | income (header) | | |
+| 4100 | Sales revenue | income | `sales_revenue` | |
+| 5000 | Expenses | expense (header) | | |
+| 5100 | Cost of goods sold | expense | `cost_of_goods_sold` | |
+| 5110 | Stock shrinkage | expense | `stock_shrinkage` | |
+
+### `retail_categories`, `retail_units` (RLS; `bms_app` SELECT, INSERT)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id`, `tenant_id`, `created_at`, `created_by` | standard | |
+| `name` | varchar(100) for categories, varchar(30) for units | Unique per tenant ignoring case (FR-RET-01) |
+
+### `retail_products` (RLS; `bms_app` SELECT, INSERT, UPDATE)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id`, `tenant_id`, `created_at`, `updated_at`, `version`, `created_by` | standard | |
+| `code` | varchar(40) | Trimmed; unique per tenant on `lower(code)` (data dictionary rule 1) |
+| `description` | varchar(300) | Trigram index for search |
+| `category_id`, `unit_id` | uuid | Composite FKs to `retail_categories`, `retail_units` |
+| `cost_minor`, `sell_minor` | bigint >= 0 | The current prices. Changed only by the statement that also writes `retail_price_history` (ADR-020 decision 5) |
+| `currency` | char(3) | The tenant currency at creation |
+| `active` | boolean | Inactive products stay in history and stock views |
+
+### `retail_price_history` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id`, `tenant_id`, `created_at` | standard | |
+| `product_id` | uuid | Composite FK |
+| `source` | text | `initial`, `manual`, `purchase`, `import` |
+| `source_id` | uuid | The purchase or import batch; null for `initial` and `manual` |
+| `old_cost_minor`, `old_sell_minor` | bigint | Null only for `initial` (CHECK) |
+| `new_cost_minor`, `new_sell_minor` | bigint | |
+| `currency`, `reason`, `changed_by` | | `reason` is required for a manual edit |
+
+UPDATE and DELETE are not granted to `bms_app` and the `reject_mutation` trigger refuses them for
+every role (section 6.2.4).
