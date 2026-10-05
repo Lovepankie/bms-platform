@@ -4079,9 +4079,6 @@
           "require_mfa_all_staff" : {
             "type" : "boolean"
           },
-          "retail_allow_negative_stock" : {
-            "type" : "boolean"
-          },
           "sms_sender_name" : {
             "type" : "string"
           },
@@ -4380,10 +4377,6 @@
             "type" : "string"
           },
           "require_mfa_all_staff" : {
-            "type" : "boolean"
-          },
-          "retail_allow_negative_stock" : {
-            "description" : "FR-RET-03: whether a retail sale may take stock below zero (default true)",
             "type" : "boolean"
           },
           "sms_sender_name" : {

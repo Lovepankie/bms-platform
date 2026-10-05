@@ -3381,7 +3381,6 @@ export interface components {
             max_active_loans_per_member?: number;
             receipt_footer?: string;
             require_mfa_all_staff?: boolean;
-            retail_allow_negative_stock?: boolean;
             sms_sender_name?: string;
             sms_window_end?: string;
             sms_window_start?: string;
@@ -3480,8 +3479,6 @@ export interface components {
             max_active_loans_per_member?: number;
             receipt_footer?: string;
             require_mfa_all_staff?: boolean;
-            /** @description FR-RET-03: whether a retail sale may take stock below zero (default true) */
-            retail_allow_negative_stock?: boolean;
             /** @description Subject to aggregator approval */
             sms_sender_name?: string;
             sms_window_end?: string;
