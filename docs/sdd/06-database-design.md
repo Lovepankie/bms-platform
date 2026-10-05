@@ -1187,7 +1187,10 @@ functions now call when the module is switched on. `V11__retail_stock_sales.sql`
 `retail_stocktake_lines`, `retail_customers`, `retail_sales` and `retail_sale_lines` (append-only).
 `V12__retail_purchasing_usage.sql` (#53) creates `retail_suppliers`, `retail_purchases` and
 `retail_purchase_lines`, `retail_usage_reports` and `retail_usage_lines`, and
-`retail_sale_payments`, all but suppliers append-only.
+`retail_sale_payments`, all but suppliers append-only. `V20__retail_import_refs.sql` (#55) creates
+`retail_import_refs` (append-only) for the `import-retail` command (section 6.11.4). It takes V20,
+deliberately clear of the numbers the open lending and retail pull requests take; Flyway accepts
+the gap.
 
 ## 6.10 Open items
 
@@ -1281,6 +1284,10 @@ are all zero is not posted.
 | Usage or damage | `stock_shrinkage`, lines at the cost snapshot | `inventory` | `retail.usage:<id>` |
 | Stock-take loss | `stock_shrinkage`, value of the shortfall at cost | `inventory` | `retail.stocktake:<id>` |
 | Stock-take gain | `inventory`, value of the surplus at cost | `stock_shrinkage` | (same entry as the loss) |
+| Opening stock from the import, per branch | `inventory`, the branch's positive source balances at the product's current cost | `opening_balance_equity` | `retail.import_opening:<branch>` |
+
+Imported history (sales, purchases, adjustments, returns, usage, legacy balances) posts nothing
+(ADR-020 decision 9); see section 6.11.4.
 
 ### `retail_stock_movements` (RLS; append-only, `bms_app` SELECT, INSERT)
 
@@ -1378,3 +1385,38 @@ relieving inventory at current cost (ADR-020 decision 8) and is reported, never 
 error. Daily profit per branch and day is `retail_sales.total_minor` less `cost_total_minor` over
 completed (not voided) sales by `sale_date`, less `retail_usage_reports.cost_total_minor` by
 `occurred_on`; snapshots only, never current prices.
+
+### 6.11.4 The pilot import (FR-RET-12; ADR-020 decision 9; #55)
+
+The `import-retail` command (chapter 13 section 13.13) writes through the modules' history ports,
+as `bms_app` under the tenant's row-level security:
+
+- **History documents** are rows of the tables above with `historical = true`, `created_by` the
+  import actor (`00000000-0000-0000-0000-000000000000`, not a staff account) and `created_at` the
+  source's time: one `retail_sales` row and line per sale (snapshots from the export, credit sales
+  unpaid, no `sale_entry_id` or `cost_entry_id`), one `retail_purchases` row and line per restock
+  (`payment_method` `cash`, no journal, so no supplier payable), one `retail_usage_reports` row and
+  line per usage or damage report (no `journal_entry_id`).
+- **Movements** are written by `StockLedger.recordHistorical`: `historical = true`, `occurred_at`
+  the source's time, no oversell guard. Restocks the source recorded for a stock-take or a customer
+  return become `adjustment` (either sign) or `return` movements with `source_type`
+  `retail.import`, not purchases. One `legacy_balance` movement per branch and product, dated one
+  second before the earliest imported history, makes the balance equal the source's current
+  quantity; a negative source quantity is kept and reported.
+- **Prices**: each product takes its cost and sell price from the product master, with an
+  `initial` history row. An `import` history row, dated at the restock, is written only where two
+  consecutive restocks of a product carried different prices.
+- **The opening journal**: one per branch (section 6.11.2), for the positive balances only.
+
+### `retail_import_refs` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+| Column | Type | Notes |
+|---|---|---|
+| `tenant_id`, `created_at` | standard | |
+| `source_file` | varchar(30) | `sales`, `purchases`, `usage`, or `opening` |
+| `source_ref` | varchar(100) | The export's own reference; for `opening`, the branch code |
+| `target_type`, `target_id` | | What the row became: `retail.sale`, `retail.purchase`, `retail.usage`, `retail.stock_movement` (the first movement of an adjustment or return), `core.journal_entry` |
+| `source_user` | varchar(200) | The source system's user, kept as entered; not a staff account |
+
+Primary key `(tenant_id, source_file, source_ref)`: a row already present is skipped, so a re-run
+of the same export adds nothing.

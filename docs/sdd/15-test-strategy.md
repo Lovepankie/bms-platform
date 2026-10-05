@@ -163,6 +163,11 @@ Coverage gate for the lending calculation code: 95 percent lines (NFR-MNT-02).
   normalised values in chapter 13 section 13.12. Then applies the standard resolutions,
   commits, and asserts the created records, the opening journal and the DPD values listed
   there.
+- **Retail import golden test** (`RetailImportIT`, FR-RET-12). Runs the `import-retail` command's
+  importer as `bms_app` over `fixtures/retail/import-sample/` and asserts the balances, the
+  valuation and one day's profit, the three opening journals, the absence of any other journal, a
+  re-run that adds no row, a dry run that writes nothing, and another tenant left untouched
+  (chapter 13 section 13.13).
 - **Normalisation tables.** Every table of examples in chapter 13 section 13.6 is a
   parametrised unit test.
 - **Report golden tests.** Each report in chapter 14 runs over its fabricated dataset and
