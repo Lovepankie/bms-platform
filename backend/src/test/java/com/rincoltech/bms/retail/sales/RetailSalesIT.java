@@ -49,6 +49,7 @@ class RetailSalesIT extends IntegrationTest {
      */
     @Test
     void aCashSaleMovesOnlyItsBranchAndPostsTwoBalancedEntries() {
+        api.stockUp(t.headOffice(), product, "10");
         ResponseEntity<JsonNode> created = api.sell(t.headOffice(), "cash", product, "2.5");
         assertThat(created.getStatusCode()).as("%s", created.getBody()).isEqualTo(HttpStatus.CREATED);
         JsonNode sale = created.getBody();
@@ -64,18 +65,28 @@ class RetailSalesIT extends IntegrationTest {
         assertThat(line.get("unit_cost_minor").asLong()).isEqualTo(1_500);
 
         JsonNode hq = api.get("/stock?branch_id=" + t.headOffice(), ADMIN).getBody();
-        assertThat(hq.get("items").get(0).get("qty").asString()).isEqualTo("-2.500");
-        assertThat(hq.get("items").get(0).get("negative").asBoolean()).isTrue();
+        assertThat(hq.get("items").get(0).get("qty").asString()).isEqualTo("7.500");
+        assertThat(hq.get("items").get(0).get("negative").asBoolean()).isFalse();
         JsonNode br2 = api.get("/stock?branch_id=" + t.secondBranch(), ADMIN).getBody();
         assertThat(br2.get("items").get(0).get("qty").asString()).isEqualTo("0.000");
         assertThat(api.get("/stock?branch_id=" + t.headOffice() + "&negative_only=true", ADMIN)
                         .getBody()
                         .get("items"))
-                .hasSize(1);
+                .isEmpty();
         JsonNode searched = api.get("/products?branch_id=" + t.headOffice(), ADMIN)
                 .getBody()
                 .get("items");
-        assertThat(searched.get(0).get("qty").asString()).isEqualTo("-2.500");
+        assertThat(searched.get(0).get("qty").asString()).isEqualTo("7.500");
+
+        // ADR-020 decision 4: only imported history can leave a balance below zero; it is flagged.
+        api.importedBalance(t.secondBranch(), product, "-2.5");
+        assertThat(api.get("/stock?branch_id=" + t.secondBranch() + "&negative_only=true", ADMIN)
+                        .getBody()
+                        .get("items")
+                        .get(0)
+                        .get("negative")
+                        .asBoolean())
+                .isTrue();
 
         UUID id = RetailTestSupport.id(created);
         List<Map<String, Object>> lines = journalLines(id);
@@ -92,6 +103,7 @@ class RetailSalesIT extends IntegrationTest {
     /** ADR-020 decision 5: profit comes from the snapshot, never from today's price. */
     @Test
     void aLaterPriceChangeLeavesTheSaleAlone() {
+        api.stockUp(t.headOffice(), product, "2");
         UUID id = RetailTestSupport.id(api.sell(t.headOffice(), "cash", product, "1"));
         api.post(
                 "/products/" + product + "/prices",
@@ -112,6 +124,7 @@ class RetailSalesIT extends IntegrationTest {
         body.put("branch_id", t.headOffice());
         body.put("payment_method", "mobile_money");
         body.put("lines", List.of(Map.of("product_id", product, "qty", "1")));
+        api.stockUp(t.headOffice(), product, "5");
         ResponseEntity<JsonNode> missing = api.post("/sales", body, ADMIN);
         assertThat(missing.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(missing.getBody().get("code").asString()).isEqualTo("idempotency_key_missing");
@@ -125,7 +138,7 @@ class RetailSalesIT extends IntegrationTest {
         assertThat(again.getBody().get("id")).isEqualTo(first.getBody().get("id"));
         assertThat(count("SELECT count(*) FROM retail_sales WHERE tenant_id = ?"))
                 .isEqualTo(1);
-        assertThat(count("SELECT count(*) FROM retail_stock_movements WHERE tenant_id = ?"))
+        assertThat(count("SELECT count(*) FROM retail_stock_movements WHERE tenant_id = ? AND kind = 'sale'"))
                 .isEqualTo(1);
 
         body.put("payment_method", "cash");
@@ -139,6 +152,7 @@ class RetailSalesIT extends IntegrationTest {
      */
     @Test
     void aVoidReversesTheMovementsAndTheJournals() {
+        api.stockUp(t.headOffice(), product, "3");
         UUID id = RetailTestSupport.id(api.sell(t.headOffice(), "bank", product, "3"));
         ResponseEntity<JsonNode> denied = api.post("/sales/" + id + "/void", Map.of("reason", "Test"), SALES);
         assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -153,14 +167,15 @@ class RetailSalesIT extends IntegrationTest {
                         .get(0)
                         .get("qty")
                         .asString())
-                .isEqualTo("0.000");
+                .isEqualTo("3.000");
         JsonNode movements = api.get("/stock/movements?product_id=" + product, ADMIN)
                 .getBody()
                 .get("items");
-        assertThat(movements).hasSize(2);
-        assertThat(movements.get(1).get("kind").asString()).isEqualTo("return");
-        assertThat(movements.get(1).get("reverses_movement_id").asString())
-                .isEqualTo(movements.get(0).get("id").asString());
+        assertThat(movements).hasSize(3);
+        assertThat(movements.get(0).get("kind").asString()).isEqualTo("adjustment");
+        assertThat(movements.get(2).get("kind").asString()).isEqualTo("return");
+        assertThat(movements.get(2).get("reverses_movement_id").asString())
+                .isEqualTo(movements.get(1).get("id").asString());
 
         long reversals = TestDatabase.owner()
                 .sql(
@@ -184,6 +199,7 @@ class RetailSalesIT extends IntegrationTest {
     void aCreditSaleIsOwedByItsBuyer() {
         UUID buyer = RetailTestSupport.id(
                 api.post("/customers", Map.of("name", "Test Buyer 02", "contact", "+256700000002"), SALES));
+        api.stockUp(t.headOffice(), product, "4");
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("branch_id", t.headOffice());
         body.put("payment_method", "credit");
@@ -214,12 +230,16 @@ class RetailSalesIT extends IntegrationTest {
     }
 
     /**
-     * FR-RET-03, ADR-020 decision 4: with negative stock switched off a sale past zero is refused
-     * and leaves nothing behind.
+     * FR-RET-03, ADR-020 decision 4: a sale past the branch's stock is always refused and leaves
+     * nothing behind; there is no setting to allow it.
      */
     @Test
-    void negativeStockIsRefusedWhenTheTenantSaysSo() {
-        api.allowNegativeStock(false);
+    void overSellingIsAlwaysRefused() {
+        assertThat(api.sell(t.headOffice(), "cash", product, "1")
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("insufficient_stock");
         api.stockUp(t.headOffice(), product, "1");
         ResponseEntity<JsonNode> refused = api.sell(t.headOffice(), "cash", product, "1.5");
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
@@ -232,34 +252,76 @@ class RetailSalesIT extends IntegrationTest {
                 .isZero();
         assertThat(api.sell(t.headOffice(), "cash", product, "1").getStatusCode())
                 .isEqualTo(HttpStatus.CREATED);
+        assertThat(balance()).isEqualByComparingTo("0");
     }
 
     /**
-     * FR-RET-03: two sales of the last unit race; the balance row lock serialises them. With negative
-     * stock off exactly one succeeds; with it on both do; either way the balance equals the sum of
-     * the movements.
+     * FR-RET-03: two sales of the last unit race; the balance row lock serialises them, so exactly
+     * one succeeds, the other is refused, and the balance equals the sum of the movements.
      */
     @Test
     void twoSalesOfTheLastUnitAreSerialised() throws Exception {
-        api.allowNegativeStock(false);
-        api.stockUp(t.headOffice(), product, "1");
-        List<HttpStatusCode> statuses = Api.race(2, () -> api.sell(t.headOffice(), "cash", product, "1"));
-        assertThat(Api.count(statuses, HttpStatus.CREATED)).isEqualTo(1);
-        assertThat(Api.count(statuses, HttpStatus.UNPROCESSABLE_CONTENT)).isEqualTo(1);
-        assertThat(balance()).isEqualByComparingTo("0");
-        assertThat(movementSum()).isEqualByComparingTo(balance());
+        for (int round = 0; round < 3; round++) {
+            api.stockUp(t.headOffice(), product, "1");
+            List<HttpStatusCode> statuses = Api.race(2, () -> api.sell(t.headOffice(), "cash", product, "1"));
+            assertThat(Api.count(statuses, HttpStatus.CREATED)).isEqualTo(1);
+            assertThat(Api.count(statuses, HttpStatus.UNPROCESSABLE_CONTENT)).isEqualTo(1);
+            assertThat(balance()).isEqualByComparingTo("0");
+            assertThat(movementSum()).isEqualByComparingTo(balance());
+        }
+    }
 
-        api.allowNegativeStock(true);
-        api.stockUp(t.headOffice(), product, "1");
-        statuses = Api.race(2, () -> api.sell(t.headOffice(), "cash", product, "1"));
-        assertThat(Api.count(statuses, HttpStatus.CREATED)).isEqualTo(2);
-        assertThat(balance()).isEqualByComparingTo("-1");
-        assertThat(movementSum()).isEqualByComparingTo(balance());
+    /** A sale line at a price; as an admin unless other permissions are given. */
+    ResponseEntity<JsonNode> sellAt(long unitPriceMinor, String permissions) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("branch_id", t.headOffice());
+        body.put("payment_method", "cash");
+        body.put("lines", List.of(Map.of("product_id", product, "qty", "1", "unit_price_minor", unitPriceMinor)));
+        return api.postKeyed("/sales", body, permissions, "*", UUID.randomUUID().toString());
+    }
+
+    /**
+     * Issue #64, ADR-020 decision 5: a unit price at or below the product's cost (1 500) is refused
+     * with price_below_cost, even for the admin, and the refusal never carries the cost.
+     */
+    @Test
+    void aPriceNotAboveCostIsRefusedWithoutRevealingTheCost() {
+        api.stockUp(t.headOffice(), product, "10");
+        for (long price : new long[] {1_499, 1_500}) {
+            for (String permissions : List.of(ADMIN, SALES)) {
+                ResponseEntity<JsonNode> refused = sellAt(price, permissions);
+                assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+                assertThat(refused.getBody().get("code").asString()).isEqualTo("price_below_cost");
+                assertThat(refused.getBody().toString()).doesNotContainPattern("\\b1[ ,.]?500\\b");
+            }
+        }
+        assertThat(count("SELECT count(*) FROM retail_sales WHERE tenant_id = ?"))
+                .isZero();
+        assertThat(balance()).isEqualByComparingTo("10");
+
+        ResponseEntity<JsonNode> above = sellAt(1_501, SALES);
+        assertThat(above.getStatusCode()).as("%s", above.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(above.getBody().get("lines").get(0).get("unit_price_minor").asLong())
+                .isEqualTo(1_501);
+    }
+
+    /** Issue #64: a custom role holding retail.price.below_cost may sell at or below cost. */
+    @Test
+    void theBelowCostPermissionAllowsALowPrice() {
+        api.stockUp(t.headOffice(), product, "2");
+        String custom = SALES + ",retail.price.below_cost";
+        ResponseEntity<JsonNode> below = sellAt(1_000, custom);
+        assertThat(below.getStatusCode()).as("%s", below.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(below.getBody().get("total_minor").asLong()).isEqualTo(1_000);
+        assertThat(sellAt(1_500, custom).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(balance()).isEqualByComparingTo("0");
     }
 
     /** ADR-017: a sale happens in the caller's branch; another branch's sale is invisible. */
     @Test
     void salesFollowTheBranchScope() {
+        api.stockUp(t.headOffice(), product, "1");
+        api.stockUp(t.secondBranch(), product, "1");
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("payment_method", "cash");
         body.put("lines", List.of(Map.of("product_id", product, "qty", "1")));
@@ -314,6 +376,7 @@ class RetailSalesIT extends IntegrationTest {
     /** ADR-020 decision 10: the sales role receives no cost snapshot or profit field. */
     @Test
     void theSalesRoleReceivesNoCostFields() {
+        api.stockUp(t.headOffice(), product, "1");
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("branch_id", t.headOffice());
         body.put("payment_method", "cash");

@@ -97,6 +97,13 @@ class PermissionMatrixIT extends IntegrationTest {
                 .query((rs, n) -> seeded.get(rs.getString("role_key")).add(rs.getString("permission_key")))
                 .list();
         assertThat(seeded).isEqualTo(expected);
+        // Issue #64: catalogued, yet in no column of the matrix and granted to no default role.
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM permissions WHERE key = 'retail.price.below_cost'")
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+        assertThat(seeded.values()).noneMatch(held -> held.contains("retail.price.below_cost"));
     }
 
     /** Each staff role, signed in for real, holds exactly its matrix column. */

@@ -38,8 +38,8 @@ class RetailReportsIT extends IntegrationTest {
 
     /**
      * Product A costs 1,000 and sells at 1,500; B costs 200 and sells at 300. A restock puts 10 A at
-     * head office and 5 at branch two. Head office sells 2 A and 3 B (B goes to -3), uses 1 A, and
-     * sells and voids 1 A.
+     * head office and 5 at branch two, and 3 B at head office. Head office sells 2 A and 3 B (B goes
+     * to 0), uses 1 A, and sells and voids 1 A.
      */
     @BeforeEach
     void setUp() {
@@ -56,10 +56,17 @@ class RetailReportsIT extends IntegrationTest {
                 List.of(
                         Map.of("branch_id", t.headOffice(), "qty", "10"),
                         Map.of("branch_id", t.secondBranch(), "qty", "5")));
+        Map<String, Object> lineB = Map.of(
+                "product_id",
+                b,
+                "cost_minor",
+                200,
+                "qty_by_branch",
+                List.of(Map.of("branch_id", t.headOffice(), "qty", "3")));
         String today = LocalDate.now(ZoneId.of("Africa/Kampala")).toString();
         assertThat(api.postKeyed(
                                 "/purchases",
-                                Map.of("purchased_on", today, "payment_method", "cash", "lines", List.of(line)),
+                                Map.of("purchased_on", today, "payment_method", "cash", "lines", List.of(line, lineB)),
                                 ADMIN,
                                 "*",
                                 UUID.randomUUID().toString())
@@ -86,10 +93,10 @@ class RetailReportsIT extends IntegrationTest {
     }
 
     /**
-     * FR-RET-09: head office A 7 (value 7,000, expected 10,500), B -3 (-600, -900, flagged);
-     * branch two A 5 (5,000, 7,500); totals 11,400 at cost and 17,100 expected. The inventory
-     * account equals the valuation until a price changes; then the difference is reported (ADR-020
-     * decision 8).
+     * FR-RET-09: head office A 7 (value 7,000, expected 10,500), B 0 (no row); branch two A 5 (5,000,
+     * 7,500); totals 12,000 at cost and 18,000 expected. The inventory account equals the valuation
+     * until a price changes; then the difference is reported (ADR-020 decision 8). A negative
+     * balance, which only imported history can leave (ADR-020 decision 4), is flagged.
      */
     @Test
     void valuationAtCostAndAtPriceWithTotals() {
@@ -102,15 +109,13 @@ class RetailReportsIT extends IntegrationTest {
         assertThat(hqA.get("qty").asString()).isEqualTo("7.000");
         assertThat(hqA.get("value_at_cost_minor").asLong()).isEqualTo(7_000);
         assertThat(hqA.get("expected_sales_minor").asLong()).isEqualTo(10_500);
-        JsonNode hqB = rows.get(t.headOffice() + "/RPT-B");
-        assertThat(hqB.get("negative").asBoolean()).isTrue();
-        assertThat(hqB.get("value_at_cost_minor").asLong()).isEqualTo(-600);
+        assertThat(rows).as("a zero balance has no row").doesNotContainKey(t.headOffice() + "/RPT-B");
         assertThat(rows.get(t.secondBranch() + "/RPT-A")
                         .get("value_at_cost_minor")
                         .asLong())
                 .isEqualTo(5_000);
-        assertThat(v.get("value_at_cost_minor").asLong()).isEqualTo(11_400);
-        assertThat(v.get("expected_sales_minor").asLong()).isEqualTo(17_100);
+        assertThat(v.get("value_at_cost_minor").asLong()).isEqualTo(12_000);
+        assertThat(v.get("expected_sales_minor").asLong()).isEqualTo(18_000);
         for (JsonNode branch : v.get("branches")) {
             assertThat(branch.get("revaluation_difference_minor").asLong()).isZero();
         }
@@ -132,6 +137,17 @@ class RetailReportsIT extends IntegrationTest {
                         .getBody()
                         .get("rows"))
                 .isEmpty();
+
+        api.importedBalance(t.headOffice(), b, "-3");
+        JsonNode imported = null;
+        for (JsonNode r : api.get("/reports/valuation", ADMIN).getBody().get("rows")) {
+            if (r.get("branch_id").asString().equals(t.headOffice().toString())
+                    && r.get("code").asString().equals("RPT-B")) {
+                imported = r;
+            }
+        }
+        assertThat(imported.get("negative").asBoolean()).isTrue();
+        assertThat(imported.get("value_at_cost_minor").asLong()).isEqualTo(-600);
     }
 
     /**

@@ -11,9 +11,9 @@ import java.util.UUID;
  * the sum of its movements. Balance rows are locked in branch and product order, so concurrent
  * multi-line events cannot deadlock.
  *
- * <p>When the tenant setting {@code retail_allow_negative_stock} is false, a {@code sale},
- * {@code usage} or {@code damage} movement that would take a balance below zero is refused with
- * 422 {@code insufficient_stock} (ADR-020 decision 4).
+ * <p>A {@code sale}, {@code usage} or {@code damage} movement that would take a balance below zero
+ * is always refused with 422 {@code insufficient_stock}; there is no setting to allow it (ADR-020
+ * decision 4). Imports ({@code legacy_balance}) and stock-take adjustments are not guarded.
  */
 public interface StockLedger {
 

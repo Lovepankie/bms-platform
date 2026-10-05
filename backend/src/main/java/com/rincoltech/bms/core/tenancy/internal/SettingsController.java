@@ -47,7 +47,6 @@ class SettingsController {
             Map<String, Integer> appraisalWeights,
             List<String> disabledCollateralTypes,
             boolean requireMfaAllStaff,
-            boolean retailAllowNegativeStock,
             int version) {}
 
     /** Omitted (or null) fields are unchanged (chapter 7 section 7.5). */
@@ -76,10 +75,7 @@ class SettingsController {
             Map<String, Integer> appraisalWeights,
 
             List<@Pattern(regexp = "^[a-z_]{2,40}$") String> disabledCollateralTypes,
-            Boolean requireMfaAllStaff,
-
-            @Schema(description = "FR-RET-03: whether a retail sale may take stock below zero (default true)")
-            Boolean retailAllowNegativeStock) {}
+            Boolean requireMfaAllStaff) {}
 
     @GetMapping
     @RequiresPermission("core.settings.read")

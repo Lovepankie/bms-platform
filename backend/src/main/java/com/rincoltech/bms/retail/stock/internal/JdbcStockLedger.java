@@ -1,6 +1,5 @@
 package com.rincoltech.bms.retail.stock.internal;
 
-import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
@@ -22,16 +21,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class JdbcStockLedger implements StockLedger {
 
-    /** Kinds the tenant setting may refuse when they take a balance below zero (ADR-020 decision 4). */
+    /** Kinds refused when they would take a balance below zero; there is no setting (ADR-020 decision 4). */
     static final Set<String> GUARDED = Set.of("sale", "usage", "damage");
 
     private final JdbcClient jdbc;
-    private final TenantSettings settings;
     private final BusinessClock clock;
 
-    JdbcStockLedger(JdbcClient jdbc, TenantSettings settings, BusinessClock clock) {
+    JdbcStockLedger(JdbcClient jdbc, BusinessClock clock) {
         this.jdbc = jdbc;
-        this.settings = settings;
         this.clock = clock;
     }
 
@@ -48,19 +45,18 @@ class JdbcStockLedger implements StockLedger {
                 Comparator.comparing((Integer i) -> movements.get(i).branchId())
                         .thenComparing(i -> movements.get(i).productId())
                         .thenComparing(i -> i));
-        boolean allowNegative = settings.retailAllowNegativeStock();
         UUID by = CurrentPrincipal.get().map(Principal::userId).orElse(null);
         Timestamp now = Timestamp.from(clock.now());
         for (int i : order) {
             Movement m = movements.get(i);
             BigDecimal current = lockBalance(m.branchId(), m.productId());
             BigDecimal next = current.add(m.qty());
-            if (!allowNegative && GUARDED.contains(m.kind()) && next.signum() < 0) {
+            if (GUARDED.contains(m.kind()) && m.qty().signum() < 0 && next.signum() < 0) {
                 throw ApiException.rule(
                         "insufficient_stock",
                         "Product " + m.productId() + " has "
                                 + current.stripTrailingZeros().toPlainString()
-                                + " in stock at this branch, and the tenant does not allow negative stock.");
+                                + " in stock at this branch, so this quantity cannot be taken.");
             }
             UUID id = UUID.randomUUID();
             jdbc.sql("""

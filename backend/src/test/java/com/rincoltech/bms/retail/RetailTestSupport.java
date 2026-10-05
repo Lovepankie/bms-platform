@@ -99,20 +99,30 @@ public final class RetailTestSupport {
         }
     }
 
-    /** Sets {@code retail_allow_negative_stock} through the settings API (FR-RET-03). */
-    public void allowNegativeStock(boolean allow) {
-        HttpHeaders h = headers("core.settings.read,core.settings.manage", "*", Map.of());
-        ResponseEntity<JsonNode> current =
-                http.exchange("/api/v1/settings", HttpMethod.GET, new HttpEntity<>(null, h), JsonNode.class);
-        h.add(HttpHeaders.IF_MATCH, current.getHeaders().getETag());
-        ResponseEntity<JsonNode> patched = http.exchange(
-                "/api/v1/settings",
-                HttpMethod.PATCH,
-                new HttpEntity<>(Map.of("retail_allow_negative_stock", allow), h),
-                JsonNode.class);
-        if (!patched.getStatusCode().is2xxSuccessful()) {
-            throw new AssertionError("settings: " + patched.getBody());
-        }
+    /**
+     * Stands in for the R5 importer (ADR-020 decision 9): a {@code legacy_balance} movement of
+     * {@code qty}, which may be negative, and its balance, written as the owner. The only way a
+     * balance goes below zero now that overselling is refused.
+     */
+    public void importedBalance(UUID branchId, UUID productId, String qty) {
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, branch_id, product_id, kind, qty,
+                            unit_cost_minor, source_type, historical)
+                        VALUES (gen_random_uuid(), ?, now(), ?, ?, 'legacy_balance', CAST(? AS numeric), 0, 'retail.import',
+                            true)
+                        """)
+                .params(tenant.tenantId(), branchId, productId, qty)
+                .update();
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, qty)
+                        VALUES (?, ?, ?, CAST(? AS numeric))
+                        ON CONFLICT (tenant_id, branch_id, product_id)
+                        DO UPDATE SET qty = retail_stock_balances.qty + EXCLUDED.qty
+                        """)
+                .params(tenant.tenantId(), branchId, productId, qty)
+                .update();
     }
 
     public UUID category(String name) {

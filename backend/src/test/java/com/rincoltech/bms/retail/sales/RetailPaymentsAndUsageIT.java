@@ -50,6 +50,7 @@ class RetailPaymentsAndUsageIT extends IntegrationTest {
     /** FR-RET-05: partial payments reduce the balance and trade debtors; never past the total. */
     @Test
     void partialPaymentsSettleACreditSale() {
+        api.stockUp(t.headOffice(), product, "11");
         UUID sale = RetailTestSupport.id(api.sell(t.headOffice(), "credit", product, "10"));
         ResponseEntity<JsonNode> first = pay(sale, 2_000, SALES);
         assertThat(first.getStatusCode()).as("%s", first.getBody()).isEqualTo(HttpStatus.CREATED);
@@ -155,6 +156,24 @@ class RetailPaymentsAndUsageIT extends IntegrationTest {
                 .query(Long.class)
                 .single();
         assertThat(shrinkage).isEqualTo(1_050);
+
+        // ADR-020 decision 4: damage past the branch's stock is refused like a sale.
+        ResponseEntity<JsonNode> tooMuch = api.postKeyed(
+                "/usage",
+                Map.of(
+                        "branch_id",
+                        t.headOffice(),
+                        "kind",
+                        "damaged",
+                        "reason",
+                        "Test flood",
+                        "lines",
+                        List.of(Map.of("product_id", product, "qty", "16.501"))),
+                ADMIN,
+                "*",
+                UUID.randomUUID().toString());
+        assertThat(tooMuch.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(tooMuch.getBody().get("code").asString()).isEqualTo("insufficient_stock");
         assertThat(api.post("/usage", Map.of(), ADMIN).getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
 }

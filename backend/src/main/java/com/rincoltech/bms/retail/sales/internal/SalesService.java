@@ -174,6 +174,16 @@ class SalesService {
         if (!problems.isEmpty()) {
             throw ApiException.validation(problems);
         }
+        // ADR-020 decision 5: the message never carries the cost, which a sales caller cannot read.
+        if (!CurrentPrincipal.require().may("retail.price.below_cost", branch)) {
+            for (NewLine l : lines) {
+                if (l.unitPriceMinor() <= l.unitCostMinor()) {
+                    throw ApiException.rule(
+                            "price_below_cost",
+                            "The price on line " + l.lineNo() + " is too low: it must be above the product's cost.");
+                }
+            }
+        }
         long total = lines.stream().mapToLong(NewLine::lineTotalMinor).reduce(0, Math::addExact);
         long cost = lines.stream().mapToLong(NewLine::lineCostMinor).reduce(0, Math::addExact);
         UUID id = UUID.randomUUID();

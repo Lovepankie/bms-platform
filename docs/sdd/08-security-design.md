@@ -183,6 +183,7 @@ platform API and holds no tenant permissions.
 | `member.self.pay` | | | | | | | Y | |
 | `retail.catalogue.manage` | Y | | | | | | | |
 | `retail.price.edit` | Y | | | | | | | |
+| `retail.price.below_cost` | | | | | | | | |
 | `retail.customer.manage` | Y | | | | | | | Y |
 | `retail.sale.create` | Y | | | | | | | Y |
 | `retail.sale.read` | Y | | | | | | | Y |
@@ -206,12 +207,17 @@ Notes:
   document list shows ID images only to those who may open them, and a document with no known
   kind is denied (fail closed). If auditors need the
   images later, a read-only audit permission is added then (#29, decided by the dev lead).
-- Retail (ADR-020): the admin role is the tenant admin, who holds every `retail.*` permission; the
-  sales role (`retail_sales`) holds sale create and read, stock read, usage report and customer
-  manage, scoped to its assigned branches. Lending roles hold no retail permission. Cost, cost
+- Retail (ADR-020): the admin role is the tenant admin, who holds every `retail.*` permission
+  except `retail.price.below_cost`; the sales role (`retail_sales`) holds sale create and read,
+  stock read, usage report and customer manage, scoped to its assigned branches. Lending roles hold no retail permission. Cost, cost
   snapshot, valuation at cost and profit fields are omitted from responses (absent, not null)
   unless the caller holds `retail.profit.read`, and the profit routes refuse without it. The sales
   role holds no `core.*` permission; the PWA reads the user's branches from `/me`.
+- `retail.price.below_cost` (issue #64, ADR-020 decision 5) lets a sale line be priced at or below
+  the product's cost. It is in the catalogue (migration V13) but no default role holds it, not even
+  the tenant admin: it is meant for a custom role, and roles are not yet tenant-editable, so today
+  no user holds it. Without it such a sale is refused with 422 `price_below_cost`, and the message
+  never carries the cost.
 - Write-off approval is deliberately restricted to the tenant admin, the most senior
   role, because write-off removes an asset from the books.
 - The matrix is seeded by migration V2 and `PermissionMatrixIT` asserts the seeded
