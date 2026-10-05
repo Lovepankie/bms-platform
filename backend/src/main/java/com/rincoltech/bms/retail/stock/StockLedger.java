@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.stock;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -59,4 +60,35 @@ public interface StockLedger {
             BigDecimal qty,
             long unitCostMinor,
             UUID sourceLineId) {}
+
+    /**
+     * Imported history (ADR-020 decision 9, FR-RET-12): writes each movement flagged
+     * {@code historical}, dated when it happened in the source, and moves its balance under the
+     * balance row's lock, like {@link #record}. No stock guard applies: history already happened,
+     * and a negative running balance is what the source recorded. Posts nothing to the ledger.
+     *
+     * @return the new movement ids, in the order given
+     */
+    List<UUID> recordHistorical(List<HistoricalMovement> movements);
+
+    /**
+     * Every branch and product that has moved: its balance, the sum of its historical movements
+     * other than {@code legacy_balance}, and whether a {@code legacy_balance} movement exists.
+     */
+    List<Position> positions();
+
+    /** As {@link Movement}, with the source's time; the kind's sign rules are the table's. */
+    record HistoricalMovement(
+            UUID branchId,
+            UUID productId,
+            String kind,
+            BigDecimal qty,
+            long unitCostMinor,
+            Instant occurredAt,
+            String sourceType,
+            UUID sourceId,
+            UUID sourceLineId,
+            String note) {}
+
+    record Position(UUID branchId, UUID productId, BigDecimal balance, BigDecimal historicalQty, boolean legacy) {}
 }

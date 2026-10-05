@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.tenancy.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.tenancy.BranchDeactivationGuard;
+import com.rincoltech.bms.core.tenancy.BranchProvisioning;
 import com.rincoltech.bms.core.tenancy.PlanLimits;
 import com.rincoltech.bms.core.tenancy.internal.BranchController.BranchResponse;
 import com.rincoltech.bms.core.tenancy.internal.BranchController.CreateBranchRequest;
@@ -30,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  * (NFR-ISO-04).
  */
 @Service
-class BranchService {
+class BranchService implements BranchProvisioning {
 
     private static final String COLUMNS =
             "id, code, name, location, is_head_office, status, created_at, updated_at, version";
@@ -94,6 +95,16 @@ class BranchService {
         after.put("location", request.location());
         audit.record(AuditLog.Entry.created("core.branch.created", "core.branch", id, id, after));
         return find(id).orElseThrow();
+    }
+
+    @Override
+    @Transactional
+    public UUID create(String code, String name) {
+        if (code == null || !code.matches("^[A-Z0-9]{2,10}$") || name == null || name.isBlank()) {
+            throw ApiException.rule(
+                    "invalid_branch", "A branch needs a code of 2 to 10 capital letters or digits and a name.");
+        }
+        return create(new CreateBranchRequest(code, name, null)).id();
     }
 
     @Transactional

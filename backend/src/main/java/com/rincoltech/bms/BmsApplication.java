@@ -1,6 +1,7 @@
 package com.rincoltech.bms;
 
 import com.rincoltech.bms.core.identity.ProvisioningKeys;
+import com.rincoltech.bms.retail.imports.RetailImportCommand;
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.info.Info;
 import io.swagger.v3.oas.annotations.servers.Server;
@@ -14,7 +15,9 @@ import org.springframework.modulith.Modulithic;
  * <p>{@code java -jar bms-api.jar migrate} runs the database migrations as the owner role and
  * exits, without starting the web application. The deploy script runs it as a one-shot container
  * before the application containers switch (ADR-006). {@code java -jar bms-api.jar keys} prints new
- * sign-in key material for a host env file and exits (chapter 8 section 8.7).
+ * sign-in key material for a host env file and exits (chapter 8 section 8.7). {@code java -jar
+ * bms-api.jar import-retail --tenant <slug> --dir <path> [--dry-run]} imports a retail export into
+ * one tenant as {@code bms_app}, prints its report and exits ({@code docs/runbooks/import-retail.md}).
  */
 @SpringBootApplication
 @Modulithic(systemName = "BMS Platform")
@@ -28,6 +31,9 @@ public class BmsApplication {
         if (args.length > 0 && args[0].equals("keys")) {
             System.out.print(ProvisioningKeys.envLines());
             return;
+        }
+        if (args.length > 0 && args[0].equals(RetailImportCommand.NAME)) {
+            System.exit(RetailImportCommand.run(BmsApplication.class, args));
         }
         SpringApplication.run(BmsApplication.class, args);
     }
