@@ -4,6 +4,7 @@ import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
+import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.Versions;
@@ -16,6 +17,8 @@ import com.rincoltech.bms.lending.members.MemberLookup.MemberSummary;
 import com.rincoltech.bms.lending.products.ProductCatalog;
 import com.rincoltech.bms.lending.products.ProductCatalog.ProductTerms;
 import com.rincoltech.bms.lending.products.ScheduleCalculator;
+import java.sql.Timestamp;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,6 +26,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -40,6 +44,7 @@ class DecisionService {
     private final ProductCatalog products;
     private final TenantSettings settings;
     private final AuditLog audit;
+    private final BusinessClock clock;
 
     DecisionService(
             LoanRepository repo,
@@ -47,13 +52,15 @@ class DecisionService {
             MemberLookup members,
             ProductCatalog products,
             TenantSettings settings,
-            AuditLog audit) {
+            AuditLog audit,
+            BusinessClock clock) {
         this.repo = repo;
         this.loans = loans;
         this.members = members;
         this.products = products;
         this.settings = settings;
         this.audit = audit;
+        this.clock = clock;
     }
 
     @Transactional
@@ -116,7 +123,7 @@ class DecisionService {
         columns.put("approved_principal_minor", principal);
         columns.put("approved_term_count", term);
         columns.put("approved_by", user);
-        columns.put("approved_at", LoanRepository.NOW);
+        columns.put("approved_at", Timestamp.from(clock.now()));
         repo.move(loan.id(), "appraised", "approved", user, note, columns);
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("status", "approved");
@@ -191,12 +198,15 @@ class DecisionService {
     }
 
     /**
-     * FR-ORG-08: runs inside the nightly task's per-tenant transaction.
+     * FR-ORG-08: runs inside the nightly task's per-tenant transaction. The bound comes from the
+     * business clock, which also stamps {@code approved_at}, so tests can move the date.
      *
      * @return the number of approvals expired
      */
+    @Transactional(propagation = Propagation.MANDATORY)
     int expireOverdue() {
-        List<Loan> overdue = repo.overdueApprovals(settings.approvalValidityDays());
+        List<Loan> overdue = repo.overdueApprovals(
+                Timestamp.from(clock.now().minus(Duration.ofDays(settings.approvalValidityDays()))));
         for (Loan loan : overdue) {
             Map<String, Object> columns = new LinkedHashMap<>();
             columns.put("cancelled_reason", APPROVAL_EXPIRED);

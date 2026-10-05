@@ -4,8 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.kagkarlsson.scheduler.task.helper.RecurringTask;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.jobs.TenantJobs;
+import com.rincoltech.bms.core.tenancy.TenantSettings;
+import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.lending.loans.LoanFixtures;
+import com.rincoltech.bms.lending.members.MemberLookup;
+import com.rincoltech.bms.lending.products.ProductCatalog;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,9 +34,6 @@ class LoanDecisionIT extends LoanFixtures {
 
     @Autowired
     TenantJobs jobs;
-
-    @Autowired
-    DecisionService decisions;
 
     @Autowired
     @Qualifier("loanApprovalExpiry")
@@ -238,36 +242,61 @@ class LoanDecisionIT extends LoanFixtures {
         assertThat(l.get("provisional_schedule")).isEmpty();
     }
 
-    /** FR-ORG-08: an approval older than approval_validity_days (default 14) is cancelled by the nightly task. */
+    @Autowired
+    LoanRepository repo;
+
+    @Autowired
+    LoanService loanService;
+
+    @Autowired
+    MemberLookup memberLookup;
+
+    @Autowired
+    ProductCatalog catalog;
+
+    @Autowired
+    TenantSettings tenantSettings;
+
+    @Autowired
+    AuditLog auditLog;
+
+    /** The nightly expiry as it runs once the business clock has moved {@code days} ahead. */
+    void expireAfter(int days) {
+        DecisionService later = new DecisionService(
+                repo,
+                loanService,
+                memberLookup,
+                catalog,
+                tenantSettings,
+                auditLog,
+                new BusinessClock(Clock.offset(Clock.systemUTC(), Duration.ofDays(days))));
+        jobs.forEachActiveTenantWithModule(LoanJobs.APPROVAL_EXPIRY, "lending", tenantId -> later.expireOverdue());
+    }
+
+    /**
+     * FR-ORG-08: an approval older than approval_validity_days (default 14) is cancelled by the
+     * nightly task. The business clock moves; no row is backdated.
+     */
     @Test
     void anApprovalNobodyDisbursedExpires() {
         String product = product("EXPIRE", false, false);
         String member = member("Test Borrower 35", "0700000035", t.headOffice(), true);
         String stale = appraised(member, product, null);
-        String fresh = appraised(member, product, null);
         decide(stale, manager, "\"3\"", approve(null, null));
-        decide(fresh, manager, "\"3\"", approve(null, null));
-        TestDatabase.owner()
-                .sql("UPDATE lending_loans SET approved_at = now() - interval '15 days' WHERE id = ?::uuid")
-                .param(stale)
-                .update();
-        TestDatabase.owner()
-                .sql("UPDATE lending_loans SET approved_at = now() - interval '13 days' WHERE id = ?::uuid")
-                .param(fresh)
-                .update();
 
-        jobs.forEachActiveTenantWithModule(LoanJobs.APPROVAL_EXPIRY, "lending", tenantId -> decisions.expireOverdue());
+        expireAfter(13);
+        assertThat(asOfficer(HttpMethod.GET, LOANS + "/" + stale, null, null)
+                        .getBody()
+                        .get("status")
+                        .asString())
+                .isEqualTo("approved");
 
+        expireAfter(15);
         assertThat(task.getName()).isEqualTo(LoanJobs.APPROVAL_EXPIRY);
         JsonNode expired =
                 asOfficer(HttpMethod.GET, LOANS + "/" + stale, null, null).getBody();
         assertThat(expired.get("status").asString()).isEqualTo("cancelled");
         assertThat(expired.get("cancelled_reason").asString()).isEqualTo("approval_expired");
-        assertThat(asOfficer(HttpMethod.GET, LOANS + "/" + fresh, null, null)
-                        .getBody()
-                        .get("status")
-                        .asString())
-                .isEqualTo("approved");
         assertThat(TestDatabase.owner()
                         .sql("SELECT actor_kind FROM audit_log WHERE entity_id = ?::uuid"
                                 + " AND action = 'lending.loan.approval_expired'")

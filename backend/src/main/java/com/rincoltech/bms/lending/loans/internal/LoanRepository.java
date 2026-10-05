@@ -381,11 +381,10 @@ class LoanRepository {
                 .single();
     }
 
-    /** FR-ORG-08: approved loans still waiting for disbursement after the validity period, locked. */
-    List<Loan> overdueApprovals(int validityDays) {
-        return jdbc.sql("SELECT * FROM lending_loans WHERE status = 'approved'"
-                        + " AND approved_at < now() - make_interval(days => ?) FOR UPDATE")
-                .param(validityDays)
+    /** FR-ORG-08: approved loans still waiting for disbursement, approved before {@code bound}, locked. */
+    List<Loan> overdueApprovals(Timestamp bound) {
+        return jdbc.sql("SELECT * FROM lending_loans WHERE status = 'approved' AND approved_at < ? FOR UPDATE")
+                .param(bound)
                 .query(LoanRepository::map)
                 .list();
     }
