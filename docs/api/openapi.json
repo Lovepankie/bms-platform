@@ -1326,11 +1326,13 @@
           "declared_monthly_income_minor" : {
             "description" : "Defaults to the member's declared monthly income",
             "format" : "int64",
+            "maximum" : 1000000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
           "monthly_obligations_minor" : {
             "format" : "int64",
+            "maximum" : 1000000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
@@ -1346,6 +1348,7 @@
           "approved_principal_minor" : {
             "description" : "Approve only; defaults to the requested principal, never above it",
             "format" : "int64",
+            "maximum" : 1000000000000000,
             "minimum" : 0,
             "type" : "integer"
           },
