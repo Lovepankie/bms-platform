@@ -3342,7 +3342,7 @@
             "type" : "string"
           },
           "committed_variance_qty" : {
-            "description" : "The variance written at commit, against the balance then; null for a draft",
+            "description" : "The adjustment written at commit: counted less expected, the variance measured when the count was taken; null for a draft",
             "type" : "string"
           },
           "counted_qty" : {

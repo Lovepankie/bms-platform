@@ -3050,7 +3050,7 @@ export interface components {
         };
         RetailStocktakeLine: {
             code?: string;
-            /** @description The variance written at commit, against the balance then; null for a draft */
+            /** @description The adjustment written at commit: counted less expected, the variance measured when the count was taken; null for a draft */
             committed_variance_qty?: string;
             counted_qty?: string;
             description?: string;

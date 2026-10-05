@@ -91,7 +91,9 @@ final class StockApi {
 
             @Schema(description = "counted less expected") String varianceQty,
 
-            @Schema(description = "The variance written at commit, against the balance then; null for a draft")
+            @Schema(
+                    description =
+                            "The adjustment written at commit: counted less expected, the variance measured when the count was taken; null for a draft")
             String committedVarianceQty,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)

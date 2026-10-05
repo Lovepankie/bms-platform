@@ -1312,8 +1312,10 @@ with the sum of its movements and records any difference as a system audit row
 
 A stock-take is `draft` or `committed` (with `committed_by`, `committed_at` and the journal entry
 `adjustment_entry_id`). A line holds `counted_qty`, the `expected_qty` (the balance when the count
-was recorded) and, after commit, `committed_variance_qty` (counted less the balance at commit,
-under its lock) and the `unit_cost_minor` it was valued at. One line per product.
+was recorded) and, after commit, `committed_variance_qty` (counted less `expected_qty`, applied
+under the balance lock, so movements recorded between count and commit stay in the balance; a
+commit that would leave a balance negative is refused with `stock_moved_since_count`) and the
+`unit_cost_minor` it was valued at. One line per product.
 
 ### `retail_customers` (RLS; `bms_app` SELECT, INSERT)
 

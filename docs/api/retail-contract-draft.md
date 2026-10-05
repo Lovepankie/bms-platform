@@ -35,7 +35,7 @@ except `retail.price.below_cost`, which no default role holds.
 | `GET /stock/movements?productId=&branchId=&from=&to=` | Movement list | row: `{at, kind, qty, sourceType, sourceId, by}` |
 | `POST /stocktakes` | Start a count | body: `{branchId, lines:[{productId, countedQty}], note}`; returns variance per line |
 | `GET /stocktakes/{id}` | Read draft or committed | |
-| `POST /stocktakes/{id}/commit` | Write adjustment movements | needs `retail.stocktake.commit` |
+| `POST /stocktakes/{id}/commit` | Write adjustment movements | needs `retail.stocktake.commit`; each adjustment is counted less `expectedQty`, so movements after the count stay; 409 `stock_moved_since_count` asks for a recount when the result would be negative |
 
 ## Sales and customers
 

@@ -48,8 +48,9 @@ class RetailStockIT extends IntegrationTest {
     }
 
     /**
-     * FR-RET-08, FR-RET-11: a count shows its variance; commit writes the adjustment against the
-     * balance at that moment and posts gains and losses at cost; a second commit is refused.
+     * FR-RET-08, FR-RET-11: a count shows its variance against the balance when it was taken;
+     * commit applies that variance as the adjustment, so a sale between count and commit stays in
+     * the balance, and posts gains and losses at cost; a second commit is refused.
      */
     @Test
     void aStocktakeAdjustsToTheCountAndPostsTheVariance() {
@@ -95,8 +96,8 @@ class RetailStockIT extends IntegrationTest {
                         .get(0)
                         .get("committed_variance_qty")
                         .asString())
-                .isEqualTo("0.000");
-        assertThat(qty()).isEqualTo("6.000");
+                .isEqualTo("-1.000");
+        assertThat(qty()).isEqualTo("5.000");
 
         UUID second = RetailTestSupport.id(api.post(
                 "/stocktakes",
@@ -109,10 +110,10 @@ class RetailStockIT extends IntegrationTest {
         JsonNode done =
                 api.post("/stocktakes/" + second + "/commit", Map.of(), ADMIN).getBody();
         assertThat(done.get("lines").get(0).get("committed_variance_qty").asString())
-                .isEqualTo("-1.500");
+                .isEqualTo("-0.500");
         assertThat(qty()).isEqualTo("4.500");
         Map<String, Long> net = net(second);
-        assertThat(net).containsEntry("stock_shrinkage", 600L).containsEntry("inventory", -600L);
+        assertThat(net).containsEntry("stock_shrinkage", 200L).containsEntry("inventory", -200L);
 
         ResponseEntity<JsonNode> again = api.post("/stocktakes/" + second + "/commit", Map.of(), ADMIN);
         assertThat(again.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
@@ -123,6 +124,65 @@ class RetailStockIT extends IntegrationTest {
                         .get(0)
                         .has("unit_cost_minor"))
                 .isFalse();
+    }
+
+    /**
+     * FR-RET-08 (review F1): a sale between the count and the commit is not undone. The shelf held
+     * what was counted, the cashier then sold from it, so the commit applies only the shortfall
+     * measured at the count and posts no false gain.
+     */
+    @Test
+    void aSaleBetweenDraftAndCommitStaysInTheBalance() {
+        api.stockUp(t.headOffice(), product, "10");
+        UUID id = RetailTestSupport.id(api.post(
+                "/stocktakes",
+                Map.of(
+                        "branch_id",
+                        t.headOffice(),
+                        "lines",
+                        List.of(Map.of("product_id", product, "counted_qty", "9"))),
+                ADMIN));
+        api.sell(t.headOffice(), "cash", product, "3");
+
+        ResponseEntity<JsonNode> committed = api.post("/stocktakes/" + id + "/commit", Map.of(), ADMIN);
+        assertThat(committed.getStatusCode()).as("%s", committed.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(committed
+                        .getBody()
+                        .get("lines")
+                        .get(0)
+                        .get("committed_variance_qty")
+                        .asString())
+                .isEqualTo("-1.000");
+        assertThat(qty()).isEqualTo("6.000");
+        assertThat(net(id)).containsEntry("stock_shrinkage", 400L).containsEntry("inventory", -400L);
+    }
+
+    /**
+     * FR-RET-08 (review F1): when the stock moved after the count so far that the count's variance
+     * would take the balance below zero, the commit is refused and the lines are to be recounted.
+     */
+    @Test
+    void aCommitThatWouldGoNegativeAfterLaterMovementsAsksForARecount() {
+        api.stockUp(t.headOffice(), product, "10");
+        UUID id = RetailTestSupport.id(api.post(
+                "/stocktakes",
+                Map.of(
+                        "branch_id",
+                        t.headOffice(),
+                        "lines",
+                        List.of(Map.of("product_id", product, "counted_qty", "2"))),
+                ADMIN));
+        api.sell(t.headOffice(), "cash", product, "5");
+
+        ResponseEntity<JsonNode> refused = api.post("/stocktakes/" + id + "/commit", Map.of(), ADMIN);
+        assertThat(refused.getStatusCode()).as("%s", refused.getBody()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("stock_moved_since_count");
+        assertThat(refused.getBody().get("detail").asString())
+                .contains("SKT-13A")
+                .contains("recount");
+        assertThat(qty()).isEqualTo("5.000");
+        assertThat(api.get("/stocktakes/" + id, ADMIN).getBody().get("status").asString())
+                .isEqualTo("draft");
     }
 
     /** FR-RET-03: movements are append-only for the application and the owner alike. */

@@ -47,7 +47,7 @@ to R3 have merged. Target: usable on staging by 2026-10-07.
 | FR-RET-05 | A credit sale records the buyer and a proposed payment date. Payments against it reduce the trade debtor balance and may be partial. |
 | FR-RET-06 | A restock records the supplier and per-branch quantities. Cost and sell price on its lines update the product and the history in the same transaction. |
 | FR-RET-07 | Usage and damage reports reduce stock, record a reason and are valued at cost. |
-| FR-RET-08 | A stock-take records counted quantities per branch and product, shows the variance and writes an adjustment movement on commit. |
+| FR-RET-08 | A stock-take records counted quantities per branch and product and the balance when counted, shows the variance and on commit writes an adjustment of counted less that balance, so trading between count and commit stays in the balance. If later movements would make the result negative, the commit is refused (`stock_moved_since_count`) and those lines are recounted. |
 | FR-RET-09 | Valuation shows quantity times cost and quantity times sell price per branch and product, with totals. |
 | FR-RET-10 | Daily profit per branch and day equals sale lines less cost snapshots less usage at cost, and is readable only with `retail.profit.read`. |
 | FR-RET-11 | Sales, their cost, restocks, usage and voids post balanced entries to the right branch through `post_entry`. |

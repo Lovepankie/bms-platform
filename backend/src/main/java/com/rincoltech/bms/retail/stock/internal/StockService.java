@@ -209,9 +209,12 @@ class StockService {
     }
 
     /**
-     * FR-RET-08, FR-RET-11: under the stock-take's lock and each balance's lock, the variance against
-     * the balance now becomes an adjustment movement at the product's cost, and the net value posts
-     * to stock shrinkage against inventory in one entry for the branch.
+     * FR-RET-08, FR-RET-11: under the stock-take's lock and each balance's lock, the variance measured
+     * when the count was taken (counted less {@code expected_qty}) becomes an adjustment movement at
+     * the product's cost, so a sale, restock, usage or void recorded between count and commit stays
+     * in the balance. The net value posts to stock shrinkage against inventory in one entry for the
+     * branch. When later movements mean the adjustment would take a balance below zero, the count no
+     * longer describes the shelf: the commit is refused with 409 {@code stock_moved_since_count}.
      */
     @Transactional
     Stocktake commit(UUID id) {
@@ -231,9 +234,14 @@ class StockService {
         List<Movement> movements = new ArrayList<>();
         long losses = 0;
         long gains = 0;
+        List<String> recount = new ArrayList<>();
         for (StocktakeLine line : lines) {
             BigDecimal balance = ledger.lock(s.branchId(), line.productId());
-            BigDecimal variance = new BigDecimal(line.countedQty()).subtract(balance);
+            BigDecimal variance = new BigDecimal(line.countedQty()).subtract(new BigDecimal(line.expectedQty()));
+            if (balance.add(variance).signum() < 0) {
+                recount.add(line.code());
+                continue;
+            }
             long cost = catalogue
                     .find(line.productId())
                     .map(ProductSnapshot::costMinor)
@@ -250,6 +258,15 @@ class StockService {
             } else {
                 gains += value;
             }
+        }
+        if (!recount.isEmpty()) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "stock_moved_since_count",
+                    "Stock moved since the count",
+                    "Stock of " + String.join(", ", recount)
+                            + " has moved since it was counted, so the count no longer matches the shelf."
+                            + " Please recount these lines in a new stock-take.");
         }
         ledger.record(movements);
         LocalDate today = clock.today(tenant.profile().timezone());
