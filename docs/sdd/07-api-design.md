@@ -194,7 +194,8 @@ published under the platform host.
 Business rule codes used in chapter 3 (each is a 422 unless listed above):
 `validation_failed`, `plan_limit_reached`, `invalid_phone`, `invalid_nin`,
 `invalid_term_frequency`, `invalid_rate_unit`, `below_product_minimum`,
-`above_product_maximum`, `guarantor_required`, `collateral_required`,
+`above_product_maximum`, `amount_out_of_range`, `fees_exceed_principal`,
+`guarantor_required`, `collateral_required`,
 `collateral_cover_insufficient`, `kyc_not_verified`, `member_blacklisted`,
 `max_active_loans_reached`, `approval_above_requested`, `self_approval_forbidden`,
 `approver_conflict`, `subject_changed`, `approval_expired`, `period_closed`,

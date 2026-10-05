@@ -89,7 +89,7 @@ final class ProductApi {
             Integer minCollateralCoverBp,
 
             Boolean requiresGuarantor,
-            @Valid List<Fee> fees) {}
+            @Valid @Size(max = 20) List<Fee> fees) {}
 
     @Schema(name = "CreateLoanProductRequest")
     record CreateProductRequest(
@@ -108,7 +108,7 @@ final class ProductApi {
             @NotNull @Min(1) @Max(3660) Integer termCount,
             @NotNull @Pattern(regexp = PATTERNS) String repaymentPattern,
             @Pattern(regexp = FREQUENCIES) String instalmentFrequency,
-            @Valid List<Fee> fees,
+            @Valid @Size(max = 20) List<Fee> fees,
             @NotNull @Positive @Max(MAX_MONEY_MINOR) Long principalMinor,
 
             @NotNull @Schema(description = "Between 2000-01-01 and 2100-12-31")
