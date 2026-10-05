@@ -17,8 +17,8 @@ public interface CatalogueHistory {
 
     /**
      * The product with this code ignoring case. A new product gets an {@code initial} history row
-     * with these prices. An existing one whose prices differ takes them with an {@code import}
-     * history row ({@code changed}); its other fields are left as they are.
+     * with these prices. An existing one is left exactly as it is, prices included, and no history
+     * row is written (issue #73): {@code changed} only says its prices differ from these.
      */
     Ensured ensureProduct(
             String code,

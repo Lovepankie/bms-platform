@@ -127,7 +127,26 @@ balances checksum: rows=60 total_qty=2210.500 source_sha256=... derived_sha256=.
 
 ## 5. Real run
 
-Repeat step 3 without `--dry-run`, saving the report:
+**Take a backup first, and verify it.** The imported tables are append-only and the run commits per
+file, so nothing a real run writes can be undone by editing rows. Immediately before the real run,
+on the host, dump the database as `bms_owner` (it has BYPASSRLS, so every tenant is in the dump) and
+check the dump reads back:
+
+```bash
+cd /opt/bms
+C=(docker compose --project-name bms -f compose.yml)
+"${C[@]}" exec -T postgres pg_dump --username bms_owner --dbname bms --format custom --compress 6 \
+  > backups/pre-import-<slug>.dump
+chmod 600 backups/pre-import-<slug>.dump
+"${C[@]}" exec -T postgres pg_restore --list < backups/pre-import-<slug>.dump | grep -c 'TABLE DATA'
+sha256sum backups/pre-import-<slug>.dump | tee backups/pre-import-<slug>.sha256
+```
+
+The `--list` must exit 0 and count the table data entries (well over a hundred); a truncated or empty
+dump fails here. Note the time of the dump in the cutover record. Do not start the real run without
+a verified dump.
+
+Then repeat step 3 without `--dry-run`, saving the report:
 
 ```bash
 docker compose --project-name bms -f compose.yml run --rm --no-deps \
@@ -156,19 +175,28 @@ legacy balances the import date, which is also the date of the opening journals.
 
 ## 6. Re-run safely
 
-The import is idempotent:
+The import is idempotent for the data it imports:
 
 - History rows are keyed by `source_ref` in `retail_import_refs`; a reference already imported is
   counted as `existing` and skipped.
 - Catalogue, suppliers, credit buyers and branches are matched by code or name.
+- **An existing product's prices are never changed by a re-run** (issue #73). A product that
+  already exists keeps its cost and sell price and gets no price history row, so a price edited in
+  the app between two runs stays as it is. When the file's prices differ from the catalogue's, the
+  report says so (`product <code> existed with other prices; its prices were left unchanged`); the
+  line is information only. Only a new product takes the file's prices.
+- A balance the imported history already gives (a zero legacy difference) is written as nothing
+  and counted as `existing`, on the first run and on every re-run.
 - The legacy balance is written once per branch and product. On a re-run, a balance that no longer
   equals the source is reported (`legacy balance already written ... correct it with a stock-take`),
   never silently changed.
 - The opening journal is posted once per branch (`already posted, not posted again`).
 
 A re-run of the same export prints the same report with every count under `existing` and writes no
-row; a dry run writes no row either (both checked end to end on a throwaway database for issue #71,
-with the fabricated `fixtures/retail/import-sample/`).
+data row; a dry run writes no row either (both checked end to end on a throwaway database for issue #71,
+with the fabricated `fixtures/retail/import-sample/`). A committed re-run still writes **one audit
+row per file** (`retail.import.file_imported`, ten per run, with that file's counts), so the audit log
+records every run; a dry run's audit rows are rolled back with the rest.
 
 So after a failure (`result: FAILED: <file>: <reason>`, exit status 1), fix the cause and run the
 same command again: the files that committed are skipped row by row and the run continues where it
@@ -176,9 +204,58 @@ stopped. To add rows the first export missed, add them to the export with new `s
 and re-run. To change something already imported, do not re-import: correct it in the application
 (a stock-take for quantities, a price edit for prices).
 
+## If the real run was wrong
+
+Know these before you decide anything:
+
+- **The run commits per file.** A file that fails rolls back alone; the files before it stay
+  committed. A run that finished committed everything it reported as `written`.
+- **The tables it writes are append-only** (`retail_stock_movements`, `retail_sale_lines`,
+  `retail_price_history`, `retail_import_refs`, `journal_entries` and `journal_lines`, among others;
+  SDD chapter 6 section 6.11). `bms_app` cannot update or delete them, and they must **never** be
+  edited ad hoc as `bms_owner` either: a hand-deleted movement or journal line breaks the balances,
+  the ledger and the audit trail in ways no report shows.
+
+Then:
+
+1. **Stop.** Do not re-run the import to "fix" it: a re-run adds what is missing and changes
+   nothing already imported (section 6). Tell the dev lead; the decision to restore is theirs.
+2. **Compare against the backup in a scratch database.** Restore the pre-import dump next to the
+   live database, without touching it, and compare the tenant's rows as `bms_owner`:
+
+   ```bash
+   cd /opt/bms
+   C=(docker compose --project-name bms -f compose.yml)
+   sha256sum -c backups/pre-import-<slug>.sha256
+   "${C[@]}" exec -T postgres psql -U postgres -d postgres -c "CREATE DATABASE bms_preimport OWNER bms_owner"
+   "${C[@]}" exec -T postgres pg_restore -U bms_owner -d bms_preimport --exit-on-error \
+     < backups/pre-import-<slug>.dump
+   ```
+
+   Count the tenant's rows of the tables in the report (`retail_products`, `retail_stock_movements`,
+   `journal_entries`, ...) in `bms` and in `bms_preimport`, and check whether any **other** tenant,
+   or this tenant's staff, wrote anything after the dump (`audit_log` rows newer than the dump time,
+   outside `retail.import.*`).
+3. **Reverse with the documented owner procedure.** If nothing but the import wrote after the dump,
+   the reversal is the "existing host" procedure of `docs/runbooks/restore-from-backup.md` section 3,
+   run by the operator as `bms_owner` on the dev lead's decision, with `bms_preimport` as the restored
+   database (skip its steps 1 and 2): stop the API, swap the names, keep the damaged copy, then
+   section 4 to verify and start. Fix the export, dry-run again (step 3) and repeat the real run with
+   a fresh backup.
+4. **If anything else wrote after the dump** (another tenant, or this tenant started trading), a
+   whole-database restore would lose those writes: do not restore. Correct the data in the
+   application instead (a stock-take for quantities, a price edit for prices) and record what was
+   wrong and what was corrected in the cutover record. An opening journal is corrected only by a
+   reversing journal through the ledger; agree it with the accountant and the dev lead.
+5. Drop the scratch database once the decision is recorded:
+   `"${C[@]}" exec -T postgres psql -U postgres -d postgres -c "DROP DATABASE bms_preimport"`.
+
 ## After
 
 - Keep both reports with the cutover record (outside the repository).
 - Delete the export from the host: `rm -r /opt/bms/import/<slug>`.
+- Once the import is signed off, delete the pre-import dump too (it holds real data):
+  `rm /opt/bms/backups/pre-import-<slug>.*`. The nightly encrypted backup covers the database from
+  then on.
 - Plan the first stock-take for every branch with negative balances; its adjustments replace the
   legacy balances (ADR-020 decision 9).
