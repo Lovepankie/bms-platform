@@ -179,6 +179,105 @@ class RlsIsolationIT {
                         INSERT INTO lending_loan_collateral (id, tenant_id, loan_id, collateral_id, pledged_value_minor)
                         VALUES (?, ?, ?, ?, 50000)
                         """).params(UUID.randomUUID(), t.tenantId(), loan, collateral).update();
+        owner.sql("""
+                        INSERT INTO lending_loan_appraisals (id, tenant_id, loan_id, appraised_by, score, band,
+                            components, flags, exposure, weights, recommendation)
+                        VALUES (?, ?, ?, ?, 50, 'C', '{}', '{}', '{}', '{}', 'review')
+                        """).params(UUID.randomUUID(), t.tenantId(), loan, user).update();
+        // Retail tables (migration V10, ADR-020).
+        UUID retailCategory = UUID.randomUUID();
+        UUID retailUnit = UUID.randomUUID();
+        UUID retailProduct = UUID.randomUUID();
+        owner.sql("INSERT INTO retail_categories (id, tenant_id, name) VALUES (?, ?, 'Test Category')")
+                .params(retailCategory, t.tenantId())
+                .update();
+        owner.sql("INSERT INTO retail_units (id, tenant_id, name) VALUES (?, ?, 'pcs')")
+                .params(retailUnit, t.tenantId())
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_products (id, tenant_id, code, description, category_id, unit_id, cost_minor,
+                                                     sell_minor, currency)
+                        VALUES (?, ?, 'RLS-1', 'Test Product', ?, ?, 100, 150, 'UGX')
+                        """)
+                .params(retailProduct, t.tenantId(), retailCategory, retailUnit)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_price_history (id, tenant_id, product_id, source, new_cost_minor, new_sell_minor,
+                                                          currency)
+                        VALUES (?, ?, ?, 'initial', 100, 150, 'UGX')
+                        """).params(UUID.randomUUID(), t.tenantId(), retailProduct).update();
+        // Retail tables (migration V11, ADR-020).
+        owner.sql("""
+                        INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, business_date, branch_id, product_id, kind, qty,
+                                                            unit_cost_minor, source_type)
+                        VALUES (?, ?, now(), current_date, ?, ?, 'opening', 2, 100, 'test')
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), t.headOffice(), retailProduct)
+                .update();
+        owner.sql("INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, qty) VALUES (?, ?, ?, 2)")
+                .params(t.tenantId(), t.headOffice(), retailProduct)
+                .update();
+        UUID stocktake = UUID.randomUUID();
+        owner.sql(
+                        "INSERT INTO retail_stocktakes (id, tenant_id, branch_id, status, created_by) VALUES (?, ?, ?, 'draft', ?)")
+                .params(stocktake, t.tenantId(), t.headOffice(), user)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_stocktake_lines (id, tenant_id, stocktake_id, product_id, counted_qty, expected_qty)
+                        VALUES (?, ?, ?, ?, 2, 2)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), stocktake, retailProduct)
+                .update();
+        UUID customer = UUID.randomUUID();
+        owner.sql("INSERT INTO retail_customers (id, tenant_id, name) VALUES (?, ?, 'Test Buyer 01')")
+                .params(customer, t.tenantId())
+                .update();
+        UUID sale = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_sales (id, tenant_id, branch_id, sale_no, sale_date, payment_method, customer_id,
+                                                  currency, total_minor, cost_total_minor, paid_minor, status, created_by)
+                        VALUES (?, ?, ?, 'RS99999999', DATE '2026-01-15', 'credit', ?, 'UGX', 150, 100, 0, 'completed', ?)
+                        """)
+                .params(sale, t.tenantId(), t.headOffice(), customer, user)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_sale_lines (id, tenant_id, sale_id, line_no, product_id, qty, unit_price_minor,
+                                                       unit_cost_minor, line_total_minor, line_cost_minor)
+                        VALUES (?, ?, ?, 1, ?, 1, 150, 100, 150, 100)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), sale, retailProduct)
+                .update();
+        // Retail tables (migration V12, ADR-020).
+        UUID supplier = UUID.randomUUID();
+        owner.sql("INSERT INTO retail_suppliers (id, tenant_id, name) VALUES (?, ?, 'Test Supplier 01')")
+                .params(supplier, t.tenantId())
+                .update();
+        UUID purchase = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_purchases (id, tenant_id, purchase_no, supplier_id, purchased_on, payment_method,
+                                                      currency, total_minor, created_by)
+                        VALUES (?, ?, 'RP99999999', ?, DATE '2026-01-15', 'credit', 'UGX', 200, ?)
+                        """).params(purchase, t.tenantId(), supplier, user).update();
+        owner.sql("""
+                        INSERT INTO retail_purchase_lines (id, tenant_id, purchase_id, line_no, product_id, cost_minor,
+                                                           qty_total, line_total_minor)
+                        VALUES (?, ?, ?, 1, ?, 100, 2, 200)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), purchase, retailProduct)
+                .update();
+        UUID usage = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_usage_reports (id, tenant_id, branch_id, kind, reason, occurred_on, currency,
+                                                          cost_total_minor, created_by)
+                        VALUES (?, ?, ?, 'used', 'Test use', DATE '2026-01-15', 'UGX', 100, ?)
+                        """).params(usage, t.tenantId(), t.headOffice(), user).update();
+        owner.sql("""
+                        INSERT INTO retail_usage_lines (id, tenant_id, report_id, line_no, product_id, qty, unit_cost_minor,
+                                                        line_cost_minor)
+                        VALUES (?, ?, ?, 1, ?, 1, 100, 100)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), usage, retailProduct)
+                .update();
         owner.sql(
                         "INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type) VALUES (?, ?, 'system', 'test.fixture.created', 'test')")
                 .params(UUID.randomUUID(), t.tenantId())
@@ -211,6 +310,19 @@ class RlsIsolationIT {
                         t.tenantId(),
                         t.account("cash_on_hand"))
                 .update();
+        owner.sql("""
+                        INSERT INTO retail_sale_payments (id, tenant_id, sale_id, amount_minor, currency, method, paid_on,
+                                                          journal_entry_id, created_by)
+                        SELECT ?, ?, id, 50, 'UGX', 'cash', DATE '2026-01-15', ?, ?
+                          FROM retail_sales WHERE tenant_id = ? LIMIT 1
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), entry, user, t.tenantId())
+                .update();
+        // The retail import's source references (migration V20, #55).
+        owner.sql("""
+                        INSERT INTO retail_import_refs (tenant_id, source_file, source_ref, target_type, source_user)
+                        VALUES (?, 'sales', 'SAL-TEST-01', 'retail.sale', 'test.sales01')
+                        """).param(t.tenantId()).update();
     }
 
     static String randomHash() {

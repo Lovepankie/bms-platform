@@ -338,12 +338,11 @@ class ApprovalService implements Approvals {
             sql.append(" AND r.action_type IN (:actionTypes)");
             params.put("actionTypes", actionTypes);
         }
-        Optional<String> after = Cursor.decode(cursor);
+        Optional<Cursor.Key> after = Cursor.decodeKey(cursor);
         if (after.isPresent()) {
-            String[] parts = after.get().split("\\|");
             sql.append(" AND (r.requested_at, r.id) < (:afterAt, :afterId)");
-            params.put("afterAt", Timestamp.from(Instant.parse(parts[0])));
-            params.put("afterId", UUID.fromString(parts[1]));
+            params.put("afterAt", Timestamp.from(after.get().at()));
+            params.put("afterId", after.get().id());
         }
         sql.append(" ORDER BY r.requested_at DESC, r.id DESC LIMIT :limit");
         params.put("limit", size + 1);

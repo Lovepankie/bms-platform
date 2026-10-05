@@ -9,7 +9,7 @@ agent working in this repository.
 enterprises in Uganda and East Africa. It is a **platform core plus vertical modules**
 that a tenant switches on (ADR-001). The first vertical, being built now, is **lending**
 (microfinance and money lending: members, loans, collateral, savings, investments,
-collections). Retail is a later vertical and is not built now.
+collections). Retail is the second vertical and is being built now (ADR-020, story #50).
 
 This repository holds the application code and, under `docs/`, the complete specification:
 the System Design Document, the decision log (ADRs), the Structurizr architecture model,
@@ -44,6 +44,13 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   (ADR-016); audit search and CSV export; the notification port with a recording fake adapter;
   and the PWA's sign-in, MFA, invitation, branch switcher and approvals inbox. No production
   approval action is registered until increment 2.
+- **Integrated, not yet on `main` (issue #71):** the loan pull requests #47 and #48 (appraisal,
+  credit score, approval decision; migration `V9`) and, on top of them, the retail vertical
+  (ADR-020): catalogue, stock, sales, purchasing, usage, valuation and daily profit (`V10` to
+  `V12`), the oversell refusal and price floor (`V13`), the review fixes (`V14`), the
+  `import-retail` command (`V20`, `docs/runbooks/import-retail.md`) and the phone-first retail
+  screens on the real API (`docs/specs/retail-ui-notes.md`). Flyway runs with `outOfOrder` off,
+  so a new migration takes a number above the highest one on any open branch (`V21` next).
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
   Cloudflare Tunnel and pulls every green build of `main` from a `staging` pointer tag; hosts are
@@ -122,6 +129,13 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `lending` investments | Investments | INV | 6.7 | 7.11.16 |
 | `lending` collections | Due lists, arrears, actions | CLN | 6.7 | 7.11.17 |
 | Member area | Member self-service | MSS; chapter 11 | none | 7.11.18 |
+| `retail.manifest` | The retail vertical's registration with the core (ADR-020) | 3.28 | 6.11.1 chart | none |
+| `retail.catalogue` | Categories, units, products, append-only price history | RET-01, RET-02 | 6.11 | 7.11.20 |
+| `retail.stock` | Stock movements and balances, stock-takes, usage and damage, reconciliation; retail posting and idempotency helpers | RET-03, RET-07, RET-08, RET-11 | 6.11 | 7.11.20 |
+| `retail.sales` | Sales with snapshots, voids, credit buyers, payments | RET-04, RET-05, RET-11 | 6.11 | 7.11.20 |
+| `retail.purchasing` | Suppliers, restocks that set prices atomically | RET-06, RET-11 | 6.11 | 7.11.20 |
+| `retail.reports` | Valuation, revaluation difference, daily profit | RET-09, RET-10 | 6.11.3 | 7.11.20 |
+| `retail.imports` | The one-off `import-retail` command: pilot history, legacy balances, opening journals; `retail_import_refs` | RET-12; chapter 13 section 13.13 | 6.11.4 | none (a command, `docs/runbooks/import-retail.md`) |
 
 ## How to run it
 
@@ -266,12 +280,16 @@ Accepted (this list is the ADR index):
 - ADR-018 Staging on a shared ARM64 host behind a Cloudflare Tunnel, pull-based deploy, hyphenated
   hosts under the Rincol zone
 - ADR-019 Collateral release as an approval action, and the interim duplicate pledge rule (proposed, #24)
+- ADR-020 Retail vertical brought forward; stock as append-only movements; retail events post to the
+  ledger (proposed, #50)
 
 Pending (cite only as "pending ADR-NNN"):
 
 - ADR-011 Payment gateway (Pesapal or Interswitch)
 - ADR-012 Credit scoring model beyond the rules-based default
 - ADR-013 SMS and USSD aggregator
+- ADR-021 Weighted average cost for retail, per tenant (ADR-020 decision 6)
+- ADR-022 The cash book: expenses, banking and advances, likely partly core (ADR-020)
 
 ## Team
 

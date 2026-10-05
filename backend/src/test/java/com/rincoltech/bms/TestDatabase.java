@@ -56,6 +56,15 @@ public final class TestDatabase {
 
     /** A fabricated tenant with a head office branch and, optionally, lending enabled. */
     public static Fixture tenant(String slugPrefix, boolean lending) {
+        return tenant(slugPrefix, lending, false);
+    }
+
+    /**
+     * As {@link #tenant(String, boolean)}; {@code retail} switches the retail module on through the
+     * same platform function the platform API calls, so its chart of accounts is seeded as on a
+     * server (ADR-020 decision 7).
+     */
+    public static Fixture tenant(String slugPrefix, boolean lending, boolean retail) {
         String slug = slugPrefix + "-" + UUID.randomUUID().toString().substring(0, 8);
         UUID tenantId = UUID.randomUUID();
         UUID headOffice = UUID.randomUUID();
@@ -79,6 +88,12 @@ public final class TestDatabase {
             owner.sql("SELECT bms_seed_lending_chart(?)")
                     .param(tenantId)
                     .query(Integer.class)
+                    .single();
+        }
+        if (retail) {
+            owner.sql("SELECT platform_set_tenant_modules(?, ?::text[], NULL)")
+                    .params(tenantId, lending ? "{lending,retail}" : "{retail}")
+                    .query((rs, n) -> 1)
                     .single();
         }
         return new Fixture(tenantId, slug, headOffice, secondBranch);

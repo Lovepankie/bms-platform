@@ -77,6 +77,26 @@ The maker-checker tests use a test-only action type registered in the test sourc
 (`TestApprovalAction`, requested with a cashier's permission and decided with a branch manager's),
 because no production action exists before increment 2 (ADR-015).
 
+### 15.4.2 Retail (ADR-020)
+
+Every retail table gets its factory row in `RlsIsolationIT`, so the catalogue, cross-tenant read,
+write and unbound-session tests cover it without a separate suite.
+
+| Test | Proves |
+|---|---|
+| `RetailCatalogueIT` (#51) | Products with an `initial` history row and audit; codes unique ignoring case; a manual price edit and its history row commit together and need `retail.price.edit`; PATCH never changes a price; a user signed in with the `retail_sales` role holds exactly the sales column and receives no cost field at all (absent, not null) on products and price history; a tenant without the module gets `module_not_enabled`; switching the module on seeds the retail chart once and shares cash, bank and opening balance equity with the lending chart; price history rejects UPDATE and DELETE for `bms_app` (no privilege) and the owner (trigger) (FR-RET-01, FR-RET-02, FR-RET-13, FR-RET-14) |
+| `RetailSalesIT` (#52) | A cash sale moves only its branch, snapshots cost and price, and posts revenue and cost of goods sold as two balanced entries for the branch; a later price change leaves the sale and its profit alone; `Idempotency-Key` missing, replayed and reused; a void writes `return` movements and reversing entries that net to zero, once, and the sales role cannot void; a credit sale debits trade debtors and shows on the buyer's balance; overselling is always refused (there is no setting) and leaves no row; **two sales of the last unit race** in three rounds: each round exactly one succeeds, the other is refused with `insufficient_stock`, and the balance equals the sum of movements; a unit price below or equal to cost is refused with `price_below_cost` for the admin and the sales role alike and the body never carries the cost, a price above cost is accepted, and a custom role holding `retail.price.below_cost` may sell below cost (#64); branch scope; the sales role gets no cost or profit field (FR-RET-03, FR-RET-04, FR-RET-05, FR-RET-11, FR-RET-14) |
+| `RetailInputGuardsIT` (#68) | A malformed cursor on sales, purchases, movements, stock and products is 400 `malformed_request` (review F8); out-of-range amounts are 422 `amount_out_of_range` and one oversized product does not break valuation (F7); product codes differing only by Unicode spaces collide and codes with control or inner Unicode spaces are refused (F9) |
+| `RetailValuationReviewIT` (#68) | `as_of` follows each movement's business date: a restock dated three days ago and a sale dated yesterday show on those dates with a zero revaluation difference (review F4); a branch with no stock left but a non-zero inventory account is reported with value 0 and the difference, within the caller's filter (F3) |
+| `RetailCostScopeIT` (#68) | With `X-Dev-Scopes` a user reads stock and sales everywhere but holds `retail.profit.read` at head office only: cost, cost snapshots, profit and the inventory account show on head office rows and branch totals only, and the overall value at cost is absent (review F5, ADR-017) |
+| `RetailLockOrderIT` (#68) | The product lock does not block a movement insert (deterministic, two connections); restocks race a usage report, a void, a stock-take commit and a two-line sale in reverse product order over several rounds: no 500, every call succeeds and every balance equals its movements (review F2) |
+| `RetailStockIT` (#52) | A stock-take shows its variance, commits counted less `expected_qty` so a sale between draft and commit stays in the balance, refuses with `stock_moved_since_count` when later movements would make the balance negative, and posts loss and gain at cost, once; movements are append-only (no grant, and the trigger for the owner); the reconciliation reports a balance written outside the stock ledger and leaves it as it is (FR-RET-03, FR-RET-08, FR-RET-11) |
+| `RetailPurchasingIT` (#53) | A restock at a new price changes the product's cost and sell price with a `purchase` history row naming it, moves each branch and posts one balanced entry per branch, and the next sale snapshots the new prices; two lines for one product in one request and a later purchase: the latest line wins with a history row per change and none when nothing changes; a restock forced to fail after its prices were applied (inventory account inactive) leaves no price, history, movement, purchase or key; six concurrent restocks of one product leave an unbroken history chain ending at the product's prices; credit restocks credit trade creditors per supplier; idempotent replay; only admins restock; a buyer scoped to one branch sees only that branch's quantities and totals in the purchase list (#68, review F11) (FR-RET-06, FR-RET-11, FR-RET-14) |
+| `RetailPaymentsAndUsageIT` (#53) | Partial payments reduce the balance and trade debtors to zero, an overpayment is refused, a paid credit sale cannot be voided, a cash sale takes no payment; usage and damage move stock out at the cost snapshot and post to stock shrinkage, and the sales role may report but sees no cost; damage past the branch's stock is refused with `insufficient_stock` (FR-RET-03, FR-RET-05, FR-RET-07, FR-RET-11) |
+| `RetailReportsIT` (#54) | Valuation at cost and at price per branch and product with totals, worked by hand, and a negative balance left by imported history flagged; the revaluation difference is zero until a cost changes and then equals the change times the quantity per branch; `as_of` before any movement is empty; daily profit per branch and day equals sales less cost snapshots less usage at cost, excludes voids and ignores a later cost change; a user signed in with the real `retail_sales` role sees only its branch, no cost, valuation at cost or inventory key anywhere in the body, and gets 403 on the profit report; profit comes from the sale lines, so a header changed through the owner switch leaves it unchanged, the header refuses every UPDATE but payment, void and entry ids, and a committed stock-take line refuses UPDATE (#68, review F10) (FR-RET-09, FR-RET-10, FR-RET-13) |
+| `LedgerPostingIT` | Adds the reversal of an entry: lines turned around, `reverses_entry_id` set, at most once and a reversal is not reversed (`already_reversed`, FR-GL-04) |
+| `ModularityTest` | Adds `retailNeverDependsOnLending`: no `retail.*` module has a direct dependency on a `lending.*` module (ADR-020) |
+
 1. **Catalogue test.** Query `pg_class` and `pg_policy` for every table with a
    `tenant_id` column (plus `tenants`). Each must have `relrowsecurity` and
    `relforcerowsecurity` true and a `tenant_isolation` policy whose expression uses
@@ -104,6 +124,14 @@ because no production action exists before increment 2 (ADR-015).
    tenants; `app_list_active_tenants` returns only ids; `app_list_active_tenants_with_module`
    leaves out a tenant with the module switched off (`PlatformIT`).
 
+## 15.4.3 Migration order
+
+`MigrationOrderIT` runs `DatabaseMigrator` with Flyway's `outOfOrder` off, as every environment
+does, on a fresh PostgreSQL 16 container per case: every migration (V1 to V9 lending, V10 to V14
+retail, V20 the retail import references) applies in order on an empty database; on a database
+already migrated to V9 with a lending tenant, exactly V10 to V14 and V20 apply and that tenant can
+then switch retail on; and no two migration files share a version (issue #71, review F6).
+
 ## 15.5 Module boundary test
 
 Fails the build when any rule of ADR-002 is broken: core depending on a vertical, a
@@ -111,8 +139,8 @@ module using another module's internals, one vertical depending on another, the 
 depending on anything, or a cycle. The allowed dependency list is chapter 5 section
 5.4.2, kept as data in each module's `package-info.java` (`allowedDependencies`), so a change
 to the architecture shows up in review as a change to that line. `ModularityTest` runs Spring
-Modulith's `verify()` over them and adds an explicit rule that no `core.*` module depends on a
-vertical. `RoutePermissionIT` enumerates routes and fails on any without a declared permission
+Modulith's `verify()` over them and adds explicit rules that no `core.*` module depends on a
+vertical and that no `retail.*` module depends on a `lending.*` module (ADR-020). `RoutePermissionIT` enumerates routes and fails on any without a declared permission
 (FR-IAM-03), `ClockArchitectureTest` fails on any direct system clock read outside the
 kernel, and `SecurityArchitectureTest` fails when a module other than identity sets the current
 principal or one other than tenancy binds a request's tenant (ADR-017).
@@ -147,6 +175,14 @@ Coverage gate for the lending calculation code: 95 percent lines (NFR-MNT-02).
   normalised values in chapter 13 section 13.12. Then applies the standard resolutions,
   commits, and asserts the created records, the opening journal and the DPD values listed
   there.
+- **Retail import golden test** (`RetailImportIT`, FR-RET-12). Runs the `import-retail` command's
+  importer as `bms_app` over `fixtures/retail/import-sample/` and asserts the balances, the
+  valuation and one day's profit, the three opening journals, the absence of any other journal, a
+  re-run that adds no row, a dry run that writes nothing, and another tenant left untouched
+  (chapter 13 section 13.13). It also asserts that every imported movement carries the business
+  date of its source row and the legacy balances the import date, that a valuation `as_of` the day
+  before the import counts the imported history by business date, and that product codes are
+  normalised exactly as the catalogue normalises them (review F9).
 - **Normalisation tables.** Every table of examples in chapter 13 section 13.6 is a
   parametrised unit test.
 - **Report golden tests.** Each report in chapter 14 runs over its fabricated dataset and

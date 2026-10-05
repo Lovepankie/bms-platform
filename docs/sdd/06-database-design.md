@@ -262,7 +262,9 @@ Until the `bms_platform` role exists, `bms_app` holds the grants on the platform
 
 (std) `settings jsonb NOT NULL`, `UNIQUE (tenant_id)`. The JSON holds only the keys a tenant
 admin has set, validated against a typed schema in the service; every read applies the defaults
-below to the rest. A tenant without a row reads all defaults. Keys and defaults:
+below to the rest. A tenant without a row reads all defaults. A stored key not in the table below
+(such as the retired `retail_allow_negative_stock`, #64) is ignored on read and does not fail a
+write. Keys and defaults:
 
 | Key | Type | Default | Requirement |
 |---|---|---|---|
@@ -1176,6 +1178,28 @@ first uses it.
 `lending_loan_product_fees`. `V8__loan_applications.sql` (#41) creates `lending_loans` with every
 column of this section, `lending_loan_status_history` (append-only), `lending_loan_guarantors` and
 `lending_loan_collateral`, with the one-open-pledge index and the draft-only triggers.
+`V9__loan_appraisals.sql` (#42) creates `lending_loan_appraisals` (append-only: `SELECT` and
+`INSERT` only).
+Retail migrations (ADR-020) share the one Flyway sequence and follow V9 in order:
+`V10__retail_catalogue.sql` (#51)
+adds `retail` to every plan's allowed modules, seeds the retail permissions and the `retail_sales`
+role, creates `retail_categories`, `retail_units`, `retail_products` and `retail_price_history`
+(append-only), and adds `bms_seed_retail_chart(tenant)` (section 6.11.1), which the platform
+functions now call when the module is switched on. `V11__retail_stock_sales.sql` (#52) creates
+`retail_stock_movements` (append-only), `retail_stock_balances`, `retail_stocktakes`,
+`retail_stocktake_lines`, `retail_customers`, `retail_sales` and `retail_sale_lines` (append-only).
+`V12__retail_purchasing_usage.sql` (#53) creates `retail_suppliers`, `retail_purchases` and
+`retail_purchase_lines`, `retail_usage_reports` and `retail_usage_lines`, and
+`retail_sale_payments`, all but suppliers append-only. `V13__retail_price_below_cost.sql` (#64)
+adds the `retail.price.below_cost` permission to the catalogue and grants it to no role.
+`V14__retail_review_fixes.sql` (#68) adds `business_date` to stock movements, the product code and
+amount CHECKs and the sale header and stock-take line guards (sections 6.11.2 and 6.11.3). The
+retired setting `retail_allow_negative_stock` needs no migration: a stored key is ignored on read.
+`V20__retail_import_refs.sql` (#55) creates `retail_import_refs` (append-only) for the
+`import-retail` command (section 6.11.4). It took V20 while the retail fixes were still open;
+Flyway applies the gap in order after V14. `outOfOrder` stays off, so V15 to V19 are never used:
+once a database is at V20 a lower new version would fail validation. The next migration is V21
+(`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items
 
@@ -1184,3 +1208,251 @@ column of this section, `lending_loan_status_history` (append-only), `lending_lo
 - Whether the pilot tenant needs more than one currency (all design supports it; seed and
   UI assume the tenant currency only).
 - Accrual accounting and provisioning tables, deferred by ADR-004.
+
+## 6.11 Retail tables (RLS; prefix `retail_`, ADR-020)
+
+Every table below is tenant-owned, has forced row-level security with the standard policy, and
+references its parents by composite keys on `(tenant_id, id)`. Money is `bigint` minor units with a
+`currency`; quantities are `numeric(14,3)` so metres and rolls are exact.
+
+### 6.11.1 Default retail chart of accounts
+
+Seeded by `bms_seed_retail_chart(tenant)` when the platform switches the module on (from
+`platform_create_tenant` or `platform_set_tenant_modules`). A code or `system_key` the tenant has
+already (from the lending chart of section 6.6.2, or an earlier switch) is kept, so a tenant with
+both verticals has one cash, one bank and one opening balance equity account, and switching the
+module on again adds nothing. `S` marks `is_system_controlled`.
+
+| Code | Name | Type | `system_key` | S |
+|---|---|---|---|---|
+| 1000 | Assets | asset (header) | | |
+| 1010 | Cash on hand | asset | `cash_on_hand` | |
+| 1020 | Bank | asset | `bank` | |
+| 1035 | Mobile money | asset | `mobile_money` | |
+| 1200 | Trade debtors | asset | `trade_debtors` | S |
+| 1300 | Inventory | asset | `inventory` | S |
+| 2000 | Liabilities | liability (header) | | |
+| 2100 | Trade creditors | liability | `trade_creditors` | S |
+| 3000 | Equity | equity (header) | | |
+| 3030 | Opening balance equity | equity | `opening_balance_equity` | |
+| 4000 | Income | income (header) | | |
+| 4100 | Sales revenue | income | `sales_revenue` | |
+| 5000 | Expenses | expense (header) | | |
+| 5100 | Cost of goods sold | expense | `cost_of_goods_sold` | |
+| 5110 | Stock shrinkage | expense | `stock_shrinkage` | |
+
+### `retail_categories`, `retail_units` (RLS; `bms_app` SELECT, INSERT)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id`, `tenant_id`, `created_at`, `created_by` | standard | |
+| `name` | varchar(100) for categories, varchar(30) for units | Unique per tenant ignoring case (FR-RET-01) |
+
+### `retail_products` (RLS; `bms_app` SELECT, INSERT, UPDATE)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id`, `tenant_id`, `created_at`, `updated_at`, `version`, `created_by` | standard | |
+| `code` | varchar(40) | Normalised by `RetailCatalogue.normaliseCode` (Unicode spaces stripped at the ends, then NFKC); no control character and no space other than U+0020 inside (CHECK `retail_products_code_check`, V14); unique per tenant on `lower(code)` (data dictionary rule 1) |
+| `description` | varchar(300) | Trigram index for search |
+| `category_id`, `unit_id` | uuid | Composite FKs to `retail_categories`, `retail_units` |
+| `cost_minor`, `sell_minor` | bigint >= 0 | The current prices. Changed only by the statement that also writes `retail_price_history` (ADR-020 decision 5) |
+| `currency` | char(3) | The tenant currency at creation |
+| `active` | boolean | Inactive products stay in history and stock views |
+
+### `retail_price_history` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id`, `tenant_id`, `created_at` | standard | |
+| `product_id` | uuid | Composite FK |
+| `source` | text | `initial`, `manual`, `purchase`, `import` |
+| `source_id` | uuid | The purchase or import batch; null for `initial` and `manual` |
+| `old_cost_minor`, `old_sell_minor` | bigint | Null only for `initial` (CHECK) |
+| `new_cost_minor`, `new_sell_minor` | bigint | |
+| `currency`, `reason`, `changed_by` | | `reason` is required for a manual edit |
+
+UPDATE and DELETE are not granted to `bms_app` and the `reject_mutation` trigger refuses them for
+every role (section 6.2.4).
+
+### 6.11.2 Retail posting rules (FR-RET-11, ADR-020 decision 7)
+
+Every rule posts through `post_entry` in the transaction of its event, one entry per branch, with
+`source_module = 'retail'`. "PM" is the account of the payment method: `cash_on_hand` (cash),
+`mobile_money`, `bank`, or `trade_debtors` (credit, with the sale as subledger). Amounts are line
+values rounded half up once per line (R-ROUND); a leg of zero is left out and an entry whose legs
+are all zero is not posted.
+
+| Event | Debit | Credit | Idempotency key |
+|---|---|---|---|
+| Sale | PM, total | `sales_revenue`, total | `retail.sale:<id>` |
+| Cost of a sale | `cost_of_goods_sold`, sum of line cost snapshots | `inventory` | `retail.sale_cost:<id>` |
+| Void | The reversal of each of the two entries (`reverses_entry_id` set) | | `retail.sale_void:<id>`, `retail.sale_cost_void:<id>` |
+| Payment on a credit sale | PM (`cash_on_hand`, `mobile_money`, `bank`), amount | `trade_debtors`, amount, sale as subledger | `retail.sale_payment:<id>` |
+| Restock, per branch | `inventory`, the branch's quantities at the line costs | `cash_on_hand`, `bank`, or `trade_creditors` (supplier as subledger) | `retail.purchase:<id>:<branch>` |
+| Usage or damage | `stock_shrinkage`, lines at the cost snapshot | `inventory` | `retail.usage:<id>` |
+| Stock-take loss | `stock_shrinkage`, value of the shortfall at cost | `inventory` | `retail.stocktake:<id>` |
+| Stock-take gain | `inventory`, value of the surplus at cost | `stock_shrinkage` | (same entry as the loss) |
+| Opening stock from the import, per branch | `inventory`, the branch's positive source balances at the product's current cost | `opening_balance_equity` | `retail.import_opening:<branch>` |
+
+Imported history (sales, purchases, adjustments, returns, usage, legacy balances) posts nothing
+(ADR-020 decision 9); see section 6.11.4.
+
+### `retail_stock_movements` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id`, `tenant_id`, `created_at` | standard | |
+| `occurred_at` | timestamptz | From the kernel clock: when it was recorded |
+| `business_date` | date | The event's business date, the date its journal entry carries: `purchased_on`, `sale_date`, usage `occurred_on`, or the void's or stock-take commit's date (V14, review F4). Rows recorded before V14 took their `occurred_at` date in Africa/Kampala. Valuation `as_of` filters on it |
+| `branch_id`, `product_id` | uuid | Composite FKs |
+| `kind` | text | `opening`, `purchase`, `return` (positive); `sale`, `usage`, `damage` (negative); `adjustment`, `legacy_balance` (either sign). CHECK on the sign |
+| `qty` | numeric(14,3) | Signed, never zero |
+| `unit_cost_minor` | bigint | The product's cost at the time: the valuation snapshot |
+| `source_type`, `source_id`, `source_line_id` | | The document that wrote it: `retail.sale`, `retail.sale_void`, `retail.stocktake`, and the R3 sources |
+| `reverses_movement_id` | uuid | Set on a void's `return`; unique, so a movement is reversed at most once |
+| `historical` | boolean | Imported history (FR-RET-12); default false |
+| `note`, `recorded_by` | | |
+
+### `retail_stock_balances` (RLS; `bms_app` SELECT, INSERT, UPDATE)
+
+Primary key `(tenant_id, branch_id, product_id)`, `qty numeric(14,3)`, `updated_at`. Written only by
+`StockLedger` in the transaction of each movement, under the row's lock (`SELECT ... FOR UPDATE`,
+taken in branch and product order). Product rows are locked only by restocks and price edits, with
+`FOR NO KEY UPDATE` (see purchases below). The nightly job `retail.stock-reconciliation` compares each row
+with the sum of its movements and records any difference as a system audit row
+(`retail.stock.reconciliation_mismatch`); it never corrects a balance.
+
+### `retail_stocktakes`, `retail_stocktake_lines` (RLS; `bms_app` SELECT, INSERT, UPDATE)
+
+A stock-take is `draft` or `committed` (with `committed_by`, `committed_at` and the journal entry
+`adjustment_entry_id`). A line holds `counted_qty`, the `expected_qty` (the balance when the count
+was recorded) and, after commit, `committed_variance_qty` (counted less `expected_qty`, applied
+under the balance lock, so movements recorded between count and commit stay in the balance; a
+commit that would leave a balance negative is refused with `stock_moved_since_count`) and the
+`unit_cost_minor` it was valued at. One line per product. Once committed, the stock-take and its
+lines are refused any UPDATE (trigger `retail_stocktake_guard_update`, V14, review F10).
+
+### `retail_customers` (RLS; `bms_app` SELECT, INSERT)
+
+Credit buyers: `name varchar(200)`, `contact varchar(100)` kept as entered, `created_by`.
+
+### `retail_sales` (RLS; `bms_app` SELECT, INSERT, UPDATE)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id`, `tenant_id`, `created_at`, `updated_at`, `version`, `created_by` | standard | |
+| `branch_id`, `sale_no` | | `sale_no` from the tenant sequence `retail_sale_no` (`RS00000001`) |
+| `sale_date` | date | Not in the future |
+| `payment_method` | text | `cash`, `mobile_money`, `bank`, `credit` |
+| `customer_id`, `buyer_name`, `buyer_contact` | | A credit sale has a customer or a buyer name (CHECK) |
+| `due_date` | date | The proposed payment date; credit sales only (CHECK) |
+| `currency`, `total_minor`, `cost_total_minor` | | Sums of the line totals and line cost snapshots |
+| `paid_minor` | bigint | Equals the total except on a credit sale (CHECK); at most the total |
+| `status` | text | `completed` or `voided`; `voided_at`, `voided_by`, `void_reason` |
+| `sale_entry_id`, `cost_entry_id` | uuid | The two journal entries |
+| `historical` | boolean | Imported history posts no journal (FR-RET-12) |
+
+The trigger `retail_sales_guard_update` (V14, review F10) lets an UPDATE change only `paid_minor`
+(upwards), the void columns (once, `completed` to `voided`), `updated_at`, `version` and the two
+entry ids (once, from null); any other change is refused, for `bms_app` and the owner alike (the
+owner's `bms.allow_mutation` maintenance switch of `reject_mutation` applies).
+
+### `retail_sale_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+`line_no`, `product_id`, `qty numeric(14,3) > 0`, and the snapshots `unit_price_minor` and
+`unit_cost_minor` with `line_total_minor` and `line_cost_minor` (each rounded half up once). Profit
+is computed from these, never from the product's current prices (ADR-020 decision 5).
+
+### `retail_suppliers` (RLS; `bms_app` SELECT, INSERT)
+
+`name varchar(200)` unique per tenant ignoring case, `contact`, `active`, `created_by`.
+
+### `retail_purchases`, `retail_purchase_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+A purchase: `purchase_no` from the sequence `retail_purchase_no` (`RP00000001`), `supplier_id`
+(required for credit, CHECK), `purchased_on`, `payment_method` (`cash`, `bank`, `credit`),
+`currency`, `total_minor`, `note`, `historical`. A line: `product_id`, `cost_minor`, optional
+`sell_minor`, `qty_total` and `line_total_minor` (the sum of each branch's quantity at the cost,
+rounded per branch). The quantity per branch is the `purchase` movement itself (`source_line_id`
+is the line). In the purchase's transaction each line, in request order, sets the product's cost
+(and sell price when given) with a `purchase` history row naming the purchase; the products are
+locked in id order first with `SELECT ... FOR NO KEY UPDATE`, never `FOR UPDATE`: every movement
+and sale line insert takes `FOR KEY SHARE` on its product through the foreign key, so a `FOR
+UPDATE` product lock taken before the balance lock deadlocks with a sale, usage, void or stock-take
+that locks the balance before inserting (review F2). `FOR NO KEY UPDATE` still serialises restocks
+and price edits. As a backstop, a transaction PostgreSQL aborts as a deadlock victim (SQLSTATE
+`40P01`) or serialisation loser (`40001`) answers 409 `transaction_conflict` with `Retry-After`;
+nothing was committed and the idempotency key rolled back, so the same request may be sent again. `retail_price_history.created_at` is the statement clock
+(`clock_timestamp()`), so two changes in one purchase keep their order.
+
+### `retail_usage_reports`, `retail_usage_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+A report: `branch_id`, `kind` (`used`, `damaged`), `reason`, `occurred_on`, `cost_total_minor`,
+`journal_entry_id`. A line: `product_id`, `qty > 0`, `unit_cost_minor` (the product's cost at the
+time) and `line_cost_minor`. Each line writes a `usage` or `damage` movement.
+
+### `retail_sale_payments` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+`sale_id`, `amount_minor > 0`, `currency`, `method` (`cash`, `mobile_money`, `bank`), `paid_on`,
+`journal_entry_id`. Each payment raises `retail_sales.paid_minor` under the sale's row lock; the
+CHECK `paid_minor <= total_minor` makes an overpayment impossible.
+
+Every retail unit amount a request can set (product and purchase cost and sell price, sale line
+price and cost snapshot, payment amount, movement, usage and stock-take unit cost, price history)
+has a CHECK of at most 10^13 minor units (V14, review F7), the bound the API validates.
+
+### 6.11.3 Valuation and profit (FR-RET-09, FR-RET-10; #54)
+
+No table: `retail.reports` reads the tables above. Valuation per branch and product is the
+balance (or, with `as_of`, the sum of movements whose `business_date` is on or before that day, the same basis as the journals' `entry_date`, review F4)
+times the product's **current** cost and sell price (ADR-020 decision 6), rounded half up per row;
+totals are sums of rows. A row whose value does not fit a long is flagged `amount_out_of_range` and left out of the totals rather than failing the report. With `retail.profit.read` each branch also shows the `inventory` account
+balance (entries dated on or before the valuation date, through `LedgerAccounts.balanceByBranch`)
+and the revaluation difference, value at cost less that balance. The branches reported are the union of those holding stock and those whose `inventory` balance is not zero, within the caller's branch filter, so a branch that has sold out but still carries an inventory balance shows value at cost 0 and difference equal to minus that balance (review F3). The difference is the expected result of
+relieving inventory at current cost (ADR-020 decision 8) and is reported, never treated as an
+error. Daily profit per branch and day is the sum of `retail_sale_lines.line_total_minor` less
+`line_cost_minor` over the lines of completed (not voided) sales by `sale_date` (the append-only
+lines, never the sale header, review F10), less `retail_usage_reports.cost_total_minor` by
+`occurred_on`; snapshots only, never current prices.
+
+### 6.11.4 The pilot import (FR-RET-12; ADR-020 decision 9; #55)
+
+The `import-retail` command (chapter 13 section 13.13) writes through the modules' history ports,
+as `bms_app` under the tenant's row-level security:
+
+- **History documents** are rows of the tables above with `historical = true`, `created_by` the
+  import actor (`00000000-0000-0000-0000-000000000000`, not a staff account) and `created_at` the
+  source's time: one `retail_sales` row and line per sale (snapshots from the export, credit sales
+  unpaid, no `sale_entry_id` or `cost_entry_id`), one `retail_purchases` row and line per restock
+  (`payment_method` `cash`, no journal, so no supplier payable), one `retail_usage_reports` row and
+  line per usage or damage report (no `journal_entry_id`).
+- **Movements** are written by `StockLedger.recordHistorical(businessDate, movements)`:
+  `historical = true`, `occurred_at` the source's time, `business_date` the source row's date
+  (`sold_at`, `purchased_on`, `reported_at` in the tenant's zone), no oversell guard. Restocks the source recorded for a stock-take or a customer
+  return become `adjustment` (either sign) or `return` movements with `source_type`
+  `retail.import`, not purchases. One `legacy_balance` movement per branch and product, dated one
+  second before the earliest imported history, makes the balance equal the source's current
+  quantity; a negative source quantity is kept and reported. Its `business_date` is the import
+  date in the tenant's zone (Africa/Kampala for the pilot), the date the opening journal carries,
+  so a valuation `as_of` an earlier date counts the imported history by business date and no
+  legacy balance, on the same basis as the inventory account, which is still empty then.
+- **Product codes** are normalised by `RetailCatalogue.normaliseCode`, as the catalogue API does
+  (review F9), before they are matched or stored.
+- **Prices**: each product takes its cost and sell price from the product master, with an
+  `initial` history row. An `import` history row, dated at the restock, is written only where two
+  consecutive restocks of a product carried different prices.
+- **The opening journal**: one per branch (section 6.11.2), for the positive balances only.
+
+### `retail_import_refs` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+| Column | Type | Notes |
+|---|---|---|
+| `tenant_id`, `created_at` | standard | |
+| `source_file` | varchar(30) | `sales`, `purchases`, `usage`, or `opening` |
+| `source_ref` | varchar(100) | The export's own reference; for `opening`, the branch code |
+| `target_type`, `target_id` | | What the row became: `retail.sale`, `retail.purchase`, `retail.usage`, `retail.stock_movement` (the first movement of an adjustment or return), `core.journal_entry` |
+| `source_user` | varchar(200) | The source system's user, kept as entered; not a staff account |
+
+Primary key `(tenant_id, source_file, source_ref)`: a row already present is skipped, so a re-run
+of the same export adds nothing.

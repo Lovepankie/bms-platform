@@ -505,3 +505,58 @@ rows 7, 9 and 13), commit must create:
   `opening_balance_equity` 2,810,000;
 - days past due as at 30 June 2026 of 75 (row 3), 86 (row 4), 88 (row 5), 67 (row 6),
   16 (row 10) and 54 (row 11).
+
+## 13.13 Retail pilot import (FR-RET-12; ADR-020 decision 9; #55)
+
+The retail pilot moves from a spreadsheet with a form app on top
+(`docs/specs/retail-pilot-data-dictionary.md`). Its import is not a template of the framework above:
+it is a one-off application command, run once per tenant at cutover by a platform operator, on a
+**normalised export** that a person prepares from the spreadsheet (data dictionary section 4). The
+dry run and its report stand in for the preview, and the review of the source happens before the
+export. The procedure is `docs/runbooks/import-retail.md`.
+
+```
+java -jar bms-api.jar import-retail --tenant <slug> --dir <path> [--dry-run]
+```
+
+**How it runs.** The command starts the application without the web server and the job scheduler,
+connected as `bms_app` like the API (the database role guard refuses the owner role), binds the
+tenant by slug through `core.jobs` (only an active tenant with retail switched on), and writes
+through the retail modules' history ports, so every insert is under the tenant's row-level security.
+Each file is one transaction, in the order branches, categories, units, products, suppliers,
+customers, purchases, sales, usage, balances. A file that fails stops the run; the files before it
+stay committed and a re-run skips what they wrote. `--dry-run` runs every file inside one outer
+transaction that is rolled back, and prints the same report.
+
+**What it writes** (chapter 6 section 6.11.4):
+
+| Export | Becomes |
+|---|---|
+| Branches, categories, units, suppliers, credit buyers | Created when no existing one matches (branch code, or name ignoring case) |
+| Products | Matched by code normalised as the catalogue normalises it (`RetailCatalogue.normaliseCode`, review F9) and ignoring case (data dictionary rule 1); a duplicate is one product and is reported. New products take the master's prices with an `initial` history row; an existing one whose prices differ takes them with an `import` row |
+| Sales, restocks, usage and damage | Historical documents and movements, no journals, keyed by `source_ref` in `retail_import_refs`; each movement's `business_date` is the source row's sale, purchase or usage date in the tenant's zone, so valuation `as_of` and daily profit read them by business date |
+| Restocks of kind `adjustment` or `return` | `adjustment` or `return` movements, not purchases, with no supplier payable |
+| Restock price changes | An `import` history row where consecutive restocks of a product changed its cost or sell price |
+| Balances | One `legacy_balance` movement per branch and product, equal to the source quantity less the balance the imported history left, so the derived balance equals the source exactly, dated with the import date as its business date; then one opening journal per branch, dated the same day, (debit `inventory`, credit `opening_balance_equity`) for the positive balances at the product's current cost |
+
+**Never guess, never lose a row (13.2).** A row with an unknown product or branch code, a missing
+or malformed field, a duplicate `source_ref`, a duplicate product code or a duplicate balance is
+skipped and listed in the report with its file and line; the export still holds it, and after the
+export is fixed a re-run imports only what is missing. Names the reference files do not list
+(a category, unit or supplier) are created exactly as written and reported. Negative source
+balances are imported as they are, excluded from the opening journal and listed for the first
+stock-take (ADR-020 decision 4). A history row has no oversell guard: it happened.
+
+**The report** is plain text: rows read, written, already present and skipped per file; the opening
+journal per branch; the negative balances; the credit sales imported unpaid (the source keeps no
+payments, so no receivable is journalled for them); every anomaly; and a checksum line, the SHA-256
+of the sorted `branch|product code|quantity` lines of the balances file and of the same lines with
+the balance after the import. `match=yes` means every balance equals the source.
+
+**Golden test.** `RetailImportIT` imports the fabricated `fixtures/retail/import-sample/` (three
+branches, 20 products and a duplicate code differing by case, 221 sales including credit sales and
+an unknown product code, 34 restock rows including an adjustment and a return, 15 usage rows, 60
+balances including a negative one) on PostgreSQL as `bms_app`, and checks: every balance equals the
+source; the valuation and one day's profit from the R4 reports include the imported history like
+live data; exactly three opening journals, balanced, per branch; no other journal; a re-run adds
+no row; a dry run writes nothing and prints the same report; another tenant is untouched.

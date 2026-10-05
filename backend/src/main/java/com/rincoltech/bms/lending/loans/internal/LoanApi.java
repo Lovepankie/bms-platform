@@ -66,6 +66,21 @@ final class LoanApi {
     @Schema(name = "LoanNoteRequest")
     record NoteRequest(@NotBlank @Size(max = 1000) String note) {}
 
+    @Schema(name = "LoanDecisionRequest")
+    record DecisionRequest(
+            @NotNull @Pattern(regexp = "approve|reject") String decision,
+
+            @Positive
+            @Max(MAX_MONEY_MINOR)
+            @Schema(description = "Approve only; defaults to the requested principal, never above it")
+            Long approvedPrincipalMinor,
+
+            @Positive @Schema(description = "Approve only; defaults to the requested term, never above it")
+            Integer approvedTermCount,
+
+            @Size(max = 1000) @Schema(description = "Required on reject")
+            String note) {}
+
     @Schema(name = "LoanGuarantor")
     record Guarantor(UUID memberId, String memberNo, long guaranteedAmountMinor, String relationship, String status) {}
 
@@ -114,8 +129,8 @@ final class LoanApi {
             List<Pledge> collateral,
 
             @Schema(
-                    description =
-                            "FR-ORG-03: from the requested terms and the proposed (else today's) date; display only")
+                    description = "FR-ORG-03, FR-ORG-06: from the requested (once approved, the approved) terms and the"
+                            + " proposed (else today's) date; display only")
             List<ScheduleItem> provisionalSchedule,
 
             UUID createdBy,

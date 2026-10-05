@@ -117,7 +117,10 @@ Signed-in sessions (bearer tokens) work in every environment. In addition, local
 environments may run with `AUTH_MODE=dev`, where a request without a bearer token takes its
 principal from `X-Dev-User-Id` (a UUID), `X-Dev-Kind` (`staff`, the default, or `member`),
 `X-Dev-Permissions` (comma separated permission keys) and `X-Dev-Branch-Ids` (comma separated
-branch UUIDs, or `*` for all branches) headers, each permission applying in those branches. Missing
+branch UUIDs, or `*` for all branches) headers, each permission applying in those branches. The
+optional `X-Dev-Scopes` header gives single permissions their own scope, as several roles do for a
+signed-in user (ADR-017): semicolon separated `permission=*` or `permission=uuid,uuid` entries,
+for example `retail.profit.read=<branch A>`, replacing that permission's scope or adding it. Missing
 or malformed headers leave the request unauthenticated; the stub never applies to platform paths.
 The application refuses to start with `AUTH_MODE=dev` in any profile other than `dev` or `test`;
 with the default `AUTH_MODE=none` only signed-in sessions authenticate. The PWA always signs in
@@ -146,7 +149,9 @@ for real; the stub is for curl and tests.
   `include_total=true` the response adds `"total"` (capped at 10,000; beyond that
   `"total_capped": true`).
 - Sorting: `?sort=<field>` or `?sort=-<field>`; each endpoint lists its sortable fields;
-  the cursor encodes the sort key plus `id` as a tiebreaker.
+  the cursor encodes the sort key plus `id` as a tiebreaker. Every list decodes it with the
+  kernel's one parser (`Cursor.decodeKey`): a cursor that is not base64url, has no `|`, has a
+  bad `id` or, on a timestamp-ordered list, a bad timestamp is 400 `malformed_request`, never a 500.
 - Filters are query parameters named after fields: `status=active&status=closed`
   (repeatable means OR), ranges as `<field>_from` and `<field>_to` (inclusive), free
   search as `q`.
@@ -183,7 +188,7 @@ published under the platform host.
 | 404 | Not found or outside branch scope; `unknown_tenant`; `module_not_enabled` |
 | 413 | `file_too_large`: an upload over 5 MB (chapter 8 section 8.8) |
 | 415 | `unsupported_file_type`: an upload that is not JPEG, PNG or PDF by content |
-| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, `approval_already_pending`, `mfa_already_enrolled`, `mfa_not_enrolled`, `mfa_enrolment_not_started`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`, `duplicate_email`, `duplicate_phone`, `duplicate_branch_code`, `duplicate_slug`, `duplicate_product_code`); `conflict` for any other unique or foreign key violation |
+| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, `approval_already_pending`, `mfa_already_enrolled`, `mfa_not_enrolled`, `mfa_enrolment_not_started`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`, `duplicate_email`, `duplicate_phone`, `duplicate_branch_code`, `duplicate_slug`, `duplicate_product_code`); `transaction_conflict` (the database aborted the transaction as a deadlock victim or serialisation loser; nothing was saved, `Retry-After` is set and the same request may be retried with the same `Idempotency-Key`); `stock_moved_since_count` (a retail stock-take whose lines moved after the count so far that the adjustment would leave a negative balance; recount them); `conflict` for any other unique or foreign key violation |
 | 422 | Validation and business rule failures (codes below) |
 | 423 | `tenant_suspended`, `account_locked` |
 | 428 | `precondition_required`: a `PATCH` without `If-Match` (section 7.9) |
@@ -209,7 +214,7 @@ from identity, tenancy and approvals (increment 1): `weak_password`, `invitation
 `invitation_expired`, `invalid_mfa_code` (enrolment and recovery code replacement),
 `cannot_deactivate_self`, `cannot_reset_own_mfa`, `last_tenant_admin`, `not_a_tenant_admin`,
 `head_office_required`, `invalid_tenant`, `module_not_allowed`, `unknown_action_type`,
-`approval_execution_failed`.
+`approval_execution_failed`; and from retail (ADR-020): `insufficient_stock`, `price_below_cost`; and from any money route: `amount_out_of_range` (exact arithmetic on minor units overflowed; every retail `*_minor` input is also bounded at 10^13 by validation and a database CHECK, review F7).
 
 Entries of the `errors` array carry their own `code`: `invalid` (a Bean Validation failure;
 the message says which), `required`, `unknown_branch` (a branch that does not exist, is inactive
@@ -491,7 +496,31 @@ runs the pledge checks again and adds `member_blacklisted`, `guarantor_not_activ
 `guarantor_blacklisted`; it also stores today as the proposed disbursement date when none was
 given. The provisional schedule includes the version's `added_to_loan` fees, so it equals the
 product preview. Money fields accept at most 10^15 minor units. `PATCH` with `purpose_text: ""`
-clears the text. Appraisal and decision arrive with #42 and #43.
+clears the text.
+
+Built (#42): `POST` and `GET .../appraisals`. The POST takes
+`{declared_monthly_income_minor?, monthly_obligations_minor?, visit_notes?}` with `If-Match` on
+the loan, on a `submitted` or `appraised` loan (else 409 `invalid_status_transition`), and returns
+201 with the stored snapshot: `score`, `band`, `components`, `flags`, `exposure`
+(`own_loans`, `guaranteed_loans`, `linked_party_loans`, each with `loan_no`, `status`,
+`outstanding_minor`, `days_past_due`), `weights` and `recommendation`. Income defaults to the
+member's declared monthly income. Both money inputs accept at most 10^15 minor units, the same
+bound as every loan money field; a larger value is 422 `validation_failed` and nothing is stored,
+because appraisals are append-only and a bad snapshot cannot be corrected. The first appraisal moves the loan to `appraised`; a later one
+records a new snapshot and the latest appraiser. The GET lists newest first.
+
+Built (#43): `POST .../decision` with `If-Match`, on an `appraised` loan. `approve` takes
+`approved_principal_minor` and `approved_term_count` (each defaults to the requested value) and
+stores them with the approver (`approved_principal_minor` accepts at most 10^15 minor units,
+else 422 `validation_failed`); the loan's `provisional_schedule` then previews the approved
+terms. `reject` requires `note`. Codes (422 unless stated): `self_approval_forbidden` (the
+approver submitted or appraised the loan, FR-APR-03), `above_requested_principal`,
+`above_requested_term`, `below_product_minimum`, `member_blacklisted`, `kyc_not_verified`,
+`collateral_below_product_minimum` (cover measured against the approved principal),
+`max_active_loans_reached` (approved and active loans both count, section 3.18), and 409 `invalid_status_transition`. The nightly task
+`lending.loan-approval-expiry` cancels an approval older than `approval_validity_days` with
+reason `approval_expired` (FR-ORG-08), audited with actor kind `system`. Both `approved_at` and
+the expiry bound come from the business clock (AGENTS.md rule 7), never the database's `now()`.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
@@ -599,6 +628,69 @@ with the item's `ETag`; PATCH, events and release require `If-Match`. Release an
 | POST | `/payments/callbacks/{provider}` | 7.11.10 |
 | POST | `/channels/sms/{provider}/delivery-reports` | FR-NTF-05 |
 | POST | `/channels/ussd/{provider}` | Session callback. FR-MSS-07 (Later) |
+
+### 7.11.20 Retail (`/retail`, ADR-020)
+
+Refused with 404 `module_not_enabled` unless the tenant has the retail module switched on. The
+draft `docs/api/retail-contract-draft.md` is replaced by this section and the generated
+`openapi.json`; as everywhere in this API, JSON fields and query parameters are snake_case
+(`cost_minor`, `branch_id`), where the draft wrote camelCase. Quantities are decimal strings with up
+to three places (`"3.500"`). Fields marked `*` are **absent** from the body, not null, for a caller
+without `retail.profit.read` (ADR-020 decision 10). On a branch-bound row (stock, movements,
+stock-takes, usage, sales, valuation rows and branch totals) the permission must cover that row's
+branch, per ADR-017, not merely be held somewhere; the valuation's overall `value_at_cost_minor`
+shows only when cost shows for every branch reported (review F5). Products and price history are
+tenant-wide and need the permission in any branch.
+
+Built (#51, catalogue):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/categories`, `/retail/units` | `retail.stock.read` | `{items: [{id, name}]}` |
+| POST | `/retail/categories`, `/retail/units` | `retail.catalogue.manage` | `{name}`; 409 `duplicate_category`, `duplicate_unit` (names ignore case). FR-RET-01 |
+| GET | `/retail/products` | `retail.stock.read` | Filters `query` (code or description), `category_id`, `active`; `limit`, `cursor`, ordered by code. Row: `{id, code, description, category_id, category, unit_id, unit, sell_minor, cost_minor*, currency, active, version}` |
+| POST | `/retail/products` | `retail.catalogue.manage` | `{code, description, category_id, unit_id, cost_minor, sell_minor}`; writes the `initial` history row; 409 `duplicate_product_code`. FR-RET-01 |
+| GET, PATCH | `/retail/products/{product_id}` | read / `retail.catalogue.manage` | PATCH needs `If-Match` and edits `code`, `description`, `category_id`, `unit_id`, `active` only; a price in the body is 400 |
+| POST | `/retail/products/{product_id}/prices` | `retail.price.edit` | `{cost_minor?, sell_minor?, reason}`; at least one price; 422 `price_unchanged`; writes a `manual` history row and audit. FR-RET-02 |
+| GET | `/retail/products/{product_id}/price-history` | `retail.stock.read` | `{items: [{id, at, by, source, source_id, old_cost_minor*, new_cost_minor*, old_sell_minor, new_sell_minor, currency, reason}]}` |
+
+Built (#52, stock and sales). `M` marks a money-moving route that requires `Idempotency-Key`
+(section 7.8). A sale, stock-take or list for one branch takes `branch_id`, or the caller's one
+branch when the permission's scope has exactly one; otherwise 422 `branch_required`.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/products?branch_id=` | `retail.stock.read` | Each row adds `qty` and `negative` for that branch |
+| GET | `/retail/stock` | `retail.stock.read` | `branch_id`, `query`, `negative_only`, `limit`, `cursor`. Row: `{product_id, code, description, unit, qty, negative, sell_minor, cost_minor*}`. FR-RET-03 |
+| GET | `/retail/stock/movements` | `retail.stock.read` | `branch_id` (repeatable, scoped), `product_id`, `from`, `to`. Row: `{id, at, branch_id, product_id, kind, qty, unit_cost_minor*, source_type, source_id, reverses_movement_id, historical, note, by}` |
+| POST | `/retail/stocktakes` | `retail.stocktake.commit` | `{branch_id?, lines: [{product_id, counted_qty}], note?}`; returns each line's `expected_qty` and `variance_qty`. FR-RET-08 |
+| GET | `/retail/stocktakes/{stocktake_id}` | `retail.stock.read` | Draft or committed |
+| POST | `/retail/stocktakes/{stocktake_id}/commit` | `retail.stocktake.commit` | Adjustment movements of counted less `expected_qty` (the variance when counted, so later movements stay in the balance), posted at cost; 409 `stocktake_committed`; 409 `stock_moved_since_count` when later movements would make an adjusted balance negative (recount those lines) |
+| POST | `/retail/sales` | `retail.sale.create` | **M**. `{branch_id?, sale_date?, payment_method, customer_id?, buyer_name?, buyer_contact?, due_date?, lines: [{product_id, qty, unit_price_minor?}]}`; 422 `insufficient_stock` when a line exceeds the branch's stock (always; ADR-020 decision 4); 422 `price_below_cost` when a line's unit price is not above the product's cost and the caller lacks `retail.price.below_cost` (the message never carries the cost; ADR-020 decision 5). Response: the sale with `lines`, `total_minor`, `paid_minor`, `balance_minor`, `cost_total_minor*`, `profit_minor*`, and per line `unit_cost_minor*`, `line_cost_minor*`. FR-RET-04 |
+| GET | `/retail/sales` | `retail.sale.read` | `branch_id` (repeatable, scoped), `from`, `to`, `customer_id`, `limit`, `cursor` |
+| GET | `/retail/sales/{sale_id}` | `retail.sale.read` | 404 outside scope |
+| POST | `/retail/sales/{sale_id}/void` | `retail.sale.void` | `{reason}`; 409 `sale_voided`; 422 `sale_has_payments` for a credit sale with payments |
+| GET | `/retail/customers` | `retail.sale.read` | `query`, `limit` |
+| POST | `/retail/customers` | `retail.customer.manage` | `{name, contact?}` |
+| GET | `/retail/customers/{customer_id}/balance` | `retail.sale.read` | `{customer_id, currency, balance_minor, open_sales: [...]}` over credit sales in the caller's scope. FR-RET-05 |
+
+Built (#53, purchasing, usage and payments):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET, POST | `/retail/suppliers` | `retail.purchase.create` | `{name, contact?}`; 409 `duplicate_supplier` |
+| POST | `/retail/purchases` | `retail.purchase.create` | **M**. `{supplier_id?, purchased_on, payment_method: cash, bank or credit, note?, lines: [{product_id, cost_minor, sell_minor?, qty_by_branch: [{branch_id, qty}]}]}`; every branch must be in the caller's scope; sets the product prices and history atomically, latest line wins. FR-RET-06 |
+| GET | `/retail/purchases` | `retail.purchase.create` | `from`, `to`, `supplier_id`, `limit`, `cursor`; purchases that moved stock into the caller's branches. A branch-scoped caller sees only their branches' `qty_by_branch`, with `qty_total`, `line_total_minor` and `total_minor` recomputed from them (lines with nothing in scope left out); an all-branch caller sees the whole document (review F11) |
+| POST | `/retail/usage` | `retail.usage.report` | **M**. `{branch_id?, kind: used or damaged, reason, occurred_on?, lines: [{product_id, qty}]}`; response `cost_total_minor*`, per line `unit_cost_minor*`, `line_cost_minor*`; 422 `insufficient_stock` past the branch's stock (ADR-020 decision 4). FR-RET-07 |
+| POST | `/retail/sales/{sale_id}/payments` | `retail.sale.create` | **M**. `{amount_minor, method: cash, mobile_money or bank, paid_on?}`; `{payment, sale_paid_minor, sale_balance_minor}`; 422 `payment_exceeds_balance`, `sale_not_payable`. FR-RET-05 |
+| GET | `/retail/sales/{sale_id}/payments` | `retail.sale.read` | |
+
+Built (#54, reports):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/reports/valuation` | `retail.stock.read` | `branch_id` (repeatable, scoped), `as_of` (not in the future; quantities are summed by each movement's business date, the date its journal carries). A row whose quantity times a price does not fit is flagged `amount_out_of_range`, its values left out and excluded from the totals, so one product never fails the report. `{as_of, currency, rows: [{branch_id, product_id, code, description, unit, qty, negative, sell_minor, expected_sales_minor, amount_out_of_range, cost_minor*, value_at_cost_minor*}], branches: [{branch_id, expected_sales_minor, value_at_cost_minor*, inventory_account_minor*, revaluation_difference_minor*}], expected_sales_minor, value_at_cost_minor*}`; `branches` lists every branch in the filter that holds stock or has a non-zero `inventory` balance (review F3). FR-RET-09 |
+| GET | `/retail/reports/profit/daily` | `retail.profit.read` | `branch_id` (repeatable, scoped), `from`, `to` (default the last 30 days, at most 366). `{from, to, currency, rows: [{branch_id, date, sales_minor, cost_of_sales_minor, gross_profit_minor, usage_cost_minor, profit_minor}], sales_minor, cost_of_sales_minor, usage_cost_minor, profit_minor}`. FR-RET-10 |
 
 ## 7.12 Example: record a repayment
 

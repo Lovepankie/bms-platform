@@ -77,6 +77,18 @@ const staffApprovalsRoute = createRoute({ getParentRoute: () => staffRoute, path
   import('../areas/staff/approvals').then((m) => m.Route),
 );
 
+const staffRetailRoute = createRoute({ getParentRoute: () => staffRoute, path: '/retail', component: Outlet });
+
+const retailScreen = <P extends string>(path: P) => createRoute({ getParentRoute: () => staffRetailRoute, path });
+const retailHomeRoute = retailScreen('/').lazy(() => import('../areas/staff/retail/home').then((m) => m.Route));
+const retailSaleRoute = retailScreen('/sale').lazy(() => import('../areas/staff/retail/sale').then((m) => m.Route));
+const retailRestockRoute = retailScreen('/restock').lazy(() => import('../areas/staff/retail/restock').then((m) => m.Route));
+const retailUsageRoute = retailScreen('/usage').lazy(() => import('../areas/staff/retail/usage').then((m) => m.Route));
+const retailStockRoute = retailScreen('/stock').lazy(() => import('../areas/staff/retail/stock').then((m) => m.Route));
+const retailStocktakeRoute = retailScreen('/stocktake').lazy(() => import('../areas/staff/retail/stocktake').then((m) => m.Route));
+const retailValuationRoute = retailScreen('/valuation').lazy(() => import('../areas/staff/retail/profit').then((m) => m.ValuationRoute));
+const retailProfitRoute = retailScreen('/profit').lazy(() => import('../areas/staff/retail/profit').then((m) => m.Route));
+
 const memberRoute = createRoute({ getParentRoute: () => rootRoute, path: '/member' }).lazy(() =>
   import('../areas/member/route').then((m) => m.Route),
 );
@@ -86,7 +98,16 @@ export const router = createRouter({
     indexRoute,
     signInRoute,
     acceptInvitationRoute,
-    staffRoute.addChildren([staffHomeRoute, staffApprovalsRoute]),
+    staffRoute.addChildren([staffHomeRoute, staffApprovalsRoute, staffRetailRoute.addChildren([
+        retailHomeRoute,
+        retailSaleRoute,
+        retailRestockRoute,
+        retailUsageRoute,
+        retailStockRoute,
+        retailStocktakeRoute,
+        retailValuationRoute,
+        retailProfitRoute,
+      ])]),
     memberRoute,
   ]),
 });

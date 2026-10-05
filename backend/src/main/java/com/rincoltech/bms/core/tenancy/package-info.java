@@ -9,6 +9,7 @@
  * {@link com.rincoltech.bms.core.tenancy.PlanLimits},
  * {@link com.rincoltech.bms.core.tenancy.PlatformHost},
  * {@link com.rincoltech.bms.core.tenancy.BranchDeactivationGuard},
+ * {@link com.rincoltech.bms.core.tenancy.BranchProvisioning},
  * {@link com.rincoltech.bms.core.tenancy.ModuleManifest}.
  */
 @ApplicationModule(

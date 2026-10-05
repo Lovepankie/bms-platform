@@ -246,6 +246,166 @@ class LoanRepository {
                 > 0;
     }
 
+    /** A loan as it counts towards someone's exposure (FR-ORG-05). */
+    record ExposureLoan(
+            UUID loanId, UUID memberId, String loanNo, String status, long outstandingMinor, int daysPastDue) {}
+
+    private static final String EXPOSURE = """
+            SELECT l.id, l.member_id, l.loan_no, l.status, l.days_past_due,
+                   l.principal_outstanding_minor + l.interest_outstanding_minor + l.fees_outstanding_minor
+                       + l.penalties_outstanding_minor AS outstanding
+              FROM lending_loans l
+            """;
+
+    /** Statuses that count as exposure: applied for and not yet finished (drafts do not count). */
+    static final List<String> EXPOSED = List.of("submitted", "appraised", "approved", "active");
+
+    List<ExposureLoan> exposureOfMembers(List<UUID> memberIds, UUID exceptLoanId) {
+        if (memberIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql(EXPOSURE + " WHERE l.member_id IN (:members) AND l.status IN (:statuses)"
+                        + " AND l.id IS DISTINCT FROM CAST(:except AS uuid) ORDER BY l.created_at")
+                .param("members", memberIds)
+                .param("statuses", EXPOSED)
+                .param("except", exceptLoanId)
+                .query(LoanRepository::exposure)
+                .list();
+    }
+
+    /** Loans this member guarantees (active guarantees on exposed loans). */
+    List<ExposureLoan> guaranteedBy(UUID memberId) {
+        return jdbc.sql(EXPOSURE + " JOIN lending_loan_guarantors g ON g.loan_id = l.id"
+                        + " WHERE g.guarantor_member_id = :member AND g.status = 'active' AND l.status IN (:statuses)"
+                        + " ORDER BY l.created_at")
+                .param("member", memberId)
+                .param("statuses", EXPOSED)
+                .query(LoanRepository::exposure)
+                .list();
+    }
+
+    /** Closed and written-off loans of a member, for the repayment history component. */
+    record History(int closed, int writtenOff) {}
+
+    History historyCounts(UUID memberId) {
+        return jdbc.sql("""
+                        SELECT count(*) FILTER (WHERE status = 'closed') AS closed,
+                               count(*) FILTER (WHERE status = 'written_off') AS written_off
+                          FROM lending_loans WHERE member_id = ?
+                        """)
+                .param(memberId)
+                .query((rs, n) -> new History(rs.getInt("closed"), rs.getInt("written_off")))
+                .single();
+    }
+
+    void insertAppraisal(
+            UUID id,
+            UUID loanId,
+            UUID by,
+            Long income,
+            Long obligations,
+            String notes,
+            CreditScore.Result r,
+            String componentsJson,
+            String exposureJson,
+            String weightsJson) {
+        jdbc.sql("""
+                        INSERT INTO lending_loan_appraisals (id, tenant_id, loan_id, appraised_by,
+                            declared_monthly_income_minor, monthly_obligations_minor, visit_notes, score, band,
+                            components, flags, exposure, weights, recommendation)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb),
+                                CAST(? AS text[]), CAST(? AS jsonb), CAST(? AS jsonb), ?)
+                        """)
+                .params(
+                        id,
+                        loanId,
+                        by,
+                        income,
+                        obligations,
+                        notes,
+                        r.score(),
+                        r.band(),
+                        componentsJson,
+                        "{" + String.join(",", r.flags()) + "}",
+                        exposureJson,
+                        weightsJson,
+                        r.recommendation())
+                .update();
+    }
+
+    record AppraisalRow(
+            UUID id,
+            UUID appraisedBy,
+            Long declaredMonthlyIncomeMinor,
+            Long monthlyObligationsMinor,
+            String visitNotes,
+            int score,
+            String band,
+            String componentsJson,
+            List<String> flags,
+            String exposureJson,
+            String weightsJson,
+            String recommendation,
+            Instant createdAt) {}
+
+    List<AppraisalRow> appraisals(UUID loanId) {
+        return jdbc.sql("""
+                        SELECT id, appraised_by, declared_monthly_income_minor, monthly_obligations_minor, visit_notes,
+                               score, band, components::text AS components, flags, exposure::text AS exposure,
+                               weights::text AS weights, recommendation, created_at
+                          FROM lending_loan_appraisals WHERE loan_id = ? ORDER BY created_at DESC, id
+                        """)
+                .param(loanId)
+                .query((rs, n) -> new AppraisalRow(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("appraised_by", UUID.class),
+                        rs.getObject("declared_monthly_income_minor", Long.class),
+                        rs.getObject("monthly_obligations_minor", Long.class),
+                        rs.getString("visit_notes"),
+                        rs.getInt("score"),
+                        rs.getString("band"),
+                        rs.getString("components"),
+                        List.of((String[]) rs.getArray("flags").getArray()),
+                        rs.getString("exposure"),
+                        rs.getString("weights"),
+                        rs.getString("recommendation"),
+                        instant(rs.getTimestamp("created_at"))))
+                .list();
+    }
+
+    /** FR-ORG-07: the member's approved and active loans; an approval not yet disbursed counts. */
+    int approvedOrActiveLoans(UUID memberId) {
+        return jdbc.sql("SELECT count(*) FROM lending_loans WHERE member_id = ? AND status IN ('approved', 'active')")
+                .param(memberId)
+                .query(Integer.class)
+                .single();
+    }
+
+    /** FR-ORG-08: approved loans still waiting for disbursement, approved before {@code bound}, locked. */
+    List<Loan> overdueApprovals(Timestamp bound) {
+        return jdbc.sql("SELECT * FROM lending_loans WHERE status = 'approved' AND approved_at < ? FOR UPDATE")
+                .param(bound)
+                .query(LoanRepository::map)
+                .list();
+    }
+
+    /** A re-appraisal of an appraised loan: the latest appraiser, no status change. */
+    void reappraised(UUID loanId, UUID by) {
+        jdbc.sql("UPDATE lending_loans SET appraised_by = ?, updated_at = now(), version = version + 1 WHERE id = ?")
+                .params(by, loanId)
+                .update();
+    }
+
+    private static ExposureLoan exposure(ResultSet rs, int n) throws SQLException {
+        return new ExposureLoan(
+                rs.getObject("id", UUID.class),
+                rs.getObject("member_id", UUID.class),
+                rs.getString("loan_no"),
+                rs.getString("status"),
+                rs.getLong("outstanding"),
+                rs.getInt("days_past_due"));
+    }
+
     /** One page ordered by creation; {@code branchIds} already intersected with the scope, null for every branch. */
     List<LoanListItem> page(
             List<UUID> branchIds,

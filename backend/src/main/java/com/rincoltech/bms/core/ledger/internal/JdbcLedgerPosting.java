@@ -8,6 +8,8 @@ import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -29,6 +31,75 @@ class JdbcLedgerPosting implements LedgerPosting {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public PostedEntry post(EntryRequest request) {
+        return insert(request, null);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public PostedEntry reverse(ReversalRequest request) {
+        Original original = jdbc.sql("""
+                        SELECT branch_id, source_module, source_type, source_id, reverses_entry_id
+                          FROM journal_entries WHERE id = ?
+                        """)
+                .param(request.entryId())
+                .query((rs, n) -> new Original(
+                        rs.getObject(1, UUID.class),
+                        rs.getString(2),
+                        rs.getString(3),
+                        rs.getObject(4, UUID.class),
+                        rs.getObject(5, UUID.class)))
+                .optional()
+                .orElseThrow(ApiException::notFound);
+        // FR-GL-04: a reversal is not reversed again; the original is.
+        if (original.reversesEntryId() != null) {
+            throw reversed();
+        }
+        if (jdbc.sql("SELECT count(*) FROM journal_entries WHERE reverses_entry_id = ?")
+                        .param(request.entryId())
+                        .query(Long.class)
+                        .single()
+                > 0) {
+            throw reversed();
+        }
+        List<Line> swapped = jdbc.sql("""
+                        SELECT account_id, debit, credit, currency, subledger_type, subledger_id
+                          FROM journal_lines WHERE entry_id = ? ORDER BY line_no
+                        """)
+                .param(request.entryId())
+                .query((rs, n) -> new Line(
+                        rs.getObject(1, UUID.class),
+                        rs.getLong(3),
+                        rs.getLong(2),
+                        rs.getString(4),
+                        rs.getString(5),
+                        rs.getObject(6, UUID.class)))
+                .list();
+        EntryRequest entry = new EntryRequest(
+                original.branchId(),
+                request.entryDate(),
+                request.reference(),
+                request.memo(),
+                original.sourceModule(),
+                original.sourceType(),
+                original.sourceId(),
+                request.idempotencyKey(),
+                swapped);
+        try {
+            return insert(entry, request.entryId());
+        } catch (DuplicateKeyException e) {
+            throw reversed();
+        }
+    }
+
+    private static ApiException reversed() {
+        return new ApiException(
+                HttpStatus.CONFLICT,
+                "entry_reversed",
+                "Entry already reversed",
+                "The entry has been reversed already.");
+    }
+
+    private PostedEntry insert(EntryRequest request, UUID reversesEntryId) {
         EntryRules.check(request.lines());
         if (branches.findActive(request.branchId()).isEmpty()) {
             throw ApiException.rule("invalid_journal_line", "The entry's branch does not exist or is inactive.");
@@ -43,8 +114,9 @@ class JdbcLedgerPosting implements LedgerPosting {
 
         jdbc.sql("""
                         INSERT INTO journal_entries (id, tenant_id, branch_id, entry_no, entry_date, period_id, reference,
-                                                     memo, source_module, source_type, source_id, idempotency_key, created_by)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                     memo, source_module, source_type, source_id, idempotency_key, created_by,
+                                                     reverses_entry_id)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """)
                 .params(
                         entryId,
@@ -58,7 +130,8 @@ class JdbcLedgerPosting implements LedgerPosting {
                         request.sourceType(),
                         request.sourceId(),
                         request.idempotencyKey(),
-                        createdBy)
+                        createdBy,
+                        reversesEntryId)
                 .update();
 
         List<Line> lines = request.lines();
@@ -117,6 +190,9 @@ class JdbcLedgerPosting implements LedgerPosting {
         }
         return period.id();
     }
+
+    private record Original(
+            UUID branchId, String sourceModule, String sourceType, UUID sourceId, UUID reversesEntryId) {}
 
     private record AccountRow(String currency, boolean postable, boolean active) {}
 

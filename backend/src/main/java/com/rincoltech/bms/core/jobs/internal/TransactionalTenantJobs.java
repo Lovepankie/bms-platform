@@ -5,6 +5,7 @@ import com.rincoltech.bms.kernel.TenantContext;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -42,6 +43,24 @@ class TransactionalTenantJobs implements TenantJobs {
                         .query(UUID.class)
                         .list(),
                 work);
+    }
+
+    @Override
+    public <T> T callAsTenant(String slug, String moduleKey, Supplier<T> work) {
+        UUID tenantId = jdbc.sql("SELECT id FROM app_resolve_tenant_status(?) WHERE status = 'active'")
+                .param(slug)
+                .query(UUID.class)
+                .optional()
+                .orElseThrow(() -> new IllegalArgumentException("No active tenant with slug " + slug + "."));
+        boolean enabled = jdbc.sql("SELECT app_list_active_tenants_with_module(?)")
+                .param(moduleKey)
+                .query(UUID.class)
+                .list()
+                .contains(tenantId);
+        if (!enabled) {
+            throw new IllegalArgumentException("Tenant " + slug + " does not have the " + moduleKey + " module on.");
+        }
+        return TenantContext.callAs(tenantId, work);
     }
 
     private int run(String jobName, List<UUID> tenants, Consumer<UUID> work) {

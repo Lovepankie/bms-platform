@@ -1,0 +1,21 @@
+{"code": "TP-001", "description": "Test cable item 01", "category": "Cables", "unit": "metre", "cost_minor": 800, "sell_minor": 1300, "active": true}
+{"code": "TP-002", "description": "Test switche item 02", "category": "Switches", "unit": "piece", "cost_minor": 1200, "sell_minor": 2200, "active": true}
+{"code": "TP-003", "description": "Test lighting item 03", "category": "Lighting", "unit": "piece", "cost_minor": 800, "sell_minor": 1300, "active": true}
+{"code": "TP-004", "description": "Test socket item 04", "category": "Sockets", "unit": "piece", "cost_minor": 4000, "sell_minor": 4200, "active": true}
+{"code": "TP-005", "description": "Test cable item 05", "category": "Cables", "unit": "metre", "cost_minor": 6500, "sell_minor": 8000, "active": true}
+{"code": " tp-001", "description": "Test duplicate of TP-001", "category": "Cables", "unit": "metre", "cost_minor": 800, "sell_minor": 1300, "active": true}
+{"code": "TP-006", "description": "Test switche item 06", "category": "Switches", "unit": "piece", "cost_minor": 9000, "sell_minor": 10500, "active": true}
+{"code": "TP-007", "description": "Test lighting item 07", "category": "Lighting", "unit": "box", "cost_minor": 9000, "sell_minor": 10000, "active": true}
+{"code": "TP-008", "description": "Test socket item 08", "category": "Sockets", "unit": "piece", "cost_minor": 9000, "sell_minor": 12000, "active": true}
+{"code": "TP-009", "description": "Test cable item 09", "category": "Cables", "unit": "metre", "cost_minor": 500, "sell_minor": 1500, "active": true}
+{"code": "TP-010", "description": "Test switche item 10", "category": "Switches", "unit": "piece", "cost_minor": 500, "sell_minor": 1000, "active": true}
+{"code": "TP-011", "description": "Test lighting item 11", "category": "Lighting", "unit": "piece", "cost_minor": 500, "sell_minor": 3500, "active": true}
+{"code": "TP-012", "description": "Test socket item 12", "category": "Sockets", "unit": "piece", "cost_minor": 15000, "sell_minor": 15500, "active": true}
+{"code": "TP-013", "description": "Test cable item 13", "category": "Cables", "unit": "metre", "cost_minor": 500, "sell_minor": 2000, "active": true}
+{"code": "TP-014", "description": "Test switche item 14", "category": "Switches", "unit": "box", "cost_minor": 2500, "sell_minor": 2700, "active": true}
+{"code": "TP-015", "description": "Test lighting item 15", "category": "Lighting", "unit": "piece", "cost_minor": 9000, "sell_minor": 9500, "active": true}
+{"code": "TP-016", "description": "Test socket item 16", "category": "Sockets", "unit": "piece", "cost_minor": 2500, "sell_minor": 3000, "active": true}
+{"code": "TP-017", "description": "Test cable item 17", "category": "Cables", "unit": "metre", "cost_minor": 9000, "sell_minor": 9500, "active": true}
+{"code": "TP-018", "description": "Test switche item 18", "category": "Switches", "unit": "piece", "cost_minor": 4000, "sell_minor": 5000, "active": true}
+{"code": "TP-019", "description": "Test lighting item 19", "category": "Lighting", "unit": "piece", "cost_minor": 500, "sell_minor": 700, "active": true}
+{"code": "TP-020", "description": "Test socket item 20", "category": "Sockets", "unit": "piece", "cost_minor": 9000, "sell_minor": 10000, "active": false}

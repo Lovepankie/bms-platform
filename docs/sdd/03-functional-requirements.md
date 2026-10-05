@@ -38,6 +38,7 @@ A letter suffix (`FR-REP-04a`) splits one statement into separately testable par
 | INV | Investments | 3.25 |
 | CLN | Collections | 3.26 |
 | MSS | Member self-service | 3.27 |
+| RET | Retail vertical: catalogue, stock, sales, purchasing, valuation (ADR-020) | 3.28 |
 
 **Phase column.** `MVP` is in the first release for the pilot tenant
 (`docs/specs/lending-mvp-scope.md` orders them). `P2` is planned after the MVP. `Later`
@@ -56,7 +57,10 @@ chapter 8.
 In scope: the platform core (ADR-001) and the lending vertical for a licensed money
 lender (Tier 4, Uganda) with loans, savings and investment products.
 
-Out of scope for this chapter: the retail vertical (ADR-001), synchronisation with the
+The retail vertical (ADR-020) is in scope from section 3.28; its build order is
+`docs/specs/retail-mvp-scope.md`, where `MVP` in the phase column means the retail first release.
+
+Out of scope for this chapter: synchronisation with the
 offline single-device product (ADR-007), accrual accounting and expected credit loss
 provisioning (ADR-004), and regulator return formats (open question in
 `docs/specs/lending-mvp-scope.md`).
@@ -477,6 +481,12 @@ Origination rules that follow from the table above:
   adequacy: the collateral cover against the product minimum is checked at approval (FR-ORG-07),
   and a guarantor's capacity is not measured at all in the MVP. A limit on how much one member may
   guarantee across loans is an open question for the product owner.
+- Loans per member (FR-ORG-07). `max_active_loans_per_member` counts the member's loans that are
+  `approved` or `active`: an approval not yet disbursed takes a place, so several appraised loans
+  cannot all be approved before one is disbursed. Approval locks the member's row before it
+  counts, so two approvals for one member at the same moment run one after the other and the
+  second is refused with `max_active_loans_reached`. An approval that expires (FR-ORG-08) frees
+  its place.
 - Dates. A proposed disbursement date is today or later. A loan submitted without one takes the
   submission date, so the provisional schedule stops moving.
 
@@ -500,6 +510,12 @@ Band: A 75 to 100, B 60 to 74, C 45 to 59, D below 45. Flags are shown with the 
 `INCOME_NOT_DECLARED`, `EXISTING_LOAN_IN_ARREARS`, `LINKED_PARTY_IN_ARREARS`,
 `MULTIPLE_ACTIVE_LOANS`, `COLLATERAL_BELOW_PRODUCT_MINIMUM`, `NEW_MEMBER` (registered
 less than 30 days ago).
+
+Recommendation stored with the score: band A or B `approve`, band C `review`, band D `decline`.
+Exposure (FR-ORG-05) counts loans in `submitted`, `appraised`, `approved` or `active`; linked
+parties are the FR-MEM-08 links plus this loan's guarantors and the borrowers of loans the member
+guarantees. Until the daily DPD snapshots exist (increment 6) no maximum DPD is recorded per
+loan, so every closed loan counts as closed on time in the repayment history rule.
 
 ## 3.19 Disbursement and repayment schedule (DIS)
 
@@ -609,3 +625,29 @@ return.
 | FR-MSS-05 | A member shall download statements and receipts. | Signed URL per FR-DOC-03. | P2 |
 | FR-MSS-06 | The member area shall work on a slow connection and show the last synced data offline (chapter 4 NFR-OFF). | Tested with the network disabled after one sync. | P2 |
 | FR-MSS-07 | Members shall use a USSD menu for balance, next due amount, mini statement and pay (chapter 11). | Depends on pending ADR-013. | Later |
+
+## 3.28 Retail (RET)
+
+The retail vertical (ADR-020): a generic module for shops that sell stock from several branches.
+Stock is a ledger of append-only movements; prices live on the product and change only inside the
+event that carries them; every financial event posts to the general ledger. Build order and open
+questions are in `docs/specs/retail-mvp-scope.md`; the import of a pilot spreadsheet is described
+by `docs/specs/retail-pilot-data-dictionary.md`. `MVP` here is the retail first release.
+
+| ID | Requirement | Acceptance criteria | Phase |
+|---|---|---|---|
+| FR-RET-01 | Products shall have a code, description, category, unit of measure, current cost and sell price in minor units with the tenant currency, and an active flag. Categories and units are managed per tenant. | Codes are unique ignoring case and surrounding spaces, Unicode spaces included, after NFKC; a code with a control character or a Unicode space inside is refused; names of categories and units are unique ignoring case; amounts are integers (ADR-004); a non-price edit never changes a price. | MVP |
+| FR-RET-02 | Every change to a product's cost or sell price shall record the old and new values, who, when, the source (`initial`, `manual`, `purchase`, `import`) and its reason or source document. | The history table is append-only for the application and rejects UPDATE and DELETE by trigger; a manual edit needs `retail.price.edit`; the price and its history row commit together. | MVP |
+| FR-RET-03 | Stock movements shall be append-only, with a signed quantity per branch and product. The balance per branch and product is derived from them, kept in the same transaction, and reconciled against the sum of movements. A sale, usage or damage movement that would take a branch's balance below zero is always refused; there is no setting to allow it (ADR-020 decision 4). Imported history (`legacy_balance`) and stock-take adjustments are not guarded; a negative balance can only come from imported history and is flagged on every stock view until the first stock-take. | No route or job edits a balance; the reconciliation job reports any branch and product whose balance differs from the sum of its movements; a sale, usage or damage past the branch's stock is refused with `insufficient_stock` and leaves nothing behind; two concurrent sales of the last unit yield exactly one success and one refusal. | MVP |
+| FR-RET-04 | A sale shall have lines, a branch from the user's context, a payment method (`cash`, `mobile_money`, `bank`) or `credit`, an optional buyer, and snapshots of unit cost and unit price on each line. A line whose unit price is not above the product's current cost is refused unless the user holds `retail.price.below_cost` (ADR-020 decision 5). A void reverses the stock movements and the journals. | A later price change does not change a recorded sale or its profit; a line priced at or below cost is refused with `price_below_cost`, whose message never carries the cost; a void writes reversing movements and reversing journal entries and needs `retail.sale.void`; a sale is idempotent on its `Idempotency-Key`. | MVP |
+| FR-RET-05 | A credit sale shall record the buyer and a proposed payment date. Payments against it reduce the trade debtor balance and may be partial. | A payment above the balance is refused; the sale balance and the debtors account move together. | MVP |
+| FR-RET-06 | A restock shall record the supplier and the quantity per branch. A cost and sell price on its lines update the product and its price history in the same transaction as the movements. | The latest restock line wins, including two lines for one product in one request; the history rows name the purchase. | MVP |
+| FR-RET-07 | Usage and damage reports shall reduce stock, record a reason and be valued at the product's cost at the time. | Each line carries its unit cost snapshot; the shrinkage journal equals the sum of the lines. | MVP |
+| FR-RET-08 | A stock-take shall record counted quantities per branch and product with the balance at the time of the count (`expected_qty`), show the variance, and on commit write an adjustment movement per line of counted less `expected_qty`, so sales, restocks, usage and voids recorded between count and commit stay in the balance. | Committing needs `retail.stocktake.commit`; the adjustment is applied under the balance lock; a sale between count and commit is not undone and posts no gain; when movements since the count would make the adjusted balance negative, the commit is refused with 409 `stock_moved_since_count` naming the lines to recount and nothing is written; a committed stock-take cannot be committed again. | MVP |
+| FR-RET-09 | Valuation shall show, per branch and product, the quantity times cost and the quantity times sell price, with totals. | Cost columns are absent for a user without `retail.profit.read`. | MVP |
+| FR-RET-10 | Daily profit per branch and day shall equal sale line totals less their cost snapshots less usage and damage at cost, and be readable only with `retail.profit.read`. | Voided sales are excluded; profit is read from the append-only sale lines, not the sale header, and a changed header leaves it unchanged; a test with fabricated figures checks the arithmetic; a sales user gets 403. | MVP |
+| FR-RET-11 | Sales, their cost, restocks, usage, stock-take adjustments and voids shall post balanced entries to the right branch through `post_entry`, in the same transaction as the event. | One entry per branch per event; the database balance trigger holds; a void posts a reversing entry for each original entry. | MVP |
+| FR-RET-12 | The pilot spreadsheet and a generic catalogue template shall be importable; history marked historical posts no journals; a legacy balance movement ties each balance to the source; re-running is idempotent. | Golden test with a fabricated fixture (increment R5). | MVP |
+| FR-RET-13 | Retail permissions and the sales and admin role mapping shall be seeded, with branch scope applied per permission (ADR-017). | `PermissionMatrixIT` compares the seeded rows with chapter 8; a sales user holds exactly the sales column. | MVP |
+| FR-RET-14 | Every retail write shall be audited. | Each create, edit, price change, sale, void, payment, purchase, usage report and stock-take commit writes an `audit_log` row in its transaction. | MVP |
+| FR-RET-15 | Phone-first PWA screens shall cover the flows above, gated by permission. | Built in increment R6 against chapter 7 section 7.11.20. | MVP |

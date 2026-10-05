@@ -28,8 +28,11 @@ It is built as a **platform core plus vertical modules** (ADR-001):
     lenders: members with KYC, loan products, applications, appraisal, approval,
     disbursement, schedules, repayments, arrears and penalties, collateral, savings,
     investments, collections, member self-service and SMS notifications.
-  - **Retail** (later, not built now): stock, point of sale, invoices, purchases,
-    expenses and debtors.
+  - **Retail** (second, brought forward by ADR-020 and being built now): catalogue and
+    price history, stock by branch as append-only movements, sales with credit buyers,
+    restocks, usage and damage, stock-takes, valuation and daily profit, the pilot import
+    and phone-first staff screens. The cash book (expenses, banking, advances) follows
+    (pending ADR-022).
 
 ## 1.3 The first tenant
 

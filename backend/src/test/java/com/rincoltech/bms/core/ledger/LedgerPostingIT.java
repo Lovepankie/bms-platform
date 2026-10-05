@@ -73,6 +73,33 @@ class LedgerPostingIT extends IntegrationTest {
         assertThat(lines).isEqualTo(4);
     }
 
+    /** ADR-004: a correction is a reversal, posted once, with every line turned around. */
+    @Test
+    void anEntryIsReversedOnceWithItsLinesTurnedAround() {
+        Money principal = Money.of(250_000, "UGX");
+        PostedEntry original = inTenant(() -> ledger.post(disbursement(List.of(
+                Line.debit(t.account("loans_receivable"), principal),
+                Line.credit(t.account("cash_on_hand"), principal)))));
+        PostedEntry reversal = inTenant(() -> ledger.reverse(
+                new LedgerPosting.ReversalRequest(original.entryId(), DAY, "LN000001-R", "Test reversal", null)));
+        UUID reverses = TestDatabase.owner()
+                .sql("SELECT reverses_entry_id FROM journal_entries WHERE id = ?")
+                .param(reversal.entryId())
+                .query(UUID.class)
+                .single();
+        assertThat(reverses).isEqualTo(original.entryId());
+        long net = TestDatabase.owner()
+                .sql("SELECT sum(debit - credit) FROM journal_lines WHERE tenant_id = ? AND account_id = ?")
+                .params(t.tenantId(), t.account("loans_receivable"))
+                .query(Long.class)
+                .single();
+        assertThat(net).isZero();
+        assertThatThrownBy(() -> inTenant(() -> ledger.reverse(
+                        new LedgerPosting.ReversalRequest(original.entryId(), DAY, "LN000001-R", null, null))))
+                .isInstanceOfSatisfying(
+                        ApiException.class, e -> assertThat(e.code()).isEqualTo("entry_reversed"));
+    }
+
     @Test
     void anUnbalancedEntryIsRejectedAndNothingIsWritten() {
         assertThatThrownBy(() -> inTenant(() -> ledger.post(disbursement(List.of(
