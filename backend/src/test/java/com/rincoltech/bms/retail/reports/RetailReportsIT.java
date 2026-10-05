@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.reports;
 
 import static com.rincoltech.bms.retail.RetailTestSupport.ADMIN;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
@@ -177,6 +178,55 @@ class RetailReportsIT extends IntegrationTest {
         assertThat(api.get("/reports/profit/daily?from=2026-02-01&to=2026-01-01", ADMIN)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    /**
+     * Review F10: profit is the sum of the append-only sale lines of non-voided sales, so a changed
+     * sale header (written here through the owner's maintenance escape hatch) does not change past
+     * profit. The header accepts only the columns a payment, a void or posting may change, and a
+     * committed stock-take's lines and header no longer change at all.
+     */
+    @Test
+    void profitComesFromTheSaleLinesAndTheHeaderIsGuarded() {
+        long before = api.get("/reports/profit/daily", ADMIN).getBody().get("profit_minor").asLong();
+        TestDatabase.owner()
+                .sql("DO $$ BEGIN PERFORM set_config('bms.allow_mutation', 'on', true);"
+                        + " UPDATE retail_sales SET cost_total_minor = 0 WHERE tenant_id = '" + t.tenantId()
+                        + "'; END $$")
+                .update();
+        assertThat(api.get("/reports/profit/daily", ADMIN).getBody().get("profit_minor").asLong())
+                .isEqualTo(before);
+
+        for (String change : new String[] {
+            "cost_total_minor = cost_total_minor + 1",
+            "total_minor = total_minor + 1, paid_minor = paid_minor + 1",
+            "sale_date = sale_date - 1",
+            "branch_id = branch_id",
+            "sale_entry_id = NULL"
+        }) {
+            boolean refused;
+            try {
+                TestDatabase.owner()
+                        .sql("UPDATE retail_sales SET " + change + " WHERE tenant_id = ? AND status = 'completed'")
+                        .param(t.tenantId())
+                        .update();
+                refused = change.startsWith("branch_id");
+            } catch (RuntimeException e) {
+                refused = !change.startsWith("branch_id");
+                assertThat(e).rootCause().hasMessageContaining("retail_sales");
+            }
+            assertThat(refused).as(change).isTrue();
+        }
+        api.stockUp(t.headOffice(), b, "4");
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("""
+                                UPDATE retail_stocktake_lines SET counted_qty = counted_qty + 1
+                                 WHERE tenant_id = ? AND committed_variance_qty IS NOT NULL
+                                """)
+                        .param(t.tenantId())
+                        .update())
+                .rootCause()
+                .hasMessageContaining("committed");
     }
 
     /**

@@ -1317,7 +1317,8 @@ A stock-take is `draft` or `committed` (with `committed_by`, `committed_at` and 
 was recorded) and, after commit, `committed_variance_qty` (counted less `expected_qty`, applied
 under the balance lock, so movements recorded between count and commit stay in the balance; a
 commit that would leave a balance negative is refused with `stock_moved_since_count`) and the
-`unit_cost_minor` it was valued at. One line per product.
+`unit_cost_minor` it was valued at. One line per product. Once committed, the stock-take and its
+lines are refused any UPDATE (trigger `retail_stocktake_guard_update`, V14, review F10).
 
 ### `retail_customers` (RLS; `bms_app` SELECT, INSERT)
 
@@ -1338,6 +1339,11 @@ Credit buyers: `name varchar(200)`, `contact varchar(100)` kept as entered, `cre
 | `status` | text | `completed` or `voided`; `voided_at`, `voided_by`, `void_reason` |
 | `sale_entry_id`, `cost_entry_id` | uuid | The two journal entries |
 | `historical` | boolean | Imported history posts no journal (FR-RET-12) |
+
+The trigger `retail_sales_guard_update` (V14, review F10) lets an UPDATE change only `paid_minor`
+(upwards), the void columns (once, `completed` to `voided`), `updated_at`, `version` and the two
+entry ids (once, from null); any other change is refused, for `bms_app` and the owner alike (the
+owner's `bms.allow_mutation` maintenance switch of `reject_mutation` applies).
 
 ### `retail_sale_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
 
@@ -1392,6 +1398,7 @@ totals are sums of rows. A row whose value does not fit a long is flagged `amoun
 balance (entries dated on or before the valuation date, through `LedgerAccounts.balanceByBranch`)
 and the revaluation difference, value at cost less that balance. The branches reported are the union of those holding stock and those whose `inventory` balance is not zero, within the caller's branch filter, so a branch that has sold out but still carries an inventory balance shows value at cost 0 and difference equal to minus that balance (review F3). The difference is the expected result of
 relieving inventory at current cost (ADR-020 decision 8) and is reported, never treated as an
-error. Daily profit per branch and day is `retail_sales.total_minor` less `cost_total_minor` over
-completed (not voided) sales by `sale_date`, less `retail_usage_reports.cost_total_minor` by
+error. Daily profit per branch and day is the sum of `retail_sale_lines.line_total_minor` less
+`line_cost_minor` over the lines of completed (not voided) sales by `sale_date` (the append-only
+lines, never the sale header, review F10), less `retail_usage_reports.cost_total_minor` by
 `occurred_on`; snapshots only, never current prices.

@@ -78,8 +78,9 @@ class ReportsRepository {
     record DayFigures(UUID branchId, LocalDate date, long sales, long costOfSales, long usageCost) {}
 
     /**
-     * FR-RET-10 per branch and day: completed (not voided) sales and their cost snapshots by sale
-     * date, and usage and damage at their cost snapshots by the day they happened.
+     * FR-RET-10 per branch and day: the append-only lines of completed (not voided) sales, their
+     * totals and cost snapshots, by sale date (never the mutable sale header, review F10), and usage
+     * and damage at their cost snapshots by the day they happened.
      */
     List<DayFigures> daily(List<UUID> branchIds, LocalDate from, LocalDate to) {
         Map<String, Object> params = new LinkedHashMap<>();
@@ -91,15 +92,16 @@ class ReportsRepository {
             if (branchIds.isEmpty()) {
                 return List.of();
             }
-            salesFilter = " AND branch_id IN (:branchIds)";
+            salesFilter = " AND s.branch_id IN (:branchIds)";
             usageFilter = " AND branch_id IN (:branchIds)";
             params.put("branchIds", branchIds);
         }
         return jdbc.sql("""
                         SELECT branch_id, day, sum(sales) AS sales, sum(cost) AS cost, sum(usage) AS usage FROM (
-                            SELECT branch_id, sale_date AS day, total_minor AS sales, cost_total_minor AS cost, 0 AS usage
-                              FROM retail_sales
-                             WHERE status = 'completed' AND sale_date BETWEEN :from AND :to""" + salesFilter + """
+                            SELECT s.branch_id, s.sale_date AS day, l.line_total_minor AS sales,
+                                   l.line_cost_minor AS cost, 0 AS usage
+                              FROM retail_sale_lines l JOIN retail_sales s ON s.id = l.sale_id
+                             WHERE s.status = 'completed' AND s.sale_date BETWEEN :from AND :to""" + salesFilter + """
 
                             UNION ALL
                             SELECT branch_id, occurred_on, 0, 0, cost_total_minor FROM retail_usage_reports

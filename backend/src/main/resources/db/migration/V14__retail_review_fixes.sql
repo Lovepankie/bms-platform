@@ -63,3 +63,66 @@ ALTER TABLE retail_stock_movements ENABLE TRIGGER reject_mutation;
 ALTER TABLE retail_stock_movements ALTER COLUMN business_date SET NOT NULL;
 CREATE INDEX retail_stock_movements_business_date
     ON retail_stock_movements (tenant_id, business_date, branch_id, product_id);
+
+-- ---------------------------------------------------------------------------------------------
+-- F10: profit is computed from the append-only sale lines. The sale header keeps UPDATE for the
+-- columns that legitimately change, and only those: paid_minor (up, by a payment), the void
+-- columns (once, completed to voided), updated_at, version, and the two entry ids (once, from
+-- null). A committed stock-take and its lines no longer change. The owner's maintenance escape
+-- hatch of reject_mutation (bms.allow_mutation) applies here too.
+-- ---------------------------------------------------------------------------------------------
+
+CREATE FUNCTION retail_sales_guard_update() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF session_user = 'bms_owner' AND coalesce(current_setting('bms.allow_mutation', true), '') = 'on' THEN
+        RETURN NEW;
+    END IF;
+    IF (NEW.id, NEW.tenant_id, NEW.created_at, NEW.branch_id, NEW.sale_no, NEW.sale_date, NEW.payment_method,
+        NEW.customer_id, NEW.buyer_name, NEW.buyer_contact, NEW.due_date, NEW.currency, NEW.total_minor,
+        NEW.cost_total_minor, NEW.historical, NEW.created_by)
+       IS DISTINCT FROM
+       (OLD.id, OLD.tenant_id, OLD.created_at, OLD.branch_id, OLD.sale_no, OLD.sale_date, OLD.payment_method,
+        OLD.customer_id, OLD.buyer_name, OLD.buyer_contact, OLD.due_date, OLD.currency, OLD.total_minor,
+        OLD.cost_total_minor, OLD.historical, OLD.created_by)
+       OR NEW.paid_minor < OLD.paid_minor
+       OR (OLD.sale_entry_id IS NOT NULL AND NEW.sale_entry_id IS DISTINCT FROM OLD.sale_entry_id)
+       OR (OLD.cost_entry_id IS NOT NULL AND NEW.cost_entry_id IS DISTINCT FROM OLD.cost_entry_id)
+       OR (OLD.status = 'voided' AND (NEW.status, NEW.voided_at, NEW.voided_by, NEW.void_reason)
+                                     IS DISTINCT FROM (OLD.status, OLD.voided_at, OLD.voided_by, OLD.void_reason))
+       OR (OLD.status = 'completed' AND NEW.status = 'completed'
+           AND (NEW.voided_at, NEW.voided_by, NEW.void_reason) IS DISTINCT FROM (OLD.voided_at, OLD.voided_by, OLD.void_reason))
+    THEN
+        RAISE EXCEPTION 'retail_sales: only the paid amount, the void, the entry ids (once) and the version may change'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END
+$$;
+CREATE TRIGGER retail_sales_guard_update BEFORE UPDATE ON retail_sales
+    FOR EACH ROW EXECUTE FUNCTION retail_sales_guard_update();
+
+CREATE FUNCTION retail_stocktake_guard_update() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_status text;
+BEGIN
+    IF session_user = 'bms_owner' AND coalesce(current_setting('bms.allow_mutation', true), '') = 'on' THEN
+        RETURN NEW;
+    END IF;
+    IF TG_TABLE_NAME = 'retail_stocktakes' THEN
+        v_status := OLD.status;
+    ELSE
+        SELECT status INTO v_status FROM retail_stocktakes WHERE tenant_id = OLD.tenant_id AND id = OLD.stocktake_id;
+    END IF;
+    IF v_status = 'committed' THEN
+        RAISE EXCEPTION '% of a committed stock-take is not allowed', TG_TABLE_NAME
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END
+$$;
+CREATE TRIGGER retail_stocktake_guard_update BEFORE UPDATE ON retail_stocktakes
+    FOR EACH ROW EXECUTE FUNCTION retail_stocktake_guard_update();
+CREATE TRIGGER retail_stocktake_guard_update BEFORE UPDATE ON retail_stocktake_lines
+    FOR EACH ROW EXECUTE FUNCTION retail_stocktake_guard_update();
