@@ -1,5 +1,6 @@
 package com.rincoltech.bms.kernel;
 
+import java.sql.SQLException;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +53,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<ProblemDetail> handleUnexpected(Exception e) {
+        if (isRetryable(e)) {
+            // PostgreSQL chose this transaction as a deadlock victim or a serialisation loser. Nothing
+            // was committed, the idempotency key rolled back with it, so the same request is safe to
+            // send again (chapter 7 section 7.8).
+            log.warn("Transaction aborted by the database, client told to retry");
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .header(HttpHeaders.RETRY_AFTER, "1")
+                    .body(Problems.of(
+                            HttpStatus.CONFLICT,
+                            "transaction_conflict",
+                            "Try again",
+                            "Another request changed the same records at the same moment and nothing was saved."
+                                    + " Send the same request again."));
+        }
         log.error("Unhandled exception", e);
         return ResponseEntity.internalServerError()
                 .body(Problems.of(
@@ -90,6 +105,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         };
         ProblemDetail problem = Problems.of(status, code, status.getReasonPhrase(), status.getReasonPhrase() + ".");
         return ResponseEntity.status(status).headers(headers).body(problem);
+    }
+
+    /** SQLSTATE {@code 40P01} (deadlock detected) or {@code 40001} (serialization failure) anywhere in the causes. */
+    static boolean isRetryable(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof SQLException sql) {
+                for (SQLException next = sql; next != null; next = next.getNextException()) {
+                    if ("40P01".equals(next.getSQLState()) || "40001".equals(next.getSQLState())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     static String snakeCase(String camel) {

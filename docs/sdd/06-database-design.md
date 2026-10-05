@@ -1304,7 +1304,8 @@ are all zero is not posted.
 
 Primary key `(tenant_id, branch_id, product_id)`, `qty numeric(14,3)`, `updated_at`. Written only by
 `StockLedger` in the transaction of each movement, under the row's lock (`SELECT ... FOR UPDATE`,
-taken in branch and product order). The nightly job `retail.stock-reconciliation` compares each row
+taken in branch and product order). Product rows are locked only by restocks and price edits, with
+`FOR NO KEY UPDATE` (see purchases below). The nightly job `retail.stock-reconciliation` compares each row
 with the sum of its movements and records any difference as a system audit row
 (`retail.stock.reconciliation_mismatch`); it never corrects a balance.
 
@@ -1356,7 +1357,13 @@ A purchase: `purchase_no` from the sequence `retail_purchase_no` (`RP00000001`),
 rounded per branch). The quantity per branch is the `purchase` movement itself (`source_line_id`
 is the line). In the purchase's transaction each line, in request order, sets the product's cost
 (and sell price when given) with a `purchase` history row naming the purchase; the products are
-locked in id order first. `retail_price_history.created_at` is the statement clock
+locked in id order first with `SELECT ... FOR NO KEY UPDATE`, never `FOR UPDATE`: every movement
+and sale line insert takes `FOR KEY SHARE` on its product through the foreign key, so a `FOR
+UPDATE` product lock taken before the balance lock deadlocks with a sale, usage, void or stock-take
+that locks the balance before inserting (review F2). `FOR NO KEY UPDATE` still serialises restocks
+and price edits. As a backstop, a transaction PostgreSQL aborts as a deadlock victim (SQLSTATE
+`40P01`) or serialisation loser (`40001`) answers 409 `transaction_conflict` with `Retry-After`;
+nothing was committed and the idempotency key rolled back, so the same request may be sent again. `retail_price_history.created_at` is the statement clock
 (`clock_timestamp()`), so two changes in one purchase keep their order.
 
 ### `retail_usage_reports`, `retail_usage_lines` (RLS; append-only, `bms_app` SELECT, INSERT)

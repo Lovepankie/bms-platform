@@ -88,11 +88,17 @@ class CatalogueRepository {
                 .optional();
     }
 
+    /**
+     * The product row lock (FR-RET-06). {@code FOR UPDATE} would conflict with the {@code FOR KEY
+     * SHARE} that every stock movement and sale line insert takes through its foreign key, and a
+     * restock that locks the product before the balance would then deadlock with a sale, usage, void
+     * or stock-take that locks the balance before inserting its movement (review F2). {@code FOR NO
+     * KEY UPDATE} still serialises restocks and price edits, since the product's key never changes.
+     */
+    static final String LOCK = SELECT_PRODUCT + " WHERE p.id = ? FOR NO KEY UPDATE OF p";
+
     Optional<Product> lock(UUID id) {
-        return jdbc.sql(SELECT_PRODUCT + " WHERE p.id = ? FOR UPDATE OF p")
-                .param(id)
-                .query(CatalogueRepository::product)
-                .optional();
+        return jdbc.sql(LOCK).param(id).query(CatalogueRepository::product).optional();
     }
 
     /** One page ordered by code; {@code query} matches the code or the description. */
