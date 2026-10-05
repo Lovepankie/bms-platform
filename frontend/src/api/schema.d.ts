@@ -1290,7 +1290,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Edit prices by hand, with a history row (FR-RET-02) */
+        /** Edit prices by hand under If-Match, with a history row (FR-RET-02) */
         post: operations["editRetailPrices"];
         delete?: never;
         options?: never;
@@ -5866,7 +5866,9 @@ export interface operations {
     editRetailPrices: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string;
+            };
             path: {
                 product_id: string;
             };
