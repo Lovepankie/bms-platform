@@ -1158,6 +1158,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Credit buyers */
+        get: operations["listRetailCustomers"];
+        put?: never;
+        /** Add a credit buyer (FR-RET-05) */
+        post: operations["createRetailCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/customers/{customer_id}/balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What a credit buyer owes (FR-RET-05) */
+        get: operations["getRetailCustomerBalance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/products": {
         parameters: {
             query?: never;
@@ -1165,7 +1200,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search products by code or description */
+        /** Search products by code or description; with branch_id each row has that branch's balance */
         get: operations["listRetailProducts"];
         put?: never;
         /** Create a product with its first prices (FR-RET-01) */
@@ -1222,6 +1257,143 @@ export interface paths {
         put?: never;
         /** Edit prices by hand, with a history row (FR-RET-02) */
         post: operations["editRetailPrices"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/sales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sales in the caller's branch scope */
+        get: operations["listRetailSales"];
+        put?: never;
+        /** Record a sale: snapshots, stock and journals in one transaction (FR-RET-04); M */
+        post: operations["createRetailSale"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/sales/{sale_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A sale with its lines */
+        get: operations["getRetailSale"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/sales/{sale_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a sale by reversal (FR-RET-04) */
+        post: operations["voidRetailSale"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/stock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A branch's stock balances, negatives flagged (FR-RET-03) */
+        get: operations["listRetailStock"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/stock/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stock movements in the caller's branch scope */
+        get: operations["listRetailStockMovements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/stocktakes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a count; returns the variance per line (FR-RET-08) */
+        post: operations["createRetailStocktake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/stocktakes/{stocktake_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A stock-take, draft or committed */
+        get: operations["getRetailStocktake"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/stocktakes/{stocktake_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Write the adjustment movements and post the variance (FR-RET-08) */
+        post: operations["commitRetailStocktake"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2320,6 +2492,47 @@ export interface components {
         RetailCategoryRequest: {
             name: string;
         };
+        RetailCustomer: {
+            contact?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+        };
+        /** @description Credit sales in the caller's branch scope */
+        RetailCustomerBalance: {
+            /** Format: int64 */
+            balance_minor?: number;
+            currency?: string;
+            /** Format: uuid */
+            customer_id?: string;
+            open_sales?: components["schemas"]["RetailOpenSale"][];
+        };
+        RetailCustomerList: {
+            items?: components["schemas"]["RetailCustomer"][];
+        };
+        RetailCustomerRequest: {
+            contact?: string;
+            name: string;
+        };
+        RetailOpenSale: {
+            /** Format: int64 */
+            balance_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            due_date?: string;
+            /** Format: int64 */
+            paid_minor?: number;
+            /** Format: date */
+            sale_date?: string;
+            /** Format: uuid */
+            sale_id?: string;
+            sale_no?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
         RetailPriceChange: {
             /** Format: date-time */
             at?: string;
@@ -2376,6 +2589,10 @@ export interface components {
             description?: string;
             /** Format: uuid */
             id?: string;
+            /** @description True when the branch balance is below zero */
+            negative?: boolean;
+            /** @description The branch balance, when branch_id was given */
+            qty?: string;
             /** Format: int64 */
             sell_minor?: number;
             unit?: string;
@@ -2390,6 +2607,223 @@ export interface components {
             items?: components["schemas"]["RetailProduct"][];
             next_cursor?: string;
         };
+        RetailSale: {
+            /** Format: int64 */
+            balance_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            buyer_contact?: string;
+            buyer_name?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            cost_total_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: uuid */
+            customer_id?: string;
+            /** Format: date */
+            due_date?: string;
+            historical?: boolean;
+            /** Format: uuid */
+            id?: string;
+            lines?: components["schemas"]["RetailSaleLine"][];
+            /** Format: int64 */
+            paid_minor?: number;
+            payment_method?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            profit_minor?: number;
+            /** Format: date */
+            sale_date?: string;
+            sale_no?: string;
+            status?: string;
+            /** Format: int64 */
+            total_minor?: number;
+            /** Format: int32 */
+            version?: number;
+            void_reason?: string;
+            /** Format: date-time */
+            voided_at?: string;
+            /** Format: uuid */
+            voided_by?: string;
+        };
+        RetailSaleLine: {
+            code?: string;
+            description?: string;
+            /** Format: uuid */
+            id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            line_cost_minor?: number;
+            /** Format: int32 */
+            line_no?: number;
+            /** Format: int64 */
+            line_total_minor?: number;
+            /** Format: uuid */
+            product_id?: string;
+            qty?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            unit_cost_minor?: number;
+            /** Format: int64 */
+            unit_price_minor?: number;
+        };
+        RetailSaleLineRequest: {
+            /** Format: uuid */
+            product_id: string;
+            /** @example 2.5 */
+            qty: string;
+            /**
+             * Format: int64
+             * @description Defaults to the product's sell price
+             */
+            unit_price_minor?: number;
+        };
+        RetailSalePage: {
+            items?: components["schemas"]["RetailSale"][];
+            next_cursor?: string;
+        };
+        RetailSaleRequest: {
+            /**
+             * Format: uuid
+             * @description Defaults to the caller's one branch
+             */
+            branch_id?: string;
+            buyer_contact?: string;
+            buyer_name?: string;
+            /** Format: uuid */
+            customer_id?: string;
+            /**
+             * Format: date
+             * @description Proposed payment date of a credit sale
+             */
+            due_date?: string;
+            lines: components["schemas"]["RetailSaleLineRequest"][];
+            payment_method: string;
+            /**
+             * Format: date
+             * @description Defaults to today; not in the future
+             */
+            sale_date?: string;
+        };
+        RetailStockMovement: {
+            /** Format: date-time */
+            at?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: uuid */
+            by?: string;
+            historical?: boolean;
+            /** Format: uuid */
+            id?: string;
+            kind?: string;
+            note?: string;
+            /** Format: uuid */
+            product_id?: string;
+            qty?: string;
+            /** Format: uuid */
+            reverses_movement_id?: string;
+            /** Format: uuid */
+            source_id?: string;
+            source_type?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            unit_cost_minor?: number;
+        };
+        RetailStockMovementPage: {
+            items?: components["schemas"]["RetailStockMovement"][];
+            next_cursor?: string;
+        };
+        RetailStockPage: {
+            /** Format: uuid */
+            branch_id?: string;
+            items?: components["schemas"]["RetailStockRow"][];
+            next_cursor?: string;
+        };
+        RetailStockRow: {
+            code?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            cost_minor?: number;
+            description?: string;
+            /** @description Below zero: flagged until a purchase or stock-take corrects it (ADR-020 decision 4) */
+            negative?: boolean;
+            /** Format: uuid */
+            product_id?: string;
+            qty?: string;
+            /** Format: int64 */
+            sell_minor?: number;
+            unit?: string;
+        };
+        RetailStocktake: {
+            /** Format: uuid */
+            adjustment_entry_id?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date-time */
+            committed_at?: string;
+            /** Format: uuid */
+            committed_by?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            /** Format: uuid */
+            id?: string;
+            lines?: components["schemas"]["RetailStocktakeLine"][];
+            note?: string;
+            status?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        RetailStocktakeLine: {
+            code?: string;
+            /** @description The variance written at commit, against the balance then; null for a draft */
+            committed_variance_qty?: string;
+            counted_qty?: string;
+            description?: string;
+            /** @description The balance when the count was recorded */
+            expected_qty?: string;
+            /** Format: uuid */
+            product_id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            unit_cost_minor?: number;
+            /** @description counted less expected */
+            variance_qty?: string;
+        };
+        RetailStocktakeLineRequest: {
+            /** @example 12.5 */
+            counted_qty: string;
+            /** Format: uuid */
+            product_id: string;
+        };
+        RetailStocktakeRequest: {
+            /**
+             * Format: uuid
+             * @description Defaults to the caller's one branch
+             */
+            branch_id?: string;
+            lines: components["schemas"]["RetailStocktakeLineRequest"][];
+            note?: string;
+        };
         RetailUnit: {
             /** Format: uuid */
             id?: string;
@@ -2400,6 +2834,9 @@ export interface components {
         };
         RetailUnitRequest: {
             name: string;
+        };
+        RetailVoidRequest: {
+            reason: string;
         };
         Role: {
             key?: string;
@@ -2547,6 +2984,7 @@ export interface components {
             max_active_loans_per_member?: number;
             receipt_footer?: string;
             require_mfa_all_staff?: boolean;
+            retail_allow_negative_stock?: boolean;
             sms_sender_name?: string;
             sms_window_end?: string;
             sms_window_start?: string;
@@ -2645,6 +3083,8 @@ export interface components {
             max_active_loans_per_member?: number;
             receipt_footer?: string;
             require_mfa_all_staff?: boolean;
+            /** @description FR-RET-03: whether a retail sale may take stock below zero (default true) */
+            retail_allow_negative_stock?: boolean;
             /** @description Subject to aggregator approval */
             sms_sender_name?: string;
             sms_window_end?: string;
@@ -4665,12 +5105,82 @@ export interface operations {
             };
         };
     };
+    listRetailCustomers: {
+        parameters: {
+            query?: {
+                query?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomerList"];
+                };
+            };
+        };
+    };
+    createRetailCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomer"];
+                };
+            };
+        };
+    };
+    getRetailCustomerBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomerBalance"];
+                };
+            };
+        };
+    };
     listRetailProducts: {
         parameters: {
             query?: {
                 query?: string;
                 category_id?: string;
                 active?: boolean;
+                branch_id?: string;
                 limit?: number;
                 cursor?: string;
             };
@@ -4809,6 +5319,228 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    listRetailSales: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                customer_id?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSalePage"];
+                };
+            };
+        };
+    };
+    createRetailSale: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSaleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSale"];
+                };
+            };
+        };
+    };
+    getRetailSale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSale"];
+                };
+            };
+        };
+    };
+    voidRetailSale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailVoidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSale"];
+                };
+            };
+        };
+    };
+    listRetailStock: {
+        parameters: {
+            query?: {
+                branch_id?: string;
+                query?: string;
+                negative_only?: boolean;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStockPage"];
+                };
+            };
+        };
+    };
+    listRetailStockMovements: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                product_id?: string;
+                from?: string;
+                to?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStockMovementPage"];
+                };
+            };
+        };
+    };
+    createRetailStocktake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailStocktakeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStocktake"];
+                };
+            };
+        };
+    };
+    getRetailStocktake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stocktake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStocktake"];
+                };
+            };
+        };
+    };
+    commitRetailStocktake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stocktake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStocktake"];
                 };
             };
         };

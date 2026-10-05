@@ -70,6 +70,51 @@ public final class RetailTestSupport {
         return call(HttpMethod.POST, path, body, permissions, "*", Map.of());
     }
 
+    /** A POST with an Idempotency-Key, for the money-moving routes (chapter 7 section 7.8). */
+    public ResponseEntity<JsonNode> postKeyed(
+            String path, Object body, String permissions, String branchIds, String key) {
+        return call(HttpMethod.POST, path, body, permissions, branchIds, Map.of("Idempotency-Key", key));
+    }
+
+    /** A sale at a branch of one line, as an admin, with a fresh key. */
+    public ResponseEntity<JsonNode> sell(UUID branchId, String method, UUID productId, String qty) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("branch_id", branchId);
+        body.put("payment_method", method);
+        if (method.equals("credit")) {
+            body.put("buyer_name", "Test Buyer 01");
+        }
+        body.put("lines", java.util.List.of(Map.of("product_id", productId, "qty", qty)));
+        return postKeyed("/sales", body, ADMIN, "*", UUID.randomUUID().toString());
+    }
+
+    /** Brings a branch's balance to {@code qty} with a committed stock-take, as an admin. */
+    public void stockUp(UUID branchId, UUID productId, String qty) {
+        Map<String, Object> body = Map.of(
+                "branch_id", branchId, "lines", java.util.List.of(Map.of("product_id", productId, "counted_qty", qty)));
+        UUID stocktake = id(post("/stocktakes", body, ADMIN));
+        ResponseEntity<JsonNode> committed = post("/stocktakes/" + stocktake + "/commit", Map.of(), ADMIN);
+        if (!committed.getStatusCode().is2xxSuccessful()) {
+            throw new AssertionError("stock-take commit: " + committed.getBody());
+        }
+    }
+
+    /** Sets {@code retail_allow_negative_stock} through the settings API (FR-RET-03). */
+    public void allowNegativeStock(boolean allow) {
+        HttpHeaders h = headers("core.settings.read,core.settings.manage", "*", Map.of());
+        ResponseEntity<JsonNode> current =
+                http.exchange("/api/v1/settings", HttpMethod.GET, new HttpEntity<>(null, h), JsonNode.class);
+        h.add(HttpHeaders.IF_MATCH, current.getHeaders().getETag());
+        ResponseEntity<JsonNode> patched = http.exchange(
+                "/api/v1/settings",
+                HttpMethod.PATCH,
+                new HttpEntity<>(Map.of("retail_allow_negative_stock", allow), h),
+                JsonNode.class);
+        if (!patched.getStatusCode().is2xxSuccessful()) {
+            throw new AssertionError("settings: " + patched.getBody());
+        }
+    }
+
     public UUID category(String name) {
         return id(post("/categories", Map.of("name", name), ADMIN));
     }

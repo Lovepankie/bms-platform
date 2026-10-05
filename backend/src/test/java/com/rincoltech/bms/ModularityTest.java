@@ -46,7 +46,9 @@ class ModularityTest {
                         "lending.members",
                         "lending.products",
                         "retail.catalogue",
-                        "retail.manifest");
+                        "retail.manifest",
+                        "retail.sales",
+                        "retail.stock");
     }
 
     /** ADR-001: the core never depends on a vertical, whatever a package-info might allow. */

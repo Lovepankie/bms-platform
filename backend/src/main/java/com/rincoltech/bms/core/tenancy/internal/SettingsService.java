@@ -129,6 +129,12 @@ class SettingsService implements TenantSettings {
         return current().allowLoansBeforeKycVerified();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean retailAllowNegativeStock() {
+        return current().retailAllowNegativeStock();
+    }
+
     private Stored load(boolean forUpdate) {
         return jdbc.sql("SELECT settings::text AS settings, version FROM tenant_settings"
                         + (forUpdate ? " FOR UPDATE" : ""))
@@ -190,6 +196,7 @@ class SettingsService implements TenantSettings {
                 weights,
                 List.copyOf((List<String>) s.getOrDefault("disabled_collateral_types", List.of())),
                 (Boolean) s.getOrDefault("require_mfa_all_staff", false),
+                (Boolean) s.getOrDefault("retail_allow_negative_stock", true),
                 version);
     }
 }

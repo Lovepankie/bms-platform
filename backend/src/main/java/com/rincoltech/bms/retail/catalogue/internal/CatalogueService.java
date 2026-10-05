@@ -114,7 +114,9 @@ class CatalogueService {
                 true,
                 null,
                 null,
-                1);
+                1,
+                null,
+                null);
         try {
             repo.insert(p, by);
         } catch (DuplicateKeyException e) {
@@ -146,7 +148,11 @@ class CatalogueService {
     }
 
     @Transactional(readOnly = true)
-    ProductPage list(String query, UUID categoryId, Boolean active, Integer limit, String cursor) {
+    ProductPage list(String query, UUID categoryId, Boolean active, UUID branchId, Integer limit, String cursor) {
+        if (branchId != null && !CurrentPrincipal.require().may("retail.stock.read", branchId)) {
+            throw ApiException.validation(
+                    List.of(new FieldProblem("branch_id", "unknown_branch", "No such branch in your scope.")));
+        }
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         String afterCode = null;
         UUID afterId = null;
@@ -162,7 +168,7 @@ class CatalogueService {
             }
         }
         String q = query == null || query.isBlank() ? null : query.trim();
-        List<Product> rows = repo.page(q, categoryId, active, afterCode, afterId, size + 1);
+        List<Product> rows = repo.page(q, categoryId, active, branchId, afterCode, afterId, size + 1);
         boolean more = rows.size() > size;
         List<Product> items = more ? rows.subList(0, size) : rows;
         String next = more
@@ -201,7 +207,9 @@ class CatalogueService {
                 r.active() == null ? before.active() : r.active(),
                 before.createdAt(),
                 before.updatedAt(),
-                before.version());
+                before.version(),
+                null,
+                null);
         if (after.code().isEmpty() || after.description().isEmpty()) {
             throw ApiException.validation(
                     List.of(new FieldProblem("code", "invalid", "Code and description must not be blank.")));

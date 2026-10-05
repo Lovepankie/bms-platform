@@ -4,6 +4,7 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Category;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceChange;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Product;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Unit;
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -95,9 +96,19 @@ class CatalogueRepository {
     }
 
     /** One page ordered by code; {@code query} matches the code or the description. */
-    List<Product> page(String query, UUID categoryId, Boolean active, String afterCode, UUID afterId, int limit) {
-        StringBuilder sql = new StringBuilder(SELECT_PRODUCT + " WHERE true");
+    List<Product> page(
+            String query, UUID categoryId, Boolean active, UUID branchId, String afterCode, UUID afterId, int limit) {
         Map<String, Object> params = new LinkedHashMap<>();
+        StringBuilder sql;
+        if (branchId == null) {
+            sql = new StringBuilder(SELECT_PRODUCT + " WHERE true");
+        } else {
+            // The balance of retail_stock_balances (the stock module's table), read for the search row.
+            sql = new StringBuilder(
+                    SELECT_PRODUCT.replace(" FROM retail_products p", ", b.qty FROM retail_products p")
+                            + " LEFT JOIN retail_stock_balances b ON b.product_id = p.id AND b.branch_id = :branchId WHERE true");
+            params.put("branchId", branchId);
+        }
         if (query != null) {
             sql.append(" AND (p.code ILIKE :q OR p.description ILIKE :q)");
             params.put(
@@ -120,7 +131,7 @@ class CatalogueRepository {
         params.put("limit", limit);
         return jdbc.sql(sql.toString())
                 .params(params)
-                .query(CatalogueRepository::product)
+                .query(branchId == null ? CatalogueRepository::product : CatalogueRepository::productWithQty)
                 .list();
     }
 
@@ -226,7 +237,32 @@ class CatalogueRepository {
                 rs.getBoolean("active"),
                 instant(rs, "created_at"),
                 instant(rs, "updated_at"),
-                rs.getInt("version"));
+                rs.getInt("version"),
+                null,
+                null);
+    }
+
+    static Product productWithQty(ResultSet rs, int n) throws SQLException {
+        Product p = product(rs, n);
+        BigDecimal qty = rs.getBigDecimal("qty");
+        BigDecimal q = (qty == null ? BigDecimal.ZERO : qty).setScale(3);
+        return new Product(
+                p.id(),
+                p.code(),
+                p.description(),
+                p.categoryId(),
+                p.category(),
+                p.unitId(),
+                p.unit(),
+                p.sellMinor(),
+                p.costMinor(),
+                p.currency(),
+                p.active(),
+                p.createdAt(),
+                p.updatedAt(),
+                p.version(),
+                q.toPlainString(),
+                q.signum() < 0);
     }
 
     static Instant instant(ResultSet rs, String column) throws SQLException {

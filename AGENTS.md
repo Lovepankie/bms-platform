@@ -124,6 +124,8 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | Member area | Member self-service | MSS; chapter 11 | none | 7.11.18 |
 | `retail.manifest` | The retail vertical's registration with the core (ADR-020) | 3.28 | 6.11.1 chart | none |
 | `retail.catalogue` | Categories, units, products, append-only price history | RET-01, RET-02 | 6.11 | 7.11.20 |
+| `retail.stock` | Stock movements and balances, stock-takes, reconciliation; retail posting and idempotency helpers | RET-03, RET-08, RET-11 | 6.11 | 7.11.20 |
+| `retail.sales` | Sales with snapshots, voids, credit buyers | RET-04, RET-05, RET-11 | 6.11 | 7.11.20 |
 
 ## How to run it
 

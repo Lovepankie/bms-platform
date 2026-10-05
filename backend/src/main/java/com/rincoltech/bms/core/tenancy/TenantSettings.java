@@ -19,4 +19,7 @@ public interface TenantSettings {
 
     /** FR-MEM-05: whether a loan may be submitted for a member whose KYC is not verified (default false). */
     boolean allowLoansBeforeKycVerified();
+
+    /** FR-RET-03, ADR-020 decision 4: whether a retail sale may take a balance below zero (default true). */
+    boolean retailAllowNegativeStock();
 }

@@ -84,7 +84,15 @@ final class CatalogueApi {
             boolean active,
             Instant createdAt,
             Instant updatedAt,
-            int version) {
+            int version,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The branch balance, when branch_id was given")
+            String qty,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "True when the branch balance is below zero")
+            Boolean negative) {
 
         Product withoutCost() {
             return new Product(
@@ -101,7 +109,9 @@ final class CatalogueApi {
                     active,
                     createdAt,
                     updatedAt,
-                    version);
+                    version,
+                    qty,
+                    negative);
         }
     }
 

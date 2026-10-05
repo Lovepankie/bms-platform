@@ -621,6 +621,26 @@ Built (#51, catalogue):
 | POST | `/retail/products/{product_id}/prices` | `retail.price.edit` | `{cost_minor?, sell_minor?, reason}`; at least one price; 422 `price_unchanged`; writes a `manual` history row and audit. FR-RET-02 |
 | GET | `/retail/products/{product_id}/price-history` | `retail.stock.read` | `{items: [{id, at, by, source, source_id, old_cost_minor*, new_cost_minor*, old_sell_minor, new_sell_minor, currency, reason}]}` |
 
+Built (#52, stock and sales). `M` marks a money-moving route that requires `Idempotency-Key`
+(section 7.8). A sale, stock-take or list for one branch takes `branch_id`, or the caller's one
+branch when the permission's scope has exactly one; otherwise 422 `branch_required`.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/products?branch_id=` | `retail.stock.read` | Each row adds `qty` and `negative` for that branch |
+| GET | `/retail/stock` | `retail.stock.read` | `branch_id`, `query`, `negative_only`, `limit`, `cursor`. Row: `{product_id, code, description, unit, qty, negative, sell_minor, cost_minor*}`. FR-RET-03 |
+| GET | `/retail/stock/movements` | `retail.stock.read` | `branch_id` (repeatable, scoped), `product_id`, `from`, `to`. Row: `{id, at, branch_id, product_id, kind, qty, unit_cost_minor*, source_type, source_id, reverses_movement_id, historical, note, by}` |
+| POST | `/retail/stocktakes` | `retail.stocktake.commit` | `{branch_id?, lines: [{product_id, counted_qty}], note?}`; returns each line's `expected_qty` and `variance_qty`. FR-RET-08 |
+| GET | `/retail/stocktakes/{stocktake_id}` | `retail.stock.read` | Draft or committed |
+| POST | `/retail/stocktakes/{stocktake_id}/commit` | `retail.stocktake.commit` | Adjustment movements against the balance at commit, posted at cost; 409 `stocktake_committed` |
+| POST | `/retail/sales` | `retail.sale.create` | **M**. `{branch_id?, sale_date?, payment_method, customer_id?, buyer_name?, buyer_contact?, due_date?, lines: [{product_id, qty, unit_price_minor?}]}`; 422 `insufficient_stock` when the tenant forbids negative stock. Response: the sale with `lines`, `total_minor`, `paid_minor`, `balance_minor`, `cost_total_minor*`, `profit_minor*`, and per line `unit_cost_minor*`, `line_cost_minor*`. FR-RET-04 |
+| GET | `/retail/sales` | `retail.sale.read` | `branch_id` (repeatable, scoped), `from`, `to`, `customer_id`, `limit`, `cursor` |
+| GET | `/retail/sales/{sale_id}` | `retail.sale.read` | 404 outside scope |
+| POST | `/retail/sales/{sale_id}/void` | `retail.sale.void` | `{reason}`; 409 `sale_voided`; 422 `sale_has_payments` for a credit sale with payments |
+| GET | `/retail/customers` | `retail.sale.read` | `query`, `limit` |
+| POST | `/retail/customers` | `retail.customer.manage` | `{name, contact?}` |
+| GET | `/retail/customers/{customer_id}/balance` | `retail.sale.read` | `{customer_id, currency, balance_minor, open_sales: [...]}` over credit sales in the caller's scope. FR-RET-05 |
+
 ## 7.12 Example: record a repayment
 
 ```http

@@ -73,14 +73,17 @@ class CatalogueController {
 
     @GetMapping("/products")
     @RequiresPermission("retail.stock.read")
-    @Operation(summary = "Search products by code or description", operationId = "listRetailProducts")
+    @Operation(
+            summary = "Search products by code or description; with branch_id each row has that branch's balance",
+            operationId = "listRetailProducts")
     ProductPage products(
             @RequestParam(name = "query", required = false) String query,
             @RequestParam(name = "category_id", required = false) UUID categoryId,
             @RequestParam(name = "active", required = false) Boolean active,
+            @RequestParam(name = "branch_id", required = false) UUID branchId,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.list(query, categoryId, active, limit, cursor);
+        return service.list(query, categoryId, active, branchId, limit, cursor);
     }
 
     @PostMapping("/products")

@@ -278,6 +278,7 @@ below to the rest. A tenant without a row reads all defaults. Keys and defaults:
 | `appraisal_weights` | object | section 3.18.1 defaults | FR-ORG-04 |
 | `disabled_collateral_types` | string array | empty | FR-COL-05 |
 | `require_mfa_all_staff` | boolean | false | FR-IAM-06 |
+| `retail_allow_negative_stock` | boolean | true | FR-RET-03 (ADR-020 decision 4) |
 
 ### `branches` (RLS)
 
@@ -1181,7 +1182,9 @@ Flyway sequence and take the next free number when they merge: `V10__retail_cata
 adds `retail` to every plan's allowed modules, seeds the retail permissions and the `retail_sales`
 role, creates `retail_categories`, `retail_units`, `retail_products` and `retail_price_history`
 (append-only), and adds `bms_seed_retail_chart(tenant)` (section 6.11.1), which the platform
-functions now call when the module is switched on.
+functions now call when the module is switched on. `V11__retail_stock_sales.sql` (#52) creates
+`retail_stock_movements` (append-only), `retail_stock_balances`, `retail_stocktakes`,
+`retail_stocktake_lines`, `retail_customers`, `retail_sales` and `retail_sale_lines` (append-only).
 
 ## 6.10 Open items
 
@@ -1256,3 +1259,75 @@ module on again adds nothing. `S` marks `is_system_controlled`.
 
 UPDATE and DELETE are not granted to `bms_app` and the `reject_mutation` trigger refuses them for
 every role (section 6.2.4).
+
+### 6.11.2 Retail posting rules (FR-RET-11, ADR-020 decision 7)
+
+Every rule posts through `post_entry` in the transaction of its event, one entry per branch, with
+`source_module = 'retail'`. "PM" is the account of the payment method: `cash_on_hand` (cash),
+`mobile_money`, `bank`, or `trade_debtors` (credit, with the sale as subledger). Amounts are line
+values rounded half up once per line (R-ROUND); a leg of zero is left out and an entry whose legs
+are all zero is not posted.
+
+| Event | Debit | Credit | Idempotency key |
+|---|---|---|---|
+| Sale | PM, total | `sales_revenue`, total | `retail.sale:<id>` |
+| Cost of a sale | `cost_of_goods_sold`, sum of line cost snapshots | `inventory` | `retail.sale_cost:<id>` |
+| Void | The reversal of each of the two entries (`reverses_entry_id` set) | | `retail.sale_void:<id>`, `retail.sale_cost_void:<id>` |
+| Stock-take loss | `stock_shrinkage`, value of the shortfall at cost | `inventory` | `retail.stocktake:<id>` |
+| Stock-take gain | `inventory`, value of the surplus at cost | `stock_shrinkage` | (same entry as the loss) |
+
+### `retail_stock_movements` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id`, `tenant_id`, `created_at` | standard | |
+| `occurred_at` | timestamptz | From the kernel clock |
+| `branch_id`, `product_id` | uuid | Composite FKs |
+| `kind` | text | `opening`, `purchase`, `return` (positive); `sale`, `usage`, `damage` (negative); `adjustment`, `legacy_balance` (either sign). CHECK on the sign |
+| `qty` | numeric(14,3) | Signed, never zero |
+| `unit_cost_minor` | bigint | The product's cost at the time: the valuation snapshot |
+| `source_type`, `source_id`, `source_line_id` | | The document that wrote it: `retail.sale`, `retail.sale_void`, `retail.stocktake`, and the R3 sources |
+| `reverses_movement_id` | uuid | Set on a void's `return`; unique, so a movement is reversed at most once |
+| `historical` | boolean | Imported history (FR-RET-12); default false |
+| `note`, `recorded_by` | | |
+
+### `retail_stock_balances` (RLS; `bms_app` SELECT, INSERT, UPDATE)
+
+Primary key `(tenant_id, branch_id, product_id)`, `qty numeric(14,3)`, `updated_at`. Written only by
+`StockLedger` in the transaction of each movement, under the row's lock (`SELECT ... FOR UPDATE`,
+taken in branch and product order). The nightly job `retail.stock-reconciliation` compares each row
+with the sum of its movements and records any difference as a system audit row
+(`retail.stock.reconciliation_mismatch`); it never corrects a balance.
+
+### `retail_stocktakes`, `retail_stocktake_lines` (RLS; `bms_app` SELECT, INSERT, UPDATE)
+
+A stock-take is `draft` or `committed` (with `committed_by`, `committed_at` and the journal entry
+`adjustment_entry_id`). A line holds `counted_qty`, the `expected_qty` (the balance when the count
+was recorded) and, after commit, `committed_variance_qty` (counted less the balance at commit,
+under its lock) and the `unit_cost_minor` it was valued at. One line per product.
+
+### `retail_customers` (RLS; `bms_app` SELECT, INSERT)
+
+Credit buyers: `name varchar(200)`, `contact varchar(100)` kept as entered, `created_by`.
+
+### `retail_sales` (RLS; `bms_app` SELECT, INSERT, UPDATE)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id`, `tenant_id`, `created_at`, `updated_at`, `version`, `created_by` | standard | |
+| `branch_id`, `sale_no` | | `sale_no` from the tenant sequence `retail_sale_no` (`RS00000001`) |
+| `sale_date` | date | Not in the future |
+| `payment_method` | text | `cash`, `mobile_money`, `bank`, `credit` |
+| `customer_id`, `buyer_name`, `buyer_contact` | | A credit sale has a customer or a buyer name (CHECK) |
+| `due_date` | date | The proposed payment date; credit sales only (CHECK) |
+| `currency`, `total_minor`, `cost_total_minor` | | Sums of the line totals and line cost snapshots |
+| `paid_minor` | bigint | Equals the total except on a credit sale (CHECK); at most the total |
+| `status` | text | `completed` or `voided`; `voided_at`, `voided_by`, `void_reason` |
+| `sale_entry_id`, `cost_entry_id` | uuid | The two journal entries |
+| `historical` | boolean | Imported history posts no journal (FR-RET-12) |
+
+### `retail_sale_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+`line_no`, `product_id`, `qty numeric(14,3) > 0`, and the snapshots `unit_price_minor` and
+`unit_cost_minor` with `line_total_minor` and `line_cost_minor` (each rounded half up once). Profit
+is computed from these, never from the product's current prices (ADR-020 decision 5).
