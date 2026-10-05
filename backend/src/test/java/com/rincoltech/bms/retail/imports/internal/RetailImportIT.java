@@ -391,10 +391,8 @@ class RetailImportIT extends IntegrationTest {
                 .query(UUID.class)
                 .single();
 
-        assertThat(api.post(
-                                "/products/" + product + "/prices",
-                                Map.of("cost_minor", 1_200, "sell_minor", 1_800, "reason", "Test edit"),
-                                ADMIN)
+        assertThat(api.editPrices(
+                                product, Map.of("cost_minor", 1_200, "sell_minor", 1_800, "reason", "Test edit"), ADMIN)
                         .getStatusCode()
                         .is2xxSuccessful())
                 .isTrue();

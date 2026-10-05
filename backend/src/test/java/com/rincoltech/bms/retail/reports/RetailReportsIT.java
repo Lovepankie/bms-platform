@@ -121,7 +121,7 @@ class RetailReportsIT extends IntegrationTest {
             assertThat(branch.get("revaluation_difference_minor").asLong()).isZero();
         }
 
-        api.post("/products/" + a + "/prices", Map.of("cost_minor", 1_100, "reason", "Test revalue"), ADMIN);
+        api.editPrices(a, Map.of("cost_minor", 1_100, "reason", "Test revalue"), ADMIN);
         JsonNode after = api.get("/reports/valuation", ADMIN).getBody();
         Map<String, Long> difference = new HashMap<>();
         after.get("branches")
@@ -168,7 +168,7 @@ class RetailReportsIT extends IntegrationTest {
         assertThat(row.get("profit_minor").asLong()).isEqualTo(300);
         assertThat(p.get("profit_minor").asLong()).isEqualTo(300);
 
-        api.post("/products/" + a + "/prices", Map.of("cost_minor", 5_000, "reason", "Test later"), ADMIN);
+        api.editPrices(a, Map.of("cost_minor", 5_000, "reason", "Test later"), ADMIN);
         assertThat(api.get("/reports/profit/daily", ADMIN)
                         .getBody()
                         .get("profit_minor")

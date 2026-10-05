@@ -117,10 +117,14 @@ class CatalogueController {
 
     @PostMapping("/products/{product_id}/prices")
     @RequiresPermission("retail.price.edit")
-    @Operation(summary = "Edit prices by hand, with a history row (FR-RET-02)", operationId = "editRetailPrices")
+    @Operation(
+            summary = "Edit prices by hand under If-Match, with a history row (FR-RET-02)",
+            operationId = "editRetailPrices")
     ResponseEntity<Product> editPrices(
-            @PathVariable("product_id") UUID id, @Valid @RequestBody PriceEditRequest request) {
-        Product p = service.editPrices(id, request);
+            @PathVariable("product_id") UUID id,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody PriceEditRequest request) {
+        Product p = service.editPrices(id, ifMatch, request);
         return ResponseEntity.ok().eTag(String.valueOf(p.version())).body(p);
     }
 

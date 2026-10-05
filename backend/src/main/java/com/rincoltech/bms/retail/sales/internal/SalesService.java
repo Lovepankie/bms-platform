@@ -262,7 +262,6 @@ class SalesService {
         after.put("sale_no", saleNo);
         after.put("payment_method", r.paymentMethod());
         after.put("total_minor", total);
-        after.put("cost_total_minor", cost);
         after.put("lines", lines.size());
         audit.record(AuditLog.Entry.created("retail.sale.created", SALE, id, branch, after));
         return visible(repo.find(id, false).orElseThrow().sale());

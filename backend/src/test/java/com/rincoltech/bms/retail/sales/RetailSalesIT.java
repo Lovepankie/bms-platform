@@ -105,10 +105,7 @@ class RetailSalesIT extends IntegrationTest {
     void aLaterPriceChangeLeavesTheSaleAlone() {
         api.stockUp(t.headOffice(), product, "2");
         UUID id = RetailTestSupport.id(api.sell(t.headOffice(), "cash", product, "1"));
-        api.post(
-                "/products/" + product + "/prices",
-                Map.of("cost_minor", 1_800, "sell_minor", 2_400, "reason", "Test change"),
-                ADMIN);
+        api.editPrices(product, Map.of("cost_minor", 1_800, "sell_minor", 2_400, "reason", "Test change"), ADMIN);
         JsonNode sale = api.get("/sales/" + id, ADMIN).getBody();
         assertThat(sale.get("lines").get(0).get("unit_price_minor").asLong()).isEqualTo(2_000);
         assertThat(sale.get("lines").get(0).get("unit_cost_minor").asLong()).isEqualTo(1_500);

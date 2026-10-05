@@ -285,8 +285,6 @@ class StockService {
                 id, principal.userId(), entry.map(PostedEntry::entryId).orElse(null));
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("adjusted_lines", movements.size());
-        after.put("loss_minor", losses);
-        after.put("gain_minor", gains);
         audit.record(new AuditLog.Entry(
                 "retail.stocktake.committed", STOCKTAKE, id, s.branchId(), Map.of("status", "draft"), after));
         return visible(repo.stocktake(id, false).orElseThrow());

@@ -325,6 +325,12 @@ the lending module is switched on (runbook `docs/runbooks/`, onboarding a tenant
 
 - Every state-changing action writes an `audit_log` row in the same transaction
   (FR-AUD-01), with masked NIN and phone values (FR-AUD-05).
+- Retail audit payloads carry no cost, cost total, loss, gain or purchase total (all at cost),
+  because audit readers such as the auditor and branch manager do not hold `retail.profit.read`
+  (#77, ADR-020 decision 10). They record facts at selling value, counts and ids (sale number and
+  total, line counts, adjusted lines, payment method, supplier); a price change records the sell
+  price diff and its source only. Cost stays in the documents and journals, whose reads apply the
+  permission.
 - `audit_log`, `journal_entries`, `journal_lines` and the other append-only tables in
   chapter 6 section 6.2.4 reject UPDATE and DELETE for the application role.
 - Platform operator actions go to `platform_audit_log`, which tenants cannot read and

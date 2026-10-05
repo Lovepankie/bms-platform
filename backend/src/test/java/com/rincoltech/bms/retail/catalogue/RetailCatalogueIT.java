@@ -107,11 +107,11 @@ class RetailCatalogueIT extends IntegrationTest {
     void aManualPriceEditWritesAHistoryRow() {
         UUID id = api.product("LMP-9W", 3_000, 4_000);
         ResponseEntity<JsonNode> denied =
-                api.post("/products/" + id + "/prices", Map.of("sell_minor", 4_500, "reason", "Test increase"), SALES);
+                api.editPrices(id, Map.of("sell_minor", 4_500, "reason", "Test increase"), SALES);
         assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
         ResponseEntity<JsonNode> edited =
-                api.post("/products/" + id + "/prices", Map.of("sell_minor", 4_500, "reason", "Test increase"), ADMIN);
+                api.editPrices(id, Map.of("sell_minor", 4_500, "reason", "Test increase"), ADMIN);
         assertThat(edited.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(edited.getBody().get("sell_minor").asLong()).isEqualTo(4_500);
         assertThat(edited.getBody().get("cost_minor").asLong()).isEqualTo(3_000);
@@ -128,11 +128,9 @@ class RetailCatalogueIT extends IntegrationTest {
         assertThat(last.get("new_cost_minor").asLong()).isEqualTo(3_000);
         assertThat(last.get("reason").asString()).isEqualTo("Test increase");
 
-        ResponseEntity<JsonNode> same =
-                api.post("/products/" + id + "/prices", Map.of("sell_minor", 4_500, "reason", "Test again"), ADMIN);
+        ResponseEntity<JsonNode> same = api.editPrices(id, Map.of("sell_minor", 4_500, "reason", "Test again"), ADMIN);
         assertThat(same.getBody().get("code").asString()).isEqualTo("price_unchanged");
-        assertThat(api.post("/products/" + id + "/prices", Map.of("reason", "Test none"), ADMIN)
-                        .getStatusCode())
+        assertThat(api.editPrices(id, Map.of("reason", "Test none"), ADMIN).getStatusCode())
                 .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(TestDatabase.owner()
                         .sql(
@@ -175,7 +173,7 @@ class RetailCatalogueIT extends IntegrationTest {
     @Test
     void aSalesUserNeverReceivesCostFields() {
         UUID id = api.product("BRK-20A", 7_000, 9_000);
-        api.post("/products/" + id + "/prices", Map.of("cost_minor", 7_500, "reason", "Test cost"), ADMIN);
+        api.editPrices(id, Map.of("cost_minor", 7_500, "reason", "Test cost"), ADMIN);
 
         String email = Api.email("sales");
         UUID user = Api.staff(t, email, new Role("retail_sales", t.headOffice()));
