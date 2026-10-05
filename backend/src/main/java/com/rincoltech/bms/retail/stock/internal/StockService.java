@@ -99,7 +99,7 @@ class StockService {
         String next = more
                 ? Cursor.encode(items.getLast().code() + "|" + items.getLast().productId())
                 : null;
-        boolean cost = mayReadCost();
+        boolean cost = mayReadCost(branch);
         return new StockPage(
                 branch,
                 items.stream()
@@ -139,10 +139,9 @@ class StockService {
         String next = more
                 ? Cursor.encode(items.getLast().at() + "|" + items.getLast().id())
                 : null;
-        boolean cost = mayReadCost();
         return new MovementPage(
                 items.stream()
-                        .map(m -> cost
+                        .map(m -> mayReadCost(m.branchId())
                                 ? m
                                 : new MovementRow(
                                         m.id(),
@@ -294,7 +293,7 @@ class StockService {
     }
 
     private Stocktake visible(Stocktake s) {
-        if (mayReadCost()) {
+        if (mayReadCost(s.branchId())) {
             return s;
         }
         return new Stocktake(
@@ -321,8 +320,12 @@ class StockService {
                 s.version());
     }
 
-    static boolean mayReadCost() {
-        return CurrentPrincipal.require().hasPermission(PROFIT_READ);
+    /**
+     * Cost on a branch-bound row needs {@code retail.profit.read} in that row's branch, not in any
+     * branch (ADR-017; review F5).
+     */
+    static boolean mayReadCost(UUID branchId) {
+        return CurrentPrincipal.require().may(PROFIT_READ, branchId);
     }
 
     private static String blankToNull(String s) {

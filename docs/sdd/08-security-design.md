@@ -211,7 +211,10 @@ Notes:
   except `retail.price.below_cost`; the sales role (`retail_sales`) holds sale create and read,
   stock read, usage report and customer manage, scoped to its assigned branches. Lending roles hold no retail permission. Cost, cost
   snapshot, valuation at cost and profit fields are omitted from responses (absent, not null)
-  unless the caller holds `retail.profit.read`, and the profit routes refuse without it. The sales
+  unless the caller holds `retail.profit.read`, and the profit routes refuse without it. On a
+  branch-bound row the permission must cover that row's branch (`principal.may`, ADR-017), so a
+  user with profit read at branch A only sees no cost on branch B's stock, movements, sales or
+  valuation (review F5); tenant-wide products and price history need it in any branch. The sales
   role holds no `core.*` permission; the PWA reads the user's branches from `/me`.
 - `retail.price.below_cost` (issue #64, ADR-020 decision 5) lets a sale line be priced at or below
   the product's cost. It is in the catalogue (migration V13) but no default role holds it, not even

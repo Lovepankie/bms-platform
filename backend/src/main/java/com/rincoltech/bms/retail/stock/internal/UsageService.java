@@ -178,7 +178,7 @@ class UsageService {
         after.put("lines", lines.size());
         audit.record(AuditLog.Entry.created("retail.usage.reported", USAGE, id, branch, after));
         UsageReport report = new UsageReport(id, branch, r.kind(), reason, on, currency, total, lines, clock.now(), by);
-        return StockService.mayReadCost() ? report : withoutCost(report);
+        return StockService.mayReadCost(branch) ? report : withoutCost(report);
     }
 
     static UsageReport withoutCost(UsageReport r) {

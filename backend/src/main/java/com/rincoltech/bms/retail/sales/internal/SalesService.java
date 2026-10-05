@@ -465,8 +465,9 @@ class SalesService {
         return new CustomerBalance(customerId, tenant.profile().currency(), owed, open);
     }
 
+    /** Cost and profit need {@code retail.profit.read} in the sale's branch (ADR-017; review F5). */
     static Sale visible(Sale s) {
-        if (CurrentPrincipal.require().hasPermission("retail.profit.read")) {
+        if (CurrentPrincipal.require().may("retail.profit.read", s.branchId())) {
             return s;
         }
         return new Sale(

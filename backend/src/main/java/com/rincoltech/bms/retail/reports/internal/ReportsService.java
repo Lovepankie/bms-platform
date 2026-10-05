@@ -48,8 +48,10 @@ class ReportsService {
 
     /**
      * FR-RET-09: per branch and product, quantity times the current cost and the current sell price
-     * (ADR-020 decision 6), with branch and overall totals. A caller with {@code retail.profit.read}
-     * also gets each branch's inventory account balance and the revaluation difference (decision 8).
+     * (ADR-020 decision 6), with branch and overall totals. Where the caller holds {@code
+     * retail.profit.read} in a row's branch (ADR-017; review F5), that row and branch also show cost,
+     * the inventory account balance and the revaluation difference (decision 8). The overall value
+     * at cost shows only when cost shows for every reported branch.
      */
     @Transactional(readOnly = true)
     Valuation valuation(List<UUID> branchIds, LocalDate asOf) {
@@ -60,10 +62,10 @@ class ReportsService {
             throw ApiException.validation(
                     List.of(new FieldProblem("as_of", "invalid", "A valuation cannot be dated in the future.")));
         }
-        boolean cost = principal.hasPermission(PROFIT_READ);
         List<ValuationRow> rows = new ArrayList<>();
         Map<UUID, long[]> byBranch = new LinkedHashMap<>();
         for (Holding h : repo.holdings(filter, asOf)) {
+            boolean cost = principal.may(PROFIT_READ, h.branchId());
             long[] t = byBranch.computeIfAbsent(h.branchId(), b -> new long[2]);
             Long expected;
             Long atCost;
@@ -94,20 +96,26 @@ class ReportsService {
                     cost ? h.costMinor() : null,
                     cost ? atCost : null));
         }
-        Map<UUID, Long> inventory =
-                cost ? accounts.balanceByBranch("inventory", asOf == null ? today : asOf) : Map.of();
+        Map<UUID, Long> inventory = principal.hasPermission(PROFIT_READ)
+                ? accounts.balanceByBranch("inventory", asOf == null ? today : asOf)
+                : Map.of();
         // Review F3: a branch that holds no stock but whose inventory account is not zero is reported
         // too, with value at cost 0, so its revaluation difference is not hidden.
         Set<UUID> reported = new LinkedHashSet<>(byBranch.keySet());
         inventory.entrySet().stream()
-                .filter(e -> e.getValue() != 0 && (filter == null || filter.contains(e.getKey())))
+                .filter(e -> e.getValue() != 0
+                        && (filter == null || filter.contains(e.getKey()))
+                        && principal.may(PROFIT_READ, e.getKey()))
                 .map(Map.Entry::getKey)
                 .sorted()
                 .forEach(reported::add);
         List<BranchTotal> branches = new ArrayList<>();
         long expectedTotal = 0;
         long atCostTotal = 0;
+        boolean costEverywhere = true;
         for (UUID branch : reported) {
+            boolean cost = principal.may(PROFIT_READ, branch);
+            costEverywhere &= cost;
             long[] t = byBranch.getOrDefault(branch, new long[2]);
             expectedTotal = Math.addExact(expectedTotal, t[0]);
             atCostTotal = Math.addExact(atCostTotal, t[1]);
@@ -125,7 +133,7 @@ class ReportsService {
                 rows,
                 branches,
                 expectedTotal,
-                cost ? atCostTotal : null);
+                costEverywhere && principal.hasPermission(PROFIT_READ) ? atCostTotal : null);
     }
 
     /** FR-RET-10: sale lines less their cost snapshots less usage and damage at cost, per branch and day. */

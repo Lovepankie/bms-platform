@@ -117,7 +117,10 @@ Signed-in sessions (bearer tokens) work in every environment. In addition, local
 environments may run with `AUTH_MODE=dev`, where a request without a bearer token takes its
 principal from `X-Dev-User-Id` (a UUID), `X-Dev-Kind` (`staff`, the default, or `member`),
 `X-Dev-Permissions` (comma separated permission keys) and `X-Dev-Branch-Ids` (comma separated
-branch UUIDs, or `*` for all branches) headers, each permission applying in those branches. Missing
+branch UUIDs, or `*` for all branches) headers, each permission applying in those branches. The
+optional `X-Dev-Scopes` header gives single permissions their own scope, as several roles do for a
+signed-in user (ADR-017): semicolon separated `permission=*` or `permission=uuid,uuid` entries,
+for example `retail.profit.read=<branch A>`, replacing that permission's scope or adding it. Missing
 or malformed headers leave the request unauthenticated; the stub never applies to platform paths.
 The application refuses to start with `AUTH_MODE=dev` in any profile other than `dev` or `test`;
 with the default `AUTH_MODE=none` only signed-in sessions authenticate. The PWA always signs in
@@ -609,7 +612,11 @@ draft `docs/api/retail-contract-draft.md` is replaced by this section and the ge
 `openapi.json`; as everywhere in this API, JSON fields and query parameters are snake_case
 (`cost_minor`, `branch_id`), where the draft wrote camelCase. Quantities are decimal strings with up
 to three places (`"3.500"`). Fields marked `*` are **absent** from the body, not null, for a caller
-without `retail.profit.read` (ADR-020 decision 10).
+without `retail.profit.read` (ADR-020 decision 10). On a branch-bound row (stock, movements,
+stock-takes, usage, sales, valuation rows and branch totals) the permission must cover that row's
+branch, per ADR-017, not merely be held somewhere; the valuation's overall `value_at_cost_minor`
+shows only when cost shows for every branch reported (review F5). Products and price history are
+tenant-wide and need the permission in any branch.
 
 Built (#51, catalogue):
 
