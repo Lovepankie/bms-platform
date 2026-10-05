@@ -119,6 +119,10 @@ principal or one other than tenancy binds a request's tenant (ADR-017).
 
 ## 15.6 Money correctness
 
+Built so far (#40): the Schedules row, in `ScheduleCalculatorTest` (worked examples A, B and C as
+exact tables, and seeded random terms for the properties) and `LoanProductsIT` (the same examples
+through the preview endpoint).
+
 | Area | Tests |
 |---|---|
 | Schedules | Worked examples A, B and C (chapter 3 section 3.4) as exact tables. Property-based tests over random principal, rate, term and frequency: principals sum to `P`; interest sums to `I` (flat); balance ends at 0 (declining); every due date strictly increases; month-end clamping never drifts. |

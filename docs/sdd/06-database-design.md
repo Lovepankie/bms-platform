@@ -749,7 +749,8 @@ increment 4.
 
 `lending_loan_products`: (std) `code varchar(20) NOT NULL` (`UNIQUE (tenant_id, code)`),
 `name varchar(100) NOT NULL`, `status text NOT NULL` [`active`, `archived`],
-`current_version_id uuid`.
+`current_version_id uuid` (`FOREIGN KEY (tenant_id, id, current_version_id)` to the versions'
+`UNIQUE (tenant_id, product_id, id)`, so a product can only point at one of its own versions).
 
 `lending_loan_product_versions` (immutable once referenced by a loan; FR-PRD-04):
 
@@ -776,7 +777,7 @@ increment 4.
 | `penalty_cap_bp` | `integer` | |
 | `flat_early_settlement_rebate` | `boolean NOT NULL DEFAULT false` | R-PAYOFF |
 | `requires_collateral` | `boolean NOT NULL DEFAULT false` | |
-| `min_collateral_cover_bp` | `integer` | For example 15000 = 1.5 times principal. |
+| `min_collateral_cover_bp` | `integer` | For example 15000 = 1.5 times principal. `CHECK`: NOT NULL when `requires_collateral`. |
 | `requires_guarantor` | `boolean NOT NULL DEFAULT false` | |
 | `created_by` | `uuid NOT NULL` | |
 
@@ -785,9 +786,15 @@ increment 4.
 (std, no `version`) `product_version_id uuid NOT NULL`, `name varchar(60) NOT NULL`,
 `fee_type text NOT NULL` [`application`, `processing`, `insurance`, `other`],
 `calc_method text NOT NULL` [`flat`, `percent_of_principal`], `amount_minor bigint`,
-`rate_bp integer`, `timing text NOT NULL` [`deducted_at_disbursement`, `added_to_loan`,
+`rate_bp integer` (`CHECK (rate_bp BETWEEN 1 AND 10000)`), `timing text NOT NULL` [`deducted_at_disbursement`, `added_to_loan`,
 `paid_upfront`]. `CHECK` that exactly one of `amount_minor`, `rate_bp` is set to match
 `calc_method`.
+
+Versions and fees are insert-only for `bms_app` (FR-PRD-04); the product row is updated only to
+point at its current version and to archive it. The version row's CHECKs carry the parts of
+R-TERM, R-RATE and R-PEN a row can express (frequency present exactly for instalments, the
+allocation order a permutation, the penalty fields matching the method); the rest is checked by
+the service before the insert.
 
 ### `lending_loans`
 
@@ -1153,6 +1160,8 @@ first uses it.
 (SELECT and INSERT only), `lending_collateral_events` (append-only) and
 `lending_collateral_documents`. `lending_loan_collateral` waits for `lending_loans` (increment 4).
 `V6__member_document_supersede.sql` (#29) adds the supersede columns to `lending_member_documents`.
+`V7__loan_products.sql` (#40) creates `lending_loan_products`, `lending_loan_product_versions` and
+`lending_loan_product_fees`.
 
 ## 6.10 Open items
 

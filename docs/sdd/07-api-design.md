@@ -183,7 +183,7 @@ published under the platform host.
 | 404 | Not found or outside branch scope; `unknown_tenant`; `module_not_enabled` |
 | 413 | `file_too_large`: an upload over 5 MB (chapter 8 section 8.8) |
 | 415 | `unsupported_file_type`: an upload that is not JPEG, PNG or PDF by content |
-| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, `approval_already_pending`, `mfa_already_enrolled`, `mfa_not_enrolled`, `mfa_enrolment_not_started`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`, `duplicate_email`, `duplicate_phone`, `duplicate_branch_code`, `duplicate_slug`); `conflict` for any other unique or foreign key violation |
+| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, `approval_already_pending`, `mfa_already_enrolled`, `mfa_not_enrolled`, `mfa_enrolment_not_started`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`, `duplicate_email`, `duplicate_phone`, `duplicate_branch_code`, `duplicate_slug`, `duplicate_product_code`); `conflict` for any other unique or foreign key violation |
 | 422 | Validation and business rule failures (codes below) |
 | 423 | `tenant_suspended`, `account_locked` |
 | 428 | `precondition_required`: a `PATCH` without `If-Match` (section 7.9) |
@@ -458,6 +458,13 @@ document routes. The rest of this table is to be built.
 | POST | `/lending/members/{member_id}/transfer` | `lending.members.update` | **A**. FR-BR-06 (P2) |
 
 ### 7.11.12 Lending: loan products (`/lending/loan-products`)
+
+Built (#40): every route below. Products are tenant-wide, so the permission is the whole check
+(no branch scope). `POST .../versions` and `POST .../archive` require `If-Match`; an archived
+product refuses both with 409 `invalid_status_transition`. The schedule preview takes the terms
+as typed on the product form (saved or not), a principal, a term count and a disbursement date,
+and answers `{items, totals, deducted_at_disbursement_minor, paid_upfront_minor,
+net_disbursed_minor}` from the same calculator real schedules will use.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|

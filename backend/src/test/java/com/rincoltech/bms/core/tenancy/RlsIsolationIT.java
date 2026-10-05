@@ -137,6 +137,23 @@ class RlsIsolationIT {
         owner.sql("INSERT INTO lending_collateral_documents (tenant_id, collateral_id, document_id) VALUES (?, ?, ?)")
                 .params(t.tenantId(), collateral, document)
                 .update();
+        UUID product = UUID.randomUUID();
+        UUID productVersion = UUID.randomUUID();
+        owner.sql(
+                        "INSERT INTO lending_loan_products (id, tenant_id, code, name, status) VALUES (?, ?, 'RLS', 'Test Product', 'active')")
+                .params(product, t.tenantId())
+                .update();
+        owner.sql("""
+                        INSERT INTO lending_loan_product_versions (id, tenant_id, product_id, version_no, currency,
+                            interest_method, interest_rate_bp, rate_unit, term_unit, min_term_count, max_term_count,
+                            default_term_count, repayment_pattern, min_principal_minor, max_principal_minor, created_by)
+                        VALUES (?, ?, ?, 1, 'UGX', 'flat', 1000, 'per_term', 'month', 1, 1, 1, 'bullet', 1000, 100000, ?)
+                        """).params(productVersion, t.tenantId(), product, user).update();
+        owner.sql("""
+                        INSERT INTO lending_loan_product_fees (id, tenant_id, product_version_id, name, fee_type,
+                            calc_method, amount_minor, timing)
+                        VALUES (?, ?, ?, 'Test fee', 'processing', 'flat', 1000, 'paid_upfront')
+                        """).params(UUID.randomUUID(), t.tenantId(), productVersion).update();
         owner.sql(
                         "INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type) VALUES (?, ?, 'system', 'test.fixture.created', 'test')")
                 .params(UUID.randomUUID(), t.tenantId())

@@ -42,7 +42,8 @@ class ModularityTest {
                         "core.platform",
                         "lending.collateral",
                         "lending.manifest",
-                        "lending.members");
+                        "lending.members",
+                        "lending.products");
     }
 
     /** ADR-001: the core never depends on a vertical, whatever a package-info might allow. */
