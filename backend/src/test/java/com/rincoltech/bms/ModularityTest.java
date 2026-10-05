@@ -47,6 +47,7 @@ class ModularityTest {
                         "lending.products",
                         "retail.catalogue",
                         "retail.manifest",
+                        "retail.purchasing",
                         "retail.sales",
                         "retail.stock");
     }

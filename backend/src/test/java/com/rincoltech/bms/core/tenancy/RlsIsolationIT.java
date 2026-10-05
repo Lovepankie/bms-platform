@@ -242,6 +242,37 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), sale, retailProduct)
                 .update();
+        // Retail tables (migration V12, ADR-020).
+        UUID supplier = UUID.randomUUID();
+        owner.sql("INSERT INTO retail_suppliers (id, tenant_id, name) VALUES (?, ?, 'Test Supplier 01')")
+                .params(supplier, t.tenantId())
+                .update();
+        UUID purchase = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_purchases (id, tenant_id, purchase_no, supplier_id, purchased_on, payment_method,
+                                                      currency, total_minor, created_by)
+                        VALUES (?, ?, 'RP99999999', ?, DATE '2026-01-15', 'credit', 'UGX', 200, ?)
+                        """).params(purchase, t.tenantId(), supplier, user).update();
+        owner.sql("""
+                        INSERT INTO retail_purchase_lines (id, tenant_id, purchase_id, line_no, product_id, cost_minor,
+                                                           qty_total, line_total_minor)
+                        VALUES (?, ?, ?, 1, ?, 100, 2, 200)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), purchase, retailProduct)
+                .update();
+        UUID usage = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_usage_reports (id, tenant_id, branch_id, kind, reason, occurred_on, currency,
+                                                          cost_total_minor, created_by)
+                        VALUES (?, ?, ?, 'used', 'Test use', DATE '2026-01-15', 'UGX', 100, ?)
+                        """).params(usage, t.tenantId(), t.headOffice(), user).update();
+        owner.sql("""
+                        INSERT INTO retail_usage_lines (id, tenant_id, report_id, line_no, product_id, qty, unit_cost_minor,
+                                                        line_cost_minor)
+                        VALUES (?, ?, ?, 1, ?, 1, 100, 100)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), usage, retailProduct)
+                .update();
         owner.sql(
                         "INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type) VALUES (?, ?, 'system', 'test.fixture.created', 'test')")
                 .params(UUID.randomUUID(), t.tenantId())
@@ -273,6 +304,14 @@ class RlsIsolationIT {
                         UUID.randomUUID(),
                         t.tenantId(),
                         t.account("cash_on_hand"))
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_sale_payments (id, tenant_id, sale_id, amount_minor, currency, method, paid_on,
+                                                          journal_entry_id, created_by)
+                        SELECT ?, ?, id, 50, 'UGX', 'cash', DATE '2026-01-15', ?, ?
+                          FROM retail_sales WHERE tenant_id = ? LIMIT 1
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), entry, user, t.tenantId())
                 .update();
     }
 

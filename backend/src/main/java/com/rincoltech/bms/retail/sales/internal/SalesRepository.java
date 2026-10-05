@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.sales.internal;
 
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Customer;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.OpenSale;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.Payment;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Sale;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleLine;
 import com.rincoltech.bms.retail.stock.Quantities;
@@ -241,6 +242,52 @@ class SalesRepository {
                 rs.getObject("voided_by", UUID.class),
                 rs.getString("void_reason"),
                 rs.getInt("version"));
+    }
+
+    // ---- Payments --------------------------------------------------------------------------
+
+    void insertPayment(Payment p) {
+        jdbc.sql("""
+                        INSERT INTO retail_sale_payments (id, tenant_id, sale_id, amount_minor, currency, method, paid_on,
+                            journal_entry_id, created_by)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?)
+                        """)
+                .params(
+                        p.id(),
+                        p.saleId(),
+                        p.amountMinor(),
+                        p.currency(),
+                        p.method(),
+                        Date.valueOf(p.paidOn()),
+                        p.journalEntryId(),
+                        p.createdBy())
+                .update();
+    }
+
+    void addPaid(UUID saleId, long amountMinor) {
+        jdbc.sql("""
+                        UPDATE retail_sales SET paid_minor = paid_minor + ?, updated_at = now(), version = version + 1
+                         WHERE id = ?
+                        """).params(amountMinor, saleId).update();
+    }
+
+    List<Payment> payments(UUID saleId) {
+        return jdbc.sql("""
+                        SELECT id, sale_id, amount_minor, currency, method, paid_on, journal_entry_id, created_at, created_by
+                          FROM retail_sale_payments WHERE sale_id = ? ORDER BY paid_on, created_at, id
+                        """)
+                .param(saleId)
+                .query((rs, n) -> new Payment(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("sale_id", UUID.class),
+                        rs.getLong("amount_minor"),
+                        rs.getString("currency"),
+                        rs.getString("method"),
+                        rs.getDate("paid_on").toLocalDate(),
+                        rs.getObject("journal_entry_id", UUID.class),
+                        instant(rs, "created_at"),
+                        rs.getObject("created_by", UUID.class)))
+                .list();
     }
 
     // ---- Customers -----------------------------------------------------------------------

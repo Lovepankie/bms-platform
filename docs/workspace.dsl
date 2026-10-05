@@ -67,7 +67,8 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 # ---------------- retail vertical (ADR-020) ----------------
                 retailCatalogue = component "Retail: Catalogue" "Categories, units, products with current cost and sell price; append-only price history written with every price change." "retail" "retail"
                 retailStock     = component "Retail: Stock" "Append-only stock movements and per-branch balances kept in the same transaction under a row lock; stock-takes; nightly reconciliation of balances against movements; retail posting rules and Idempotency-Key handling." "retail" "retail"
-                retailSales     = component "Retail: Sales" "Sales with unit cost and price snapshots, credit buyers, voids by reversal; revenue and cost of goods sold posted per branch." "retail" "retail"
+                retailSales     = component "Retail: Sales" "Sales with unit cost and price snapshots, credit buyers, payments against credit sales, voids by reversal; revenue and cost of goods sold posted per branch." "retail" "retail"
+                retailPurchasing = component "Retail: Purchasing" "Suppliers and restocks that set product prices, with history, in the same transaction as the stock movements and the per-branch journals." "retail" "retail"
             }
 
             migrate = container "Migrate" "One-shot container run before the application containers switch: applies the Flyway migrations as bms_owner, then exits (ADR-006)." "API image, migrate command" "app"
@@ -168,7 +169,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.retailCatalogue -> bms.api.audit "Writes audit rows"
         bms.api.retailCatalogue -> bms.api.tenancy "Reads the tenant currency"
         bms.api.retailCatalogue -> bms.db "Products and the append-only price history"
-        bms.web -> bms.api.retailStock "Stock by branch, movements, stock-takes"
+        bms.web -> bms.api.retailStock "Stock by branch, movements, stock-takes, usage and damage reports"
         bms.web -> bms.api.retailSales "POST /retail/sales with Idempotency-Key; voids; credit buyers"
         bms.api.retailSales -> bms.api.retailCatalogue "Reads the current cost and sell price to snapshot"
         bms.api.retailSales -> bms.api.retailStock "Moves stock; posts through the retail books; claims the idempotency key"
@@ -178,7 +179,12 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.retailStock -> bms.api.jobs "Runs the nightly stock reconciliation per retail tenant"
         bms.api.retailStock -> bms.db "Append-only movements and balances under a row lock"
         bms.api.retailSales -> bms.api.audit "Writes audit rows"
-        bms.api.retailSales -> bms.db "Sales, append-only lines with snapshots, credit buyers"
+        bms.api.retailSales -> bms.db "Sales, append-only lines with snapshots, credit buyers, payments"
+        bms.web -> bms.api.retailPurchasing "POST /retail/purchases with Idempotency-Key; suppliers"
+        bms.api.retailPurchasing -> bms.api.retailCatalogue "Sets cost and sell price with a history row, under the product lock"
+        bms.api.retailPurchasing -> bms.api.retailStock "Moves stock per branch; posts per branch; claims the idempotency key"
+        bms.api.retailPurchasing -> bms.api.audit "Writes audit rows"
+        bms.api.retailPurchasing -> bms.db "Suppliers, append-only purchases and lines"
         bms.api.tenancy     -> bms.db "Resolves the slug with app_resolve_tenant_status; binds app.tenant_id"
         bms.api.tenancy     -> bms.api.audit "Audits branch and settings changes"
         bms.api.identity    -> bms.db "Reads sessions and role assignments; revocation takes effect at once"

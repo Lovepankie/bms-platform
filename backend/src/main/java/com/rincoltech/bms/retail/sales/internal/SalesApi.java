@@ -135,4 +135,32 @@ final class SalesApi {
 
     @Schema(name = "RetailCustomerBalance", description = "Credit sales in the caller's branch scope")
     record CustomerBalance(UUID customerId, String currency, long balanceMinor, List<OpenSale> openSales) {}
+
+    @Schema(name = "RetailPaymentRequest")
+    record PaymentRequest(
+            @NotNull @Positive Long amountMinor,
+
+            @NotNull @Pattern(regexp = "cash|mobile_money|bank")
+            String method,
+
+            @Schema(description = "Defaults to today; not before the sale, not in the future")
+            LocalDate paidOn) {}
+
+    @Schema(name = "RetailPayment")
+    record Payment(
+            UUID id,
+            UUID saleId,
+            long amountMinor,
+            String currency,
+            String method,
+            LocalDate paidOn,
+            UUID journalEntryId,
+            Instant createdAt,
+            UUID createdBy) {}
+
+    @Schema(name = "RetailPaymentResult")
+    record PaymentResult(Payment payment, long salePaidMinor, long saleBalanceMinor) {}
+
+    @Schema(name = "RetailPaymentList")
+    record PaymentList(List<Payment> items) {}
 }

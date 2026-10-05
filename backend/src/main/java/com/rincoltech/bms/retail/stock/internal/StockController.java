@@ -1,10 +1,13 @@
 package com.rincoltech.bms.retail.stock.internal;
 
 import com.rincoltech.bms.kernel.RequiresPermission;
+import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Stocktake;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeRequest;
+import com.rincoltech.bms.retail.stock.internal.UsageApi.UsageReport;
+import com.rincoltech.bms.retail.stock.internal.UsageApi.UsageRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -12,12 +15,14 @@ import java.net.URI;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,9 +34,11 @@ import org.springframework.web.bind.annotation.RestController;
 class StockController {
 
     private final StockService service;
+    private final UsageService usage;
 
-    StockController(StockService service) {
+    StockController(StockService service, UsageService usage) {
         this.service = service;
+        this.usage = usage;
     }
 
     @GetMapping("/stock")
@@ -57,6 +64,22 @@ class StockController {
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
         return service.movements(branchIds, productId, from, to, limit, cursor);
+    }
+
+    @PostMapping("/usage")
+    @RequiresPermission("retail.usage.report")
+    @Operation(
+            summary = "Report stock used or damaged, valued at cost (FR-RET-07); M",
+            operationId = "reportRetailUsage")
+    ResponseEntity<UsageReport> usage(
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody UsageRequest request) {
+        Outcome<UsageReport> outcome = usage.report(idempotencyKey, request);
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.CREATED);
+        if (outcome.replayed()) {
+            response.header("Idempotent-Replayed", "true");
+        }
+        return response.body(outcome.body());
     }
 
     @PostMapping("/stocktakes")

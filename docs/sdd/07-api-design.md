@@ -641,6 +641,17 @@ branch when the permission's scope has exactly one; otherwise 422 `branch_requir
 | POST | `/retail/customers` | `retail.customer.manage` | `{name, contact?}` |
 | GET | `/retail/customers/{customer_id}/balance` | `retail.sale.read` | `{customer_id, currency, balance_minor, open_sales: [...]}` over credit sales in the caller's scope. FR-RET-05 |
 
+Built (#53, purchasing, usage and payments):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET, POST | `/retail/suppliers` | `retail.purchase.create` | `{name, contact?}`; 409 `duplicate_supplier` |
+| POST | `/retail/purchases` | `retail.purchase.create` | **M**. `{supplier_id?, purchased_on, payment_method: cash, bank or credit, note?, lines: [{product_id, cost_minor, sell_minor?, qty_by_branch: [{branch_id, qty}]}]}`; every branch must be in the caller's scope; sets the product prices and history atomically, latest line wins. FR-RET-06 |
+| GET | `/retail/purchases` | `retail.purchase.create` | `from`, `to`, `supplier_id`, `limit`, `cursor`; purchases that moved stock into the caller's branches |
+| POST | `/retail/usage` | `retail.usage.report` | **M**. `{branch_id?, kind: used or damaged, reason, occurred_on?, lines: [{product_id, qty}]}`; response `cost_total_minor*`, per line `unit_cost_minor*`, `line_cost_minor*`. FR-RET-07 |
+| POST | `/retail/sales/{sale_id}/payments` | `retail.sale.create` | **M**. `{amount_minor, method: cash, mobile_money or bank, paid_on?}`; `{payment, sale_paid_minor, sale_balance_minor}`; 422 `payment_exceeds_balance`, `sale_not_payable`. FR-RET-05 |
+| GET | `/retail/sales/{sale_id}/payments` | `retail.sale.read` | |
+
 ## 7.12 Example: record a repayment
 
 ```http

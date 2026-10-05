@@ -2332,6 +2332,19 @@
           }
         }
       },
+      "RetailBranchQty" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "example" : "10",
+            "type" : "string"
+          }
+        },
+        "required" : [ "branch_id", "qty" ]
+      },
       "RetailCategory" : {
         "properties" : {
           "id" : {
@@ -2458,6 +2471,88 @@
             "type" : "string"
           },
           "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailPayment" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "journal_entry_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "method" : {
+            "type" : "string"
+          },
+          "paid_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailPaymentList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPayment"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailPaymentRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "method" : {
+            "pattern" : "cash|mobile_money|bank",
+            "type" : "string"
+          },
+          "paid_on" : {
+            "description" : "Defaults to today; not before the sale, not in the future",
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor", "method" ]
+      },
+      "RetailPaymentResult" : {
+        "properties" : {
+          "payment" : {
+            "$ref" : "#/components/schemas/RetailPayment"
+          },
+          "sale_balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sale_paid_minor" : {
             "format" : "int64",
             "type" : "integer"
           }
@@ -2617,6 +2712,180 @@
             "type" : "string"
           }
         }
+      },
+      "RetailPurchase" : {
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPurchaseLine"
+            },
+            "type" : "array"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "payment_method" : {
+            "type" : "string"
+          },
+          "purchase_no" : {
+            "type" : "string"
+          },
+          "purchased_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailPurchaseLine" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "cost_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "line_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "line_total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty_by_branch" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPurchaseLineBranch"
+            },
+            "type" : "array"
+          },
+          "qty_total" : {
+            "type" : "string"
+          },
+          "sell_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailPurchaseLineBranch" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailPurchaseLineRequest" : {
+        "properties" : {
+          "cost_minor" : {
+            "description" : "Unit cost; becomes the product's cost",
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty_by_branch" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailBranchQty"
+            },
+            "maxItems" : 50,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "sell_minor" : {
+            "description" : "When given, becomes the product's sell price",
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "cost_minor", "product_id", "qty_by_branch" ]
+      },
+      "RetailPurchasePage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPurchase"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailPurchaseRequest" : {
+        "properties" : {
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPurchaseLineRequest"
+            },
+            "maxItems" : 500,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "note" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "payment_method" : {
+            "pattern" : "cash|bank|credit",
+            "type" : "string"
+          },
+          "purchased_on" : {
+            "description" : "Not in the future",
+            "format" : "date",
+            "type" : "string"
+          },
+          "supplier_id" : {
+            "description" : "Required for a credit purchase",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "lines", "payment_method", "purchased_on" ]
       },
       "RetailSale" : {
         "properties" : {
@@ -3068,6 +3337,52 @@
         },
         "required" : [ "lines" ]
       },
+      "RetailSupplier" : {
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "contact" : {
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSupplierList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplier"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailSupplierRequest" : {
+        "properties" : {
+          "contact" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name" ]
+      },
       "RetailUnit" : {
         "properties" : {
           "id" : {
@@ -3098,6 +3413,126 @@
           }
         },
         "required" : [ "name" ]
+      },
+      "RetailUsageLine" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "line_cost_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "line_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "type" : "string"
+          },
+          "unit_cost_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailUsageLineRequest" : {
+        "properties" : {
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "example" : "1.5",
+            "type" : "string"
+          }
+        },
+        "required" : [ "product_id", "qty" ]
+      },
+      "RetailUsageReport" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cost_total_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailUsageLine"
+            },
+            "type" : "array"
+          },
+          "occurred_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailUsageRequest" : {
+        "properties" : {
+          "branch_id" : {
+            "description" : "Defaults to the caller's one branch",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "pattern" : "used|damaged",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailUsageLineRequest"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "occurred_on" : {
+            "description" : "Defaults to today; not in the future",
+            "format" : "date",
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "kind", "lines", "reason" ]
       },
       "RetailVoidRequest" : {
         "properties" : {
@@ -6961,6 +7396,100 @@
         "tags" : [ "retail-catalogue" ]
       }
     },
+    "/api/v1/retail/purchases" : {
+      "get" : {
+        "operationId" : "listRetailPurchases",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "supplier_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchasePage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Purchases",
+        "tags" : [ "retail-purchasing" ]
+      },
+      "post" : {
+        "operationId" : "createRetailPurchase",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailPurchaseRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchase"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record a restock: prices, history, movements and journals in one transaction (FR-RET-06); M",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
     "/api/v1/retail/sales" : {
       "get" : {
         "operationId" : "listRetailSales",
@@ -7091,6 +7620,77 @@
           }
         },
         "summary" : "A sale with its lines",
+        "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/sales/{sale_id}/payments" : {
+      "get" : {
+        "operationId" : "listRetailSalePayments",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sale_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPaymentList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Payments against a sale",
+        "tags" : [ "retail-sales" ]
+      },
+      "post" : {
+        "operationId" : "payRetailSale",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sale_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailPaymentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPaymentResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record a payment against a credit sale, partial allowed (FR-RET-05); M",
         "tags" : [ "retail-sales" ]
       }
     },
@@ -7345,6 +7945,52 @@
         "tags" : [ "retail-stock" ]
       }
     },
+    "/api/v1/retail/suppliers" : {
+      "get" : {
+        "operationId" : "listRetailSuppliers",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Suppliers",
+        "tags" : [ "retail-purchasing" ]
+      },
+      "post" : {
+        "operationId" : "createRetailSupplier",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailSupplierRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplier"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add a supplier (FR-RET-06)",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
     "/api/v1/retail/units" : {
       "get" : {
         "operationId" : "listRetailUnits",
@@ -7389,6 +8035,43 @@
         },
         "summary" : "Create a unit of measure (FR-RET-01)",
         "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/usage" : {
+      "post" : {
+        "operationId" : "reportRetailUsage",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailUsageRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailUsageReport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Report stock used or damaged, valued at cost (FR-RET-07); M",
+        "tags" : [ "retail-stock" ]
       }
     },
     "/api/v1/roles" : {

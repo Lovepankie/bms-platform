@@ -5,6 +5,9 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.Customer;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerBalance;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerList;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.PaymentList;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.PaymentRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.PaymentResult;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Sale;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SalePage;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleRequest;
@@ -83,6 +86,30 @@ class SalesController {
     @Operation(summary = "Void a sale by reversal (FR-RET-04)", operationId = "voidRetailSale")
     Sale voidSale(@PathVariable("sale_id") UUID id, @Valid @RequestBody VoidRequest request) {
         return service.voidSale(id, request);
+    }
+
+    @PostMapping("/sales/{sale_id}/payments")
+    @RequiresPermission("retail.sale.create")
+    @Operation(
+            summary = "Record a payment against a credit sale, partial allowed (FR-RET-05); M",
+            operationId = "payRetailSale")
+    ResponseEntity<PaymentResult> pay(
+            @PathVariable("sale_id") UUID id,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody PaymentRequest request) {
+        Outcome<PaymentResult> outcome = service.pay(idempotencyKey, id, request);
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.CREATED);
+        if (outcome.replayed()) {
+            response.header("Idempotent-Replayed", "true");
+        }
+        return response.body(outcome.body());
+    }
+
+    @GetMapping("/sales/{sale_id}/payments")
+    @RequiresPermission("retail.sale.read")
+    @Operation(summary = "Payments against a sale", operationId = "listRetailSalePayments")
+    PaymentList payments(@PathVariable("sale_id") UUID id) {
+        return service.payments(id);
     }
 
     @GetMapping("/customers")

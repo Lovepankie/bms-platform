@@ -1263,6 +1263,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/purchases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Purchases */
+        get: operations["listRetailPurchases"];
+        put?: never;
+        /** Record a restock: prices, history, movements and journals in one transaction (FR-RET-06); M */
+        post: operations["createRetailPurchase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/sales": {
         parameters: {
             query?: never;
@@ -1292,6 +1310,24 @@ export interface paths {
         get: operations["getRetailSale"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/sales/{sale_id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Payments against a sale */
+        get: operations["listRetailSalePayments"];
+        put?: never;
+        /** Record a payment against a credit sale, partial allowed (FR-RET-05); M */
+        post: operations["payRetailSale"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1400,6 +1436,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/suppliers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Suppliers */
+        get: operations["listRetailSuppliers"];
+        put?: never;
+        /** Add a supplier (FR-RET-06) */
+        post: operations["createRetailSupplier"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/units": {
         parameters: {
             query?: never;
@@ -1412,6 +1466,23 @@ export interface paths {
         put?: never;
         /** Create a unit of measure (FR-RET-01) */
         post: operations["createRetailUnit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report stock used or damaged, valued at cost (FR-RET-07); M */
+        post: operations["reportRetailUsage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2481,6 +2552,12 @@ export interface components {
             member_no?: string;
             relationship?: string;
         };
+        RetailBranchQty: {
+            /** Format: uuid */
+            branch_id: string;
+            /** @example 10 */
+            qty: string;
+        };
         RetailCategory: {
             /** Format: uuid */
             id?: string;
@@ -2532,6 +2609,44 @@ export interface components {
             sale_no?: string;
             /** Format: int64 */
             total_minor?: number;
+        };
+        RetailPayment: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            journal_entry_id?: string;
+            method?: string;
+            /** Format: date */
+            paid_on?: string;
+            /** Format: uuid */
+            sale_id?: string;
+        };
+        RetailPaymentList: {
+            items?: components["schemas"]["RetailPayment"][];
+        };
+        RetailPaymentRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            method: string;
+            /**
+             * Format: date
+             * @description Defaults to today; not before the sale, not in the future
+             */
+            paid_on?: string;
+        };
+        RetailPaymentResult: {
+            payment?: components["schemas"]["RetailPayment"];
+            /** Format: int64 */
+            sale_balance_minor?: number;
+            /** Format: int64 */
+            sale_paid_minor?: number;
         };
         RetailPriceChange: {
             /** Format: date-time */
@@ -2606,6 +2721,82 @@ export interface components {
         RetailProductPage: {
             items?: components["schemas"]["RetailProduct"][];
             next_cursor?: string;
+        };
+        RetailPurchase: {
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            lines?: components["schemas"]["RetailPurchaseLine"][];
+            note?: string;
+            payment_method?: string;
+            purchase_no?: string;
+            /** Format: date */
+            purchased_on?: string;
+            /** Format: uuid */
+            supplier_id?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailPurchaseLine: {
+            code?: string;
+            /** Format: int64 */
+            cost_minor?: number;
+            description?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int32 */
+            line_no?: number;
+            /** Format: int64 */
+            line_total_minor?: number;
+            /** Format: uuid */
+            product_id?: string;
+            qty_by_branch?: components["schemas"]["RetailPurchaseLineBranch"][];
+            qty_total?: string;
+            /** Format: int64 */
+            sell_minor?: number;
+        };
+        RetailPurchaseLineBranch: {
+            /** Format: uuid */
+            branch_id?: string;
+            qty?: string;
+        };
+        RetailPurchaseLineRequest: {
+            /**
+             * Format: int64
+             * @description Unit cost; becomes the product's cost
+             */
+            cost_minor: number;
+            /** Format: uuid */
+            product_id: string;
+            qty_by_branch: components["schemas"]["RetailBranchQty"][];
+            /**
+             * Format: int64
+             * @description When given, becomes the product's sell price
+             */
+            sell_minor?: number;
+        };
+        RetailPurchasePage: {
+            items?: components["schemas"]["RetailPurchase"][];
+            next_cursor?: string;
+        };
+        RetailPurchaseRequest: {
+            lines: components["schemas"]["RetailPurchaseLineRequest"][];
+            note?: string;
+            payment_method: string;
+            /**
+             * Format: date
+             * @description Not in the future
+             */
+            purchased_on: string;
+            /**
+             * Format: uuid
+             * @description Required for a credit purchase
+             */
+            supplier_id?: string;
         };
         RetailSale: {
             /** Format: int64 */
@@ -2824,6 +3015,22 @@ export interface components {
             lines: components["schemas"]["RetailStocktakeLineRequest"][];
             note?: string;
         };
+        RetailSupplier: {
+            active?: boolean;
+            contact?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+        };
+        RetailSupplierList: {
+            items?: components["schemas"]["RetailSupplier"][];
+        };
+        RetailSupplierRequest: {
+            contact?: string;
+            name: string;
+        };
         RetailUnit: {
             /** Format: uuid */
             id?: string;
@@ -2834,6 +3041,67 @@ export interface components {
         };
         RetailUnitRequest: {
             name: string;
+        };
+        RetailUsageLine: {
+            code?: string;
+            description?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            line_cost_minor?: number;
+            /** Format: int32 */
+            line_no?: number;
+            /** Format: uuid */
+            product_id?: string;
+            qty?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            unit_cost_minor?: number;
+        };
+        RetailUsageLineRequest: {
+            /** Format: uuid */
+            product_id: string;
+            /** @example 1.5 */
+            qty: string;
+        };
+        RetailUsageReport: {
+            /** Format: uuid */
+            branch_id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            cost_total_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            kind?: string;
+            lines?: components["schemas"]["RetailUsageLine"][];
+            /** Format: date */
+            occurred_on?: string;
+            reason?: string;
+        };
+        RetailUsageRequest: {
+            /**
+             * Format: uuid
+             * @description Defaults to the caller's one branch
+             */
+            branch_id?: string;
+            kind: string;
+            lines: components["schemas"]["RetailUsageLineRequest"][];
+            /**
+             * Format: date
+             * @description Defaults to today; not in the future
+             */
+            occurred_on?: string;
+            reason: string;
         };
         RetailVoidRequest: {
             reason: string;
@@ -5323,6 +5591,58 @@ export interface operations {
             };
         };
     };
+    listRetailPurchases: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                supplier_id?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchasePage"];
+                };
+            };
+        };
+    };
+    createRetailPurchase: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPurchaseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchase"];
+                };
+            };
+        };
+    };
     listRetailSales: {
         parameters: {
             query?: {
@@ -5394,6 +5714,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSale"];
+                };
+            };
+        };
+    };
+    listRetailSalePayments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPaymentList"];
+                };
+            };
+        };
+    };
+    payRetailSale: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPaymentResult"];
                 };
             };
         };
@@ -5545,6 +5915,50 @@ export interface operations {
             };
         };
     };
+    listRetailSuppliers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierList"];
+                };
+            };
+        };
+    };
+    createRetailSupplier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSupplierRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplier"];
+                };
+            };
+        };
+    };
     listRetailUnits: {
         parameters: {
             query?: never;
@@ -5585,6 +5999,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailUnit"];
+                };
+            };
+        };
+    };
+    reportRetailUsage: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailUsageRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailUsageReport"];
                 };
             };
         };

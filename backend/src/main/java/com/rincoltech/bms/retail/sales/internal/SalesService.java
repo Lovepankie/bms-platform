@@ -17,6 +17,10 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerBalance;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerList;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.OpenSale;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.Payment;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.PaymentList;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.PaymentRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.PaymentResult;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Sale;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleLine;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleLineRequest;
@@ -335,6 +339,90 @@ class SalesService {
                 Map.of("status", "completed"),
                 Map.of("status", "voided", "reason", reason)));
         return visible(repo.find(id, false).orElseThrow().sale());
+    }
+
+    // ---- Payments against a credit sale ------------------------------------------------------
+
+    @Transactional
+    Outcome<PaymentResult> pay(String idempotencyKey, UUID saleId, PaymentRequest r) {
+        return idempotency.once(
+                idempotencyKey,
+                "POST",
+                PATH + "/" + saleId + "/payments",
+                r,
+                PaymentResult.class,
+                () -> recordPayment(saleId, r));
+    }
+
+    /**
+     * FR-RET-05, FR-RET-11: a payment, partial allowed, under the sale's row lock; it never takes
+     * the paid amount past the total. Debits the payment method's account and credits trade
+     * debtors with the sale as subledger, in the sale's branch.
+     */
+    private PaymentResult recordPayment(UUID saleId, PaymentRequest r) {
+        Principal principal = CurrentPrincipal.require();
+        Sale s = repo.find(saleId, true)
+                .map(Header::sale)
+                .filter(x -> principal.may("retail.sale.create", x.branchId()))
+                .orElseThrow(ApiException::notFound);
+        if (!s.paymentMethod().equals("credit") || !s.status().equals("completed")) {
+            throw ApiException.rule("sale_not_payable", "Only a completed credit sale takes payments.");
+        }
+        long balance = s.totalMinor() - s.paidMinor();
+        if (r.amountMinor() > balance) {
+            throw ApiException.rule(
+                    "payment_exceeds_balance", "The sale's balance is " + balance + "; the payment is larger.");
+        }
+        LocalDate today = clock.today(tenant.profile().timezone());
+        LocalDate paidOn = r.paidOn() == null ? today : r.paidOn();
+        if (paidOn.isAfter(today) || paidOn.isBefore(s.saleDate())) {
+            throw ApiException.validation(
+                    List.of(new FieldProblem("paid_on", "invalid", "A payment is dated between the sale and today.")));
+        }
+        UUID id = UUID.randomUUID();
+        PostedEntry entry = books.post(new Posting(
+                        s.branchId(),
+                        paidOn,
+                        s.saleNo(),
+                        "Payment on " + s.saleNo(),
+                        "retail.sale_payment",
+                        id,
+                        "retail.sale_payment:" + id,
+                        List.of(
+                                Leg.debit(accountFor(r.method()), r.amountMinor()),
+                                Leg.credit("trade_debtors", r.amountMinor()).withSubledger(SALE, saleId))))
+                .orElseThrow();
+        Payment payment = new Payment(
+                id,
+                saleId,
+                r.amountMinor(),
+                s.currency(),
+                r.method(),
+                paidOn,
+                entry.entryId(),
+                clock.now(),
+                principal.userId());
+        repo.insertPayment(payment);
+        repo.addPaid(saleId, r.amountMinor());
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("payment_id", id);
+        after.put("amount_minor", r.amountMinor());
+        after.put("method", r.method());
+        after.put("paid_minor", s.paidMinor() + r.amountMinor());
+        audit.record(new AuditLog.Entry(
+                "retail.sale.payment_recorded",
+                SALE,
+                saleId,
+                s.branchId(),
+                Map.of("paid_minor", s.paidMinor()),
+                after));
+        return new PaymentResult(payment, s.paidMinor() + r.amountMinor(), balance - r.amountMinor());
+    }
+
+    @Transactional(readOnly = true)
+    PaymentList payments(UUID saleId) {
+        Sale s = get(saleId);
+        return new PaymentList(repo.payments(s.id()));
     }
 
     // ---- Customers -------------------------------------------------------------------------

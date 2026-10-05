@@ -1185,6 +1185,9 @@ role, creates `retail_categories`, `retail_units`, `retail_products` and `retail
 functions now call when the module is switched on. `V11__retail_stock_sales.sql` (#52) creates
 `retail_stock_movements` (append-only), `retail_stock_balances`, `retail_stocktakes`,
 `retail_stocktake_lines`, `retail_customers`, `retail_sales` and `retail_sale_lines` (append-only).
+`V12__retail_purchasing_usage.sql` (#53) creates `retail_suppliers`, `retail_purchases` and
+`retail_purchase_lines`, `retail_usage_reports` and `retail_usage_lines`, and
+`retail_sale_payments`, all but suppliers append-only.
 
 ## 6.10 Open items
 
@@ -1273,6 +1276,9 @@ are all zero is not posted.
 | Sale | PM, total | `sales_revenue`, total | `retail.sale:<id>` |
 | Cost of a sale | `cost_of_goods_sold`, sum of line cost snapshots | `inventory` | `retail.sale_cost:<id>` |
 | Void | The reversal of each of the two entries (`reverses_entry_id` set) | | `retail.sale_void:<id>`, `retail.sale_cost_void:<id>` |
+| Payment on a credit sale | PM (`cash_on_hand`, `mobile_money`, `bank`), amount | `trade_debtors`, amount, sale as subledger | `retail.sale_payment:<id>` |
+| Restock, per branch | `inventory`, the branch's quantities at the line costs | `cash_on_hand`, `bank`, or `trade_creditors` (supplier as subledger) | `retail.purchase:<id>:<branch>` |
+| Usage or damage | `stock_shrinkage`, lines at the cost snapshot | `inventory` | `retail.usage:<id>` |
 | Stock-take loss | `stock_shrinkage`, value of the shortfall at cost | `inventory` | `retail.stocktake:<id>` |
 | Stock-take gain | `inventory`, value of the surplus at cost | `stock_shrinkage` | (same entry as the loss) |
 
@@ -1331,3 +1337,31 @@ Credit buyers: `name varchar(200)`, `contact varchar(100)` kept as entered, `cre
 `line_no`, `product_id`, `qty numeric(14,3) > 0`, and the snapshots `unit_price_minor` and
 `unit_cost_minor` with `line_total_minor` and `line_cost_minor` (each rounded half up once). Profit
 is computed from these, never from the product's current prices (ADR-020 decision 5).
+
+### `retail_suppliers` (RLS; `bms_app` SELECT, INSERT)
+
+`name varchar(200)` unique per tenant ignoring case, `contact`, `active`, `created_by`.
+
+### `retail_purchases`, `retail_purchase_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+A purchase: `purchase_no` from the sequence `retail_purchase_no` (`RP00000001`), `supplier_id`
+(required for credit, CHECK), `purchased_on`, `payment_method` (`cash`, `bank`, `credit`),
+`currency`, `total_minor`, `note`, `historical`. A line: `product_id`, `cost_minor`, optional
+`sell_minor`, `qty_total` and `line_total_minor` (the sum of each branch's quantity at the cost,
+rounded per branch). The quantity per branch is the `purchase` movement itself (`source_line_id`
+is the line). In the purchase's transaction each line, in request order, sets the product's cost
+(and sell price when given) with a `purchase` history row naming the purchase; the products are
+locked in id order first. `retail_price_history.created_at` is the statement clock
+(`clock_timestamp()`), so two changes in one purchase keep their order.
+
+### `retail_usage_reports`, `retail_usage_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+A report: `branch_id`, `kind` (`used`, `damaged`), `reason`, `occurred_on`, `cost_total_minor`,
+`journal_entry_id`. A line: `product_id`, `qty > 0`, `unit_cost_minor` (the product's cost at the
+time) and `line_cost_minor`. Each line writes a `usage` or `damage` movement.
+
+### `retail_sale_payments` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+`sale_id`, `amount_minor > 0`, `currency`, `method` (`cash`, `mobile_money`, `bank`), `paid_on`,
+`journal_entry_id`. Each payment raises `retail_sales.paid_minor` under the sale's row lock; the
+CHECK `paid_minor <= total_minor` makes an overpayment impossible.

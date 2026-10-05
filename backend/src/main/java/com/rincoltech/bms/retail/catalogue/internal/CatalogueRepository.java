@@ -179,12 +179,15 @@ class CatalogueRepository {
 
     // ---- Price history (append-only) -----------------------------------------------------
 
+    // created_at is the statement's clock, not the transaction's: two changes in one restock keep
+    // their order (FR-RET-06, latest line wins).
+
     void insertHistory(PriceChange h, UUID productId) {
         jdbc.sql("""
-                        INSERT INTO retail_price_history (id, tenant_id, product_id, source, source_id, old_cost_minor,
-                            new_cost_minor, old_sell_minor, new_sell_minor, currency, reason, changed_by)
-                        VALUES (:id, current_setting('app.tenant_id')::uuid, :productId, :source, :sourceId, :oldCost,
-                            :newCost, :oldSell, :newSell, :currency, :reason, :by)
+                        INSERT INTO retail_price_history (id, tenant_id, created_at, product_id, source, source_id,
+                            old_cost_minor, new_cost_minor, old_sell_minor, new_sell_minor, currency, reason, changed_by)
+                        VALUES (:id, current_setting('app.tenant_id')::uuid, clock_timestamp(), :productId, :source,
+                            :sourceId, :oldCost, :newCost, :oldSell, :newSell, :currency, :reason, :by)
                         """)
                 .param("id", h.id())
                 .param("productId", productId)
