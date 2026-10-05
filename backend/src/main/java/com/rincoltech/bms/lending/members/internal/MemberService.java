@@ -36,6 +36,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -392,17 +393,26 @@ class MemberService implements MemberLookup {
     @Override
     @Transactional(readOnly = true)
     public Optional<MemberSummary> find(UUID memberId) {
-        return members.findById(memberId)
-                .map(m -> new MemberSummary(
-                        m.id(),
-                        m.branchId(),
-                        m.memberNo(),
-                        m.fullName(),
-                        m.kycStatus(),
-                        m.status(),
-                        m.isBlacklisted(),
-                        m.createdAt(),
-                        m.monthlyIncomeMinor()));
+        return members.findById(memberId).map(MemberService::summary);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<MemberSummary> lock(UUID memberId) {
+        return members.lockById(memberId).map(MemberService::summary);
+    }
+
+    private static MemberSummary summary(MemberResponse m) {
+        return new MemberSummary(
+                m.id(),
+                m.branchId(),
+                m.memberNo(),
+                m.fullName(),
+                m.kycStatus(),
+                m.status(),
+                m.isBlacklisted(),
+                m.createdAt(),
+                m.monthlyIncomeMinor());
     }
 
     @Override

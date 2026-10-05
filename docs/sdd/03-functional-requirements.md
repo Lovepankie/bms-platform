@@ -481,6 +481,12 @@ Origination rules that follow from the table above:
   adequacy: the collateral cover against the product minimum is checked at approval (FR-ORG-07),
   and a guarantor's capacity is not measured at all in the MVP. A limit on how much one member may
   guarantee across loans is an open question for the product owner.
+- Loans per member (FR-ORG-07). `max_active_loans_per_member` counts the member's loans that are
+  `approved` or `active`: an approval not yet disbursed takes a place, so several appraised loans
+  cannot all be approved before one is disbursed. Approval locks the member's row before it
+  counts, so two approvals for one member at the same moment run one after the other and the
+  second is refused with `max_active_loans_reached`. An approval that expires (FR-ORG-08) frees
+  its place.
 - Dates. A proposed disbursement date is today or later. A loan submitted without one takes the
   submission date, so the provisional schedule stops moving.
 

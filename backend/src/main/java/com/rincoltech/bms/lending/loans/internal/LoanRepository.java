@@ -373,9 +373,9 @@ class LoanRepository {
                 .list();
     }
 
-    /** FR-ORG-07: the member's active loans. */
-    int activeLoans(UUID memberId) {
-        return jdbc.sql("SELECT count(*) FROM lending_loans WHERE member_id = ? AND status = 'active'")
+    /** FR-ORG-07: the member's approved and active loans; an approval not yet disbursed counts. */
+    int approvedOrActiveLoans(UUID memberId) {
+        return jdbc.sql("SELECT count(*) FROM lending_loans WHERE member_id = ? AND status IN ('approved', 'active')")
                 .param(memberId)
                 .query(Integer.class)
                 .single();

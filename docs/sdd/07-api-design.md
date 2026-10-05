@@ -517,7 +517,7 @@ terms. `reject` requires `note`. Codes (422 unless stated): `self_approval_forbi
 approver submitted or appraised the loan, FR-APR-03), `above_requested_principal`,
 `above_requested_term`, `below_product_minimum`, `member_blacklisted`, `kyc_not_verified`,
 `collateral_below_product_minimum` (cover measured against the approved principal),
-`max_active_loans_reached`, and 409 `invalid_status_transition`. The nightly task
+`max_active_loans_reached` (approved and active loans both count, section 3.18), and 409 `invalid_status_transition`. The nightly task
 `lending.loan-approval-expiry` cancels an approval older than `approval_validity_days` with
 reason `approval_expired` (FR-ORG-08), audited with actor kind `system`. Both `approved_at` and
 the expiry bound come from the business clock (AGENTS.md rule 7), never the database's `now()`.

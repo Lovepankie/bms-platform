@@ -13,15 +13,21 @@ import com.rincoltech.bms.lending.members.MemberLookup;
 import com.rincoltech.bms.lending.products.ProductCatalog;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
@@ -221,6 +227,54 @@ class LoanDecisionIT extends LoanFixtures {
         JsonNode l = decide(loan, manager, "\"4\"", approve(400_000L, null)).getBody();
         assertThat(l.get("status").asString()).isEqualTo("approved");
         assertThat(l.get("version").asInt()).isEqualTo(5);
+    }
+
+    /**
+     * FR-ORG-07: an approval not yet disbursed counts toward max_active_loans_per_member, and the
+     * member's row is locked first, so two approvals at once cannot both pass a limit of 1.
+     */
+    @Test
+    void approvedLoansCountTowardTheLimitEvenAtOnce() throws Exception {
+        TestDatabase.owner()
+                .sql(
+                        "INSERT INTO tenant_settings (id, tenant_id, settings) VALUES (?, ?, '{\"max_active_loans_per_member\": 1}')")
+                .params(UUID.randomUUID(), t.tenantId())
+                .update();
+        String product = product("LIMIT", false, false);
+
+        String member = member("Test Borrower 36", "0700000036", t.headOffice(), true);
+        String first = appraised(member, product, null);
+        String second = appraised(member, product, null);
+        assertThat(decide(first, manager, "\"3\"", approve(null, null)).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> refused = decide(second, manager, "\"3\"", approve(null, null));
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(refused)).isEqualTo("max_active_loans_reached");
+
+        String other = member("Test Borrower 37", "0700000037", t.headOffice(), true);
+        List<String> pair = List.of(appraised(other, product, null), appraised(other, product, null));
+        try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<ResponseEntity<JsonNode>>> results = new ArrayList<>();
+            for (String loan : pair) {
+                results.add(pool.submit(() -> {
+                    start.await();
+                    return decide(loan, manager, "\"3\"", approve(null, null));
+                }));
+            }
+            start.countDown();
+            List<HttpStatusCode> statuses = new ArrayList<>();
+            for (Future<ResponseEntity<JsonNode>> r : results) {
+                statuses.add(r.get().getStatusCode());
+            }
+            assertThat(statuses).containsExactlyInAnyOrder(HttpStatus.OK, HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM lending_loans WHERE member_id = ?::uuid AND status = 'approved'")
+                        .param(other)
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(1);
     }
 
     /** FR-ORG-06: a rejection needs a reason; the submitter's manager may be anyone with the permission. */

@@ -11,6 +11,12 @@ public interface MemberLookup {
     Optional<MemberSummary> find(UUID memberId);
 
     /**
+     * {@link #find}, with the member's row locked until the caller's transaction ends. Serialises
+     * per-member rules that count rows of another module, such as FR-ORG-07's loan limit.
+     */
+    Optional<MemberSummary> lock(UUID memberId);
+
+    /**
      * Members linked to this one through next of kin (the relationship view of chapter 6 section
      * 6.7), both directions; used for the exposure rule of chapter 3 section 3.18.1.
      */

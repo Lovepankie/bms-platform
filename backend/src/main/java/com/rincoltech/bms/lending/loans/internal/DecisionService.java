@@ -168,9 +168,13 @@ class DecisionService {
         ScheduleCalculator.instalments(product.withTermCount(term));
     }
 
-    /** FR-ORG-07: each failing check has its own code and blocks the approval. */
+    /**
+     * FR-ORG-07: each failing check has its own code and blocks the approval. The member's row is
+     * locked first, so two approvals for one member run one after the other and the second counts
+     * the first.
+     */
     private void checkMemberAndCover(Loan loan, ProductTerms product, long principal) {
-        MemberSummary member = members.find(loan.memberId()).orElseThrow();
+        MemberSummary member = members.lock(loan.memberId()).orElseThrow();
         if (member.blacklisted()) {
             throw ApiException.rule("member_blacklisted", "The member is blacklisted.");
         }
@@ -190,10 +194,10 @@ class DecisionService {
             }
         }
         Integer max = settings.maxActiveLoansPerMember();
-        if (max != null && repo.activeLoans(loan.memberId()) >= max) {
+        if (max != null && repo.approvedOrActiveLoans(loan.memberId()) >= max) {
             throw ApiException.rule(
                     "max_active_loans_reached",
-                    "The member already has " + max + " active loan(s), the tenant's limit.");
+                    "The member already has " + max + " approved or active loan(s), the tenant's limit.");
         }
     }
 
