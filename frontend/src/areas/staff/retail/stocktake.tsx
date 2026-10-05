@@ -1,15 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { retail, type Stocktake } from '../../../api/retail';
+import { retail, type Stocktake, type StocktakeLine } from '../../../api/retail';
 import { milliOf, parseCount, showQty } from './maths';
 import { BranchRequired, Gate, Note, Problem, useSingleBranch } from './ui';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
 // out, then commit to write the adjustments. Only counted rows are sent.
 
+/** The variance written at commit once committed, otherwise the draft's (counted less expected). */
+const variance = (l: StocktakeLine): string => l.committed_variance_qty ?? l.variance_qty ?? '0';
+
 export function StocktakeReview({ stocktake, onCommit, committing }: { stocktake: Stocktake; onCommit?: () => void; committing?: boolean }) {
-  const changed = stocktake.lines.filter((l) => milliOf(l.varianceQty) !== 0);
+  const changed = (stocktake.lines ?? []).filter((l) => milliOf(variance(l)) !== 0);
   return (
     <section aria-label="Stock-take review">
       <h2>{stocktake.status === 'committed' ? 'Stock-take committed' : 'Review the variance'}</h2>
@@ -27,14 +30,14 @@ export function StocktakeReview({ stocktake, onCommit, committing }: { stocktake
           </thead>
           <tbody>
             {changed.map((l) => {
-              const v = milliOf(l.varianceQty);
+              const v = milliOf(variance(l));
               return (
-                <tr key={l.productId}>
-                  <td>{l.description ?? l.productId}</td>
-                  <td className="num">{showQty(l.expectedQty)}</td>
-                  <td className="num">{showQty(l.countedQty)}</td>
+                <tr key={l.product_id}>
+                  <td>{l.description ?? l.product_id}</td>
+                  <td className="num">{showQty(l.expected_qty ?? '0')}</td>
+                  <td className="num">{showQty(l.counted_qty ?? '0')}</td>
                   <td className="num">
-                    <strong>{v > 0 ? '+' : ''}{showQty(l.varianceQty)}</strong> {v > 0 ? '(more)' : '(less)'}
+                    <strong>{v > 0 ? '+' : ''}{showQty(variance(l))}</strong> {v > 0 ? '(more)' : '(less)'}
                   </td>
                 </tr>
               );
@@ -61,7 +64,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   const entered = Object.entries(counts).filter(([, v]) => v.trim() !== '');
   const bad = entered.some(([, v]) => parseCount(v) === null);
   const review = useMutation({
-    mutationFn: () => retail.createStocktake({ branchId, lines: entered.map(([productId, countedQty]) => ({ productId, countedQty: countedQty.trim() })) }),
+    mutationFn: () => retail.createStocktake({ branch_id: branchId, lines: entered.map(([productId, countedQty]) => ({ product_id: productId, counted_qty: countedQty.trim() })) }),
     onSuccess: setDraft,
   });
   const commit = useMutation({
@@ -82,7 +85,7 @@ function CountSheet({ branchId }: { branchId: string }) {
       </>
     );
   }
-  const rows = (stock.data ?? []).filter((r) => !query.trim() || r.description.toLowerCase().includes(query.trim().toLowerCase()));
+  const rows = (stock.data ?? []).filter((r) => !query.trim() || (r.description ?? '').toLowerCase().includes(query.trim().toLowerCase()));
   return (
     <>
       <Note>Type the counted quantity for each item you counted. Leave an item blank to skip it.</Note>
@@ -90,14 +93,17 @@ function CountSheet({ branchId }: { branchId: string }) {
       <input id="count-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
       {stock.isPending && <p>Loading</p>}
       <Problem error={stock.error} />
-      {rows.map((r) => (
-        <div key={r.productId} className="rt-card">
-          <label htmlFor={`count-${r.productId}`}>{r.description} ({r.unit})</label>
-          <input id={`count-${r.productId}`} inputMode="decimal" value={counts[r.productId] ?? ''} placeholder="Counted"
-            aria-invalid={(counts[r.productId] ?? '').trim() !== '' && parseCount(counts[r.productId] ?? '') === null}
-            onChange={(e) => setCounts({ ...counts, [r.productId]: e.target.value })} />
-        </div>
-      ))}
+      {rows.map((r) => {
+        const id = r.product_id ?? '';
+        return (
+          <div key={id} className="rt-card">
+            <label htmlFor={`count-${id}`}>{r.description} ({r.unit})</label>
+            <input id={`count-${id}`} inputMode="decimal" value={counts[id] ?? ''} placeholder="Counted"
+              aria-invalid={(counts[id] ?? '').trim() !== '' && parseCount(counts[id] ?? '') === null}
+              onChange={(e) => setCounts({ ...counts, [id]: e.target.value })} />
+          </div>
+        );
+      })}
       {bad && <p role="alert" className="rt-flag">Some counts are not valid quantities.</p>}
       <Problem error={review.error} />
       <button type="button" className="rt-primary" disabled={entered.length === 0 || bad || review.isPending} onClick={() => review.mutate()}>

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { retail, type Product, type Sale, type SalePayment } from '../../../api/retail';
 import { useIdempotencyKey } from './idempotency';
 import { showQty } from './maths';
-import { buildSaleRequest, draftProblem, draftTotal, lineFigures, newLine, type Draft } from './sale-state';
+import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, type Draft } from './sale-state';
 import { BranchRequired, Gate, Note, Problem, money, useProfitAccess, useSingleBranch } from './ui';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per form open: a double tap or a retry
@@ -23,8 +23,8 @@ export function Receipt({ sale, onNew }: { sale: Sale; onNew?: () => void }) {
     <section aria-label="Sale receipt">
       <h2>Sale saved</h2>
       <p>
-        Paid by {METHODS.find((m) => m.value === sale.paymentMethod)?.label ?? sale.paymentMethod} on {sale.saleDate}
-        {sale.buyerName ? `, buyer ${sale.buyerName}` : ''}
+        Paid by {METHODS.find((m) => m.value === sale.payment_method)?.label ?? sale.payment_method} on {sale.sale_date}
+        {sale.buyer_name ? `, buyer ${sale.buyer_name}` : ''}
       </p>
       <table>
         <thead>
@@ -36,24 +36,24 @@ export function Receipt({ sale, onNew }: { sale: Sale; onNew?: () => void }) {
           </tr>
         </thead>
         <tbody>
-          {sale.lines.map((l) => (
-            <tr key={l.productId}>
+          {(sale.lines ?? []).map((l) => (
+            <tr key={l.product_id}>
               <td>{l.description}</td>
-              <td className="num">{showQty(l.qty)}</td>
-              <td className="num">{money(l.unitPriceMinor)}</td>
-              <td className="num">{money(l.lineTotalMinor)}</td>
+              <td className="num">{showQty(l.qty ?? '0')}</td>
+              <td className="num">{money(l.unit_price_minor ?? 0)}</td>
+              <td className="num">{money(l.line_total_minor ?? 0)}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className="rt-total">Total {money(sale.totalMinor)}</p>
-      {sale.balanceMinor > 0 && (
+      <p className="rt-total">Total {money(sale.total_minor ?? 0)}</p>
+      {(sale.balance_minor ?? 0) > 0 && (
         <p>
-          Still to pay: <strong>{money(sale.balanceMinor)}</strong>
-          {sale.dueDate ? ` by ${sale.dueDate}` : ''}
+          Still to pay: <strong>{money(sale.balance_minor ?? 0)}</strong>
+          {sale.due_date ? ` by ${sale.due_date}` : ''}
         </p>
       )}
-      {canProfit && sale.profitMinor !== undefined && <p>Profit on this sale: {money(sale.profitMinor)}</p>}
+      {canProfit && sale.profit_minor !== undefined && <p>Profit on this sale: {money(sale.profit_minor)}</p>}
       {onNew && (
         <button type="button" className="rt-primary" onClick={onNew}>
           New sale
@@ -113,7 +113,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
               <span>
                 <strong>{p.description}</strong> ({p.code})
                 <br />
-                {money(p.sellMinor)} each, in stock here:{' '}
+                {money(p.sell_minor ?? 0)} each, in stock here:{' '}
                 {p.qty !== undefined && p.qty.startsWith('-') ? <span className="rt-flag">{showQty(p.qty)} (negative)</span> : showQty(p.qty ?? '0')}{' '}
                 {p.unit}
               </span>
@@ -129,19 +129,21 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
       {draft.lines.length === 0 && <p>No items yet. Search above and tap Add.</p>}
       {draft.lines.map((l, i) => {
         const f = lineFigures(l);
+        const hint = lineHint(l);
         return (
           <div key={l.product.id} className="rt-card">
             <strong>{l.product.description}</strong>
             <div className="rt-row">
               <div>
                 <label htmlFor={`qty-${i}`}>Quantity ({l.product.unit})</label>
-                <input id={`qty-${i}`} inputMode="decimal" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} aria-invalid={f === null} />
+                <input id={`qty-${i}`} inputMode="decimal" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} aria-invalid={f === null || hint !== null} />
               </div>
               <div>
                 <label htmlFor={`price-${i}`}>Unit price</label>
                 <input id={`price-${i}`} inputMode="numeric" value={l.price} onChange={(e) => setLine(i, { price: e.target.value })} aria-invalid={f === null} />
               </div>
             </div>
+            {hint && <p role="alert" className="rt-flag">{hint}</p>}
             <p>
               {f ? `Line total ${money(f.totalMinor)}` : <span className="rt-flag">Check quantity and price</span>}{' '}
               <button type="button" onClick={() => setDraft((d) => ({ ...d, lines: d.lines.filter((_, n) => n !== i) }))} aria-label={`Remove ${l.product.description}`}>

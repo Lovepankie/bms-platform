@@ -1,37 +1,38 @@
 import { useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { retail, type DailyProfitRow, type Valuation } from '../../../api/retail';
+import { retail, type DailyProfit, type Valuation } from '../../../api/retail';
 import { showQty } from './maths';
 import { BranchRequired, Gate, Problem, money, useSingleBranch } from './ui';
 
-// Stock value (FR-RET-09) and daily profit (FR-RET-10). Both are offered only with
-// retail.profit.read (the Gate), and the server refuses them otherwise.
+// Stock value (FR-RET-09) is a stock read; its cost columns arrive only with retail.profit.read.
+// Daily profit (FR-RET-10) needs retail.profit.read (the Gate), and the server refuses it otherwise.
 
 export function ValuationTable({ valuation }: { valuation: Valuation }) {
+  // The cost columns exist only when the server sent them (retail.profit.read).
+  const withCost = valuation.value_at_cost_minor !== undefined;
   return (
     <>
       <p className="rt-total">
-        At cost {valuation.totals.valueAtCostMinor !== undefined ? money(valuation.totals.valueAtCostMinor) : ''}
-        <br />
-        At selling price {money(valuation.totals.expectedSalesMinor)}
+        {withCost && <>At cost {money(valuation.value_at_cost_minor ?? 0)}<br /></>}
+        At selling price {money(valuation.expected_sales_minor ?? 0)}
       </p>
       <table>
         <thead>
           <tr>
             <th>Item</th>
             <th className="num">Qty</th>
-            <th className="num">At cost</th>
+            {withCost && <th className="num">At cost</th>}
             <th className="num">At price</th>
           </tr>
         </thead>
         <tbody>
-          {valuation.rows.map((r) => (
-            <tr key={r.productId}>
+          {(valuation.rows ?? []).map((r) => (
+            <tr key={`${r.branch_id}-${r.product_id}`}>
               <td>{r.description}</td>
-              <td className="num">{showQty(r.qty)}</td>
-              <td className="num">{r.valueAtCostMinor !== undefined ? money(r.valueAtCostMinor) : ''}</td>
-              <td className="num">{money(r.expectedSalesMinor)}</td>
+              <td className="num">{showQty(r.qty ?? '0')}</td>
+              {withCost && <td className="num">{r.value_at_cost_minor !== undefined ? money(r.value_at_cost_minor) : ''}</td>}
+              <td className="num">{money(r.expected_sales_minor ?? 0)}</td>
             </tr>
           ))}
         </tbody>
@@ -57,11 +58,11 @@ function ValuationPage() {
   );
 }
 
-export function ProfitTable({ rows }: { rows: DailyProfitRow[] }) {
-  const total = rows.reduce((s, r) => s + r.profitMinor, 0);
+export function ProfitTable({ report }: { report: DailyProfit }) {
+  const rows = report.rows ?? [];
   return (
     <>
-      <p className="rt-total">Profit for the period {money(total)}</p>
+      <p className="rt-total">Profit for the period {money(report.profit_minor ?? 0)}</p>
       <table>
         <thead>
           <tr>
@@ -76,10 +77,10 @@ export function ProfitTable({ rows }: { rows: DailyProfitRow[] }) {
           {rows.map((r) => (
             <tr key={r.date}>
               <td>{r.date}</td>
-              <td className="num">{money(r.salesMinor)}</td>
-              <td className="num">{money(r.costMinor)}</td>
-              <td className="num">{money(r.usageMinor)}</td>
-              <td className="num">{money(r.profitMinor)}{r.profitMinor < 0 ? ' (loss)' : ''}</td>
+              <td className="num">{money(r.sales_minor ?? 0)}</td>
+              <td className="num">{money(r.cost_of_sales_minor ?? 0)}</td>
+              <td className="num">{money(r.usage_cost_minor ?? 0)}</td>
+              <td className="num">{money(r.profit_minor ?? 0)}{(r.profit_minor ?? 0) < 0 ? ' (loss)' : ''}</td>
             </tr>
           ))}
         </tbody>
@@ -107,7 +108,7 @@ function ProfitPage() {
           {from > to && <p role="alert" className="rt-flag">The start date must not be after the end date.</p>}
           {profit.isPending && from <= to && <p>Loading</p>}
           <Problem error={profit.error} />
-          {profit.data && <ProfitTable rows={profit.data} />}
+          {profit.data && <ProfitTable report={profit.data} />}
         </>
       )}
     </Gate>

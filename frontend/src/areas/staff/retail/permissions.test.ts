@@ -6,12 +6,23 @@ describe('retail permission gating', () => {
   const sales = mockMe('sales');
   const admin = mockMe('admin');
 
-  it('never offers profit or valuation to a sales user', () => {
+  it('never offers profit to a sales user, and follows the real permission names', () => {
     expect(canSeeProfit(sales)).toBe(false);
     expect(canUse(sales, 'profit')).toBe(false);
-    expect(canUse(sales, 'valuation')).toBe(false);
-    const labels = screensFor(sales).map((s) => s.screen);
-    expect(labels).toEqual(['sale', 'usage', 'stock']);
+    expect(canUse(sales, 'restock')).toBe(false);
+    expect(canUse(sales, 'stocktake')).toBe(false);
+    // Stock value is a stock read; only its cost columns need retail.profit.read.
+    expect(screensFor(sales).map((s) => s.screen)).toEqual(['sale', 'usage', 'stock', 'valuation']);
+  });
+
+  it('maps each screen to the permission the API route declares', () => {
+    const only = (p: string) => screensFor({ permissions: [p] }).map((s) => s.screen);
+    expect(only('retail.sale.create')).toEqual(['sale']);
+    expect(only('retail.purchase.create')).toEqual(['restock']);
+    expect(only('retail.usage.report')).toEqual(['usage']);
+    expect(only('retail.stock.read')).toEqual(['stock', 'valuation']);
+    expect(only('retail.profit.read')).toEqual(['profit']);
+    expect(only('retail.sale.read')).toEqual([]);
   });
 
   it('offers everything to an admin', () => {

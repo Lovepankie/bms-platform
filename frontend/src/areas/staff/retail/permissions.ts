@@ -3,7 +3,7 @@ import type { Me } from '../../../api/client';
 // Which retail screens a session may use. The API is the authority; this only decides what the
 // menu and the routes offer, from the same /me permissions the rest of the app reads. Cost,
 // cost snapshot and profit appear only with retail.profit.read, and the server never sends them
-// otherwise (docs/api/retail-contract-draft.md).
+// otherwise (docs/sdd/07-api-design.md section 7.11.20, chapter 8 section 8.3.2).
 
 export const PROFIT = 'retail.profit.read';
 
@@ -15,7 +15,8 @@ const NEEDS: Record<RetailScreen, string[]> = {
   usage: ['retail.usage.report'],
   stock: ['retail.stock.read'],
   stocktake: ['retail.stocktake.commit', 'retail.stock.read'],
-  valuation: [PROFIT, 'retail.stock.read'],
+  // Stock value is a stock read; its cost columns and the profit report need retail.profit.read.
+  valuation: ['retail.stock.read'],
   profit: [PROFIT],
 };
 

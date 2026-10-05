@@ -6,7 +6,8 @@ import { showQty } from './maths';
 import { BranchRequired, Gate, Problem, money, useProfitAccess, useSingleBranch } from './ui';
 
 // Stock per branch (FR-RET-03): balances with a negative flag and a search box. The cost column
-// exists only for a session holding retail.profit.read.
+// exists only for a session holding retail.profit.read: showCost is the screen's choice and the server
+// sends no cost field to anyone else.
 
 export function StockTable({ rows, showCost }: { rows: StockRow[]; showCost: boolean }) {
   if (rows.length === 0) return <p>No items found.</p>;
@@ -22,14 +23,14 @@ export function StockTable({ rows, showCost }: { rows: StockRow[]; showCost: boo
       </thead>
       <tbody>
         {rows.map((r) => (
-          <tr key={r.productId}>
+          <tr key={r.product_id}>
             <td>{r.description}</td>
             <td className="num">
-              {showQty(r.qty)} {r.unit}
+              {showQty(r.qty ?? '0')} {r.unit}
               {r.negative && <div className="rt-flag">Negative</div>}
             </td>
-            <td className="num">{money(r.sellMinor)}</td>
-            {showCost && <td className="num">{r.costMinor !== undefined ? money(r.costMinor) : ''}</td>}
+            <td className="num">{money(r.sell_minor ?? 0)}</td>
+            {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
           </tr>
         ))}
       </tbody>

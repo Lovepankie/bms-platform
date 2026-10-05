@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { renderToString as render } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { Product, Sale, Stocktake, StockRow, Valuation } from '../../../api/retail';
+import type { DailyProfit, Product, Sale, Stocktake, StockRow, Valuation } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { Receipt, SaleForm } from './sale';
@@ -27,13 +27,13 @@ const page = (role: 'sales' | 'admin', node: ReactElement, client = new QueryCli
   );
 
 const products: Product[] = [
-  { id: 'p1', code: 'P003', description: 'LED bulb 9W screw', unit: 'piece', sellMinor: 6000, active: true, qty: '12.000' },
-  { id: 'p2', code: 'P004', description: 'LED bulb 15W screw', unit: 'piece', sellMinor: 9500, active: true, qty: '-2.000' },
+  { id: 'p1', code: 'P003', description: 'LED bulb 9W screw', unit: 'piece', sell_minor: 6000, active: true, qty: '12.000' },
+  { id: 'p2', code: 'P004', description: 'LED bulb 15W screw', unit: 'piece', sell_minor: 9500, active: true, qty: '-2.000', negative: true },
 ];
 
 describe('gating', () => {
-  it('shows a sales user nothing of the profit and valuation screens', () => {
-    for (const screen of ['profit', 'valuation'] as const) {
+  it('shows a sales user nothing of the profit and restock screens', () => {
+    for (const screen of ['profit', 'restock', 'stocktake'] as const) {
       const html = page('sales', <Gate screen={screen} title="Secret"><p>SECRET-CONTENT</p></Gate>);
       expect(html).toContain('You do not have access');
       expect(html).not.toContain('SECRET-CONTENT');
@@ -60,9 +60,9 @@ describe('sale screen', () => {
   });
 
   const sale: Sale = {
-    id: 's1', branchId: branch, saleDate: '2026-10-05', paymentMethod: 'credit', buyerName: 'Test Buyer 01', dueDate: '2026-11-01',
-    lines: [{ productId: 'p1', description: 'LED bulb 9W screw', qty: '2.000', unitPriceMinor: 6000, lineTotalMinor: 12000, unitCostMinor: 3500 }],
-    totalMinor: 12000, balanceMinor: 12000, profitMinor: 5000,
+    id: 's1', branch_id: branch, sale_date: '2026-10-05', payment_method: 'credit', buyer_name: 'Test Buyer 01', due_date: '2026-11-01',
+    lines: [{ product_id: 'p1', description: 'LED bulb 9W screw', qty: '2.000', unit_price_minor: 6000, line_total_minor: 12000, unit_cost_minor: 3500 }],
+    total_minor: 12000, paid_minor: 0, balance_minor: 12000, profit_minor: 5000,
   };
 
   it('shows the receipt with what is still owed, and profit only with the permission', () => {
@@ -76,8 +76,8 @@ describe('sale screen', () => {
 
 describe('stock screen', () => {
   const rows: StockRow[] = [
-    { productId: 'p1', description: 'LED bulb 9W screw', unit: 'piece', qty: '12.000', negative: false, sellMinor: 6000, costMinor: 3500 },
-    { productId: 'p2', description: 'LED bulb 15W screw', unit: 'piece', qty: '-2.000', negative: true, sellMinor: 9500, costMinor: 6000 },
+    { product_id: 'p1', description: 'LED bulb 9W screw', unit: 'piece', qty: '12.000', negative: false, sell_minor: 6000, cost_minor: 3500 },
+    { product_id: 'p2', description: 'LED bulb 15W screw', unit: 'piece', qty: '-2.000', negative: true, sell_minor: 9500, cost_minor: 6000 },
   ];
 
   it('flags negative stock in words and hides the cost column without the permission', () => {
@@ -108,10 +108,10 @@ describe('usage screen', () => {
 
 describe('stock-take review', () => {
   const st: Stocktake = {
-    id: 't1', branchId: branch, status: 'draft',
+    id: 't1', branch_id: branch, status: 'draft',
     lines: [
-      { productId: 'p1', description: 'LED bulb 9W screw', expectedQty: '12.000', countedQty: '10.000', varianceQty: '-2.000' },
-      { productId: 'p2', description: 'LED bulb 15W screw', expectedQty: '5.000', countedQty: '5.000', varianceQty: '0.000' },
+      { product_id: 'p1', description: 'LED bulb 9W screw', expected_qty: '12.000', counted_qty: '10.000', variance_qty: '-2.000' },
+      { product_id: 'p2', description: 'LED bulb 15W screw', expected_qty: '5.000', counted_qty: '5.000', variance_qty: '0.000' },
     ],
   };
 
@@ -129,19 +129,36 @@ describe('stock-take review', () => {
 });
 
 describe('valuation and profit', () => {
-  it('shows totals at cost and at price', () => {
-    const v: Valuation = {
-      branchId: branch, asOf: '2026-10-05',
-      rows: [{ productId: 'p1', description: 'LED bulb 9W screw', qty: '2.000', sellMinor: 6000, expectedSalesMinor: 12000, costMinor: 3500, valueAtCostMinor: 7000 }],
-      totals: { expectedSalesMinor: 12000, valueAtCostMinor: 7000 },
-    };
+  const v: Valuation = {
+    as_of: '2026-10-05', currency: 'UGX',
+    rows: [{ branch_id: branch, product_id: 'p1', description: 'LED bulb 9W screw', qty: '2.000', sell_minor: 6000, expected_sales_minor: 12000, cost_minor: 3500, value_at_cost_minor: 7000 }],
+    expected_sales_minor: 12000, value_at_cost_minor: 7000,
+  };
+
+  it('shows totals at cost and at price when the server sent the cost', () => {
     const html = renderToString(<ValuationTable valuation={v} />);
     expect(html).toContain('UGX 7,000');
     expect(html).toContain('UGX 12,000');
+    expect(html).toContain('At cost');
+  });
+
+  it('shows no cost column when the server sent no cost (no retail.profit.read)', () => {
+    const noCost: Valuation = {
+      ...v, value_at_cost_minor: undefined,
+      rows: [{ branch_id: branch, product_id: 'p1', description: 'LED bulb 9W screw', qty: '2.000', sell_minor: 6000, expected_sales_minor: 12000 }],
+    };
+    const html = renderToString(<ValuationTable valuation={noCost} />);
+    expect(html).toContain('UGX 12,000');
+    expect(html).not.toMatch(/cost/i);
+    expect(html).not.toContain('UGX 7,000');
   });
 
   it('marks a loss in words', () => {
-    const html = renderToString(<ProfitTable rows={[{ branchId: branch, date: '2026-10-05', salesMinor: 1000, costMinor: 3000, usageMinor: 500, profitMinor: -2500 }]} />);
+    const report: DailyProfit = {
+      from: '2026-10-05', to: '2026-10-05', currency: 'UGX', sales_minor: 1000, cost_of_sales_minor: 3000, usage_cost_minor: 500, profit_minor: -2500,
+      rows: [{ branch_id: branch, date: '2026-10-05', sales_minor: 1000, cost_of_sales_minor: 3000, gross_profit_minor: -2000, usage_cost_minor: 500, profit_minor: -2500 }],
+    };
+    const html = renderToString(<ProfitTable report={report} />);
     expect(html).toContain('(loss)');
     expect(html).toContain('-UGX 2,500');
   });

@@ -42,17 +42,17 @@ export function restockTotal(lines: RestockLine[]): number {
 
 export function buildPurchase(input: { supplierId: string; purchasedOn: string; method: PurchasePayment; lines: RestockLine[] }): PurchaseRequest {
   return {
-    ...(input.supplierId ? { supplierId: input.supplierId } : {}),
-    purchasedOn: input.purchasedOn,
-    paymentMethod: input.method,
+    ...(input.supplierId ? { supplier_id: input.supplierId } : {}),
+    purchased_on: input.purchasedOn,
+    payment_method: input.method,
     lines: input.lines.map((l) => ({
-      productId: l.product.id,
-      costMinor: parseMinor(l.cost, RETAIL_CURRENCY) ?? 0,
-      sellMinor: parseMinor(l.sell, RETAIL_CURRENCY) ?? l.product.sellMinor,
-      qtyByBranch: Object.entries(l.qtyByBranch)
+      product_id: l.product.id ?? '',
+      cost_minor: parseMinor(l.cost, RETAIL_CURRENCY) ?? 0,
+      sell_minor: parseMinor(l.sell, RETAIL_CURRENCY) ?? l.product.sell_minor ?? 0,
+      qty_by_branch: Object.entries(l.qtyByBranch)
         .map(([branchId, q]) => ({ branchId, milli: branchQty(q) ?? 0 }))
         .filter((q) => q.milli > 0)
-        .map((q) => ({ branchId: q.branchId, qty: qtyString(q.milli) })),
+        .map((q) => ({ branch_id: q.branchId, qty: qtyString(q.milli) })),
     })),
   };
 }
@@ -84,7 +84,7 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase) => void }) {
   const save = useMutation({
     mutationFn: async () => {
       let id = supplierId;
-      if (!id && newSupplier.trim()) id = (await retail.createSupplier({ name: newSupplier.trim() })).id;
+      if (!id && newSupplier.trim()) id = (await retail.createSupplier({ name: newSupplier.trim() })).id ?? '';
       return retail.createPurchase(buildPurchase({ supplierId: id, purchasedOn, method, lines }), key);
     },
     onSuccess: (p) => {
@@ -97,7 +97,7 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase) => void }) {
     setLines((ls) =>
       ls.some((l) => l.product.id === p.id)
         ? ls
-        : [...ls, { product: p, cost: p.costMinor !== undefined ? String(p.costMinor) : '', sell: String(p.sellMinor), qtyByBranch: { ...(branch && branches.some((b) => b.id === branch) ? { [branch]: '' } : {}) } }],
+        : [...ls, { product: p, cost: p.cost_minor !== undefined ? String(p.cost_minor) : '', sell: String(p.sell_minor ?? 0), qtyByBranch: { ...(branch && branches.some((b) => b.id === branch) ? { [branch]: '' } : {}) } }],
     );
   const patch = (i: number, change: Partial<RestockLine>) => setLines((ls) => ls.map((l, n) => (n === i ? { ...l, ...change } : l)));
 
@@ -164,8 +164,8 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase) => void }) {
               ))}
             </fieldset>
             <p>
-              {newSell !== null && newSell !== l.product.sellMinor ? `Sell price will change from ${money(l.product.sellMinor)} to ${money(newSell)}.` : 'Sell price stays the same.'}
-              {canProfit && newCost !== null && l.product.costMinor !== undefined && newCost !== l.product.costMinor ? ` Cost will change from ${money(l.product.costMinor)} to ${money(newCost)}.` : ''}
+              {newSell !== null && newSell !== l.product.sell_minor ? `Sell price will change from ${money(l.product.sell_minor ?? 0)} to ${money(newSell)}.` : 'Sell price stays the same.'}
+              {canProfit && newCost !== null && l.product.cost_minor !== undefined && newCost !== l.product.cost_minor ? ` Cost will change from ${money(l.product.cost_minor)} to ${money(newCost)}.` : ''}
             </p>
             {problems[i] && <p className="rt-flag">{problems[i]}</p>}
             <button type="button" onClick={() => setLines((ls) => ls.filter((_, n) => n !== i))} aria-label={`Remove ${l.product.description}`}>Remove</button>
@@ -198,8 +198,8 @@ function Restock() {
       {done ? (
         <section aria-label="Restock saved">
           <h2>Restock saved</h2>
-          <p>{done.lineCount} items, total cost {money(done.totalMinor)}.</p>
-          <p>Prices updated on {done.pricesUpdated} items.</p>
+          <p>{(done.lines ?? []).length} items, total cost {money(done.total_minor ?? 0)}.</p>
+          <p>Prices updated on {(done.lines ?? []).length} items.</p>
           <button type="button" className="rt-primary" onClick={() => { setDone(null); setRound((n) => n + 1); }}>New restock</button>
         </section>
       ) : (

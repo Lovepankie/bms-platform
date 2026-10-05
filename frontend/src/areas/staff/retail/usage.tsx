@@ -13,10 +13,10 @@ interface Line { product: Product; qty: string }
 
 export function buildUsage(input: { branchId: string; kind: 'used' | 'damaged'; reason: string; lines: Line[] }): UsageRequest {
   return {
-    branchId: input.branchId,
+    branch_id: input.branchId,
     kind: input.kind,
     reason: input.reason.trim(),
-    lines: input.lines.map((l) => ({ productId: l.product.id, qty: qtyString(parseQty(l.qty) ?? 0) })),
+    lines: input.lines.map((l) => ({ product_id: l.product.id ?? '', qty: qtyString(parseQty(l.qty) ?? 0) })),
   };
 }
 
@@ -91,7 +91,7 @@ function UsagePage() {
       ) : done ? (
         <section aria-label="Saved">
           <h2>Saved</h2>
-          <p>{done.kind === 'used' ? 'Usage' : 'Damage'} recorded for {done.lineCount} items. Stock is reduced.</p>
+          <p>{done.kind === 'used' ? 'Usage' : 'Damage'} recorded for {(done.lines ?? []).length} items. Stock is reduced.</p>
           <button type="button" className="rt-primary" onClick={() => { setDone(null); setRound((n) => n + 1); }}>Record another</button>
         </section>
       ) : (
