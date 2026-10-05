@@ -2,8 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, createLazyRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { api, fetchMe, type Me } from '../../api/client';
-import { mockMe, setMockProfitAccess } from '../../api/retail-mock';
-import { retailMockEnabled } from '../../api/retail';
+import { loadRetailMock, retailMockEnabled } from '../../api/retail';
 import { ALL_BRANCHES, initialBranch, loadBranch, saveBranch } from '../../auth/branch';
 import { getAccessToken, refreshSession, setAccessToken, subscribe } from '../../auth/session';
 import { StaffContext } from './context';
@@ -33,7 +32,7 @@ function StaffLayout() {
     });
   }, [token, navigate, mock]);
 
-  const me = useQuery({ queryKey: ['me', token], queryFn: (): Promise<Me> => (mock ? Promise.resolve(mockMe(import.meta.env.VITE_RETAIL_MOCK_ROLE)) : fetchMe()),
+  const me = useQuery({ queryKey: ['me', token], queryFn: (): Promise<Me> => (mock ? loadRetailMock().then((m) => m.mockMe(import.meta.env.VITE_RETAIL_MOCK_ROLE)) : fetchMe()),
     enabled: token !== null || mock,
   });
   const [branch, setBranch] = useState<string | null>(null);
@@ -47,7 +46,7 @@ function StaffLayout() {
   }
 
   const profile = me.data;
-  if (mock) setMockProfitAccess(canSeeProfit(profile));
+  if (mock) void loadRetailMock().then((m) => m.setMockProfitAccess(canSeeProfit(profile)));
   function choose(selection: string) {
     setBranch(selection);
     saveBranch(profile.user_id ?? '', selection);

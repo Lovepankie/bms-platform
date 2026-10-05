@@ -1,13 +1,13 @@
 import { api, problemOf } from './client';
 import { retailMessage } from './retail-errors';
-import { createMockRetail } from './retail-mock';
 import type { components } from './schema';
 
 // The retail API client, typed by the generated schema (ADR-009; `npm run gen:api`), as client.ts
 // is. Names are the server's snake_case. Money is integer minor units (`..._minor`), quantities are
 // decimal strings with up to three places. Fields the schema marks "present only with
 // retail.profit.read" (cost, cost snapshot, profit) are absent from the body for any other caller.
-// The screens use only `RetailApi`, so the fabricated mock (retail-mock.ts) can stand in for it.
+// The screens use only `RetailApi`, so the fabricated mock (retail-mock.ts) can stand in for it. The
+// mock is imported dynamically behind VITE_RETAIL_MOCK, so a production build leaves it out (#77).
 
 type S = components['schemas'];
 
@@ -145,5 +145,25 @@ export const retailMockEnabled = (): boolean => {
   return flag !== undefined && flag !== '' && flag !== '0' && flag !== 'false';
 };
 
+type MockModule = typeof import('./retail-mock');
+
+// Statically false in a build without VITE_RETAIL_MOCK, so the bundler drops the import below.
+const mockModule: Promise<MockModule> | null = import.meta.env.VITE_RETAIL_MOCK && retailMockEnabled() ? import('./retail-mock') : null;
+
+/** The mock's state and fake session, loaded only when the mock switch is on. */
+export function loadRetailMock(): Promise<MockModule> {
+  if (!mockModule) return Promise.reject(new Error('VITE_RETAIL_MOCK is off'));
+  return mockModule;
+}
+
+function lazyMock(module: Promise<MockModule>): RetailApi {
+  const api = module.then((m) => m.createMockRetail());
+  const adapter = {} as Record<keyof RetailApi, unknown>;
+  for (const name of Object.keys(realRetail) as (keyof RetailApi)[]) {
+    adapter[name] = (...args: unknown[]) => api.then((m) => (m[name] as (...a: unknown[]) => Promise<unknown>)(...args));
+  }
+  return adapter as RetailApi;
+}
+
 /** The adapter every retail screen uses: the real client, or the fabricated mock. */
-export const retail: RetailApi = retailMockEnabled() ? createMockRetail() : realRetail;
+export const retail: RetailApi = mockModule ? lazyMock(mockModule) : realRetail;

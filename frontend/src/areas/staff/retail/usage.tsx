@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type Product, type Usage, type UsageRequest } from '../../../api/retail';
-import { useIdempotencyKey } from './idempotency';
+import { useStaff } from '../context';
+import { usePersistedDraft } from './idempotency';
 import { parseQty, qtyString, showQty } from './maths';
 import { BranchRequired, Gate, Problem, useSingleBranch } from './ui';
 
@@ -22,15 +23,21 @@ export function buildUsage(input: { branchId: string; kind: 'used' | 'damaged'; 
 
 export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (u: Usage) => void }) {
   const queryClient = useQueryClient();
-  const key = useIdempotencyKey();
-  const [kind, setKind] = useState<'used' | 'damaged'>('used');
-  const [reason, setReason] = useState('');
+  const { me } = useStaff();
+  const { key, draft, setDraft, finish, discard } = usePersistedDraft<{ kind: 'used' | 'damaged'; reason: string; lines: Line[] }>(
+    `usage:${me.user_id ?? ''}:${branchId}`,
+    { kind: 'used', reason: '', lines: [] },
+  );
+  const { kind, reason, lines } = draft;
+  const setKind = (k: 'used' | 'damaged') => setDraft((d) => ({ ...d, kind: k }));
+  const setReason = (r: string) => setDraft((d) => ({ ...d, reason: r }));
+  const setLines = (f: (ls: Line[]) => Line[]) => setDraft((d) => ({ ...d, lines: f(d.lines) }));
   const [search, setSearch] = useState('');
-  const [lines, setLines] = useState<Line[]>([]);
   const products = useQuery({ queryKey: ['retail', 'products', branchId, search], queryFn: () => retail.listProducts({ query: search, branchId }) });
   const save = useMutation({
     mutationFn: () => retail.createUsage(buildUsage({ branchId, kind, reason, lines }), key),
     onSuccess: (u) => {
+      finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       onSaved?.(u);
     },
@@ -76,6 +83,9 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
       ))}
       <Problem error={save.error} />
       <button type="submit" className="rt-primary" disabled={!valid || save.isPending}>{save.isPending ? 'Saving' : 'Save'}</button>
+      {(lines.length > 0 || reason !== '') && !save.isPending && (
+        <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this form</button>
+      )}
     </form>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Product } from '../../../api/retail';
-import { newIdempotencyKey } from './idempotency';
+import { dropDraft, loadDraft, newIdempotencyKey, saveDraft, type DraftStore } from './idempotency';
 import { buildSaleRequest, draftProblem, draftTotal, lineHint, newLine, type Draft } from './sale-state';
 
 const bulb: Product = { id: 'p1', code: 'P003', description: 'LED bulb 9W screw', unit: 'piece', sell_minor: 6000, active: true };
@@ -68,5 +68,25 @@ describe('sale form', () => {
   it('makes a different idempotency key for each form open', () => {
     expect(newIdempotencyKey()).not.toBe(newIdempotencyKey());
     expect(newIdempotencyKey()).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('keeps the key with the draft across a reload until the sale is saved or cleared (#77)', () => {
+    const items = new Map<string, string>();
+    const store: DraftStore = {
+      getItem: (k) => items.get(k) ?? null,
+      setItem: (k, v) => void items.set(k, v),
+      removeItem: (k) => void items.delete(k),
+    };
+    const opened = loadDraft(store, 'sale:u1:b1', draft({ lines: [] }));
+    saveDraft(store, 'sale:u1:b1', { key: opened.key, draft: draft() });
+    const reloaded = loadDraft(store, 'sale:u1:b1', draft({ lines: [] }));
+    expect(reloaded.key).toBe(opened.key);
+    expect(buildSaleRequest(reloaded.draft)).toEqual(buildSaleRequest(draft()));
+    expect(loadDraft(store, 'sale:u1:b2', draft()).key).not.toBe(opened.key);
+    dropDraft(store, 'sale:u1:b1');
+    expect(loadDraft(store, 'sale:u1:b1', draft()).key).not.toBe(opened.key);
+    items.set('retail-draft:sale:u1:b1', '{not json');
+    expect(loadDraft(store, 'sale:u1:b1', draft()).draft.lines).toHaveLength(1);
+    expect(loadDraft(null, 'sale:u1:b1', draft()).key).toMatch(/^[0-9a-f-]{36}$/);
   });
 });

@@ -2,13 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type Product, type Sale, type SalePayment } from '../../../api/retail';
-import { useIdempotencyKey } from './idempotency';
+import { useStaff } from '../context';
+import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, type Draft } from './sale-state';
 import { BranchRequired, Gate, Note, Problem, money, useProfitAccess, useSingleBranch } from './ui';
 
-// Record a sale (FR-RET-04, FR-RET-05). One idempotency key per form open: a double tap or a retry
-// after a lost answer posts once. After saving, the receipt summary replaces the form.
+// Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
+// tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
+// reload posts once (#77). After saving, the receipt summary replaces the form.
 
 const METHODS: { value: SalePayment; label: string }[] = [
   { value: 'cash', label: 'Cash' },
@@ -65,12 +67,12 @@ export function Receipt({ sale, onNew }: { sale: Sale; onNew?: () => void }) {
 
 export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (sale: Sale) => void }) {
   const queryClient = useQueryClient();
-  const key = useIdempotencyKey();
-  const [search, setSearch] = useState('');
-  const [draft, setDraft] = useState<Draft>({
+  const { me } = useStaff();
+  const { key, draft, setDraft, finish, discard } = usePersistedDraft<Draft>(`sale:${me.user_id ?? ''}:${branchId}`, {
     branchId, method: 'cash', customerId: '', newBuyerName: '', newBuyerContact: '', dueDate: '', lines: [],
   });
-  const [addingBuyer, setAddingBuyer] = useState(false);
+  const [search, setSearch] = useState('');
+  const [addingBuyer, setAddingBuyer] = useState(draft.newBuyerName !== '');
 
   const products = useQuery({
     queryKey: ['retail', 'products', branchId, search],
@@ -81,6 +83,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
   const save = useMutation({
     mutationFn: () => retail.createSale(buildSaleRequest(draft), key),
     onSuccess: (sale) => {
+      finish();
       void queryClient.invalidateQueries({ queryKey: ['retail', 'products'] });
       void queryClient.invalidateQueries({ queryKey: ['retail', 'stock'] });
       onSaved?.(sale);
@@ -207,6 +210,11 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
       <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending}>
         {save.isPending ? 'Saving' : 'Save sale'}
       </button>
+      {draft.lines.length > 0 && !save.isPending && (
+        <button type="button" onClick={() => { discard(); setAddingBuyer(false); save.reset(); }}>
+          Clear this sale
+        </button>
+      )}
     </form>
   );
 }
