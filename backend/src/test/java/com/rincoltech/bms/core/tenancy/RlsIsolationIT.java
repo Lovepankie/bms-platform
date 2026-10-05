@@ -313,6 +313,11 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), entry, user, t.tenantId())
                 .update();
+        // The retail import's source references (migration V20, #55).
+        owner.sql("""
+                        INSERT INTO retail_import_refs (tenant_id, source_file, source_ref, target_type, source_user)
+                        VALUES (?, 'sales', 'SAL-TEST-01', 'retail.sale', 'test.sales01')
+                        """).param(t.tenantId()).update();
     }
 
     static String randomHash() {

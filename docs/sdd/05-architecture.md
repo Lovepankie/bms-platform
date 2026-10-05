@@ -38,6 +38,7 @@ packages.
 | API | Java 25, Spring Boot 4.1, Spring Modulith 2.1 (ADR-010) | All HTTP endpoints in chapter 7; runs every module in one process; one transaction per request, bound to the tenant; also runs the worker role |
 | Worker (a role) | db-scheduler inside the API process, state in PostgreSQL (ADR-008); can move to a second container of the same image with `BMS_SCHEDULER_ENABLED` | Drains the outbox (SMS, email, PDF rendering, report builds), runs scheduled jobs (nightly arrears, interest, reminders, reconciliation, key purge) |
 | Migrate (one-shot) | The API image's `migrate` command | Applies Flyway migrations as `bms_owner` before the application containers switch (ADR-006) |
+| Retail import (one-off) | The API image's `import-retail` command, run with `docker compose run` | Imports a retail tenant's normalised export at cutover as `bms_app` under the tenant's row-level security, without the web server or the scheduler (FR-RET-12, chapter 13 section 13.13) |
 | PostgreSQL 16 | Database | System of record for all tenants (chapter 6), and the job store (`scheduled_tasks`, ADR-008) |
 | Object storage | Cloudflare R2 (S3 API) | Generated PDFs, uploads, encrypted database backups |
 
