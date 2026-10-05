@@ -844,7 +844,17 @@ creation and replaced by the approved terms at approval.
 
 Indexes: `(tenant_id, member_id)`, `(tenant_id, branch_id, status)`,
 `(tenant_id, officer_user_id, status)`, `(tenant_id, status, next_due_date)`,
-`(tenant_id, status, days_past_due) WHERE status = 'active'`.
+`(tenant_id, status, days_past_due) WHERE status = 'active'`. The approver CHECK is named
+`lending_loans_approver_is_not_submitter_or_appraiser`. Guarantor and pledge rows of a draft are
+replaced as a whole, so `bms_app` holds DELETE on those two tables only, and triggers
+(`lending_loan_collateral_guard`, `lending_loan_guarantors_guard`) refuse any insert, delete or
+change of the pledged item, value, guarantor or amount unless the parent loan is a `draft`. A
+pledged item secures one open loan at a time (`collateral_already_pledged`): the service locks the
+item row before it checks, and the partial unique index
+`lending_loan_collateral_one_open_pledge (tenant_id, collateral_id) WHERE released_at IS NULL`
+is the backstop. `released_at` is set when the loan becomes `cancelled`, `rejected` or `closed`;
+a `written_off` loan keeps its pledges. The collateral register asks the loans module through
+`CollateralPledges` before any release (FR-COL-04).
 
 ### `lending_loan_status_history` (append-only)
 
@@ -917,7 +927,9 @@ document_id)`.
 
 (std) `loan_id uuid NOT NULL`, `collateral_id uuid NOT NULL`,
 `pledged_value_minor bigint NOT NULL`, `released_at timestamptz`.
-`UNIQUE (tenant_id, loan_id, collateral_id)`.
+`UNIQUE (tenant_id, loan_id, collateral_id)`; `UNIQUE (tenant_id, collateral_id) WHERE
+released_at IS NULL` (one open pledge per item). The service refuses a pledged value above the
+item's value (`pledge_exceeds_value`).
 
 ### `lending_schedule_items`
 
@@ -1161,7 +1173,9 @@ first uses it.
 `lending_collateral_documents`. `lending_loan_collateral` waits for `lending_loans` (increment 4).
 `V6__member_document_supersede.sql` (#29) adds the supersede columns to `lending_member_documents`.
 `V7__loan_products.sql` (#40) creates `lending_loan_products`, `lending_loan_product_versions` and
-`lending_loan_product_fees`.
+`lending_loan_product_fees`. `V8__loan_applications.sql` (#41) creates `lending_loans` with every
+column of this section, `lending_loan_status_history` (append-only), `lending_loan_guarantors` and
+`lending_loan_collateral`, with the one-open-pledge index and the draft-only triggers.
 
 ## 6.10 Open items
 

@@ -453,7 +453,7 @@ a `lending_loan_status_history` row.
 | ID | Requirement | Acceptance criteria | Phase |
 |---|---|---|---|
 | FR-ORG-01 | A loan officer shall create a loan application for a member with product, principal requested, term, purpose (free text plus a purpose category: business, school fees, medical, agriculture, household, construction, other), and proposed disbursement date. | The loan gets a tenant-unique number `LN` plus 6 digits. Principal and term are validated against the product. | MVP |
-| FR-ORG-02 | The application shall record guarantors (members, with guaranteed amount) and collateral items pledged (from the collateral register, with pledged value). | Required when the product says so; submission fails with `guarantor_required` or `collateral_required` otherwise. | MVP |
+| FR-ORG-02 | The application shall record guarantors (members, with guaranteed amount) and collateral items pledged (from the collateral register, with pledged value). | Required when the product says so; submission fails with `guarantor_required` or `collateral_required` otherwise. Guarantors are other members of the tenant; pledged items come from the borrower's register, are held (pledged or in custody) and secure one open loan at a time (`collateral_already_pledged`). | MVP |
 | FR-ORG-03 | Submitting shall freeze the application's terms and generate a provisional schedule for display. | After submit, only a return-for-correction reopens editing. | MVP |
 | FR-ORG-04 | Appraisal shall capture declared monthly income and monthly obligations, the officer's visit notes, and shall compute the credit score in section 3.18.1 with its components and flags. | The appraisal stores a snapshot of every input and the result, so later changes to the member do not change a recorded appraisal. | MVP |
 | FR-ORG-05 | The appraisal shall show the member's exposure: own open loans, loans they guarantee, and linked parties' loans (FR-MEM-08), with outstanding balances and DPD. | Tested with the fixture relationship. | MVP |
@@ -461,6 +461,24 @@ a `lending_loan_status_history` row.
 | FR-ORG-07 | Approval shall check: member not blacklisted, KYC verified (FR-MEM-05), collateral cover meets the product minimum, and the tenant's optional maximum number of concurrent active loans per member (default no limit). | Each failing check returns its code and blocks approval. | MVP |
 | FR-ORG-08 | An approved loan not disbursed within the tenant setting `approval_validity_days` (default 14) shall expire to `cancelled` with reason `approval_expired`. | Nightly job tested. | MVP |
 | FR-ORG-09 | A member shall apply for a loan from the portal, creating a `draft` with channel `portal` that appears in the assigned officer's queue. | Portal applications cannot skip appraisal. | P2 |
+
+Origination rules that follow from the table above:
+
+- One open loan per item (FR-COL-01, ADR-019). A collateral item secures at most one loan that is
+  not cancelled, rejected or closed. A draft holds its pledges from the moment they are set, and a
+  loan returned for correction keeps them: the officer is still assembling that application.
+  Cancelling, rejecting or closing the loan releases them. A written-off loan keeps its
+  collateral, because it is being recovered.
+- Pledged value (FR-ORG-02). A pledge states at most the item's value (latest forced sale value,
+  else the estimate). A product that requires collateral accepts valued items only.
+- What submit checks and what it leaves (FR-ORG-03, FR-ORG-07). Submit checks again, as they
+  stand at that moment, the borrower and each guarantor (active, not blacklisted) and each
+  pledged item (the borrower's, held, in the loan's currency, valued, free). It does not measure
+  adequacy: the collateral cover against the product minimum is checked at approval (FR-ORG-07),
+  and a guarantor's capacity is not measured at all in the MVP. A limit on how much one member may
+  guarantee across loans is an open question for the product owner.
+- Dates. A proposed disbursement date is today or later. A loan submitted without one takes the
+  submission date, so the provisional schedule stops moving.
 
 ### 3.18.1 Credit score (default model)
 
@@ -533,7 +551,7 @@ less than 30 days ago).
 | FR-COL-01 | A loan officer shall register a collateral item for a member with: type (`land_title`, `vehicle_logbook`, `vehicle`, `national_id`, `household_item`, `other`), description, reference number (title number, logbook number, plate number, or ID number), owner name and owner relationship to the member (self, spouse, other), estimated value, and photos or scans. | `vehicle` requires a plate number, normalised to upper case without spaces. A plate or title number already pledged on an open loan in the tenant raises `collateral_already_pledged`. Until loans exist (increment 4), `collateral_already_pledged` applies to any item of the same type and normalised reference that is not `released` or `disposed`. | MVP |
 | FR-COL-02 | A collateral item shall have valuations over time (valuer, date, market value, forced sale value); the latest valuation's forced sale value, or the estimated value if none, is the collateral value used for cover. | Cover in FR-ORG-07 uses this value. | MVP |
 | FR-COL-03 | Custody status shall be `pledged` (owner keeps the item), `in_custody` (the tenant holds the item or document, with storage location), `released`, `seized` or `disposed`. Every change is an event with date, user, location and note. | Events are append only and shown as a timeline. Allowed moves: `received_into_custody` pledged to in_custody, `moved` within in_custody, `seized` from pledged or in_custody, `disposed` from seized, `note` with no change; release has its own route (FR-COL-04). Anything else is 409 `invalid_status_transition`. | MVP |
-| FR-COL-04 | Release shall be a maker-checker action allowed only when every loan it secures is `closed`, `cancelled` or `rejected`; release records who collected the item and when. | Release while a linked loan is active fails with `collateral_secures_open_loan`. Built as the `collateral_release` approval action; the open-loan check joins with loans (increment 4). | MVP |
+| FR-COL-04 | Release shall be a maker-checker action allowed only when every loan it secures is `closed`, `cancelled` or `rejected`; release records who collected the item and when. | Release while a linked loan is active fails with `collateral_secures_open_loan`. Built as the `collateral_release` approval action; the open-loan check joins with loans (increment 4). Enforced since #41: `collateral_secures_open_loan` while a draft, submitted, appraised, approved or active loan holds the item. | MVP |
 | FR-COL-05 | The tenant shall be able to disable collateral types it does not accept (setting). | A disabled type cannot be registered. | MVP |
 | FR-COL-06 | A collateral register report shall list items by status, type, branch and linked loan status, including items `in_custody` on closed loans (release overdue). | Chapter 14. | MVP |
 

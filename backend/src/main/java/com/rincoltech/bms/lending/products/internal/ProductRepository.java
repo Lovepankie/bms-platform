@@ -177,6 +177,22 @@ class ProductRepository {
         }
     }
 
+    List<Fee> fees(UUID versionId) {
+        return jdbc.sql("""
+                        SELECT name, fee_type, calc_method, amount_minor, rate_bp, timing
+                          FROM lending_loan_product_fees WHERE product_version_id = ? ORDER BY created_at, id
+                        """)
+                .param(versionId)
+                .query((rs, n) -> new Fee(
+                        rs.getString("name"),
+                        rs.getString("fee_type"),
+                        rs.getString("calc_method"),
+                        rs.getObject("amount_minor", Long.class),
+                        rs.getObject("rate_bp", Integer.class),
+                        rs.getString("timing")))
+                .list();
+    }
+
     /** Every version of a product with its fees, newest first. */
     List<Version> versions(UUID productId) {
         Map<UUID, List<Fee>> fees = new LinkedHashMap<>();

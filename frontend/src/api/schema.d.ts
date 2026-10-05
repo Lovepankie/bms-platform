@@ -537,6 +537,144 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/loans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List loans in the caller's branch scope */
+        get: operations["listLoans"];
+        put?: never;
+        /** Create a draft application (FR-ORG-01) */
+        post: operations["createLoan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A loan with guarantors, collateral and its provisional schedule */
+        get: operations["getLoan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a draft application */
+        patch: operations["updateLoan"];
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel an application with a reason */
+        post: operations["cancelLoan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/collateral": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set a draft's pledged collateral (FR-ORG-02) */
+        put: operations["setLoanCollateral"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/guarantors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set a draft's guarantors (FR-ORG-02) */
+        put: operations["setLoanGuarantors"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Return an application to draft with a note */
+        post: operations["returnLoan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/status-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every status move of a loan */
+        get: operations["getLoanStatusHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a draft, freezing its terms (FR-ORG-03) */
+        post: operations["submitLoan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/members": {
         parameters: {
             query?: never;
@@ -1416,6 +1554,23 @@ export interface components {
             name: string;
             terms: components["schemas"]["LoanProductTerms"];
         };
+        CreateLoanRequest: {
+            /** Format: uuid */
+            member_id: string;
+            /** Format: uuid */
+            product_id: string;
+            /** Format: date */
+            proposed_disbursement_date?: string;
+            purpose_category: string;
+            purpose_text?: string;
+            /** Format: int64 */
+            requested_principal_minor: number;
+            /**
+             * Format: int32
+             * @description Defaults to the product's default term
+             */
+            requested_term_count?: number;
+        };
         CreateMemberRequest: {
             alt_phone?: string;
             /** Format: uuid */
@@ -1546,6 +1701,130 @@ export interface components {
             /** @description Required when rejected */
             note?: string;
         };
+        Loan: {
+            /** Format: uuid */
+            appraised_by?: string;
+            /** Format: date-time */
+            approved_at?: string;
+            /** Format: uuid */
+            approved_by?: string;
+            /** Format: int64 */
+            approved_principal_minor?: number;
+            /** Format: int32 */
+            approved_term_count?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            cancelled_reason?: string;
+            channel?: string;
+            collateral?: components["schemas"]["LoanPledge"][];
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            guarantors?: components["schemas"]["LoanGuarantor"][];
+            /** Format: uuid */
+            id?: string;
+            instalment_frequency?: string;
+            interest_method?: string;
+            /** Format: int32 */
+            interest_rate_bp?: number;
+            loan_no?: string;
+            /** Format: uuid */
+            member_id?: string;
+            member_no?: string;
+            /** Format: uuid */
+            officer_user_id?: string;
+            product_code?: string;
+            /** Format: uuid */
+            product_id?: string;
+            /** Format: uuid */
+            product_version_id?: string;
+            /** Format: date */
+            proposed_disbursement_date?: string;
+            /** @description FR-ORG-03: from the requested terms and the proposed (else today's) date; display only */
+            provisional_schedule?: components["schemas"]["LoanScheduleItem"][];
+            purpose_category?: string;
+            purpose_text?: string;
+            rate_unit?: string;
+            rejected_reason?: string;
+            repayment_pattern?: string;
+            /** Format: int64 */
+            requested_principal_minor?: number;
+            /** Format: int32 */
+            requested_term_count?: number;
+            status?: string;
+            /** Format: date-time */
+            submitted_at?: string;
+            /** Format: uuid */
+            submitted_by?: string;
+            term_unit?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        LoanGuarantor: {
+            /** Format: int64 */
+            guaranteed_amount_minor?: number;
+            /** Format: uuid */
+            member_id?: string;
+            member_no?: string;
+            relationship?: string;
+            status?: string;
+        };
+        LoanGuarantorInput: {
+            /** Format: int64 */
+            guaranteed_amount_minor: number;
+            /** Format: uuid */
+            member_id: string;
+            relationship?: string;
+        };
+        LoanListItem: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            loan_no?: string;
+            /** Format: uuid */
+            member_id?: string;
+            /** Format: uuid */
+            officer_user_id?: string;
+            purpose_category?: string;
+            /** Format: int64 */
+            requested_principal_minor?: number;
+            /** Format: int32 */
+            requested_term_count?: number;
+            status?: string;
+        };
+        LoanNoteRequest: {
+            note: string;
+        };
+        LoanPage: {
+            items?: components["schemas"]["LoanListItem"][];
+            next_cursor?: string;
+        };
+        LoanPledge: {
+            /** Format: uuid */
+            collateral_id?: string;
+            collateral_type?: string;
+            /** Format: int64 */
+            collateral_value_minor?: number;
+            /** Format: int64 */
+            pledged_value_minor?: number;
+        };
+        LoanPledgeInput: {
+            /** Format: uuid */
+            collateral_id: string;
+            /**
+             * Format: int64
+             * @description At most the item's value
+             */
+            pledged_value_minor: number;
+        };
         LoanProduct: {
             code?: string;
             /** Format: date-time */
@@ -1665,6 +1944,33 @@ export interface components {
             term_unit?: string;
             /** Format: int32 */
             version_no?: number;
+        };
+        /** @description FR-ORG-03: from the requested terms and the proposed (else today's) date; display only */
+        LoanScheduleItem: {
+            /** Format: date */
+            due_date?: string;
+            /** Format: int64 */
+            fee_minor?: number;
+            /** Format: int64 */
+            interest_minor?: number;
+            /** Format: int32 */
+            no?: number;
+            /** Format: int64 */
+            principal_minor?: number;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        LoanStatusChange: {
+            /** Format: date-time */
+            at?: string;
+            /** Format: uuid */
+            changed_by?: string;
+            from_status?: string;
+            reason?: string;
+            to_status?: string;
+        };
+        LoanStatusHistory: {
+            items?: components["schemas"]["LoanStatusChange"][];
         };
         Me: {
             all_branches?: boolean;
@@ -1965,6 +2271,12 @@ export interface components {
             term_count: number;
             term_unit: string;
         };
+        SetLoanCollateralRequest: {
+            collateral: components["schemas"]["LoanPledgeInput"][];
+        };
+        SetLoanGuarantorsRequest: {
+            guarantors: components["schemas"]["LoanGuarantorInput"][];
+        };
         SignInRequest: {
             /** @description Email, or phone for staff */
             login: string;
@@ -2043,6 +2355,17 @@ export interface components {
             owner_name?: string;
             owner_relationship?: string;
             reference_no?: string;
+        };
+        /** @description Draft only; omitted fields are unchanged */
+        UpdateLoanRequest: {
+            /** Format: date */
+            proposed_disbursement_date?: string;
+            purpose_category?: string;
+            purpose_text?: string;
+            /** Format: int64 */
+            requested_principal_minor?: number;
+            /** Format: int32 */
+            requested_term_count?: number;
         };
         /** @description Omitted fields are unchanged */
         UpdateMemberRequest: {
@@ -3031,6 +3354,266 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LoanProduct"];
+                };
+            };
+        };
+    };
+    listLoans: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                status?: string[];
+                member_id?: string;
+                officer_user_id?: string;
+                product_id?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanPage"];
+                };
+            };
+        };
+    };
+    createLoan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLoanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    getLoan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    updateLoan: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLoanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    cancelLoan: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoanNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    setLoanCollateral: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLoanCollateralRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    setLoanGuarantors: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLoanGuarantorsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    returnLoan: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoanNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    getLoanStatusHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanStatusHistory"];
+                };
+            };
+        };
+    };
+    submitLoan: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Loan"];
                 };
             };
         };

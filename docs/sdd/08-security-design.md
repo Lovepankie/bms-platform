@@ -226,6 +226,14 @@ never by a tenant role:
   principal's member. Records not owned return 404.
 - The frontend hides what the user cannot do, based on `/me`. That is a convenience; the
   API is the authority.
+- Cross-module checks go through registered hooks, not shared tables (chapter 5 section 5.4.3).
+  The collateral register refuses a release while `CollateralPledges` (registered by the loans
+  module) reports an open pledge, and both sides take the item's row lock before they check, so a
+  pledge and a release of the same item cannot both succeed (FR-COL-04).
+- Guarantor disclosure. A loan shows each guarantor's member number even when that member's home
+  branch is outside the reader's scope. That is deliberate: the reader is entitled to the loan,
+  and the loan cannot be assessed without knowing who guarantees it. Nothing else about the
+  guarantor is disclosed; opening the guarantor's record still needs scope over their branch.
 
 ## 8.4 Maker-checker
 
@@ -360,6 +368,9 @@ Detailed requirements are NFR-DP-01 to NFR-DP-08 in chapter 4. Design consequenc
 - Data minimisation: the member form collects only the fields in FR-MEM-01; free-text
   fields carry a hint not to record health or other special personal data.
 - NIN and phone are masked in lists, logs and audit payloads.
+- Staff free text on a loan (purpose text, return, rejection and cancellation notes, visit notes)
+  can hold personal data about the member or third parties. It is staff-only: the member area
+  never returns it.
 - Application logs never contain request bodies of member endpoints, NINs, phone numbers,
   tokens or passwords; the logger has a redaction filter with a unit test.
 - Test and development environments never hold production data. Fixtures are fabricated

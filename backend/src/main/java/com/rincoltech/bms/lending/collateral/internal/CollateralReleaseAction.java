@@ -2,9 +2,12 @@ package com.rincoltech.bms.lending.collateral.internal;
 
 import com.rincoltech.bms.core.approvals.ApprovalAction;
 import com.rincoltech.bms.core.audit.AuditLog;
+import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.BusinessClock;
+import com.rincoltech.bms.lending.collateral.CollateralPledges;
 import com.rincoltech.bms.lending.collateral.internal.CollateralApi.CollateralResponse;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,11 +27,14 @@ class CollateralReleaseAction implements ApprovalAction {
     private final CollateralRepository repo;
     private final AuditLog audit;
     private final BusinessClock clock;
+    private final List<CollateralPledges> pledges;
 
-    CollateralReleaseAction(CollateralRepository repo, AuditLog audit, BusinessClock clock) {
+    CollateralReleaseAction(
+            CollateralRepository repo, AuditLog audit, BusinessClock clock, List<CollateralPledges> pledges) {
         this.repo = repo;
         this.audit = audit;
         this.clock = clock;
+        this.pledges = List.copyOf(pledges);
     }
 
     @Override
@@ -71,6 +77,11 @@ class CollateralReleaseAction implements ApprovalAction {
         if (!CollateralService.RELEASABLE.contains(c.custodyStatus())) {
             // A clean 409 in the approval's execution error, not an internal error in the log.
             throw CollateralService.invalidTransition("An item that is " + c.custodyStatus() + " cannot be released.");
+        }
+        if (pledges.stream().anyMatch(p -> p.securesOpenLoan(c.id()))) {
+            throw ApiException.rule(
+                    "collateral_secures_open_loan",
+                    "The item secures a loan that is not closed, cancelled or rejected.");
         }
         repo.update(CollateralService.withCustody(c, "released", null));
         String collectedBy = (String) e.payload().get("collected_by");

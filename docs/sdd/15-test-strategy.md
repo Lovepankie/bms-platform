@@ -133,6 +133,7 @@ through the preview endpoint).
 | Ledger invariants | An unbalanced entry is rejected at commit by the trigger even when inserted with raw SQL; journal UPDATE and DELETE fail; posting to a closed period fails. |
 | Subledger reconciliation | After a randomised sequence of disbursements, repayments, reversals, write-offs, deposits and withdrawals, every control account equals its subledger (a property test run with a fixed seed in CI and a random seed nightly). |
 | Concurrency | 50 concurrent repayments on one loan and 50 concurrent deposits on one savings account: final balances exact, receipt numbers gap-free and unique. |
+| Races on shared records | Two concurrent registrations of one collateral reference, and two loans pledging one item at the same moment: exactly one succeeds and the other gets `collateral_already_pledged`. Each rule that is a check before a write has a lock or a unique index behind it and a two-thread test. |
 | Idempotency | Same key replays; same key with different body is refused; concurrent same-key requests produce one record (chapter 7 section 7.8). |
 | Maker-checker | Self-approval refused by the service and by the database CHECK; stale payload refused; expiry. |
 

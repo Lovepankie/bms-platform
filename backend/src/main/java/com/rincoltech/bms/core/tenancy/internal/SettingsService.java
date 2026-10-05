@@ -123,6 +123,12 @@ class SettingsService implements TenantSettings {
         return Set.copyOf(current().disabledCollateralTypes());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean allowLoansBeforeKycVerified() {
+        return current().allowLoansBeforeKycVerified();
+    }
+
     private Stored load(boolean forUpdate) {
         return jdbc.sql("SELECT settings::text AS settings, version FROM tenant_settings"
                         + (forUpdate ? " FOR UPDATE" : ""))

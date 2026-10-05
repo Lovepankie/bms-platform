@@ -195,7 +195,8 @@ Business rule codes used in chapter 3 (each is a 422 unless listed above):
 `validation_failed`, `plan_limit_reached`, `invalid_phone`, `invalid_nin`,
 `invalid_term_frequency`, `invalid_rate_unit`, `below_product_minimum`,
 `above_product_maximum`, `guarantor_required`, `collateral_required`,
-`collateral_cover_insufficient`, `kyc_not_verified`, `member_blacklisted`,
+`collateral_cover_insufficient`, `kyc_not_verified`, `member_blacklisted`, `member_not_active`,
+`product_archived`,
 `max_active_loans_reached`, `approval_above_requested`, `self_approval_forbidden`,
 `approver_conflict`, `subject_changed`, `approval_expired`, `period_closed`,
 `payment_method_unmapped`, `value_date_in_future`, `has_repayments`,
@@ -476,6 +477,21 @@ net_disbursed_minor}` from the same calculator real schedules will use.
 | POST | `/lending/loan-products/schedule-preview` | `lending.products.read` | `{terms..., principal_minor, disbursement_date}` returns the schedule. FR-PRD-03 |
 
 ### 7.11.13 Lending: loans (`/lending/loans`)
+
+Built (#41): list, create, get (with guarantors, collateral and the provisional schedule from
+the loan's own copied terms), PATCH (draft only), PUT guarantors and collateral (draft only),
+submit, return, cancel, and `GET .../status-history`. Every change requires `If-Match`. A loan
+officer cancels only their own draft; a holder of `lending.loans.approve` cancels any application
+not yet disbursed. Codes: `member_not_active`, `product_archived`, `below_product_minimum`,
+`above_product_maximum`, `guarantor_required`, `collateral_required`, `kyc_not_verified`,
+`collateral_already_pledged` (409); field codes `guarantor_is_borrower`, `unknown_collateral`,
+`collateral_not_held`, `currency_mismatch`, `collateral_not_valued`, `pledge_exceeds_value`
+(on `pledged_value_minor`) and `in_the_past` (a proposed disbursement date before today). Submit
+runs the pledge checks again and adds `member_blacklisted`, `guarantor_not_active` and
+`guarantor_blacklisted`; it also stores today as the proposed disbursement date when none was
+given. The provisional schedule includes the version's `added_to_loan` fees, so it equals the
+product preview. Money fields accept at most 10^15 minor units. `PATCH` with `purpose_text: ""`
+clears the text. Appraisal and decision arrive with #42 and #43.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
