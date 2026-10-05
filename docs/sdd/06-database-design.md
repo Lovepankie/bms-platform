@@ -1244,7 +1244,7 @@ module on again adds nothing. `S` marks `is_system_controlled`.
 | Column | Type | Notes |
 |---|---|---|
 | `id`, `tenant_id`, `created_at`, `updated_at`, `version`, `created_by` | standard | |
-| `code` | varchar(40) | Trimmed; unique per tenant on `lower(code)` (data dictionary rule 1) |
+| `code` | varchar(40) | Normalised by `RetailCatalogue.normaliseCode` (Unicode spaces stripped at the ends, then NFKC); no control character and no space other than U+0020 inside (CHECK `retail_products_code_check`, V14); unique per tenant on `lower(code)` (data dictionary rule 1) |
 | `description` | varchar(300) | Trigram index for search |
 | `category_id`, `unit_id` | uuid | Composite FKs to `retail_categories`, `retail_units` |
 | `cost_minor`, `sell_minor` | bigint >= 0 | The current prices. Changed only by the statement that also writes `retail_price_history` (ADR-020 decision 5) |

@@ -22,7 +22,7 @@ It holds no real data. The golden test uses a fabricated fixture of the same sha
 
 ## 2. Rules
 
-1. A product id is matched case-insensitively and trimmed. Ids that differ only by case are one product.
+1. A product id is matched case-insensitively and trimmed. Ids that differ only by case are one product. Trimming removes every Unicode space at the ends, including the no-break space a spreadsheet paste leaves, and NFKC folds full-width forms; an id with a control character or a Unicode space other than a plain space inside is refused. The API and the importer share one normaliser (`RetailCatalogue.normaliseCode`, review F9).
 2. Quantities and prices become `numeric(14,3)` and integer minor units. Blank is zero.
 3. History rows are movements and documents marked `historical`. They post no journals.
 4. For each branch and product, a `legacy_balance` movement equals the source's current quantity

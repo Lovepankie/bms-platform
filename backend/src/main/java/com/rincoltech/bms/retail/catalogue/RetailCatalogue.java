@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.catalogue;
 
+import java.text.Normalizer;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,6 +27,50 @@ public interface RetailCatalogue {
      * @return the product as it is now
      */
     ProductSnapshot applyPurchasePrices(UUID productId, long costMinor, Long sellMinor, UUID purchaseId);
+
+    /**
+     * The one normal form of a product code, for the API and the importer alike (review F9):
+     * {@code strip()} and the no-break spaces it keeps are removed at the ends (a no-break space pasted from a
+     * spreadsheet), then NFKC folds compatibility forms (full-width letters and digits). A code that
+     * is then empty, or holds a control or format character or any space other than U+0020, is
+     * refused. The database CHECK of migration V14 enforces the same rule.
+     *
+     * @return the normalised code, or empty when it is not acceptable
+     */
+    static Optional<String> normaliseCode(String raw) {
+        if (raw == null || !acceptable(stripSpaces(raw))) {
+            return Optional.empty();
+        }
+        String code = stripSpaces(Normalizer.normalize(stripSpaces(raw), Normalizer.Form.NFKC));
+        return acceptable(code) ? Optional.of(code) : Optional.empty();
+    }
+
+    /** {@code strip()} plus the no-break spaces it leaves (U+00A0, U+2007, U+202F). */
+    private static String stripSpaces(String s) {
+        int start = 0;
+        int end = s.length();
+        while (start < end && isSpace(s.charAt(start))) {
+            start++;
+        }
+        while (end > start && isSpace(s.charAt(end - 1))) {
+            end--;
+        }
+        return s.substring(start, end);
+    }
+
+    private static boolean isSpace(char c) {
+        return Character.isWhitespace(c) || Character.isSpaceChar(c);
+    }
+
+    private static boolean acceptable(String code) {
+        return !code.isEmpty()
+                && code.codePoints()
+                        .allMatch(c -> c == ' '
+                                || !(Character.isISOControl(c)
+                                        || Character.getType(c) == Character.FORMAT
+                                        || Character.isSpaceChar(c)
+                                        || Character.isWhitespace(c)));
+    }
 
     record ProductSnapshot(
             UUID id,

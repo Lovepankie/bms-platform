@@ -8,6 +8,7 @@ import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.Versions;
+import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Category;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.CategoryList;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.CategoryRequest;
@@ -102,7 +103,7 @@ class CatalogueService {
         UUID by = CurrentPrincipal.require().userId();
         Product p = new Product(
                 UUID.randomUUID(),
-                r.code().trim(),
+                code(r.code()),
                 r.description().trim(),
                 r.categoryId(),
                 null,
@@ -189,7 +190,7 @@ class CatalogueService {
                 r.unitId() == null ? before.unitId() : r.unitId());
         Product after = new Product(
                 id,
-                r.code() == null ? before.code() : r.code().trim(),
+                r.code() == null ? before.code() : code(r.code()),
                 r.description() == null ? before.description() : r.description().trim(),
                 r.categoryId() == null ? before.categoryId() : r.categoryId(),
                 null,
@@ -286,6 +287,14 @@ class CatalogueService {
 
     Product visible(Product p) {
         return mayReadCost() ? p : p.withoutCost();
+    }
+
+    private static String code(String raw) {
+        return RetailCatalogue.normaliseCode(raw)
+                .orElseThrow(() -> ApiException.validation(List.of(new FieldProblem(
+                        "code",
+                        "invalid",
+                        "A code must not be blank or contain control characters or special spaces."))));
     }
 
     static boolean mayReadCost() {
