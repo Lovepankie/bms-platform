@@ -46,8 +46,9 @@ so a new refusal (for example a price floor code spelled differently) is never h
 
 The sale form also gives early hints that only save a round trip: a quantity above the branch balance, and a
 price not above cost when the cost is known (only with `retail.profit.read`; for anyone else only the server can
-refuse a price). Note the backend default `retail_allow_negative_stock = true` accepts a sale the hint blocks;
-the hint follows the pilot behaviour ("oversell refused") and the server stays the authority.
+refuse a price). The server refuses both itself, always: overselling is refused with `insufficient_stock` (there is
+no setting, ADR-020 decision 4, #64) and a price at or below cost with `price_below_cost` unless the caller holds
+`retail.price.below_cost` (#64). The hints only save a round trip; the server stays the authority.
 
 ## The mock switch
 
@@ -74,8 +75,32 @@ real server. No page overflowed sideways. Screenshots and the script are not com
 
 Sandbox notes: Docker Hub answered 429, so base images came from `mirror.gcr.io` and were retagged locally, and the
 image builds cannot trust the egress proxy's CA, so the API jar was built on the host and wrapped in local images
-outside the repository. `price_below_cost` is not on this backend build yet (#64), so a sales user's low price was
-accepted by the server; the client path for it is covered by unit tests only.
+outside the repository. That run predates the price floor (#64).
+
+## Verification on the integrated branch (#71)
+
+The walk was repeated against the combined backend (loan PRs, retail R1 to R4, #64, #68 and the importer) with
+the same shape of stack: `docker compose up --no-build` with the API image wrapping the jar built by `mvn verify`
+and the web image wrapping `npm run build`, both built on the host (outside the repository), and a fresh fabricated
+retail tenant created with `deploy/sql/create-tenant.sql`, `platform_set_tenant_modules` and
+`deploy/sql/invite-tenant-admin.sql` (admin and a `retail_sales` user at the head office, both with TOTP, a
+second branch, four products counted in by stock-take). A Playwright script drove Chromium at 360px; 38 of 38
+steps passed, among them:
+
+- the admin flows above (cash and credit sale with the profit line, stock and price-floor hints, restock to two
+  branches, usage, stock with cost, stock-take commit, valuation, daily profit);
+- the sales user's tiles, "no access" on Restock, Stock-take and Daily profit by URL, a sale without profit, and
+  stock and valuation without cost; none of the 20 retail responses that session received carried cost or profit;
+- **price floor:** the sales user, who does not see cost, entered 3,500 and 3,499 for an item costing 3,500; the
+  form allowed it, the server answered 422 `price_below_cost` without the cost in the body, and the form showed
+  the plain message; 3,501 was accepted;
+- **oversell, default tenant settings:** the form was filled with the whole branch balance, another till sold one
+  unit, and Save was refused with 422 `insufficient_stock` and the plain message; the balance stayed at zero or
+  above;
+- no screen overflowed sideways at 360px.
+
+A TOTP code is accepted once, so a script that enrols and then signs in must wait for the next 30 second window.
+The script and its screenshots are not committed.
 
 ## Left to do
 
