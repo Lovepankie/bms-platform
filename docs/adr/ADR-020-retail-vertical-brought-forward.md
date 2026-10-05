@@ -37,16 +37,18 @@ does not touch lending packages.
    transaction, and a reconciliation job checks it against the sum of movements. Nothing edits
    a balance directly; a stock-take writes an adjustment movement. Transfers between branches
    are reserved and not in the first release.
-4. **Negative stock is allowed by default.** The tenant setting `retail.allow_negative_stock`
-   defaults to true because shops sell before the purchase is recorded; refusing the sale loses
-   the sale. A negative balance is flagged on every stock view until a purchase or stock-take
-   corrects it.
+4. **Overselling is refused.** A sale, usage report or damage report larger than the branch's
+   available stock is refused, as in the pilot's current app. There is no setting to allow it.
+   A negative balance can only come from imported history (stock that was never recorded); it is
+   flagged for the first stock-take, and the legacy balance movement (decision 9) absorbs it.
 5. **Prices live on the product and are written by the event that changes them.** The product
    holds the current `cost_minor` and `sell_minor`. `retail_price_history` is append-only. A
    restock line that carries a price sets it in the same transaction as the movement (latest
    restock wins) and writes a history row. A manual price edit needs `retail.price.edit` and
    writes a history row. A sale line snapshots the unit cost and unit price at the time of sale,
-   and profit is computed from the snapshot, never from the current price.
+   and profit is computed from the snapshot, never from the current price. A sale whose unit
+   price is not above the product's cost is refused with a clear message, as in the pilot's
+   current app, unless the user holds `retail.price.below_cost`.
 6. **Cost basis in the first release is the product's cost at the time of sale.** Weighted
    average cost is a later per-tenant option and will need its own record (pending ADR-021).
 7. **Every financial retail event posts through `post_entry`** in the same transaction, one
@@ -64,8 +66,10 @@ does not touch lending packages.
    valuation against the opening balance equity account. A `legacy_balance` movement per branch
    and product makes the balance equal the source figure, and the first stock-take replaces it.
 10. **Permissions:** a `retail.*` catalogue (sale create and read, stock read, purchase create,
-    usage report, price edit, stock-take commit, catalogue manage, profit read). Profit read is
-    its own permission, held by admins only. Branch scope applies (ADR-017).
+    usage report, price edit, price below cost, stock-take commit, catalogue manage, profit read).
+    Profit read is its own permission, held by admins only. In the pilot, recording purchases and
+    creating products are also admin only, and shop staff record sales for their assigned branch
+    only. Branch scope applies (ADR-017).
 11. **Retail is generic.** No field exists for one tenant. A second retail tenant is the module
     switch plus a catalogue import; differences are settings, categories and units.
 

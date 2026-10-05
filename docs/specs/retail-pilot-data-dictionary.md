@@ -45,3 +45,10 @@ It holds no real data. The golden test uses a fabricated fixture of the same sha
 - **Internal advances.** Tabs named as loans record advances to the owner and the company, not
   customer lending. They are not mapped to the lending module.
 - **Product description repeats and near duplicates** go to the import review queue.
+- **Stock-takes and returns recorded as restocks.** The restock log carries rows whose supplier text
+  marks stock found at a count and customer returns. The importer maps them to `adjustment` and
+  `return` movements, not purchases, and they post no supplier payable.
+- **Hard-coded totals.** The valuation view shows its totals on one fixed row number of the product
+  master. They are not data and are not imported.
+- **Restock prices.** The restock form pre-fills cost and sell price from the product and staff may
+  change them. That change is the price update (FR-RET-06) and must be reproduced in price history.
