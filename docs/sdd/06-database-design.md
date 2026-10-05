@@ -1390,7 +1390,7 @@ balance (or, with `as_of`, the sum of movements whose `business_date` is on or b
 times the product's **current** cost and sell price (ADR-020 decision 6), rounded half up per row;
 totals are sums of rows. A row whose value does not fit a long is flagged `amount_out_of_range` and left out of the totals rather than failing the report. With `retail.profit.read` each branch also shows the `inventory` account
 balance (entries dated on or before the valuation date, through `LedgerAccounts.balanceByBranch`)
-and the revaluation difference, value at cost less that balance, which is the expected result of
+and the revaluation difference, value at cost less that balance. The branches reported are the union of those holding stock and those whose `inventory` balance is not zero, within the caller's branch filter, so a branch that has sold out but still carries an inventory balance shows value at cost 0 and difference equal to minus that balance (review F3). The difference is the expected result of
 relieving inventory at current cost (ADR-020 decision 8) and is reported, never treated as an
 error. Daily profit per branch and day is `retail_sales.total_minor` less `cost_total_minor` over
 completed (not voided) sales by `sale_date`, less `retail_usage_reports.cost_total_minor` by

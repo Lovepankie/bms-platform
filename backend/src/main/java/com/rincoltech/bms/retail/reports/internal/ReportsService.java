@@ -19,8 +19,10 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -94,16 +96,24 @@ class ReportsService {
         }
         Map<UUID, Long> inventory =
                 cost ? accounts.balanceByBranch("inventory", asOf == null ? today : asOf) : Map.of();
+        // Review F3: a branch that holds no stock but whose inventory account is not zero is reported
+        // too, with value at cost 0, so its revaluation difference is not hidden.
+        Set<UUID> reported = new LinkedHashSet<>(byBranch.keySet());
+        inventory.entrySet().stream()
+                .filter(e -> e.getValue() != 0 && (filter == null || filter.contains(e.getKey())))
+                .map(Map.Entry::getKey)
+                .sorted()
+                .forEach(reported::add);
         List<BranchTotal> branches = new ArrayList<>();
         long expectedTotal = 0;
         long atCostTotal = 0;
-        for (Map.Entry<UUID, long[]> e : byBranch.entrySet()) {
-            long[] t = e.getValue();
+        for (UUID branch : reported) {
+            long[] t = byBranch.getOrDefault(branch, new long[2]);
             expectedTotal = Math.addExact(expectedTotal, t[0]);
             atCostTotal = Math.addExact(atCostTotal, t[1]);
-            long account = inventory.getOrDefault(e.getKey(), 0L);
+            long account = inventory.getOrDefault(branch, 0L);
             branches.add(new BranchTotal(
-                    e.getKey(),
+                    branch,
                     t[0],
                     cost ? t[1] : null,
                     cost ? account : null,
