@@ -124,6 +124,14 @@ write and unbound-session tests cover it without a separate suite.
    tenants; `app_list_active_tenants` returns only ids; `app_list_active_tenants_with_module`
    leaves out a tenant with the module switched off (`PlatformIT`).
 
+## 15.4.3 Migration order
+
+`MigrationOrderIT` runs `DatabaseMigrator` with Flyway's `outOfOrder` off, as every environment
+does, on a fresh PostgreSQL 16 container per case: every migration (V1 to V9 lending, V10 to V14
+retail, V20 the retail import references) applies in order on an empty database; on a database
+already migrated to V9 with a lending tenant, exactly V10 to V14 and V20 apply and that tenant can
+then switch retail on; and no two migration files share a version (issue #71, review F6).
+
 ## 15.5 Module boundary test
 
 Fails the build when any rule of ADR-002 is broken: core depending on a vertical, a
@@ -171,7 +179,10 @@ Coverage gate for the lending calculation code: 95 percent lines (NFR-MNT-02).
   importer as `bms_app` over `fixtures/retail/import-sample/` and asserts the balances, the
   valuation and one day's profit, the three opening journals, the absence of any other journal, a
   re-run that adds no row, a dry run that writes nothing, and another tenant left untouched
-  (chapter 13 section 13.13).
+  (chapter 13 section 13.13). It also asserts that every imported movement carries the business
+  date of its source row and the legacy balances the import date, that a valuation `as_of` the day
+  before the import counts the imported history by business date, and that product codes are
+  normalised exactly as the catalogue normalises them (review F9).
 - **Normalisation tables.** Every table of examples in chapter 13 section 13.6 is a
   parametrised unit test.
 - **Report golden tests.** Each report in chapter 14 runs over its fabricated dataset and

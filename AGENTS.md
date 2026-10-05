@@ -44,6 +44,13 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   (ADR-016); audit search and CSV export; the notification port with a recording fake adapter;
   and the PWA's sign-in, MFA, invitation, branch switcher and approvals inbox. No production
   approval action is registered until increment 2.
+- **Integrated, not yet on `main` (issue #71):** the loan pull requests #47 and #48 (appraisal,
+  credit score, approval decision; migration `V9`) and, on top of them, the retail vertical
+  (ADR-020): catalogue, stock, sales, purchasing, usage, valuation and daily profit (`V10` to
+  `V12`), the oversell refusal and price floor (`V13`), the review fixes (`V14`), the
+  `import-retail` command (`V20`, `docs/runbooks/import-retail.md`) and the phone-first retail
+  screens on the real API (`docs/specs/retail-ui-notes.md`). Flyway runs with `outOfOrder` off,
+  so a new migration takes a number above the highest one on any open branch (`V21` next).
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
   Cloudflare Tunnel and pulls every green build of `main` from a `staging` pointer tag; hosts are

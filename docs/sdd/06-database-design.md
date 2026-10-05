@@ -1196,9 +1196,10 @@ adds the `retail.price.below_cost` permission to the catalogue and grants it to 
 amount CHECKs and the sale header and stock-take line guards (sections 6.11.2 and 6.11.3). The
 retired setting `retail_allow_negative_stock` needs no migration: a stored key is ignored on read.
 `V20__retail_import_refs.sql` (#55) creates `retail_import_refs` (append-only) for the
-`import-retail` command (section 6.11.4). It takes V20, leaving V15 to V19 free for the next
-retail or lending migration; Flyway applies the gap in order after V14 (`outOfOrder` stays off,
-so any later migration must be numbered above V20).
+`import-retail` command (section 6.11.4). It took V20 while the retail fixes were still open;
+Flyway applies the gap in order after V14. `outOfOrder` stays off, so V15 to V19 are never used:
+once a database is at V20 a lower new version would fail validation. The next migration is V21
+(`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items
 
