@@ -70,6 +70,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 retailSales     = component "Retail: Sales" "Sales with unit cost and price snapshots, credit buyers, payments against credit sales, voids by reversal; revenue and cost of goods sold posted per branch." "retail" "retail"
                 retailReports    = component "Retail: Reports" "Stock valuation at cost and expected sales at price per branch, the revaluation difference against the inventory account, daily profit per branch from the sale snapshots; cost and profit only with retail.profit.read." "retail" "retail"
                 retailPurchasing = component "Retail: Purchasing" "Suppliers and restocks that set product prices, with history, in the same transaction as the stock movements and the per-branch journals." "retail" "retail"
+                retailImports    = component "Retail: Imports" "The one-off import-retail command: reads a normalised JSON Lines export and writes historical documents and movements (no journals), legacy balance movements and one opening journal per branch, keyed by source reference so a re-run adds nothing (ADR-020 decision 9)." "retail" "retail"
             }
 
             migrate = container "Migrate" "One-shot container run before the application containers switch: applies the Flyway migrations as bms_owner, then exits (ADR-006)." "API image, migrate command" "app"
@@ -189,6 +190,15 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.web -> bms.api.retailReports "Valuation; daily profit (admins)"
         bms.api.retailReports -> bms.api.ledger "Reads the inventory account balance per branch"
         bms.api.retailReports -> bms.db "Reads balances, movements, sales and usage (read model)"
+        platformOperator -> bms.api.retailImports "Runs import-retail on the host with the tenant's export mounted read only"
+        bms.api.retailImports -> bms.api.jobs "Binds the tenant by slug for the command"
+        bms.api.retailImports -> bms.api.tenancy "Creates missing branches through the branch rules"
+        bms.api.retailImports -> bms.api.retailCatalogue "Ensures categories, units and products; writes imported price history"
+        bms.api.retailImports -> bms.api.retailPurchasing "Historical purchases and suppliers"
+        bms.api.retailImports -> bms.api.retailSales "Historical sales and credit buyers"
+        bms.api.retailImports -> bms.api.retailStock "Historical, adjustment, return and legacy balance movements; usage; the opening journal per branch"
+        bms.api.retailImports -> bms.api.audit "One audit row per imported file"
+        bms.api.retailImports -> bms.db "Source references of imported rows"
         bms.api.tenancy     -> bms.db "Resolves the slug with app_resolve_tenant_status; binds app.tenant_id"
         bms.api.tenancy     -> bms.api.audit "Audits branch and settings changes"
         bms.api.identity    -> bms.db "Reads sessions and role assignments; revocation takes effect at once"

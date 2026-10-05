@@ -139,4 +139,69 @@ class JdbcStockLedger implements StockLedger {
                 .optional()
                 .orElse(BigDecimal.ZERO.setScale(3));
     }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<UUID> recordHistorical(LocalDate businessDate, List<HistoricalMovement> movements) {
+        UUID[] ids = new UUID[movements.size()];
+        Integer[] order = new Integer[movements.size()];
+        for (int i = 0; i < order.length; i++) {
+            order[i] = i;
+        }
+        Arrays.sort(
+                order,
+                Comparator.comparing((Integer i) -> movements.get(i).branchId())
+                        .thenComparing(i -> movements.get(i).productId())
+                        .thenComparing(i -> i));
+        for (int i : order) {
+            HistoricalMovement m = movements.get(i);
+            lockBalance(m.branchId(), m.productId());
+            UUID id = UUID.randomUUID();
+            jdbc.sql("""
+                            INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, business_date, branch_id, product_id, kind,
+                                qty, unit_cost_minor, source_type, source_id, source_line_id, historical, note)
+                            VALUES (:id, current_setting('app.tenant_id')::uuid, :at, :businessDate, :branch, :product, :kind,
+                                :qty, :cost, :sourceType, :sourceId, :sourceLineId, true, :note)
+                            """)
+                    .param("id", id)
+                    .param("at", Timestamp.from(m.occurredAt()))
+                    .param("businessDate", java.sql.Date.valueOf(businessDate))
+                    .param("branch", m.branchId())
+                    .param("product", m.productId())
+                    .param("kind", m.kind())
+                    .param("qty", m.qty())
+                    .param("cost", m.unitCostMinor())
+                    .param("sourceType", m.sourceType())
+                    .param("sourceId", m.sourceId())
+                    .param("sourceLineId", m.sourceLineId())
+                    .param("note", m.note())
+                    .update();
+            jdbc.sql("""
+                            UPDATE retail_stock_balances SET qty = qty + ?, updated_at = now()
+                             WHERE branch_id = ? AND product_id = ?
+                            """).params(m.qty(), m.branchId(), m.productId()).update();
+            ids[i] = id;
+        }
+        return List.of(ids);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<Position> positions() {
+        return jdbc.sql("""
+                        SELECT b.branch_id, b.product_id, b.qty,
+                               coalesce(sum(m.qty) FILTER (WHERE m.historical AND m.kind <> 'legacy_balance'), 0) AS hist,
+                               bool_or(m.kind = 'legacy_balance') IS TRUE AS legacy
+                          FROM retail_stock_balances b
+                          LEFT JOIN retail_stock_movements m ON m.branch_id = b.branch_id AND m.product_id = b.product_id
+                         GROUP BY b.branch_id, b.product_id, b.qty
+                        """)
+                .query((rs, n) -> new Position(
+                        rs.getObject("branch_id", UUID.class),
+                        rs.getObject("product_id", UUID.class),
+                        rs.getBigDecimal("qty"),
+                        rs.getBigDecimal("hist"),
+                        rs.getBoolean("legacy")))
+                .list();
+    }
 }

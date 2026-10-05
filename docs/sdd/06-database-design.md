@@ -1195,6 +1195,10 @@ adds the `retail.price.below_cost` permission to the catalogue and grants it to 
 `V14__retail_review_fixes.sql` (#68) adds `business_date` to stock movements, the product code and
 amount CHECKs and the sale header and stock-take line guards (sections 6.11.2 and 6.11.3). The
 retired setting `retail_allow_negative_stock` needs no migration: a stored key is ignored on read.
+`V20__retail_import_refs.sql` (#55) creates `retail_import_refs` (append-only) for the
+`import-retail` command (section 6.11.4). It takes V20, leaving V15 to V19 free for the next
+retail or lending migration; Flyway applies the gap in order after V14 (`outOfOrder` stays off,
+so any later migration must be numbered above V20).
 
 ## 6.10 Open items
 
@@ -1288,6 +1292,10 @@ are all zero is not posted.
 | Usage or damage | `stock_shrinkage`, lines at the cost snapshot | `inventory` | `retail.usage:<id>` |
 | Stock-take loss | `stock_shrinkage`, value of the shortfall at cost | `inventory` | `retail.stocktake:<id>` |
 | Stock-take gain | `inventory`, value of the surplus at cost | `stock_shrinkage` | (same entry as the loss) |
+| Opening stock from the import, per branch | `inventory`, the branch's positive source balances at the product's current cost | `opening_balance_equity` | `retail.import_opening:<branch>` |
+
+Imported history (sales, purchases, adjustments, returns, usage, legacy balances) posts nothing
+(ADR-020 decision 9); see section 6.11.4.
 
 ### `retail_stock_movements` (RLS; append-only, `bms_app` SELECT, INSERT)
 
@@ -1406,3 +1414,44 @@ error. Daily profit per branch and day is the sum of `retail_sale_lines.line_tot
 `line_cost_minor` over the lines of completed (not voided) sales by `sale_date` (the append-only
 lines, never the sale header, review F10), less `retail_usage_reports.cost_total_minor` by
 `occurred_on`; snapshots only, never current prices.
+
+### 6.11.4 The pilot import (FR-RET-12; ADR-020 decision 9; #55)
+
+The `import-retail` command (chapter 13 section 13.13) writes through the modules' history ports,
+as `bms_app` under the tenant's row-level security:
+
+- **History documents** are rows of the tables above with `historical = true`, `created_by` the
+  import actor (`00000000-0000-0000-0000-000000000000`, not a staff account) and `created_at` the
+  source's time: one `retail_sales` row and line per sale (snapshots from the export, credit sales
+  unpaid, no `sale_entry_id` or `cost_entry_id`), one `retail_purchases` row and line per restock
+  (`payment_method` `cash`, no journal, so no supplier payable), one `retail_usage_reports` row and
+  line per usage or damage report (no `journal_entry_id`).
+- **Movements** are written by `StockLedger.recordHistorical(businessDate, movements)`:
+  `historical = true`, `occurred_at` the source's time, `business_date` the source row's date
+  (`sold_at`, `purchased_on`, `reported_at` in the tenant's zone), no oversell guard. Restocks the source recorded for a stock-take or a customer
+  return become `adjustment` (either sign) or `return` movements with `source_type`
+  `retail.import`, not purchases. One `legacy_balance` movement per branch and product, dated one
+  second before the earliest imported history, makes the balance equal the source's current
+  quantity; a negative source quantity is kept and reported. Its `business_date` is the import
+  date in the tenant's zone (Africa/Kampala for the pilot), the date the opening journal carries,
+  so a valuation `as_of` an earlier date counts the imported history by business date and no
+  legacy balance, on the same basis as the inventory account, which is still empty then.
+- **Product codes** are normalised by `RetailCatalogue.normaliseCode`, as the catalogue API does
+  (review F9), before they are matched or stored.
+- **Prices**: each product takes its cost and sell price from the product master, with an
+  `initial` history row. An `import` history row, dated at the restock, is written only where two
+  consecutive restocks of a product carried different prices.
+- **The opening journal**: one per branch (section 6.11.2), for the positive balances only.
+
+### `retail_import_refs` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+| Column | Type | Notes |
+|---|---|---|
+| `tenant_id`, `created_at` | standard | |
+| `source_file` | varchar(30) | `sales`, `purchases`, `usage`, or `opening` |
+| `source_ref` | varchar(100) | The export's own reference; for `opening`, the branch code |
+| `target_type`, `target_id` | | What the row became: `retail.sale`, `retail.purchase`, `retail.usage`, `retail.stock_movement` (the first movement of an adjustment or return), `core.journal_entry` |
+| `source_user` | varchar(200) | The source system's user, kept as entered; not a staff account |
+
+Primary key `(tenant_id, source_file, source_ref)`: a row already present is skipped, so a re-run
+of the same export adds nothing.
