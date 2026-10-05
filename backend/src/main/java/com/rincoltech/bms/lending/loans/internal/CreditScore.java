@@ -67,7 +67,9 @@ final class CreditScore {
             affordability = 0;
             flags.add("INCOME_NOT_DECLARED");
         } else {
-            BigDecimal q = BigDecimal.valueOf(in.monthlyInstalmentMinor() + in.monthlyObligationsMinor())
+            // Summed as BigDecimal: a long sum could overflow to a negative ratio and score as affordable.
+            BigDecimal q = BigDecimal.valueOf(in.monthlyInstalmentMinor())
+                    .add(BigDecimal.valueOf(in.monthlyObligationsMinor()))
                     .divide(BigDecimal.valueOf(in.declaredIncomeMinor()), MC);
             affordability = linearDown(q, LOW_Q, HIGH_Q, weights.get("affordability"));
             afford.put("ratio", q.setScale(4, RoundingMode.HALF_UP));

@@ -16,6 +16,7 @@ import com.rincoltech.bms.lending.members.MemberLookup.MemberSummary;
 import com.rincoltech.bms.lending.products.ProductCatalog;
 import com.rincoltech.bms.lending.products.ScheduleCalculator;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.time.Duration;
@@ -41,10 +42,12 @@ class AppraisalService {
 
     @Schema(name = "LoanAppraisalRequest")
     record AppraisalRequest(
-            @PositiveOrZero @Schema(description = "Defaults to the member's declared monthly income")
+            @PositiveOrZero
+            @Max(LoanApi.MAX_MONEY_MINOR)
+            @Schema(description = "Defaults to the member's declared monthly income")
             Long declaredMonthlyIncomeMinor,
 
-            @PositiveOrZero Long monthlyObligationsMinor,
+            @PositiveOrZero @Max(LoanApi.MAX_MONEY_MINOR) Long monthlyObligationsMinor,
             @Size(max = 2000) String visitNotes) {}
 
     @Schema(name = "LoanAppraisal")

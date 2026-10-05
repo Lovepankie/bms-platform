@@ -220,4 +220,31 @@ class LoanAppraisalIT extends LoanFixtures {
                         .getStatusCode())
                 .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
+
+    /**
+     * Appraisals are append-only, so an absurd amount must be refused before a row exists: each money
+     * input above the loan money bound is a 422 and the loan stays submitted with no appraisal.
+     */
+    @Test
+    void anAbsurdAmountIsRefusedBeforeAnythingIsWritten() {
+        String product = product("BOUND", false, false);
+        String member = member("Test Borrower 25", "0700000025", t.headOffice(), true);
+        String loan = submitted(member, product);
+        for (String field : List.of("declared_monthly_income_minor", "monthly_obligations_minor")) {
+            ResponseEntity<JsonNode> absurd = appraise(loan, "\"2\"", Map.of(field, Long.MAX_VALUE));
+            assertThat(absurd.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(absurd.getBody().get("code").asString()).isEqualTo("validation_failed");
+            assertThat(absurd.getBody().get("errors").findValuesAsString("field"))
+                    .containsExactly(field);
+        }
+        assertThat(asOfficer(HttpMethod.GET, LOANS + "/" + loan + "/appraisals", null, null)
+                        .getBody()
+                        .get("items"))
+                .isEmpty();
+        assertThat(asOfficer(HttpMethod.GET, LOANS + "/" + loan, null, null)
+                        .getBody()
+                        .get("status")
+                        .asString())
+                .isEqualTo("submitted");
+    }
 }

@@ -111,4 +111,16 @@ class CreditScoreTest {
         // A two-week bullet is under a month: divided by 1, not by a fraction.
         assertThat(CreditScore.monthly(600_000, "bullet", null, "week", 2)).isEqualTo(600_000);
     }
+
+    /**
+     * Instalment plus obligations beyond a long: the sum must not wrap to a negative ratio and score
+     * full affordability. It scores nothing, as any ratio above 0.60 does.
+     */
+    @Test
+    void anOverflowingSumIsNeverAffordable() {
+        Result r = CreditScore.score(
+                new Inputs(0, 0, 0, Long.MAX_VALUE, 600_000L, Long.MAX_VALUE, 0, 500_000, false, false, 0, false, null),
+                DEFAULT);
+        assertThat(points(r, "affordability")).isZero();
+    }
 }

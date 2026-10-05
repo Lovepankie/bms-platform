@@ -129,6 +129,11 @@ class LoanDecisionIT extends LoanFixtures {
                         .get("code")
                         .asString())
                 .isEqualTo("above_requested_principal");
+        ResponseEntity<JsonNode> absurd = decide(loan, manager, "\"3\"", approve(Long.MAX_VALUE, null));
+        assertThat(absurd.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(absurd)).isEqualTo("validation_failed");
+        assertThat(absurd.getBody().get("errors").findValuesAsString("field"))
+                .containsExactly("approved_principal_minor");
         assertThat(decide(loan, manager, "\"3\"", approve(null, 3))
                         .getBody()
                         .get("code")

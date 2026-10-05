@@ -70,7 +70,9 @@ final class LoanApi {
     record DecisionRequest(
             @NotNull @Pattern(regexp = "approve|reject") String decision,
 
-            @Positive @Schema(description = "Approve only; defaults to the requested principal, never above it")
+            @Positive
+            @Max(MAX_MONEY_MINOR)
+            @Schema(description = "Approve only; defaults to the requested principal, never above it")
             Long approvedPrincipalMinor,
 
             @Positive @Schema(description = "Approve only; defaults to the requested term, never above it")
