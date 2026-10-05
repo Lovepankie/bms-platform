@@ -146,7 +146,9 @@ for real; the stub is for curl and tests.
   `include_total=true` the response adds `"total"` (capped at 10,000; beyond that
   `"total_capped": true`).
 - Sorting: `?sort=<field>` or `?sort=-<field>`; each endpoint lists its sortable fields;
-  the cursor encodes the sort key plus `id` as a tiebreaker.
+  the cursor encodes the sort key plus `id` as a tiebreaker. Every list decodes it with the
+  kernel's one parser (`Cursor.decodeKey`): a cursor that is not base64url, has no `|`, has a
+  bad `id` or, on a timestamp-ordered list, a bad timestamp is 400 `malformed_request`, never a 500.
 - Filters are query parameters named after fields: `status=active&status=closed`
   (repeatable means OR), ranges as `<field>_from` and `<field>_to` (inclusive), free
   search as `q`.

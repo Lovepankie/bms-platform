@@ -265,11 +265,10 @@ class PurchasingService {
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         Instant afterCreated = null;
         UUID afterId = null;
-        String after = Cursor.decode(cursor).orElse(null);
+        Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
         if (after != null) {
-            String[] parts = after.split("\\|", 2);
-            afterCreated = Instant.parse(parts[0]);
-            afterId = UUID.fromString(parts[1]);
+            afterCreated = after.at();
+            afterId = after.id();
         }
         List<Purchase> rows = repo.page(filter, from, to, supplierId, afterCreated, afterId, size + 1);
         boolean more = rows.size() > size;

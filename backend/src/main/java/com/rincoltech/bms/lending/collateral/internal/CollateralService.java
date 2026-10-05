@@ -161,11 +161,10 @@ class CollateralService {
         List<UUID> branchFilter = principal.branchFilter("lending.collateral.read", branchIds);
         Instant afterCreated = null;
         UUID afterId = null;
-        String after = Cursor.decode(cursor).orElse(null);
+        Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
         if (after != null) {
-            String[] parts = after.split("\\|", 2);
-            afterCreated = Instant.parse(parts[0]);
-            afterId = UUID.fromString(parts[1]);
+            afterCreated = after.at();
+            afterId = after.id();
         }
         List<CollateralResponse> rows =
                 repo.page(branchFilter, memberId, types, statuses, afterCreated, afterId, size + 1);

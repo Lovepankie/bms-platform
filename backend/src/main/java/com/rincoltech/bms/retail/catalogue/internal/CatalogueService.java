@@ -156,16 +156,10 @@ class CatalogueService {
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         String afterCode = null;
         UUID afterId = null;
-        String after = Cursor.decode(cursor).orElse(null);
+        Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
         if (after != null) {
-            int bar = after.lastIndexOf('|');
-            try {
-                afterCode = after.substring(0, bar);
-                afterId = UUID.fromString(after.substring(bar + 1));
-            } catch (RuntimeException e) {
-                throw new ApiException(
-                        HttpStatus.BAD_REQUEST, "malformed_request", "Malformed request", "Invalid cursor.");
-            }
+            afterCode = after.sortKey();
+            afterId = after.id();
         }
         String q = query == null || query.isBlank() ? null : query.trim();
         List<Product> rows = repo.page(q, categoryId, active, branchId, afterCode, afterId, size + 1);

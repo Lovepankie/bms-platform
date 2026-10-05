@@ -27,7 +27,6 @@ import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeLine;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeLineRequest;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeRequest;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -87,13 +86,13 @@ class StockService {
     StockPage stock(UUID branchId, String query, boolean negativeOnly, Integer limit, String cursor) {
         UUID branch = branches.resolve("retail.stock.read", branchId);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
-        String[] after = splitCursor(cursor);
+        Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
         List<StockRow> rows = repo.stock(
                 branch,
                 query == null || query.isBlank() ? null : query.trim(),
                 negativeOnly,
-                after == null ? null : after[0],
-                after == null ? null : UUID.fromString(after[1]),
+                after == null ? null : after.sortKey(),
+                after == null ? null : after.id(),
                 size + 1);
         boolean more = rows.size() > size;
         List<StockRow> items = more ? rows.subList(0, size) : rows;
@@ -125,15 +124,15 @@ class StockService {
         Principal principal = CurrentPrincipal.require();
         List<UUID> filter = principal.branchFilter("retail.stock.read", branchIds);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
-        String[] after = splitCursor(cursor);
+        Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
         List<MovementRow> rows = repo.movements(
                 filter,
                 productId,
                 from,
                 to,
                 tenant.profile().timezone().getId(),
-                after == null ? null : Instant.parse(after[0]),
-                after == null ? null : UUID.fromString(after[1]),
+                after == null ? null : after.at(),
+                after == null ? null : after.id(),
                 size + 1);
         boolean more = rows.size() > size;
         List<MovementRow> items = more ? rows.subList(0, size) : rows;
@@ -324,18 +323,6 @@ class StockService {
 
     static boolean mayReadCost() {
         return CurrentPrincipal.require().hasPermission(PROFIT_READ);
-    }
-
-    private static String[] splitCursor(String cursor) {
-        String after = Cursor.decode(cursor).orElse(null);
-        if (after == null) {
-            return null;
-        }
-        int bar = after.lastIndexOf('|');
-        if (bar < 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "malformed_request", "Malformed request", "Invalid cursor.");
-        }
-        return new String[] {after.substring(0, bar), after.substring(bar + 1)};
     }
 
     private static String blankToNull(String s) {
