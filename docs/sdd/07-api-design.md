@@ -209,7 +209,7 @@ from identity, tenancy and approvals (increment 1): `weak_password`, `invitation
 `invitation_expired`, `invalid_mfa_code` (enrolment and recovery code replacement),
 `cannot_deactivate_self`, `cannot_reset_own_mfa`, `last_tenant_admin`, `not_a_tenant_admin`,
 `head_office_required`, `invalid_tenant`, `module_not_allowed`, `unknown_action_type`,
-`approval_execution_failed`.
+`approval_execution_failed`; and from retail (ADR-020): `insufficient_stock`, `price_below_cost`.
 
 Entries of the `errors` array carry their own `code`: `invalid` (a Bean Validation failure;
 the message says which), `required`, `unknown_branch` (a branch that does not exist, is inactive
@@ -633,7 +633,7 @@ branch when the permission's scope has exactly one; otherwise 422 `branch_requir
 | POST | `/retail/stocktakes` | `retail.stocktake.commit` | `{branch_id?, lines: [{product_id, counted_qty}], note?}`; returns each line's `expected_qty` and `variance_qty`. FR-RET-08 |
 | GET | `/retail/stocktakes/{stocktake_id}` | `retail.stock.read` | Draft or committed |
 | POST | `/retail/stocktakes/{stocktake_id}/commit` | `retail.stocktake.commit` | Adjustment movements against the balance at commit, posted at cost; 409 `stocktake_committed` |
-| POST | `/retail/sales` | `retail.sale.create` | **M**. `{branch_id?, sale_date?, payment_method, customer_id?, buyer_name?, buyer_contact?, due_date?, lines: [{product_id, qty, unit_price_minor?}]}`; 422 `insufficient_stock` when the tenant forbids negative stock. Response: the sale with `lines`, `total_minor`, `paid_minor`, `balance_minor`, `cost_total_minor*`, `profit_minor*`, and per line `unit_cost_minor*`, `line_cost_minor*`. FR-RET-04 |
+| POST | `/retail/sales` | `retail.sale.create` | **M**. `{branch_id?, sale_date?, payment_method, customer_id?, buyer_name?, buyer_contact?, due_date?, lines: [{product_id, qty, unit_price_minor?}]}`; 422 `insufficient_stock` when a line exceeds the branch's stock (always; ADR-020 decision 4); 422 `price_below_cost` when a line's unit price is not above the product's cost and the caller lacks `retail.price.below_cost` (the message never carries the cost; ADR-020 decision 5). Response: the sale with `lines`, `total_minor`, `paid_minor`, `balance_minor`, `cost_total_minor*`, `profit_minor*`, and per line `unit_cost_minor*`, `line_cost_minor*`. FR-RET-04 |
 | GET | `/retail/sales` | `retail.sale.read` | `branch_id` (repeatable, scoped), `from`, `to`, `customer_id`, `limit`, `cursor` |
 | GET | `/retail/sales/{sale_id}` | `retail.sale.read` | 404 outside scope |
 | POST | `/retail/sales/{sale_id}/void` | `retail.sale.void` | `{reason}`; 409 `sale_voided`; 422 `sale_has_payments` for a credit sale with payments |
@@ -648,7 +648,7 @@ Built (#53, purchasing, usage and payments):
 | GET, POST | `/retail/suppliers` | `retail.purchase.create` | `{name, contact?}`; 409 `duplicate_supplier` |
 | POST | `/retail/purchases` | `retail.purchase.create` | **M**. `{supplier_id?, purchased_on, payment_method: cash, bank or credit, note?, lines: [{product_id, cost_minor, sell_minor?, qty_by_branch: [{branch_id, qty}]}]}`; every branch must be in the caller's scope; sets the product prices and history atomically, latest line wins. FR-RET-06 |
 | GET | `/retail/purchases` | `retail.purchase.create` | `from`, `to`, `supplier_id`, `limit`, `cursor`; purchases that moved stock into the caller's branches |
-| POST | `/retail/usage` | `retail.usage.report` | **M**. `{branch_id?, kind: used or damaged, reason, occurred_on?, lines: [{product_id, qty}]}`; response `cost_total_minor*`, per line `unit_cost_minor*`, `line_cost_minor*`. FR-RET-07 |
+| POST | `/retail/usage` | `retail.usage.report` | **M**. `{branch_id?, kind: used or damaged, reason, occurred_on?, lines: [{product_id, qty}]}`; response `cost_total_minor*`, per line `unit_cost_minor*`, `line_cost_minor*`; 422 `insufficient_stock` past the branch's stock (ADR-020 decision 4). FR-RET-07 |
 | POST | `/retail/sales/{sale_id}/payments` | `retail.sale.create` | **M**. `{amount_minor, method: cash, mobile_money or bank, paid_on?}`; `{payment, sale_paid_minor, sale_balance_minor}`; 422 `payment_exceeds_balance`, `sale_not_payable`. FR-RET-05 |
 | GET | `/retail/sales/{sale_id}/payments` | `retail.sale.read` | |
 

@@ -12,8 +12,9 @@ to three places (`"3.500"`), ids are UUIDs, dates are ISO 8601. A user without
 
 `retail.catalogue.manage`, `retail.price.edit`, `retail.customer.manage`, `retail.sale.create`,
 `retail.sale.read`, `retail.sale.void`, `retail.stock.read`, `retail.stocktake.commit`,
-`retail.purchase.create`, `retail.usage.report`, `retail.profit.read`.
-Sales role: sale create and read, stock read, usage report, customer manage. Admin role: all.
+`retail.purchase.create`, `retail.usage.report`, `retail.profit.read`, `retail.price.below_cost`.
+Sales role: sale create and read, stock read, usage report, customer manage. Admin role: all
+except `retail.price.below_cost`, which no default role holds.
 
 ## Catalogue
 
@@ -40,7 +41,7 @@ Sales role: sale create and read, stock read, usage report, customer manage. Adm
 
 | Method and path | Purpose | Notes |
 |---|---|---|
-| `POST /sales` | Record a sale | body: `{branchId?, saleDate?, paymentMethod: "cash"|"mobile_money"|"bank"|"credit", customerId?, buyerName?, buyerContact?, dueDate?, lines:[{productId, qty, unitPriceMinor?}]}`; unit price defaults to the product's sell price; response has lines, `totalMinor`, `balanceMinor`, and `profitMinor*` |
+| `POST /sales` | Record a sale | body: `{branchId?, saleDate?, paymentMethod: "cash"|"mobile_money"|"bank"|"credit", customerId?, buyerName?, buyerContact?, dueDate?, lines:[{productId, qty, unitPriceMinor?}]}`; unit price defaults to the product's sell price; response has lines, `totalMinor`, `balanceMinor`, and `profitMinor*`; 422 `insufficient_stock` when a line exceeds the branch's stock (always, no setting); 422 `price_below_cost` when a unit price is not above the product's cost, unless the caller holds `retail.price.below_cost`; the message never carries the cost |
 | `GET /sales?branchId=&from=&to=&customerId=` and `GET /sales/{id}` | Read | |
 | `POST /sales/{id}/void` | Void | body `{reason}`; reverses movements and journals; needs `retail.sale.void` |
 | `POST /sales/{id}/payments` | Pay a credit sale | body `{amountMinor, method, paidOn}` |
@@ -53,7 +54,7 @@ Sales role: sale create and read, stock read, usage report, customer manage. Adm
 | `GET/POST /suppliers` | Suppliers | |
 | `POST /purchases` | Restock | body: `{supplierId?, purchasedOn, paymentMethod: "cash"|"bank"|"credit", lines:[{productId, costMinor, sellMinor?, qtyByBranch:[{branchId, qty}]}]}`; sets the product prices atomically and writes history |
 | `GET /purchases?from=&to=&supplierId=` | Read | |
-| `POST /usage` | Usage or damage | body: `{branchId, kind: "used"|"damaged", reason, lines:[{productId, qty}]}` |
+| `POST /usage` | Usage or damage | body: `{branchId, kind: "used"|"damaged", reason, lines:[{productId, qty}]}`; 422 `insufficient_stock` past the branch's stock |
 
 ## Reports
 

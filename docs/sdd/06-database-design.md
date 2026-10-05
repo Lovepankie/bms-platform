@@ -262,7 +262,9 @@ Until the `bms_platform` role exists, `bms_app` holds the grants on the platform
 
 (std) `settings jsonb NOT NULL`, `UNIQUE (tenant_id)`. The JSON holds only the keys a tenant
 admin has set, validated against a typed schema in the service; every read applies the defaults
-below to the rest. A tenant without a row reads all defaults. Keys and defaults:
+below to the rest. A tenant without a row reads all defaults. A stored key not in the table below
+(such as the retired `retail_allow_negative_stock`, #64) is ignored on read and does not fail a
+write. Keys and defaults:
 
 | Key | Type | Default | Requirement |
 |---|---|---|---|
@@ -278,7 +280,6 @@ below to the rest. A tenant without a row reads all defaults. Keys and defaults:
 | `appraisal_weights` | object | section 3.18.1 defaults | FR-ORG-04 |
 | `disabled_collateral_types` | string array | empty | FR-COL-05 |
 | `require_mfa_all_staff` | boolean | false | FR-IAM-06 |
-| `retail_allow_negative_stock` | boolean | true | FR-RET-03 (ADR-020 decision 4) |
 
 ### `branches` (RLS)
 
@@ -1187,7 +1188,9 @@ functions now call when the module is switched on. `V11__retail_stock_sales.sql`
 `retail_stocktake_lines`, `retail_customers`, `retail_sales` and `retail_sale_lines` (append-only).
 `V12__retail_purchasing_usage.sql` (#53) creates `retail_suppliers`, `retail_purchases` and
 `retail_purchase_lines`, `retail_usage_reports` and `retail_usage_lines`, and
-`retail_sale_payments`, all but suppliers append-only.
+`retail_sale_payments`, all but suppliers append-only. `V13__retail_price_below_cost.sql` (#64)
+adds the `retail.price.below_cost` permission to the catalogue and grants it to no role. The
+retired setting `retail_allow_negative_stock` needs no migration: a stored key is ignored on read.
 
 ## 6.10 Open items
 

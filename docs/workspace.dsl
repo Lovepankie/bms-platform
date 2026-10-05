@@ -176,7 +176,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.retailSales -> bms.api.retailStock "Moves stock; posts through the retail books; claims the idempotency key"
         bms.api.retailStock -> bms.api.retailCatalogue "Reads the product cost for stock-take valuation"
         bms.api.retailStock -> bms.api.ledger "Posts and reverses entries by system key, one per branch, in the same transaction"
-        bms.api.retailStock -> bms.api.tenancy "Reads retail_allow_negative_stock; resolves the branch"
+        bms.api.retailStock -> bms.api.tenancy "Resolves the branch"
         bms.api.retailStock -> bms.api.jobs "Runs the nightly stock reconciliation per retail tenant"
         bms.api.retailStock -> bms.db "Append-only movements and balances under a row lock"
         bms.api.retailSales -> bms.api.audit "Writes audit rows"
