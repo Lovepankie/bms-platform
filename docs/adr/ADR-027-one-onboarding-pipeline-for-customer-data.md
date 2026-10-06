@@ -1,4 +1,4 @@
-# ADR-025: One onboarding pipeline for customer data: quarantined staging, canonical templates with versioned mappings, resumable maker-checker commit
+# ADR-027: One onboarding pipeline for customer data: quarantined staging, canonical templates with versioned mappings, resumable maker-checker commit
 
 ## Status
 

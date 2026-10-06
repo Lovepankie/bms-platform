@@ -1,7 +1,7 @@
 # Runbook template: customer data cutover
 
 **Applies to:** every tenant onboarding with existing data · **Specification:**
-`docs/specs/customer-data-onboarding.md` · **Decision:** ADR-025 · **Design:** SDD chapter 13 ·
+`docs/specs/customer-data-onboarding.md` · **Decision:** ADR-027 · **Design:** SDD chapter 13 ·
 **Related:** `docs/runbooks/import-retail.md`, `docs/runbooks/restore-from-backup.md`,
 `docs/runbooks/onboard-tenant.md`
 

@@ -1,6 +1,6 @@
 # Customer data onboarding
 
-**Status:** Draft · **Owner:** Hillary · **Issue:** #125 · **Decision:** ADR-025 ·
+**Status:** Draft · **Owner:** Hillary · **Issue:** #125 · **Decision:** ADR-027 ·
 **Design:** SDD chapter 13 (section 13.14 summarises this spec) · **Runbook:**
 `docs/runbooks/customer-data-cutover.md`
 

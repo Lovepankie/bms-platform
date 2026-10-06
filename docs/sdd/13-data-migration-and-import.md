@@ -14,7 +14,7 @@ preview, commit, reconciliation. The pilot register is its first **template**,
 `pilot_loan_register_v1`, registered by the lending module (chapter 5 section 5.4.3).
 Requirements: FR-IMP-01 to FR-IMP-09, FR-GL-09.
 
-ADR-025 makes this framework the one onboarding pipeline for every tenant's data, with canonical
+ADR-027 makes this framework the one onboarding pipeline for every tenant's data, with canonical
 templates per vertical and versioned mappings per customer sheet (section 13.14,
 `docs/specs/customer-data-onboarding.md`).
 
@@ -571,10 +571,10 @@ cases (#73): a price edited through the API between two runs survives the re-run
 history row and the product counted as existing; a zero-difference balance is existing on both
 runs; a code that NFKC makes longer than 40 characters is a skipped row, not a failed file.
 
-## 13.14 Customer data onboarding for every tenant (ADR-025; #125)
+## 13.14 Customer data onboarding for every tenant (ADR-027; #125)
 
 Sections 13.1 to 13.12 design the framework for one lending sheet; section 13.13 describes the
-retail command. ADR-025 makes the framework the one pipeline for every tenant's data, and
+retail command. ADR-027 makes the framework the one pipeline for every tenant's data, and
 `docs/specs/customer-data-onboarding.md` specifies it; the operator's procedure is the template
 `docs/runbooks/customer-data-cutover.md`. What changes in this chapter's design:
 
