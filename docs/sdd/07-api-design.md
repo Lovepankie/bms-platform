@@ -757,6 +757,85 @@ destination branch: the same cost is posted to both branches' inventory accounts
 `retail.transfer` and `source_id` the transfer; a void adds the opposite kinds with `source_type`
 `retail.transfer_void` and `reverses_movement_id` set.
 
+### 7.11.21 Retail cash book (`/retail`, proposed, ADR-022)
+
+**Proposed, not built:** the contract the build must meet, and the source of `openapi.json` after it.
+Refused with 404 `module_not_enabled` unless retail is switched on. Conventions are those of section
+7.11.20: snake_case, branch scope on every row (ADR-017, 404 outside scope), `*` fields absent (not
+null) without `retail.profit.read`, **M** requires `Idempotency-Key` (section 7.8). A request for one
+branch takes `branch_id`, or the caller's one branch when the permission's scope has exactly one;
+otherwise 422 `branch_required`. Dates are business dates in the tenant's zone, default today, never in
+the future (422 `future_date`). Every record in a response carries `by`, `at`, `voided`, `historical`.
+Every void takes `{reason}`, is **M**, needs `retail.cashbook.void`, and is 409 `already_voided` the
+second time.
+
+Lists and the expense setup (FR-RET-17):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/expense-categories` | `retail.cashbook.read` | `{items: [{id, name, expense_account_id, active, items: [{id, name, requires_explanation, active}]}]}`; `active` filter |
+| POST, PATCH | `/retail/expense-categories` | `retail.expense.manage` | `{name, expense_account_id?}`; 409 `duplicate_category`; PATCH takes `If-Match` |
+| POST, PATCH | `/retail/expense-categories/{category_id}/items` | `retail.expense.manage` | `{name, requires_explanation?}`; 409 `duplicate_item` |
+| GET | `/retail/cash-parties` | `retail.cashbook.read` | `query`, `kind`, `limit` |
+| POST | `/retail/cash-parties` | `retail.expense.record` or `retail.advance.create` | `{name, contact?, kind}`; 409 `duplicate_party` |
+
+Daily savings (FR-RET-18 to FR-RET-20):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/savings/suggestion` | `retail.savings.record` | `branch_id?`, `date?`. `{branch_id, business_date, total_sold_minor, suggested_minor, daily_profit_minor*, existing_id}`; `existing_id` is the active record for the day, if any |
+| POST | `/retail/savings` | `retail.savings.record` | **M**. `{branch_id?, business_date?, amount_minor?, overwrite_reason?}`; an omitted amount takes the suggestion; a differing amount needs `retail.savings.overwrite` (403) and a reason (422 `reason_required`); 409 `savings_exists` |
+| GET | `/retail/savings` | `retail.cashbook.read` | `branch_id` (repeatable), `from`, `to`, `include_voided`; row `{id, branch_id, business_date, amount_minor, total_sold_minor, overwritten, suggested_minor*, by, at}`; grouped client-side by shop, year and month |
+| POST | `/retail/savings/{savings_id}/void` | `retail.cashbook.void` | Reverses the entry and frees the day |
+
+Cash banked (FR-RET-21 to FR-RET-23):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/bankings/expected` | `retail.banking.record` | `branch_id?`, `date?`. `{branch_id, business_date, cash_takings_minor, savings_minor, expenses_minor, advances_out_minor, repayments_in_minor, expected_minor, banked_so_far_minor}`; the form shows it and prefills |
+| POST | `/retail/bankings` | `retail.banking.record` | **M**. `{branch_id?, business_date?, amount_minor, banked_at?, reference?}`; stores `expected_minor`; response adds `difference_minor`, `flag` and `warnings: [cash_below_banked?]`; never refused for exceeding cash |
+| GET | `/retail/bankings` | `retail.cashbook.read` | `branch_id`, `from`, `to`, `include_voided`, `limit`, `cursor` |
+| POST | `/retail/bankings/{banking_id}/void` | `retail.cashbook.void` | |
+| POST | `/retail/withdrawals` | `retail.withdrawal.record` | **M**. `{branch_id?, business_date?, amount_minor, withdrawn_at?, purpose?}`; response may carry `warnings: [bank_balance_negative]` |
+| GET | `/retail/withdrawals` | `retail.cashbook.read` | Same filters |
+| POST | `/retail/withdrawals/{withdrawal_id}/void` | `retail.cashbook.void` | |
+
+Expenses (FR-RET-24):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/retail/expenses` | `retail.expense.record` | **M**. `{branch_id?, business_date?, category_id, item_id, party_id?, amount_minor, explanation?, receipt_document_id?}`; 422 `item_not_in_category`, `explanation_required`, `category_inactive` |
+| GET | `/retail/expenses` | `retail.cashbook.read` | `branch_id`, `from`, `to`, `category_id`, `item_id`, `include_voided`, `limit`, `cursor` |
+| POST | `/retail/expenses/{expense_id}/void` | `retail.cashbook.void` | |
+
+Advances and repayments (FR-RET-26):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/retail/advances` | `retail.advance.create` | **M**. `{branch_id?, business_date?, party_id, taken_by_party_id?, principal_minor, purpose?}`; response has `advance_no` |
+| GET | `/retail/advances` | `retail.cashbook.read` | `branch_id`, `party_id`, `open_only` (balance above zero, what the repayment form lists), `from`, `to`; row adds `repaid_minor`, `balance_minor` |
+| GET | `/retail/advances/{advance_id}` | `retail.cashbook.read` | With its repayments |
+| POST | `/retail/advances/{advance_id}/repayments` | `retail.advance.repay` | **M**. `{amount_minor, method: cash, mobile_money or bank, paid_on?}`; 422 `repayment_exceeds_balance`, `advance_settled`; returns the new balance |
+| POST | `/retail/advances/{advance_id}/void` | `retail.cashbook.void` | 409 `advance_has_repayments` |
+| POST | `/retail/advances/{advance_id}/repayments/{repayment_id}/void` | `retail.cashbook.void` | |
+
+Reports (FR-RET-23, FR-RET-27, FR-RET-29), all `branch_id` (repeatable, scoped), `from`, `to` (default
+the last 30 days, at most 366), also `format=csv` through the report runs of section 7.11.8:
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/reports/cash/daily` | `retail.cashbook.read` | Per branch and day: `opening_minor`, `cash_takings_minor`, `savings_minor`, `expenses_minor`, `advances_out_minor`, `repayments_in_minor`, `withdrawals_in_minor`, `banked_minor`, `closing_minor`, `other_movements_minor`, `expected_to_bank_minor`, `unbanked_running_minor`, `ledger_basis`; `daily_profit_minor*` |
+| GET | `/retail/reports/cash/banking` | `retail.cashbook.read` | Per branch and day: `expected_minor`, `banked_minor`, `difference_minor`, `flag` (`ok`, `shortfall`, `surplus`, `not_banked`), `unbanked_running_minor`, `entries: [{id, amount_minor, banked_at, by}]`; filter `flag` |
+| GET | `/retail/reports/cash/expenses` | `retail.cashbook.read` | `group_by` (`category`, `item`, `branch`, `month`), totals, count; no voided rows |
+| GET | `/retail/reports/cash/savings` | `retail.cashbook.read` | Per branch and day `amount_minor`, `total_sold_minor`, `overwritten`; `suggested_minor*`, `daily_profit_minor*` |
+| GET | `/retail/reports/cash/advances` | `retail.cashbook.read` | Outstanding by party: principal, repaid, balance, oldest advance date |
+
+Error codes added to section 7.7: `savings_exists`, `reason_required`, `explanation_required`,
+`item_not_in_category`, `category_inactive`, `duplicate_category`, `duplicate_item`,
+`duplicate_party`, `repayment_exceeds_balance`, `advance_settled`, `advance_has_repayments`,
+`already_voided`, `future_date`. The cash book has no import endpoint; its history comes through the
+`import-retail` command (chapter 13 section 13.13).
+
 ## 7.12 Example: record a repayment
 
 ```http

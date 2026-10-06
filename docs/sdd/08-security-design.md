@@ -194,6 +194,16 @@ platform API and holds no tenant permissions.
 | `retail.purchase.create` | Y | | | | | | | |
 | `retail.usage.report` | Y | | | | | | | Y |
 | `retail.profit.read` | Y | | | | | | | |
+| `retail.cashbook.read` | Y | | | | | | | Y |
+| `retail.savings.record` | Y | | | | | | | Y |
+| `retail.savings.overwrite` | Y | | | | | | | Y |
+| `retail.banking.record` | Y | | | | | | | Y |
+| `retail.expense.record` | Y | | | | | | | Y |
+| `retail.expense.manage` | Y | | | | | | |  |
+| `retail.withdrawal.record` | Y | | | | | | |  |
+| `retail.advance.create` | Y | | | | | | |  |
+| `retail.advance.repay` | Y | | | | | | |  |
+| `retail.cashbook.void` | Y | | | | | | |  |
 
 Notes:
 
@@ -217,6 +227,17 @@ Notes:
   user with profit read at branch A only sees no cost on branch B's stock, movements, sales or
   valuation (review F5); tenant-wide products and price history need it in any branch. The sales
   role holds no `core.*` permission; the PWA reads the user's branches from `/me`.
+- Retail cash book (ADR-022, **proposed**, FR-RET-32): the ten `retail.cashbook.*`, `retail.savings.*`,
+  `retail.banking.record`, `retail.expense.*`, `retail.withdrawal.record` and `retail.advance.*`
+  rows above are the proposed catalogue, not yet seeded. The tenant admin holds all of them; the
+  sales role holds read, savings record and overwrite, banking record and expense record for its
+  assigned branches, which is the pilot's behaviour (open question 5 may remove the overwrite).
+  Withdrawals and advances (both ways) are owner or admin only, a deliberate change from the pilot,
+  where every signed-in user could record advances and their payments (open question 6). The day's
+  profit, the savings suggestion and `suggested_minor` need `retail.profit.read` and are absent, not
+  null, without it; the audit payload of a savings overwrite carries neither (FR-RET-19). Voiding
+  needs `retail.cashbook.void`. No cash book approval action is registered (open question 3); if one
+  is, its row joins section 8.4 with a threshold set first.
 - `retail.stock.transfer` (issue #84, migration V22, FR-RET-16) moves stock from one branch to
   another. It is money-moving (it posts an inventory entry at each branch) and goes to the roles
   that restock, which in the default roles is the tenant admin only. Its branch scope is checked

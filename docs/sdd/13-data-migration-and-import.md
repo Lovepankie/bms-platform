@@ -566,3 +566,22 @@ no row; a dry run writes nothing and prints the same report; another tenant is u
 cases (#73): a price edited through the API between two runs survives the re-run with no new
 history row and the product counted as existing; a zero-difference balance is existing on both
 runs; a code that NFKC makes longer than 40 characters is a skipped row, not a failed file.
+
+### 13.13.1 Cash book tabs (proposed, ADR-022; FR-RET-30)
+
+**Proposed, not built.** The same command, the same JSON Lines contract and the same rules as above,
+extended with the cash book files (the shapes are in `docs/specs/retail-pilot-data-dictionary.md`
+section 5), imported after `balances` in this order: `cash_parties`, `expense_categories`, `savings`,
+`expenses`, `banking`, `withdrawals`, `advances`, `advance_payments`, `cash_balances`.
+
+| Export | Becomes |
+|---|---|
+| Expense categories and items, parties | Matched by name ignoring case, else created and reported. Never guessed: the real lists come from the pilot app's expense categories tab |
+| Daily savings, expenses, banked, withdrawals | Historical rows (`historical = true`), `created_by` the import actor, `occurred_at` from the source, `business_date` the source's date in the tenant's zone, **no journals**; keyed by `source_ref` in `retail_import_refs`. A second savings row for one shop and day is reported and skipped (the unique rule), never merged |
+| Advances and their payments | Historical advances with their repayments; the number kept is the source id as `advance_no` when it fits, else the next sequence value with the source id in the note; a payment against an unknown advance is reported and skipped; `repaid_minor` equals the sum of the payments, and a payment above the principal is reported and skipped |
+| `cash_balances` | One opening journal per branch at the cutover date: debit `cash_on_hand`, `bank`, `savings_reserve` as given, and `owner_advances` for the outstanding balance of the imported advances; credit `opening_balance_equity` (ADR-020 decision 9). A branch with no row gets no entry |
+
+A row with an unknown branch, a missing field, a future date or a malformed amount is skipped and listed
+with its file and line (13.2). `--dry-run` covers these files too. A wrong committed run is reversed from
+the verified pre-import backup, like the others.
+
