@@ -90,6 +90,100 @@ class StockRepository {
                 .list();
     }
 
+    record ProductTotal(
+            UUID id,
+            String code,
+            String description,
+            UUID categoryId,
+            String category,
+            String unit,
+            long sellMinor,
+            long costMinor,
+            BigDecimal total,
+            boolean negative) {}
+
+    /**
+     * Products with their quantity summed over {@code branchIds} (the caller's scope; never empty),
+     * ordered by code. An inactive product shows only while it holds a quantity in those branches.
+     */
+    List<ProductTotal> allBranches(
+            List<UUID> branchIds,
+            String query,
+            UUID categoryId,
+            boolean negativeOnly,
+            String afterCode,
+            UUID afterId,
+            int limit) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT p.id, p.code, p.description, p.category_id, c.name AS category, u.name AS unit, p.sell_minor,
+                       p.cost_minor, coalesce(t.total, 0) AS total, coalesce(t.negs, 0) > 0 AS negative
+                  FROM retail_products p
+                  JOIN retail_units u ON u.id = p.unit_id
+                  JOIN retail_categories c ON c.id = p.category_id
+                  LEFT JOIN (SELECT product_id, sum(qty) AS total, count(*) FILTER (WHERE qty < 0) AS negs,
+                                    count(*) FILTER (WHERE qty <> 0) AS held
+                               FROM retail_stock_balances WHERE branch_id IN (:branchIds)
+                              GROUP BY product_id) t ON t.product_id = p.id
+                 WHERE (p.active OR coalesce(t.held, 0) > 0)
+                """);
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("branchIds", branchIds);
+        if (query != null) {
+            sql.append(" AND (p.code ILIKE :q OR p.description ILIKE :q OR c.name ILIKE :q)");
+            params.put(
+                    "q", "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+        }
+        if (categoryId != null) {
+            sql.append(" AND p.category_id = :categoryId");
+            params.put("categoryId", categoryId);
+        }
+        if (negativeOnly) {
+            sql.append(" AND coalesce(t.negs, 0) > 0");
+        }
+        if (afterCode != null) {
+            sql.append(" AND (p.code, p.id) > (:afterCode, :afterId)");
+            params.put("afterCode", afterCode);
+            params.put("afterId", afterId);
+        }
+        sql.append(" ORDER BY p.code, p.id LIMIT :limit");
+        params.put("limit", limit);
+        return jdbc.sql(sql.toString())
+                .params(params)
+                .query((rs, n) -> new ProductTotal(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("code"),
+                        rs.getString("description"),
+                        rs.getObject("category_id", UUID.class),
+                        rs.getString("category"),
+                        rs.getString("unit"),
+                        rs.getLong("sell_minor"),
+                        rs.getLong("cost_minor"),
+                        rs.getBigDecimal("total"),
+                        rs.getBoolean("negative")))
+                .list();
+    }
+
+    /** Balances of the given products in the given branches, keyed by product then branch. */
+    Map<UUID, Map<UUID, BigDecimal>> balances(List<UUID> productIds, List<UUID> branchIds) {
+        Map<UUID, Map<UUID, BigDecimal>> out = new LinkedHashMap<>();
+        if (productIds.isEmpty()) {
+            return out;
+        }
+        jdbc.sql("""
+                        SELECT product_id, branch_id, qty FROM retail_stock_balances
+                         WHERE product_id IN (:products) AND branch_id IN (:branchIds)
+                        """)
+                .param("products", productIds)
+                .param("branchIds", branchIds)
+                .query((rs, n) -> {
+                    out.computeIfAbsent(rs.getObject("product_id", UUID.class), k -> new LinkedHashMap<>())
+                            .put(rs.getObject("branch_id", UUID.class), rs.getBigDecimal("qty"));
+                    return null;
+                })
+                .list();
+        return out;
+    }
+
     /** {@code branchIds} is already intersected with the caller's scope; null means every branch. */
     List<MovementRow> movements(
             List<UUID> branchIds,

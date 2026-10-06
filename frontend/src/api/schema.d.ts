@@ -1675,6 +1675,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/stock/all-branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every product with its balance in each branch the caller may read (#144) */
+        get: operations["listRetailStockAllBranches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/stock/movements": {
         parameters: {
             query?: never;
@@ -3139,6 +3156,43 @@ export interface components {
             member_no?: string;
             relationship?: string;
         };
+        /** @description One product with its balance in every branch of the page */
+        RetailAllBranchesRow: {
+            /** @description One entry per branch of the page, in the page's branch order */
+            balances?: components["schemas"]["RetailBranchBalance"][];
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
+            code?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch of the page
+             */
+            cost_minor?: number;
+            description?: string;
+            /** @description True when any branch's balance is below zero */
+            negative?: boolean;
+            /** Format: uuid */
+            product_id?: string;
+            /** Format: int64 */
+            sell_minor?: number;
+            /** @description The sum over the branches of the page */
+            total_qty?: string;
+            unit?: string;
+        };
+        RetailAllBranchesStock: {
+            branches?: components["schemas"]["RetailStockBranch"][];
+            items?: components["schemas"]["RetailAllBranchesRow"][];
+            next_cursor?: string;
+        };
+        /** @description One entry per branch of the page, in the page's branch order */
+        RetailBranchBalance: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** @description Below zero in this branch */
+            negative?: boolean;
+            qty?: string;
+        };
         RetailBranchQty: {
             /** Format: uuid */
             branch_id: string;
@@ -3526,6 +3580,13 @@ export interface components {
              * @description Defaults to today; not in the future
              */
             sale_date?: string;
+        };
+        RetailStockBranch: {
+            code?: string;
+            head_office?: boolean;
+            /** Format: uuid */
+            id?: string;
+            name?: string;
         };
         RetailStockMovement: {
             /** Format: date-time */
@@ -7147,6 +7208,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailStockPage"];
+                };
+            };
+        };
+    };
+    listRetailStockAllBranches: {
+        parameters: {
+            query?: {
+                query?: string;
+                category_id?: string;
+                negative_only?: boolean;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAllBranchesStock"];
                 };
             };
         };

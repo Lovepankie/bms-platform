@@ -1,5 +1,5 @@
 import type {
-  Category, Customer, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockRow, Supplier, Transfer, Usage, Valuation,
+  AllBranchesRow, Category, Customer, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockRow, Supplier, Transfer, Usage, Valuation,
   ValuationRow,
 } from './retail';
 import { RetailError, businessToday } from './retail';
@@ -15,6 +15,10 @@ import type { Me } from './client';
 
 const BRANCH_A = '00000000-0000-4000-8000-0000000000a1';
 const BRANCH_B = '00000000-0000-4000-8000-0000000000a2';
+const MOCK_BRANCHES = [
+  { id: BRANCH_A, code: 'BR1', name: 'Test Branch A', is_head_office: true },
+  { id: BRANCH_B, code: 'BR2', name: 'Test Branch B', is_head_office: false },
+];
 
 const SALES_PERMISSIONS = [
   'retail.sale.create', 'retail.sale.read', 'retail.stock.read', 'retail.usage.report', 'retail.customer.manage',
@@ -33,10 +37,7 @@ export function mockMe(role: string | undefined): Me & { modules: string[] } {
     permissions: role === 'sales' ? SALES_PERMISSIONS : ADMIN_PERMISSIONS,
     all_branches: role !== 'sales',
     default_branch_id: BRANCH_A,
-    branches: [
-      { id: BRANCH_A, code: 'BR1', name: 'Test Branch A', is_head_office: true },
-      { id: BRANCH_B, code: 'BR2', name: 'Test Branch B', is_head_office: false },
-    ],
+    branches: MOCK_BRANCHES,
     mfa_enabled: false,
     unused_recovery_codes: 8,
     modules: ['retail'],
@@ -156,6 +157,19 @@ export function createMockRetail(): RetailApi {
 
     listCategories: () => delay([...CATEGORIES]),
 
+    listStockAllBranches: ({ query, categoryId: category, negativeOnly }) =>
+      delay({
+        branches: MOCK_BRANCHES.map((b) => ({ id: b.id, code: b.code, name: b.name, head_office: b.is_head_office })),
+        items: [...products.values()].filter((p) => matches(p, query) && (!category || categoryId(p.category) === category)).map((p): AllBranchesRow => {
+          const balancesMilli = MOCK_BRANCHES.map((b) => bal(b.id, p.id));
+          return cost({
+            product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit,
+            total_qty: fromMilli(balancesMilli.reduce((x, y) => x + y, 0)), negative: balancesMilli.some((m) => m < 0), sell_minor: p.sellMinor,
+            balances: MOCK_BRANCHES.map((b, i) => ({ branch_id: b.id, qty: fromMilli(balancesMilli[i] ?? 0), negative: (balancesMilli[i] ?? 0) < 0 })),
+          }, { cost_minor: p.costMinor });
+        }).filter((r) => !negativeOnly || r.negative),
+      }),
+
     listStock: ({ branchId, query, categoryId: category, negativeOnly }) =>
       delay([...products.values()].filter((p) => matches(p, query) && (!category || categoryId(p.category) === category)).map((p): StockRow => {
         const milli = bal(branchId, p.id);
@@ -254,27 +268,26 @@ export function createMockRetail(): RetailApi {
     },
 
     // Stock value is read with retail.stock.read; its cost and profit columns need retail.profit.read.
+    // Without a branch it covers every branch, with a total per branch, as the server does (#144).
     valuation: ({ branchId, asOf }) => {
-      const bp = (profit: number, atCost: number): number | undefined => (atCost > 0 ? Math.round((profit * 10000) / atCost) : undefined);
-      const rows = [...products.values()].map((p): ValuationRow => {
-        const milli = bal(branchId, p.id);
+      const bp = (profit: number, atCost: number): { expected_profit_bp?: number } => (atCost > 0 ? { expected_profit_bp: Math.round((profit * 10000) / atCost) } : {});
+      const ids = branchId ? [branchId] : MOCK_BRANCHES.map((b) => b.id);
+      const rows = ids.flatMap((id) => [...products.values()].map((p): ValuationRow => {
+        const milli = bal(id, p.id);
         const sells = lineTotal(p.sellMinor, milli);
         const atCost = lineTotal(p.costMinor, milli);
-        return cost({ branch_id: branchId, product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor, expected_sales_minor: sells },
-          { cost_minor: p.costMinor, value_at_cost_minor: atCost, expected_profit_minor: sells - atCost, ...(bp(sells - atCost, atCost) !== undefined ? { expected_profit_bp: bp(sells - atCost, atCost) as number } : {}) });
-      });
+        return cost({ branch_id: id, product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor, expected_sales_minor: sells },
+          { cost_minor: p.costMinor, value_at_cost_minor: atCost, expected_profit_minor: sells - atCost, ...bp(sells - atCost, atCost) });
+      }));
       const sum = (pick: (r: ValuationRow) => number | undefined, from: ValuationRow[] = rows) => from.reduce((s, r) => s + (pick(r) ?? 0), 0);
-      const categories = CATEGORIES.map((c) => {
-        const own = rows.filter((r) => r.category_id === c.id);
+      const totals = (own: ValuationRow[]) => {
         const sells = sum((r) => r.expected_sales_minor, own);
         const atCost = sum((r) => r.value_at_cost_minor, own);
-        return cost({ category_id: c.id, category: c.name, expected_sales_minor: sells },
-          { value_at_cost_minor: atCost, expected_profit_minor: sells - atCost, ...(bp(sells - atCost, atCost) !== undefined ? { expected_profit_bp: bp(sells - atCost, atCost) as number } : {}) });
-      });
-      const sells = sum((r) => r.expected_sales_minor);
-      const atCost = sum((r) => r.value_at_cost_minor);
-      const v: Valuation = cost({ as_of: asOf ?? today(), currency: 'UGX', rows, categories, expected_sales_minor: sells },
-        { value_at_cost_minor: atCost, expected_profit_minor: sells - atCost, ...(bp(sells - atCost, atCost) !== undefined ? { expected_profit_bp: bp(sells - atCost, atCost) as number } : {}) });
+        return cost({ expected_sales_minor: sells }, { value_at_cost_minor: atCost, expected_profit_minor: sells - atCost, ...bp(sells - atCost, atCost) });
+      };
+      const branches = ids.map((id) => ({ branch_id: id, ...totals(rows.filter((r) => r.branch_id === id)) }));
+      const categories = CATEGORIES.map((c) => ({ category_id: c.id, category: c.name, ...totals(rows.filter((r) => r.category_id === c.id)) }));
+      const v: Valuation = { as_of: asOf ?? today(), currency: 'UGX', rows, branches, categories, ...totals(rows) };
       return delay(v);
     },
 
@@ -282,14 +295,18 @@ export function createMockRetail(): RetailApi {
 
     dailyProfit: ({ branchId, from, to }) => {
       if (!profitAccess) return Promise.reject(new RetailError(retailMessage({ code: 'permission_denied' }, 403), 403, 'permission_denied'));
+      const ids = branchId ? [branchId] : MOCK_BRANCHES.map((b) => b.id);
       const rows: DailyProfitRow[] = [];
-      for (let d = new Date(`${from}T00:00:00Z`); d <= new Date(`${to}T00:00:00Z`) && rows.length < 366; d.setUTCDate(d.getUTCDate() + 1)) {
+      for (let d = new Date(`${from}T00:00:00Z`); d <= new Date(`${to}T00:00:00Z`) && rows.length < 366 * ids.length; d.setUTCDate(d.getUTCDate() + 1)) {
         const date = d.toISOString().slice(0, 10);
-        const own = sales.filter((s) => s.branch_id === branchId && s.sale_date === date);
-        const salesMinor = own.reduce((s, x) => s + (x.total_minor ?? 0), 0);
-        const costMinor = own.reduce((s, x) => s + x.costTotal, 0);
-        const usageMinor = usageCostByDay.get(date) ?? 0;
-        rows.push({ branch_id: branchId, date, sales_minor: salesMinor, cost_of_sales_minor: costMinor, gross_profit_minor: salesMinor - costMinor, usage_cost_minor: usageMinor, profit_minor: salesMinor - costMinor - usageMinor });
+        for (const id of ids) {
+          const own = sales.filter((s) => s.branch_id === id && s.sale_date === date);
+          const salesMinor = own.reduce((s, x) => s + (x.total_minor ?? 0), 0);
+          const costMinor = own.reduce((s, x) => s + x.costTotal, 0);
+          const usageMinor = id === (branchId ?? BRANCH_A) ? (usageCostByDay.get(date) ?? 0) : 0;
+          if (salesMinor === 0 && costMinor === 0 && usageMinor === 0 && ids.length > 1) continue;
+          rows.push({ branch_id: id, date, sales_minor: salesMinor, cost_of_sales_minor: costMinor, gross_profit_minor: salesMinor - costMinor, usage_cost_minor: usageMinor, profit_minor: salesMinor - costMinor - usageMinor });
+        }
       }
       const sum = (pick: (r: DailyProfitRow) => number | undefined) => rows.reduce((s, r) => s + (pick(r) ?? 0), 0);
       const report: DailyProfit = {

@@ -183,4 +183,140 @@ class RetailParityIT extends IntegrationTest {
             }
         }
     }
+
+    // ---- C. All branches (#144) -------------------------------------------------------------
+
+    /** Head office: 10 cable, 4 bulb. Branch two: 5 cable and, left by imported history, minus 2 bulb. */
+    void stockInTwoBranches() {
+        api.stockUp(t.secondBranch(), cable, "5");
+        api.importedBalance(t.secondBranch(), bulb, "-2");
+    }
+
+    JsonNode cell(JsonNode row, UUID branch) {
+        for (JsonNode b : row.get("balances")) {
+            if (b.get("branch_id").asString().equals(branch.toString())) {
+                return b;
+            }
+        }
+        throw new AssertionError("no cell for " + branch + " in " + row);
+    }
+
+    JsonNode row(JsonNode page, String code) {
+        for (JsonNode r : page.get("items")) {
+            if (r.get("code").asString().equals(code)) {
+                return r;
+            }
+        }
+        throw new AssertionError("no row " + code + " in " + page);
+    }
+
+    @Test
+    void allBranchesShowsOneRowPerProductWithAColumnPerBranchAndATotal() {
+        stockInTwoBranches();
+        JsonNode page = ok(api.get("/stock/all-branches", ADMIN));
+        assertThat(page.get("branches")).hasSize(2);
+        assertThat(page.get("branches").get(0).get("id").asString())
+                .isEqualTo(t.headOffice().toString());
+        JsonNode c = row(page, "PAR-CABLE");
+        assertThat(c.get("total_qty").asString()).isEqualTo("15.000");
+        assertThat(cell(c, t.headOffice()).get("qty").asString()).isEqualTo("10.000");
+        assertThat(cell(c, t.secondBranch()).get("qty").asString()).isEqualTo("5.000");
+        assertThat(c.get("negative").asBoolean()).isFalse();
+        assertThat(c.get("category").asString()).isEqualTo("Test Category PAR-CABLE");
+        assertThat(c.get("cost_minor").asLong()).isEqualTo(1_000);
+        JsonNode b = row(page, "PAR-BULB");
+        assertThat(b.get("total_qty").asString()).isEqualTo("2.000");
+        assertThat(b.get("negative").asBoolean()).isTrue();
+        assertThat(cell(b, t.headOffice()).get("negative").asBoolean()).isFalse();
+        assertThat(cell(b, t.secondBranch()).get("negative").asBoolean()).isTrue();
+        assertThat(cell(b, t.secondBranch()).get("qty").asString()).isEqualTo("-2.000");
+    }
+
+    @Test
+    void allBranchesSearchesFiltersByCategoryAndShowsOnlyNegativeStock() {
+        stockInTwoBranches();
+        assertThat(ok(api.get("/stock/all-branches?negative_only=true", ADMIN)).get("items"))
+                .hasSize(1);
+        assertThat(ok(api.get("/stock/all-branches?query=cable", ADMIN)).get("items"))
+                .hasSize(1);
+        assertThat(ok(api.get("/stock/all-branches?query=Category PAR-BULB", ADMIN))
+                        .get("items"))
+                .hasSize(1);
+        UUID category = UUID.fromString(row(ok(api.get("/stock/all-branches", ADMIN)), "PAR-CABLE")
+                .get("category_id")
+                .asString());
+        JsonNode one = ok(api.get("/stock/all-branches?category_id=" + category, ADMIN))
+                .get("items");
+        assertThat(one).hasSize(1);
+        assertThat(one.get(0).get("code").asString()).isEqualTo("PAR-CABLE");
+    }
+
+    @Test
+    void allBranchesPagesByCode() {
+        stockInTwoBranches();
+        JsonNode first = ok(api.get("/stock/all-branches?limit=1", ADMIN));
+        assertThat(first.get("items")).hasSize(1);
+        assertThat(first.get("next_cursor").asString()).isNotBlank();
+        JsonNode second = ok(api.get(
+                "/stock/all-branches?limit=1&cursor=" + first.get("next_cursor").asString(), ADMIN));
+        assertThat(second.get("items").get(0).get("code").asString()).isEqualTo("PAR-CABLE");
+        assertThat(second.get("next_cursor").isNull()).isTrue();
+    }
+
+    @Test
+    void allBranchesStaysInsideTheCallersBranchScope() {
+        stockInTwoBranches();
+        ResponseEntity<JsonNode> r = api.call(
+                HttpMethod.GET,
+                "/stock/all-branches",
+                null,
+                "retail.stock.read",
+                t.headOffice().toString(),
+                Map.of());
+        JsonNode page = ok(r);
+        assertThat(page.get("branches")).hasSize(1);
+        JsonNode c = row(page, "PAR-CABLE");
+        assertThat(c.get("total_qty").asString()).isEqualTo("10.000");
+        assertThat(c.get("balances")).hasSize(1);
+        assertThat(page.toString()).doesNotContain(t.secondBranch().toString());
+        assertThat(row(page, "PAR-BULB").get("negative").asBoolean()).isFalse();
+    }
+
+    @Test
+    void allBranchesShowsCostOnlyWhereProfitIsHeldInEveryBranch() {
+        stockInTwoBranches();
+        assertThat(row(ok(api.get("/stock/all-branches", "retail.stock.read")), "PAR-CABLE")
+                        .has("cost_minor"))
+                .isFalse();
+        ResponseEntity<JsonNode> partial = api.call(
+                HttpMethod.GET,
+                "/stock/all-branches",
+                null,
+                "retail.stock.read",
+                "*",
+                Map.of("X-Dev-Scopes", "retail.profit.read=" + t.headOffice()));
+        assertThat(row(ok(partial), "PAR-CABLE").has("cost_minor")).isFalse();
+        assertThat(ok(partial).toString()).doesNotContain("cost");
+    }
+
+    @Test
+    void aCallerCoveringManyBranchesMustStillNameOneForTheSingleBranchStockRead() {
+        ResponseEntity<JsonNode> r = api.get("/stock", ADMIN);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(r.getBody().toString()).contains("branch_required");
+    }
+
+    @Test
+    void valuationAndDailyProfitAcceptNoBranchAndSplitPerBranch() {
+        stockInTwoBranches();
+        assertThat(api.sell(t.headOffice(), "cash", cable, "1").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(api.sell(t.secondBranch(), "cash", cable, "2").getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        JsonNode v = ok(api.get("/reports/valuation", ADMIN));
+        assertThat(v.get("branches")).hasSize(2);
+        JsonNode profit = ok(api.get("/reports/profit/daily", ADMIN));
+        assertThat(profit.get("rows")).hasSize(2);
+        assertThat(profit.get("sales_minor").asLong()).isEqualTo(4_500);
+        assertThat(profit.get("profit_minor").asLong()).isEqualTo(1_500);
+    }
 }

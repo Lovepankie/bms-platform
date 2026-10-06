@@ -13,6 +13,9 @@ type S = components['schemas'];
 
 export type Product = S['RetailProduct'];
 export type StockRow = S['RetailStockRow'];
+export type AllBranchesRow = S['RetailAllBranchesRow'];
+export type StockBranch = S['RetailStockBranch'];
+export type AllBranchesStock = { branches: StockBranch[]; items: AllBranchesRow[] };
 export type Category = S['RetailCategory'];
 export type Customer = S['RetailCustomer'];
 export type Supplier = S['RetailSupplier'];
@@ -71,10 +74,13 @@ export interface RetailApi {
   createUsage(body: UsageRequest, idempotencyKey: string): Promise<Usage>;
   createStocktake(body: StocktakeRequest): Promise<Stocktake>;
   commitStocktake(id: string): Promise<Stocktake>;
-  valuation(q: { branchId: string; asOf?: string }): Promise<Valuation>;
+  /** Every product with its balance in each branch the caller may read (#144). */
+  listStockAllBranches(q: { query?: string; categoryId?: string; negativeOnly?: boolean }): Promise<AllBranchesStock>;
+  /** One branch, or every branch in the caller's scope when `branchId` is absent (#144). */
+  valuation(q: { branchId?: string; asOf?: string }): Promise<Valuation>;
   /** The branches in the caller's stock scope holding a quantity above zero of anything (#103). */
   stockedBranches(): Promise<string[]>;
-  dailyProfit(q: { branchId: string; from: string; to: string }): Promise<DailyProfit>;
+  dailyProfit(q: { branchId?: string; from: string; to: string }): Promise<DailyProfit>;
   createTransfer(body: TransferRequest, idempotencyKey: string): Promise<Transfer>;
   listTransfers(q: { branchId?: string; cursor?: string }): Promise<TransferPage>;
   getTransfer(id: string): Promise<Transfer>;
@@ -132,6 +138,23 @@ const realRetail: RetailApi = {
     return rows;
   },
 
+  async listStockAllBranches({ query, categoryId, negativeOnly }) {
+    const items: AllBranchesRow[] = [];
+    let branches: StockBranch[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = unwrap(
+        await api.GET('/api/v1/retail/stock/all-branches', {
+          params: { query: { query: query || undefined, category_id: categoryId || undefined, negative_only: negativeOnly || undefined, limit: PAGE, cursor } },
+        }),
+      );
+      branches = page.branches ?? branches;
+      items.push(...(page.items ?? []));
+      cursor = page.next_cursor;
+    } while (cursor);
+    return { branches, items };
+  },
+
   async listCustomers() {
     return unwrap(await api.GET('/api/v1/retail/customers', { params: { query: {} } })).items ?? [];
   },
@@ -165,7 +188,7 @@ const realRetail: RetailApi = {
   },
 
   async valuation({ branchId, asOf }) {
-    return unwrap(await api.GET('/api/v1/retail/reports/valuation', { params: { query: { branch_id: [branchId], as_of: asOf } } }));
+    return unwrap(await api.GET('/api/v1/retail/reports/valuation', { params: { query: { branch_id: branchId ? [branchId] : undefined, as_of: asOf } } }));
   },
 
   async stockedBranches() {
@@ -174,7 +197,7 @@ const realRetail: RetailApi = {
   },
 
   async dailyProfit({ branchId, from, to }) {
-    return unwrap(await api.GET('/api/v1/retail/reports/profit/daily', { params: { query: { branch_id: [branchId], from, to } } }));
+    return unwrap(await api.GET('/api/v1/retail/reports/profit/daily', { params: { query: { branch_id: branchId ? [branchId] : undefined, from, to } } }));
   },
 
   async createTransfer(body, key) {

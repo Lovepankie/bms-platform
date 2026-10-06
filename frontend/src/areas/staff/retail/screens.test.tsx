@@ -2,18 +2,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { renderToString as render } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { businessToday, type DailyProfit, type Product, type Purchase, type Sale, type Stocktake, type StockRow, type Transfer, type Valuation } from '../../../api/retail';
+import { businessToday, type AllBranchesStock, type DailyProfit, type Product, type Purchase, type Sale, type Stocktake, type StockRow, type Transfer, type Valuation } from '../../../api/retail';
 import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { Receipt, SaleForm } from './sale';
-import { StockPage, StockTable } from './stock';
+import { AllBranchesList, AllBranchesTable, StockPage, StockTable } from './stock';
 import { StocktakeReview } from './stocktake';
-import { ProfitTable, ValuationTable } from './profit';
+import { BranchTotals, ProfitTable, ValuationTable } from './profit';
 import { RestockForm, RestockSaved } from './restock';
 import { TransferForm, TransferSummary } from './transfer';
 import { TransferList, showDate } from './transfers';
 import { UsageForm } from './usage';
-import { Gate, NoStockHere, Problem } from './ui';
+import { BranchRequired, Gate, NoStockHere, Problem } from './ui';
+import { ALL_BRANCHES } from '../../../auth/branch';
 
 const renderToString = (node: ReactElement) => render(node).replaceAll('<!-- -->', '');
 
@@ -319,5 +320,107 @@ describe('walk-through fixes (#112)', () => {
     expect(admin).toContain('LED bulb 9W screw: cost changed from UGX 800 to UGX 850.');
     expect(admin).not.toContain('LED bulb 15W screw:');
     expect(page('sales', <RestockSaved purchase={purchase} context={context} />)).not.toContain('cost changed');
+  });
+});
+
+describe('All branches (#144)', () => {
+  const [a, b] = mockMe('admin').branches ?? [];
+  const data: AllBranchesStock = {
+    branches: [{ id: a?.id, code: a?.code, name: a?.name }, { id: b?.id, code: b?.code, name: b?.name }],
+    items: [
+      {
+        product_id: 'p1', code: 'P003', description: 'LED bulb 9W screw', category: 'Lighting', unit: 'piece', total_qty: '10.000', negative: true, sell_minor: 6000, cost_minor: 3500,
+        balances: [{ branch_id: a?.id, qty: '12.000', negative: false }, { branch_id: b?.id, qty: '-2.000', negative: true }],
+      },
+    ],
+  };
+  const inAll = (node: ReactElement, role: 'admin' | 'sales' = 'admin', client = new QueryClient()) =>
+    renderToString(
+      <QueryClientProvider client={client}>
+        <StaffContext.Provider value={{ me: mockMe(role), branch: ALL_BRANCHES, chooseBranch: () => undefined }}>{node}</StaffContext.Provider>
+      </QueryClientProvider>,
+    );
+
+  it('shows a column per branch, a total and the negative flag on the cell that is negative', () => {
+    const html = renderToString(<AllBranchesTable data={data} showCost={false} />);
+    expect(html).toContain('Test Branch A (BR1)');
+    expect(html).toContain('Test Branch B (BR2)');
+    expect(html).toContain('<th class="num">Total</th>');
+    expect(html).toContain('<td class="num">12</td>');
+    expect(html).toContain('<td class="num">-2<div class="rt-flag">Negative</div></td>');
+    expect(html).toContain('10 piece');
+    expect(html).not.toMatch(/cost/i);
+  });
+
+  it('shows cost only when asked and the server sent it', () => {
+    expect(renderToString(<AllBranchesTable data={data} showCost />)).toContain('UGX 3,500');
+    const without: AllBranchesStock = { ...data, items: data.items.map(({ cost_minor: _c, ...r }) => r) };
+    expect(renderToString(<AllBranchesTable data={without} showCost />)).not.toMatch(/cost/i);
+  });
+
+  it('on a phone shows the total and a button for the per-branch breakdown', () => {
+    const html = renderToString(<AllBranchesList data={data} showCost={false} />);
+    expect(html).toContain('Total');
+    expect(html).toContain('Show branches');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('Test Branch B');
+    expect(html).toContain('Negative');
+  });
+
+  it('says there are no items when the list is empty', () => {
+    expect(renderToString(<AllBranchesTable data={{ ...data, items: [] }} showCost={false} />)).toContain('No items found.');
+  });
+
+  it('the Stock page with All branches shows the table, not a request to choose a branch', () => {
+    const client = new QueryClient();
+    client.setQueryData(['retail', 'stock', 'all-branches', '', '', false], data);
+    const html = inAll(<StockPage />, 'admin', client);
+    expect(html).toContain('All branches');
+    expect(html).toContain('LED bulb 9W screw');
+    expect(html).not.toContain('Choose a branch');
+  });
+
+  it('a write screen asks for a branch and offers each as a button', () => {
+    const html = inAll(<BranchRequired />);
+    expect(html).toContain('Choose a branch');
+    expect(html).toContain('<button type="button" class="btn-sm">Test Branch A (BR1)</button>');
+    expect(html).toContain('Test Branch B (BR2)');
+    expect(html).not.toContain('Branch box');
+  });
+
+  it('Stock value shows each branch and the total', () => {
+    const v: Valuation = {
+      as_of: '2026-10-05', currency: 'UGX', rows: [], categories: [],
+      branches: [
+        { branch_id: a?.id, expected_sales_minor: 12000, value_at_cost_minor: 7000, expected_profit_minor: 5000, expected_profit_bp: 7143 },
+        { branch_id: b?.id, expected_sales_minor: 6000, value_at_cost_minor: 3500, expected_profit_minor: 2500, expected_profit_bp: 7143 },
+      ],
+      expected_sales_minor: 18000, value_at_cost_minor: 10500, expected_profit_minor: 7500, expected_profit_bp: 7143,
+    };
+    const nameOf = (id: string | undefined) => (id === a?.id ? 'Test Branch A' : 'Test Branch B');
+    const html = renderToString(<><BranchTotals valuation={v} nameOf={nameOf} /><ValuationTable valuation={v} /></>);
+    expect(html).toContain('<h2>By branch</h2>');
+    expect(html).toContain('Test Branch A');
+    expect(html).toContain('UGX 12,000');
+    expect(html).toContain('UGX 6,000');
+    expect(html).toContain('At selling price UGX 18,000');
+  });
+
+  it('Daily profit shows each branch and the total of every branch per day', () => {
+    const report: DailyProfit = {
+      from: '2026-10-05', to: '2026-10-05', currency: 'UGX', sales_minor: 3000, cost_of_sales_minor: 1800, usage_cost_minor: 0, profit_minor: 1200,
+      rows: [
+        { branch_id: a?.id, date: '2026-10-05', sales_minor: 1000, cost_of_sales_minor: 600, gross_profit_minor: 400, usage_cost_minor: 0, profit_minor: 400 },
+        { branch_id: b?.id, date: '2026-10-05', sales_minor: 2000, cost_of_sales_minor: 1200, gross_profit_minor: 800, usage_cost_minor: 0, profit_minor: 800 },
+      ],
+    };
+    const nameOf = (id: string | undefined) => (id === a?.id ? 'Test Branch A' : 'Test Branch B');
+    const html = renderToString(<ProfitTable report={report} nameOf={nameOf} />);
+    expect(html).toContain('<h2>By branch</h2>');
+    expect(html).toContain('<td>Test Branch A</td>');
+    expect(html).toContain('<td>Test Branch B</td>');
+    expect(html).toContain('<td>2026-10-05</td>');
+    expect(html).toContain('UGX 3,000');
+    expect(html).toContain('UGX 1,200');
   });
 });

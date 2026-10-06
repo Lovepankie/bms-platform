@@ -44,6 +44,43 @@ final class StockApi {
     @Schema(name = "RetailStockPage")
     record StockPage(UUID branchId, List<StockRow> items, String nextCursor) {}
 
+    @Schema(name = "RetailStockBranch")
+    record StockBranch(UUID id, String code, String name, boolean headOffice) {}
+
+    @Schema(name = "RetailBranchBalance")
+    record BranchBalance(
+            UUID branchId,
+            String qty,
+
+            @Schema(description = "Below zero in this branch")
+            boolean negative) {}
+
+    @Schema(name = "RetailAllBranchesRow", description = "One product with its balance in every branch of the page")
+    record AllBranchesRow(
+            UUID productId,
+            String code,
+            String description,
+            UUID categoryId,
+            String category,
+            String unit,
+
+            @Schema(description = "The sum over the branches of the page")
+            String totalQty,
+
+            @Schema(description = "True when any branch's balance is below zero")
+            boolean negative,
+
+            long sellMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY + " in every branch of the page")
+            Long costMinor,
+
+            @Schema(description = "One entry per branch of the page, in the page's branch order")
+            List<BranchBalance> balances) {}
+
+    @Schema(name = "RetailAllBranchesStock")
+    record AllBranchesPage(List<StockBranch> branches, List<AllBranchesRow> items, String nextCursor) {}
+
     @Schema(name = "RetailStockMovement")
     record MovementRow(
             UUID id,

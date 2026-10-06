@@ -25,6 +25,14 @@ public class RetailBranchContext {
         this.branches = branches;
     }
 
+    /** The active branches the permission covers, head office first: the columns of an all-branches read. */
+    public List<Branches.Branch> visible(String permission) {
+        Principal principal = CurrentPrincipal.require();
+        return branches.all().stream()
+                .filter(b -> b.active() && principal.may(permission, b.id()))
+                .toList();
+    }
+
     public UUID resolve(String permission, UUID requested) {
         return resolve(permission, requested, "branch_id");
     }

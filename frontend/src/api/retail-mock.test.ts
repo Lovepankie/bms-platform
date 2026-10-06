@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RetailError } from './retail';
+import { RetailError, businessToday } from './retail';
 import { createMockRetail, mockMe, setMockProfitAccess } from './retail-mock';
 
 const branch = mockMe('admin').branches?.[0]?.id ?? '';
@@ -131,5 +131,39 @@ describe('retail mock adapter (real response shapes)', () => {
     expect(plain).not.toMatch(/cost|profit/i);
     expect(plain).toContain('categories');
     setMockProfitAccess(true);
+  });
+
+  it('lists every product with a balance per branch, a total and a negative flag per cell', async () => {
+    setMockProfitAccess(true);
+    const api = createMockRetail();
+    const { branches, items } = await api.listStockAllBranches({});
+    expect(branches).toHaveLength(2);
+    const stock = await Promise.all((await api.listStock({ branchId: branches[0]?.id ?? '' })).map(async (r) => r));
+    expect(items).toHaveLength(stock.length);
+    for (const r of items) {
+      expect(r.balances).toHaveLength(2);
+      const sum = (r.balances ?? []).reduce((s, c) => s + Number(c.qty), 0);
+      expect(Number(r.total_qty)).toBeCloseTo(sum, 3);
+      expect(r.negative).toBe((r.balances ?? []).some((c) => c.negative));
+    }
+    expect(items.some((r) => r.negative)).toBe(true);
+    expect((await api.listStockAllBranches({ negativeOnly: true })).items.every((r) => r.negative)).toBe(true);
+    setMockProfitAccess(false);
+    expect(JSON.stringify(await createMockRetail().listStockAllBranches({}))).not.toMatch(/cost/i);
+    setMockProfitAccess(true);
+  });
+
+  it('values and reports profit for every branch when no branch is named', async () => {
+    setMockProfitAccess(true);
+    const api = createMockRetail();
+    const products = await api.listProducts({ branchId: branch });
+    await api.createSale(cash(products[1]?.id ?? '', '1.000'), 'all-branches-key');
+    const v = await api.valuation({});
+    expect(v.branches).toHaveLength(2);
+    expect((v.branches ?? []).reduce((s, b) => s + (b.expected_sales_minor ?? 0), 0)).toBe(v.expected_sales_minor);
+    const today = businessToday();
+    const report = await api.dailyProfit({ from: today, to: today });
+    expect(report.sales_minor).toBeGreaterThan(0);
+    expect((report.rows ?? []).reduce((s, r) => s + (r.profit_minor ?? 0), 0)).toBe(report.profit_minor);
   });
 });

@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.stock.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.ledger.LedgerPosting.PostedEntry;
+import com.rincoltech.bms.core.tenancy.Branches.Branch;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
@@ -18,14 +19,19 @@ import com.rincoltech.bms.retail.stock.RetailBooks.Posting;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.Movement;
+import com.rincoltech.bms.retail.stock.internal.StockApi.AllBranchesPage;
+import com.rincoltech.bms.retail.stock.internal.StockApi.AllBranchesRow;
+import com.rincoltech.bms.retail.stock.internal.StockApi.BranchBalance;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementRow;
+import com.rincoltech.bms.retail.stock.internal.StockApi.StockBranch;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockRow;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Stocktake;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeLine;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeLineRequest;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeRequest;
+import com.rincoltech.bms.retail.stock.internal.StockRepository.ProductTotal;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -79,6 +85,63 @@ class StockService {
         this.tenant = tenant;
         this.clock = clock;
         this.audit = audit;
+    }
+
+    /**
+     * FR-RET-03, #144: every product with its balance in each branch the caller may read, a total and
+     * the negative flag per branch. Cost shows only when the caller holds {@code retail.profit.read} in
+     * every branch of the page, since one cost cannot be shown for some branches and hidden for others.
+     */
+    @Transactional(readOnly = true)
+    AllBranchesPage allBranches(String query, UUID categoryId, boolean negativeOnly, Integer limit, String cursor) {
+        Principal principal = CurrentPrincipal.require();
+        List<Branch> visible = branches.visible("retail.stock.read");
+        List<UUID> ids = visible.stream().map(Branch::id).toList();
+        List<StockBranch> columns = visible.stream()
+                .map(b -> new StockBranch(b.id(), b.code(), b.name(), b.headOffice()))
+                .toList();
+        if (ids.isEmpty()) {
+            return new AllBranchesPage(columns, List.of(), null);
+        }
+        int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
+        Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
+        List<ProductTotal> rows = repo.allBranches(
+                ids,
+                blankToNull(query),
+                categoryId,
+                negativeOnly,
+                after == null ? null : after.sortKey(),
+                after == null ? null : after.id(),
+                size + 1);
+        boolean more = rows.size() > size;
+        List<ProductTotal> page = more ? rows.subList(0, size) : rows;
+        Map<UUID, Map<UUID, BigDecimal>> held =
+                repo.balances(page.stream().map(ProductTotal::id).toList(), ids);
+        boolean cost = ids.stream().allMatch(b -> principal.may(PROFIT_READ, b));
+        List<AllBranchesRow> items = page.stream()
+                .map(p -> new AllBranchesRow(
+                        p.id(),
+                        p.code(),
+                        p.description(),
+                        p.categoryId(),
+                        p.category(),
+                        p.unit(),
+                        Quantities.format(p.total()),
+                        p.negative(),
+                        p.sellMinor(),
+                        cost ? p.costMinor() : null,
+                        ids.stream()
+                                .map(b -> {
+                                    BigDecimal q =
+                                            held.getOrDefault(p.id(), Map.of()).getOrDefault(b, BigDecimal.ZERO);
+                                    return new BranchBalance(b, Quantities.format(q), q.signum() < 0);
+                                })
+                                .toList()))
+                .toList();
+        String next = more
+                ? Cursor.encode(page.getLast().code() + "|" + page.getLast().id())
+                : null;
+        return new AllBranchesPage(columns, items, next);
     }
 
     /** FR-RET-03: a branch's balances, negatives flagged. */
