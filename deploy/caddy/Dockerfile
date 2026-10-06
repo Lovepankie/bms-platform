@@ -30,7 +30,7 @@ RUN mkdir -p /empty
 FROM caddy:2.11.4-alpine
 COPY --from=build /out/caddy /usr/bin/caddy
 COPY caddy/Caddyfile caddy/Caddyfile.tunnel /etc/caddy/
-COPY compose.pi-staging.yml deploy.sh backup.sh pull-staging.sh /usr/share/bms-deploy/
+COPY compose.pi-staging.yml deploy.sh backup.sh restore-drill.sh pull-staging.sh /usr/share/bms-deploy/
 COPY postgres /usr/share/bms-deploy/postgres
 COPY sql /usr/share/bms-deploy/sql
 COPY systemd /usr/share/bms-deploy/systemd

@@ -175,7 +175,17 @@ the same image.
    `monthly/`;
 4. daily copies older than 30 days and monthly copies older than 365 days are deleted
    (NFR-BAK-03);
-5. `state/last_backup_ok` is written for the missing-backup alert.
+5. `state/last_backup_ok` is written on the host; the alert does not read it (it would die with
+   the host). Instead a watchdog on the dev lead's workstation checks R2 itself every hour: the
+   newest object under `daily/` is younger than 26 hours and not under half the recent median
+   size, and the last restore drill is younger than 9 days. A problem is sent to the dev lead's
+   phone, repeated at most every 12 hours, with one message when it clears (issue #46).
+6. `deploy/restore-drill.sh`, run weekly by cron (Sunday 03:30 host time), restores the newest
+   daily dump into a throwaway PostgreSQL (no network, 384 MB, inside `bms.slice` on staging),
+   checks the Flyway history against the live one, reads the row counts and proves the
+   application role can read a tenant's rows under row-level security, then removes everything,
+   including the decrypted dump. It writes `state/last_restore_drill` or
+   `state/last_restore_drill_error`.
 
 The R2 token is scoped to the backup bucket. The encryption key has an offline copy held by
 the dev lead (chapter 8 section 8.7). The restore procedure and the quarterly drill
@@ -186,7 +196,8 @@ the dev lead (chapter 8 section 8.7). The restore procedure and the quarterly dr
 To be configured when the hosts are provisioned (NFR-OBS-04): an external uptime check on
 `https://<platform host>/healthz` (staging `https://bms-staging.rincoltech.com/healthz`) and on one
 tenant host every minute; an alert when
-`state/last_backup_ok` is older than 26 hours; disk above 70 percent; failed db-scheduler
+the newest R2 backup is older than 26 hours or the last restore drill failed or is older than 9 days
+(the watchdog of section 9.10); disk above 70 percent; failed db-scheduler
 executions (`scheduled_tasks.consecutive_failures > 0`); the nightly job failure alerts of
 chapter 5. The API logs JSON (ECS format) with the request id on every line in the `server`
 profile.
