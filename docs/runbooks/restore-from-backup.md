@@ -90,7 +90,25 @@ curl -s https://<platform host>/readyz
 Check, as `bms_owner`: row counts of `tenants`, `lending_members` and `journal_entries` against
 the source; the trial balance of one tenant balances (sum of debits equals sum of credits).
 
-## 5. Clean up and record
+## 5. The weekly drill and the backup alert
+
+`deploy/restore-drill.sh` (cron, Sunday 03:30 host time, as the deploy user) does steps 1 to 4 for
+you without touching the live database: it fetches the newest `daily/` dump, decrypts it, restores it
+into a throwaway PostgreSQL (no network, 384 MB, inside `bms.slice` on staging) and checks the Flyway
+history, the row counts and the application role's row-level-security access. It writes one line to
+`state/last_restore_drill` (`<time> OK <file> flyway=<v> live_flyway=<v> tenants=<n> users=<n> ...`) or
+`state/last_restore_drill_error`, and removes the throwaway database and the decrypted dump. Run it by
+hand with `sudo -u bms /opt/bms/restore-drill.sh` after changing the backup key or the R2 credentials.
+
+It proves the data and the grants restore. It does not time a full restore onto a fresh VM against the
+two hour RTO; that stays the quarterly drill below.
+
+The backup alert is a separate watchdog on the dev lead's workstation (not on the host, so it also fires
+when the host is down). It checks R2 every hour and sends a message when the newest daily backup is
+older than 26 hours or under half the recent median size, when the last drill failed, or when no drill
+succeeded in 9 days.
+
+## 6. Clean up and record
 
 ```bash
 rm -f backups/restore.dump backups/*.dump.enc

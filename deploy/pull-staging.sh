@@ -123,7 +123,7 @@ docker cp "$container:/usr/share/bms-deploy" "$work/deploy" > /dev/null
 src="$work/deploy"
 
 install -m 644 "$src/$COMPOSE_SOURCE" "$release_dir/compose.yml"
-for script in deploy.sh backup.sh pull-staging.sh; do
+for script in deploy.sh backup.sh restore-drill.sh pull-staging.sh; do
     install -m 755 "$src/$script" "$release_dir/$script"
 done
 for dir in postgres sql systemd; do
@@ -145,7 +145,7 @@ case "$status" in
         # never displaces what is actually running or this script's own next run.
         ln -sfn "releases/$tag" current
         install -m 644 "$release_dir/compose.yml" compose.yml.new && mv -f compose.yml.new compose.yml
-        for script in deploy.sh backup.sh pull-staging.sh; do
+        for script in deploy.sh backup.sh restore-drill.sh pull-staging.sh; do
             install -m 755 "$release_dir/$script" "$script.new" && mv -f "$script.new" "$script"
         done
         for dir in postgres sql systemd; do
