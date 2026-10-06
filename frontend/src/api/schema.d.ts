@@ -7045,6 +7045,11 @@ export interface operations {
                 from?: string;
                 to?: string;
                 customer_id?: string;
+                payment_method?: string;
+                product_id?: string;
+                buyer?: string;
+                status?: string;
+                newest_first?: boolean;
                 limit?: number;
                 cursor?: string;
             };

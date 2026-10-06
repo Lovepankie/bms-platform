@@ -267,8 +267,30 @@ class SalesService {
         return visible(repo.find(id, false).orElseThrow().sale());
     }
 
+    private static final java.util.Set<String> PAYMENT_METHODS =
+            java.util.Set.of("cash", "mobile_money", "bank", "credit");
+
     @Transactional(readOnly = true)
-    SalePage list(List<UUID> branchIds, LocalDate from, LocalDate to, UUID customerId, Integer limit, String cursor) {
+    SalePage list(
+            List<UUID> branchIds,
+            LocalDate from,
+            LocalDate to,
+            UUID customerId,
+            String paymentMethod,
+            UUID productId,
+            String buyer,
+            String status,
+            boolean newestFirst,
+            Integer limit,
+            String cursor) {
+        if (paymentMethod != null && !PAYMENT_METHODS.contains(paymentMethod)) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "payment_method", "invalid", "payment_method is cash, mobile_money, bank or credit.")));
+        }
+        if (status != null && !status.equals("completed") && !status.equals("voided")) {
+            throw ApiException.validation(
+                    List.of(new FieldProblem("status", "invalid", "status is completed or voided.")));
+        }
         Principal principal = CurrentPrincipal.require();
         List<UUID> filter = principal.branchFilter("retail.sale.read", branchIds);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
@@ -279,7 +301,19 @@ class SalesService {
             afterCreated = after.at();
             afterId = after.id();
         }
-        List<Sale> rows = repo.page(filter, from, to, customerId, afterCreated, afterId, size + 1);
+        List<Sale> rows = repo.page(
+                filter,
+                from,
+                to,
+                customerId,
+                paymentMethod,
+                productId,
+                buyer == null || buyer.isBlank() ? null : buyer.trim(),
+                status,
+                newestFirst,
+                afterCreated,
+                afterId,
+                size + 1);
         boolean more = rows.size() > size;
         List<Sale> items = more ? rows.subList(0, size) : rows;
         String next = more

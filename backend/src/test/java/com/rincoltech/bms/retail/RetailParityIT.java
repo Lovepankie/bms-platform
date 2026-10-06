@@ -378,4 +378,83 @@ class RetailParityIT extends IntegrationTest {
         assertThat(codes(ok(api.get("/stock/all-branches?stock_level=out", ADMIN))))
                 .containsExactly("PAR-OWED", "PAR-ZERO");
     }
+
+    // ---- E. Sales filters -------------------------------------------------------------------
+
+    /** Head office: a cash sale of cable and a credit sale of bulb; branch two: a credit sale of cable. */
+    UUID[] threeSales() {
+        api.stockUp(t.secondBranch(), cable, "5");
+        UUID s1 = RetailTestSupport.id(api.sell(t.headOffice(), "cash", cable, "1"));
+        UUID s2 = RetailTestSupport.id(api.sell(t.headOffice(), "credit", bulb, "2"));
+        UUID s3 = RetailTestSupport.id(api.sell(t.secondBranch(), "credit", cable, "1"));
+        return new UUID[] {s1, s2, s3};
+    }
+
+    int count(String query) {
+        return ok(api.get("/sales" + query, ADMIN)).get("items").size();
+    }
+
+    @Test
+    void salesFilterByPaymentMethodProductBuyerBranchAndStatus() {
+        UUID[] s = threeSales();
+        assertThat(count("")).isEqualTo(3);
+        assertThat(count("?payment_method=credit")).isEqualTo(2);
+        assertThat(count("?payment_method=cash")).isEqualTo(1);
+        assertThat(count("?product_id=" + bulb)).isEqualTo(1);
+        assertThat(count("?product_id=" + cable)).isEqualTo(2);
+        assertThat(count("?buyer=buyer 01")).isEqualTo(2);
+        assertThat(count("?buyer=nobody")).isZero();
+        assertThat(count("?branch_id=" + t.secondBranch())).isEqualTo(1);
+        assertThat(count("?payment_method=credit&product_id=" + cable)).isEqualTo(1);
+        assertThat(count("?to=2000-01-01")).isZero();
+
+        assertThat(api.post("/sales/" + s[0] + "/void", Map.of("reason", "Test void"), ADMIN)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(count("?status=voided")).isEqualTo(1);
+        assertThat(count("?status=completed")).isEqualTo(2);
+    }
+
+    @Test
+    void salesRefuseAnUnknownPaymentMethodOrStatus() {
+        assertThat(api.get("/sales?payment_method=barter", ADMIN).getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(api.get("/sales?status=lost", ADMIN).getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    @Test
+    void salesListNewestFirstAndPageWithoutRepeats() {
+        UUID[] s = threeSales();
+        JsonNode newest = ok(api.get("/sales?newest_first=true", ADMIN)).get("items");
+        assertThat(newest.get(0).get("id").asString()).isEqualTo(s[2].toString());
+        assertThat(newest.get(2).get("id").asString()).isEqualTo(s[0].toString());
+        JsonNode oldest = ok(api.get("/sales", ADMIN)).get("items");
+        assertThat(oldest.get(0).get("id").asString()).isEqualTo(s[0].toString());
+
+        JsonNode first = ok(api.get("/sales?newest_first=true&limit=2", ADMIN));
+        assertThat(first.get("items")).hasSize(2);
+        JsonNode rest = ok(api.get(
+                "/sales?newest_first=true&limit=2&cursor="
+                        + first.get("next_cursor").asString(),
+                ADMIN));
+        assertThat(rest.get("items")).hasSize(1);
+        assertThat(rest.get("items").get(0).get("id").asString()).isEqualTo(s[0].toString());
+    }
+
+    @Test
+    void salesFiltersStayInsideTheBranchScopeAndHideProfitFromTheSalesRole() {
+        threeSales();
+        ResponseEntity<JsonNode> r = api.call(
+                HttpMethod.GET,
+                "/sales?payment_method=credit",
+                null,
+                RetailTestSupport.SALES,
+                t.headOffice().toString(),
+                Map.of());
+        JsonNode items = ok(r).get("items");
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).get("branch_id").asString())
+                .isEqualTo(t.headOffice().toString());
+        assertThat(ok(r).toString()).doesNotContain("profit").doesNotContain("cost");
+    }
 }
