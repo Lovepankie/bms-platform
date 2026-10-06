@@ -17,7 +17,7 @@ export function ValuationTable({ valuation }: { valuation: Valuation }) {
         {withCost && <>At cost {money(valuation.value_at_cost_minor ?? 0)}<br /></>}
         At selling price {money(valuation.expected_sales_minor ?? 0)}
       </p>
-      <div className="table-wrap"><table>
+      <div className="table-wrap" tabIndex={0}><table>
         <thead>
           <tr>
             <th>Item</th>
@@ -63,7 +63,7 @@ export function ProfitTable({ report }: { report: DailyProfit }) {
   return (
     <>
       <p className="rt-total">Profit for the period {money(report.profit_minor ?? 0)}</p>
-      <div className="table-wrap"><table>
+      <div className="table-wrap" tabIndex={0}><table>
         <thead>
           <tr>
             <th>Day</th>

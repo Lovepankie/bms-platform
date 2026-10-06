@@ -30,7 +30,7 @@ function StaffHome() {
           {members.isPending && <p className="loading">Loading members</p>}
           {members.isError && <p role="alert" className="alert alert-danger">Could not load members.</p>}
           {members.data && (
-            <div className="table-wrap">
+            <div className="table-wrap" tabIndex={0}>
               <table>
                 <thead>
                   <tr>

@@ -12,7 +12,7 @@ import { BranchRequired, Gate, Problem, money, useProfitAccess, useSingleBranch 
 export function StockTable({ rows, showCost }: { rows: StockRow[]; showCost: boolean }) {
   if (rows.length === 0) return <p className="empty-state">No items found.</p>;
   return (
-    <div className="table-wrap"><table>
+    <div className="table-wrap" tabIndex={0}><table>
       <thead>
         <tr>
           <th>Item</th>

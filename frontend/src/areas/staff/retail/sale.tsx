@@ -28,7 +28,7 @@ export function Receipt({ sale, onNew }: { sale: Sale; onNew?: () => void }) {
         Paid by {METHODS.find((m) => m.value === sale.payment_method)?.label ?? sale.payment_method} on {sale.sale_date}
         {sale.buyer_name ? `, buyer ${sale.buyer_name}` : ''}
       </p>
-      <div className="table-wrap"><table>
+      <div className="table-wrap" tabIndex={0}><table>
         <thead>
           <tr>
             <th>Item</th>

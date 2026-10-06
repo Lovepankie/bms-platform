@@ -53,7 +53,7 @@ function AreaChooser() {
     <main className="landing">
       <section className="card landing-hero">
         <BrandMark />
-        <h1>BMS Platform</h1>
+        <h1>Welcome</h1>
         <p className="lead">Sales, stock, members and loans for your business, in one place.</p>
         <ul className="landing-actions">
           <li>
@@ -86,7 +86,14 @@ function AreaChooser() {
 function BrandMark() {
   const brand = useShellBrand();
   if (brand.logoSrc) return <img className="brand-logo" src={brand.logoSrc} alt={brand.name} />;
-  return <div className="wordmark">{brand.name}</div>;
+  return (
+    <div className="wordmark">
+      <span className="wordmark-mark" aria-hidden="true">
+        {brand.name.charAt(0)}
+      </span>
+      <span>{brand.name}</span>
+    </div>
+  );
 }
 
 const rootRoute = createRootRoute({ component: RootLayout });

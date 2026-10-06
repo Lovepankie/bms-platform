@@ -19,7 +19,7 @@ export function StocktakeReview({ stocktake, onCommit, committing }: { stocktake
       {changed.length === 0 ? (
         <p>Every counted item matches the system.</p>
       ) : (
-        <div className="table-wrap"><table>
+        <div className="table-wrap" tabIndex={0}><table>
           <thead>
             <tr>
               <th>Item</th>

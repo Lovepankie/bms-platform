@@ -90,7 +90,7 @@ body {
 :root {
   --rt-blue: #00adef;
   --rt-blue-strong: #0077b6;
-  --rt-blue-tint: #e6f7fd;
+  --rt-blue-tint: #eef9fe; /* the strong blue reads at 4.55:1 on it */
   --rt-grey-50: #f5f7f9;
   --rt-grey-100: #eeeeee;
   --rt-grey-200: #e5e5e5;

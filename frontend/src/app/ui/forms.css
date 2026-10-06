@@ -120,6 +120,39 @@ label:has(> input:focus-visible) {
   outline-offset: 2px;
 }
 
+input[type='file'] {
+  display: block;
+  max-width: 100%;
+  margin-top: 6px;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+input[type='file']::file-selector-button {
+  min-height: var(--tap);
+  margin-right: var(--space-3);
+  padding: 8px 16px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+input[type='color'] {
+  width: 56px;
+  height: var(--tap);
+  padding: 4px;
+  margin-left: var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  vertical-align: middle;
+}
+
 fieldset {
   min-width: 0;
   margin: var(--space-4) 0;

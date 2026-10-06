@@ -82,7 +82,7 @@ function Approvals() {
       {pending.isError && <p role="alert" className="alert alert-danger">Could not load approvals.</p>}
       {pending.data && items.length === 0 && <p className="empty-state">Nothing waiting.</p>}
       {items.length > 0 && (
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0}>
           <table>
             <thead>
               <tr>

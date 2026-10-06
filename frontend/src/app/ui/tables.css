@@ -8,7 +8,13 @@
   margin: 0 0 var(--space-4);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  background: var(--color-surface);
+  /* Scroll shadows: a soft edge shows on the side that has more columns to scroll to. */
+  background:
+    linear-gradient(to right, var(--color-surface) 30%, transparent) left / 32px 100% no-repeat local,
+    linear-gradient(to left, var(--color-surface) 30%, transparent) right / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgba(16, 24, 40, 0.14), transparent) left / 12px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgba(16, 24, 40, 0.14), transparent) right / 12px 100% no-repeat scroll,
+    var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
@@ -23,7 +29,7 @@ table {
 
 th,
 td {
-  padding: var(--space-3);
+  padding: 10px var(--space-2);
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid var(--rt-grey-100);
@@ -40,12 +46,25 @@ th {
   white-space: nowrap;
 }
 
+th:first-child,
+td:first-child {
+  padding-left: var(--space-3);
+  min-width: 8.5em;
+}
+
+th:last-child,
+td:last-child {
+  padding-right: var(--space-3);
+}
+
 tbody tr:last-child td {
   border-bottom: 0;
 }
 
-tbody tr:hover td {
-  background: var(--color-surface-muted);
+@media (hover: hover) {
+  tbody tr:hover td {
+    background: var(--color-surface-muted);
+  }
 }
 
 td.num,
