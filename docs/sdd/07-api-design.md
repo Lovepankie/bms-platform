@@ -335,11 +335,11 @@ The refresh token never appears in a response body: it is the `__Host-bms_rt` co
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET | `/settings` | `core.settings.read` | |
-| PATCH | `/settings` | `core.settings.manage` | FR-TEN-08. Includes `theme_primary` (`#RRGGBB`, contrast rule, 422 `insufficient_contrast`) and `setup_dismissed` |
-| PUT | `/settings/logo` | `core.settings.manage` | `multipart/form-data` field `file`: PNG, JPEG or WebP, 1 MB, 128 px or more; re-encoded and scaled to 512 px; returns the settings. FR-TEN-08 |
+| PATCH | `/settings` | `core.settings.manage` | FR-TEN-08. Includes `theme_primary` (`#RRGGBB`, or an empty string to clear it back to the platform look; a colour with no readable text colour is a 422 `validation_failed` with the field error `insufficient_contrast`) and `setup_dismissed` |
+| PUT | `/settings/logo` | `core.settings.manage` | `multipart/form-data` field `file`: PNG, JPEG or WebP, 1 MB, 128 px or more; re-encoded and scaled to 512 px; returns the settings. Takes no `If-Match` but bumps the settings `version`, so a form holding the old version must refetch before its next `PATCH`. A logo over 4 megapixels is 422 `image_too_large`. FR-TEN-08 |
 | DELETE | `/settings/logo` | `core.settings.manage` | Clears the logo; the file is kept. Idempotent |
 | GET | `/branding` | public | `{display_name, theme_primary, theme_text, logo_url}` for the tenant of the request host; `logo_url` is `/api/v1/branding/logo?v=<document id>` or null. FR-TEN-08 |
-| GET | `/branding/logo` | public | The logo image: `Content-Type` from the stored value (`image/png` or `image/jpeg`), `Cache-Control: public, max-age=3600`, `ETag` (304 on `If-None-Match`), `X-Content-Type-Options: nosniff`, `Content-Disposition: inline`, `Content-Security-Policy: default-src 'none'; sandbox`; 404 `not_found` when there is no logo. FR-TEN-08 |
+| GET | `/branding/logo` | public | The logo image: `Content-Type` from the stored value (`image/png` or `image/jpeg`), `Cache-Control: public, max-age=3600`, `ETag` (304 on `If-None-Match`), `X-Content-Type-Options: nosniff`, `Content-Disposition: inline`, `Content-Security-Policy: default-src 'none'; sandbox`; 404 `not_found` when there is no logo; 503 `logo_unavailable` when storage cannot be read; `Vary: Host`; the optional `v` parameter must be a UUID and only busts caches. FR-TEN-08 |
 
 The two branding routes are public by design: they take no token, the tenant is resolved from the
 host like every tenant route (an unknown host is 404 `unknown_tenant`; the platform host has no

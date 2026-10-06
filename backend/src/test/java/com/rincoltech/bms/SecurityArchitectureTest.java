@@ -58,4 +58,19 @@ class SecurityArchitectureTest {
                 .callMethod(TenantContext.class, "callAs", UUID.class, Supplier.class)
                 .check(CLASSES);
     }
+
+    /** The permission-free public asset read is for the tenant logo route only (FR-TEN-08). */
+    @Test
+    void onlyTenancyReadsPublicAssets() {
+        noClasses()
+                .that()
+                .resideOutsideOfPackages("com.rincoltech.bms.core.tenancy..", "com.rincoltech.bms.core.documents..")
+                .should()
+                .callMethod(
+                        com.rincoltech.bms.core.documents.Documents.class, "publicAssetMeta", String.class, UUID.class)
+                .orShould()
+                .callMethod(
+                        com.rincoltech.bms.core.documents.Documents.class, "publicAssetBytes", String.class, UUID.class)
+                .check(CLASSES);
+    }
 }

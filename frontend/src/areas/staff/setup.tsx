@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { type ChangeEvent, useEffect, useState } from 'react';
+import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import { api, fetchSettings, problemOf, type TenantSettings } from '../../api/client';
 import { useShellBrand } from '../../app/branding';
 import { checkColour, colourMessage, suggestColour } from '../../app/contrast';
@@ -22,6 +22,7 @@ async function suggestFrom(file: File): Promise<string | null> {
     const context = canvas.getContext('2d');
     if (!context) return null;
     context.drawImage(bitmap, 0, 0, 64, 64);
+    bitmap.close();
     return suggestColour(context.getImageData(0, 0, 64, 64).data);
   } catch {
     return null;
@@ -52,13 +53,17 @@ function Setup() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // The form is filled once from the saved settings and then belongs to the admin: a logo upload,
+  // removal or dismissal changes the settings version but must not wipe what has been typed.
   const loaded = settings.data;
+  const seeded = useRef(false);
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || seeded.current) return;
+    seeded.current = true;
     setName(loaded.display_name ?? '');
     setFooter(loaded.receipt_footer ?? '');
     setColour(loaded.theme_primary ?? '');
-  }, [loaded?.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loaded]);
 
   if (settings.isError) return <p>Could not load the settings.</p>;
   if (!loaded) return <p>Loading</p>;
@@ -88,7 +93,7 @@ function Setup() {
       const body: Record<string, string> = {};
       if (name.trim() !== (current.display_name ?? '')) body.display_name = name.trim();
       if (footer !== (current.receipt_footer ?? '')) body.receipt_footer = footer;
-      if (colour !== '' && colour.toUpperCase() !== (current.theme_primary ?? '')) body.theme_primary = colour;
+      if (colour.toUpperCase() !== (current.theme_primary ?? '')) body.theme_primary = colour;
       if (Object.keys(body).length === 0) return 'Nothing to save.';
       const { error } = await api.PATCH('/api/v1/settings', {
         params: { header: { 'If-Match': `"${current.version}"` } },
@@ -99,7 +104,7 @@ function Setup() {
         throw new Error(problem.errors?.[0]?.message ?? problem.detail ?? 'Could not save.');
       }
       await refresh();
-      return 'Saved.';
+      return colour === '' ? 'Saved. The platform colour is in use.' : 'Saved.';
     });
   }
 
@@ -218,10 +223,22 @@ function Setup() {
           </label>{' '}
           <label>
             Hex
-            <input value={colour} placeholder="#0D5C75" maxLength={7} onChange={(e) => { setColour(e.target.value); setSuggested(false); }} />
-          </label>
+            <input
+              value={colour}
+              placeholder="#0D5C75"
+              maxLength={7}
+              aria-invalid={colourProblem !== null}
+              aria-describedby={colourProblem ? 'colour-problem' : undefined}
+              onChange={(e) => { setColour(e.target.value); setSuggested(false); }}
+            />
+          </label>{' '}
+          {current.theme_primary && (
+            <button type="button" disabled={busy} onClick={() => { setColour(''); setSuggested(false); }}>
+              Use the platform colour
+            </button>
+          )}
           {suggested && <p role="status">Suggested from your logo.</p>}
-          {colourProblem && <p role="alert">{colourProblem}</p>}
+          {colourProblem && <p id="colour-problem" role="alert">{colourProblem}</p>}
           {check.ok && (
             <p>
               <span style={{ background: colour, color: check.text, padding: '6px 12px', borderRadius: 4 }}>Preview of text on your colour</span>{' '}

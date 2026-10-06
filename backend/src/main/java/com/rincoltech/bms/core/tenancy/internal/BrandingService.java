@@ -1,12 +1,19 @@
 package com.rincoltech.bms.core.tenancy.internal;
 
 import com.rincoltech.bms.core.documents.Documents;
-import com.rincoltech.bms.core.documents.Documents.Content;
+import com.rincoltech.bms.core.documents.Documents.AssetMeta;
 import com.rincoltech.bms.core.documents.Documents.ImagePolicy;
 import com.rincoltech.bms.core.tenancy.internal.SettingsController.SettingsResponse;
+import com.rincoltech.bms.kernel.ApiException;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,8 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class BrandingService {
 
-    /** PNG, JPEG or WebP; 1 MB in, 128 px on the short side at least, 512 px on the long edge at most. */
-    static final ImagePolicy LOGO = new ImagePolicy(1024 * 1024, 128, 512);
+    private static final Logger log = LoggerFactory.getLogger(BrandingService.class);
+
+    /** PNG, JPEG or WebP; 1 MB in, 128 px on the short side at least, 512 px on the long edge at most, 4 megapixels decoded at most. */
+    static final ImagePolicy LOGO = new ImagePolicy(1024 * 1024, 128, 512, 4_000_000L);
 
     /** The only types the public logo route will ever send: never anything a browser could run. */
     static final Set<String> SERVABLE = Set.of("image/png", "image/jpeg");
@@ -62,12 +71,56 @@ class BrandingService {
                 s.logoDocumentId() == null ? null : "/api/v1/branding/logo?v=" + s.logoDocumentId());
     }
 
+    /** The current logo's id and checksum, from the database only: a conditional request reads no storage. */
+    record Logo(UUID id, AssetMeta meta) {}
+
     @Transactional(readOnly = true)
-    Optional<Content> logo() {
+    Optional<Logo> logo() {
         SettingsResponse s = settings.current();
         if (s.logoDocumentId() == null) {
             return Optional.empty();
         }
-        return documents.content(s.logoDocumentId()).filter(c -> SERVABLE.contains(c.contentType()));
+        return documents
+                .publicAssetMeta(TenantDocumentAccess.SUBJECT, s.logoDocumentId())
+                .filter(m -> SERVABLE.contains(m.contentType()))
+                .map(m -> new Logo(s.logoDocumentId(), m));
     }
+
+    /**
+     * The logo's bytes: from a small in-process cache (a document is immutable, so its id is a safe
+     * key, and {@link #logo()} has just proved it is this tenant's) or from storage. A storage
+     * failure is a 503 on this public route, never a 500; a missing object is empty (404).
+     */
+    Optional<byte[]> bytes(Logo logo) {
+        byte[] cached = cache.get(logo.id());
+        if (cached != null) {
+            return Optional.of(cached);
+        }
+        Optional<byte[]> loaded;
+        try {
+            loaded = documents.publicAssetBytes(TenantDocumentAccess.SUBJECT, logo.id());
+        } catch (ApiException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.warn("the tenant logo could not be read from storage", e);
+            throw new ApiException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "logo_unavailable",
+                    "Logo unavailable",
+                    "The logo cannot be read right now; try again shortly.");
+        }
+        loaded.ifPresent(b -> cache.put(logo.id(), b));
+        return loaded;
+    }
+
+    /** At most {@value #CACHE_ENTRIES} logos of at most about 1 MB each, least recently used out. */
+    static final int CACHE_ENTRIES = 16;
+
+    private final Map<UUID, byte[]> cache =
+            java.util.Collections.synchronizedMap(new LinkedHashMap<>(CACHE_ENTRIES, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<UUID, byte[]> eldest) {
+                    return size() > CACHE_ENTRIES;
+                }
+            });
 }

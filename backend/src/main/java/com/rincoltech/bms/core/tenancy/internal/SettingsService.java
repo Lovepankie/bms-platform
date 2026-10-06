@@ -71,7 +71,8 @@ class SettingsService implements TenantSettings {
         Map<String, Object> changes = mapper.convertValue(request, MAP);
         changes.values().removeIf(Objects::isNull);
         if (changes.get("theme_primary") instanceof String colour) {
-            changes.put("theme_primary", colour.toUpperCase(Locale.ROOT));
+            // An empty string clears the colour: back to the platform look.
+            changes.put("theme_primary", colour.isEmpty() ? null : colour.toUpperCase(Locale.ROOT));
         }
         return write(stored, changes);
     }
@@ -79,10 +80,11 @@ class SettingsService implements TenantSettings {
     /** Stores a prepared logo as a core document of this tenant and makes it the current one (FR-TEN-08). */
     @Transactional
     SettingsResponse replaceLogo(Documents.Prepared prepared) {
-        Stored stored = lock();
+        // Stored first: the object write does not wait inside the settings row lock.
         UUID id = documents
                 .store(prepared, TenantDocumentAccess.SUBJECT, tenant.profile().id(), null)
                 .id();
+        Stored stored = lock();
         return write(stored, Map.of("logo_document_id", id.toString()));
     }
 
@@ -225,6 +227,7 @@ class SettingsService implements TenantSettings {
             problems.add(new FieldProblem("display_name", "invalid", "Must not be blank."));
         }
         if (request.themePrimary() != null
+                && !request.themePrimary().isEmpty()
                 && BrandColour.readableText(request.themePrimary()).isEmpty()) {
             problems.add(
                     new FieldProblem(

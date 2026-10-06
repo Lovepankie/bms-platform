@@ -28,17 +28,24 @@ public interface Documents {
      */
     Prepared prepareImage(byte[] bytes, ImagePolicy policy);
 
-    /** The limits of {@link #prepareImage}: bytes in, shortest side at least, longest edge at most. */
-    record ImagePolicy(int maxBytes, int minShortSide, int maxLongEdge) {}
+    /**
+     * The limits of {@link #prepareImage}: bytes in, shortest side at least, longest edge at most,
+     * and the largest canvas that is decoded at all (0 keeps the module's 16 megapixel default).
+     */
+    record ImagePolicy(int maxBytes, int minShortSide, int maxLongEdge, long maxPixels) {}
 
     /**
-     * The stored bytes of a document, with no permission check: only for an asset the owning module
-     * serves publicly by design (the tenant logo). Everything else goes through a signed URL.
+     * Type and checksum of a document that its owning module serves publicly by design (the tenant
+     * logo), read without a permission check. Empty unless the document belongs to this subject type
+     * and its subject is the current tenant, so it cannot be used to read anyone's other documents.
+     * Only {@code core.tenancy} calls it (an architecture test enforces that).
      */
-    Optional<Content> content(UUID documentId);
+    Optional<AssetMeta> publicAssetMeta(String subjectType, UUID documentId);
 
-    /** The bytes as stored (already re-encoded), their sniffed type and checksum. */
-    record Content(byte[] bytes, String contentType, String sha256) {}
+    /** The bytes of a public asset, under the same subject rule as {@link #publicAssetMeta}. */
+    Optional<byte[]> publicAssetBytes(String subjectType, UUID documentId);
+
+    record AssetMeta(String contentType, String sha256, long sizeBytes) {}
 
     /** Stores and records a prepared file in the caller's transaction. */
     StoredDocument store(Prepared prepared, String subjectType, UUID subjectId, UUID branchId);

@@ -1,7 +1,27 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { checkColour, colourMessage, contrast, fitToReadable, luminance, parseHex, suggestColour } from './contrast';
 
 const rgb = (hex: string) => parseHex(hex) as [number, number, number];
+
+// One file of vectors shared with BrandColourTest.java, so the two implementations cannot drift.
+const vectors = JSON.parse(readFileSync('../fixtures/brand-contrast.json', 'utf8')) as {
+  ratios: { a: string; b: string; ratio: number; tolerance: number }[];
+  readable: { hex: string; text: string }[];
+  refused: string[];
+  notHex: string[];
+};
+
+describe('the shared vectors', () => {
+  it('give the same ratios, text colours and refusals as the backend', () => {
+    for (const r of vectors.ratios) {
+      expect(Math.abs(contrast(rgb(r.a), rgb(r.b)) - r.ratio)).toBeLessThanOrEqual(r.tolerance);
+    }
+    for (const r of vectors.readable) expect(checkColour(r.hex), r.hex).toMatchObject({ ok: true, text: r.text });
+    for (const hex of vectors.refused) expect(checkColour(hex), hex).toMatchObject({ ok: false, reason: 'contrast' });
+    for (const hex of vectors.notHex) expect(checkColour(hex), hex).toMatchObject({ ok: false, reason: 'format' });
+  });
+});
 
 // The reference values are the ones in BrandColourTest.java: the two implementations must agree.
 describe('WCAG contrast', () => {

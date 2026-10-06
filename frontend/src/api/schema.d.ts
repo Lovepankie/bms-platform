@@ -3650,7 +3650,7 @@ export interface components {
             sms_sender_name?: string;
             sms_window_end?: string;
             sms_window_start?: string;
-            /** @description #RRGGBB; white or near-black text on it must reach contrast 4.5 (FR-TEN-08) */
+            /** @description #RRGGBB, or an empty string to clear it; white or near-black text on it must reach contrast 4.5 (FR-TEN-08) */
             theme_primary?: string;
         };
         /** @description Omitted fields are unchanged */
@@ -4184,7 +4184,9 @@ export interface operations {
     };
     getBrandingLogo: {
         parameters: {
-            query?: never;
+            query?: {
+                v?: string;
+            };
             header?: {
                 "If-None-Match"?: string;
             };
@@ -4193,8 +4195,26 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
-            200: {
+            /** @description The ETag still matches */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description No logo, or an unknown host (unknown_tenant) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description Storage cannot be read (logo_unavailable) */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6575,8 +6595,26 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description Over 1 MB (file_too_large) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantSettings"];
+                };
+            };
+            /** @description Not PNG, JPEG or WebP, or not decodable (unsupported_file_type) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantSettings"];
+                };
+            };
+            /** @description svg_not_allowed, image_too_small, image_too_large (over 4 megapixels) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

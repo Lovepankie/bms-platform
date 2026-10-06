@@ -3,10 +3,41 @@ package com.rincoltech.bms.core.tenancy.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /** The brand colour rule of FR-TEN-08; the frontend's contrast.test.ts holds the same reference values. */
 class BrandColourTest {
+
+    /** The vectors shared with the frontend test: one file, so the two implementations cannot drift. */
+    static final JsonNode VECTORS = JsonMapper.builder()
+            .build()
+            .readTree(Path.of("../fixtures/brand-contrast.json").toFile());
+
+    @Test
+    void theSharedVectorsHold() {
+        for (JsonNode r : VECTORS.get("ratios")) {
+            assertThat(BrandColour.contrast(r.get("a").asString(), r.get("b").asString()))
+                    .isCloseTo(
+                            r.get("ratio").asDouble(), within(r.get("tolerance").asDouble()));
+        }
+        for (JsonNode r : VECTORS.get("readable")) {
+            assertThat(BrandColour.readableText(r.get("hex").asString()))
+                    .contains(r.get("text").asString());
+        }
+        for (JsonNode hex : VECTORS.get("refused")) {
+            assertThat(BrandColour.readableText(hex.asString()))
+                    .as(hex.asString())
+                    .isEmpty();
+        }
+        for (JsonNode hex : VECTORS.get("notHex")) {
+            assertThat(BrandColour.readableText(hex.asString()))
+                    .as(hex.asString())
+                    .isEmpty();
+        }
+    }
 
     @Test
     void blackOnWhiteIs21AndTheLuminancesAreTheWcagOnes() {

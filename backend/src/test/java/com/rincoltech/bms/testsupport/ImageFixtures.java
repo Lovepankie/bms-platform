@@ -49,6 +49,78 @@ public final class ImageFixtures {
         return out.toByteArray();
     }
 
+    /** A JPEG whose EXIF orientation says it must be turned (6: rotate 90 degrees clockwise). */
+    public static byte[] jpegWithOrientation(int width, int height, Color colour, int orientation) {
+        byte[] j = jpeg(width, height, colour);
+        // APP1: "Exif\0\0", a little-endian TIFF header, IFD0 with one entry (tag 0x0112, SHORT, 1, value).
+        byte[] app1 = {
+            'E',
+            'x',
+            'i',
+            'f',
+            0,
+            0,
+            'I',
+            'I',
+            42,
+            0,
+            8,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0x12,
+            0x01,
+            3,
+            0,
+            1,
+            0,
+            0,
+            0,
+            (byte) orientation,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        };
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        int len = app1.length + 2;
+        out.write(j, 0, 2);
+        out.write(new byte[] {(byte) 0xFF, (byte) 0xE1, (byte) (len >> 8), (byte) len}, 0, 4);
+        out.write(app1, 0, app1.length);
+        out.write(j, 2, j.length - 2);
+        return out.toByteArray();
+    }
+
+    /** A valid JPEG with a script appended after its end marker: a polyglot a re-encode must drop. */
+    public static byte[] jpegWithTrailingScript(int width, int height, Color colour) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] j = jpeg(width, height, colour);
+        out.write(j, 0, j.length);
+        byte[] tail = "<html><script>alert('test-polyglot')</script></html>".getBytes(StandardCharsets.US_ASCII);
+        out.write(tail, 0, tail.length);
+        return out.toByteArray();
+    }
+
+    /** A PNG with a ZIP-looking trailer after IEND. */
+    public static byte[] pngWithTrailer(int width, int height, Color colour) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] p = png(width, height, colour);
+        out.write(p, 0, p.length);
+        byte[] tail = "PK\u0003\u0004test-polyglot-trailer".getBytes(StandardCharsets.ISO_8859_1);
+        out.write(tail, 0, tail.length);
+        return out.toByteArray();
+    }
+
+    /** A flat one-bit PNG of a huge canvas: a few KB on the wire, tens of MB once decoded. */
+    public static byte[] bigCanvasPng(int width, int height) {
+        return write(new BufferedImage(width, height, BufferedImage.TYPE_BYTE_BINARY), "png");
+    }
+
     /**
      * A lossless WebP of one flat colour, assembled by hand (the JDK and the decoder plugin have no
      * WebP writer): a VP8L stream whose five prefix codes each hold a single symbol, so the pixels

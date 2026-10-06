@@ -80,7 +80,9 @@ Verticals (retail, lending) and every area use only these variables, never a har
 colour, and draw text on `--brand` only in `--brand-contrast`; `--brand` alone is not guaranteed
 readable as text on white. The contrast rule lives in one tested pure function
 (`frontend/src/app/contrast.ts`) and in the same rule in the API (`BrandColour`), both checked
-against the same reference values.
+against the same reference values (`fixtures/brand-contrast.json`, read by both tests). The rule
+is about text. A very light `--brand` is allowed and makes the brand bar's border faint on a white
+page; the logo stays the main brand mark.
 
 ## 11.3 SMS
 

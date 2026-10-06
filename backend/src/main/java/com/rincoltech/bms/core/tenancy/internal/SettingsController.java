@@ -4,6 +4,7 @@ import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -102,8 +103,10 @@ class SettingsController {
             List<@Pattern(regexp = "^[a-z_]{2,40}$") String> disabledCollateralTypes,
             Boolean requireMfaAllStaff,
 
-            @Pattern(regexp = "^#[0-9A-Fa-f]{6}$")
-            @Schema(description = "#RRGGBB; white or near-black text on it must reach contrast 4.5 (FR-TEN-08)")
+            @Pattern(regexp = "^(#[0-9A-Fa-f]{6})?$")
+            @Schema(
+                    description =
+                            "#RRGGBB, or an empty string to clear it; white or near-black text on it must reach contrast 4.5 (FR-TEN-08)")
             String themePrimary,
 
             Boolean setupDismissed) {}
@@ -133,7 +136,16 @@ class SettingsController {
     @Operation(
             summary = "Upload or replace the business logo: PNG, JPEG or WebP, 1 MB, 128 px or more (FR-TEN-08)",
             operationId = "uploadLogo")
+    @ApiResponse(responseCode = "413", description = "Over 1 MB (file_too_large)")
+    @ApiResponse(responseCode = "415", description = "Not PNG, JPEG or WebP, or not decodable (unsupported_file_type)")
+    @ApiResponse(
+            responseCode = "422",
+            description = "svg_not_allowed, image_too_small, image_too_large (over 4 megapixels)")
     ResponseEntity<SettingsResponse> uploadLogo(@RequestPart("file") MultipartFile file) {
+        if (file.getSize() > BrandingService.LOGO.maxBytes()) {
+            throw new ApiException(
+                    HttpStatus.CONTENT_TOO_LARGE, "file_too_large", "File too large", "The file is larger than 1 MB.");
+        }
         byte[] bytes;
         try {
             bytes = file.getBytes();

@@ -424,6 +424,67 @@ class BrandingIT extends IntegrationTest {
                 .isEqualTo(HttpStatus.OK);
     }
 
+    @Test
+    void exifOrientationIsAppliedBeforeTheMetadataIsDropped() throws Exception {
+        assertThat(upload(ImageFixtures.jpegWithOrientation(300, 200, Color.MAGENTA, 6), "p.jpg")
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        BufferedImage decoded = decode(logo(t).getBody());
+        assertThat(decoded.getWidth()).isEqualTo(200);
+        assertThat(decoded.getHeight()).isEqualTo(300);
+    }
+
+    @Test
+    void polyglotsLoseTheirTrailerOnReencode() {
+        for (byte[] polyglot : new byte[][] {
+            ImageFixtures.jpegWithTrailingScript(200, 200, Color.CYAN),
+            ImageFixtures.pngWithTrailer(200, 200, Color.CYAN)
+        }) {
+            assertThat(upload(polyglot, "logo.png").getStatusCode()).isEqualTo(HttpStatus.OK);
+            byte[] served = logo(t).getBody();
+            assertThat(contains(served, "<script")).isFalse();
+            assertThat(contains(served, "test-polyglot")).isFalse();
+        }
+    }
+
+    /** A few KB on the wire, a huge canvas decoded: refused before decoding (4 megapixel logo cap). */
+    @Test
+    void aDecompressionBombIsRefusedBeforeItIsDecoded() {
+        ResponseEntity<JsonNode> r = upload(ImageFixtures.bigCanvasPng(5000, 5000), "logo.png");
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(r.getBody().get("code").asString()).isEqualTo("image_too_large");
+        assertThat(upload(ImageFixtures.bigCanvasPng(2000, 2000), "ok.png").getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void conditionalRequestsAcceptWeakTagsListsAndStar() {
+        upload(ImageFixtures.png(200, 200, Color.RED), "a.png");
+        String etag = logo(t).getHeaders().getETag();
+        for (String header : new String[] {"W/" + etag, "\"other\", " + etag, "*"}) {
+            assertThat(publicGet("/api/v1/branding/logo", t.slug(), null, byte[].class, "If-None-Match", header)
+                            .getStatusCode())
+                    .as(header)
+                    .isEqualTo(HttpStatus.NOT_MODIFIED);
+        }
+        assertThat(publicGet("/api/v1/branding/logo", t.slug(), null, byte[].class, "If-None-Match", "\"nope\"")
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(logo(t).getHeaders().getFirst(HttpHeaders.VARY)).isEqualTo("Host");
+        assertThat(publicGet("/api/v1/branding/logo?v=not-a-uuid", t.slug(), null, JsonNode.class)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void theThemeColourCanBeClearedWithAnEmptyString() {
+        patch(Map.of("theme_primary", "#0D5C75"));
+        ResponseEntity<JsonNode> cleared = patch(Map.of("theme_primary", ""));
+        assertThat(cleared.getStatusCode()).as("%s", cleared.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(cleared.getBody().get("theme_primary").isNull()).isTrue();
+        assertThat(branding(t).getBody().get("theme_primary").isNull()).isTrue();
+    }
+
     // ---- The theme colour -------------------------------------------------------------------
 
     @Test
