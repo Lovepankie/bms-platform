@@ -118,7 +118,7 @@ till.** A scheduled job (db-scheduler, ADR-008) may move `active` to `past_due` 
 
 A tenant can always be moved by hand by the operator, as today (FR-TEN-05), with the reason audited.
 
-## 6. Payments (FR-PAY-01 to FR-PAY-05)
+## 6. Payments (FR-SPM-01 to FR-SPM-05) <!-- [AI-RECOMMENDED - CONFIRM BEFORE MERGE]: FR-PAY-01 to FR-PAY-05 already identify the unrelated gateway payment-intent requirements in chapter 3.15 of the requirements catalogue; this manual subscription-payment feature needs its own, unused ID block -->
 
 A payment is a record, whatever the channel: `claimed` by the tenant (or entered by the operator),
 then `confirmed` or `rejected` by the operator. Fields: amount, method (`mtn_momo`, `airtel_money`,
@@ -168,8 +168,11 @@ operator alerts). The provider is configuration; no provider is chosen in this s
 ## 12. Security and data
 
 - The public endpoints are rate limited and return the same response for known and unknown emails.
-- Applications hold personal data: mask phone and email in audit payloads as everywhere (chapter 8.9);
-  delete `rejected` and `expired` applications after 90 days.
+- Applications hold personal data: mask phone in audit payloads as everywhere (chapter 8.9); mask
+  email in audit payloads too, extending chapter 8.9, which today only names NIN and phone
+  [AI-RECOMMENDED - CONFIRM BEFORE MERGE: chapter 8.9 does not currently specify email masking;
+  confirm whether to add it there and treat this spec as doing so, or to drop the email-masking
+  claim here]; delete `rejected` and `expired` applications after 90 days.
 - The activation link is a signed one-time token, valid 72 hours, hashed at rest, as invitations are
   today (FR-IAM-01).
 - Only platform operators can price, confirm, activate, suspend and manage agents (ADR-016: through
@@ -185,7 +188,11 @@ operator alerts). The provider is configuration; no provider is chosen in this s
 4. Agents and commissions.
 
 Each step carries its migration and docs; migration numbers for this work are claimed on issue #50
-before use (proposal: V30 to V39), one migration pull request at a time.
+before use, one migration pull request at a time, each taking the next free number at merge time
+(ADR-020's established practice for the shared sequence), not a pre-claimed static block
+[AI-RECOMMENDED - CONFIRM BEFORE MERGE: the repo's next free Flyway number today is V22, not V30;
+with `outOfOrder` off, pre-claiming V30 to V39 would strand V22 to V29, as V15 to V19 were stranded
+when V20 was claimed early].
 
 ## 14. Open points
 
