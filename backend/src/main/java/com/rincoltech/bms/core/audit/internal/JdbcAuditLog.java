@@ -19,9 +19,20 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 class JdbcAuditLog implements AuditLog {
 
-    /** Keys whose values are personal identifiers (FR-AUD-05). */
+    /** Keys whose values are personal identifiers (FR-AUD-05, chapter 8 section 8.9). */
     static final Set<String> MASKED_KEYS = Set.of(
-            "national_id", "phone_e164", "alt_phone_e164", "phone", "other_id_number", "payer_phone_e164", "login");
+            "national_id",
+            "phone_e164",
+            "alt_phone_e164",
+            "phone",
+            "other_id_number",
+            "payer_phone_e164",
+            "login",
+            "email",
+            "contact_email",
+            "contact_phone",
+            "contact_phone_e164",
+            "recipient");
 
     private final JdbcClient jdbc;
     private final ObjectMapper mapper;

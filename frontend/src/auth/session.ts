@@ -22,6 +22,15 @@ export function subscribe(listener: Listener): () => void {
 }
 
 let inFlight: Promise<boolean> | null = null;
+let refreshPath = '/api/v1/auth/refresh';
+
+/**
+ * Which session this page restores: staff on a tenant host, or a platform operator on the platform
+ * host, whose refresh cookie belongs to /api/v1/platform/auth (ADR-014). The operator portal sets it.
+ */
+export function setSessionScope(scope: 'staff' | 'platform'): void {
+  refreshPath = scope === 'platform' ? '/api/v1/platform/auth/refresh' : '/api/v1/auth/refresh';
+}
 
 /**
  * Rotates the refresh cookie and stores the new access token. Concurrent callers share one
@@ -29,7 +38,7 @@ let inFlight: Promise<boolean> | null = null;
  */
 export function refreshSession(): Promise<boolean> {
   if (!inFlight) {
-    inFlight = fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'same-origin', headers: tenantHeaders() })
+    inFlight = fetch(refreshPath, { method: 'POST', credentials: 'same-origin', headers: tenantHeaders() })
       .then(async (response) => {
         if (!response.ok) {
           setAccessToken(null);

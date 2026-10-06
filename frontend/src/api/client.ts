@@ -29,7 +29,8 @@ const auth: Middleware = {
   },
   // An expired access token is refreshed once and a read is retried; writes are not replayed.
   async onResponse({ request, response }) {
-    if (response.status !== 401 || request.url.includes('/api/v1/auth/') || request.method !== 'GET') {
+    const authPath = ['/api/v1/auth/', '/api/v1/platform/auth/', '/api/v1/platform/sign-up/'].some((p) => request.url.includes(p));
+    if (response.status !== 401 || authPath || request.method !== 'GET') {
       return response;
     }
     if (!(await refreshSession())) return response;

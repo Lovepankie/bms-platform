@@ -69,6 +69,8 @@ data gets its own read test (`lending_member_links_v` in `RlsIsolationIT`).
 | `TenancyAdminIT` | Branch create, rename with `If-Match`, deactivate, head office kept; scoped branch lists and `/me` branches; plan limits for branches, staff and members; settings validation, conflicts and audited before and after; tenant-wide MFA; the suspended tenant (FR-BR-01, FR-BR-03, FR-BR-04, FR-TEN-04, FR-TEN-06, FR-TEN-08) |
 | `BrandingIT`, `BrandColourTest`, `RlsIsolationIT`, `contrast.test.ts`, `shell.test.tsx` | Tenant branding (FR-TEN-08): logo upload limits and refusals (SVG as UTF-8 and UTF-16, GIF, HTML, truncated PNG, over 1 MB, under 128 px, a JPEG named .png stored as a JPEG, EXIF stripped, a WebP stored as PNG, scaling to 512 px, wrong permission, no token); the two public routes with no sign-in, cache, nosniff and type headers, the ETag 304, 404 shapes, a suspended tenant, and tenant isolation (the host wins over a header, unknown and foreign hosts and the platform host 404); replace keeps the old file, remove clears; audit with was and now; the theme colour rule on both sides against the same reference values; the `core.tenant` document subject in the isolation suite; the Powered-by footer present in the shared shell for a tenant, a tenant without a logo and the platform host, and the shell being the root of every area |
 | `PlatformIT` | Operator setup token and mandatory TOTP; tenant creation with head office, modules, chart, settings, invited admin and audit rows; slug rules; module switching and the job tenant list; subscription moves and suspension; platform MFA reset of a tenant admin; host and token separation (FR-TEN-01 to FR-TEN-06, FR-IAM-12) |
+| `OnboardingIT` | Self-onboarding (ADR-024, FR-ONB-01 to FR-ONB-09): apply, confirm the email once and reach the queue, operator alerts written once; the same answer for a known, an unknown and a honeypot request, one open application per mailbox (+tag and Gmail dot variants), a variant submitted first not squatting the mailbox, the confirmation email carrying only the reference and the link, only the newest link works; input caps, ASCII-only addresses and phone rules; the per-address and link rate limits, a spoofed left-most X-Forwarded-For value and an IPv6 /64 landing in one bucket, the bounded limiter; the per-mailbox bound and the global caps counted in the database, with one alert and audit row per hour (the cap test runs its own service ten years ahead, so it shares no counts with other tests); one answer for a malformed or unknown link; Needs info, the applicant's reply, Verify, Reject and refused moves; possible repeats by phone, email and normalised name; Activate creating exactly one tenant with a working invitation, masked email in `platform_audit_log`, one activation email, a repeat doing nothing, four concurrent activations creating one tenant, the paid way with its note starting `active`, a taken slug rolling everything back; a tenant admin's token, no token, the development headers and the tenant host refused on every onboarding and outbox route; no table privilege for `bms_app`, forced row-level security, definer functions owned by `bms_owner` and not executable by PUBLIC; expiry and 90 day deletion; no token or address in the audit log |
+| `OutboxIT` | The outbox (FR-NTF-01, FR-NTF-09 to FR-NTF-11): senders off without their variables and rows kept pending; no row outside a transaction or after a rollback, one row per idempotency key, an unrenderable template refused; a sent row marked and its parameters cleared; three failures then `failed`, shown masked in the portal and sent again (audited); a row locked by another sender skipped, not sent twice; an attempt that dies with an Error counted and leased, and after three such deaths marked `failed` instead of claimed again; a row whose own link expired neither sent nor retried; a row older than 7 days refused for "send again" and cleared by the purge, sent rows deleted after 30 days; a malformed bot token switching Telegram off; every template renders and the confirmation email uses only `reference` and `link`; the SMTP Message-ID is stable per key; provider and JDK error messages are reduced to their class |
 | `AuditSearchIT` | Search filters and branch scope; CSV export, audited; audited denial on a money-moving route (FR-AUD-03, FR-AUD-04) |
 | `Increment1AcceptanceIT` | The increment 1 demo end to end: a platform operator creates a tenant, its admin enrols MFA and invites a branch manager and a cashier, the cashier requests a test action and the branch manager approves it |
 | `TenantHostPatternTest`, `TenantResolutionFilterTest`, `MembersApiIT`, `PlatformIT`, `hosts.test.ts` | The host rules of chapter 7 section 7.2 (ADR-018): the pattern and platform host are validated at startup (exactly one `{slug}` in the leftmost label, valid labels, platform host not a tenant host); exact, case-insensitive matching; look-alike hosts (another zone appended, a trailing dot, extra labels, a different separator, reserved or too long slugs) resolve no tenant and answer 404; platform routes answer only on the platform host; invitation links use the pattern; the PWA classifies hosts with the same rules (FR-TEN-02) |
@@ -132,11 +134,11 @@ write and unbound-session tests cover it without a separate suite.
 `MigrationOrderIT` runs `DatabaseMigrator` with Flyway's `outOfOrder` off, as every environment
 does, on a fresh PostgreSQL 16 container per case: every migration (V1 to V9 lending, V10 to V14
 retail, V20 the retail import references, V21 the lending follow-ups, V22 the retail stock
-transfers) applies in order on an empty database; on a database already migrated to V9 with a
-lending tenant, exactly V10 to V14, V20, V21 and V22 apply and that tenant can then switch retail
-on; a tenant that switched retail on at V21 gets the inter-branch clearing account (code 1190,
-system controlled) from V22 (#84); and no two migration files share a version (issue #71, review
-F6).
+transfers, V23 the onboarding applications and outbox of #89) applies in order on an empty
+database; on a database already migrated to V9 with a lending tenant, exactly V10 to V14, V20,
+V21, V22 and V23 apply and that tenant can then switch retail on; a tenant that switched retail on
+at V21 gets the inter-branch clearing account (code 1190, system controlled) from V22 (#84); and
+no two migration files share a version (issue #71, review F6).
 
 ## 15.5 Module boundary test
 
@@ -221,6 +223,15 @@ output changed.
   formatting, the second factor and invitation token parsing, the password rule echo, recovery
   code display and the active branch choice (`auth/codes.test.ts`).
 - Component tests for the schedule table, allocation display and approval queue.
+- Self-onboarding (ADR-024): `areas/onboarding/onboarding.test.tsx` (sign-up checks and request
+  shape; labelled fields with the phone first; the hidden honeypot; the button disabled while
+  sending; errors marked on the field; the "check your email" state; the link token read from the
+  fragment only; the applicant page in each status, loading and an invalid link; the Activate
+  checks) and `areas/platform/portal.test.tsx` (operator sign-in steps, enrolment and recovery
+  codes, busy and error states, first password; the queue with counts, filters and links; the
+  possible-repeat warning; decisions allowed per status and notes required; the Activate form
+  labelled and not sent twice; the result and the repeat; failed messages masked with a retry and
+  a warning for an unconfigured sender; the new routes on the shared shell).
 - Bundle budget check for the member area (NFR-PERF-06).
 - Accessibility checks on key screens (NFR-ACC-01).
 

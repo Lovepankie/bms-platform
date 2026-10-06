@@ -51,7 +51,13 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   `import-retail` command (`V20`, `docs/runbooks/import-retail.md`) and the phone-first retail
   screens on the real API (`docs/specs/retail-ui-notes.md`). Stock transfers between branches
   (issue #84, ADR-020 amendment) add `V22`. Flyway runs with `outOfOrder` off, so a new migration
-  takes a number above the highest one on any open branch (`V23` next).
+  takes a number above the highest one on any open branch (`V24` next).
+- **Self-onboarding, build step 1 (issue #89, ADR-024):** migration `V23` with
+  `onboarding_applications` and `notification_outbox`, reached only through definer functions;
+  the public sign-up and applicant page; the operator portal on the platform host (operator
+  sign-in, applications queue, Activate through `TenantProvisioning`, messages not sent); the
+  outbox sender job with SMTP and Telegram senders, off until their `BMS_SMTP_*`, `BMS_MAIL_FROM`
+  and `BMS_TELEGRAM_*` variables are set.
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
   Cloudflare Tunnel and pulls every green build of `main` from a `staging` pointer tag; hosts are
@@ -114,7 +120,8 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `core.approvals` | Maker-checker | APR | 6.5 `approval_requests` | 7.11.5 |
 | `core.platform` | Platform console: tenant creation, modules, subscriptions | TEN | 6.4, 6.5 | 7.11.3 |
 | `core.ledger` | Chart of accounts, periods, journals, reconciliation | GL | 6.6 | 7.11.6 |
-| `core.notifications` | Templates, outbox, SMS and email adapters | NTF | 6.5 | 7.11.7 |
+| `core.notifications` | Templates, outbox, SMS and email adapters; today the platform outbox with SMTP and Telegram senders (ADR-024) | NTF | 6.4 `notification_outbox`, 6.5 | 7.11.3, 7.11.7 |
+| `core.onboarding` | Public sign-up, applications, Verify, Needs info, Reject, Activate (ADR-024) | ONB | 6.4 `onboarding_applications` | 7.11.3 |
 | `core.documents` | PDFs, uploads, object storage, signed URLs | DOC | 6.5 `documents` | 7.11.7 |
 | `core.reporting` | Report catalogue and runs | RPT; chapter 14 | 6.5 `report_runs` | 7.11.8 |
 | `core.imports` | Import batches, review queue, commit | IMP; chapter 13 | 13.4 | 7.11.9 |
@@ -283,6 +290,8 @@ Accepted (this list is the ADR index):
 - ADR-019 Collateral release as an approval action, and the interim duplicate pledge rule (proposed, #24)
 - ADR-020 Retail vertical brought forward; stock as append-only movements; retail events post to the
   ledger (proposed, #50)
+- ADR-024 Self-onboarding with operator verification, per-module subscriptions and manual payments
+  (spec `docs/specs/self-onboarding-and-subscriptions.md`; build step 1 is #89)
 
 Pending (cite only as "pending ADR-NNN"):
 

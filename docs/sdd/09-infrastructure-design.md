@@ -154,6 +154,27 @@ migration) with status only, no details.
 - Host names: `BMS_TENANT_HOST_PATTERN` and `BMS_PLATFORM_HOST` for the API and the web
   container; on the production VM also `BMS_DNS_ZONE` and `BMS_CALLBACK_HOST` for the proxy; on
   the staging host `CLOUDFLARE_TUNNEL_TOKEN` and `CLOUDFLARED_IMAGE` for cloudflared.
+- Outbox senders (ADR-024, spec section 11), optional on every host: `BMS_SMTP_HOST`,
+  `BMS_SMTP_PORT` (465, implicit TLS; port 587 is blocked on the staging host), `BMS_SMTP_USER`,
+  `BMS_SMTP_PASSWORD` and `BMS_MAIL_FROM` for email, `BMS_TELEGRAM_BOT_TOKEN` and
+  `BMS_TELEGRAM_OPERATOR_CHAT_ID` for operator alerts. Both compose files pass them to the API
+  only. With a sender's values unset it is off: its messages wait as `pending` and nothing fails.
+  The staging host's `/opt/bms/.env` holds them since 2026-10-06 (issue #89). Outbound traffic is
+  SMTPS to the mail provider and HTTPS to `api.telegram.org`; nothing is opened inbound.
+  `BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR` (default 30) and
+  `BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR` (default 60) are the global sign-up caps.
+- Edge rule for the public sign-up (ADR-024, chapter 7 section 7.10), added by the dev lead in the
+  Cloudflare dashboard for the platform host: a rate limiting rule on `URI Path starts with
+  /api/v1/platform/sign-up/`, counting by IP, 10 requests per minute, action block for 10 minutes.
+  It is the first line; the API's own bounds hold without it.
+- Client addresses for the per-address limits: on staging, Cloudflare appends the visitor to
+  `X-Forwarded-For`, cloudflared and Caddy (`Caddyfile.tunnel`, which trusts the tunnel and reads
+  `Cf-Connecting-Ip`) pass it on, and Tomcat's RemoteIpValve takes the right-most untrusted value,
+  so a value a client prepends changes nothing. On the production VM the tenant and platform
+  records are DNS only (`docs/runbooks/provision-host.md`), so Caddy's peer is the visitor. If the
+  production records are ever proxied through Cloudflare, add Cloudflare's published ranges to
+  `trusted_proxies` with `client_ip_headers Cf-Connecting-Ip` in `deploy/caddy/Caddyfile` first;
+  otherwise every visitor behind one edge shares one bucket.
 - Production refuses development switches at startup: `ALLOW_TENANT_HEADER` and `AUTH_MODE=dev`
   are accepted only in the `dev` and `test` profiles, and the servers run the `server` profile.
 
@@ -162,6 +183,11 @@ migration) with status only, no details.
 db-scheduler runs inside the API process with its state in `scheduled_tasks` (ADR-008). No
 separate worker container exists yet; `BMS_SCHEDULER_ENABLED` lets one be split out later from
 the same image.
+
+Platform jobs (no tenant bound): `core.notifications.outbox-sender` every 30 seconds (at most 50
+rows a run), `core.notifications.outbox-purge` nightly at 03:15 (sent rows after 30 days) and
+`core.onboarding.application-housekeeping` nightly at 02:45 (expiry after 14 days unconfirmed,
+deletion 90 days after closing), all Africa/Kampala (ADR-024).
 
 ## 9.10 Backups and restore
 

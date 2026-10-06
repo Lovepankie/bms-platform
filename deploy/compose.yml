@@ -82,6 +82,19 @@ services:
       R2_DOCUMENTS_ACCESS_KEY_ID: ${R2_DOCUMENTS_ACCESS_KEY_ID:?}
       R2_DOCUMENTS_SECRET_ACCESS_KEY: ${R2_DOCUMENTS_SECRET_ACCESS_KEY:?}
       R2_DOCUMENTS_BUCKET: ${R2_DOCUMENTS_BUCKET:?}
+      # Outbox senders (spec section 11, chapter 9 section 9.8). Optional: a sender whose values
+      # are empty stays off and its messages wait in the outbox. SMTP is implicit TLS on 465 (587 is
+      # blocked on the staging host).
+      BMS_SMTP_HOST: ${BMS_SMTP_HOST:-}
+      BMS_SMTP_PORT: ${BMS_SMTP_PORT:-465}
+      BMS_SMTP_USER: ${BMS_SMTP_USER:-}
+      BMS_SMTP_PASSWORD: ${BMS_SMTP_PASSWORD:-}
+      BMS_MAIL_FROM: ${BMS_MAIL_FROM:-}
+      BMS_TELEGRAM_BOT_TOKEN: ${BMS_TELEGRAM_BOT_TOKEN:-}
+      BMS_TELEGRAM_OPERATOR_CHAT_ID: ${BMS_TELEGRAM_OPERATOR_CHAT_ID:-}
+      # Global sign-up caps per hour (chapter 7 section 7.10); defaults 30 and 60.
+      BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR: ${BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR:-30}
+      BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR: ${BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR:-60}
     mem_limit: 1536m
     depends_on:
       postgres:

@@ -936,6 +936,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The applications queue with counts (FR-ONB-05) */
+        get: operations["platformListApplications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/applications/{application_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One application with the possible duplicates (FR-ONB-05) */
+        get: operations["platformGetApplication"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/applications/{application_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create the tenant and send the activation link; a repeat does nothing (FR-ONB-07) */
+        post: operations["platformActivateApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/applications/{application_id}/needs-info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask the applicant for more information; they see the note (FR-ONB-06) */
+        post: operations["platformApplicationNeedsInfo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/applications/{application_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject with a reason the applicant sees (FR-ONB-06) */
+        post: operations["platformRejectApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/applications/{application_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The operator verified the business (FR-ONB-06) */
+        post: operations["platformVerifyApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/auth/login": {
         parameters: {
             query?: never;
@@ -1072,6 +1174,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/outbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Outbox counts and the failed rows (FR-NTF-09) */
+        get: operations["platformOutbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/outbox/{outbox_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a failed row again, if younger than its link's lifetime (FR-NTF-09) */
+        post: operations["platformRetryOutbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/plans": {
         parameters: {
             query?: never;
@@ -1083,6 +1219,74 @@ export interface paths {
         get: operations["platformListPlans"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/sign-up/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply: the form of spec section 4; a link to confirm the email is sent (FR-ONB-01, FR-ONB-02) */
+        post: operations["signUpApply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/sign-up/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Answer the operator's question; the application returns to the queue (FR-ONB-04) */
+        post: operations["signUpReply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/sign-up/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The applicant page (FR-ONB-04) */
+        post: operations["signUpStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/sign-up/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm the email with the link token; the application joins the queue (FR-ONB-02) */
+        post: operations["signUpVerify"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1825,6 +2029,112 @@ export interface components {
         AcceptInvitationRequest: {
             password: string;
             token: string;
+        };
+        ActivateApplicationRequest: {
+            /** @description Ignored in this release: agents arrive later */
+            agent_code?: string;
+            modules: string[];
+            /** @description Required when paid: a free text note of the payment received */
+            payment_note?: string;
+            /** @description Default starter */
+            plan_code?: string;
+            /** @description FR-TEN-02 rules; cannot change later */
+            slug: string;
+            term: string;
+            /** @description trial: one month free; paid: payment received */
+            way_in: string;
+        };
+        ActivationResult: {
+            /** @description False when the application was already activated: nothing was done */
+            activated_now?: boolean;
+            /** Format: date-time */
+            admin_invitation_expires_at?: string;
+            /** @description The admin's one-time link, shown once (also emailed); null on a repeat */
+            admin_invitation_url?: string;
+            application?: components["schemas"]["Application"];
+            /** Format: uuid */
+            tenant_id?: string;
+            tenant_slug?: string;
+        };
+        ApplicantLinkRequest: {
+            token: string;
+        };
+        ApplicantReplyRequest: {
+            reply: string;
+            token: string;
+        };
+        /** @description What the applicant sees: no contact details */
+        ApplicantView: {
+            business_name?: string;
+            /** Format: date-time */
+            created_at?: string;
+            email_verified?: boolean;
+            modules?: string[];
+            /** @description The operator's question, while the status is needs_info */
+            operator_note?: string;
+            reference?: string;
+            /** @description The reason, when rejected */
+            reject_reason?: string;
+            /** @description submitted, needs_info, verified, activated, rejected or expired */
+            status?: string;
+            term?: string;
+            way_in?: string;
+        };
+        Application: {
+            /** Format: date-time */
+            activated_at?: string;
+            /** Format: uuid */
+            activated_by?: string;
+            /** Format: uuid */
+            activated_tenant_id?: string;
+            activated_tenant_slug?: string;
+            activation_note?: string;
+            activation_term?: string;
+            activation_way?: string;
+            agent_code?: string;
+            applicant_reply?: string;
+            business_name?: string;
+            contact_email?: string;
+            contact_name?: string;
+            contact_phone?: string;
+            country?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            decided_at?: string;
+            /** Format: uuid */
+            decided_by?: string;
+            /** Format: date-time */
+            email_verified_at?: string;
+            /** Format: uuid */
+            id?: string;
+            message?: string;
+            modules?: string[];
+            operator_note?: string;
+            reference?: string;
+            reject_reason?: string;
+            /** @description submitted, needs_info, verified, activated, rejected or expired */
+            status?: string;
+            term?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            way_in?: string;
+        };
+        ApplicationDetail: {
+            application?: components["schemas"]["Application"];
+            possible_duplicates?: components["schemas"]["PossibleDuplicate"][];
+            /** @description A free slug from the business name (FR-TEN-02); editable at Activate */
+            suggested_slug?: string;
+        };
+        ApplicationList: {
+            /** @description Applications in the queue per status, whatever the filter */
+            counts?: {
+                [key: string]: number;
+            };
+            items?: components["schemas"]["Application"][];
+        };
+        ApplicationNoteRequest: {
+            note: string;
         };
         Approval: {
             action_type?: string;
@@ -2732,6 +3042,31 @@ export interface components {
         NextOfKinList: {
             items?: components["schemas"]["NextOfKin"][];
         };
+        OutboxFailure: {
+            /** Format: int32 */
+            attempts?: number;
+            channel?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            failed_at?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @description The error class, never a message text or an address */
+            last_error?: string;
+            /** @description Masked to its last 4 characters */
+            recipient?: string;
+            template_key?: string;
+        };
+        OutboxStatus: {
+            /** @description Rows per status: pending, sent, failed */
+            counts?: {
+                [key: string]: number;
+            };
+            /** @description Channels whose sender is configured; rows of the others stay pending */
+            enabled_channels?: string[];
+            failures?: components["schemas"]["OutboxFailure"][];
+        };
         /** @description Limits only; prices are not stored in this repository */
         Plan: {
             allowed_modules?: string[];
@@ -2774,6 +3109,19 @@ export interface components {
         };
         PlatformTenantList: {
             items?: components["schemas"]["PlatformTenant"][];
+        };
+        /** @description Another application or tenant that may be the same business */
+        PossibleDuplicate: {
+            /** Format: uuid */
+            id?: string;
+            /** @description application or tenant */
+            kind?: string;
+            /** @description email, phone, business_name */
+            matched_on?: string[];
+            name?: string;
+            /** @description The application reference or the tenant slug */
+            reference?: string;
+            status?: string;
         };
         RecoveryCodes: {
             /** @description Shown once; each works once */
@@ -3625,6 +3973,32 @@ export interface components {
             recovery_codes?: string[];
             status?: string;
             token_type?: string;
+        };
+        /** @description The same answer whether or not the email is already known */
+        SignUpAccepted: {
+            status?: string;
+        };
+        SignUpRequest: {
+            /** @description Recorded; agents arrive later */
+            agent_code?: string;
+            business_name: string;
+            /**
+             * Format: email
+             * @description ASCII only: an address needing SMTPUTF8 is refused
+             */
+            contact_email: string;
+            contact_name: string;
+            /** @description Local or international form; stored as E.164 */
+            contact_phone: string;
+            /** @description ISO 3166 alpha-2: UG, KE, TZ or RW */
+            country: string;
+            message?: string;
+            modules: string[];
+            term: string;
+            /** @description trial: one month free; paid: subscribe now */
+            way_in: string;
+            /** @description Leave empty. A hidden field: a value marks the request as automated */
+            website?: string;
         };
         StoredDocument: {
             /** Format: uuid */
@@ -5515,6 +5889,150 @@ export interface operations {
             };
         };
     };
+    platformListApplications: {
+        parameters: {
+            query?: {
+                status?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationList"];
+                };
+            };
+        };
+    };
+    platformGetApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationDetail"];
+                };
+            };
+        };
+    };
+    platformActivateApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivateApplicationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivationResult"];
+                };
+            };
+        };
+    };
+    platformApplicationNeedsInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplicationNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationDetail"];
+                };
+            };
+        };
+    };
+    platformRejectApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplicationNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationDetail"];
+                };
+            };
+        };
+    };
+    platformVerifyApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationDetail"];
+                };
+            };
+        };
+    };
     platformLogin: {
         parameters: {
             query?: never;
@@ -5693,6 +6211,46 @@ export interface operations {
             };
         };
     };
+    platformOutbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxStatus"];
+                };
+            };
+        };
+    };
+    platformRetryOutbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outbox_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     platformListPlans: {
         parameters: {
             query?: never;
@@ -5709,6 +6267,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanList"];
+                };
+            };
+        };
+    };
+    signUpApply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignUpRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignUpAccepted"];
+                };
+            };
+        };
+    };
+    signUpReply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplicantReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicantView"];
+                };
+            };
+        };
+    };
+    signUpStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplicantLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicantView"];
+                };
+            };
+        };
+    };
+    signUpVerify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplicantLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicantView"];
                 };
             };
         };
