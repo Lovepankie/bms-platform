@@ -3,7 +3,7 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type StockRow } from '../../../api/retail';
 import { showQty } from './maths';
-import { BranchRequired, Gate, Problem, money, useProfitAccess, useSingleBranch } from './ui';
+import { BranchRequired, Gate, NoStockHere, Problem, money, useProfitAccess, useSingleBranch } from './ui';
 
 // Stock per branch (FR-RET-03): balances with a negative flag and a search box. The cost column
 // exists only for a session holding retail.profit.read: showCost is the screen's choice and the server
@@ -55,6 +55,7 @@ function StockPage() {
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>
+          <NoStockHere branchId={branchId} />
           <label htmlFor="stock-search">Search by name or code</label>
           <input id="stock-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
           <label style={{ fontWeight: 400 }}>

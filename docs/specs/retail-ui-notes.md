@@ -1,6 +1,6 @@
 # Retail UI notes
 
-**Status:** Draft · **Tasks:** #56 (R6), #65 (R6b) under story #50, #84 (stock transfers) · **Requirements:** FR-RET-15, FR-RET-16 · **Scope:** `docs/specs/retail-mvp-scope.md`
+**Status:** Draft · **Tasks:** #56 (R6), #65 (R6b) under story #50, #84 (stock transfers), #103, #105, #112 (walk-through fixes) · **Requirements:** FR-RET-15, FR-RET-16 · **Scope:** `docs/specs/retail-mvp-scope.md`
 
 Phone-first staff screens for the retail vertical, in `frontend/src/areas/staff/retail/`. Since #65 they run on the
 real retail API (`docs/sdd/07-api-design.md` section 7.11.20, `docs/api/openapi.json`), which replaced the contract
@@ -29,7 +29,7 @@ lists the transfers from or to the chosen branch, or every branch the user may r
 user's other branches in `/me` (the API accepts any active branch of the tenant, but the PWA has no tenant-wide
 branch list for a branch-scoped user yet). Items are added with the same product picker as the sale screen
 (`ProductPicker` in `ui.tsx`, now shared), which shows what the source branch holds, and each line hints when its
-quantity is above that. The date is optional (empty means today) and so is the note. The form keeps its draft and
+quantity is above that. The date starts on today in the business's timezone (#112) and the note is optional. The form keeps its draft and
 one `Idempotency-Key` in `sessionStorage` like the sale form, and a refusal for stock shows the plain
 `insufficient_stock` message. No cost is shown, except the value at cost on the saved summary for a user with
 `retail.profit.read`. Stock moves opens a transfer and offers "Cancel this move" with a reason to a user who may
@@ -44,6 +44,40 @@ once. "New sale" mounts a fresh form with a fresh key. A supplier added inside a
 created, so a retry does not add it twice. Money is integer minor units
 (`UGX`, no decimals) and quantities are integer thousandths in the forms, so no float touches an amount. The
 totals shown while typing are a preview; the server's response is the receipt.
+
+## Branches, dates and the walk-through fixes (#103, #105, #112)
+
+- **Starting branch (#103).** The staff bar's picker (`areas/staff/branch-picker.tsx`) starts on the last
+  branch this user chose in this browser, kept in `localStorage` per tenant (the host) and user, read and
+  written inside try/catch. Without one it starts on the user's only branch, else the default branch when it
+  holds stock, else the first branch that holds stock, and never on a head office without stock while other
+  branches exist. "Holds stock" is any quantity above zero in the stock value report
+  (`GET /retail/reports/valuation` without a branch), read once for a session with `retail.stock.read`; a
+  session without it starts on the default branch as before. The staff area waits for that read (one retry)
+  before showing a screen, so a screen never opens on the wrong branch.
+- **No stock here (#103).** Stock, Record a sale and Move stock say "This branch holds no stock. Switch
+  branch?" when the chosen branch holds nothing, with a button for each of the user's branches that does.
+- **Branch names (#105).** Every branch name the retail screens and the picker print goes through
+  `branchLabel` (`auth/branch.ts`): the name alone when the code equals the name ignoring case (an imported
+  "GAYAZA Gayaza" reads "Gayaza"), otherwise "Name (CODE)".
+- **Dates (#112 items 3 and 9).** The tenant's timezone is not on `/me` or the settings yet, so the forms use
+  `businessToday()` in `api/retail.ts`: today in Africa/Kampala, the server's default business zone
+  (`BusinessClock`). Move stock's date and Restock's "Bought on" start on it, and Daily profit's range is the
+  last seven days ending on it. Before #112 Restock and Daily profit used the UTC date, which is yesterday
+  between midnight and 03:00 in Kampala. Usage, sale and stock-take send no date and take the server's.
+- **Stock moves (#112 item 1).** A row reads the date ("6 Oct 2026", on one line), "From X to Y", the item
+  count with the first two item names, and "by you" for the user's own moves; tapping it opens the move. The
+  API gives a transfer no number of its own and `created_by` is an id, so no number or other name is shown.
+- **Move stock hint (#112 item 2).** A line above the source branch's stock says "Only N piece in stock at
+  this branch.", the words of the sale screen, and Move stock stays disabled; a refusal from the server still
+  shows as the plain `insufficient_stock` message.
+- **Restock saved (#112 items 10 and 11).** The confirmation names the supplier, the restock number
+  (`purchase_no`) and date, and lists each line whose sell price changed ("sell price changed from X to Y")
+  and, for a user with `retail.profit.read`, whose cost changed.
+- **Daily profit and stock-takes (#112 item 8).** The report counts sales, their cost and usage and damage
+  reports. A committed stock-take posts its variance to the `stock_shrinkage` account in the ledger, but the
+  report does not read it, so a stock-take loss is in the books and not in daily profit. The screen now says
+  so under the table; whether shrinkage belongs in the report is left for a decision (ADR-020).
 
 ## Look and navigation (#95)
 
@@ -166,8 +200,34 @@ passed, among them:
 
 The script and its screenshots are not committed.
 
+## Verification of the walk-through fixes (#103, #105, #112)
+
+The API jar from `mvn package` ran on the host against the compose PostgreSQL (migrated to V22) with the
+`dev` profile, and both bundles (`main` and this branch, `npm run build`) were served with a small static
+server that proxies `/api` with the Host header kept, so `shop.localhost` resolves the tenant. A fabricated
+tenant "Sample Shop (fabricated)" was made with `deploy/sql/create-tenant.sql`, `platform_set_tenant_modules`
+and `deploy/sql/invite-tenant-admin.sql`, with branches HQ Head Office, SECOND Second Shop, TOWN Town and MKT
+Market Kiosk, three products restocked to the three shops only (the head office holds nothing) and one move
+from Town to Second Shop. A Playwright script drove Chromium at 360px and 390px; 43 of 43 steps passed
+(`docs/ui/design-system/walkthrough-fixes/walk-log.txt`, screenshots beside it):
+
+- after signing in with TOTP, a reload of `/staff/retail/stock` stayed signed in, and a new tab holding only
+  the refresh cookie opened signed in, on `main` and on this branch;
+- on `main` the picker started on "HQ Head Office" (no stock) and listed "SECOND Second Shop"; on this branch it
+  started on "Market Kiosk (MKT)", listed "Town" for the branch whose code is its name, said "This branch holds
+  no stock. Switch branch?" on the head office, switched with the button and kept the choice over a reload;
+- the stock moves row read "2026-10-06" over two lines then ": TOWN Town to SECOND Second Shop, 2 items" on
+  `main`, and "6 Oct 2026 / From Town to Second Shop (SECOND) / 2 items: LED bulb 9W screw, Socket double, by
+  you" on this branch, and opened the move when tapped;
+- Move stock's date was empty on `main` and today's date on this branch; with 50 of an item the branch held
+  12 of, both disabled Move stock, `main` saying "Only 12 piece at the branch you are moving from." and this
+  branch "Only 12 piece in stock at this branch.";
+- no page overflowed sideways.
+
 ## Left to do
 
 - Void a sale, pay a credit sale, price edit and price history screens (not in R6).
 - The component tests render static markup (no DOM in the test setup); the browser run above covers behaviour.
 - Offline use, barcode scanning and receipts to SMS are out of the first release.
+- The tenant's timezone and a transfer number are not in the API; when they are, use them (#112).
+- Whether stock-take shrinkage belongs in daily profit (#112 item 8).

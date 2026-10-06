@@ -5,6 +5,8 @@ import type { Me } from '../../api/client';
 export interface StaffContextValue {
   me: Me;
   branch: string | null;
+  /** Switches the active branch, as the picker in the staff bar does (#103). */
+  chooseBranch?: (selection: string) => void;
 }
 
 export const StaffContext = createContext<StaffContextValue | null>(null);

@@ -2,7 +2,7 @@ import type {
   Customer, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockRow, Supplier, Transfer, Usage, Valuation,
   ValuationRow,
 } from './retail';
-import { RetailError } from './retail';
+import { RetailError, businessToday } from './retail';
 import { retailMessage } from './retail-errors';
 import type { Me } from './client';
 
@@ -73,7 +73,7 @@ const PRODUCTS: MockProduct[] = [
 const toMilli = (text: string): number => Math.round(Number(text) * 1000);
 const fromMilli = (m: number): string => `${m < 0 ? '-' : ''}${Math.floor(Math.abs(m) / 1000)}.${String(Math.abs(m) % 1000).padStart(3, '0')}`;
 const lineTotal = (price: number, qtyMilli: number): number => Number((BigInt(price) * BigInt(qtyMilli) + 500n) / 1000n);
-const today = (): string => new Date().toISOString().slice(0, 10);
+const today = (): string => businessToday();
 const delay = <T>(value: T): Promise<T> => new Promise((resolve) => setTimeout(() => resolve(value), 120));
 /** Runs a handler; what it throws (a refusal) becomes a rejected promise, as a failed request does. */
 const run = <T>(fn: () => T): Promise<T> => {
@@ -257,6 +257,8 @@ export function createMockRetail(): RetailApi {
         { value_at_cost_minor: sum((r) => r.value_at_cost_minor) });
       return delay(v);
     },
+
+    stockedBranches: () => delay([BRANCH_A, BRANCH_B].filter((b) => [...products.values()].some((p) => bal(b, p.id) > 0))),
 
     dailyProfit: ({ branchId, from, to }) => {
       if (!profitAccess) return Promise.reject(new RetailError(retailMessage({ code: 'permission_denied' }, 403), 403, 'permission_denied'));

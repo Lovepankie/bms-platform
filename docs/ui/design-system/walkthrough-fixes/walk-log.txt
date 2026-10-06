@@ -1,0 +1,43 @@
+PASS signed in with TOTP
+PASS reload on /staff/retail/stock stays signed in (after build)
+PASS a new tab with the refresh cookie is signed in (before build, main)
+PASS before 360px picker starts on "HQ Head Office", options ["All branches","HQ Head Office","MKT Market Kiosk","SECOND Second Shop","TOWN Town"]
+PASS before 360px stock: no sideways overflow
+PASS before 360px stock moves row: "2026-10-06\n: TOWN Town to SECOND Second Shop, 2 items"
+PASS before 360px stock moves: no sideways overflow
+PASS before 360px move date field starts as ""
+PASS before 360px over-stock hint ["Only 12 piece at the branch you are moving from."], button disabled true
+PASS before 360px move stock: no sideways overflow
+PASS after 360px picker starts on "Market Kiosk (MKT)", options ["All branches","Head Office (HQ)","Market Kiosk (MKT)","Second Shop (SECOND)","Town"]
+PASS after 360px: does not start on the empty head office
+PASS after 360px: head office says it holds no stock
+PASS after 360px: the switch button chose Second Shop (SECOND)
+PASS after 360px: reload keeps the last branch used (Second Shop (SECOND))
+PASS after 360px stock: no sideways overflow
+PASS after 360px stock moves row: "6 Oct 2026\nFrom Town to Second Shop (SECOND)\n2 items: LED bulb 9W screw, Socket double, by you"
+PASS after 360px stock moves: no sideways overflow
+PASS after 360px: tapping a row opens the move
+PASS after 360px move date field starts as "2026-10-06"
+PASS after 360px over-stock hint ["Only 12 piece in stock at this branch."], button disabled true
+PASS after 360px move stock: no sideways overflow
+PASS after 360px: hint in the sale words and button disabled
+PASS before 390px picker starts on "HQ Head Office", options ["All branches","HQ Head Office","MKT Market Kiosk","SECOND Second Shop","TOWN Town"]
+PASS before 390px stock: no sideways overflow
+PASS before 390px stock moves row: "2026-10-06\n: TOWN Town to SECOND Second Shop, 2 items"
+PASS before 390px stock moves: no sideways overflow
+PASS before 390px move date field starts as ""
+PASS before 390px over-stock hint ["Only 12 piece at the branch you are moving from."], button disabled true
+PASS before 390px move stock: no sideways overflow
+PASS after 390px picker starts on "Market Kiosk (MKT)", options ["All branches","Head Office (HQ)","Market Kiosk (MKT)","Second Shop (SECOND)","Town"]
+PASS after 390px: does not start on the empty head office
+PASS after 390px: head office says it holds no stock
+PASS after 390px: the switch button chose Second Shop (SECOND)
+PASS after 390px: reload keeps the last branch used (Second Shop (SECOND))
+PASS after 390px stock: no sideways overflow
+PASS after 390px stock moves row: "6 Oct 2026\nFrom Town to Second Shop (SECOND)\n2 items: LED bulb 9W screw, Socket double, by you"
+PASS after 390px stock moves: no sideways overflow
+PASS after 390px: tapping a row opens the move
+PASS after 390px move date field starts as "2026-10-06"
+PASS after 390px over-stock hint ["Only 12 piece in stock at this branch."], button disabled true
+PASS after 390px move stock: no sideways overflow
+PASS after 390px: hint in the sale words and button disabled

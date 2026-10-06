@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { RETAIL_CURRENCY, retail, type Product, type Purchase, type PurchasePayment, type PurchaseRequest } from '../../../api/retail';
+import { RETAIL_CURRENCY, businessToday, retail, type Product, type Purchase, type PurchasePayment, type PurchaseRequest } from '../../../api/retail';
+import { branchLabel } from '../../../auth/branch';
 import { parseMinor } from '../../../components/money';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
@@ -63,8 +64,6 @@ const METHODS: { value: PurchasePayment; label: string }[] = [
   { value: 'credit', label: 'Credit (pay the supplier later)' },
 ];
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
-
 /** What the restock form keeps with its key in this tab until saved or cleared (#77). */
 interface RestockDraft {
   supplierId: string;
@@ -74,13 +73,19 @@ interface RestockDraft {
   lines: RestockLine[];
 }
 
-export function RestockForm({ onSaved }: { onSaved?: (p: Purchase) => void }) {
+/** What the confirmation needs besides the server's answer: who supplied it and the prices before. */
+export interface RestockContext {
+  supplierName: string;
+  before: Record<string, { sell?: number; cost?: number }>;
+}
+
+export function RestockForm({ onSaved }: { onSaved?: (p: Purchase, context: RestockContext) => void }) {
   const { me, branch } = useStaff();
   const canProfit = useProfitAccess();
   const queryClient = useQueryClient();
   const branches = (me.branches ?? []).filter((b) => b.id);
   const { key, draft, setDraft, finish, discard } = usePersistedDraft<RestockDraft>(`restock:${me.user_id ?? ''}`, {
-    supplierId: '', newSupplier: '', purchasedOn: todayIso(), method: 'cash', lines: [],
+    supplierId: '', newSupplier: '', purchasedOn: businessToday(), method: 'cash', lines: [],
   });
   const { supplierId, newSupplier, purchasedOn, method, lines } = draft;
   const field = <K extends keyof RestockDraft>(k: K) => (v: RestockDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
@@ -97,17 +102,22 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase) => void }) {
   const save = useMutation({
     mutationFn: async () => {
       let id = supplierId;
+      let supplierName = (suppliers.data ?? []).find((x) => x.id === supplierId)?.name ?? '';
+      const before = Object.fromEntries(lines.map((l) => [l.product.id ?? '', { sell: l.product.sell_minor, cost: l.product.cost_minor }]));
       if (!id && newSupplier.trim()) {
-        id = (await retail.createSupplier({ name: newSupplier.trim() })).id ?? '';
+        const created = await retail.createSupplier({ name: newSupplier.trim() });
+        id = created.id ?? '';
+        supplierName = created.name ?? newSupplier.trim();
         // Kept in the draft, so a retry after a failed restock does not add the supplier twice.
         setDraft((d) => ({ ...d, supplierId: id, newSupplier: '' }));
       }
-      return retail.createPurchase(buildPurchase({ supplierId: id, purchasedOn, method, lines }), key);
+      const saved = await retail.createPurchase(buildPurchase({ supplierId: id, purchasedOn, method, lines }), key);
+      return { saved, context: { supplierName, before } };
     },
-    onSuccess: (p) => {
+    onSuccess: ({ saved, context }) => {
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
-      onSaved?.(p);
+      onSaved?.(saved, context);
     },
   });
 
@@ -175,7 +185,7 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase) => void }) {
               <legend>Quantity bought per branch ({l.product.unit})</legend>
               {branches.map((b) => (
                 <div key={b.id}>
-                  <label htmlFor={`q-${i}-${b.id}`}>{b.code} {b.name}</label>
+                  <label htmlFor={`q-${i}-${b.id}`}>{branchLabel(b)}</label>
                   <input id={`q-${i}-${b.id}`} inputMode="decimal" value={l.qtyByBranch[b.id ?? ''] ?? ''} placeholder="0"
                     onChange={(e) => patch(i, { qtyByBranch: { ...l.qtyByBranch, [b.id ?? '']: e.target.value } })} />
                 </div>
@@ -211,20 +221,50 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase) => void }) {
   );
 }
 
+/** "Sell price changed from UGX 1,200 to UGX 1,400." for each line whose price moved (#112 item 11). */
+export function priceChanges(p: Purchase, before: RestockContext['before'], showCost: boolean): string[] {
+  return (p.lines ?? []).flatMap((l) => {
+    const was = before[l.product_id ?? ''] ?? {};
+    const out: string[] = [];
+    if (l.sell_minor !== undefined && was.sell !== undefined && l.sell_minor !== was.sell) {
+      out.push(`${l.description}: sell price changed from ${money(was.sell)} to ${money(l.sell_minor)}.`);
+    }
+    if (showCost && l.cost_minor !== undefined && was.cost !== undefined && l.cost_minor !== was.cost) {
+      out.push(`${l.description}: cost changed from ${money(was.cost)} to ${money(l.cost_minor)}.`);
+    }
+    return out;
+  });
+}
+
+export function RestockSaved({ purchase, context, onNew }: { purchase: Purchase; context: RestockContext; onNew?: () => void }) {
+  const changes = priceChanges(purchase, context.before, useProfitAccess());
+  const count = (purchase.lines ?? []).length;
+  return (
+    <section aria-label="Restock saved">
+      <h2>Restock saved{purchase.purchase_no ? ` (${purchase.purchase_no})` : ''}</h2>
+      <p>
+        From {context.supplierName || 'no supplier'}, bought on {purchase.purchased_on}: {count} {count === 1 ? 'item' : 'items'}, total cost{' '}
+        {money(purchase.total_minor ?? 0)}.
+      </p>
+      {changes.length > 0 ? (
+        <ul>{changes.map((c) => <li key={c}>{c}</li>)}</ul>
+      ) : (
+        <p>No price changed.</p>
+      )}
+      {onNew && <button type="button" className="rt-primary" onClick={onNew}>New restock</button>}
+    </section>
+  );
+}
+
 function Restock() {
-  const [done, setDone] = useState<Purchase | null>(null);
+  const [done, setDone] = useState<{ purchase: Purchase; context: RestockContext } | null>(null);
   const [round, setRound] = useState(0);
   return (
     <Gate screen="restock" title="Restock">
       {done ? (
-        <section aria-label="Restock saved">
-          <h2>Restock saved</h2>
-          <p>{(done.lines ?? []).length} items, total cost {money(done.total_minor ?? 0)}.</p>
-          <p>Prices updated on {(done.lines ?? []).length} items.</p>
-          <button type="button" className="rt-primary" onClick={() => { setDone(null); setRound((n) => n + 1); }}>New restock</button>
-        </section>
+        <RestockSaved purchase={done.purchase} context={done.context} onNew={() => { setDone(null); setRound((n) => n + 1); }} />
       ) : (
-        <RestockForm key={round} onSaved={setDone} />
+        <RestockForm key={round} onSaved={(purchase, context) => setDone({ purchase, context })} />
       )}
     </Gate>
   );

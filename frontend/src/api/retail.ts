@@ -37,6 +37,24 @@ export type TransferPage = S['RetailTransferPage'];
 /** The tenant currency is not on /me yet; the retail pilot trades in shillings. */
 export const RETAIL_CURRENCY = 'UGX';
 
+/**
+ * The tenant's timezone is not on /me or the tenant settings yet; the server dates retail events in
+ * Africa/Kampala unless the tenant profile says otherwise (BusinessClock), so the forms do too.
+ */
+export const RETAIL_ZONE = 'Africa/Kampala';
+
+/** Today as yyyy-mm-dd in the business's timezone, not the browser's or UTC (#112 items 3 and 9). */
+export function businessToday(now: Date = new Date(), zone: string = RETAIL_ZONE): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+}
+
+/** A yyyy-mm-dd date `days` before `date`, on the calendar (no timezone involved). */
+export function daysBefore(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
 export type SalePayment = 'cash' | 'mobile_money' | 'bank' | 'credit';
 export type PurchasePayment = 'cash' | 'bank' | 'credit';
 
@@ -52,6 +70,8 @@ export interface RetailApi {
   createStocktake(body: StocktakeRequest): Promise<Stocktake>;
   commitStocktake(id: string): Promise<Stocktake>;
   valuation(q: { branchId: string; asOf?: string }): Promise<Valuation>;
+  /** The branches in the caller's stock scope holding a quantity above zero of anything (#103). */
+  stockedBranches(): Promise<string[]>;
   dailyProfit(q: { branchId: string; from: string; to: string }): Promise<DailyProfit>;
   createTransfer(body: TransferRequest, idempotencyKey: string): Promise<Transfer>;
   listTransfers(q: { branchId?: string; cursor?: string }): Promise<TransferPage>;
@@ -140,6 +160,11 @@ const realRetail: RetailApi = {
 
   async valuation({ branchId, asOf }) {
     return unwrap(await api.GET('/api/v1/retail/reports/valuation', { params: { query: { branch_id: [branchId], as_of: asOf } } }));
+  },
+
+  async stockedBranches() {
+    const all = unwrap(await api.GET('/api/v1/retail/reports/valuation', { params: { query: {} } }));
+    return [...new Set((all.rows ?? []).filter((r) => r.qty !== undefined && !r.qty.startsWith('-')).map((r) => r.branch_id ?? ''))];
   },
 
   async dailyProfit({ branchId, from, to }) {
