@@ -6,7 +6,7 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, type Draft } from './sale-state';
-import { BranchRequired, Gate, Note, ProductPicker, Problem, money, useProfitAccess, useSingleBranch } from './ui';
+import { BranchRequired, Gate, NoStockHere, Note, ProductPicker, Problem, money, useProfitAccess, useSingleBranch } from './ui';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -207,6 +207,7 @@ function RecordSale() {
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>
+          <NoStockHere branchId={branchId} />
           <SaleForm key={`${branchId}-${round}`} branchId={branchId} onSaved={setSale} />
         </>
       )}
