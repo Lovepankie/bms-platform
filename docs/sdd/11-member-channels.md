@@ -84,6 +84,35 @@ against the same reference values (`fixtures/brand-contrast.json`, read by both 
 is about text. A very light `--brand` is allowed and makes the brand bar's border faint on a white
 page; the logo stays the main brand mark.
 
+### 11.2.6 Design tokens and components (#95)
+
+Every area draws with one design layer in the Rincol Tech look: white surfaces on a light grey page,
+Open Sans (self-hosted from `@fontsource-variable/open-sans`, so no font CDN and nothing extra in the
+CSP), bold headings, 8px corners and soft shadows. The tokens are CSS custom properties in
+`frontend/src/app/theme.css`; the component styles are in `frontend/src/app/ui/`, imported once by
+`main.tsx`. The catalogue and the rules for new screens are in `docs/specs/design-system.md`.
+
+| Group | Tokens (examples) |
+|---|---|
+| Colour roles | `--color-bg`, `--color-surface`, `--color-text`, `--color-text-muted`, `--color-border`, `--color-border-strong`, `--color-primary`, `--color-on-primary`, `--color-accent`, `--color-link`, `--color-focus`, `--color-danger`, `--color-success`, `--color-warning` and their `-tint` backgrounds |
+| Type | `--font-sans`, `--font-mono`, `--text-xs` to `--text-3xl`, `--weight-regular` to `--weight-bold` |
+| Space, shape, depth | `--space-1` (4px) to `--space-8` (56px), `--radius-sm`, `--radius`, `--radius-lg`, `--shadow-sm`, `--shadow`, `--shadow-lg` |
+| Layers and interaction | `--z-nav`, `--z-overlay`, `--z-modal`, `--z-toast`, `--tap` (44px), `--focus-ring` |
+
+The Rincol blue `#00adef` reads at only 2.5:1 on white, so it is the accent (borders, focus halos,
+tints, icons) and never text; text, links and button fills use `#0077b6` (4.87:1 with white). The
+shell's `--brand` pair defaults to that blue, and when a tenant has a colour it replaces the
+primary and the accent, while links and focus rings use a darkened mix of it (section 11.2.5:
+`--brand` alone is not guaranteed readable on white). `src/app/ui/tokens.test.ts` checks the text
+tokens against 4.5:1 and input edges against 3:1 with the same `contrast.ts` the branding rule uses.
+
+Components: buttons (a bare `<button>` is the secondary style; `.btn-primary`, `.btn-danger`,
+`.btn-ghost`, `.btn` for links), labelled inputs, selects and choice rows of at least 44px, field
+hints and errors, cards, tables in a `.table-wrap` that scrolls sideways inside its card on a phone
+with right-aligned tabular numbers, tabs, the staff bar, the retail bottom bar, badges, alerts, empty
+states, a spinner and skeleton, the `<dialog>` sheet and a toast. Screens carry no inline `<style>`
+element, which the production CSP (`style-src 'self'`) refuses.
+
 ## 11.3 SMS
 
 ### 11.3.1 Events and default templates

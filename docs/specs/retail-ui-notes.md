@@ -31,6 +31,23 @@ created, so a retry does not add it twice. Money is integer minor units
 (`UGX`, no decimals) and quantities are integer thousandths in the forms, so no float touches an amount. The
 totals shown while typing are a preview; the server's response is the receipt.
 
+## Look and navigation (#95)
+
+The screens draw with the shared design layer (`docs/specs/design-system.md`); their own classes
+(`.rt-card`, `.rt-row`, `.rt-total`, `.rt-flag`, `.rt-primary`) are styled in `src/app/ui/retail.css`.
+The inline `<style>` element the screens used to render (`RetailStyles`) is gone: the production CSP
+(`style-src 'self'`) refused it, so on a server the screens had no styles at all. `RetailStyles` stays as
+a no-op export.
+
+- The retail home shows one large tile per screen, with an icon, two per row on a phone.
+- On the retail pages the staff layout adds a bottom bar (`retail/nav.tsx`): Retail home plus the first
+  three of Sale, Stock, Restock, Stock-take and Usage that the user may use. It is fixed to the bottom
+  on a phone and a row of pills above the title from 720px wide.
+- Tables sit in a `.table-wrap` that scrolls sideways inside its card on a phone, with a shadow on the
+  side that has more columns; quantities and money are right-aligned in tabular figures.
+- Forms end with the main action full width, and any secondary action ("Clear this sale") under it.
+- Choice rows (payment method, usage kind) are full-width 44px tap targets.
+
 ## Permission gating
 
 `retail/permissions.ts` is the one place that maps screens to the permissions the API routes declare, read
