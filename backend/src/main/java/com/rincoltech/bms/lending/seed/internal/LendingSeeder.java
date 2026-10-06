@@ -22,7 +22,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The {@code seed-lending} command's work (ADR-025; {@code docs/runbooks/seed-lending.md}): 15
+ * The {@code seed-lending} command's work (ADR-026; {@code docs/runbooks/seed-lending.md}): 15
  * fabricated members, 4 loan products, 12 applications in mixed states and 6 disbursed loans with
  * repayments, in one transaction for one tenant. Every name, phone number, amount and rate is
  * invented. Refused, with nothing written, when the tenant already holds members, products, loans

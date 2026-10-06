@@ -5,7 +5,7 @@ import java.util.UUID;
 
 /**
  * Loan servicing for callers outside a staff request: the fabricated lending seed now, the pilot
- * import from increment 7 (ADR-025). Each call runs in the caller's transaction (it refuses to run
+ * import from increment 7 (ADR-026). Each call runs in the caller's transaction (it refuses to run
  * without one) with the same rules, postings and audit as the staff routes, but the caller names
  * the actors, because there is no request principal. Staff never reach this port: their routes go
  * through the approval mechanism and the permission matrix.

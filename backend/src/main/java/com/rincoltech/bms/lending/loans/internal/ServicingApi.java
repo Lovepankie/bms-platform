@@ -18,7 +18,7 @@ import java.util.UUID;
  */
 final class ServicingApi {
 
-    /** Payment methods money moves by; each maps to a ledger account by system key (ADR-025). */
+    /** Payment methods money moves by; each maps to a ledger account by system key (ADR-026). */
     static final String METHODS = "cash|bank|mtn_momo|airtel_money";
 
     private ServicingApi() {}

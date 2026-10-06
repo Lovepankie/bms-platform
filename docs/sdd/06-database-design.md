@@ -997,7 +997,7 @@ Partial unique `(tenant_id, schedule_item_id, period_no) WHERE charge_type = 'pe
 
 Index `(tenant_id, loan_id, value_date)`, `(tenant_id, branch_id, value_date, txn_type)`.
 Built in `V25` (#108): `payment_method_key` is one of `cash`, `bank`, `mtn_momo`, `airtel_money`
-(ADR-025 maps each to a seeded account until FR-GL-08); `CHECK (is_historic OR journal_entry_id IS NOT
+(ADR-026 maps each to a seeded account until FR-GL-08); `CHECK (is_historic OR journal_entry_id IS NOT
 NULL)`; `CHECK ((txn_type = 'reversal') = (reverses_txn_id IS NOT NULL))`; partial unique
 `(tenant_id, loan_id) WHERE txn_type = 'disbursement'` (FR-DIS-03).
 
@@ -1009,7 +1009,7 @@ row), `applies_to_txn_id uuid NOT NULL` (the repayment whose money the row moves
 `overpayment`), `component text NOT NULL` [`penalty`, `fee`, `interest`, `principal`, `overpayment`,
 `interest_rebate`], `amount_minor bigint NOT NULL` (`<> 0`; negative only on rows belonging to a
 `reversal` transaction, which writes the reversed repayment's rows negated and the differences of
-every later repayment it re-allocates, ADR-025). `interest_rebate` is the early settlement rebate of
+every later repayment it re-allocates, ADR-026). `interest_rebate` is the early settlement rebate of
 R-PAYOFF: interest waived, not cash. Indexes `(tenant_id, transaction_id)`,
 `(tenant_id, applies_to_txn_id)`. Built in `V25` (#108).
 

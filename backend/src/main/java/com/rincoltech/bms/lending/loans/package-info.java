@@ -4,7 +4,7 @@
  * {@code lending_repayment_allocations}; chapter 7 section 7.11.13). One row from application to
  * closure; the status table of chapter 3 section 3.18 is the only way a loan moves, and every move
  * writes {@code lending_loan_status_history}. Every money event posts through {@code post_entry}
- * (ADR-004) and the maker-checker actions are registered here (ADR-015, ADR-025).
+ * (ADR-004) and the maker-checker actions are registered here (ADR-015, ADR-026).
  * {@link com.rincoltech.bms.lending.loans.LoanServicing} is the port for callers without a request
  * principal (the fabricated seed, later the import).
  */

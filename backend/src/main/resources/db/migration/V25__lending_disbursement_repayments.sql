@@ -1,5 +1,5 @@
 -- V25: lending increment 5, disbursement and repayments (issue #108; FR-DIS-01 to FR-DIS-04,
--- FR-REP-01 to FR-REP-06, FR-LCL-01 to FR-LCL-03, FR-DOC-04; ADR-025).
+-- FR-REP-01 to FR-REP-06, FR-LCL-01 to FR-LCL-03, FR-DOC-04; ADR-026).
 --
 -- Additive only (chapter 6 section 6.9): three new tables and CHECKs on lending_loans columns
 -- that V8 created with a default of 0 and nothing has written since, so every existing row (on

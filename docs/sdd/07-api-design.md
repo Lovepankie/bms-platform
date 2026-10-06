@@ -535,7 +535,7 @@ approver submitted or appraised the loan, FR-APR-03), `above_requested_principal
 reason `approval_expired` (FR-ORG-08), audited with actor kind `system`. Both `approved_at` and
 the expiry bound come from the business clock (AGENTS.md rule 7), never the database's `now()`.
 
-Built (#108, increment 5, ADR-025): disbursement, schedule, transactions, repayments, reversal,
+Built (#108, increment 5, ADR-026): disbursement, schedule, transactions, repayments, reversal,
 payoff quote and write-off. Every money-moving route requires `Idempotency-Key` (section 7.8; a
 replay answers `Idempotent-Replayed: true`). `POST .../disbursements` takes
 `{disbursement_date, payment_method_key, external_reference?}` on an `approved` loan and answers

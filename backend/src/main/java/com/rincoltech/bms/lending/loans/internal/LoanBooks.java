@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 /**
  * Lending's posting rules (chapter 6 section 6.6.3) go through here to {@code post_entry}:
  * accounts are named by {@code system_key}, a payment method resolves to its account by the
- * default mapping of ADR-025, lines on system-controlled accounts carry the loan as subledger, and
+ * default mapping of ADR-026, lines on system-controlled accounts carry the loan as subledger, and
  * every entry is for the loan's branch, in the caller's transaction.
  */
 @Component
@@ -35,7 +35,7 @@ class LoanBooks {
     static final String BAD_DEBT_RECOVERED = "bad_debt_recovered";
 
     /**
-     * ADR-025: until the payment method mapping of FR-GL-08 is built, each method posts to the
+     * ADR-026: until the payment method mapping of FR-GL-08 is built, each method posts to the
      * seeded account with this system key (chapter 6 section 6.6.2).
      */
     static final Map<String, String> METHOD_ACCOUNTS = Map.of(

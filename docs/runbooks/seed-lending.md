@@ -1,6 +1,6 @@
 # Runbook: fill a staging lending tenant with fabricated data (`seed-lending`)
 
-**Requirements:** increment 5 demo (issue #108) · **Decision:** ADR-025 decision 4 ·
+**Requirements:** increment 5 demo (issue #108) · **Decision:** ADR-026 decision 4 ·
 **Design:** SDD chapter 5 section 5.4 (`lending.seed`), chapter 7 section 7.11.13
 
 The command gives an empty lending tenant on **staging** a small, fully fabricated loan book, so the

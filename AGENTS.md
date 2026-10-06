@@ -53,7 +53,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   (issue #84, ADR-020 amendment) add `V22`. Flyway runs with `outOfOrder` off, so a new migration
   takes a number above the highest one on any open branch (`V23` is the sign-up work of #89, `V24`
   is held for a database audit, `V25` is lending increment 5, so `V26` next).
-- **Built (increment 5, issue #108, ADR-025):** migration `V25` (schedule items, loan transactions,
+- **Built (increment 5, issue #108, ADR-026):** migration `V25` (schedule items, loan transactions,
   repayment allocations); disbursement with the `loan_disbursement` approval action and fee
   handling; schedules from the disbursement date; repayments allocated by R-ALLOC with overpayment
   credit; payoff quote; reversal with re-allocation (`repayment_reversal`); automatic closure;
@@ -136,7 +136,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `lending` products | Loan products and versions | PRD | 6.7 | 7.11.12 |
 | `lending` loans | Origination, schedules, disbursement, repayments, arrears, closure | ORG, DIS, REP, ARR, LCL; 3.4 | 6.7 | 7.11.13 |
 | `lending` collateral | Collateral register | COL | 6.7 | 7.11.14 |
-| `lending.seed` | The `seed-lending` command: fabricated loan book for one empty staging tenant (ADR-025) | none | none (writes 6.7 tables) | none (a command, `docs/runbooks/seed-lending.md`) |
+| `lending.seed` | The `seed-lending` command: fabricated loan book for one empty staging tenant (ADR-026) | none | none (writes 6.7 tables) | none (a command, `docs/runbooks/seed-lending.md`) |
 | `lending` savings | Savings | SAV | 6.7 | 7.11.15 |
 | `lending` investments | Investments | INV | 6.7 | 7.11.16 |
 | `lending` collections | Due lists, arrears, actions | CLN | 6.7 | 7.11.17 |
@@ -294,7 +294,7 @@ Accepted (this list is the ADR index):
 - ADR-019 Collateral release as an approval action, and the interim duplicate pledge rule (proposed, #24)
 - ADR-020 Retail vertical brought forward; stock as append-only movements; retail events post to the
   ledger (proposed, #50)
-- ADR-025 Loan servicing: allocation rows by repayment, replay on reversal, default payment method
+- ADR-026 Loan servicing: allocation rows by repayment, replay on reversal, default payment method
   accounts and a servicing port for commands (proposed, #108)
 
 Pending (cite only as "pending ADR-NNN"):

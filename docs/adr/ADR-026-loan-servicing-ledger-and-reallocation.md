@@ -1,4 +1,4 @@
-# ADR-025: Loan servicing: allocation rows by repayment, replay on reversal, default payment method accounts and a servicing port for commands
+# ADR-026: Loan servicing: allocation rows by repayment, replay on reversal, default payment method accounts and a servicing port for commands
 
 ## Status
 

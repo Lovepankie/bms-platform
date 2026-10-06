@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * The fabricated lending seed (#108, ADR-025): it fills an empty tenant with the promised counts,
+ * The fabricated lending seed (#108, ADR-026): it fills an empty tenant with the promised counts,
  * every money event balanced and the subledger equal to the control account, and it refuses a
  * tenant that holds data or was seeded before.
  */

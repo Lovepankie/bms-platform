@@ -26,7 +26,7 @@ import tools.jackson.databind.ObjectMapper;
  * {@code idempotency_in_progress}; a key reused with a different request is 422
  * {@code idempotency_key_reused}; a completed key replays its stored response without doing the
  * work again. The same protocol as retail's {@code RetailIdempotency}, which lending may not
- * depend on (ADR-002); lifting both into a core module is noted in ADR-025.
+ * depend on (ADR-002); lifting both into a core module is noted in ADR-026.
  */
 @Service
 class LoanIdempotency {
