@@ -66,7 +66,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
 
                 # ---------------- retail vertical (ADR-020) ----------------
                 retailCatalogue = component "Retail: Catalogue" "Categories, units, products with current cost and sell price; append-only price history written with every price change." "retail" "retail"
-                retailStock     = component "Retail: Stock" "Append-only stock movements and per-branch balances kept in the same transaction under a row lock; stock-takes; nightly reconciliation of balances against movements; retail posting rules and Idempotency-Key handling." "retail" "retail"
+                retailStock     = component "Retail: Stock" "Append-only stock movements and per-branch balances kept in the same transaction under a row lock; stock-takes; stock transfers between branches at cost, one entry per branch through inter-branch clearing; nightly reconciliation of balances against movements; retail posting rules and Idempotency-Key handling." "retail" "retail"
                 retailSales     = component "Retail: Sales" "Sales with unit cost and price snapshots, credit buyers, payments against credit sales, voids by reversal; revenue and cost of goods sold posted per branch." "retail" "retail"
                 retailReports    = component "Retail: Reports" "Stock valuation at cost and expected sales at price per branch, the revaluation difference against the inventory account, daily profit per branch from the sale snapshots; cost and profit only with retail.profit.read." "retail" "retail"
                 retailPurchasing = component "Retail: Purchasing" "Suppliers and restocks that set product prices, with history, in the same transaction as the stock movements and the per-branch journals." "retail" "retail"
@@ -171,7 +171,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.retailCatalogue -> bms.api.audit "Writes audit rows"
         bms.api.retailCatalogue -> bms.api.tenancy "Reads the tenant currency"
         bms.api.retailCatalogue -> bms.db "Products and the append-only price history"
-        bms.web -> bms.api.retailStock "Stock by branch, movements, stock-takes, usage and damage reports"
+        bms.web -> bms.api.retailStock "Stock by branch, movements, stock-takes, usage and damage reports, stock transfers"
         bms.web -> bms.api.retailSales "POST /retail/sales with Idempotency-Key; voids; credit buyers"
         bms.api.retailSales -> bms.api.retailCatalogue "Reads the current cost and sell price to snapshot"
         bms.api.retailSales -> bms.api.retailStock "Moves stock; posts through the retail books; claims the idempotency key"

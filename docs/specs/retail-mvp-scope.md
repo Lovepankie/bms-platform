@@ -55,14 +55,15 @@ to R3 have merged. Target: usable on staging by 2026-10-07.
 | FR-RET-13 | Retail permissions and the sales and admin role mapping, with branch scope. In the pilot, recording purchases, creating products and seeing cost, valuation and profit are admin only. |
 | FR-RET-14 | Every retail write is audited. |
 | FR-RET-15 | Phone-first PWA screens for the flows above, permission gated. |
+| FR-RET-16 | Stock transfers between branches: one action moves one or more products from a source branch to another branch in one transaction, at the source's current cost (no profit or loss), refused when the source lacks stock, shown as a transfer in both branches' history, posted as one entry per branch through inter-branch clearing, and voidable while the destination still holds the stock. Needs `retail.stock.transfer` on the source branch. Added by issue #84 (ADR-020 amendment); imported history is not rewritten. |
 
-These are adopted into chapter 3 section 3.28 by R1.
+These are adopted into chapter 3 section 3.28 by R1; FR-RET-16 by issue #84.
 
 ## 4. Out of the first release
 
 Cash book (expenses, banking, withdrawals, advances to the owner or company, a daily savings
 target), wider financial and sales reports, receipt photos and location capture, offline use,
-barcode scanning, transfers between branches, weighted average cost, supplier statements beyond
+barcode scanning, weighted average cost, supplier statements beyond
 trade creditors, SMS receipts, returns other than a void. The cash book is likely partly core
 (pending ADR-022).
 

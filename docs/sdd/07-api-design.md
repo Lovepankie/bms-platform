@@ -251,10 +251,13 @@ Gateway callbacks use the provider's transaction reference as the idempotency ke
 
 ## 7.9 Optimistic concurrency
 
-Mutable resources return `ETag: "<version>"` on GET. `PATCH` and state transitions on
-those resources require `If-Match: "<version>"`; a mismatch returns 409
-`version_conflict` with the current version in the body. Money-moving endpoints lock the
-target row (`SELECT ... FOR UPDATE`) instead, and do not need `If-Match`.
+Mutable resources return `ETag: "<version>"` on GET. Three kinds of write require
+`If-Match: "<version>"`: a `PATCH` of such a resource, a state transition on it, and the retail
+manual price edit (`POST /retail/products/{product_id}/prices`, #77), which is a `POST` but changes
+the product's prices in place. Without the header the answer is 428 `precondition_required`; a
+mismatch returns 409 `version_conflict` with the current version in the body. Money-moving
+endpoints lock the target row (`SELECT ... FOR UPDATE`) instead, and do not need `If-Match`; a
+retail transfer and its void are among them.
 
 ## 7.10 Rate limits
 
@@ -691,6 +694,21 @@ Built (#54, reports):
 |---|---|---|---|
 | GET | `/retail/reports/valuation` | `retail.stock.read` | `branch_id` (repeatable, scoped), `as_of` (not in the future; quantities are summed by each movement's business date, the date its journal carries). A row whose quantity times a price does not fit is flagged `amount_out_of_range`, its values left out and excluded from the totals, so one product never fails the report. `{as_of, currency, rows: [{branch_id, product_id, code, description, unit, qty, negative, sell_minor, expected_sales_minor, amount_out_of_range, cost_minor*, value_at_cost_minor*}], branches: [{branch_id, expected_sales_minor, value_at_cost_minor*, inventory_account_minor*, revaluation_difference_minor*}], expected_sales_minor, value_at_cost_minor*}`; `branches` lists every branch in the filter that holds stock or has a non-zero `inventory` balance (review F3). FR-RET-09 |
 | GET | `/retail/reports/profit/daily` | `retail.profit.read` | `branch_id` (repeatable, scoped), `from`, `to` (default the last 30 days, at most 366). `{from, to, currency, rows: [{branch_id, date, sales_minor, cost_of_sales_minor, gross_profit_minor, usage_cost_minor, profit_minor}], sales_minor, cost_of_sales_minor, usage_cost_minor, profit_minor}`. FR-RET-10 |
+
+Built (#84, stock transfers between branches; FR-RET-16):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/retail/transfers` | `retail.stock.transfer` | **M**. `{from_branch_id?, to_branch_id, transfer_date?, note?, lines: [{product_id, qty}]}`. The source is `from_branch_id`, or the caller's one branch, and must be in the permission's scope (422 `unknown_branch` or `branch_required` on `from_branch_id`); the destination is any active branch of the tenant other than the source (422 `same_branch` or `unknown_branch` on `to_branch_id`). `transfer_date` defaults to today in the tenant's zone and may not be in the future; one line per product (422 `duplicate`); quantities positive with at most three places. 422 `insufficient_stock` when a line exceeds the source's balance (always; ADR-020 decision 4); nothing is written. 201 with `Location`: `{id, from_branch_id, to_branch_id, transfer_date, note, status, currency, cost_total_minor*, lines: [{line_no, product_id, code, description, qty, unit_cost_minor*, line_cost_minor*}], created_at, created_by, voided_at, voided_by, void_reason}` |
+| GET | `/retail/transfers` | `retail.stock.read` | `branch_id` (repeatable, scoped; a transfer is listed when its source or its destination is one of them), `product_id`, `from`, `to` (on `transfer_date`), `limit`, `cursor`; newest first |
+| GET | `/retail/transfers/{transfer_id}` | `retail.stock.read` | 404 unless the caller may read the source or the destination branch |
+| POST | `/retail/transfers/{transfer_id}/void` | `retail.stock.transfer` | `{reason}`; scope checked on the source branch (404 otherwise). Moves every line back at the transfer's cost and reverses both entries, dated today. 409 `transfer_voided`; 422 `transfer_stock_moved` when the destination no longer holds a line's quantity (sold, used or moved on since), naming the destination and the product codes; nothing is written |
+
+For transfers, the `*` fields show when the caller holds `retail.profit.read` in the source or the
+destination branch: the same cost is posted to both branches' inventory accounts. Both branches'
+`/retail/stock/movements` show the lines as `transfer_out` and `transfer_in` with `source_type`
+`retail.transfer` and `source_id` the transfer; a void adds the opposite kinds with `source_type`
+`retail.transfer_void` and `reverses_movement_id` set.
 
 ## 7.12 Example: record a repayment
 

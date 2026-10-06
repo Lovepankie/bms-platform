@@ -1,6 +1,6 @@
 # Retail UI notes
 
-**Status:** Draft · **Tasks:** #56 (R6), #65 (R6b) under story #50 · **Requirement:** FR-RET-15 · **Scope:** `docs/specs/retail-mvp-scope.md`
+**Status:** Draft · **Tasks:** #56 (R6), #65 (R6b) under story #50, #84 (stock transfers) · **Requirements:** FR-RET-15, FR-RET-16 · **Scope:** `docs/specs/retail-mvp-scope.md`
 
 Phone-first staff screens for the retail vertical, in `frontend/src/areas/staff/retail/`. Since #65 they run on the
 real retail API (`docs/sdd/07-api-design.md` section 7.11.20, `docs/api/openapi.json`), which replaced the contract
@@ -16,11 +16,25 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 | `/staff/retail/usage` | Usage and damage | `retail.usage.report` |
 | `/staff/retail/stock` | Stock per branch, search, negative flag | `retail.stock.read` |
 | `/staff/retail/stocktake` | Count, review variance, commit | `retail.stocktake.commit` and `retail.stock.read` |
+| `/staff/retail/transfer` | Move stock: to which branch, items with the source's stock, date and note | `retail.stock.transfer` and `retail.stock.read` |
+| `/staff/retail/transfers` | Stock moves from or to the branch; open one; cancel it | `retail.stock.read` (cancel: `retail.stock.transfer`) |
 | `/staff/retail/valuation` | Stock at price; at cost too with `retail.profit.read` | `retail.stock.read` (cost columns: `retail.profit.read`) |
 | `/staff/retail/profit` | Daily profit per branch | `retail.profit.read` |
 
-Sale, usage, stock, stock-take, valuation and profit work on the branch chosen in the staff header; with
-"All branches" they ask for one branch. Restock takes a quantity per branch the user can see.
+Sale, usage, stock, stock-take, Move stock, valuation and profit work on the branch chosen in the staff header;
+with "All branches" they ask for one branch. Restock takes a quantity per branch the user can see. Stock moves
+lists the transfers from or to the chosen branch, or every branch the user may read with "All branches".
+
+**Move stock (#84).** The branch in the header is the one the stock leaves. The destination is chosen from the
+user's other branches in `/me` (the API accepts any active branch of the tenant, but the PWA has no tenant-wide
+branch list for a branch-scoped user yet). Items are added with the same product picker as the sale screen
+(`ProductPicker` in `ui.tsx`, now shared), which shows what the source branch holds, and each line hints when its
+quantity is above that. The date is optional (empty means today) and so is the note. The form keeps its draft and
+one `Idempotency-Key` in `sessionStorage` like the sale form, and a refusal for stock shows the plain
+`insufficient_stock` message. No cost is shown, except the value at cost on the saved summary for a user with
+`retail.profit.read`. Stock moves opens a transfer and offers "Cancel this move" with a reason to a user who may
+move stock; the server refuses with `transfer_stock_moved` once the destination has sold, used or moved part of
+it, and that message (naming the branch and the item codes) is shown as the server wrote it.
 
 Behaviour worth knowing: the sale, restock and usage forms generate one `Idempotency-Key` per draft and keep it,
 with the draft, in the tab's `sessionStorage` (per user and, for sale and usage, per branch) for every re-render,
@@ -44,7 +58,7 @@ API stays the authority.
 
 `src/api/retail-errors.ts` maps the problem `code` to plain words: `insufficient_stock`, `price_below_cost`,
 `idempotency_key_reused`, `idempotency_in_progress`, `idempotency_key_missing`, `permission_denied`,
-`module_not_enabled`, `branch_required`, `sale_voided`, `stocktake_committed`, `payment_exceeds_balance`, expired
+`module_not_enabled`, `branch_required`, `sale_voided`, `stocktake_committed`, `transfer_voided`, `payment_exceeds_balance`, expired
 sessions, and the field messages of `validation_failed`. A code it does not know shows the server's own message,
 so a new refusal (for example a price floor code spelled differently) is never hidden.
 
@@ -63,7 +77,10 @@ role; the default is admin. `retail-mock.ts` is imported dynamically only when `
 time, so a production build contains none of it (#77: `npm run build` without the flag emits no mock chunk and no
 mock data). The mock returns the real response shapes, omits cost and profit without
 `retail.profit.read`, replays a repeated `Idempotency-Key`, refuses a reused key and a sale above the balance
-with the server's codes, and updates prices on a restock. The vitest suites use it as the test adapter.
+with the server's codes, and updates prices on a restock. It also moves stock between its two fabricated branches,
+refuses a transfer above the source's balance (`insufficient_stock`) and a cancel once the destination no longer
+holds the stock (`transfer_stock_moved`), and lists and opens transfers; the mock admin holds
+`retail.stock.transfer`, the mock sales role does not. The vitest suites use it as the test adapter.
 
 ## Verification (#65)
 

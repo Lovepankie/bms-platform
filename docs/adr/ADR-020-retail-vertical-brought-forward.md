@@ -5,6 +5,9 @@
 Proposed (2026-10-05), accepted on merge. Amends one sentence of ADR-001: retail is no longer
 "out of scope until the lending MVP is live". Everything else in ADR-001 stands.
 
+Amended (2026-10-06, issue #84): transfers between branches move from reserved to built; see the
+amendment at the end. Decision 3's last sentence is superseded by it.
+
 ## Context
 
 ADR-001 named retail as the second vertical and deferred it. A multi-shop electrical retailer
@@ -90,3 +93,45 @@ migration takes the next free number at merge time. `ModularityTest` must keep r
 depending on lending. The cash book (expenses, banking, advances, a daily savings target) is
 out of the first release and is likely partly core, because lending needs cash handling too
 (pending ADR-022).
+
+## Amendment: stock transfers between branches (2026-10-06, issue #84)
+
+Accepted on the merge of the pull request that closes #84. The pilot's data shows shops move stock
+to each other constantly (many of its restock rows are shop-to-shop moves, imported as signed
+adjustments), so decision 3's "transfers between branches are reserved and not in the first release"
+no longer holds. Transfers are built, on the rules the other decisions already set:
+
+- **One action, one transaction.** A transfer moves one or more products from a source branch to a
+  different, active destination branch of the tenant. Each line writes a `transfer_out` movement
+  (negative) at the source and a `transfer_in` movement (positive) at the destination, linked by
+  the transfer's id, so each branch's history shows a transfer and never an adjustment. Decision 3's
+  list of kinds gains these two.
+- **Overselling is refused at the source** (decision 4): `transfer_out` is guarded like a sale,
+  usage or damage, under the balance locks, which are taken in branch and product order so two
+  opposite transfers cannot deadlock or both pass.
+- **At cost, with no profit or loss.** Stock moves at the source's current cost (decision 6), the
+  snapshot stored on both movements and on the line. The tenant's valuation at cost is unchanged;
+  each branch's moves by the transfer's cost.
+- **One entry per branch** (decision 7, ADR-004): the source debits inter-branch clearing and
+  credits inventory; the destination debits inventory and credits inter-branch clearing, the same
+  amount. The retail chart gains the clearing account (code 1190, the lending chart's code and
+  `system_key`), seeded for tenants that switched retail on earlier.
+- **Void by reversal**, like every other event: the opposite movements and the reversal of both
+  entries, allowed only while the destination still holds what the transfer brought; otherwise it
+  is refused in plain words and the user moves the stock back with a new transfer.
+- **Permissions** (decision 10): `retail.stock.transfer`, held by the roles that restock (the
+  tenant admin in the default roles), scoped on the source branch (ADR-017). Cost on a transfer
+  shows only with `retail.profit.read` in the source or the destination branch, and never in its
+  audit payload (#77).
+- **Imported history is not rewritten** (decision 9): the shop-to-shop moves already imported stay
+  signed adjustments; transfers are for new data.
+
+**Better:** shop-to-shop moves stop being two unrelated adjustments that a stock-take must explain;
+each branch's books show the stock leaving and arriving at one value.
+
+**Worse:** two more movement kinds, two tables and an account; a branch's inventory account now
+moves without a purchase or sale, so its reconciliation reads the clearing account too.
+
+**Watch for:** the clearing account must net to zero across branches in a consolidation; a balance
+other than zero means an entry was posted on one side only. Migration V22 takes the next free
+Flyway number at merge time.
