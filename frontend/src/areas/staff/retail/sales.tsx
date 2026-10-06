@@ -159,6 +159,16 @@ function More({ query }: { query: ReturnType<typeof useSales>['query'] }) {
   );
 }
 
+/** The sale shown open, if it was opened under this branch choice: a change of branch closes it. */
+export function openUnder(opened: { key: string; id: string } | null, key: string): string | null {
+  return opened && opened.key === key ? opened.id : null;
+}
+
+function useOpenSale(key: string): [string | null, (id: string | null) => void] {
+  const [opened, setOpened] = useState<{ key: string; id: string } | null>(null);
+  return [openUnder(opened, key), (id) => setOpened(id === null ? null : { key, id })];
+}
+
 type Owing = 'all' | 'owing' | 'overdue' | 'paid';
 const OWING: { value: Owing; label: string }[] = [
   { value: 'all', label: 'All credit sales' },
@@ -172,7 +182,7 @@ function CreditSales() {
   const nameOf = useBranchName();
   const [buyer, setBuyer] = useState('');
   const [owing, setOwing] = useState<Owing>('all');
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useOpenSale(all ? 'all' : (branchId ?? ''));
   const today = businessToday();
   const { query, items } = useSales({ branchId: all ? undefined : (branchId ?? undefined), buyer, paymentMethod: 'credit', status: 'completed', owing: owing === 'all' ? undefined : owing }, all || branchId !== null);
   return (
@@ -208,7 +218,7 @@ function AllSales() {
   const [method, setMethod] = useState<SalePayment | ''>('');
   const [itemSearch, setItemSearch] = useState('');
   const [productId, setProductId] = useState('');
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useOpenSale(all ? 'all' : (branchId ?? ''));
   const products = useQuery({ queryKey: ['retail', 'products', 'all', itemSearch], queryFn: () => retail.listProducts({ query: itemSearch }), enabled: itemSearch.trim() !== '' });
   const { query, items } = useSales(
     { branchId: all ? undefined : (branchId ?? undefined), from, to, buyer, paymentMethod: method || undefined, productId },

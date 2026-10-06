@@ -13,7 +13,7 @@ import { RestockForm, RestockSaved } from './restock';
 import { TransferForm, TransferSummary } from './transfer';
 import { TransferList, showDate } from './transfers';
 import { UsageForm } from './usage';
-import { SaleDetail, SaleList, saleState } from './sales';
+import { SaleDetail, SaleList, openUnder, saleState } from './sales';
 import { branchesWhere } from './permissions';
 import { BranchRequired, Gate, NoStockHere, Problem } from './ui';
 import { ALL_BRANCHES } from '../../../auth/branch';
@@ -529,6 +529,14 @@ describe('Credit sales and All sales (#145)', () => {
       payment_method: 'credit', status: 'completed', owing: 'overdue', newest_first: true, limit: 50, buyer: undefined,
     });
     expect(salesParams({ paymentMethod: 'credit' }).owing).toBeUndefined();
+  });
+
+  it('closes the open sale when the branch choice changes', () => {
+    const opened = { key: 'branch-a', id: 's1' };
+    expect(openUnder(opened, 'branch-a')).toBe('s1');
+    expect(openUnder(opened, 'branch-b')).toBeNull();
+    expect(openUnder(opened, 'all')).toBeNull();
+    expect(openUnder(null, 'all')).toBeNull();
   });
 
   it('opens a sale with its lines, and shows profit only with the permission', () => {
