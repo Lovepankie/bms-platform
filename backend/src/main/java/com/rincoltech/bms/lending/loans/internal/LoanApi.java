@@ -21,6 +21,9 @@ final class LoanApi {
     /** The largest amount any money field accepts, in minor units (the same bound as loan products). */
     static final long MAX_MONEY_MINOR = 1_000_000_000_000_000L;
 
+    /** Guarantors or pledged items per loan; each pledged item is a row lock held for the whole request. */
+    static final int MAX_PARTIES = 20;
+
     private LoanApi() {}
 
     @Schema(name = "CreateLoanRequest")
@@ -51,7 +54,8 @@ final class LoanApi {
             @Size(max = 60) String relationship) {}
 
     @Schema(name = "SetLoanGuarantorsRequest")
-    record GuarantorsRequest(@NotNull @Valid List<GuarantorInput> guarantors) {}
+    record GuarantorsRequest(
+            @NotNull @Valid @Size(max = MAX_PARTIES) List<GuarantorInput> guarantors) {}
 
     @Schema(name = "LoanPledgeInput")
     record PledgeInput(
@@ -61,7 +65,8 @@ final class LoanApi {
             Long pledgedValueMinor) {}
 
     @Schema(name = "SetLoanCollateralRequest")
-    record PledgesRequest(@NotNull @Valid List<PledgeInput> collateral) {}
+    record PledgesRequest(
+            @NotNull @Valid @Size(max = MAX_PARTIES) List<PledgeInput> collateral) {}
 
     @Schema(name = "LoanNoteRequest")
     record NoteRequest(@NotBlank @Size(max = 1000) String note) {}

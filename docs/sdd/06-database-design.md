@@ -788,7 +788,7 @@ increment 4.
 (std, no `version`) `product_version_id uuid NOT NULL`, `name varchar(60) NOT NULL`,
 `fee_type text NOT NULL` [`application`, `processing`, `insurance`, `other`],
 `calc_method text NOT NULL` [`flat`, `percent_of_principal`], `amount_minor bigint`,
-`rate_bp integer` (`CHECK (rate_bp BETWEEN 1 AND 10000)`), `timing text NOT NULL` [`deducted_at_disbursement`, `added_to_loan`,
+`rate_bp integer` (`CHECK (rate_bp BETWEEN 1 AND 10000)`; `amount_minor` at most 10^15, V21), `timing text NOT NULL` [`deducted_at_disbursement`, `added_to_loan`,
 `paid_upfront`]. `CHECK` that exactly one of `amount_minor`, `rate_bp` is set to match
 `calc_method`.
 
@@ -1177,7 +1177,10 @@ first uses it.
 `V7__loan_products.sql` (#40) creates `lending_loan_products`, `lending_loan_product_versions` and
 `lending_loan_product_fees`. `V8__loan_applications.sql` (#41) creates `lending_loans` with every
 column of this section, `lending_loan_status_history` (append-only), `lending_loan_guarantors` and
-`lending_loan_collateral`, with the one-open-pledge index and the draft-only triggers.
+`lending_loan_collateral`, with the one-open-pledge index and the draft-only triggers. `V21__loan_review_followups.sql`
+narrows those triggers: off draft, a pledge may only go from unreleased to released and a
+guarantee from `active` to `released`, never back. It also caps a flat fee's `amount_minor` at
+10^15 minor units, the API bound.
 `V9__loan_appraisals.sql` (#42) creates `lending_loan_appraisals` (append-only: `SELECT` and
 `INSERT` only).
 Retail migrations (ADR-020) share the one Flyway sequence and follow V9 in order:

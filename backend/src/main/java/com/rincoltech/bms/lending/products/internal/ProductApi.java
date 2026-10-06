@@ -30,6 +30,12 @@ final class ProductApi {
     /** A percentage fee is at most the whole principal. */
     static final long MAX_FEE_RATE_BP = 10_000;
 
+    /**
+     * Fees per version. Twenty is far more than any product uses, and it keeps every fee sum
+     * (20 x 10^15 minor units at most) far inside a long.
+     */
+    static final int MAX_FEES = 20;
+
     private ProductApi() {}
 
     @Schema(name = "LoanProductFee")
@@ -89,7 +95,7 @@ final class ProductApi {
             Integer minCollateralCoverBp,
 
             Boolean requiresGuarantor,
-            @Valid List<Fee> fees) {}
+            @Valid @Size(max = MAX_FEES) List<Fee> fees) {}
 
     @Schema(name = "CreateLoanProductRequest")
     record CreateProductRequest(
@@ -108,7 +114,7 @@ final class ProductApi {
             @NotNull @Min(1) @Max(3660) Integer termCount,
             @NotNull @Pattern(regexp = PATTERNS) String repaymentPattern,
             @Pattern(regexp = FREQUENCIES) String instalmentFrequency,
-            @Valid List<Fee> fees,
+            @Valid @Size(max = MAX_FEES) List<Fee> fees,
             @NotNull @Positive @Max(MAX_MONEY_MINOR) Long principalMinor,
 
             @NotNull @Schema(description = "Between 2000-01-01 and 2100-12-31")

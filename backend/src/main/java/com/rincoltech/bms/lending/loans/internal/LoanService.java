@@ -345,10 +345,9 @@ class LoanService {
             return new Refusal("collateral_id", "currency_mismatch", "The item is valued in " + item.currency() + ".");
         }
         if (item.collateralValueMinor() == null) {
-            // Cover (FR-ORG-07) is measured from pledged values, so a secured product takes valued items only.
-            return product.requiresCollateral()
-                    ? new Refusal("collateral_id", "collateral_not_valued", "The item has no valuation or estimate.")
-                    : null;
+            // A pledged value is only meaningful against the item's value, and cover (FR-ORG-07) and
+            // exposure are measured from it, so every pledge needs a valued item.
+            return new Refusal("collateral_id", "collateral_not_valued", "The item has no valuation or estimate.");
         }
         if (pledgedValue > item.collateralValueMinor()) {
             return new Refusal(

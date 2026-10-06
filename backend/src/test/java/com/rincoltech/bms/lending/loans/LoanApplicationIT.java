@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.TestDatabase;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -337,6 +339,66 @@ class LoanApplicationIT extends LoanFixtures {
                 .isEqualTo(1);
     }
 
+    /**
+     * FR-COL-01: the item's row lock, not only the unique index, serialises pledges. While another
+     * transaction holds the item, a pledge waits; when that transaction ends, it completes.
+     */
+    @Test
+    void aPledgeWaitsForTheItemsLock() throws Exception {
+        String product = product("LOCKED", false, false);
+        String borrower = member("Test Borrower 17", "0700000017", t.headOffice(), true);
+        String item = collateralItem(borrower, "TEST-PLEDGE-17");
+        String loan =
+                apply(borrower, product, 500_000, null).getBody().get("id").asString();
+        try (Connection holder = TestDatabase.ownerDataSource().getConnection();
+                ExecutorService pool = Executors.newSingleThreadExecutor()) {
+            holder.setAutoCommit(false);
+            try (PreparedStatement lock =
+                    holder.prepareStatement("SELECT id FROM lending_collateral_items WHERE id = ?::uuid FOR UPDATE")) {
+                lock.setString(1, item);
+                lock.executeQuery().close();
+            }
+            Future<HttpStatusCode> pledge = pool.submit(() -> asOfficer(
+                            HttpMethod.PUT, LOANS + "/" + loan + "/collateral", "\"1\"", pledge(item, 1_000_000))
+                    .getStatusCode());
+            Thread.sleep(700);
+            assertThat(pledge.isDone())
+                    .as("the pledge waits while the item is locked")
+                    .isFalse();
+            holder.commit();
+            assertThat(pledge.get(30, TimeUnit.SECONDS)).isEqualTo(HttpStatus.OK);
+        }
+    }
+
+    /** At most 20 guarantors and 20 pledged items per request: each item is a row lock. */
+    @Test
+    void listsAreBounded() {
+        String product = product("BOUNDED", false, false);
+        String borrower = member("Test Borrower 18", "0700000018", t.headOffice(), true);
+        String loan =
+                apply(borrower, product, 500_000, null).getBody().get("id").asString();
+        List<Map<String, Object>> guarantors = new ArrayList<>();
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (int i = 0; i < 21; i++) {
+            guarantors.add(Map.of("member_id", UUID.randomUUID(), "guaranteed_amount_minor", 1_000));
+            items.add(Map.of("collateral_id", UUID.randomUUID(), "pledged_value_minor", 1_000));
+        }
+        assertThat(asOfficer(
+                                HttpMethod.PUT,
+                                LOANS + "/" + loan + "/guarantors",
+                                "\"1\"",
+                                Map.of("guarantors", guarantors))
+                        .getBody()
+                        .get("errors")
+                        .findValuesAsString("field"))
+                .contains("guarantors");
+        assertThat(asOfficer(HttpMethod.PUT, LOANS + "/" + loan + "/collateral", "\"1\"", Map.of("collateral", items))
+                        .getBody()
+                        .get("errors")
+                        .findValuesAsString("field"))
+                .contains("collateral");
+    }
+
     /** A pledge states at most the item's value, and a secured product takes valued items only. */
     @Test
     void aPledgeCannotExceedTheItemsValue() {
@@ -459,6 +521,12 @@ class LoanApplicationIT extends LoanFixtures {
                 path + "/cancel",
                 as(UUID.randomUUID(), managerPerms, "*", "\"3\""),
                 Map.of("note", "Test: member withdrew"));
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("UPDATE lending_loan_collateral SET released_at = NULL WHERE loan_id = ?::uuid")
+                        .param(loan)
+                        .update())
+                .as("a released pledge stays released")
+                .hasMessageContaining("only on a draft loan");
         assertThat(TestDatabase.owner()
                         .sql("SELECT count(*) FROM lending_loan_collateral WHERE loan_id = ?::uuid"
                                 + " AND released_at IS NOT NULL")

@@ -474,7 +474,8 @@ Origination rules that follow from the table above:
   Cancelling, rejecting or closing the loan releases them. A written-off loan keeps its
   collateral, because it is being recovered.
 - Pledged value (FR-ORG-02). A pledge states at most the item's value (latest forced sale value,
-  else the estimate). A product that requires collateral accepts valued items only.
+  else the estimate), so only a valued item can be pledged (`collateral_not_valued`), on any
+  product. A loan takes at most 20 guarantors and 20 pledged items.
 - What submit checks and what it leaves (FR-ORG-03, FR-ORG-07). Submit checks again, as they
   stand at that moment, the borrower and each guarantor (active, not blacklisted) and each
   pledged item (the borrower's, held, in the loan's currency, valued, free). It does not measure

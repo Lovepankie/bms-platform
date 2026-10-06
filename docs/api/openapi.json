@@ -1618,6 +1618,8 @@
             "items" : {
               "$ref" : "#/components/schemas/LoanProductFee"
             },
+            "maxItems" : 20,
+            "minItems" : 0,
             "type" : "array"
           },
           "flat_early_settlement_rebate" : {
@@ -3993,6 +3995,8 @@
             "items" : {
               "$ref" : "#/components/schemas/LoanProductFee"
             },
+            "maxItems" : 20,
+            "minItems" : 0,
             "type" : "array"
           },
           "instalment_frequency" : {
@@ -4042,6 +4046,8 @@
             "items" : {
               "$ref" : "#/components/schemas/LoanPledgeInput"
             },
+            "maxItems" : 20,
+            "minItems" : 0,
             "type" : "array"
           }
         },
@@ -4053,6 +4059,8 @@
             "items" : {
               "$ref" : "#/components/schemas/LoanGuarantorInput"
             },
+            "maxItems" : 20,
+            "minItems" : 0,
             "type" : "array"
           }
         },
