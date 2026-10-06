@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { retail, type Stocktake, type StocktakeLine } from '../../../api/retail';
 import { milliOf, parseCount, showQty } from './maths';
 import { BranchRequired, CategoryLabel, Gate, Note, Problem, useSingleBranch } from './ui';
+import { needsOf } from './permissions';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
 // out, then commit to write the adjustments. Only counted rows are sent.
@@ -119,7 +120,7 @@ function StocktakePage() {
   return (
     <Gate screen="stocktake" title="Stock-take">
       {branchId === null ? (
-        <BranchRequired permission={'retail.stocktake.commit'} />
+        <BranchRequired permissions={needsOf('stocktake')} />
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>

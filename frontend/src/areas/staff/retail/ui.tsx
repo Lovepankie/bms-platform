@@ -126,12 +126,21 @@ export function CategoryLabel({ category }: { category?: string }) {
 
 /**
  * A screen that writes works on one branch. With "All branches" chosen it offers each of the user's
- * branches where the screen's `permission` is held as a button instead of pointing at the Branch box
- * (#144).
+ * branches where the screen's `permissions` are all held as a button instead of pointing at the Branch
+ * box (#144). With no such branch it says so.
  */
-export function BranchRequired({ permission }: { permission: string }) {
+export function BranchRequired({ permissions }: { permissions: string[] }) {
   const { me, chooseBranch } = useStaff();
-  const branches = branchesWhere(me, permission).filter((b) => b.id);
+  const branches = (me.branches ?? []).filter(
+    (b) => b.id && permissions.every((p) => branchesWhere(me, p).some((x) => x.id === b.id)),
+  );
+  if (branches.length === 0) {
+    return (
+      <div role="note" className="alert alert-info">
+        <p>You have no branch where you can do this. Ask an administrator for access.</p>
+      </div>
+    );
+  }
   return (
     <div role="note" className="alert alert-info">
       <div className="stack">

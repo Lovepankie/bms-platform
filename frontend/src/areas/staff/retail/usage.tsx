@@ -6,6 +6,7 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { parseQty, qtyString, showQty } from './maths';
 import { BranchRequired, CategoryLabel, Gate, Problem, useSingleBranch } from './ui';
+import { needsOf } from './permissions';
 
 // Usage and damage (FR-RET-07): items taken out of stock for use in the shop or because they are
 // damaged, with a reason. Valued at cost by the server; no cost is shown here.
@@ -97,7 +98,7 @@ function UsagePage() {
   return (
     <Gate screen="usage" title="Usage and damage">
       {branchId === null ? (
-        <BranchRequired permission={'retail.usage.report'} />
+        <BranchRequired permissions={needsOf('usage')} />
       ) : done ? (
         <section aria-label="Saved">
           <h2>Saved</h2>

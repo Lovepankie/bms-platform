@@ -29,6 +29,11 @@ const NEEDS: Record<RetailScreen, string[]> = {
   profit: [PROFIT],
 };
 
+/** Every permission a screen needs. */
+export function needsOf(screen: RetailScreen): string[] {
+  return NEEDS[screen];
+}
+
 export function permissionsOf(me: Pick<Me, 'permissions'>): string[] {
   return me.permissions ?? [];
 }

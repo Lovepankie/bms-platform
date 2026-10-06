@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { businessToday, daysBefore, retail, type DailyProfit, type DailyProfitRow, type Valuation } from '../../../api/retail';
 import { showPercent, showQty } from './maths';
 import { BranchRequired, CategoryLabel, Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
+import { needsOf } from './permissions';
 
 // Stock value (FR-RET-09) is a stock read; its cost columns arrive only with retail.profit.read.
 // Daily profit (FR-RET-10) needs retail.profit.read (the Gate), and the server refuses it otherwise.
@@ -157,7 +158,7 @@ function ValuationPage() {
   });
   return (
     <Gate screen="valuation" title="Stock value">
-      {!all && branchId === null ? <BranchRequired permission="retail.stock.read" /> : (
+      {!all && branchId === null ? <BranchRequired permissions={needsOf('valuation')} /> : (
         <>
           <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
           {valuation.isPending && <p className="loading">Loading</p>}
@@ -251,7 +252,7 @@ function ProfitPage() {
   });
   return (
     <Gate screen="profit" title="Daily profit">
-      {!all && branchId === null ? <BranchRequired permission="retail.profit.read" /> : (
+      {!all && branchId === null ? <BranchRequired permissions={needsOf('profit')} /> : (
         <>
           <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
           <div className="rt-row">

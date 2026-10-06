@@ -5,6 +5,7 @@ import { retail, type AllBranchesStock, type StockLevel, type StockRow } from '.
 import { branchLabel } from '../../../auth/branch';
 import { showQty } from './maths';
 import { BranchRequired, CategoryLabel, Gate, NoStockHere, Problem, money, useBranchView, useIsPhone, useProfitAccess } from './ui';
+import { needsOf } from './permissions';
 
 // Stock per branch (FR-RET-03): balances with a negative flag and a search box. The cost column
 // exists only for a session holding retail.profit.read: showCost is the screen's choice and the server
@@ -189,7 +190,7 @@ export function StockPage() {
         <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={negativeOnly} onChange={(e) => setNegativeOnly(e.target.checked)} />
         Show only negative stock
       </label>
-      {!all && branchId === null && <BranchRequired permission={'retail.stock.read'} />}
+      {!all && branchId === null && <BranchRequired permissions={needsOf('stock')} />}
       {result.isPending && (all || branchId !== null) && <p className="loading">Loading</p>}
       <Problem error={result.error} />
       {!all && one.data && <StockTable rows={one.data} showCost={canProfit} />}

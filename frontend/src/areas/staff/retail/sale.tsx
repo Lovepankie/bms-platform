@@ -7,6 +7,7 @@ import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, type Draft } from './sale-state';
 import { BranchRequired, Gate, NoStockHere, Note, ProductPicker, Problem, money, useProfitAccess, useSingleBranch } from './ui';
+import { needsOf } from './permissions';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -201,7 +202,7 @@ function RecordSale() {
   return (
     <Gate screen="sale" title="Record a sale">
       {branchId === null ? (
-        <BranchRequired permission="retail.sale.create" />
+        <BranchRequired permissions={needsOf('sale')} />
       ) : sale ? (
         <Receipt sale={sale} onNew={() => { setSale(null); setRound((n) => n + 1); }} />
       ) : (
