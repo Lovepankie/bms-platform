@@ -38,6 +38,20 @@ class FakeObjectStorage implements ObjectStorage {
         objects.put(key, new StoredObject(bytes.clone(), contentType));
     }
 
+    /** For tests: reads served by {@link #get}, and a switch that makes them fail like an outage. */
+    final java.util.concurrent.atomic.AtomicInteger gets = new java.util.concurrent.atomic.AtomicInteger();
+
+    volatile boolean failGets;
+
+    @Override
+    public Optional<byte[]> get(String key) {
+        gets.incrementAndGet();
+        if (failGets) {
+            throw new IllegalStateException("simulated storage outage");
+        }
+        return Optional.ofNullable(objects.get(key)).map(o -> o.bytes().clone());
+    }
+
     @Override
     public void delete(String key) {
         objects.remove(key);

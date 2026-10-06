@@ -41,7 +41,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
             api = container "API" "Modular monolith (ADR-002). REST under /api/v1; one database transaction per request, bound to the tenant (ADR-003). Also runs the worker role: db-scheduler jobs on PostgreSQL (ADR-008)." "Java 25, Spring Boot 4.1, Spring Modulith 2.1 (ADR-010)" "app" {
 
                 # ---------------- core ----------------
-                tenancy       = component "Tenancy" "Tenants, plans and limits, module switching, settings, branches. Resolves the tenant from the host, binds app.tenant_id, and makes a suspended tenant read only." "core" "core"
+                tenancy       = component "Tenancy" "Tenants, plans and limits, module switching, settings, branding (logo, theme colour), branches. Resolves the tenant from the host, binds app.tenant_id, and makes a suspended tenant read only." "core" "core"
                 identity      = component "Identity and Access" "Staff and platform sign-in (argon2id, TOTP with recovery codes, ADR-014), revocable server-side sessions, invitations, roles, permission matrix, per-permission branch scope." "core" "core"
                 audit         = component "Audit" "Append-only audit log written in the same transaction as each change; platform audit log; search and CSV export." "core" "core"
                 approvals     = component "Approvals" "Maker-checker requests with payload snapshots; executes approved actions through actions registered by the owning modules (ADR-015)." "core" "core"
@@ -120,7 +120,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         # COMPONENT LEVEL (inside the API)
         # ==================================================================
         bms.web -> bms.api.identity "Signs in; loads permissions and branch scope"
-        bms.web -> bms.api.tenancy "Tenant settings and branches"
+        bms.web -> bms.api.tenancy "Tenant settings and branches; public branding (logo, theme colour) for the shell"
         bms.web -> bms.api.platform "Platform console: tenants, modules, subscriptions"
         bms.web -> bms.api.audit "Searches and exports the audit log"
         bms.web -> bms.api.members "Registers, searches and verifies members"
@@ -201,6 +201,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.retailImports -> bms.db "Source references of imported rows"
         bms.api.tenancy     -> bms.db "Resolves the slug with app_resolve_tenant_status; binds app.tenant_id"
         bms.api.tenancy     -> bms.api.audit "Audits branch and settings changes"
+        bms.api.tenancy     -> bms.api.documents "Stores the tenant logo and reads it for the public branding route (FR-TEN-08)"
         bms.api.identity    -> bms.db "Reads sessions and role assignments; revocation takes effect at once"
         bms.api.identity    -> bms.api.audit "Writes sign-in, MFA, invitation and user events"
         bms.api.identity    -> bms.api.tenancy "Reads branches, settings and plan limits"

@@ -1,0 +1,81 @@
+/*
+ * Design tokens of the shared shell (FR-TEN-08). A tenant's theme colour (theme_primary) is set on
+ * :root at run time as --brand, with --brand-contrast as the readable text colour on it (white or
+ * near-black, chosen by the same contrast rule the API enforces). Without a tenant colour these
+ * defaults apply. A vertical's screens use these two variables for an accent and never write a
+ * brand colour of their own; text drawn on --brand must use --brand-contrast, and --brand alone
+ * is not guaranteed to be readable as text on white.
+ */
+:root {
+  --brand: #0d5c75;
+  --brand-contrast: #ffffff;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  font-family: system-ui, sans-serif;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+  min-height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-content {
+  flex: 1;
+}
+
+.brand-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  margin-bottom: 16px;
+  border-bottom: 4px solid var(--brand);
+}
+
+.brand-bar img {
+  max-height: 44px;
+  max-width: 200px;
+  object-fit: contain;
+}
+
+.brand-bar .brand-name {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.btn-brand,
+.badge-brand {
+  background: var(--brand);
+  color: var(--brand-contrast);
+  border: 0;
+  border-radius: 4px;
+  padding: 6px 12px;
+}
+
+.badge-brand {
+  display: inline-block;
+  padding: 2px 8px;
+}
+
+.app-footer {
+  margin-top: 32px;
+  padding-top: 12px;
+  border-top: 1px solid #d9d9d9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #555;
+  font-size: 0.85rem;
+}
+
+.app-footer a {
+  display: inline-flex;
+}

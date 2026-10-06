@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.documents.internal;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.Optional;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.checksums.RequestChecksumCalculation;
@@ -9,6 +10,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
@@ -60,6 +62,16 @@ class R2ObjectStorage implements ObjectStorage {
     @Override
     public void put(String key, byte[] bytes, String contentType) {
         s3.putObject(b -> b.bucket(bucket).key(key).contentType(contentType), RequestBody.fromBytes(bytes));
+    }
+
+    @Override
+    public Optional<byte[]> get(String key) {
+        try {
+            return Optional.of(
+                    s3.getObjectAsBytes(b -> b.bucket(bucket).key(key)).asByteArray());
+        } catch (NoSuchKeyException e) {
+            return Optional.empty();
+        }
     }
 
     @Override

@@ -31,6 +31,7 @@
         <nimbus-jose-jwt.version>10.10</nimbus-jose-jwt.version>
         <bouncycastle.version>1.86</bouncycastle.version>
         <awssdk.version>2.55.7</awssdk.version>
+        <twelvemonkeys.version>3.15.2</twelvemonkeys.version>
     </properties>
 
     <dependencyManagement>
@@ -133,6 +134,13 @@
                     <artifactId>netty-nio-client</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <!-- WebP decoding for tenant logos (FR-TEN-08): a read-only ImageIO plugin, BSD licensed;
+             a WebP upload is decoded and stored again as PNG. -->
+        <dependency>
+            <groupId>com.twelvemonkeys.imageio</groupId>
+            <artifactId>imageio-webp</artifactId>
+            <version>${twelvemonkeys.version}</version>
         </dependency>
 
         <dependency>

@@ -110,6 +110,15 @@ class RlsIsolationIT {
                         kinMember,
                         "tenants/" + t.tenantId() + "/upload/rls/" + document + ".pdf")
                 .update();
+        // A tenant logo (FR-TEN-08): a document whose subject is the tenant itself.
+        UUID logo = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO documents (id, tenant_id, doc_type, subject_type, subject_id, object_key, content_type,
+                                               size_bytes, sha256)
+                        VALUES (?, ?, 'upload', 'core.tenant', ?, ?, 'image/png', 5, repeat('1', 64))
+                        """)
+                .params(logo, t.tenantId(), t.tenantId(), "tenants/" + t.tenantId() + "/upload/rls/" + logo + ".png")
+                .update();
         owner.sql("""
                         INSERT INTO lending_member_documents (id, tenant_id, member_id, doc_kind, document_id, uploaded_by)
                         VALUES (?, ?, ?, 'other', ?, ?)
@@ -498,6 +507,18 @@ class RlsIsolationIT {
             }
         });
         assertThat(deleted).isZero();
+    }
+
+    /** FR-TEN-08: the tenant logo document (subject core.tenant) is visible to its own tenant only. */
+    @Test
+    void aTenantLogoDocumentIsVisibleToItsOwnTenantOnly() throws SQLException {
+        String sql = "SELECT count(*) FROM documents WHERE subject_type = 'core.tenant' AND subject_id = ?";
+        long aSeesB = asApp(a.tenantId(), c -> count(c, sql, b.tenantId()));
+        long bSeesB = asApp(b.tenantId(), c -> count(c, sql, b.tenantId()));
+        long aSeesA = asApp(a.tenantId(), c -> count(c, sql, a.tenantId()));
+        assertThat(aSeesB).isZero();
+        assertThat(bSeesB).isEqualTo(1);
+        assertThat(aSeesA).isEqualTo(1);
     }
 
     @Test

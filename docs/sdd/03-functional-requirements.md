@@ -253,8 +253,36 @@ The rebate is recorded as a `waived` amount on the affected items, with reason
 | FR-TEN-05 | The system shall track subscription status per tenant: `trial`, `active`, `past_due`, `suspended`, `cancelled`, with the date of the next change. | A super admin can move a tenant between statuses; each move is audited. | MVP |
 | FR-TEN-06 | A `suspended` tenant shall be read only: staff can sign in and read and export, but every state-changing request returns 423 with code `tenant_suspended`, and member portal sign-in is refused. | Tested for one read, one write and one member sign-in. Scheduled jobs that move money (penalties, interest postings) do not run for a suspended tenant; reminders do not send. | MVP |
 | FR-TEN-07 | A super admin shall open an audited support session on a tenant with a stated reason and an expiry of at most 2 hours. | Support session reads are possible only while the session is open; opening and every request are audited with the reason. | P2 |
-| FR-TEN-08 | A tenant admin shall edit tenant settings: display name, logo upload, receipt footer text, SMS sender name (subject to aggregator approval), maker-checker thresholds, appraisal weights, business hours for reminders. | Each setting has validation; each change is audited with before and after values. | MVP |
+| FR-TEN-08 | A tenant admin shall edit tenant settings: display name, logo upload, theme colour, receipt footer text, SMS sender name (subject to aggregator approval), maker-checker thresholds, appraisal weights, business hours for reminders. The logo and colour are the business's brand (detail below). | Each setting has validation; each change is audited with before and after values. | MVP |
 | FR-TEN-09 | A super admin shall export all of one tenant's data as a set of CSV files plus generated documents, and shall be able to schedule deletion after offboarding. | The export contains every tenant-owned table. Deletion is a two-person action on the platform side and is logged outside the tenant's own data. | Later |
+
+**FR-TEN-08 detail: tenant branding.** The business set-up screen (staff area, `core.settings.manage`)
+holds the display name, the logo (upload, replace, remove, with a preview), the theme colour and the
+receipt footer, and a checklist (name, logo, colour, receipt footer, first branch besides the head
+office, first staff user besides the admin) that a tenant admin lands on at first sign-in until it
+is dismissed (`setup_dismissed`, tenant wide).
+
+- **Logo rules.** PNG, JPEG or WebP by content, never by file name; no SVG (it can carry script)
+  and no GIF; at most 1 MB; at least 128 px on the short side; re-encoded on the server (metadata
+  stripped; a WebP is stored as PNG) and scaled down to at most 512 px on the long edge. It is a
+  core document of the tenant (subject `core.tenant`). A replaced logo is superseded: the previous
+  document stays and only `logo_document_id` moves, audited with the old and new id.
+- **Theme colour.** `theme_primary`, `#RRGGBB`. Text on it must reach WCAG 2.x contrast 4.5:1 with
+  white or with near-black (`#111111`); the better of the two becomes the text colour
+  automatically, and a colour where neither reaches 4.5 is refused with `insufficient_contrast`
+  (a narrow band of mid greys). On upload the screen suggests the logo's dominant colour, nudged
+  darker until it is readable; the admin can change it with a live preview.
+- **Shown where.** The logo (alt text: the display name) is in the app header and on the sign-in
+  and accept-invitation pages of the tenant host; the colour drives the accent through CSS custom
+  properties (chapter 11 section 11.2.5). Everything else keeps the platform look. The platform
+  host shows the Rincoltech brand.
+- **Footer.** "Powered by" and the Rincoltech logo, linked to the Rincoltech site, with an
+  accessible link name, on every screen of every host (sign-in, accept-invitation, staff, member
+  portal, platform console). A tenant cannot remove it in this release.
+- **Public by design.** `GET /api/v1/branding` and `GET /api/v1/branding/logo` need no sign-in so
+  the sign-in page can show the brand (chapter 7 section 7.11.4).
+- Out of scope: receipts and PDFs with the logo (FR-DOC-01), removing the footer (white label),
+  dark mode, per-branch branding.
 
 ## 3.6 Branches and branch context (BR)
 

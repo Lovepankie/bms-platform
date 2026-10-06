@@ -1,17 +1,21 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, Outlet, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
+import { useShellBrand } from './branding';
 import { classifyHost, loadHostConfig } from './hosts';
+import { Shell } from './shell';
 
 // Route-level split (ADR-009): /staff and /member are separate lazily loaded route trees, so a
 // member never downloads staff code; sign-in and invitation acceptance are small chunks of their
 // own. The platform console (on the platform host, BMS_PLATFORM_HOST) joins as a further tree
 // when built; until then its host shows a placeholder.
 
+// The root layout is the shared shell (brand bar, theme colour, Powered-by footer): every route
+// below it inherits it, so no area draws its own.
 function RootLayout() {
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 960, margin: '0 auto', padding: 16 }}>
+    <Shell brand={useShellBrand()}>
       <Outlet />
-    </div>
+    </Shell>
   );
 }
 
@@ -77,6 +81,10 @@ const staffApprovalsRoute = createRoute({ getParentRoute: () => staffRoute, path
   import('../areas/staff/approvals').then((m) => m.Route),
 );
 
+const staffSetupRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup' }).lazy(() =>
+  import('../areas/staff/setup').then((m) => m.Route),
+);
+
 const staffRetailRoute = createRoute({ getParentRoute: () => staffRoute, path: '/retail', component: Outlet });
 
 const retailScreen = <P extends string>(path: P) => createRoute({ getParentRoute: () => staffRetailRoute, path });
@@ -98,7 +106,7 @@ export const router = createRouter({
     indexRoute,
     signInRoute,
     acceptInvitationRoute,
-    staffRoute.addChildren([staffHomeRoute, staffApprovalsRoute, staffRetailRoute.addChildren([
+    staffRoute.addChildren([staffHomeRoute, staffApprovalsRoute, staffSetupRoute, staffRetailRoute.addChildren([
         retailHomeRoute,
         retailSaleRoute,
         retailRestockRoute,

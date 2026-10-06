@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.documents.internal;
 
 import com.rincoltech.bms.kernel.ApiException;
 import java.time.Duration;
+import java.util.Optional;
 import org.springframework.http.HttpStatus;
 
 /**
@@ -13,6 +14,11 @@ class UnconfiguredObjectStorage implements ObjectStorage {
 
     @Override
     public void put(String key, byte[] bytes, String contentType) {
+        throw unavailable();
+    }
+
+    @Override
+    public Optional<byte[]> get(String key) {
         throw unavailable();
     }
 
