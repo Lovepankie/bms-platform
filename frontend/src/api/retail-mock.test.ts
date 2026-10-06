@@ -117,4 +117,19 @@ describe('retail mock adapter (real response shapes)', () => {
     expect(found.length).toBeGreaterThan(0);
     expect(found.every((p) => p.category === 'Lighting')).toBe(true);
   });
+
+  it('values stock with expected profit per item, category and total only with retail.profit.read', async () => {
+    setMockProfitAccess(true);
+    const v = await createMockRetail().valuation({ branchId: branch });
+    const row = (v.rows ?? []).find((r) => (r.qty ?? '0') !== '0.000' && (r.value_at_cost_minor ?? 0) > 0);
+    expect(row?.expected_profit_minor).toBe((row?.expected_sales_minor ?? 0) - (row?.value_at_cost_minor ?? 0));
+    expect(v.expected_profit_minor).toBe((v.expected_sales_minor ?? 0) - (v.value_at_cost_minor ?? 0));
+    expect(v.expected_profit_bp).toBe(Math.round(((v.expected_profit_minor ?? 0) * 10000) / (v.value_at_cost_minor ?? 1)));
+    expect((v.categories ?? []).reduce((s, c) => s + (c.expected_profit_minor ?? 0), 0)).toBe(v.expected_profit_minor);
+    setMockProfitAccess(false);
+    const plain = JSON.stringify(await createMockRetail().valuation({ branchId: branch }));
+    expect(plain).not.toMatch(/cost|profit/i);
+    expect(plain).toContain('categories');
+    setMockProfitAccess(true);
+  });
 });

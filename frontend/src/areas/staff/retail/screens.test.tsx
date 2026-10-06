@@ -157,8 +157,9 @@ describe('stock-take review', () => {
 describe('valuation and profit', () => {
   const v: Valuation = {
     as_of: '2026-10-05', currency: 'UGX',
-    rows: [{ branch_id: branch, product_id: 'p1', description: 'LED bulb 9W screw', qty: '2.000', sell_minor: 6000, expected_sales_minor: 12000, cost_minor: 3500, value_at_cost_minor: 7000 }],
-    expected_sales_minor: 12000, value_at_cost_minor: 7000,
+    rows: [{ branch_id: branch, product_id: 'p1', description: 'LED bulb 9W screw', qty: '2.000', sell_minor: 6000, expected_sales_minor: 12000, cost_minor: 3500, value_at_cost_minor: 7000, expected_profit_minor: 5000, expected_profit_bp: 7143, category: 'Lighting' }],
+    categories: [{ category_id: 'c2', category: 'Lighting', expected_sales_minor: 12000, value_at_cost_minor: 7000, expected_profit_minor: 5000, expected_profit_bp: 7143 }],
+    expected_sales_minor: 12000, value_at_cost_minor: 7000, expected_profit_minor: 5000, expected_profit_bp: 7143,
   };
 
   it('shows totals at cost and at price when the server sent the cost', () => {
@@ -168,14 +169,23 @@ describe('valuation and profit', () => {
     expect(html).toContain('At cost');
   });
 
+  it('shows expected profit and its percent over cost in the total, per item and by category', () => {
+    const html = renderToString(<ValuationTable valuation={v} />);
+    expect(html).toContain('Expected profit UGX 5,000 (71.43% of cost)');
+    expect(html).toContain('<h2>By category</h2>');
+    expect(html).toContain('<td>Lighting</td>');
+    expect((html.match(/71\.43%/g) ?? []).length).toBe(3);
+  });
+
   it('shows no cost column when the server sent no cost (no retail.profit.read)', () => {
     const noCost: Valuation = {
-      ...v, value_at_cost_minor: undefined,
+      ...v, value_at_cost_minor: undefined, expected_profit_minor: undefined, expected_profit_bp: undefined,
+      categories: [{ category_id: 'c2', category: 'Lighting', expected_sales_minor: 12000 }],
       rows: [{ branch_id: branch, product_id: 'p1', description: 'LED bulb 9W screw', qty: '2.000', sell_minor: 6000, expected_sales_minor: 12000 }],
     };
     const html = renderToString(<ValuationTable valuation={noCost} />);
     expect(html).toContain('UGX 12,000');
-    expect(html).not.toMatch(/cost/i);
+    expect(html).not.toMatch(/cost|profit/i);
     expect(html).not.toContain('UGX 7,000');
   });
 

@@ -2,21 +2,51 @@ import { useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { businessToday, daysBefore, retail, type DailyProfit, type Valuation } from '../../../api/retail';
-import { showQty } from './maths';
-import { BranchRequired, Gate, Problem, money, useSingleBranch } from './ui';
+import { showPercent, showQty } from './maths';
+import { BranchRequired, CategoryLabel, Gate, Problem, money, useSingleBranch } from './ui';
 
 // Stock value (FR-RET-09) is a stock read; its cost columns arrive only with retail.profit.read.
 // Daily profit (FR-RET-10) needs retail.profit.read (the Gate), and the server refuses it otherwise.
 
 export function ValuationTable({ valuation }: { valuation: Valuation }) {
-  // The cost columns exist only when the server sent them (retail.profit.read).
+  // The cost and profit columns exist only when the server sent them (retail.profit.read).
   const withCost = valuation.value_at_cost_minor !== undefined;
+  const categories = valuation.categories ?? [];
   return (
     <>
       <p className="rt-total">
         {withCost && <>At cost {money(valuation.value_at_cost_minor ?? 0)}<br /></>}
         At selling price {money(valuation.expected_sales_minor ?? 0)}
+        {withCost && <><br />Expected profit {money(valuation.expected_profit_minor ?? 0)} ({showPercent(valuation.expected_profit_bp)} of cost)</>}
       </p>
+      {categories.length > 0 && (
+        <>
+          <h2>By category</h2>
+          <div className="table-wrap" tabIndex={0}><table>
+            <thead>
+              <tr>
+                <th>Category</th>
+                {withCost && <th className="num">At cost</th>}
+                <th className="num">At price</th>
+                {withCost && <th className="num">Expected profit</th>}
+                {withCost && <th className="num">Profit %</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((c) => (
+                <tr key={c.category_id}>
+                  <td>{c.category}</td>
+                  {withCost && <td className="num">{money(c.value_at_cost_minor ?? 0)}</td>}
+                  <td className="num">{money(c.expected_sales_minor ?? 0)}</td>
+                  {withCost && <td className="num">{money(c.expected_profit_minor ?? 0)}</td>}
+                  {withCost && <td className="num">{showPercent(c.expected_profit_bp)}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </>
+      )}
+      <h2>By item</h2>
       <div className="table-wrap" tabIndex={0}><table>
         <thead>
           <tr>
@@ -24,15 +54,19 @@ export function ValuationTable({ valuation }: { valuation: Valuation }) {
             <th className="num">Qty</th>
             {withCost && <th className="num">At cost</th>}
             <th className="num">At price</th>
+            {withCost && <th className="num">Expected profit</th>}
+            {withCost && <th className="num">Profit %</th>}
           </tr>
         </thead>
         <tbody>
           {(valuation.rows ?? []).map((r) => (
             <tr key={`${r.branch_id}-${r.product_id}`}>
-              <td>{r.description}</td>
+              <td>{r.description}<br /><CategoryLabel category={r.category} /></td>
               <td className="num">{showQty(r.qty ?? '0')}</td>
               {withCost && <td className="num">{r.value_at_cost_minor !== undefined ? money(r.value_at_cost_minor) : ''}</td>}
               <td className="num">{money(r.expected_sales_minor ?? 0)}</td>
+              {withCost && <td className="num">{r.expected_profit_minor !== undefined ? money(r.expected_profit_minor) : ''}</td>}
+              {withCost && <td className="num">{r.expected_profit_minor !== undefined ? showPercent(r.expected_profit_bp) : ''}</td>}
             </tr>
           ))}
         </tbody>

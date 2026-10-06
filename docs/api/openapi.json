@@ -4316,8 +4316,24 @@
             },
             "type" : "array"
           },
+          "categories" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailValuationCategory"
+            },
+            "type" : "array"
+          },
           "currency" : {
             "type" : "string"
+          },
+          "expected_profit_bp" : {
+            "description" : "Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_profit_minor" : {
+            "description" : "Present only with retail.profit.read; expected sales less value at cost",
+            "format" : "int64",
+            "type" : "integer"
           },
           "expected_sales_minor" : {
             "format" : "int64",
@@ -4342,6 +4358,16 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "expected_profit_bp" : {
+            "description" : "Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_profit_minor" : {
+            "description" : "Present only with retail.profit.read; expected sales less value at cost",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "expected_sales_minor" : {
             "format" : "int64",
             "type" : "integer"
@@ -4363,6 +4389,37 @@
           }
         }
       },
+      "RetailValuationCategory" : {
+        "description" : "Totals of every reported branch for one category",
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "expected_profit_bp" : {
+            "description" : "Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_profit_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value_at_cost_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "RetailValuationRow" : {
         "properties" : {
           "amount_out_of_range" : {
@@ -4370,6 +4427,13 @@
             "type" : "boolean"
           },
           "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
             "format" : "uuid",
             "type" : "string"
           },
@@ -4383,6 +4447,16 @@
           },
           "description" : {
             "type" : "string"
+          },
+          "expected_profit_bp" : {
+            "description" : "Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_profit_minor" : {
+            "description" : "Present only with retail.profit.read; expected sales less value at cost; absent when amount_out_of_range",
+            "format" : "int64",
+            "type" : "integer"
           },
           "expected_sales_minor" : {
             "description" : "qty times the current sell price; absent when amount_out_of_range",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lineTotalMinor, milliOf, parseCount, parseQty, qtyString, showQty } from './maths';
+import { lineTotalMinor, milliOf, parseCount, parseQty, qtyString, showPercent, showQty } from './maths';
 
 describe('retail quantity maths', () => {
   it('parses quantities with up to three places', () => {
@@ -34,5 +34,17 @@ describe('retail quantity maths', () => {
     expect(lineTotalMinor(1001, 500)).toBe(501);
     expect(lineTotalMinor(3, 500)).toBe(2);
     expect(lineTotalMinor(9_000_000_000, 9_000_000)).toBe(81_000_000_000_000);
+  });
+});
+
+describe('percent from basis points', () => {
+  it('shows up to two decimals, no trailing zeros, and n/a when there is none', () => {
+    expect(showPercent(4872)).toBe('48.72%');
+    expect(showPercent(5000)).toBe('50%');
+    expect(showPercent(3333)).toBe('33.33%');
+    expect(showPercent(5)).toBe('0.05%');
+    expect(showPercent(-250)).toBe('-2.5%');
+    expect(showPercent(0)).toBe('0%');
+    expect(showPercent(undefined)).toBe('n/a');
   });
 });

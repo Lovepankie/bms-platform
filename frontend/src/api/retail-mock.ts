@@ -253,16 +253,28 @@ export function createMockRetail(): RetailApi {
       return delay({ ...st });
     },
 
-    // Stock value is read with retail.stock.read; its cost columns need retail.profit.read.
+    // Stock value is read with retail.stock.read; its cost and profit columns need retail.profit.read.
     valuation: ({ branchId, asOf }) => {
+      const bp = (profit: number, atCost: number): number | undefined => (atCost > 0 ? Math.round((profit * 10000) / atCost) : undefined);
       const rows = [...products.values()].map((p): ValuationRow => {
         const milli = bal(branchId, p.id);
-        return cost({ branch_id: branchId, product_id: p.id, code: p.code, description: p.description, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor, expected_sales_minor: lineTotal(p.sellMinor, milli) },
-          { cost_minor: p.costMinor, value_at_cost_minor: lineTotal(p.costMinor, milli) });
+        const sells = lineTotal(p.sellMinor, milli);
+        const atCost = lineTotal(p.costMinor, milli);
+        return cost({ branch_id: branchId, product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor, expected_sales_minor: sells },
+          { cost_minor: p.costMinor, value_at_cost_minor: atCost, expected_profit_minor: sells - atCost, ...(bp(sells - atCost, atCost) !== undefined ? { expected_profit_bp: bp(sells - atCost, atCost) as number } : {}) });
       });
-      const sum = (pick: (r: ValuationRow) => number | undefined) => rows.reduce((s, r) => s + (pick(r) ?? 0), 0);
-      const v: Valuation = cost({ as_of: asOf ?? today(), currency: 'UGX', rows, expected_sales_minor: sum((r) => r.expected_sales_minor) },
-        { value_at_cost_minor: sum((r) => r.value_at_cost_minor) });
+      const sum = (pick: (r: ValuationRow) => number | undefined, from: ValuationRow[] = rows) => from.reduce((s, r) => s + (pick(r) ?? 0), 0);
+      const categories = CATEGORIES.map((c) => {
+        const own = rows.filter((r) => r.category_id === c.id);
+        const sells = sum((r) => r.expected_sales_minor, own);
+        const atCost = sum((r) => r.value_at_cost_minor, own);
+        return cost({ category_id: c.id, category: c.name, expected_sales_minor: sells },
+          { value_at_cost_minor: atCost, expected_profit_minor: sells - atCost, ...(bp(sells - atCost, atCost) !== undefined ? { expected_profit_bp: bp(sells - atCost, atCost) as number } : {}) });
+      });
+      const sells = sum((r) => r.expected_sales_minor);
+      const atCost = sum((r) => r.value_at_cost_minor);
+      const v: Valuation = cost({ as_of: asOf ?? today(), currency: 'UGX', rows, categories, expected_sales_minor: sells },
+        { value_at_cost_minor: atCost, expected_profit_minor: sells - atCost, ...(bp(sells - atCost, atCost) !== undefined ? { expected_profit_bp: bp(sells - atCost, atCost) as number } : {}) });
       return delay(v);
     },
 

@@ -3809,7 +3809,18 @@ export interface components {
             /** Format: date */
             as_of?: string;
             branches?: components["schemas"]["RetailValuationBranch"][];
+            categories?: components["schemas"]["RetailValuationCategory"][];
             currency?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero
+             */
+            expected_profit_bp?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected sales less value at cost
+             */
+            expected_profit_minor?: number;
             /** Format: int64 */
             expected_sales_minor?: number;
             rows?: components["schemas"]["RetailValuationRow"][];
@@ -3822,6 +3833,16 @@ export interface components {
         RetailValuationBranch: {
             /** Format: uuid */
             branch_id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero
+             */
+            expected_profit_bp?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected sales less value at cost
+             */
+            expected_profit_minor?: number;
             /** Format: int64 */
             expected_sales_minor?: number;
             /**
@@ -3840,11 +3861,37 @@ export interface components {
              */
             value_at_cost_minor?: number;
         };
+        /** @description Totals of every reported branch for one category */
+        RetailValuationCategory: {
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero
+             */
+            expected_profit_bp?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            expected_profit_minor?: number;
+            /** Format: int64 */
+            expected_sales_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            value_at_cost_minor?: number;
+        };
         RetailValuationRow: {
             /** @description True when qty times a price is too large to hold; the row's values are absent and left out of the totals */
             amount_out_of_range?: boolean;
             /** Format: uuid */
             branch_id?: string;
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
             code?: string;
             /**
              * Format: int64
@@ -3852,6 +3899,16 @@ export interface components {
              */
             cost_minor?: number;
             description?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero
+             */
+            expected_profit_bp?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected sales less value at cost; absent when amount_out_of_range
+             */
+            expected_profit_minor?: number;
             /**
              * Format: int64
              * @description qty times the current sell price; absent when amount_out_of_range
