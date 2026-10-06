@@ -12,7 +12,8 @@ describe('retail permission gating', () => {
     expect(canUse(sales, 'restock')).toBe(false);
     expect(canUse(sales, 'stocktake')).toBe(false);
     // Stock value is a stock read; only its cost columns need retail.profit.read.
-    expect(screensFor(sales).map((s) => s.screen)).toEqual(['sale', 'usage', 'stock', 'valuation']);
+    expect(screensFor(sales).map((s) => s.screen)).toEqual(['sale', 'usage', 'stock', 'transfers', 'valuation']);
+    expect(canUse(sales, 'transfer')).toBe(false);
   });
 
   it('maps each screen to the permission the API route declares', () => {
@@ -20,18 +21,25 @@ describe('retail permission gating', () => {
     expect(only('retail.sale.create')).toEqual(['sale']);
     expect(only('retail.purchase.create')).toEqual(['restock']);
     expect(only('retail.usage.report')).toEqual(['usage']);
-    expect(only('retail.stock.read')).toEqual(['stock', 'valuation']);
+    expect(only('retail.stock.read')).toEqual(['stock', 'transfers', 'valuation']);
     expect(only('retail.profit.read')).toEqual(['profit']);
     expect(only('retail.sale.read')).toEqual([]);
   });
 
   it('offers everything to an admin', () => {
     expect(canSeeProfit(admin)).toBe(true);
-    expect(screensFor(admin).map((s) => s.screen)).toEqual(['sale', 'restock', 'usage', 'stock', 'stocktake', 'valuation', 'profit']);
+    expect(screensFor(admin).map((s) => s.screen)).toEqual(
+      ['sale', 'restock', 'usage', 'stock', 'stocktake', 'transfer', 'transfers', 'valuation', 'profit'],
+    );
   });
 
   it('needs stock read as well as commit for a stock-take', () => {
     expect(canUse({ permissions: ['retail.stocktake.commit'] }, 'stocktake')).toBe(false);
+  });
+
+  it('offers Move stock only with retail.stock.transfer and stock read', () => {
+    expect(canUse({ permissions: ['retail.stock.transfer'] }, 'transfer')).toBe(false);
+    expect(canUse({ permissions: ['retail.stock.transfer', 'retail.stock.read'] }, 'transfer')).toBe(true);
   });
 
   it('shows the Retail menu only with the module and a retail permission', () => {

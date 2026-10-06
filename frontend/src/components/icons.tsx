@@ -35,6 +35,24 @@ export const icons = {
       <circle cx="17.5" cy="17.5" r="1.8" />
     </Svg>
   ),
+  transfer: (
+    <Svg>
+      <path d="M4 8h14" />
+      <path d="M14 4l4 4-4 4" />
+      <path d="M20 16H6" />
+      <path d="M10 12l-4 4 4 4" />
+    </Svg>
+  ),
+  transfers: (
+    <Svg>
+      <path d="M8 6h12" />
+      <path d="M8 12h12" />
+      <path d="M8 18h12" />
+      <path d="M4 6h.01" />
+      <path d="M4 12h.01" />
+      <path d="M4 18h.01" />
+    </Svg>
+  ),
   usage: (
     <Svg>
       <path d="M12 3l9 16H3z" />

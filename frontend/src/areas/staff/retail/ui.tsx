@@ -1,7 +1,9 @@
-import type { ReactNode } from 'react';
-import { RETAIL_CURRENCY } from '../../../api/retail';
+import { useQuery } from '@tanstack/react-query';
+import { useState, type ReactNode } from 'react';
+import { RETAIL_CURRENCY, retail, type Product } from '../../../api/retail';
 import { formatMinor } from '../../../components/money';
 import { useStaff } from '../context';
+import { showQty } from './maths';
 import { canSeeProfit, canUse, type RetailScreen } from './permissions';
 
 // Shared pieces of the retail screens. Phone first: one column, 44px tap targets, labels on every
@@ -61,4 +63,46 @@ export function BranchRequired() {
 
 export function useProfitAccess(): boolean {
   return canSeeProfit(useStaff().me);
+}
+
+/**
+ * Search the catalogue and add an item, each with what `branchId` holds (negative flagged). The
+ * sale screen shows the selling price too; the stock move screen shows the source branch's stock.
+ */
+export function ProductPicker({ id, branchId, onAdd, showPrice = false }: {
+  id: string;
+  branchId: string;
+  onAdd: (p: Product) => void;
+  showPrice?: boolean;
+}) {
+  const [search, setSearch] = useState('');
+  const products = useQuery({
+    queryKey: ['retail', 'products', branchId, search],
+    queryFn: () => retail.listProducts({ query: search, branchId }),
+  });
+  return (
+    <>
+      <label htmlFor={id}>Find an item by name or code</label>
+      <input id={id} type="search" value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
+      {products.isError && <Problem error={products.error} />}
+      <ul style={{ listStyle: 'none', padding: 0, maxHeight: 220, overflowY: 'auto' }}>
+        {(products.data ?? []).slice(0, 20).map((p) => (
+          <li key={p.id} className="rt-card">
+            <div className="rt-row">
+              <span>
+                <strong>{p.description}</strong> ({p.code})
+                <br />
+                {showPrice && `${money(p.sell_minor ?? 0)} each, `}in stock here:{' '}
+                {p.qty !== undefined && p.qty.startsWith('-') ? <span className="rt-flag">{showQty(p.qty)} (negative)</span> : showQty(p.qty ?? '0')}{' '}
+                {p.unit}
+              </span>
+              <button type="button" onClick={() => onAdd(p)} aria-label={`Add ${p.description}`}>
+                Add
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
 }

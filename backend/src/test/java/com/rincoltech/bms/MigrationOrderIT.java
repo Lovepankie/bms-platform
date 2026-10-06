@@ -19,7 +19,8 @@ import org.testcontainers.utility.MountableFile;
 /**
  * The one Flyway sequence shared by lending and retail (issue #71, review F6): V1 to V9 (lending,
  * V9 the loan appraisals of #42), V10 to V14 (retail R1 to R4, the price floor and the review
- * fixes), V20 (the retail import references) and V21 (the lending review follow-ups) apply in order on an empty database, and on a
+ * fixes), V20 (the retail import references), V21 (the lending review follow-ups) and V22 (the retail stock
+ * transfers of #84) apply in order on an empty database, and on a
  * database a server already migrated to V9 before the retail work reached it, with
  * {@code outOfOrder} off exactly as {@link DatabaseMigrator} runs it. Each case gets its own
  * PostgreSQL 16 container initialised by {@code deploy/postgres/initdb/01-roles.sh}.
@@ -27,7 +28,7 @@ import org.testcontainers.utility.MountableFile;
 class MigrationOrderIT {
 
     static final List<String> VERSIONS =
-            List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21");
+            List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22");
 
     @Test
     void everyMigrationAppliesInOrderOnAnEmptyDatabase() {
@@ -38,7 +39,7 @@ class MigrationOrderIT {
                     DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
 
             assertThat(result.success).isTrue();
-            assertThat(result.targetSchemaVersion).isEqualTo("21");
+            assertThat(result.targetSchemaVersion).isEqualTo("22");
             assertThat(applied(postgres)).containsExactlyElementsOf(VERSIONS);
             assertThat(flyway(postgres, null).info().pending()).isEmpty();
         }
@@ -76,7 +77,7 @@ class MigrationOrderIT {
 
             assertThat(second.success).isTrue();
             assertThat(second.migrations.stream().map(m -> m.version).toList())
-                    .containsExactly("10", "11", "12", "13", "14", "20", "21");
+                    .containsExactly("10", "11", "12", "13", "14", "20", "21", "22");
             assertThat(applied(postgres)).containsExactlyElementsOf(VERSIONS);
             assertThat(flyway(postgres, null).info().pending()).isEmpty();
             // The tenant from V9 can switch retail on: its chart is seeded next to the lending one.
@@ -86,6 +87,42 @@ class MigrationOrderIT {
                     .single();
             assertThat(accounts(owner, tenant)).isGreaterThan(lendingAccounts);
         }
+    }
+
+    /**
+     * #84: a tenant that switched retail on before V22 has no inter-branch clearing account in its
+     * retail chart; V22 adds it, so its first transfer can post one entry per branch (ADR-004).
+     * JUSTIFICATION-A3: a new test case; no existing case migrates a retail tenant across V22.
+     */
+    @Test
+    void transfersMigrationGivesAnExistingRetailTenantTheClearingAccount() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            assertThat(flyway(postgres, "21").migrate().targetSchemaVersion).isEqualTo("21");
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql(
+                            "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v21', 'Test Tenant V21', '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            owner.sql("SELECT platform_set_tenant_modules(?, ?::text[], NULL)")
+                    .params(tenant, "{retail}")
+                    .query((rs, n) -> 1)
+                    .single();
+            assertThat(clearing(owner, tenant)).isEmpty();
+
+            DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+            assertThat(clearing(owner, tenant)).containsExactly("1190 true");
+        }
+    }
+
+    private static List<String> clearing(JdbcClient owner, UUID tenant) {
+        return owner.sql("""
+                        SELECT code || ' ' || is_system_controlled FROM gl_accounts
+                         WHERE tenant_id = ? AND system_key = 'interbranch_clearing'
+                        """).param(tenant).query(String.class).list();
     }
 
     @Test

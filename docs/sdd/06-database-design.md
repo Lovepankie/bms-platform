@@ -1209,7 +1209,13 @@ retired setting `retail_allow_negative_stock` needs no migration: a stored key i
 `V20__retail_import_refs.sql` (#55) creates `retail_import_refs` (append-only) for the
 `import-retail` command (section 6.11.4). It took V20 while the retail fixes were still open;
 Flyway applies the gap in order after V14. `outOfOrder` stays off, so V15 to V19 are never used:
-once a database is at V20 a lower new version would fail validation. The next migration is V21
+once a database is at V20 a lower new version would fail validation. V21 is the lending review
+follow-ups above. `V22__retail_stock_transfers.sql` (#84) adds the `retail.stock.transfer`
+permission (granted to the roles that hold `retail.purchase.create`), the inter-branch clearing
+account in `bms_seed_retail_chart` and for every tenant that switched retail on before it,
+`retail_transfers` and `retail_transfer_lines` (append-only), the `transfer_out` and `transfer_in`
+movement kinds and the movements' `transfer_id` link (sections 6.11.1 and 6.11.2). It takes the next
+number free on `main` when it merges, so it may be renumbered then. The next migration is V23
 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items
@@ -1240,6 +1246,7 @@ module on again adds nothing. `S` marks `is_system_controlled`.
 | 1010 | Cash on hand | asset | `cash_on_hand` | |
 | 1020 | Bank | asset | `bank` | |
 | 1035 | Mobile money | asset | `mobile_money` | |
+| 1190 | Inter-branch clearing | asset | `interbranch_clearing` | S |
 | 1200 | Trade debtors | asset | `trade_debtors` | S |
 | 1300 | Inventory | asset | `inventory` | S |
 | 2000 | Liabilities | liability (header) | | |
@@ -1304,7 +1311,15 @@ are all zero is not posted.
 | Usage or damage | `stock_shrinkage`, lines at the cost snapshot | `inventory` | `retail.usage:<id>` |
 | Stock-take loss | `stock_shrinkage`, value of the shortfall at cost | `inventory` | `retail.stocktake:<id>` |
 | Stock-take gain | `inventory`, value of the surplus at cost | `stock_shrinkage` | (same entry as the loss) |
+| Transfer, at the source branch | `interbranch_clearing`, the lines at the source's cost | `inventory` | `retail.transfer_out:<id>` |
+| Transfer, at the destination branch | `inventory`, the same amount | `interbranch_clearing` | `retail.transfer_in:<id>` |
+| Transfer void | The reversal of each of the two entries, each in its own branch | | `retail.transfer_out_void:<id>`, `retail.transfer_in_void:<id>` |
 | Opening stock from the import, per branch | `inventory`, the branch's positive source balances at the product's current cost | `opening_balance_equity` | `retail.import_opening:<branch>` |
+
+A transfer moves stock at the source's current cost, the same amount on both sides, so it gains or
+loses nothing: the tenant's inventory and valuation at cost are unchanged, and in a consolidation the
+clearing account nets to zero (ADR-004). The retail chart has the clearing account since V22
+(code 1190, the lending chart's code and key, so a tenant with both verticals keeps one).
 
 Imported history (sales, purchases, adjustments, returns, usage, legacy balances) posts nothing
 (ADR-020 decision 9); see section 6.11.4.
@@ -1317,11 +1332,12 @@ Imported history (sales, purchases, adjustments, returns, usage, legacy balances
 | `occurred_at` | timestamptz | From the kernel clock: when it was recorded |
 | `business_date` | date | The event's business date, the date its journal entry carries: `purchased_on`, `sale_date`, usage `occurred_on`, or the void's or stock-take commit's date (V14, review F4). Rows recorded before V14 took their `occurred_at` date in Africa/Kampala. Valuation `as_of` filters on it |
 | `branch_id`, `product_id` | uuid | Composite FKs |
-| `kind` | text | `opening`, `purchase`, `return` (positive); `sale`, `usage`, `damage` (negative); `adjustment`, `legacy_balance` (either sign). CHECK on the sign |
+| `kind` | text | `opening`, `purchase`, `return`, `transfer_in` (positive); `sale`, `usage`, `damage`, `transfer_out` (negative); `adjustment`, `legacy_balance` (either sign). CHECK on the sign |
 | `qty` | numeric(14,3) | Signed, never zero |
 | `unit_cost_minor` | bigint | The product's cost at the time: the valuation snapshot |
-| `source_type`, `source_id`, `source_line_id` | | The document that wrote it: `retail.sale`, `retail.sale_void`, `retail.stocktake`, and the R3 sources |
-| `reverses_movement_id` | uuid | Set on a void's `return`; unique, so a movement is reversed at most once |
+| `source_type`, `source_id`, `source_line_id` | | The document that wrote it: `retail.sale`, `retail.sale_void`, `retail.stocktake`, the R3 sources, `retail.transfer` and `retail.transfer_void` (source id the transfer, line id its line) |
+| `reverses_movement_id` | uuid | Set on a void's `return`, and on a transfer void's opposite movement; unique, so a movement is reversed at most once |
+| `transfer_id` | uuid | The transfer a `transfer_out` or `transfer_in` belongs to, and only on those kinds (CHECK `retail_stock_movements_transfer_link`, V22); composite FK to `retail_transfers`, checked at commit because the movements are written under their balance locks before the header |
 | `historical` | boolean | Imported history (FR-RET-12); default false |
 | `note`, `recorded_by` | | |
 
@@ -1333,6 +1349,30 @@ taken in branch and product order). Product rows are locked only by restocks and
 `FOR NO KEY UPDATE` (see purchases below). The nightly job `retail.stock-reconciliation` compares each row
 with the sum of its movements and records any difference as a system audit row
 (`retail.stock.reconciliation_mismatch`); it never corrects a balance.
+
+### `retail_transfers` (RLS; `bms_app` SELECT, INSERT, UPDATE of the void only)
+
+A stock transfer between branches (FR-RET-16, V22). The trigger `retail_transfers_guard_update` lets
+an UPDATE change only the status and the void columns, once, from `completed` to `voided`; DELETE is
+rejected for every role (`reject_mutation`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id`, `tenant_id`, `created_at` | standard | |
+| `from_branch_id`, `to_branch_id` | uuid | Composite FKs to `branches`; CHECK they differ |
+| `transfer_date` | date | The business date both entries and all four kinds of movement carry |
+| `note` | varchar(300) | Optional |
+| `currency`, `cost_total_minor` | | The lines at the source's cost (present in responses only with `retail.profit.read`) |
+| `out_entry_id`, `in_entry_id` | uuid | The source's and the destination's journal entries; both null when the cost is zero |
+| `status` | text | `completed` or `voided` |
+| `created_by`, `voided_at`, `voided_by`, `void_reason` | | CHECK a void has a time, a user and a reason |
+
+### `retail_transfer_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
+
+`transfer_id`, `line_no`, `product_id`, `qty numeric(14,3)` (positive), `unit_cost_minor` (the
+source's cost when moved, at most 10^13) and `line_cost_minor`. One line per product per transfer
+(`UNIQUE (transfer_id, product_id)`). The quantities that moved are the movements themselves
+(`source_line_id` the line).
 
 ### `retail_stocktakes`, `retail_stocktake_lines` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 

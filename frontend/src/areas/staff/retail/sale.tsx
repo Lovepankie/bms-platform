@@ -6,7 +6,7 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, type Draft } from './sale-state';
-import { BranchRequired, Gate, Note, Problem, money, useProfitAccess, useSingleBranch } from './ui';
+import { BranchRequired, Gate, Note, ProductPicker, Problem, money, useProfitAccess, useSingleBranch } from './ui';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -71,13 +71,8 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
   const { key, draft, setDraft, finish, discard } = usePersistedDraft<Draft>(`sale:${me.user_id ?? ''}:${branchId}`, {
     branchId, method: 'cash', customerId: '', newBuyerName: '', newBuyerContact: '', dueDate: '', lines: [],
   });
-  const [search, setSearch] = useState('');
   const [addingBuyer, setAddingBuyer] = useState(draft.newBuyerName !== '');
 
-  const products = useQuery({
-    queryKey: ['retail', 'products', branchId, search],
-    queryFn: () => retail.listProducts({ query: search, branchId }),
-  });
   const customers = useQuery({ queryKey: ['retail', 'customers'], queryFn: () => retail.listCustomers(), enabled: draft.method === 'credit' });
 
   const save = useMutation({
@@ -106,27 +101,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
         if (!problem && !save.isPending) save.mutate();
       }}
     >
-      <label htmlFor="sale-search">Find an item by name or code</label>
-      <input id="sale-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
-      {products.isError && <Problem error={products.error} />}
-      <ul style={{ listStyle: 'none', padding: 0, maxHeight: 220, overflowY: 'auto' }}>
-        {(products.data ?? []).slice(0, 20).map((p) => (
-          <li key={p.id} className="rt-card">
-            <div className="rt-row">
-              <span>
-                <strong>{p.description}</strong> ({p.code})
-                <br />
-                {money(p.sell_minor ?? 0)} each, in stock here:{' '}
-                {p.qty !== undefined && p.qty.startsWith('-') ? <span className="rt-flag">{showQty(p.qty)} (negative)</span> : showQty(p.qty ?? '0')}{' '}
-                {p.unit}
-              </span>
-              <button type="button" onClick={() => add(p)} aria-label={`Add ${p.description}`}>
-                Add
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <ProductPicker id="sale-search" branchId={branchId} showPrice onAdd={add} />
 
       <h2>Items</h2>
       {draft.lines.length === 0 && <p className="empty-state">No items yet. Search above and tap Add.</p>}

@@ -332,6 +332,22 @@ class RlsIsolationIT {
                         INSERT INTO retail_import_refs (tenant_id, source_file, source_ref, target_type, source_user)
                         VALUES (?, 'sales', 'SAL-TEST-01', 'retail.sale', 'test.sales01')
                         """).param(t.tenantId()).update();
+        // Stock transfers between branches (migration V22, #84).
+        UUID transfer = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_transfers (id, tenant_id, from_branch_id, to_branch_id, transfer_date, currency,
+                                                      cost_total_minor, status, created_by)
+                        VALUES (?, ?, ?, ?, DATE '2026-01-15', 'UGX', 100, 'completed', ?)
+                        """)
+                .params(transfer, t.tenantId(), t.headOffice(), t.secondBranch(), user)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_transfer_lines (id, tenant_id, transfer_id, line_no, product_id, qty, unit_cost_minor,
+                                                           line_cost_minor)
+                        SELECT ?, ?, ?, 1, id, 1, 100, 100 FROM retail_products WHERE tenant_id = ? LIMIT 1
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), transfer, t.tenantId())
+                .update();
     }
 
     static String randomHash() {

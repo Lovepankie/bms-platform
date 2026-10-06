@@ -133,6 +133,8 @@ const retailRestockRoute = retailScreen('/restock').lazy(() => import('../areas/
 const retailUsageRoute = retailScreen('/usage').lazy(() => import('../areas/staff/retail/usage').then((m) => m.Route));
 const retailStockRoute = retailScreen('/stock').lazy(() => import('../areas/staff/retail/stock').then((m) => m.Route));
 const retailStocktakeRoute = retailScreen('/stocktake').lazy(() => import('../areas/staff/retail/stocktake').then((m) => m.Route));
+const retailTransferRoute = retailScreen('/transfer').lazy(() => import('../areas/staff/retail/transfer').then((m) => m.Route));
+const retailTransfersRoute = retailScreen('/transfers').lazy(() => import('../areas/staff/retail/transfers').then((m) => m.Route));
 const retailValuationRoute = retailScreen('/valuation').lazy(() => import('../areas/staff/retail/profit').then((m) => m.ValuationRoute));
 const retailProfitRoute = retailScreen('/profit').lazy(() => import('../areas/staff/retail/profit').then((m) => m.Route));
 
@@ -152,6 +154,8 @@ export const router = createRouter({
         retailUsageRoute,
         retailStockRoute,
         retailStocktakeRoute,
+        retailTransferRoute,
+        retailTransfersRoute,
         retailValuationRoute,
         retailProfitRoute,
       ])]),

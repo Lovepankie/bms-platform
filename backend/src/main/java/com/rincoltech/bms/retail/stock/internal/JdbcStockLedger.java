@@ -23,7 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
 class JdbcStockLedger implements StockLedger {
 
     /** Kinds refused when they would take a balance below zero; there is no setting (ADR-020 decision 4). */
-    static final Set<String> GUARDED = Set.of("sale", "usage", "damage");
+    static final Set<String> GUARDED = Set.of("sale", "usage", "damage", "transfer_out");
+
+    /** Kinds that carry the transfer they belong to, the movement's source id (FR-RET-16). */
+    static final Set<String> TRANSFER = Set.of("transfer_out", "transfer_in");
 
     private final JdbcClient jdbc;
     private final BusinessClock clock;
@@ -63,9 +66,9 @@ class JdbcStockLedger implements StockLedger {
             jdbc.sql("""
                             INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, business_date, branch_id, product_id, kind, qty,
                                 unit_cost_minor, source_type, source_id, source_line_id, reverses_movement_id, note,
-                                recorded_by)
+                                recorded_by, transfer_id)
                             VALUES (:id, current_setting('app.tenant_id')::uuid, :at, :businessDate, :branch, :product, :kind, :qty,
-                                :cost, :sourceType, :sourceId, :sourceLineId, :reverses, :note, :by)
+                                :cost, :sourceType, :sourceId, :sourceLineId, :reverses, :note, :by, :transfer)
                             """)
                     .param("id", id)
                     .param("at", now)
@@ -81,6 +84,7 @@ class JdbcStockLedger implements StockLedger {
                     .param("reverses", m.reversesMovementId())
                     .param("note", m.note())
                     .param("by", by)
+                    .param("transfer", TRANSFER.contains(m.kind()) ? m.sourceId() : null)
                     .update();
             jdbc.sql("""
                             UPDATE retail_stock_balances SET qty = qty + ?, updated_at = now()

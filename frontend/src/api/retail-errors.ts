@@ -20,6 +20,7 @@ const BY_CODE: Record<string, string> = {
   branch_required: 'Choose one branch in the Branch box at the top of the page first.',
   sale_voided: 'This sale has already been cancelled.',
   stocktake_committed: 'This stock-take has already been committed.',
+  transfer_voided: 'This transfer has already been cancelled.',
   payment_exceeds_balance: 'That payment is more than the buyer still owes.',
   token_expired: 'Your session has ended. Sign in again.',
   unauthenticated: 'Your session has ended. Sign in again.',

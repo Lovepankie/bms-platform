@@ -1,5 +1,6 @@
 import type {
-  Customer, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockRow, Supplier, Usage, Valuation, ValuationRow,
+  Customer, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockRow, Supplier, Transfer, Usage, Valuation,
+  ValuationRow,
 } from './retail';
 import { RetailError } from './retail';
 import { retailMessage } from './retail-errors';
@@ -20,7 +21,7 @@ const SALES_PERMISSIONS = [
 ];
 const ADMIN_PERMISSIONS = [
   ...SALES_PERMISSIONS, 'retail.catalogue.manage', 'retail.price.edit', 'retail.sale.void',
-  'retail.stocktake.commit', 'retail.purchase.create', 'retail.profit.read',
+  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read',
 ];
 
 /** A fake signed-in user for the mock session, so the app runs without a backend. */
@@ -100,6 +101,7 @@ export function createMockRetail(): RetailApi {
   const stocktakes = new Map<string, Stocktake>();
   const sales: (Sale & { costTotal: number })[] = [];
   const usageCostByDay = new Map<string, number>();
+  const transfers: Transfer[] = [];
   const replay = new Map<string, { hash: string; value: unknown }>();
   let seq = 100;
   const nextId = (prefix: string) => `${prefix}0000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
@@ -274,5 +276,59 @@ export function createMockRetail(): RetailApi {
       };
       return delay(report);
     },
+
+    // Stock moves between branches at the source's cost: nothing gained or lost, refused beyond the
+    // source balance, voided only while the destination still holds what arrived.
+    createTransfer: (body, key) =>
+      run(() => once(`transfer|${key}`, body, (): Transfer => {
+        const from = body.from_branch_id ?? BRANCH_A;
+        if (from === body.to_branch_id) refuse(422, 'validation_failed', 'Pick a different branch to move the stock to.');
+        body.lines.forEach((l) => guard(from, l.product_id, toMilli(l.qty)));
+        const lines = body.lines.map((l, n) => {
+          const p = find(l.product_id);
+          move(from, p.id, -toMilli(l.qty));
+          move(body.to_branch_id, p.id, toMilli(l.qty));
+          return { line_no: n + 1, product_id: p.id, code: p.code, description: p.description, qty: fromMilli(toMilli(l.qty)), unit_cost_minor: p.costMinor, line_cost_minor: lineTotal(p.costMinor, toMilli(l.qty)) };
+        });
+        const t: Transfer = {
+          id: nextId('9'), from_branch_id: from, to_branch_id: body.to_branch_id, transfer_date: body.transfer_date ?? today(),
+          status: 'completed', currency: 'UGX', lines, cost_total_minor: lines.reduce((sum, l) => sum + l.line_cost_minor, 0),
+          created_at: new Date().toISOString(), ...(body.note ? { note: body.note } : {}),
+        };
+        transfers.unshift(t);
+        return visibleTransfer(t);
+      })),
+
+    listTransfers: ({ branchId }) =>
+      delay({ items: transfers.filter((t) => !branchId || t.from_branch_id === branchId || t.to_branch_id === branchId).map(visibleTransfer) }),
+
+    getTransfer: (id) => {
+      const t = transfers.find((x) => x.id === id);
+      return t ? delay(visibleTransfer(t)) : Promise.reject(new RetailError('That could not be found.', 404, 'not_found'));
+    },
+
+    voidTransfer: (id, reason) =>
+      run(() => {
+        const t = transfers.find((x) => x.id === id);
+        if (!t) return refuse(404, 'not_found', 'That could not be found.');
+        if (t.status === 'voided') refuse(409, 'transfer_voided', 'This transfer has been voided already.');
+        const gone = (t.lines ?? []).filter((l) => bal(t.to_branch_id ?? '', l.product_id ?? '') < toMilli(l.qty ?? '0'));
+        if (gone.length > 0) {
+          refuse(422, 'transfer_stock_moved', `The destination branch no longer holds all of ${gone.map((l) => l.code).join(', ')} that this transfer brought, so it cannot be voided. Move the stock back with a new transfer instead.`);
+        }
+        (t.lines ?? []).forEach((l) => {
+          move(t.to_branch_id ?? '', l.product_id ?? '', -toMilli(l.qty ?? '0'));
+          move(t.from_branch_id ?? '', l.product_id ?? '', toMilli(l.qty ?? '0'));
+        });
+        Object.assign(t, { status: 'voided', voided_at: new Date().toISOString(), void_reason: reason });
+        return visibleTransfer(t);
+      }),
   };
+}
+
+/** A transfer as the session may see it: cost fields only with retail.profit.read. */
+function visibleTransfer(t: Transfer): Transfer {
+  if (profitAccess) return { ...t };
+  const { cost_total_minor: _total, lines, ...rest } = t;
+  return { ...rest, lines: (lines ?? []).map(({ unit_cost_minor: _unit, line_cost_minor: _line, ...l }) => l) };
 }

@@ -29,6 +29,10 @@ export type Valuation = S['RetailValuation'];
 export type ValuationRow = S['RetailValuationRow'];
 export type DailyProfit = S['RetailDailyProfit'];
 export type DailyProfitRow = S['RetailDailyProfitRow'];
+export type TransferRequest = S['RetailTransferRequest'];
+export type Transfer = S['RetailTransfer'];
+export type TransferLine = S['RetailTransferLine'];
+export type TransferPage = S['RetailTransferPage'];
 
 /** The tenant currency is not on /me yet; the retail pilot trades in shillings. */
 export const RETAIL_CURRENCY = 'UGX';
@@ -49,6 +53,10 @@ export interface RetailApi {
   commitStocktake(id: string): Promise<Stocktake>;
   valuation(q: { branchId: string; asOf?: string }): Promise<Valuation>;
   dailyProfit(q: { branchId: string; from: string; to: string }): Promise<DailyProfit>;
+  createTransfer(body: TransferRequest, idempotencyKey: string): Promise<Transfer>;
+  listTransfers(q: { branchId?: string; cursor?: string }): Promise<TransferPage>;
+  getTransfer(id: string): Promise<Transfer>;
+  voidTransfer(id: string, reason: string): Promise<Transfer>;
 }
 
 /** A failed retail call: `message` is plain words for people, `code` is the server's identifier. */
@@ -136,6 +144,24 @@ const realRetail: RetailApi = {
 
   async dailyProfit({ branchId, from, to }) {
     return unwrap(await api.GET('/api/v1/retail/reports/profit/daily', { params: { query: { branch_id: [branchId], from, to } } }));
+  },
+
+  async createTransfer(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/transfers', { body, params: { header: { 'Idempotency-Key': key } } }));
+  },
+
+  async listTransfers({ branchId, cursor }) {
+    return unwrap(
+      await api.GET('/api/v1/retail/transfers', { params: { query: { branch_id: branchId ? [branchId] : undefined, limit: 50, cursor } } }),
+    );
+  },
+
+  async getTransfer(id) {
+    return unwrap(await api.GET('/api/v1/retail/transfers/{transfer_id}', { params: { path: { transfer_id: id } } }));
+  },
+
+  async voidTransfer(id, reason) {
+    return unwrap(await api.POST('/api/v1/retail/transfers/{transfer_id}/void', { params: { path: { transfer_id: id } }, body: { reason } }));
   },
 };
 

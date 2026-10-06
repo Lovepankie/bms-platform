@@ -26,19 +26,24 @@ public class RetailBranchContext {
     }
 
     public UUID resolve(String permission, UUID requested) {
+        return resolve(permission, requested, "branch_id");
+    }
+
+    /** As {@link #resolve(String, UUID)}, naming the request field the branch came from. */
+    public UUID resolve(String permission, UUID requested, String field) {
         Principal principal = CurrentPrincipal.require();
         UUID branch = requested;
         if (branch == null) {
             BranchScope scope = principal.scopeOf(permission).orElse(null);
             if (scope == null || scope.all() || scope.branchIds().size() != 1) {
                 throw ApiException.validation(List.of(new FieldProblem(
-                        "branch_id", "branch_required", "Name the branch; your role covers more than one.")));
+                        field, "branch_required", "Name the branch; your role covers more than one.")));
             }
             branch = scope.branchIds().iterator().next();
         }
         if (!principal.may(permission, branch) || branches.findActive(branch).isEmpty()) {
             throw ApiException.validation(
-                    List.of(new FieldProblem("branch_id", "unknown_branch", "No such active branch in your scope.")));
+                    List.of(new FieldProblem(field, "unknown_branch", "No such active branch in your scope.")));
         }
         return branch;
     }
