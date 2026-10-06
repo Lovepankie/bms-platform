@@ -186,8 +186,8 @@ published under the platform host.
 | 401 | `unauthenticated`, `token_expired`, `tenant_mismatch`, `session_revoked`, `session_expired`, `invalid_credentials` (sign-in), `invalid_mfa_code` (sign-in), `mfa_token_invalid` |
 | 403 | Authenticated but lacks the permission (`permission_denied`) |
 | 404 | Not found or outside branch scope; `unknown_tenant`; `module_not_enabled` |
-| 413 | `file_too_large`: an upload over 5 MB (chapter 8 section 8.8) |
-| 415 | `unsupported_file_type`: an upload that is not JPEG, PNG or PDF by content |
+| 413 | `file_too_large`: an upload over 5 MB, or a logo over 1 MB (chapter 8 section 8.8) |
+| 415 | `unsupported_file_type`: an upload that is not JPEG, PNG or PDF by content (a logo: not PNG, JPEG or WebP, or an image that cannot be decoded) |
 | 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, `approval_already_pending`, `mfa_already_enrolled`, `mfa_not_enrolled`, `mfa_enrolment_not_started`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`, `duplicate_email`, `duplicate_phone`, `duplicate_branch_code`, `duplicate_slug`, `duplicate_product_code`); `transaction_conflict` (the database aborted the transaction as a deadlock victim or serialisation loser; nothing was saved, `Retry-After` is set and the same request may be retried with the same `Idempotency-Key`); `stock_moved_since_count` (a retail stock-take whose lines moved after the count so far that the adjustment would leave a negative balance; recount them); `conflict` for any other unique or foreign key violation |
 | 422 | Validation and business rule failures (codes below) |
 | 423 | `tenant_suspended`, `account_locked` |
@@ -206,7 +206,7 @@ Business rule codes used in chapter 3 (each is a 422 unless listed above):
 `approver_conflict`, `subject_changed`, `approval_expired`, `period_closed`,
 `payment_method_unmapped`, `value_date_in_future`, `has_repayments`,
 `already_reversed`, `insufficient_balance`, `collateral_secures_open_loan`,
-`branch_has_open_accounts`, `account_has_open_items`, `next_of_kin_required`, `image_too_large`, `collateral_type_disabled`, `unknown_placeholder`,
+`branch_has_open_accounts`, `account_has_open_items`, `next_of_kin_required`, `image_too_large`, `svg_not_allowed` (a logo that is an SVG), `image_too_small` (a logo under 128 px on the short side), `insufficient_contrast` (a theme colour with no readable text colour; a field error of `validation_failed`), `collateral_type_disabled`, `unknown_placeholder`,
 `blocking_issues_unresolved`, `system_account_not_allowed`, `idempotency_key_reused`,
 `idempotency_key_missing`, and from the ledger's posting operation (ADR-004):
 `unbalanced_entry`, `invalid_journal_line`, `account_not_postable`, `currency_mismatch`; and
@@ -335,7 +335,17 @@ The refresh token never appears in a response body: it is the `__Host-bms_rt` co
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET | `/settings` | `core.settings.read` | |
-| PATCH | `/settings` | `core.settings.manage` | FR-TEN-08 |
+| PATCH | `/settings` | `core.settings.manage` | FR-TEN-08. Includes `theme_primary` (`#RRGGBB`, contrast rule, 422 `insufficient_contrast`) and `setup_dismissed` |
+| PUT | `/settings/logo` | `core.settings.manage` | `multipart/form-data` field `file`: PNG, JPEG or WebP, 1 MB, 128 px or more; re-encoded and scaled to 512 px; returns the settings. FR-TEN-08 |
+| DELETE | `/settings/logo` | `core.settings.manage` | Clears the logo; the file is kept. Idempotent |
+| GET | `/branding` | public | `{display_name, theme_primary, theme_text, logo_url}` for the tenant of the request host; `logo_url` is `/api/v1/branding/logo?v=<document id>` or null. FR-TEN-08 |
+| GET | `/branding/logo` | public | The logo image: `Content-Type` from the stored value (`image/png` or `image/jpeg`), `Cache-Control: public, max-age=3600`, `ETag` (304 on `If-None-Match`), `X-Content-Type-Options: nosniff`, `Content-Disposition: inline`, `Content-Security-Policy: default-src 'none'; sandbox`; 404 `not_found` when there is no logo. FR-TEN-08 |
+
+The two branding routes are public by design: they take no token, the tenant is resolved from the
+host like every tenant route (an unknown host is 404 `unknown_tenant`; the platform host has no
+tenant, so they answer 404 there and the PWA shows the Rincoltech brand without calling them), and
+they work for a suspended tenant (reads). They expose only the display name, a colour and one
+re-encoded image of that tenant.
 | GET | `/branches` | `core.branches.read` | |
 | POST | `/branches` | `core.branches.manage` | FR-BR-01 |
 | GET, PATCH | `/branches/{branch_id}` | read / manage | |

@@ -383,6 +383,21 @@ GitHub Actions deploy secrets live in the `staging` and `production` environment
   small compressed file cannot exhaust memory; files are stored in object storage, never on the
   application host's disk. Tomcat reads past an over-limit upload (`max-swallow-size` 8 MB) so
   the client gets the 413 body instead of a reset connection.
+- The tenant logo (FR-TEN-08, `PUT /settings/logo`) has a narrower rule set on the same pipeline:
+  PNG, JPEG or WebP by content only, at most 1 MB, shorter side at least 128 px, long edge scaled
+  to 512 px, always re-encoded (a WebP is decoded with a read-only ImageIO plugin and stored as
+  PNG), so no metadata and no appended bytes survive. SVG is refused with 422 `svg_not_allowed`
+  (text starting with or containing an `<svg` element, UTF-16 included), never re-encoded or
+  stored; a GIF or anything else is 415. The tenant admin needs `core.settings.manage`; the image
+  is a `core.tenant` document that `core.settings.read` holders may fetch through the signed URL
+  route like any document.
+- Public endpoints for branding (`GET /branding`, `GET /branding/logo`) serve data that is public
+  by design, resolved from the host only (never a parameter or a header in production; an unknown
+  host is 404 `unknown_tenant`, so no tenant is revealed or confused). The logo route never
+  serves bytes with a script-capable type: the content type is the stored, re-encoded value, only
+  `image/png` and `image/jpeg` are ever sent (anything else is 404), and the response carries
+  `X-Content-Type-Options: nosniff`, `Content-Disposition: inline`, `Content-Security-Policy:
+  default-src 'none'; sandbox`, `Cache-Control: public, max-age=3600` and an `ETag`.
 - PDFs are stored as uploaded: only images are re-encoded, so a PDF's embedded JavaScript,
   launch actions or links are not removed. The control is how files are served: every signed
   download URL (R2 presign and the test fake alike) carries `Content-Disposition: attachment` with

@@ -57,6 +57,31 @@ The member area is its own lazily loaded route tree, under 250 KB of compressed
 JavaScript at first load (NFR-PERF-06). Lists page at 20 items. Images are avoided except
 the tenant logo.
 
+### 11.2.5 Branding and the shared shell (FR-TEN-08)
+
+The brand bar, the theme colour and the footer belong to the shared shell, the root layout of the
+PWA, so every area inherits them (sign-in, accept-invitation, staff, member, platform console).
+A tenant host reads the public `GET /api/v1/branding` (display name, theme colour, logo URL; no
+sign-in) and shows the logo with the display name as its alt text, or the name as text when there
+is no logo. The platform host and any unknown host show the Rincoltech brand. Every screen ends
+with the footer "Powered by" and the Rincoltech logo (`/brand/rincoltech-logo.png`), a link to the
+Rincoltech site with an accessible name; a tenant cannot remove it.
+
+The theme colour reaches the screens as two CSS custom properties on `:root`, set once by the
+shell and absent when the tenant has no colour (the defaults in `frontend/src/app/theme.css`
+apply):
+
+| Variable | Meaning | Use |
+|---|---|---|
+| `--brand` | The tenant's theme colour, `#RRGGBB` | Backgrounds, borders and accents |
+| `--brand-contrast` | `#FFFFFF` or `#111111`, whichever reaches contrast 4.5 on `--brand` | Text and icons drawn on `--brand` |
+
+Verticals (retail, lending) and every area use only these variables, never a hard-coded brand
+colour, and draw text on `--brand` only in `--brand-contrast`; `--brand` alone is not guaranteed
+readable as text on white. The contrast rule lives in one tested pure function
+(`frontend/src/app/contrast.ts`) and in the same rule in the API (`BrandColour`), both checked
+against the same reference values.
+
 ## 11.3 SMS
 
 ### 11.3.1 Events and default templates
