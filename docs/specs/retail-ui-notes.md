@@ -246,7 +246,7 @@ from Town to Second Shop. A Playwright script drove Chromium at 360px and 390px;
   branch, and now say "Choose a branch to continue:" with a button for each of the user's branches.
 - **Out of stock and Low stock.** Tabs on Stock (`stock_level=out|low`): out is zero or less, low is 5 or fewer
   and so includes out of stock. The threshold is a constant in the API (`StockService.LOW_STOCK_MILLI`) because
-  the settings catalogue has no retail group; in All branches the level is judged on the total.
+  the settings catalogue has no retail group (ADR-029); in All branches the level is judged on the total.
 - **Credit sales and All sales.** Two screens on the sales list API (new filters `payment_method`, `product_id`,
   `buyer`, `status`, `newest_first`), linked from the retail home. A card shows the buyer, date and amount; a
   credit sale adds the due date, what is still owed and a state badge (Paid, Part paid, Unpaid, Overdue; the

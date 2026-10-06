@@ -27,7 +27,7 @@ yet), **out of scope** (with the reason). Screens are under `frontend/src/areas/
 |---|---|---|---|
 | Product catalogue (quantity and selling price, no cost for sales staff) | Stock (`stock`): item, category, quantity, price, cost only with `retail.profit.read`; search by name, code or category; category filter | done | Nothing |
 | Product categories (with related products) | Stock category filter and the by-category table on Stock value | done | Managing categories is missing (see Catalogue management) |
-| Low stock items | Stock tab "Low stock" (at or below 5, out of stock included; a constant in `StockService`, documented in SDD 7.11.20) | partly | The AppSheet app has no per-product reorder level in the data, so one threshold serves all. A per-product or per-tenant level needs a retail settings group |
+| Low stock items | Stock tab "Low stock" (at or below 5, out of stock included; a constant in `StockService`, documented in SDD 7.11.20) | partly | The AppSheet app has no per-product reorder level in the data, so one threshold serves all (ADR-029). A per-product or per-tenant level needs a retail settings group |
 | Out of stock items | Stock tab "Out of stock" (zero or less) | done | Nothing |
 | Stock per shop and across shops | Stock with the Branch box on one branch, or All branches (a column per branch, a total, the negative flag per cell; on a phone the total with a per-branch breakdown) | done | Nothing |
 | Stock-take | Stock-take (`stocktake`) | done | Nothing |
