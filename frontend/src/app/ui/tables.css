@@ -98,29 +98,48 @@ tfoot td {
  * Stock in every branch (#144): the Item and Total columns stay in view while only the branch columns
  * scroll sideways, so a third or fourth branch never pushes Price and Cost off the screen.
  */
+.stock-matrix {
+  --stock-item-w: 8.5rem;
+  --stock-total-w: 5.5rem;
+}
+
 .stock-matrix th:first-child,
 .stock-matrix td:first-child {
   position: sticky;
   left: 0;
   z-index: 1;
-  width: 8.5em;
-  min-width: 8.5em;
-  max-width: 8.5em;
+  box-sizing: border-box;
+  width: var(--stock-item-w);
+  min-width: var(--stock-item-w);
+  max-width: var(--stock-item-w);
+  overflow-wrap: anywhere;
   background: var(--color-surface);
 }
 
 .stock-matrix th:nth-child(2),
 .stock-matrix td:nth-child(2) {
   position: sticky;
-  left: 8.5em;
+  left: var(--stock-item-w);
   z-index: 1;
+  box-sizing: border-box;
+  width: var(--stock-total-w);
+  min-width: var(--stock-total-w);
+  max-width: var(--stock-total-w);
   background: var(--color-surface);
   box-shadow: 1px 0 0 var(--color-border);
 }
 
 .stock-matrix th:first-child,
 .stock-matrix th:nth-child(2) {
+  z-index: 2;
   background: var(--color-surface-muted);
+}
+
+/* The sticky cells follow the row highlight too. */
+@media (hover: hover) {
+  .stock-matrix tbody tr:hover td {
+    background: var(--color-surface-muted);
+  }
 }
 
 .stock-matrix th {
