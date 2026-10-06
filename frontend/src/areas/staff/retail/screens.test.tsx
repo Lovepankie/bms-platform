@@ -13,6 +13,7 @@ import { RestockForm, RestockSaved } from './restock';
 import { TransferForm, TransferSummary } from './transfer';
 import { TransferList, showDate } from './transfers';
 import { UsageForm } from './usage';
+import { SaleDetail, SaleList, keepCredit, saleState } from './sales';
 import { BranchRequired, Gate, NoStockHere, Problem } from './ui';
 import { ALL_BRANCHES } from '../../../auth/branch';
 
@@ -440,5 +441,67 @@ describe('All branches (#144)', () => {
     expect(html).toContain('<td>2026-10-05</td>');
     expect(html).toContain('UGX 3,000');
     expect(html).toContain('UGX 1,200');
+  });
+});
+
+describe('Credit sales and All sales (#145)', () => {
+  const today = '2026-10-06';
+  const base: Sale = {
+    id: 's1', sale_no: 'S-000001', branch_id: branch, sale_date: '2026-10-01', payment_method: 'credit', status: 'completed', buyer_name: 'Test Buyer 01', buyer_contact: '+256700000001',
+    due_date: '2026-10-20', total_minor: 12000, paid_minor: 0, balance_minor: 12000, profit_minor: 5000, cost_total_minor: 7000,
+    lines: [{ id: 'l1', product_id: 'p1', description: 'LED bulb 9W screw', qty: '2.000', unit_price_minor: 6000, line_total_minor: 12000, unit_cost_minor: 3500 }],
+  };
+
+  it('names the state of a sale in words', () => {
+    expect(saleState(base, today)).toEqual({ label: 'Unpaid', tone: 'info' });
+    expect(saleState({ ...base, paid_minor: 2000, balance_minor: 10000 }, today).label).toBe('Part paid');
+    expect(saleState({ ...base, due_date: '2026-10-05' }, today).label).toBe('Overdue');
+    expect(saleState({ ...base, due_date: '2026-10-06' }, today).label).toBe('Unpaid');
+    expect(saleState({ ...base, paid_minor: 12000, balance_minor: 0 }, today).label).toBe('Paid');
+    expect(saleState({ ...base, payment_method: 'cash', paid_minor: 12000, balance_minor: 0 }, today).label).toBe('Paid');
+    expect(saleState({ ...base, status: 'voided' }, today).label).toBe('Voided');
+  });
+
+  it('lists a credit sale with buyer, date, amount, due date and status', () => {
+    const html = renderToString(<SaleList items={[base]} today={today} credit onOpen={() => undefined} />);
+    expect(html).toContain('Test Buyer 01');
+    expect(html).toContain('1 Oct 2026');
+    expect(html).toContain('UGX 12,000');
+    expect(html).toContain('Due 20 Oct 2026');
+    expect(html).toContain('still owes UGX 12,000');
+    expect(html).toContain('badge-info">Unpaid');
+  });
+
+  it('marks an overdue sale in words and danger', () => {
+    const html = renderToString(<SaleList items={[{ ...base, due_date: '2026-09-01' }]} today={today} credit onOpen={() => undefined} />);
+    expect(html).toContain('badge-danger">Overdue');
+  });
+
+  it('says so when there are no sales, and shows the branch only when asked', () => {
+    expect(renderToString(<SaleList items={[]} today={today} credit onOpen={() => undefined} />)).toContain('No credit sales found.');
+    expect(renderToString(<SaleList items={[]} today={today} onOpen={() => undefined} />)).toContain('No sales found.');
+    expect(renderToString(<SaleList items={[base]} today={today} onOpen={() => undefined} branchOf={() => 'Test Branch A'} />)).toContain('Test Branch A');
+    expect(renderToString(<SaleList items={[base]} today={today} onOpen={() => undefined} />)).not.toContain('Test Branch A');
+  });
+
+  it('filters credit sales by what is owed', () => {
+    const paid = { ...base, id: 's2', paid_minor: 12000, balance_minor: 0 };
+    const late = { ...base, id: 's3', due_date: '2026-09-01' };
+    const ids = (owing: 'all' | 'owing' | 'overdue' | 'paid') => keepCredit([base, paid, late], owing, today).map((s) => s.id);
+    expect(ids('all')).toEqual(['s1', 's2', 's3']);
+    expect(ids('owing')).toEqual(['s1', 's3']);
+    expect(ids('overdue')).toEqual(['s3']);
+    expect(ids('paid')).toEqual(['s2']);
+  });
+
+  it('opens a sale with its lines, and shows profit only with the permission', () => {
+    const sales = page('sales', <SaleDetail sale={base} today={today} branchName="Test Branch A" />);
+    expect(sales).toContain('Sale S-000001');
+    expect(sales).toContain('LED bulb 9W screw');
+    expect(sales).toContain('Test Branch A');
+    expect(sales).toContain('Still owes UGX 12,000');
+    expect(sales).toContain('+256700000001');
+    expect(sales).not.toContain('Profit on this sale');
+    expect(page('admin', <SaleDetail sale={base} today={today} />)).toContain('Profit on this sale: UGX 5,000');
   });
 });

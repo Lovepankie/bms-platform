@@ -27,6 +27,19 @@ export const icons = {
       <circle cx="17" cy="20" r="1.2" />
     </Svg>
   ),
+  creditSales: (
+    <Svg>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <path d="M3 10h18" />
+      <path d="M7 15h4" />
+    </Svg>
+  ),
+  salesHistory: (
+    <Svg>
+      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+      <path d="M9 8h6M9 12h6" />
+    </Svg>
+  ),
   restock: (
     <Svg>
       <path d="M1 6h13v10H1z" />

@@ -180,4 +180,36 @@ describe('retail mock adapter (real response shapes)', () => {
     const all = await api.listStockAllBranches({ level: 'low' });
     expect(all.items.every((r) => Number(r.total_qty) <= 5)).toBe(true);
   });
+
+  it('lists sales newest first, narrowed by payment method, buyer, product, branch, status and dates', async () => {
+    setMockProfitAccess(true);
+    const api = createMockRetail();
+    const all = (await api.listSales({})).items ?? [];
+    expect(all.length).toBeGreaterThan(3);
+    const dates = all.map((s) => s.sale_date ?? '');
+    expect([...dates].sort().reverse()).toEqual(dates);
+    const credit = (await api.listSales({ paymentMethod: 'credit' })).items ?? [];
+    expect(credit.length).toBeGreaterThan(0);
+    expect(credit.every((s) => s.payment_method === 'credit')).toBe(true);
+    const owes = (await api.listSales({ buyer: 'buyer 02' })).items ?? [];
+    expect(owes.length).toBeGreaterThan(0);
+    expect(owes.every((s) => s.buyer_name === 'Test Buyer 02')).toBe(true);
+    const product = all[0]?.lines?.[0]?.product_id;
+    expect(((await api.listSales({ productId: product })).items ?? []).every((s) => s.lines?.some((l) => l.product_id === product))).toBe(true);
+    expect(((await api.listSales({ branchId: branch })).items ?? []).every((s) => s.branch_id === branch)).toBe(true);
+    expect((await api.listSales({ status: 'voided' })).items).toHaveLength(0);
+    expect((await api.listSales({ to: '2000-01-01' })).items).toHaveLength(0);
+    const one = await api.getSale(all[0]?.id ?? '');
+    expect(one.lines?.length).toBeGreaterThan(0);
+    await expect(api.getSale('nope')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('hides cost and profit from the sales lists without retail.profit.read', async () => {
+    setMockProfitAccess(false);
+    const api = createMockRetail();
+    const page = await api.listSales({});
+    expect(JSON.stringify(page)).not.toMatch(/cost|profit/i);
+    expect(JSON.stringify(await api.getSale(page.items?.[0]?.id ?? ''))).not.toMatch(/cost|profit/i);
+    setMockProfitAccess(true);
+  });
 });

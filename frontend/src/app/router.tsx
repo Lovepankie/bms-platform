@@ -150,6 +150,8 @@ const staffRetailRoute = createRoute({ getParentRoute: () => staffRoute, path: '
 const retailScreen = <P extends string>(path: P) => createRoute({ getParentRoute: () => staffRetailRoute, path });
 const retailHomeRoute = retailScreen('/').lazy(() => import('../areas/staff/retail/home').then((m) => m.Route));
 const retailSaleRoute = retailScreen('/sale').lazy(() => import('../areas/staff/retail/sale').then((m) => m.Route));
+const retailCreditSalesRoute = retailScreen('/credit-sales').lazy(() => import('../areas/staff/retail/sales').then((m) => m.CreditRoute));
+const retailSalesRoute = retailScreen('/sales').lazy(() => import('../areas/staff/retail/sales').then((m) => m.Route));
 const retailRestockRoute = retailScreen('/restock').lazy(() => import('../areas/staff/retail/restock').then((m) => m.Route));
 const retailUsageRoute = retailScreen('/usage').lazy(() => import('../areas/staff/retail/usage').then((m) => m.Route));
 const retailStockRoute = retailScreen('/stock').lazy(() => import('../areas/staff/retail/stock').then((m) => m.Route));
@@ -201,6 +203,8 @@ export const router = createRouter({
     staffRoute.addChildren([staffHomeRoute, staffApprovalsRoute, staffSetupRoute, staffRetailRoute.addChildren([
         retailHomeRoute,
         retailSaleRoute,
+        retailCreditSalesRoute,
+        retailSalesRoute,
         retailRestockRoute,
         retailUsageRoute,
         retailStockRoute,

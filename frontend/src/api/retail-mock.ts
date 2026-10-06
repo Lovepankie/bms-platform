@@ -2,7 +2,7 @@ import type {
   AllBranchesRow, Category, Customer, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockRow, Supplier, Transfer, Usage, Valuation,
   ValuationRow,
 } from './retail';
-import { RetailError, businessToday } from './retail';
+import { RetailError, businessToday, daysBefore } from './retail';
 import { retailMessage } from './retail-errors';
 import type { Me } from './client';
 
@@ -110,6 +110,7 @@ export function createMockRetail(): RetailApi {
   const stocktakes = new Map<string, Stocktake>();
   const sales: (Sale & { costTotal: number })[] = [];
   const usageCostByDay = new Map<string, number>();
+  seedSales(sales);
   const transfers: Transfer[] = [];
   const replay = new Map<string, { hash: string; value: unknown }>();
   let seq = 100;
@@ -177,6 +178,22 @@ export function createMockRetail(): RetailApi {
         const milli = bal(branchId, p.id);
         return cost({ product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor }, { cost_minor: p.costMinor });
       }).filter((r) => (!negativeOnly || r.negative) && atLevel(Number(r.qty), level))),
+
+    listSales: ({ branchId, from, to, buyer, paymentMethod, productId, status, cursor }) => {
+      const wanted = [...sales].reverse().filter((x) =>
+        (!branchId || x.branch_id === branchId) && (!from || (x.sale_date ?? '') >= from) && (!to || (x.sale_date ?? '') <= to)
+        && (!buyer || (x.buyer_name ?? '').toLowerCase().includes(buyer.trim().toLowerCase()))
+        && (!paymentMethod || x.payment_method === paymentMethod) && (!productId || (x.lines ?? []).some((l) => l.product_id === productId))
+        && (!status || x.status === status));
+      const start = cursor ? Number(cursor) : 0;
+      const items = wanted.slice(start, start + 50).map(visibleSale);
+      return delay({ items, ...(start + 50 < wanted.length ? { next_cursor: String(start + 50) } : {}) });
+    },
+
+    getSale: (id) => {
+      const found = sales.find((x) => x.id === id);
+      return found ? delay(visibleSale(found)) : Promise.reject(new RetailError('That could not be found.', 404, 'not_found'));
+    },
 
     listCustomers: () => delay([...customers]),
     listSuppliers: () => delay([...suppliers]),
@@ -365,6 +382,40 @@ export function createMockRetail(): RetailApi {
         return visibleTransfer(t);
       }),
   };
+}
+
+/** A sale as the session may see it: cost and profit only with retail.profit.read. */
+function visibleSale(x: Sale & { costTotal: number }): Sale {
+  const { costTotal: _hidden, ...sale } = x;
+  if (profitAccess) return sale;
+  const { cost_total_minor: _cost, profit_minor: _profit, lines, ...rest } = sale;
+  return { ...rest, lines: (lines ?? []).map(({ unit_cost_minor: _unit, line_cost_minor: _line, ...l }) => l) };
+}
+
+/** A few fabricated sales so the History screens have something to show: cash, and credit paid, part paid and overdue. */
+function seedSales(into: (Sale & { costTotal: number })[]): void {
+  const day = (back: number) => daysBefore(businessToday(), back);
+  const make = (n: number, back: number, branch: string, productIndex: number, qty: number, method: 'cash' | 'credit', buyer?: string, paid = 0, dueIn?: number): Sale & { costTotal: number } => {
+    const p = PRODUCTS[productIndex] as MockProduct;
+    const total = p.sellMinor * qty;
+    const costTotal = p.costMinor * qty;
+    const credit = method === 'credit';
+    const sale: Sale = {
+      id: `5eed0000-0000-4000-8000-${String(n).padStart(12, '0')}`, sale_no: `S-${String(900000 + n)}`, branch_id: branch, sale_date: day(back),
+      payment_method: method, status: 'completed', currency: 'UGX', ...(buyer ? { buyer_name: buyer, buyer_contact: '+256700000001' } : {}),
+      ...(credit && dueIn !== undefined ? { due_date: day(-dueIn) } : {}),
+      lines: [{ id: `5eed1000-0000-4000-8000-${String(n).padStart(12, '0')}`, line_no: 1, product_id: p.id, code: p.code, description: p.description, qty: `${qty}.000`, unit_price_minor: p.sellMinor, line_total_minor: total, unit_cost_minor: p.costMinor, line_cost_minor: costTotal }],
+      total_minor: total, paid_minor: credit ? paid : total, balance_minor: credit ? total - paid : 0, cost_total_minor: costTotal, profit_minor: total - costTotal,
+    };
+    return { ...sale, costTotal };
+  };
+  into.push(
+    make(1, 9, BRANCH_A, 2, 3, 'cash'),
+    make(2, 8, BRANCH_B, 4, 2, 'credit', 'Test Buyer 01', 0, -3),
+    make(3, 6, BRANCH_A, 0, 1, 'credit', 'Test Buyer 02', 100000, 2),
+    make(4, 3, BRANCH_A, 5, 4, 'credit', 'Test Buyer 02', 18000, 10),
+    make(5, 1, BRANCH_B, 3, 2, 'cash'),
+  );
 }
 
 /** A transfer as the session may see it: cost fields only with retail.profit.read. */

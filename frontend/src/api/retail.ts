@@ -22,6 +22,7 @@ export type Supplier = S['RetailSupplier'];
 export type SaleRequest = S['RetailSaleRequest'];
 export type Sale = S['RetailSale'];
 export type SaleLine = S['RetailSaleLine'];
+export type SalePage = S['RetailSalePage'];
 export type PurchaseRequest = S['RetailPurchaseRequest'];
 export type Purchase = S['RetailPurchase'];
 export type UsageRequest = S['RetailUsageRequest'];
@@ -62,6 +63,18 @@ export function daysBefore(date: string, days: number): string {
 /** Stock lists can show only items out of stock (zero or less) or low (at or below the server's threshold, 5). */
 export type StockLevel = 'out' | 'low';
 
+export interface SalesQuery {
+  /** One branch; absent means every branch the caller may read. */
+  branchId?: string;
+  from?: string;
+  to?: string;
+  buyer?: string;
+  paymentMethod?: SalePayment;
+  productId?: string;
+  status?: 'completed' | 'voided';
+  cursor?: string;
+}
+
 export type SalePayment = 'cash' | 'mobile_money' | 'bank' | 'credit';
 export type PurchasePayment = 'cash' | 'bank' | 'credit';
 
@@ -69,6 +82,9 @@ export interface RetailApi {
   listProducts(q: { query?: string; branchId?: string }): Promise<Product[]>;
   listCategories(): Promise<Category[]>;
   listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel }): Promise<StockRow[]>;
+  /** One page of sales, newest first, narrowed by the filters (#145). */
+  listSales(q: SalesQuery): Promise<SalePage>;
+  getSale(id: string): Promise<Sale>;
   listCustomers(): Promise<Customer[]>;
   listSuppliers(): Promise<Supplier[]>;
   createSupplier(body: { name: string }): Promise<Supplier>;
@@ -156,6 +172,23 @@ const realRetail: RetailApi = {
       cursor = page.next_cursor;
     } while (cursor);
     return { branches, items };
+  },
+
+  async listSales({ branchId, from, to, buyer, paymentMethod, productId, status, cursor }) {
+    return unwrap(
+      await api.GET('/api/v1/retail/sales', {
+        params: {
+          query: {
+            branch_id: branchId ? [branchId] : undefined, from: from || undefined, to: to || undefined, buyer: buyer || undefined,
+            payment_method: paymentMethod, product_id: productId || undefined, status, newest_first: true, limit: 50, cursor,
+          },
+        },
+      }),
+    );
+  },
+
+  async getSale(id) {
+    return unwrap(await api.GET('/api/v1/retail/sales/{sale_id}', { params: { path: { sale_id: id } } }));
   },
 
   async listCustomers() {
