@@ -6,10 +6,10 @@ const cable: Product = { id: 'p1', code: 'P001', description: '2.5mm twin cable 
 const draft = (patch: Partial<TransferDraft>): TransferDraft => ({ toBranchId: 'b2', transferDate: '', note: '', lines: [], ...patch });
 
 describe('stock move form (FR-RET-16)', () => {
-  it('hints when a line is more than the source branch holds, and never for what it holds', () => {
+  it('hints when a line is more than the source branch holds, in the words of the sale screen (#112 item 2), and never for what it holds', () => {
     expect(transferLineHint({ product: cable, qty: '4' })).toBeNull();
-    expect(transferLineHint({ product: cable, qty: '4.001' })).toBe('Only 4 roll at the branch you are moving from.');
-    expect(transferLineHint({ product: { ...cable, qty: '-2.000' }, qty: '1' })).toBe('Only 0 roll at the branch you are moving from.');
+    expect(transferLineHint({ product: cable, qty: '4.001' })).toBe('Only 4 roll in stock at this branch.');
+    expect(transferLineHint({ product: { ...cable, qty: '-2.000' }, qty: '1' })).toBe('Only 0 roll in stock at this branch.');
     expect(transferLineHint({ product: cable, qty: '0' })).toBe('Enter a quantity above zero.');
   });
 

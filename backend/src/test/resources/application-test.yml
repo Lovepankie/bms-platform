@@ -15,6 +15,11 @@ bms:
     # other profiles use the chapter 8 cost (64 MiB, 3 iterations).
     argon2-memory-kib: 4096
     argon2-iterations: 2
+  # High global caps, so the whole suite's sign-ups fit in one hour; OnboardingIT fills them on
+  # purpose to prove the cap.
+  onboarding:
+    max-applications-per-hour: 400
+    max-verification-emails-per-hour: 400
 
 management:
   server:

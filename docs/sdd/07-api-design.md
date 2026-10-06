@@ -185,14 +185,14 @@ published under the platform host.
 | 400 | `malformed_request`: bad JSON, bad UUID, unknown body field, unknown query parameter |
 | 401 | `unauthenticated`, `token_expired`, `tenant_mismatch`, `session_revoked`, `session_expired`, `invalid_credentials` (sign-in), `invalid_mfa_code` (sign-in), `mfa_token_invalid` |
 | 403 | Authenticated but lacks the permission (`permission_denied`) |
-| 404 | Not found or outside branch scope; `unknown_tenant`; `module_not_enabled` |
+| 404 | Not found or outside branch scope; `unknown_tenant`; `module_not_enabled`; `link_invalid` (an applicant link that is malformed, unknown, replaced or expired, one answer for all, ADR-024) |
 | 413 | `file_too_large`: an upload over 5 MB, or a logo over 1 MB (chapter 8 section 8.8) |
 | 415 | `unsupported_file_type`: an upload that is not JPEG, PNG or PDF by content (a logo: not PNG, JPEG or WebP, or an image that cannot be decoded) |
-| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, `approval_already_pending`, `mfa_already_enrolled`, `mfa_not_enrolled`, `mfa_enrolment_not_started`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`, `duplicate_email`, `duplicate_phone`, `duplicate_branch_code`, `duplicate_slug`, `duplicate_product_code`); `transaction_conflict` (the database aborted the transaction as a deadlock victim or serialisation loser; nothing was saved, `Retry-After` is set and the same request may be retried with the same `Idempotency-Key`); `stock_moved_since_count` (a retail stock-take whose lines moved after the count so far that the adjustment would leave a negative balance; recount them); `conflict` for any other unique or foreign key violation |
+| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, `approval_already_pending`, `mfa_already_enrolled`, `mfa_not_enrolled`, `mfa_enrolment_not_started`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`, `duplicate_email`, `duplicate_phone`, `duplicate_branch_code`, `duplicate_slug`, `duplicate_product_code`); `transaction_conflict` (the database aborted the transaction as a deadlock victim or serialisation loser; nothing was saved, `Retry-After` is set and the same request may be retried with the same `Idempotency-Key`); `stock_moved_since_count` (a retail stock-take whose lines moved after the count so far that the adjustment would leave a negative balance; recount them); `application_state` (an onboarding decision or reply the application's status does not allow), `application_not_verified` (Activate before Verify), `outbox_not_failed` (send again on a row that has not failed), `outbox_too_old` (send again on a row older than its link's 7 day lifetime); `conflict` for any other unique or foreign key violation |
 | 422 | Validation and business rule failures (codes below) |
 | 423 | `tenant_suspended`, `account_locked` |
 | 428 | `precondition_required`: a `PATCH`, or a state transition or retail price edit, without `If-Match` (section 7.9) |
-| 429 | Rate limited; `Retry-After` header set |
+| 429 | Rate limited; `Retry-After` header set where the limiter knows it; `rate_limited` on the public sign-up endpoints (section 7.10) |
 | 500 | `internal_error`; the body carries only the generic title and the `request_id` |
 | 503 | Dependency down (the database); readiness fails; `uploads_busy` (image re-encoding is at capacity, retry shortly); `storage_unavailable` (document storage not configured) |
 
@@ -272,6 +272,27 @@ replaces this before a second API instance is added):
 | Any authenticated user | 600 requests per minute |
 | Report runs per user | 10 per minute |
 | Callbacks per provider | 50 per second |
+| Sign-up: new applications per client address, an IPv6 client by its /64 (ADR-024) | 5 per hour (429) |
+| Sign-up: link reads (verify, status, reply) per client address | 30 per 10 minutes (429) |
+| Sign-up: confirmation emails per mailbox (database) | 3 per 24 hours (202, nothing sent) |
+| Sign-up: new applications, all clients (database, `BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR`) | 30 per hour by default (202, nothing created; audit row and one Telegram alert per hour) |
+| Sign-up: confirmation emails, all clients (database, `BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR`) | 60 per hour by default (as above) |
+
+The per-address limits are token buckets in memory, bounded at 10,000 keys (least recently used
+dropped first), per API instance and lost on restart; a flood of fresh addresses can evict them,
+so they are a first, cheap line only. The bounds that must hold under a flood (per mailbox and
+global) are counted in the database inside one serialised sign-up transaction, and over them the
+answer stays the same 202, so the endpoint is no oracle. The global caps are deliberately small,
+so they can be filled cheaply: a handful of addresses (about 6 at 5 applications each) fill the
+default cap of 30 in an hour, after which every applicant, real or not, sees the normal answer and
+gets no email until the hour passes. That is the intended trade: the cap bounds what the form can
+make the platform send, and the operator is told at once (one Telegram alert and a
+`platform.sign_up.cap_reached` audit row per hour) and follows the runbook
+(`docs/runbooks/onboard-tenant.md`, "Protect the public sign-up"). The client address is the one Tomcat's
+RemoteIpValve takes from the trusted proxy's `X-Forwarded-For` (the right-most untrusted value, so
+a value a client prepends changes nothing). In front of all of this is the Cloudflare rate
+limiting rule for `/api/v1/platform/sign-up/*` (chapter 9 section 9.8,
+`docs/runbooks/onboard-tenant.md`).
 
 ## 7.11 Endpoint catalogue
 
@@ -332,6 +353,22 @@ The refresh token never appears in a response body: it is the `__Host-bms_rt` co
 | POST | `/platform/tenants/{tenant_id}/users/{user_id}/mfa/reset` | `platform.tenants.manage` | Tenant admins only. FR-IAM-12 |
 | POST | `/platform/tenants/{tenant_id}/support-sessions` | | FR-TEN-07 (P2) |
 | GET | `/platform/tenants/{tenant_id}/usage` | | Users, members, SMS segments. FR-NTF-07. Not built yet |
+| POST | `/platform/sign-up/applications` | public | The sign-up form (FR-ONB-01). Always 202 `{status: check_your_email}`, for a new, a known or a honeypot request (FR-ONB-03); 429 `rate_limited` |
+| POST | `/platform/sign-up/verify` | public (link token) | `{token}`: confirms the email on first use and returns the applicant view (FR-ONB-02) |
+| POST | `/platform/sign-up/status` | public (link token) | `{token}`: the applicant view, no contact details (FR-ONB-04) |
+| POST | `/platform/sign-up/reply` | public (link token) | `{token, reply}`: answers a `needs_info` note; back to `submitted` (FR-ONB-04) |
+| GET | `/platform/applications` | `platform.tenants.read` | `?status=` (repeatable). Confirmed applications, newest first, at most 500, and `counts` per status (FR-ONB-05) |
+| GET | `/platform/applications/{application_id}` | `platform.tenants.read` | The application, `possible_duplicates` and a free `suggested_slug` (FR-ONB-05) |
+| POST | `/platform/applications/{application_id}/verify` | `platform.tenants.manage` | FR-ONB-06 |
+| POST | `/platform/applications/{application_id}/needs-info` | `platform.tenants.manage` | `{note}`, which the applicant sees (FR-ONB-06) |
+| POST | `/platform/applications/{application_id}/reject` | `platform.tenants.manage` | `{note}`, the reason the applicant sees (FR-ONB-06) |
+| POST | `/platform/applications/{application_id}/activate` | `platform.tenants.manage` | `{modules, term, way_in, payment_note?, slug, plan_code?, agent_code?}`: creates the tenant through the FR-TEN-01 path and queues the activation email; `activated_now: false` and nothing done on a repeat (FR-ONB-07) |
+| GET | `/platform/outbox` | `platform.tenants.read` | `enabled_channels`, `counts` per status and the failed rows with a masked recipient (FR-NTF-09) |
+| POST | `/platform/outbox/{outbox_id}/retry` | `platform.tenants.manage` | A failed row back to `pending`; 409 `outbox_not_failed` otherwise. Audited |
+
+The sign-up endpoints sit under `/platform` so they are served only on the platform host and
+resolve no tenant; they need no token. Their link token travels in the body: the emailed link
+carries it in the URL fragment, which no server receives.
 
 ### 7.11.4 Tenant administration
 

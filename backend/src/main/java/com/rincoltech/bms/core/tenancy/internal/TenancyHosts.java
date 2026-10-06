@@ -29,4 +29,10 @@ class TenancyHosts implements PlatformHost {
         Integer port = properties.linkPort();
         return properties.linkScheme() + "://" + tenantHosts.hostFor(slug) + (port == null ? "" : ":" + port);
     }
+
+    @Override
+    public String platformOrigin() {
+        Integer port = properties.linkPort();
+        return properties.linkScheme() + "://" + properties.platformHost() + (port == null ? "" : ":" + port);
+    }
 }

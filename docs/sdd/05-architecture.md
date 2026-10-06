@@ -62,14 +62,17 @@ core
   audit           audit log writer and query
   approvals       maker-checker requests; dispatches execution to the owning module
   ledger          chart of accounts, periods, post_entry, reversal, trial balance, reconciliation hooks
-  notifications   templates, outbox, SMS and email adapters, delivery reports
+  notifications   templates, outbox, SMS and email adapters, delivery reports; today the platform
+                  outbox with its SMTP and Telegram senders (ADR-024)
   documents       PDF rendering, object storage, signed URLs
   reporting       report catalogue, report runs, export formats
   imports         batches, rows, issues, review queue, commit orchestration
   payments        payment intents, gateway adapters, callbacks, unallocated receipts
   jobs            db-scheduler tasks, per-tenant job runner (ADR-008)
   operations      version endpoint, readiness checks, database role guard
-  platform        platform console API: tenant creation, modules, subscriptions (ADR-016)
+  platform        platform console API: tenant creation, modules, subscriptions (ADR-016);
+                  TenantProvisioning, the one tenant creation path
+  onboarding      public sign-up, applications queue, Verify, Needs info, Reject, Activate (ADR-024)
 lending           vertical module (ADR-001)
   manifest        the vertical's registration with the core (section 5.4.3)
   members         members, KYC, next of kin, relationship graph
@@ -96,6 +99,9 @@ core.identity         -> core.tenancy, core.audit, core.notifications
 core.approvals        -> core.tenancy, core.audit, core.jobs
                          (executes through a registry the verticals register into; never imports them, ADR-015)
 core.platform         -> core.tenancy, core.identity, core.audit (the platform console, ADR-016)
+core.onboarding       -> core.tenancy, core.platform, core.audit, core.notifications
+                         (Activate creates the tenant through core.platform's TenantProvisioning, ADR-024)
+core.notifications    -> core.audit (the operator's "send again" is audited)
 core.imports          -> core.ledger, core.documents   (templates register into it)
 core.payments         -> core.ledger, core.notifications (booking is delegated through a registry)
 core.reporting        -> core.documents
@@ -140,7 +146,10 @@ The core iterates registries; it never names a vertical.
   (`SELECT ... FOR UPDATE`), validates, writes its own tables, calls the ledger's
   `post_entry`, writes the audit row, writes outbox rows for side effects, and returns.
 - The worker picks up outbox rows after commit. A side effect that fails is retried; it
-  never rolls back the financial record that caused it.
+  never rolls back the financial record that caused it. The platform outbox of ADR-024
+  (`notification_outbox`) is the first one built: written through `Outbox.enqueue` in the cause's
+  transaction, sent by the `core.notifications.outbox-sender` job every 30 seconds, one row per
+  transaction with `FOR UPDATE SKIP LOCKED`, at least once.
 - Scheduled jobs run one tenant per transaction (`app_list_active_tenants()`), and inside
   a tenant, in batches of at most 500 accounts per transaction so a single bad record
   cannot stall a tenant's whole run. Every job is idempotent for its business date.
@@ -209,7 +218,9 @@ frontend/src/
     staff/      routes per module: members, loans, collateral, savings, investments,
                 collections, ledger, reports, imports, approvals, admin
     member/     home, loans, savings, investments, pay, documents
-    platform/   tenant management (served on the platform host)
+    onboarding/ public sign-up page and applicant page (platform host, no sign-in, ADR-024)
+    platform/   operator sign-in and setup, and the operator portal: applications queue,
+                application detail with Activate, messages not sent (platform host)
   components/   shared UI (shadcn/ui based), money and date formatters
   offline/      IndexedDB caches and draft storage (chapter 4 section 4.8)
   i18n/         translation files

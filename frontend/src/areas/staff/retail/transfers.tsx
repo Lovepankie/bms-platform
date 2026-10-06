@@ -12,21 +12,42 @@ import { Gate, Problem, useSingleBranch } from './ui';
 // a user who may move stock from its source branch can cancel it while the destination still holds
 // what arrived; the server refuses otherwise, in plain words.
 
-const itemCount = (t: Transfer): string => {
-  const n = (t.lines ?? []).length;
-  return `${n} ${n === 1 ? 'item' : 'items'}`;
-};
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/** "6 Oct 2026" from "2026-10-06": no hyphen for a narrow row to break at, and no timezone shift. */
+export function showDate(iso: string | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? '');
+  return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1] ?? m[2]} ${m[1]}` : (iso ?? '');
+}
+
+/** "2 items: LED bulb 9W screw, Socket" with at most two names, then how many more. */
+export function whatMoved(t: Transfer): string {
+  const names = (t.lines ?? []).map((l) => l.description ?? l.code ?? '');
+  const n = names.length;
+  const more = n > 2 ? `, and ${n - 2} more` : '';
+  return `${n} ${n === 1 ? 'item' : 'items'}: ${names.slice(0, 2).join(', ')}${more}`;
+}
+
+// The API gives a transfer no number of its own yet, so a row shows the date, the route, what moved
+// and, for the user's own moves, "by you" (#112 item 1).
 export function TransferList({ items, onOpen }: { items: Transfer[]; onOpen: (id: string) => void }) {
   const label = useBranchLabel();
-  if (items.length === 0) return <p>No stock has been moved yet.</p>;
+  const { me } = useStaff();
+  if (items.length === 0) return <p className="empty-state">No stock has been moved yet.</p>;
   return (
     <ul style={{ listStyle: 'none', padding: 0 }}>
       {items.map((t) => (
         <li key={t.id} className="rt-card">
-          <button type="button" style={{ width: '100%', textAlign: 'left' }} onClick={() => onOpen(t.id ?? '')}>
-            <strong>{t.transfer_date}</strong>: {label(t.from_branch_id)} to {label(t.to_branch_id)}, {itemCount(t)}
-            {t.status === 'voided' && <span className="rt-flag"> cancelled</span>}
+          <button type="button" className="btn-ghost" style={{ width: '100%', textAlign: 'left', display: 'block' }} onClick={() => onOpen(t.id ?? '')}>
+            <strong style={{ display: 'block', whiteSpace: 'nowrap' }}>
+              {showDate(t.transfer_date)}
+              {t.status === 'voided' && <span className="badge badge-warning"> cancelled</span>}
+            </strong>
+            <span style={{ display: 'block' }}>From {label(t.from_branch_id)} to {label(t.to_branch_id)}</span>
+            <span className="muted" style={{ display: 'block' }}>
+              {whatMoved(t)}
+              {t.created_by && t.created_by === me.user_id ? ', by you' : ''}
+            </span>
           </button>
         </li>
       ))}

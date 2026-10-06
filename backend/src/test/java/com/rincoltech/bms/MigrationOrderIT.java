@@ -19,16 +19,17 @@ import org.testcontainers.utility.MountableFile;
 /**
  * The one Flyway sequence shared by lending and retail (issue #71, review F6): V1 to V9 (lending,
  * V9 the loan appraisals of #42), V10 to V14 (retail R1 to R4, the price floor and the review
- * fixes), V20 (the retail import references), V21 (the lending review follow-ups), V22 (the retail stock
- * transfers of #84) and V25 (lending disbursement and repayments, #108) apply in order on an empty database, and on a
+ * fixes), V20 (the retail import references), V21 (the lending review follow-ups), V22 (the retail
+ * stock transfers of #84), V23 (the onboarding applications and the outbox of #89) and V25 (lending
+ * disbursement and repayments, #108) apply in order on an empty database, and on a
  * database a server already migrated to V9 before the retail work reached it, with
  * {@code outOfOrder} off exactly as {@link DatabaseMigrator} runs it. Each case gets its own
  * PostgreSQL 16 container initialised by {@code deploy/postgres/initdb/01-roles.sh}.
  */
 class MigrationOrderIT {
 
-    static final List<String> VERSIONS =
-            List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "25");
+    static final List<String> VERSIONS = List.of(
+            "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "25");
 
     @Test
     void everyMigrationAppliesInOrderOnAnEmptyDatabase() {
@@ -77,7 +78,7 @@ class MigrationOrderIT {
 
             assertThat(second.success).isTrue();
             assertThat(second.migrations.stream().map(m -> m.version).toList())
-                    .containsExactly("10", "11", "12", "13", "14", "20", "21", "22", "25");
+                    .containsExactly("10", "11", "12", "13", "14", "20", "21", "22", "23", "25");
             assertThat(applied(postgres)).containsExactlyElementsOf(VERSIONS);
             assertThat(flyway(postgres, null).info().pending()).isEmpty();
             // The tenant from V9 can switch retail on: its chart is seeded next to the lending one.
@@ -127,7 +128,7 @@ class MigrationOrderIT {
     void servicingMigrationAppliesOnADatabaseThatAlreadyHoldsLoans() {
         try (PostgreSQLContainer postgres = database()) {
             postgres.start();
-            assertThat(flyway(postgres, "22").migrate().targetSchemaVersion).isEqualTo("22");
+            assertThat(flyway(postgres, "23").migrate().targetSchemaVersion).isEqualTo("23");
             JdbcClient owner = JdbcClient.create(
                     new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
             UUID tenant = UUID.randomUUID();
@@ -136,7 +137,7 @@ class MigrationOrderIT {
             UUID product = UUID.randomUUID();
             UUID version = UUID.randomUUID();
             owner.sql(
-                            "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v22', 'Test Tenant V22', '00000000-0000-4000-8000-000000000001')")
+                            "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v23', 'Test Tenant V23', '00000000-0000-4000-8000-000000000001')")
                     .param(tenant)
                     .update();
             owner.sql(

@@ -40,6 +40,7 @@ class ModularityTest {
                         "core.notifications",
                         "core.approvals",
                         "core.platform",
+                        "core.onboarding",
                         "lending.collateral",
                         "lending.loans",
                         "lending.manifest",

@@ -1,24 +1,22 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { retail, type Product, type Transfer } from '../../../api/retail';
+import { businessToday, retail, type Product, type Transfer } from '../../../api/retail';
+import { branchLabel } from '../../../auth/branch';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { buildTransfer, transferLineHint, transferProblem, type TransferDraft } from './transfer-state';
-import { BranchRequired, Gate, ProductPicker, Problem, money, useProfitAccess, useSingleBranch } from './ui';
+import { BranchRequired, Gate, NoStockHere, ProductPicker, Problem, money, useProfitAccess, useSingleBranch } from './ui';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
 // stock leaves; it moves at cost, so nothing is gained or lost. One idempotency key per draft, kept
 // with the draft in this tab until the move is saved or cleared, as on the sale form (#77).
 
-/** "BR2 Test Branch Two" for a branch the session knows, or a plain fallback. */
+/** "Test Branch Two (BR2)" for a branch the session knows (#105), or a plain fallback. */
 export function useBranchLabel(): (id: string | undefined) => string {
   const { me } = useStaff();
-  return (id) => {
-    const b = (me.branches ?? []).find((x) => x.id === id);
-    return b ? `${b.code ?? ''} ${b.name ?? ''}`.trim() : 'another branch';
-  };
+  return (id) => branchLabel((me.branches ?? []).find((x) => x.id === id)) || 'another branch';
 }
 
 export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; onSaved?: (t: Transfer) => void }) {
@@ -27,7 +25,7 @@ export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; 
   const label = useBranchLabel();
   const { key, draft, setDraft, finish, discard } = usePersistedDraft<TransferDraft>(
     `transfer:${me.user_id ?? ''}:${fromBranchId}`,
-    { toBranchId: '', transferDate: '', note: '', lines: [] },
+    { toBranchId: '', transferDate: businessToday(), note: '', lines: [] },
   );
   const save = useMutation({
     mutationFn: () => retail.createTransfer(buildTransfer(fromBranchId, draft), key),
@@ -46,6 +44,7 @@ export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; 
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!problem && !save.isPending) save.mutate(); }}>
       <p>From: {label(fromBranchId)}</p>
+      <NoStockHere branchId={fromBranchId} />
       <label htmlFor="transfer-to">To branch</label>
       <select id="transfer-to" value={draft.toBranchId} onChange={(e) => update({ toBranchId: e.target.value })}>
         <option value="">Choose a branch</option>
@@ -74,7 +73,7 @@ export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; 
         );
       })}
 
-      <label htmlFor="transfer-date">Date (leave empty for today)</label>
+      <label htmlFor="transfer-date">Date</label>
       <input id="transfer-date" type="date" value={draft.transferDate} onChange={(e) => update({ transferDate: e.target.value })} />
       <label htmlFor="transfer-note">Note (optional)</label>
       <input id="transfer-note" maxLength={300} value={draft.note} onChange={(e) => update({ note: e.target.value })} />
