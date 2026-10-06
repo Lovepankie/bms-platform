@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.tenancy.internal;
 
+import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -9,16 +10,23 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /** {@code /api/v1/settings} (chapter 7 section 7.11.4, FR-TEN-08). */
 @RestController
@@ -27,9 +35,11 @@ import org.springframework.web.bind.annotation.RestController;
 class SettingsController {
 
     private final SettingsService service;
+    private final BrandingService branding;
 
-    SettingsController(SettingsService service) {
+    SettingsController(SettingsService service, BrandingService branding) {
         this.service = service;
+        this.branding = branding;
     }
 
     /** Every key of chapter 6 table {@code tenant_settings}, with its default applied. */
@@ -47,6 +57,21 @@ class SettingsController {
             Map<String, Integer> appraisalWeights,
             List<String> disabledCollateralTypes,
             boolean requireMfaAllStaff,
+
+            @Schema(
+                    description =
+                            "The current logo (a core document of this tenant), or null; set through PUT /settings/logo")
+            UUID logoDocumentId,
+
+            @Schema(description = "Brand colour #RRGGBB, or null for the platform look (FR-TEN-08)")
+            String themePrimary,
+
+            @Schema(description = "True once the admin has saved a business name of their own")
+            boolean displayNameSet,
+
+            @Schema(description = "True once the business set-up checklist has been dismissed")
+            boolean setupDismissed,
+
             int version) {}
 
     /** Omitted (or null) fields are unchanged (chapter 7 section 7.5). */
@@ -75,7 +100,13 @@ class SettingsController {
             Map<String, Integer> appraisalWeights,
 
             List<@Pattern(regexp = "^[a-z_]{2,40}$") String> disabledCollateralTypes,
-            Boolean requireMfaAllStaff) {}
+            Boolean requireMfaAllStaff,
+
+            @Pattern(regexp = "^#[0-9A-Fa-f]{6}$")
+            @Schema(description = "#RRGGBB; white or near-black text on it must reach contrast 4.5 (FR-TEN-08)")
+            String themePrimary,
+
+            Boolean setupDismissed) {}
 
     @GetMapping
     @RequiresPermission("core.settings.read")
@@ -94,6 +125,31 @@ class SettingsController {
             @RequestHeader(name = "If-Match", required = false) String ifMatch,
             @Valid @RequestBody UpdateSettingsRequest request) {
         SettingsResponse settings = service.update(ifMatch, request);
+        return ResponseEntity.ok().eTag(String.valueOf(settings.version())).body(settings);
+    }
+
+    @PutMapping(path = "/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequiresPermission("core.settings.manage")
+    @Operation(
+            summary = "Upload or replace the business logo: PNG, JPEG or WebP, 1 MB, 128 px or more (FR-TEN-08)",
+            operationId = "uploadLogo")
+    ResponseEntity<SettingsResponse> uploadLogo(@RequestPart("file") MultipartFile file) {
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST, "malformed_request", "Malformed request", "The upload could not be read.");
+        }
+        SettingsResponse settings = branding.uploadLogo(bytes);
+        return ResponseEntity.ok().eTag(String.valueOf(settings.version())).body(settings);
+    }
+
+    @DeleteMapping("/logo")
+    @RequiresPermission("core.settings.manage")
+    @Operation(summary = "Remove the business logo; the file is kept (FR-TEN-08)", operationId = "removeLogo")
+    ResponseEntity<SettingsResponse> removeLogo() {
+        SettingsResponse settings = service.removeLogo();
         return ResponseEntity.ok().eTag(String.valueOf(settings.version())).body(settings);
     }
 }

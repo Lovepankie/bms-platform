@@ -39,6 +39,11 @@ class FakeObjectStorage implements ObjectStorage {
     }
 
     @Override
+    public Optional<byte[]> get(String key) {
+        return Optional.ofNullable(objects.get(key)).map(o -> o.bytes().clone());
+    }
+
+    @Override
     public void delete(String key) {
         objects.remove(key);
     }

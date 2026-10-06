@@ -8,6 +8,8 @@ import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.TenantContext;
+import java.awt.Graphics2D;
+import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -168,6 +170,52 @@ class DocumentService implements Documents {
         return new Prepared(stored, kind.contentType, kind.extension, sha256(stored));
     }
 
+    /** No transaction here either. The type comes from the bytes: SVG is refused, never re-encoded. */
+    @Override
+    public Prepared prepareImage(byte[] raw, ImagePolicy policy) {
+        if (raw == null || raw.length == 0) {
+            throw ApiException.validation(List.of(new FieldProblem("file", "required", "The file is empty.")));
+        }
+        if (raw.length > policy.maxBytes()) {
+            throw new ApiException(
+                    HttpStatus.CONTENT_TOO_LARGE,
+                    "file_too_large",
+                    "File too large",
+                    "The file is larger than " + sizeText(policy.maxBytes()) + ".");
+        }
+        if (isSvg(raw)) {
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "svg_not_allowed",
+                    "SVG not allowed",
+                    "SVG images can carry scripts and are not accepted. Upload a PNG, JPEG or WebP image.");
+        }
+        boolean jpeg = Kind.startsWith(raw, 0xFF, 0xD8, 0xFF);
+        boolean png = Kind.startsWith(raw, 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A);
+        boolean webp = raw.length > 12
+                && Kind.startsWith(raw, 0x52, 0x49, 0x46, 0x46)
+                && raw[8] == 'W'
+                && raw[9] == 'E'
+                && raw[10] == 'B'
+                && raw[11] == 'P';
+        if (!jpeg && !png && !webp) {
+            throw imageUnsupported();
+        }
+        Kind out = jpeg ? Kind.JPEG : Kind.PNG;
+        byte[] stored = reencodeBounded(raw, out.imageFormat, policy.minShortSide(), policy.maxLongEdge());
+        return new Prepared(stored, out.contentType, out.extension, sha256(stored));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Content> content(UUID documentId) {
+        return jdbc.sql("SELECT object_key, content_type, sha256 FROM documents WHERE id = ?")
+                .param(documentId)
+                .query((rs, n) -> new String[] {rs.getString(1), rs.getString(2), rs.getString(3)})
+                .optional()
+                .flatMap(row -> storage.get(row[0]).map(bytes -> new Content(bytes, row[1], row[2])));
+    }
+
     @Override
     @Transactional
     public StoredDocument store(Prepared prepared, String subjectType, UUID subjectId, UUID branchId) {
@@ -276,6 +324,14 @@ class DocumentService implements Documents {
      * does not (chapter 8 section 8.8). The canvas size is read before decoding.
      */
     static byte[] reencode(byte[] raw, String format) {
+        return transcode(raw, format, 0, 0);
+    }
+
+    /**
+     * {@link #reencode} that also refuses an image whose shorter side is under {@code minShortSide}
+     * and scales one whose longer edge is over {@code maxLongEdge} down (0 turns either off).
+     */
+    static byte[] transcode(byte[] raw, String format, int minShortSide, int maxLongEdge) {
         try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(raw))) {
             Iterator<ImageReader> readers = ImageIO.getImageReaders(in);
             if (!readers.hasNext()) {
@@ -288,7 +344,12 @@ class DocumentService implements Documents {
                 if ((long) reader.getWidth(0) * reader.getHeight(0) > MAX_PIXELS) {
                     throw ApiException.rule("image_too_large", "The image is larger than 16 megapixels.");
                 }
-                image = reader.read(0);
+                if (Math.min(reader.getWidth(0), reader.getHeight(0)) < minShortSide) {
+                    throw ApiException.rule(
+                            "image_too_small",
+                            "The shorter side of the image must be at least " + minShortSide + " px.");
+                }
+                image = scaleDown(reader.read(0), maxLongEdge);
             } finally {
                 reader.dispose();
             }
@@ -316,11 +377,53 @@ class DocumentService implements Documents {
         }
     }
 
+    /** Area-averaged, so a large logo shrunk to a header size stays smooth; alpha is kept. */
+    private static BufferedImage scaleDown(BufferedImage image, int maxLongEdge) {
+        int w = image.getWidth();
+        int h = image.getHeight();
+        if (maxLongEdge <= 0 || Math.max(w, h) <= maxLongEdge) {
+            return image;
+        }
+        double factor = (double) maxLongEdge / Math.max(w, h);
+        int nw = Math.max(1, (int) Math.round(w * factor));
+        int nh = Math.max(1, (int) Math.round(h * factor));
+        BufferedImage scaled = new BufferedImage(
+                nw, nh, image.getColorModel().hasAlpha() ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = scaled.createGraphics();
+        try {
+            g.drawImage(image.getScaledInstance(nw, nh, Image.SCALE_AREA_AVERAGING), 0, 0, null);
+        } finally {
+            g.dispose();
+        }
+        return scaled;
+    }
+
+    /** SVG is XML text with an svg element; NULs are dropped so a UTF-16 file is seen too. */
+    static boolean isSvg(byte[] raw) {
+        int n = Math.min(raw.length, 4096);
+        StringBuilder head = new StringBuilder(n);
+        for (int i = 0; i < n; i++) {
+            if (raw[i] != 0) {
+                head.append((char) (raw[i] & 0xFF));
+            }
+        }
+        return head.toString().toLowerCase(java.util.Locale.ROOT).contains("<svg");
+    }
+
+    private static String sizeText(int bytes) {
+        int mb = 1024 * 1024;
+        return bytes % mb == 0 ? bytes / mb + " MB" : bytes / 1024 + " KB";
+    }
+
     /**
      * Bounds memory and CPU on a small host: at most {@link #MAX_CONCURRENT_REENCODES} images are
      * decoded at once; a caller that waits {@link #REENCODE_WAIT_SECONDS} seconds gets a 503.
      */
     private byte[] reencodeBounded(byte[] raw, String format) {
+        return reencodeBounded(raw, format, 0, 0);
+    }
+
+    private byte[] reencodeBounded(byte[] raw, String format, int minShortSide, int maxLongEdge) {
         boolean acquired;
         try {
             acquired = reencodes.tryAcquire(REENCODE_WAIT_SECONDS, TimeUnit.SECONDS);
@@ -336,7 +439,7 @@ class DocumentService implements Documents {
                     "Too many images are being processed; try again shortly.");
         }
         try {
-            return reencode(raw, format);
+            return transcode(raw, format, minShortSide, maxLongEdge);
         } finally {
             reencodes.release();
         }
@@ -370,6 +473,14 @@ class DocumentService implements Documents {
                 "unsupported_file_type",
                 "Unsupported file type",
                 "Upload a JPEG, PNG or PDF file.");
+    }
+
+    static ApiException imageUnsupported() {
+        return new ApiException(
+                HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                "unsupported_file_type",
+                "Unsupported file type",
+                "Upload a PNG, JPEG or WebP image.");
     }
 
     static ApiException fileTooLarge() {

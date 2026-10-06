@@ -1,6 +1,7 @@
 package com.rincoltech.bms.core.tenancy.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
+import com.rincoltech.bms.core.documents.Documents;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.core.tenancy.internal.SettingsController.SettingsResponse;
@@ -11,6 +12,7 @@ import com.rincoltech.bms.kernel.Versions;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -40,12 +42,14 @@ class SettingsService implements TenantSettings {
     private final ObjectMapper mapper;
     private final CurrentTenant tenant;
     private final AuditLog audit;
+    private final Documents documents;
 
-    SettingsService(JdbcClient jdbc, ObjectMapper mapper, CurrentTenant tenant, AuditLog audit) {
+    SettingsService(JdbcClient jdbc, ObjectMapper mapper, CurrentTenant tenant, AuditLog audit, Documents documents) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.tenant = tenant;
         this.audit = audit;
+        this.documents = documents;
     }
 
     private record Stored(Map<String, Object> values, int version) {}
@@ -59,21 +63,60 @@ class SettingsService implements TenantSettings {
     @Transactional
     SettingsResponse update(String ifMatch, UpdateSettingsRequest request) {
         int expected = Versions.fromIfMatch(ifMatch);
-        jdbc.sql("""
-                        INSERT INTO tenant_settings (id, tenant_id) VALUES (?, current_setting('app.tenant_id')::uuid)
-                        ON CONFLICT (tenant_id) DO NOTHING
-                        """).param(UUID.randomUUID()).update();
-        Stored stored = load(true);
+        Stored stored = lock();
         if (stored.version() != expected) {
             throw Versions.conflict(stored.version());
         }
         validate(request);
-        SettingsResponse before = resolve(stored.values(), stored.version());
-
         Map<String, Object> changes = mapper.convertValue(request, MAP);
         changes.values().removeIf(Objects::isNull);
+        if (changes.get("theme_primary") instanceof String colour) {
+            changes.put("theme_primary", colour.toUpperCase(Locale.ROOT));
+        }
+        return write(stored, changes);
+    }
+
+    /** Stores a prepared logo as a core document of this tenant and makes it the current one (FR-TEN-08). */
+    @Transactional
+    SettingsResponse replaceLogo(Documents.Prepared prepared) {
+        Stored stored = lock();
+        UUID id = documents
+                .store(prepared, TenantDocumentAccess.SUBJECT, tenant.profile().id(), null)
+                .id();
+        return write(stored, Map.of("logo_document_id", id.toString()));
+    }
+
+    /** The previous logo's document stays (documents are never deleted); only the setting is cleared. */
+    @Transactional
+    SettingsResponse removeLogo() {
+        Stored stored = lock();
+        if (!stored.values().containsKey("logo_document_id")) {
+            return resolve(stored.values(), stored.version());
+        }
+        Map<String, Object> clear = new LinkedHashMap<>();
+        clear.put("logo_document_id", null);
+        return write(stored, clear);
+    }
+
+    private Stored lock() {
+        jdbc.sql("""
+                        INSERT INTO tenant_settings (id, tenant_id) VALUES (?, current_setting('app.tenant_id')::uuid)
+                        ON CONFLICT (tenant_id) DO NOTHING
+                        """).param(UUID.randomUUID()).update();
+        return load(true);
+    }
+
+    /** Applies changes (a null value clears the key), saves with a new version and audits was and now. */
+    private SettingsResponse write(Stored stored, Map<String, Object> changes) {
+        SettingsResponse before = resolve(stored.values(), stored.version());
         Map<String, Object> next = new TreeMap<>(stored.values());
-        next.putAll(changes);
+        changes.forEach((k, v) -> {
+            if (v == null) {
+                next.remove(k);
+            } else {
+                next.put(k, v);
+            }
+        });
         SettingsResponse after = resolve(next, stored.version() + 1);
         if (after.smsWindowStart().compareTo(after.smsWindowEnd()) >= 0) {
             throw ApiException.validation(
@@ -181,6 +224,14 @@ class SettingsService implements TenantSettings {
         if (request.displayName() != null && request.displayName().isBlank()) {
             problems.add(new FieldProblem("display_name", "invalid", "Must not be blank."));
         }
+        if (request.themePrimary() != null
+                && BrandColour.readableText(request.themePrimary()).isEmpty()) {
+            problems.add(
+                    new FieldProblem(
+                            "theme_primary",
+                            "insufficient_contrast",
+                            "Neither white nor near-black text is readable on this colour (contrast 4.5 needed). Pick a lighter or darker one."));
+        }
         if (!problems.isEmpty()) {
             throw ApiException.validation(problems);
         }
@@ -208,6 +259,10 @@ class SettingsService implements TenantSettings {
                 weights,
                 List.copyOf((List<String>) s.getOrDefault("disabled_collateral_types", List.of())),
                 (Boolean) s.getOrDefault("require_mfa_all_staff", false),
+                s.get("logo_document_id") == null ? null : UUID.fromString((String) s.get("logo_document_id")),
+                (String) s.get("theme_primary"),
+                s.containsKey("display_name"),
+                (Boolean) s.getOrDefault("setup_dismissed", false),
                 version);
     }
 }

@@ -20,6 +20,26 @@ public interface Documents {
      */
     Prepared prepare(byte[] bytes);
 
+    /**
+     * Like {@link #prepare} for an image the owner shows to the public (a tenant logo): PNG, JPEG or
+     * WebP by content only, never SVG, within the policy's size and dimensions; downscaled to the
+     * long-edge limit and re-encoded (PNG and WebP become PNG), so no metadata survives. No
+     * transaction, for the same reason as {@link #prepare}.
+     */
+    Prepared prepareImage(byte[] bytes, ImagePolicy policy);
+
+    /** The limits of {@link #prepareImage}: bytes in, shortest side at least, longest edge at most. */
+    record ImagePolicy(int maxBytes, int minShortSide, int maxLongEdge) {}
+
+    /**
+     * The stored bytes of a document, with no permission check: only for an asset the owning module
+     * serves publicly by design (the tenant logo). Everything else goes through a signed URL.
+     */
+    Optional<Content> content(UUID documentId);
+
+    /** The bytes as stored (already re-encoded), their sniffed type and checksum. */
+    record Content(byte[] bytes, String contentType, String sha256) {}
+
     /** Stores and records a prepared file in the caller's transaction. */
     StoredDocument store(Prepared prepared, String subjectType, UUID subjectId, UUID branchId);
 
