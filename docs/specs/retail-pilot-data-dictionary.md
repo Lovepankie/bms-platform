@@ -18,7 +18,7 @@ It holds no real data. The golden test uses a fabricated fixture of the same sha
 | Categories, units | Dropdown lists | `retail_categories`, `retail_units` |
 | App users | Name, email, role, branch | Staff invitations. Roles: admin maps to the admin role, sales to the sales role. |
 | Shops | Name | Branches |
-| Expenses, banking, withdrawals, advances, daily savings | Cash handling | Not imported in the first release. Mapped when the cash book is built. |
+| Daily savings, company expenses, cash banked, withdrawals, loan disbursement and payments, expense categories, loan customers | Cash handling | Not imported in the first release. Proposed mapping in section 5 (ADR-022); history rows post no journals. |
 
 ## 2. Rules
 
@@ -111,4 +111,34 @@ Example lines (fabricated):
 {"source_ref": "SAL-00011", "branch": "JJA", "product_code": "TP-004", "qty": "2.000", "unit_price_minor": 5000, "unit_cost_minor": 4000, "payment_method": "credit", "buyer": "Test Buyer 03", "buyer_contact": "+256700000003", "due_date": "2026-10-12", "sold_at": "2026-08-12T09:11:00", "source_user": "test.sales03"}
 {"source_ref": "USE-003", "branch": "KLA", "product_code": "TP-009", "kind": "used", "reason": "Test reason 03", "qty": "1.000", "unit_cost_minor": 9000, "reported_at": "2026-09-10T15:03:00", "source_user": "test.sales01"}
 {"branch": "JJA", "product_code": "TP-007", "qty": "-3.000"}
+```
+
+## 5. Cash book export (proposed, ADR-022, FR-RET-30)
+
+Not built. The same encoding, types and never-guess rules as section 4, in the order
+`cash_parties`, `expense_categories`, `savings`, `expenses`, `banking`, `withdrawals`, `advances`,
+`advance_payments`, `cash_balances`. The pilot's "loan" tabs are advances to the owner or the company,
+not customer lending (section 3, "Internal advances"). All of it is fabricated below.
+
+| File | Fields (required in bold) | Becomes |
+|---|---|---|
+| `cash_parties.jsonl` | **`name`** (200), `contact` (100), **`kind`** (`owner`, `company`, `staff`, `supplier`, `other`) | A cash party (beneficiary or advance party), unless one with that kind and name exists ignoring case. The pilot's loan customers list and its beneficiary list both land here |
+| `expense_categories.jsonl` | **`category`** (100), **`item`** (100), `requires_explanation` (boolean; true for the item "others") | A category and an item under it, matched ignoring case. The real list is the pilot's expense categories tab, never typed in by hand |
+| `savings.jsonl` | **`source_ref`**, **`branch`**, **`business_date`** (date), **`amount_minor`** (money), `total_sold_minor`, `source_user` | A historical savings record. A second row for one branch and date is reported and skipped. The pilot's virtual columns (total sold, daily profit) are not imported as facts; `total_sold_minor` is kept only as the screen snapshot |
+| `expenses.jsonl` | **`source_ref`**, **`branch`**, **`business_date`**, **`category`**, **`item`**, `beneficiary`, **`amount_minor`**, `explanation` (required when the item requires one), `source_user` | A historical expense. A category or item missing from `expense_categories` is created as written and reported |
+| `banking.jsonl` | **`source_ref`**, **`branch`**, **`business_date`**, **`amount_minor`**, `banked_at` (date), `source_user` | A historical banking record. The pilot's expected amount is virtual and not stored, so `expected_minor` is computed from the imported history |
+| `withdrawals.jsonl` | **`source_ref`**, **`business_date`**, **`amount_minor`**, `branch` (default the head office branch; the pilot has no shop), `source_user` | A historical withdrawal |
+| `advances.jsonl` | **`source_ref`** (the pilot's advance id), **`branch`** (source of money), **`party`**, `taken_by`, **`principal_minor`**, `purpose`, `business_date`, `processing_fee_minor` (not modelled: reported, kept in the note), `source_user` | A historical advance |
+| `advance_payments.jsonl` | **`source_ref`**, **`advance_ref`**, **`amount_minor`**, **`method`** (`cash`, `mobile_money`, `bank`; the pilot's payment channel), **`paid_on`**, `source_user` | A historical repayment; unknown `advance_ref` or an amount above the remaining principal is reported and skipped |
+| `cash_balances.jsonl` | **`branch`**, `cash_on_hand_minor`, `bank_minor`, `savings_reserve_minor` | One opening journal per branch with `owner_advances` for the imported advances' outstanding balance, against `opening_balance_equity` |
+
+Fabricated example lines:
+
+```json
+{"name": "Test Owner 01", "contact": "+256700000001", "kind": "owner"}
+{"category": "Test Category A", "item": "Test Item 1", "requires_explanation": false}
+{"category": "Test Category A", "item": "others", "requires_explanation": true}
+{"source_ref": "SAV-001", "branch": "KLA", "business_date": "2026-09-10", "amount_minor": 50000, "total_sold_minor": 400000, "source_user": "test.sales01"}
+{"source_ref": "BNK-001", "branch": "KLA", "business_date": "2026-09-10", "amount_minor": 300000, "banked_at": "2026-09-10T17:40:00", "source_user": "test.sales01"}
+{"source_ref": "ADV-001", "branch": "KLA", "party": "Test Owner 01", "principal_minor": 200000, "purpose": "Test purpose", "business_date": "2026-09-01"}
 ```
