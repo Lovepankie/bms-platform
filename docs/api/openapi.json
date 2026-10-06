@@ -3587,6 +3587,166 @@
         },
         "required" : [ "name" ]
       },
+      "RetailTransfer" : {
+        "properties" : {
+          "cost_total_minor" : {
+            "description" : "Present only with retail.profit.read in either branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "from_branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailTransferLine"
+            },
+            "type" : "array"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "completed", "voided" ],
+            "type" : "string"
+          },
+          "to_branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "transfer_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "void_reason" : {
+            "type" : "string"
+          },
+          "voided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "voided_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailTransferLine" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "line_cost_minor" : {
+            "description" : "Present only with retail.profit.read in either branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "line_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "type" : "string"
+          },
+          "unit_cost_minor" : {
+            "description" : "Present only with retail.profit.read in either branch",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailTransferLineRequest" : {
+        "properties" : {
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "example" : "2.5",
+            "type" : "string"
+          }
+        },
+        "required" : [ "product_id", "qty" ]
+      },
+      "RetailTransferPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailTransfer"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailTransferRequest" : {
+        "properties" : {
+          "from_branch_id" : {
+            "description" : "The source branch; defaults to the caller's one branch",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailTransferLineRequest"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "note" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "to_branch_id" : {
+            "description" : "The destination branch; any active branch of the tenant",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "transfer_date" : {
+            "description" : "Defaults to today; not in the future",
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "lines", "to_branch_id" ]
+      },
+      "RetailTransferVoidRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
       "RetailUnit" : {
         "properties" : {
           "id" : {
@@ -8510,6 +8670,177 @@
         },
         "summary" : "Add a supplier (FR-RET-06)",
         "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/transfers" : {
+      "get" : {
+        "operationId" : "listRetailTransfers",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailTransferPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Transfers from or to a branch in the caller's scope, newest first",
+        "tags" : [ "retail-stock" ]
+      },
+      "post" : {
+        "operationId" : "createRetailTransfer",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailTransferRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailTransfer"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Move stock from one branch to another at cost, in one transaction (FR-RET-16); M",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/transfers/{transfer_id}" : {
+      "get" : {
+        "operationId" : "getRetailTransfer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "transfer_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailTransfer"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A transfer with its lines",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/transfers/{transfer_id}/void" : {
+      "post" : {
+        "operationId" : "voidRetailTransfer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "transfer_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailTransferVoidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailTransfer"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Void a transfer while the destination still holds its stock (FR-RET-16)",
+        "tags" : [ "retail-stock" ]
       }
     },
     "/api/v1/retail/units" : {

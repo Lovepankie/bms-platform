@@ -1523,6 +1523,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Transfers from or to a branch in the caller's scope, newest first */
+        get: operations["listRetailTransfers"];
+        put?: never;
+        /** Move stock from one branch to another at cost, in one transaction (FR-RET-16); M */
+        post: operations["createRetailTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/transfers/{transfer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A transfer with its lines */
+        get: operations["getRetailTransfer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/transfers/{transfer_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a transfer while the destination still holds its stock (FR-RET-16) */
+        post: operations["voidRetailTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/units": {
         parameters: {
             query?: never;
@@ -3188,6 +3240,86 @@ export interface components {
         RetailSupplierRequest: {
             contact?: string;
             name: string;
+        };
+        RetailTransfer: {
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in either branch
+             */
+            cost_total_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: uuid */
+            from_branch_id?: string;
+            /** Format: uuid */
+            id?: string;
+            lines?: components["schemas"]["RetailTransferLine"][];
+            note?: string;
+            /** @enum {string} */
+            status?: "completed" | "voided";
+            /** Format: uuid */
+            to_branch_id?: string;
+            /** Format: date */
+            transfer_date?: string;
+            void_reason?: string;
+            /** Format: date-time */
+            voided_at?: string;
+            /** Format: uuid */
+            voided_by?: string;
+        };
+        RetailTransferLine: {
+            code?: string;
+            description?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in either branch
+             */
+            line_cost_minor?: number;
+            /** Format: int32 */
+            line_no?: number;
+            /** Format: uuid */
+            product_id?: string;
+            qty?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in either branch
+             */
+            unit_cost_minor?: number;
+        };
+        RetailTransferLineRequest: {
+            /** Format: uuid */
+            product_id: string;
+            /** @example 2.5 */
+            qty: string;
+        };
+        RetailTransferPage: {
+            items?: components["schemas"]["RetailTransfer"][];
+            next_cursor?: string;
+        };
+        RetailTransferRequest: {
+            /**
+             * Format: uuid
+             * @description The source branch; defaults to the caller's one branch
+             */
+            from_branch_id?: string;
+            lines: components["schemas"]["RetailTransferLineRequest"][];
+            note?: string;
+            /**
+             * Format: uuid
+             * @description The destination branch; any active branch of the tenant
+             */
+            to_branch_id: string;
+            /**
+             * Format: date
+             * @description Defaults to today; not in the future
+             */
+            transfer_date?: string;
+        };
+        RetailTransferVoidRequest: {
+            reason: string;
         };
         RetailUnit: {
             /** Format: uuid */
@@ -6302,6 +6434,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSupplier"];
+                };
+            };
+        };
+    };
+    listRetailTransfers: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                product_id?: string;
+                from?: string;
+                to?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailTransferPage"];
+                };
+            };
+        };
+    };
+    createRetailTransfer: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailTransferRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailTransfer"];
+                };
+            };
+        };
+    };
+    getRetailTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transfer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailTransfer"];
+                };
+            };
+        };
+    };
+    voidRetailTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transfer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailTransferVoidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailTransfer"];
                 };
             };
         };
