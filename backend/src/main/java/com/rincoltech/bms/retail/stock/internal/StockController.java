@@ -47,10 +47,11 @@ class StockController {
     StockPage stock(
             @RequestParam(name = "branch_id", required = false) UUID branchId,
             @RequestParam(name = "query", required = false) String query,
+            @RequestParam(name = "category_id", required = false) UUID categoryId,
             @RequestParam(name = "negative_only", required = false, defaultValue = "false") boolean negativeOnly,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.stock(branchId, query, negativeOnly, limit, cursor);
+        return service.stock(branchId, query, categoryId, negativeOnly, limit, cursor);
     }
 
     @GetMapping("/stock/movements")

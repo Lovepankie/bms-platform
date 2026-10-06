@@ -698,7 +698,7 @@ Built (#51, catalogue):
 |---|---|---|---|
 | GET | `/retail/categories`, `/retail/units` | `retail.stock.read` | `{items: [{id, name}]}` |
 | POST | `/retail/categories`, `/retail/units` | `retail.catalogue.manage` | `{name}`; 409 `duplicate_category`, `duplicate_unit` (names ignore case). FR-RET-01 |
-| GET | `/retail/products` | `retail.stock.read` | Filters `query` (code or description), `category_id`, `active`; `limit`, `cursor`, ordered by code. Row: `{id, code, description, category_id, category, unit_id, unit, sell_minor, cost_minor*, currency, active, version}` |
+| GET | `/retail/products` | `retail.stock.read` | Filters `query` (code, description or category name), `category_id`, `active`; `limit`, `cursor`, ordered by code. Row: `{id, code, description, category_id, category, unit_id, unit, sell_minor, cost_minor*, currency, active, version}` |
 | POST | `/retail/products` | `retail.catalogue.manage` | `{code, description, category_id, unit_id, cost_minor, sell_minor}`; writes the `initial` history row; 409 `duplicate_product_code`. FR-RET-01 |
 | GET, PATCH | `/retail/products/{product_id}` | read / `retail.catalogue.manage` | PATCH needs `If-Match` and edits `code`, `description`, `category_id`, `unit_id`, `active` only; a price in the body is 400 |
 | POST | `/retail/products/{product_id}/prices` | `retail.price.edit` | `{cost_minor?, sell_minor?, reason}` with `If-Match` (428 without it, 409 `version_conflict` on a stale version, #77); at least one price; 422 `price_unchanged`, which never depends on a cost the caller may not read: without `retail.profit.read` a body naming `cost_minor` always goes ahead, so resending the current cost writes a history and audit row that change nothing, by design (#77); writes a `manual` history row and audit. FR-RET-02 |
@@ -711,7 +711,7 @@ branch when the permission's scope has exactly one; otherwise 422 `branch_requir
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET | `/retail/products?branch_id=` | `retail.stock.read` | Each row adds `qty` and `negative` for that branch |
-| GET | `/retail/stock` | `retail.stock.read` | `branch_id`, `query`, `negative_only`, `limit`, `cursor`. Row: `{product_id, code, description, unit, qty, negative, sell_minor, cost_minor*}`. FR-RET-03 |
+| GET | `/retail/stock` | `retail.stock.read` | `branch_id`, `query` (code, description or category name), `category_id`, `negative_only`, `limit`, `cursor`. Row: `{product_id, code, description, category_id, category, unit, qty, negative, sell_minor, cost_minor*}`. FR-RET-03 |
 | GET | `/retail/stock/movements` | `retail.stock.read` | `branch_id` (repeatable, scoped), `product_id`, `from`, `to`. Row: `{id, at, branch_id, product_id, kind, qty, unit_cost_minor*, source_type, source_id, reverses_movement_id, historical, note, by}` |
 | POST | `/retail/stocktakes` | `retail.stocktake.commit` | `{branch_id?, lines: [{product_id, counted_qty}], note?}`; returns each line's `expected_qty` and `variance_qty`. FR-RET-08 |
 | GET | `/retail/stocktakes/{stocktake_id}` | `retail.stock.read` | Draft or committed |

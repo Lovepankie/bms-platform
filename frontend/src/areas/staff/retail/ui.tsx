@@ -86,6 +86,11 @@ export function NoStockHere({ branchId }: { branchId: string }) {
   );
 }
 
+/** The product's category as a small grey label under its name; nothing when the product has none. */
+export function CategoryLabel({ category }: { category?: string }) {
+  return category ? <span className="hint">{category}</span> : null;
+}
+
 export function BranchRequired() {
   return <Note>Choose one branch in the Branch box at the top of the page first.</Note>;
 }
@@ -111,7 +116,7 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false }: {
   });
   return (
     <>
-      <label htmlFor={id}>Find an item by name or code</label>
+      <label htmlFor={id}>Find an item by name, code or category</label>
       <input id={id} type="search" value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
       {products.isError && <Problem error={products.error} />}
       <ul style={{ listStyle: 'none', padding: 0, maxHeight: 220, overflowY: 'auto' }}>
@@ -121,6 +126,8 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false }: {
               <span>
                 <strong>{p.description}</strong> ({p.code})
                 <br />
+                <CategoryLabel category={p.category} />
+                {p.category && <br />}
                 {showPrice && `${money(p.sell_minor ?? 0)} each, `}in stock here:{' '}
                 {p.qty !== undefined && p.qty.startsWith('-') ? <span className="rt-flag">{showQty(p.qty)} (negative)</span> : showQty(p.qty ?? '0')}{' '}
                 {p.unit}

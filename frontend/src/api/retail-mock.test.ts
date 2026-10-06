@@ -103,4 +103,18 @@ describe('retail mock adapter (real response shapes)', () => {
     await expect(api.voidTransfer(t.id ?? '', 'Test')).rejects.toMatchObject({ status: 422, code: 'transfer_stock_moved' });
     setMockProfitAccess(true);
   });
+
+  it('gives every item a category, filters stock by it and searches by its text', async () => {
+    const api = createMockRetail();
+    const [cables] = await api.listCategories();
+    const stock = await api.listStock({ branchId: branch });
+    expect(stock.every((r) => r.category && r.category_id)).toBe(true);
+    const only = await api.listStock({ branchId: branch, categoryId: cables?.id });
+    expect(only.length).toBeGreaterThan(0);
+    expect(only.every((r) => r.category === cables?.name)).toBe(true);
+    expect(only.length).toBeLessThan(stock.length);
+    const found = await api.listProducts({ query: 'lighting', branchId: branch });
+    expect(found.length).toBeGreaterThan(0);
+    expect(found.every((p) => p.category === 'Lighting')).toBe(true);
+  });
 });

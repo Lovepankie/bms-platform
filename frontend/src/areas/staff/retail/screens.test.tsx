@@ -6,7 +6,7 @@ import { businessToday, type DailyProfit, type Product, type Purchase, type Sale
 import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { Receipt, SaleForm } from './sale';
-import { StockTable } from './stock';
+import { StockPage, StockTable } from './stock';
 import { StocktakeReview } from './stocktake';
 import { ProfitTable, ValuationTable } from './profit';
 import { RestockForm, RestockSaved } from './restock';
@@ -89,6 +89,30 @@ describe('stock screen', () => {
     expect(sales).not.toContain('UGX 3,500');
     const admin = renderToString(<StockTable rows={rows} showCost />);
     expect(admin).toContain('UGX 3,500');
+  });
+
+  it('shows the category of each item in a Category column', () => {
+    const html = renderToString(<StockTable rows={rows.map((r) => ({ ...r, category: 'Lighting' }))} showCost={false} />);
+    expect(html).toContain('<th>Category</th>');
+    expect(html).toContain('<td>Lighting</td>');
+  });
+
+  it('offers a category select with All categories', () => {
+    const client = new QueryClient();
+    client.setQueryData(['retail', 'categories'], [{ id: 'c1', name: 'Cables' }, { id: 'c2', name: 'Lighting' }]);
+    const html = page('sales', <StockPage />, client);
+    expect(html).toContain('for="stock-category"');
+    expect(html).toContain('All categories');
+    expect(html).toContain('>Lighting</option>');
+  });
+});
+
+describe('category in the pickers', () => {
+  it('shows the category as a small grey label in the sale picker and the usage picker', () => {
+    const client = new QueryClient();
+    client.setQueryData(['retail', 'products', branch, ''], products.map((p) => ({ ...p, category: 'Lighting' })));
+    expect(page('sales', <SaleForm branchId={branch} />, client)).toContain('<span class="hint">Lighting</span>');
+    expect(page('sales', <UsageForm branchId={branch} />, client)).toContain('<span class="hint">Lighting</span>');
   });
 });
 

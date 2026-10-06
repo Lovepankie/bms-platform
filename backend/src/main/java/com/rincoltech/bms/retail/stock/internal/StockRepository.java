@@ -33,21 +33,33 @@ class StockRepository {
     }
 
     /** Active products, and inactive ones still holding stock, with the branch balance; ordered by code. */
-    List<StockRow> stock(UUID branchId, String query, boolean negativeOnly, String afterCode, UUID afterId, int limit) {
+    List<StockRow> stock(
+            UUID branchId,
+            String query,
+            UUID categoryId,
+            boolean negativeOnly,
+            String afterCode,
+            UUID afterId,
+            int limit) {
         StringBuilder sql = new StringBuilder("""
-                SELECT p.id, p.code, p.description, u.name AS unit, p.sell_minor, p.cost_minor,
-                       coalesce(b.qty, 0) AS qty
+                SELECT p.id, p.code, p.description, p.category_id, c.name AS category, u.name AS unit, p.sell_minor,
+                       p.cost_minor, coalesce(b.qty, 0) AS qty
                   FROM retail_products p
                   JOIN retail_units u ON u.id = p.unit_id
+                  JOIN retail_categories c ON c.id = p.category_id
                   LEFT JOIN retail_stock_balances b ON b.product_id = p.id AND b.branch_id = :branch
                  WHERE (p.active OR coalesce(b.qty, 0) <> 0)
                 """);
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("branch", branchId);
         if (query != null) {
-            sql.append(" AND (p.code ILIKE :q OR p.description ILIKE :q)");
+            sql.append(" AND (p.code ILIKE :q OR p.description ILIKE :q OR c.name ILIKE :q)");
             params.put(
                     "q", "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+        }
+        if (categoryId != null) {
+            sql.append(" AND p.category_id = :categoryId");
+            params.put("categoryId", categoryId);
         }
         if (negativeOnly) {
             sql.append(" AND coalesce(b.qty, 0) < 0");
@@ -67,6 +79,8 @@ class StockRepository {
                             rs.getObject("id", UUID.class),
                             rs.getString("code"),
                             rs.getString("description"),
+                            rs.getObject("category_id", UUID.class),
+                            rs.getString("category"),
                             rs.getString("unit"),
                             Quantities.format(qty),
                             qty.signum() < 0,

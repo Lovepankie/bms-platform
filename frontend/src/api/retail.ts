@@ -13,6 +13,7 @@ type S = components['schemas'];
 
 export type Product = S['RetailProduct'];
 export type StockRow = S['RetailStockRow'];
+export type Category = S['RetailCategory'];
 export type Customer = S['RetailCustomer'];
 export type Supplier = S['RetailSupplier'];
 export type SaleRequest = S['RetailSaleRequest'];
@@ -60,7 +61,8 @@ export type PurchasePayment = 'cash' | 'bank' | 'credit';
 
 export interface RetailApi {
   listProducts(q: { query?: string; branchId?: string }): Promise<Product[]>;
-  listStock(q: { branchId: string; query?: string; negativeOnly?: boolean }): Promise<StockRow[]>;
+  listCategories(): Promise<Category[]>;
+  listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean }): Promise<StockRow[]>;
   listCustomers(): Promise<Customer[]>;
   listSuppliers(): Promise<Supplier[]>;
   createSupplier(body: { name: string }): Promise<Supplier>;
@@ -111,13 +113,17 @@ const realRetail: RetailApi = {
     return page.items ?? [];
   },
 
-  async listStock({ branchId, query, negativeOnly }) {
+  async listCategories() {
+    return unwrap(await api.GET('/api/v1/retail/categories')).items ?? [];
+  },
+
+  async listStock({ branchId, query, categoryId, negativeOnly }) {
     const rows: StockRow[] = [];
     let cursor: string | undefined;
     do {
       const page = unwrap(
         await api.GET('/api/v1/retail/stock', {
-          params: { query: { branch_id: branchId, query: query || undefined, negative_only: negativeOnly || undefined, limit: PAGE, cursor } },
+          params: { query: { branch_id: branchId, query: query || undefined, category_id: categoryId || undefined, negative_only: negativeOnly || undefined, limit: PAGE, cursor } },
         }),
       );
       rows.push(...(page.items ?? []));

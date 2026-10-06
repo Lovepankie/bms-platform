@@ -3564,6 +3564,9 @@ export interface components {
             next_cursor?: string;
         };
         RetailStockRow: {
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
             code?: string;
             /**
              * Format: int64
@@ -7069,6 +7072,7 @@ export interface operations {
             query?: {
                 branch_id?: string;
                 query?: string;
+                category_id?: string;
                 negative_only?: boolean;
                 limit?: number;
                 cursor?: string;

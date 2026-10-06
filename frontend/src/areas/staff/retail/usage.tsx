@@ -5,7 +5,7 @@ import { retail, type Product, type Usage, type UsageRequest } from '../../../ap
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { parseQty, qtyString, showQty } from './maths';
-import { BranchRequired, Gate, Problem, useSingleBranch } from './ui';
+import { BranchRequired, CategoryLabel, Gate, Problem, useSingleBranch } from './ui';
 
 // Usage and damage (FR-RET-07): items taken out of stock for use in the shop or because they are
 // damaged, with a reason. Valued at cost by the server; no cost is shown here.
@@ -58,12 +58,12 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
       <label htmlFor="usage-reason">Reason</label>
       <input id="usage-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
 
-      <label htmlFor="usage-search">Find an item by name or code</label>
+      <label htmlFor="usage-search">Find an item by name, code or category</label>
       <input id="usage-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
       <ul style={{ listStyle: 'none', padding: 0, maxHeight: 180, overflowY: 'auto' }}>
         {(products.data ?? []).slice(0, 20).map((p) => (
           <li key={p.id} className="rt-card rt-row">
-            <span><strong>{p.description}</strong> ({p.code}), in stock {showQty(p.qty ?? '0')} {p.unit}</span>
+            <span><strong>{p.description}</strong> ({p.code}), in stock {showQty(p.qty ?? '0')} {p.unit}<br /><CategoryLabel category={p.category} /></span>
             <button type="button" aria-label={`Add ${p.description}`} onClick={() => setLines((ls) => (ls.some((l) => l.product.id === p.id) ? ls : [...ls, { product: p, qty: '1' }]))}>Add</button>
           </li>
         ))}

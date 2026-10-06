@@ -1,5 +1,5 @@
 import type {
-  Customer, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockRow, Supplier, Transfer, Usage, Valuation,
+  Category, Customer, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockRow, Supplier, Transfer, Usage, Valuation,
   ValuationRow,
 } from './retail';
 import { RetailError, businessToday } from './retail';
@@ -49,24 +49,30 @@ export function setMockProfitAccess(allowed: boolean): void {
   profitAccess = allowed;
 }
 
-interface MockProduct { id: string; code: string; description: string; unit: string; costMinor: number; sellMinor: number }
+interface MockProduct { id: string; code: string; description: string; category: string; unit: string; costMinor: number; sellMinor: number }
+
+const CATEGORIES: Category[] = ['Cables', 'Lighting', 'Fittings', 'Solar'].map((name, i) => ({
+  id: `00000000-0000-4000-8000-0000000c${String(i + 1).padStart(4, '0')}`,
+  name,
+}));
+const categoryId = (name: string): string => CATEGORIES.find((c) => c.name === name)?.id ?? '';
 
 const PRODUCTS: MockProduct[] = [
-  ['P001', '2.5mm twin cable 100m roll', 'roll', 185000, 230000],
-  ['P002', '1.5mm single cable 100m roll', 'roll', 95000, 120000],
-  ['P003', 'LED bulb 9W screw', 'piece', 3500, 6000],
-  ['P004', 'LED bulb 15W screw', 'piece', 6000, 9500],
-  ['P005', 'Double socket 13A', 'piece', 8000, 12000],
-  ['P006', 'Single switch 1 gang', 'piece', 2500, 4500],
-  ['P007', 'MCB 20A single pole', 'piece', 7500, 12000],
-  ['P008', 'Consumer unit 8 way', 'piece', 65000, 90000],
-  ['P009', 'Insulation tape black', 'piece', 1200, 2500],
-  ['P010', 'Conduit pipe 20mm 3m', 'piece', 2800, 4500],
-  ['P011', 'Extension board 4 way', 'piece', 14000, 22000],
-  ['P012', 'Solar panel 100W', 'piece', 210000, 290000],
-].map(([code, description, unit, costMinor, sellMinor], i) => ({
+  ['P001', 'Cables', '2.5mm twin cable 100m roll', 'roll', 185000, 230000],
+  ['P002', 'Cables', '1.5mm single cable 100m roll', 'roll', 95000, 120000],
+  ['P003', 'Lighting', 'LED bulb 9W screw', 'piece', 3500, 6000],
+  ['P004', 'Lighting', 'LED bulb 15W screw', 'piece', 6000, 9500],
+  ['P005', 'Fittings', 'Double socket 13A', 'piece', 8000, 12000],
+  ['P006', 'Fittings', 'Single switch 1 gang', 'piece', 2500, 4500],
+  ['P007', 'Fittings', 'MCB 20A single pole', 'piece', 7500, 12000],
+  ['P008', 'Fittings', 'Consumer unit 8 way', 'piece', 65000, 90000],
+  ['P009', 'Fittings', 'Insulation tape black', 'piece', 1200, 2500],
+  ['P010', 'Cables', 'Conduit pipe 20mm 3m', 'piece', 2800, 4500],
+  ['P011', 'Fittings', 'Extension board 4 way', 'piece', 14000, 22000],
+  ['P012', 'Solar', 'Solar panel 100W', 'piece', 210000, 290000],
+].map(([code, category, description, unit, costMinor, sellMinor], i) => ({
   id: `00000000-0000-4000-8000-0000000b${String(i + 1).padStart(4, '0')}`,
-  code: code as string, description: description as string, unit: unit as string,
+  code: code as string, category: category as string, description: description as string, unit: unit as string,
   costMinor: costMinor as number, sellMinor: sellMinor as number,
 }));
 
@@ -127,7 +133,7 @@ export function createMockRetail(): RetailApi {
   };
   const matches = (p: MockProduct, query?: string) => {
     const q = (query ?? '').trim().toLowerCase();
-    return !q || p.description.toLowerCase().includes(q) || p.code.toLowerCase().includes(q);
+    return !q || p.description.toLowerCase().includes(q) || p.code.toLowerCase().includes(q) || p.category.toLowerCase().includes(q);
   };
   // The tenant forbids negative stock (the default): a sale or usage beyond the balance is refused.
   const guard = (branch: string, productId: string, milli: number) => {
@@ -139,7 +145,7 @@ export function createMockRetail(): RetailApi {
     listProducts: ({ query, branchId }) =>
       delay([...products.values()].filter((p) => matches(p, query)).map((p): Product => {
         const row: Product = {
-          id: p.id, code: p.code, description: p.description, unit: p.unit, sell_minor: p.sellMinor, currency: 'UGX', active: true,
+          id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, sell_minor: p.sellMinor, currency: 'UGX', active: true,
         };
         if (branchId) {
           row.qty = fromMilli(bal(branchId, p.id));
@@ -148,10 +154,12 @@ export function createMockRetail(): RetailApi {
         return cost(row, { cost_minor: p.costMinor });
       })),
 
-    listStock: ({ branchId, query, negativeOnly }) =>
-      delay([...products.values()].filter((p) => matches(p, query)).map((p): StockRow => {
+    listCategories: () => delay([...CATEGORIES]),
+
+    listStock: ({ branchId, query, categoryId: category, negativeOnly }) =>
+      delay([...products.values()].filter((p) => matches(p, query) && (!category || categoryId(p.category) === category)).map((p): StockRow => {
         const milli = bal(branchId, p.id);
-        return cost({ product_id: p.id, code: p.code, description: p.description, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor }, { cost_minor: p.costMinor });
+        return cost({ product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor }, { cost_minor: p.costMinor });
       }).filter((r) => !negativeOnly || r.negative)),
 
     listCustomers: () => delay([...customers]),

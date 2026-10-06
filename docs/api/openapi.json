@@ -3791,6 +3791,13 @@
       },
       "RetailStockRow" : {
         "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "code" : {
             "type" : "string"
           },
@@ -9368,6 +9375,14 @@
           "name" : "query",
           "required" : false,
           "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "category_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
             "type" : "string"
           }
         }, {

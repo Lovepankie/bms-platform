@@ -28,6 +28,8 @@ final class StockApi {
             UUID productId,
             String code,
             String description,
+            UUID categoryId,
+            String category,
             String unit,
             String qty,
 

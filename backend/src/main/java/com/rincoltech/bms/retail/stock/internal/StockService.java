@@ -83,13 +83,14 @@ class StockService {
 
     /** FR-RET-03: a branch's balances, negatives flagged. */
     @Transactional(readOnly = true)
-    StockPage stock(UUID branchId, String query, boolean negativeOnly, Integer limit, String cursor) {
+    StockPage stock(UUID branchId, String query, UUID categoryId, boolean negativeOnly, Integer limit, String cursor) {
         UUID branch = branches.resolve("retail.stock.read", branchId);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
         List<StockRow> rows = repo.stock(
                 branch,
                 query == null || query.isBlank() ? null : query.trim(),
+                categoryId,
                 negativeOnly,
                 after == null ? null : after.sortKey(),
                 after == null ? null : after.id(),
@@ -109,6 +110,8 @@ class StockService {
                                         r.productId(),
                                         r.code(),
                                         r.description(),
+                                        r.categoryId(),
+                                        r.category(),
                                         r.unit(),
                                         r.qty(),
                                         r.negative(),
