@@ -191,7 +191,8 @@ describe('valuation and profit', () => {
 
   it('shows expected profit and its percent over cost in the total, per item and by category', () => {
     const html = renderToString(<ValuationTable valuation={v} />);
-    expect(html).toContain('Expected profit UGX 5,000 (71.43% of cost)');
+    expect(html).toContain('<td>Expected profit</td><td class="num">UGX 5,000</td>');
+    expect(html).toContain('<td>Expected profit % (over cost)</td><td class="num">71.43%</td>');
     expect(html).toContain('<h2>By category</h2>');
     expect(html).toContain('<td>Lighting</td>');
     expect((html.match(/71\.43%/g) ?? []).length).toBe(3);
@@ -422,7 +423,7 @@ describe('All branches (#144)', () => {
     expect(html).toContain('Test Branch A');
     expect(html).toContain('UGX 12,000');
     expect(html).toContain('UGX 6,000');
-    expect(html).toContain('At selling price UGX 18,000');
+    expect(html).toContain('<td>At selling price</td><td class="num">UGX 18,000</td>');
   });
 
   it('Daily profit shows each branch and the total of every branch per day', () => {
@@ -469,6 +470,7 @@ describe('Credit sales and All sales (#145)', () => {
     expect(html).toContain('UGX 12,000');
     expect(html).toContain('Due 20 Oct 2026');
     expect(html).toContain('still owes UGX 12,000');
+    expect(html).toContain('>Open</button>');
     expect(html).toContain('badge-info">Unpaid');
   });
 
@@ -499,9 +501,9 @@ describe('Credit sales and All sales (#145)', () => {
     expect(sales).toContain('Sale S-000001');
     expect(sales).toContain('LED bulb 9W screw');
     expect(sales).toContain('Test Branch A');
-    expect(sales).toContain('Still owes UGX 12,000');
+    expect(sales).toContain('<td>Still owes</td><td class="num">UGX 12,000</td>');
     expect(sales).toContain('+256700000001');
     expect(sales).not.toContain('Profit on this sale');
-    expect(page('admin', <SaleDetail sale={base} today={today} />)).toContain('Profit on this sale: UGX 5,000');
+    expect(page('admin', <SaleDetail sale={base} today={today} />)).toContain('<td>Profit on this sale</td><td class="num">UGX 5,000</td>');
   });
 });

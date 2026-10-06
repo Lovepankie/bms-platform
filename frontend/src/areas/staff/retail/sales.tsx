@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { businessToday, daysBefore, retail, type Sale, type SalePayment, type SalesQuery } from '../../../api/retail';
 import { showQty } from './maths';
 import { showDate } from './transfers';
-import { Gate, Problem, money, useBranchName, useBranchView, useProfitAccess } from './ui';
+import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone, useProfitAccess } from './ui';
 
 // Credit sales and All sales (#145): the lists the pilot's app has, 'Credit sales' and the sales
 // history, read from the sales list API in the branch chosen at the top of the page (every branch the
@@ -30,7 +30,7 @@ export function saleState(sale: Sale, today: string): SaleState {
   return (sale.paid_minor ?? 0) > 0 ? { label: 'Part paid', tone: 'warning' } : { label: 'Unpaid', tone: 'info' };
 }
 
-/** One sale as a tappable card: buyer, date, amount, and for credit the due date and what is still owed. */
+/** One sale as a card: buyer, date, amount, and for credit the due date and what is still owed, with an Open button. */
 export function SaleList({ items, today, onOpen, credit, branchOf }: {
   items: Sale[];
   today: string;
@@ -46,20 +46,21 @@ export function SaleList({ items, today, onOpen, credit, branchOf }: {
         const isCredit = s.payment_method === 'credit';
         return (
           <li key={s.id} className="rt-card">
-            <button type="button" className="btn-ghost" style={{ width: '100%', textAlign: 'left', display: 'block' }} onClick={() => onOpen(s.id ?? '')}>
-              <span className="rt-row">
-                <strong>{s.buyer_name || (isCredit ? 'No buyer name' : methodLabel(s.payment_method))}</strong>
-                <span className={`badge badge-${state.tone}`}>{state.label}</span>
-              </span>
-              <span style={{ display: 'block' }}>{showDate(s.sale_date)}, {money(s.total_minor ?? 0)}</span>
-              {isCredit && (
-                <span className="muted" style={{ display: 'block' }}>
-                  {s.due_date ? `Due ${showDate(s.due_date)}` : 'No due date'}
-                  {(s.balance_minor ?? 0) > 0 ? `, still owes ${money(s.balance_minor ?? 0)}` : ''}
-                </span>
-              )}
-              {!credit && !isCredit && <span className="muted" style={{ display: 'block' }}>{methodLabel(s.payment_method)}</span>}
-              {branchOf && <span className="hint" style={{ display: 'block' }}>{branchOf(s.branch_id)}</span>}
+            <p>
+              <strong>{s.buyer_name || (isCredit ? 'No buyer name' : methodLabel(s.payment_method))}</strong>{' '}
+              <span className={`badge badge-${state.tone}`}>{state.label}</span>
+            </p>
+            <p>{showDate(s.sale_date)}, <strong>{money(s.total_minor ?? 0)}</strong></p>
+            {isCredit && (
+              <p className="hint">
+                {s.due_date ? `Due ${showDate(s.due_date)}` : 'No due date'}
+                {(s.balance_minor ?? 0) > 0 ? `, still owes ${money(s.balance_minor ?? 0)}` : ''}
+              </p>
+            )}
+            {!credit && !isCredit && <p className="hint">{methodLabel(s.payment_method)}</p>}
+            {branchOf && <p className="hint">{branchOf(s.branch_id)}</p>}
+            <button type="button" className="btn-sm" aria-label={`Open the sale of ${showDate(s.sale_date)}${s.buyer_name ? ` to ${s.buyer_name}` : ''}`} onClick={() => onOpen(s.id ?? '')}>
+              Open
             </button>
           </li>
         );
@@ -72,45 +73,54 @@ export function SaleList({ items, today, onOpen, credit, branchOf }: {
 export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: string; branchName?: string }) {
   const state = saleState(sale, today);
   const canProfit = useProfitAccess();
+  const phone = useIsPhone();
+  const facts: [string, string][] = [
+    ['Date', showDate(sale.sale_date)],
+    ...(branchName ? [['Branch', branchName] as [string, string]] : []),
+    ['Paid by', methodLabel(sale.payment_method)],
+    ...(sale.buyer_name ? [['Buyer', sale.buyer_name] as [string, string]] : []),
+    ...(sale.buyer_contact ? [['Contact', sale.buyer_contact] as [string, string]] : []),
+    ...(sale.due_date ? [['Due', showDate(sale.due_date)] as [string, string]] : []),
+    ...(sale.status === 'voided' && sale.void_reason ? [['Voided because', sale.void_reason] as [string, string]] : []),
+  ];
   return (
     <section aria-label="Sale">
       <h2>
         Sale {sale.sale_no} <span className={`badge badge-${state.tone}`}>{state.label}</span>
       </h2>
-      <dl className="facts">
-        <dt>Date</dt><dd>{showDate(sale.sale_date)}</dd>
-        {branchName && <><dt>Branch</dt><dd>{branchName}</dd></>}
-        <dt>Paid by</dt><dd>{methodLabel(sale.payment_method)}</dd>
-        {sale.buyer_name && <><dt>Buyer</dt><dd>{sale.buyer_name}</dd></>}
-        {sale.buyer_contact && <><dt>Contact</dt><dd>{sale.buyer_contact}</dd></>}
-        {sale.due_date && <><dt>Due</dt><dd>{showDate(sale.due_date)}</dd></>}
-        {sale.status === 'voided' && sale.void_reason && <><dt>Voided because</dt><dd>{sale.void_reason}</dd></>}
-      </dl>
+      <div className="table-wrap"><table>
+        <tbody>
+          {facts.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}
+        </tbody>
+      </table></div>
       <div className="table-wrap" tabIndex={0}><table>
         <thead>
           <tr>
             <th>Item</th>
-            <th className="num">Qty</th>
-            <th className="num">Price</th>
+            {!phone && <th className="num">Qty</th>}
+            {!phone && <th className="num">Price</th>}
             <th className="num">Total</th>
           </tr>
         </thead>
         <tbody>
           {(sale.lines ?? []).map((l) => (
             <tr key={l.id ?? l.product_id}>
-              <td>{l.description}</td>
-              <td className="num">{showQty(l.qty ?? '0')}</td>
-              <td className="num">{money(l.unit_price_minor ?? 0)}</td>
+              <td>{l.description}{phone && <><br /><span className="hint">{showQty(l.qty ?? '0')} at {money(l.unit_price_minor ?? 0)}</span></>}</td>
+              {!phone && <td className="num">{showQty(l.qty ?? '0')}</td>}
+              {!phone && <td className="num">{money(l.unit_price_minor ?? 0)}</td>}
               <td className="num">{money(l.line_total_minor ?? 0)}</td>
             </tr>
           ))}
         </tbody>
       </table></div>
-      <p className="rt-total">
-        Total {money(sale.total_minor ?? 0)}
-        {sale.payment_method === 'credit' && <><br />Paid {money(sale.paid_minor ?? 0)}<br />Still owes {money(sale.balance_minor ?? 0)}</>}
-      </p>
-      {canProfit && sale.profit_minor !== undefined && <p>Profit on this sale: {money(sale.profit_minor)}</p>}
+      <div className="table-wrap"><table>
+        <tbody>
+          <tr><td>Total</td><td className="num">{money(sale.total_minor ?? 0)}</td></tr>
+          {sale.payment_method === 'credit' && <tr><td>Paid</td><td className="num">{money(sale.paid_minor ?? 0)}</td></tr>}
+          {sale.payment_method === 'credit' && <tr><td>Still owes</td><td className="num">{money(sale.balance_minor ?? 0)}</td></tr>}
+          {canProfit && sale.profit_minor !== undefined && <tr><td>Profit on this sale</td><td className="num">{money(sale.profit_minor)}</td></tr>}
+        </tbody>
+      </table></div>
     </section>
   );
 }

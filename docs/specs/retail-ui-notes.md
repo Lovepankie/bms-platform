@@ -252,6 +252,18 @@ from Town to Second Shop. A Playwright script drove Chromium at 360px and 390px;
   credit sale adds the due date, what is still owed and a state badge (Paid, Part paid, Unpaid, Overdue; the
   words carry the meaning). Tapping a sale shows its lines. Profit shows only when the server sent it.
 
+### Verification of the parity pass
+
+The same shape of stack as the walkthrough fixes (real API on the dev profile, the built PWA, headless Chromium, a
+real sign-in with TOTP) on a fabricated tenant with three branches, five categories and twelve products
+(`docs/ui/design-system/parity/`, with a README). Stock, Stock value, Daily profit, Credit sales, All sales and the
+write-screen branch message were opened at 360px and 1280px with "All branches" and with one branch: no screen
+overflowed sideways, and the first pass led to these changes: on a phone the category sits under the item name and the
+cost and usage of a day under its name (so quantity, price, sales and profit stay in view), Stock value's headline
+is a two column table instead of large wrapping text, branch and category totals are one card each on a phone, and a
+sale in a list is a card with an Open button instead of a blue link-like row. The backend suite (`mvn verify`: 119
+unit and 330 integration tests, including `RetailParityIT`) is green.
+
 ## Left to do
 
 - Void a sale, pay a credit sale, price edit and price history screens (not in R6), and the catalogue management

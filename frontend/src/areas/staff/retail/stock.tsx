@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { retail, type AllBranchesStock, type StockLevel, type StockRow } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
 import { showQty } from './maths';
@@ -11,13 +11,15 @@ import { BranchRequired, CategoryLabel, Gate, NoStockHere, Problem, money, useBr
 // sends no cost field to anyone else.
 
 export function StockTable({ rows, showCost }: { rows: StockRow[]; showCost: boolean }) {
+  // On a phone the category sits under the item's name, so the table keeps room for the quantity and price.
+  const phone = useIsPhone();
   if (rows.length === 0) return <p className="empty-state">No items found.</p>;
   return (
     <div className="table-wrap" tabIndex={0}><table>
       <thead>
         <tr>
           <th>Item</th>
-          <th>Category</th>
+          {!phone && <th>Category</th>}
           <th className="num">In stock</th>
           <th className="num">Price</th>
           {showCost && <th className="num">Cost</th>}
@@ -26,8 +28,8 @@ export function StockTable({ rows, showCost }: { rows: StockRow[]; showCost: boo
       <tbody>
         {rows.map((r) => (
           <tr key={r.product_id}>
-            <td>{r.description}</td>
-            <td>{r.category}</td>
+            <td>{r.description}{phone && r.category && <><br /><CategoryLabel category={r.category} /></>}</td>
+            {!phone && <td>{r.category}</td>}
             <td className="num">
               {showQty(r.qty ?? '0')} {r.unit}
               {r.negative && <div className="rt-flag">Negative</div>}
@@ -62,9 +64,8 @@ export function AllBranchesTable({ data, showCost: mayCost }: { data: AllBranche
       <thead>
         <tr>
           <th>Item</th>
-          <th>Category</th>
-          {data.branches.map((b) => <th key={b.id} className="num">{branchName(b)}</th>)}
           <th className="num">Total</th>
+          {data.branches.map((b) => <th key={b.id} className="num">{branchName(b)}</th>)}
           <th className="num">Price</th>
           {showCost && <th className="num">Cost</th>}
         </tr>
@@ -72,12 +73,11 @@ export function AllBranchesTable({ data, showCost: mayCost }: { data: AllBranche
       <tbody>
         {data.items.map((r) => (
           <tr key={r.product_id}>
-            <td>{r.description}</td>
-            <td>{r.category}</td>
+            <td>{r.description}<br /><CategoryLabel category={r.category} /></td>
+            <td className="num"><strong><Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} /></strong></td>
             {(r.balances ?? []).map((c) => (
               <td key={c.branch_id} className="num"><Qty qty={c.qty ?? '0'} negative={c.negative} /></td>
             ))}
-            <td className="num"><Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} /></td>
             <td className="num">{money(r.sell_minor ?? 0)}</td>
             {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
           </tr>
@@ -112,14 +112,14 @@ export function AllBranchesList({ data, showCost }: { data: AllBranchesStock; sh
               {expanded ? 'Hide branches' : 'Show branches'}
             </button>
             {expanded && (
-              <dl className="facts">
+              <div>
                 {(r.balances ?? []).map((c) => (
-                  <Fragment key={c.branch_id}>
-                    <dt>{names[c.branch_id ?? '']}</dt>
-                    <dd><Qty qty={c.qty ?? '0'} unit={r.unit} negative={c.negative} /></dd>
-                  </Fragment>
+                  <div key={c.branch_id} className="rt-row">
+                    <span>{names[c.branch_id ?? '']}</span>
+                    <span className="num"><Qty qty={c.qty ?? '0'} unit={r.unit} negative={c.negative} /></span>
+                  </div>
                 ))}
-              </dl>
+              </div>
             )}
           </li>
         );
