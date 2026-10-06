@@ -1,0 +1,19 @@
+{
+  "comment": "Reference vectors of the brand colour rule (FR-TEN-08), read by BrandColourTest.java and contrast.test.ts so the backend and the frontend cannot drift. Fabricated colours only.",
+  "ratios": [
+    { "a": "#000000", "b": "#FFFFFF", "ratio": 21.0, "tolerance": 0.000001 },
+    { "a": "#FFFFFF", "b": "#FFFFFF", "ratio": 1.0, "tolerance": 0.000001 },
+    { "a": "#767676", "b": "#FFFFFF", "ratio": 4.54, "tolerance": 0.01 },
+    { "a": "#777777", "b": "#FFFFFF", "ratio": 4.48, "tolerance": 0.01 }
+  ],
+  "readable": [
+    { "hex": "#0D5C75", "text": "#FFFFFF" },
+    { "hex": "#767676", "text": "#FFFFFF" },
+    { "hex": "#FFD54F", "text": "#111111" },
+    { "hex": "#ffffff", "text": "#111111" },
+    { "hex": "#000000", "text": "#FFFFFF" },
+    { "hex": "#808080", "text": "#111111" }
+  ],
+  "refused": ["#777777", "#7A7A7A", "#787878"],
+  "notHex": ["", "red", "#FFF", "0D5C75", "#0D5C7", "#0D5C75F", "#GGGGGG", " #0D5C75"]
+}

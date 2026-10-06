@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, Outlet, createLazyRoute, useNavigate } from '@tanstack/react-router';
+import { Link, Outlet, createLazyRoute, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { api, fetchMe, type Me } from '../../api/client';
+import { api, fetchMe, fetchSettings, type Me } from '../../api/client';
 import { loadRetailMock, retailMockEnabled } from '../../api/retail';
 import { ALL_BRANCHES, initialBranch, loadBranch, saveBranch } from '../../auth/branch';
 import { getAccessToken, refreshSession, setAccessToken, subscribe } from '../../auth/session';
@@ -15,6 +15,9 @@ import { canSeeProfit, showRetail } from './retail/permissions';
 function useAccessToken() {
   return useSyncExternalStore(subscribe, getAccessToken);
 }
+
+// A tenant admin who has not dismissed the set-up checklist lands on it once per page load.
+let setupShown = false;
 
 function StaffLayout() {
   const navigate = useNavigate();
@@ -36,6 +39,16 @@ function StaffLayout() {
     enabled: token !== null || mock,
   });
   const [branch, setBranch] = useState<string | null>(null);
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const managesSettings = (me.data?.permissions ?? []).includes('core.settings.manage');
+  const settings = useQuery({ queryKey: ['settings'], queryFn: fetchSettings, enabled: managesSettings && !mock });
+
+  useEffect(() => {
+    const home = pathname === '/staff' || pathname === '/staff/';
+    if (setupShown || !home || !settings.data || settings.data.setup_dismissed) return;
+    setupShown = true;
+    void navigate({ to: '/staff/setup', replace: true });
+  }, [pathname, settings.data, navigate]);
 
   useEffect(() => {
     if (me.data) setBranch(initialBranch(me.data, loadBranch(me.data.user_id ?? '')));
@@ -81,6 +94,7 @@ function StaffLayout() {
           <Link to="/staff">Home</Link>
           {canSeeApprovals && <Link to="/staff/approvals">Approvals</Link>}
           {showRetail(profile) && <Link to="/staff/retail">Retail</Link>}
+          {managesSettings && <Link to="/staff/setup">Business set-up</Link>}
         </nav>
         <button onClick={() => void signOut()}>Sign out</button>
       </header>

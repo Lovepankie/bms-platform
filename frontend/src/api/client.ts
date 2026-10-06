@@ -10,6 +10,8 @@ export type Member = components['schemas']['Member'];
 export type MemberListItem = components['schemas']['MemberListItem'];
 export type MemberPage = components['schemas']['MemberPage'];
 export type Me = components['schemas']['Me'];
+export type Branding = components['schemas']['Branding'];
+export type TenantSettings = components['schemas']['TenantSettings'];
 export type SignInResponse = components['schemas']['SignInResponse'];
 export type MfaEnrolment = components['schemas']['MfaEnrolment'];
 export type Approval = components['schemas']['Approval'];
@@ -76,5 +78,11 @@ export async function listPendingApprovals(branchIds: string[] | undefined): Pro
     params: { query: { status: ['pending'], branch_id: branchIds } },
   });
   if (error || !data) throw new Error(problemOf(error).detail ?? 'Could not load approvals');
+  return data;
+}
+
+export async function fetchSettings(): Promise<TenantSettings> {
+  const { data, error } = await api.GET('/api/v1/settings');
+  if (error || !data) throw new Error(problemOf(error).detail ?? 'Could not load the settings');
   return data;
 }

@@ -1,11 +1,15 @@
 package com.rincoltech.bms.core.documents.internal;
 
 import java.time.Duration;
+import java.util.Optional;
 
 /** The object storage port of chapter 12 section 12.5. Buckets are private; reads go through signed URLs. */
 interface ObjectStorage {
 
     void put(String key, byte[] bytes, String contentType);
+
+    /** The object's bytes; empty when there is none. For assets the application serves itself. */
+    Optional<byte[]> get(String key);
 
     /** Removes an object; used when the transaction that stored it rolls back. */
     void delete(String key);

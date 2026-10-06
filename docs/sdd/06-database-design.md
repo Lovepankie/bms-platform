@@ -270,6 +270,8 @@ write. Keys and defaults:
 |---|---|---|---|
 | `display_name` | string | tenant name | FR-TEN-08 |
 | `logo_document_id` | uuid or null | null | FR-TEN-08 |
+| `theme_primary` | `#RRGGBB` string or null | null (platform look) | FR-TEN-08 |
+| `setup_dismissed` | boolean | false | FR-TEN-08 |
 | `receipt_footer` | string | empty | FR-DOC-01 |
 | `sms_sender_name` | string or null | null (aggregator default) | FR-NTF-02 |
 | `sms_window_start`, `sms_window_end` | `HH:MM` | `08:00`, `20:00` | FR-NTF-04 |
@@ -280,6 +282,12 @@ write. Keys and defaults:
 | `appraisal_weights` | object | section 3.18.1 defaults | FR-ORG-04 |
 | `disabled_collateral_types` | string array | empty | FR-COL-05 |
 | `require_mfa_all_staff` | boolean | false | FR-IAM-06 |
+
+`logo_document_id` is set only by the logo upload route, never by a settings patch: it names a
+`documents` row of this tenant whose subject type is `core.tenant` and subject id is the tenant id
+(no new table). `theme_primary` must match `^#[0-9A-Fa-f]{6}$` and keep contrast 4.5 against white
+or near-black text (stored upper case). Neither is personal data; both are audited with before and
+after values. Older logos stay in `documents` (rows are never deleted).
 
 ### `branches` (RLS)
 
