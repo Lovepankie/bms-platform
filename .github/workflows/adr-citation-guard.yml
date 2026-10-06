@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   citations:
-    runs-on: [self-hosted, hillary-pi]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - name: Check every ADR citation resolves or is marked pending

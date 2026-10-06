@@ -40,9 +40,11 @@ branch --PR--> ci.yml (self-hosted hillary-pi): backend mvn verify | frontend co
 
 ## 10.3 Continuous integration (`.github/workflows/ci.yml`)
 
-**Where jobs run (ADR-018, finding H1).** Read-only checks (`ci.yml`, `dash-guard`,
-`adr-citation-guard`, `architecture-model`, `linked-issue-guard`, `estimate-guard`) target
-`runs-on: [self-hosted, hillary-pi]`: the organisation runner on the ARM64 staging host, in runner
+**Where jobs run (ADR-018, finding H1).** The three small text guards (`dash-guard`,
+`adr-citation-guard`, `linked-issue-guard`) run on the GitHub-hosted `ubuntu-latest` runner: they
+only read the checked-out diff, hold no secret and cost seconds, and moving them keeps them from
+queueing behind the heavy build on the single Pi runner. The other read-only checks (`ci.yml`,
+`architecture-model`, `estimate-guard`) target `runs-on: [self-hosted, hillary-pi]`: the organisation runner on the ARM64 staging host, in runner
 group `hillary-pi` (two repositories, public repositories refused). It costs no Actions minutes,
 which matters because the repository is private. The runner is walled from staging: its own user
 without sudo or the docker group, a rootless Docker daemon (`DOCKER_HOST` is set in the runner's
