@@ -211,6 +211,28 @@ describe('valuation and profit', () => {
     expect(html).not.toContain('UGX 7,000');
   });
 
+  it('shows the profit the server sent for a caller scoped to some branches only', () => {
+    const partial: Valuation = {
+      as_of: '2026-10-05', currency: 'UGX',
+      rows: [
+        { branch_id: branch, product_id: 'p1', description: 'LED bulb 9W screw', qty: '2.000', sell_minor: 6000, expected_sales_minor: 12000, value_at_cost_minor: 7000, expected_profit_minor: 5000, expected_profit_bp: 7143, category: 'Lighting' },
+        { branch_id: 'other', product_id: 'p2', description: 'Solar lamp', qty: '1.000', sell_minor: 9000, expected_sales_minor: 9000, category: 'Solar' },
+      ],
+      categories: [
+        { category_id: 'c2', category: 'Lighting', expected_sales_minor: 12000, value_at_cost_minor: 7000, expected_profit_minor: 5000, expected_profit_bp: 7143 },
+        { category_id: 'c3', category: 'Solar', expected_sales_minor: 9000 },
+      ],
+      expected_sales_minor: 21000,
+    };
+    const html = renderToString(<ValuationTable valuation={partial} />);
+    expect(html).toContain('<th class="num">Expected profit</th>');
+    expect(html).toContain('UGX 5,000');
+    expect((html.match(/71\.43%/g) ?? []).length).toBe(2);
+    // The overall total has no cost, so the headline shows none; the row without cost stays blank.
+    expect(html).not.toContain('<td>Expected profit</td>');
+    expect(html).toContain('UGX 9,000');
+  });
+
   it('marks a loss in words', () => {
     const report: DailyProfit = {
       from: '2026-10-05', to: '2026-10-05', currency: 'UGX', sales_minor: 1000, cost_of_sales_minor: 3000, usage_cost_minor: 500, profit_minor: -2500,

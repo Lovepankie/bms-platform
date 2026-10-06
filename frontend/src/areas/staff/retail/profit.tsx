@@ -8,6 +8,10 @@ import { BranchRequired, CategoryLabel, Gate, Problem, money, useBranchName, use
 // Stock value (FR-RET-09) is a stock read; its cost columns arrive only with retail.profit.read.
 // Daily profit (FR-RET-10) needs retail.profit.read (the Gate), and the server refuses it otherwise.
 
+/** True when the server sent any cost or profit figure on this total or row (retail.profit.read where it is held). */
+const hasCost = (x: { value_at_cost_minor?: number; expected_profit_minor?: number }) =>
+  x.value_at_cost_minor !== undefined || x.expected_profit_minor !== undefined;
+
 type Sums = { sales?: number; cost?: number; profit?: number; bp?: number };
 
 /** The headline figures of a valuation as a small two column table, so no figure wraps on a phone. */
@@ -77,9 +81,10 @@ const sumsOf = (r: { expected_sales_minor?: number; value_at_cost_minor?: number
 });
 
 export function ValuationTable({ valuation, nameOf }: { valuation: Valuation; nameOf?: (id: string | undefined) => string }) {
-  // The cost and profit columns exist only when the server sent them (retail.profit.read).
-  const withCost = valuation.value_at_cost_minor !== undefined;
+  // A cost or profit column exists when the server sent a figure for the total, a row or a category:
+  // a caller who holds retail.profit.read at some branches only still sees it where it was sent.
   const categories = valuation.categories ?? [];
+  const withCost = hasCost(valuation) || categories.some(hasCost) || (valuation.rows ?? []).some(hasCost);
   const phone = useIsPhone();
   return (
     <>
@@ -87,7 +92,7 @@ export function ValuationTable({ valuation, nameOf }: { valuation: Valuation; na
       {categories.length > 0 && (
         <>
           <h2>By category</h2>
-          <SummaryRows label="Category" withCost={withCost} rows={categories.map((c) => ({ key: c.category_id ?? '', name: c.category ?? '', sums: sumsOf(c) }))} />
+          <SummaryRows label="Category" withCost={categories.some(hasCost)} rows={categories.map((c) => ({ key: c.category_id ?? '', name: c.category ?? '', sums: sumsOf(c) }))} />
         </>
       )}
       <h2>By item</h2>
@@ -131,7 +136,7 @@ export function ValuationTable({ valuation, nameOf }: { valuation: Valuation; na
 /** Every branch's totals side by side: what the owner reads first in All branches (#144). */
 export function BranchTotals({ valuation, nameOf }: { valuation: Valuation; nameOf: (id: string | undefined) => string }) {
   const branches = valuation.branches ?? [];
-  const withCost = valuation.value_at_cost_minor !== undefined || branches.some((b) => b.value_at_cost_minor !== undefined);
+  const withCost = hasCost(valuation) || branches.some(hasCost);
   if (branches.length === 0) return null;
   return (
     <>
