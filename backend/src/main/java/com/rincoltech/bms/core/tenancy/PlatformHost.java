@@ -19,4 +19,10 @@ public interface PlatformHost {
 
     /** Origin of the one-time links sent to users: the tenant's host under the pattern. */
     String tenantOrigin(String slug);
+
+    /**
+     * Origin of links to the platform host (sign-up, applicant page, operator portal), built from
+     * {@code BMS_PLATFORM_HOST} and never from a request header.
+     */
+    String platformOrigin();
 }

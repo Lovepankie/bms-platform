@@ -134,6 +134,25 @@ bms:
       access-key-id: ${R2_DOCUMENTS_ACCESS_KEY_ID:}
       secret-access-key: ${R2_DOCUMENTS_SECRET_ACCESS_KEY:}
       bucket: ${R2_DOCUMENTS_BUCKET:}
+  # Outbox senders (spec section 11, chapter 9 section 9.8). A sender whose values are unset is off:
+  # its rows stay pending and nothing fails. SMTP is implicit TLS (465); 587 is blocked on the
+  # staging host. Never logged.
+  notifications:
+    smtp:
+      host: ${BMS_SMTP_HOST:}
+      port: ${BMS_SMTP_PORT:465}
+      user: ${BMS_SMTP_USER:}
+      password: ${BMS_SMTP_PASSWORD:}
+      from: ${BMS_MAIL_FROM:}
+    telegram:
+      bot-token: ${BMS_TELEGRAM_BOT_TOKEN:}
+      operator-chat-id: ${BMS_TELEGRAM_OPERATOR_CHAT_ID:}
+  # Sign-up volume bounds (chapter 7 section 7.10), counted in the database: over a bound a request
+  # is answered 202 and nothing is created or sent; the global caps alert the operator once an hour.
+  onboarding:
+    max-applications-per-hour: ${BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR:30}
+    max-verification-emails-per-hour: ${BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR:60}
+    max-verification-emails-per-mailbox: 3
 
 # Background jobs on PostgreSQL (ADR-008). BMS_SCHEDULER_ENABLED=false turns polling off in an
 # instance that should only serve HTTP, if a separate worker instance is ever split out.

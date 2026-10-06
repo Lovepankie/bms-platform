@@ -1,19 +1,19 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { renderToString as render } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
-import type { DailyProfit, Product, Sale, Stocktake, StockRow, Transfer, Valuation } from '../../../api/retail';
-import { mockMe } from '../../../api/retail-mock';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { businessToday, type DailyProfit, type Product, type Purchase, type Sale, type Stocktake, type StockRow, type Transfer, type Valuation } from '../../../api/retail';
+import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { Receipt, SaleForm } from './sale';
 import { StockTable } from './stock';
 import { StocktakeReview } from './stocktake';
 import { ProfitTable, ValuationTable } from './profit';
-import { RestockForm } from './restock';
+import { RestockForm, RestockSaved } from './restock';
 import { TransferForm, TransferSummary } from './transfer';
-import { TransferList } from './transfers';
+import { TransferList, showDate } from './transfers';
 import { UsageForm } from './usage';
-import { Gate } from './ui';
+import { Gate, NoStockHere, Problem } from './ui';
 
 const renderToString = (node: ReactElement) => render(node).replaceAll('<!-- -->', '');
 
@@ -192,9 +192,98 @@ describe('stock moves', () => {
 
   it('lists moves in words and shows the value at cost only with retail.profit.read', () => {
     const list = page('sales', <TransferList items={[moved, { ...moved, id: 'tr2', status: 'voided' }]} onOpen={() => undefined} />);
-    expect(list).toContain('BR1 Test Branch A to BR2 Test Branch B, 1 item');
+    expect(list).toContain('From Test Branch A (BR1) to Test Branch B (BR2)');
     expect(list).toContain('cancelled');
     expect(page('sales', <TransferSummary transfer={moved} />)).not.toMatch(/cost/i);
     expect(page('admin', <TransferSummary transfer={moved} />)).toContain('Value at cost: UGX 7,000');
+  });
+});
+
+// #112 items 1, 2, 3, 10 and 11, #103 and #105.
+describe('walk-through fixes (#112)', () => {
+  const [from, to] = mockMe('admin').branches ?? [];
+  const adminId = mockMe('admin').user_id;
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('stock moves rows read as date, route and what moved, with no leading colon (item 1)', () => {
+    const t: Transfer = {
+      id: 'tr9', from_branch_id: from?.id, to_branch_id: to?.id, transfer_date: '2026-10-06', status: 'completed', created_by: adminId,
+      lines: ['LED bulb 9W screw', 'Socket double', 'Test cable 10m'].map((d, n) => ({ line_no: n + 1, product_id: `p${n}`, code: `P00${n}`, description: d, qty: '1.000' })),
+    };
+    const html = page('admin', <TransferList items={[t]} onOpen={() => undefined} />);
+    expect(html).toContain('6 Oct 2026');
+    expect(html).not.toContain('2026-10-06');
+    expect(html).not.toMatch(/>:\s/);
+    expect(html).toContain('From Test Branch A (BR1) to Test Branch B (BR2)');
+    expect(html).toContain('3 items: LED bulb 9W screw, Socket double, and 1 more, by you');
+    expect(html).toContain('white-space:nowrap');
+    expect(showDate('2026-01-31')).toBe('31 Jan 2026');
+  });
+
+  it('move stock hints in the sale screen words and disables the button above the source stock (item 2)', () => {
+    const draft = { toBranchId: to?.id, transferDate: '2026-10-06', note: '', lines: [{ product: products[0], qty: '13' }] };
+    const store = new Map([[`retail-draft:transfer:${adminId}:${branch}`, JSON.stringify({ key: 'test-key-1', draft })]]);
+    vi.stubGlobal('sessionStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: () => undefined, removeItem: () => undefined });
+    const html = page('admin', <TransferForm fromBranchId={branch} />);
+    expect(html).toContain('Only 12 piece in stock at this branch.');
+    expect(html).toMatch(/<button type="submit" class="rt-primary" disabled="">Move stock<\/button>/);
+  });
+
+  it('shows the server refusal for stock in plain words when the form let it through (item 2)', async () => {
+    const mock = createMockRetail();
+    const [item] = await mock.listProducts({ branchId: branch });
+    const refused = await mock.createTransfer(
+      { from_branch_id: branch, to_branch_id: to?.id ?? '', lines: [{ product_id: item?.id ?? '', qty: '99999' }] }, 'test-key-3',
+    ).then(() => null, (e: unknown) => e);
+    const html = renderToString(<Problem error={refused} />);
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('There is not enough stock at this branch for one of the items.');
+    expect(html).not.toContain('insufficient_stock');
+  });
+
+  it('defaults the move date to today in Africa/Kampala, not UTC (item 3)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-06T22:30:00Z'));
+    expect(businessToday()).toBe('2026-10-07');
+    const html = page('admin', <TransferForm fromBranchId={branch} />);
+    expect(html).toContain('value="2026-10-07"');
+    expect(html).not.toContain('leave empty for today');
+  });
+
+  it('says plainly when the chosen branch holds no stock and offers the branches that do (#103)', () => {
+    const client = new QueryClient();
+    client.setQueryData(['retail', 'stocked-branches'], [to?.id]);
+    const empty = page('admin', <NoStockHere branchId={from?.id ?? ''} />, client);
+    expect(empty).toContain('This branch holds no stock. Switch branch?');
+    expect(page('admin', <NoStockHere branchId={to?.id ?? ''} />, client)).toBe('');
+    expect(page('admin', <NoStockHere branchId={from?.id ?? ''} />)).toBe('');
+  });
+
+  it('prints branches as Name (CODE) in the move form (#105)', () => {
+    const html = page('admin', <TransferForm fromBranchId={branch} />);
+    expect(html).toContain('From: Test Branch A (BR1)');
+    expect(html).toContain('>Test Branch B (BR2)</option>');
+    expect(html).not.toContain('BR2 Test Branch B');
+  });
+
+  it('confirms a restock with the supplier, number, date and each price change (items 10 and 11)', () => {
+    const purchase: Purchase = {
+      id: 'pu1', purchase_no: 'RP00000042', purchased_on: '2026-10-06', total_minor: 85000, currency: 'UGX',
+      lines: [
+        { product_id: 'p1', description: 'LED bulb 9W screw', cost_minor: 850, sell_minor: 1400 },
+        { product_id: 'p2', description: 'LED bulb 15W screw', cost_minor: 6000, sell_minor: 9500 },
+      ],
+    };
+    const context = { supplierName: 'Test Supplier 01', before: { p1: { sell: 1200, cost: 800 }, p2: { sell: 9500, cost: 6000 } } };
+    const admin = page('admin', <RestockSaved purchase={purchase} context={context} />);
+    expect(admin).toContain('Restock saved (RP00000042)');
+    expect(admin).toContain('From Test Supplier 01, bought on 2026-10-06: 2 items');
+    expect(admin).toContain('LED bulb 9W screw: sell price changed from UGX 1,200 to UGX 1,400.');
+    expect(admin).toContain('LED bulb 9W screw: cost changed from UGX 800 to UGX 850.');
+    expect(admin).not.toContain('LED bulb 15W screw:');
+    expect(page('sales', <RestockSaved purchase={purchase} context={context} />)).not.toContain('cost changed');
   });
 });

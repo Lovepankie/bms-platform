@@ -19,8 +19,9 @@ import org.testcontainers.utility.MountableFile;
 /**
  * The one Flyway sequence shared by lending and retail (issue #71, review F6): V1 to V9 (lending,
  * V9 the loan appraisals of #42), V10 to V14 (retail R1 to R4, the price floor and the review
- * fixes), V20 (the retail import references), V21 (the lending review follow-ups) and V22 (the retail stock
- * transfers of #84) apply in order on an empty database, and on a
+ * fixes), V20 (the retail import references), V21 (the lending review follow-ups), V22 (the retail
+ * stock transfers of #84) and V23 (the onboarding applications and the outbox of #89) apply in order
+ * on an empty database, and on a
  * database a server already migrated to V9 before the retail work reached it, with
  * {@code outOfOrder} off exactly as {@link DatabaseMigrator} runs it. Each case gets its own
  * PostgreSQL 16 container initialised by {@code deploy/postgres/initdb/01-roles.sh}.
@@ -28,7 +29,7 @@ import org.testcontainers.utility.MountableFile;
 class MigrationOrderIT {
 
     static final List<String> VERSIONS =
-            List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22");
+            List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23");
 
     @Test
     void everyMigrationAppliesInOrderOnAnEmptyDatabase() {
@@ -39,7 +40,7 @@ class MigrationOrderIT {
                     DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
 
             assertThat(result.success).isTrue();
-            assertThat(result.targetSchemaVersion).isEqualTo("22");
+            assertThat(result.targetSchemaVersion).isEqualTo("23");
             assertThat(applied(postgres)).containsExactlyElementsOf(VERSIONS);
             assertThat(flyway(postgres, null).info().pending()).isEmpty();
         }
@@ -77,7 +78,7 @@ class MigrationOrderIT {
 
             assertThat(second.success).isTrue();
             assertThat(second.migrations.stream().map(m -> m.version).toList())
-                    .containsExactly("10", "11", "12", "13", "14", "20", "21", "22");
+                    .containsExactly("10", "11", "12", "13", "14", "20", "21", "22", "23");
             assertThat(applied(postgres)).containsExactlyElementsOf(VERSIONS);
             assertThat(flyway(postgres, null).info().pending()).isEmpty();
             // The tenant from V9 can switch retail on: its chart is seeded next to the lending one.

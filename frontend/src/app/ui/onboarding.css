@@ -1,0 +1,49 @@
+/*
+ * The sign-up, applicant and operator portal screens (ADR-024). They use the shared classes
+ * (auth-card, form-stack, alert, badge, table-wrap, tabs, cluster); this file adds only what those
+ * do not cover, from the tokens: a definition list of facts, the status filter's pressed state and
+ * long values that must wrap on a phone.
+ */
+
+.facts {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-5);
+}
+
+.facts dt {
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 479px) {
+  .facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .facts dd {
+    margin-bottom: var(--space-3);
+  }
+}
+
+.pre-line {
+  white-space: pre-line;
+}
+
+.wrap-anywhere {
+  overflow-wrap: anywhere;
+}
+
+.filters button[aria-pressed='true'] {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}

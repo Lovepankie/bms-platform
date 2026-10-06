@@ -3,6 +3,7 @@ package com.rincoltech.bms.core.platform.internal;
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.audit.PlatformAuditLog;
 import com.rincoltech.bms.core.identity.TenantAdmins;
+import com.rincoltech.bms.core.platform.TenantProvisioning;
 import com.rincoltech.bms.core.platform.internal.PlatformController.CreateTenantRequest;
 import com.rincoltech.bms.core.platform.internal.PlatformController.CreatedTenantResponse;
 import com.rincoltech.bms.core.platform.internal.PlatformController.FirstAdminInvitation;
@@ -24,6 +25,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -40,7 +42,17 @@ import org.springframework.transaction.support.TransactionTemplate;
  * tenant creation also writes the tenant's own first audit row.
  */
 @Service
-class PlatformService {
+class PlatformService implements TenantProvisioning {
+
+    private static final Steps NO_STEPS = new Steps() {
+        @Override
+        public boolean before() {
+            return true;
+        }
+
+        @Override
+        public void after(Created created) {}
+    };
 
     private final JdbcClient jdbc;
     private final TenantAdmins tenantAdmins;
@@ -99,16 +111,43 @@ class PlatformService {
                 .orElseThrow(ApiException::notFound);
     }
 
+    /** FR-TEN-01 through the platform API: {@link #create(NewTenant, Steps)} with no extra steps. */
+    CreatedTenantResponse create(CreateTenantRequest request) {
+        Created created = create(
+                        new NewTenant(
+                                request.name(),
+                                request.slug(),
+                                request.planCode(),
+                                request.currency(),
+                                request.timezone(),
+                                request.modules() == null ? List.of() : request.modules(),
+                                request.headOffice().code(),
+                                request.headOffice().name(),
+                                request.admin().fullName(),
+                                request.admin().email(),
+                                request.admin().phone(),
+                                "trial"),
+                        NO_STEPS)
+                .orElseThrow();
+        return new CreatedTenantResponse(
+                transactions.execute(status -> tenant(created.tenantId())),
+                created.headOfficeBranchId(),
+                new FirstAdminInvitation(
+                        created.adminUserId(), created.invitationUrl(), created.invitationExpiresAt()));
+    }
+
     /**
      * FR-TEN-01, in one transaction bound to the new tenant: the tenant, its subscription, settings,
      * head office and modules (with the chart of accounts of each), the first tenant admin with a
-     * 72 hour invitation, and the audit rows. The transaction opens inside
-     * {@code TenantContext.callAs}, so the transaction manager binds the new tenant as it binds any
-     * other; the tenant id is generated here and never read from the request.
+     * 72 hour invitation, and the audit rows, with the caller's steps before and after. The
+     * transaction opens inside {@code TenantContext.callAs}, so the transaction manager binds the
+     * new tenant as it binds any other; the tenant id is generated here and never read from the
+     * request.
      */
-    CreatedTenantResponse create(CreateTenantRequest request) {
+    @Override
+    public Optional<Created> create(NewTenant request, Steps steps) {
         UUID operator = CurrentPrincipal.require().userId();
-        String slug = request.slug().trim();
+        String slug = request.slug() == null ? "" : request.slug().trim();
         if (!hosts.isValidSlug(slug)) {
             throw ApiException.validation(List.of(new FieldProblem(
                     "slug", "invalid_slug", "3 to 63 lower case letters, digits or hyphens; not a reserved name.")));
@@ -120,26 +159,32 @@ class PlatformService {
             throw ApiException.validation(List.of(new FieldProblem("timezone", "invalid", "Unknown time zone.")));
         }
         List<String> modules = checkModules(request.modules() == null ? List.of() : request.modules());
-        if (request.admin().email() == null && request.admin().phone() == null) {
+        if (request.adminEmail() == null && request.adminPhone() == null) {
             throw ApiException.validation(
                     List.of(new FieldProblem("admin.email", "required", "Give the admin's email or phone.")));
         }
-        boolean taken =
-                transactions.execute(status -> jdbc.sql("SELECT count(*) FROM platform_list_tenants() WHERE slug = ?")
-                                .param(slug)
-                                .query(Long.class)
-                                .single())
-                        > 0;
-        if (taken) {
-            throw new ApiException(
-                    HttpStatus.CONFLICT, "duplicate_slug", "Slug taken", "Another tenant has this slug.");
+        String subscription = request.subscriptionStatus() == null ? "trial" : request.subscriptionStatus();
+        if (!subscription.equals("trial") && !subscription.equals("active")) {
+            throw new IllegalArgumentException("a new tenant starts as trial or active");
         }
 
         UUID tenantId = UUID.randomUUID();
         UUID headOffice = UUID.randomUUID();
-        TenantAdmins.Invitation invitation = TenantContext.callAs(
+        return Optional.ofNullable(TenantContext.callAs(
                 tenantId,
                 () -> transactions.execute(status -> {
+                    if (!steps.before()) {
+                        return null;
+                    }
+                    boolean taken = jdbc.sql("SELECT count(*) FROM platform_list_tenants() WHERE slug = ?")
+                                    .param(slug)
+                                    .query(Long.class)
+                                    .single()
+                            > 0;
+                    if (taken) {
+                        throw new ApiException(
+                                HttpStatus.CONFLICT, "duplicate_slug", "Slug taken", "Another tenant has this slug.");
+                    }
                     try {
                         jdbc.sql("SELECT platform_create_tenant(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
                                 .params(
@@ -151,36 +196,60 @@ class PlatformService {
                                         timezone,
                                         modules.toArray(String[]::new),
                                         headOffice,
-                                        request.headOffice().code(),
-                                        request.headOffice().name().trim(),
+                                        request.headOfficeCode(),
+                                        request.headOfficeName().trim(),
                                         operator)
                                 .query()
                                 .singleRow();
+                        if (subscription.equals("active")) {
+                            jdbc.sql("SELECT platform_set_subscription_status(?, 'active', NULL, ?)")
+                                    .params(tenantId, operator)
+                                    .query(String.class)
+                                    .single();
+                        }
                     } catch (DataIntegrityViolationException e) {
+                        // A tenant created concurrently with the same slug passes the count above
+                        // and meets the unique constraint here (review N7).
+                        if (String.valueOf(e.getMessage()).contains("tenants_slug_key")) {
+                            throw new ApiException(
+                                    HttpStatus.CONFLICT,
+                                    "duplicate_slug",
+                                    "Slug taken",
+                                    "Another tenant has this slug.");
+                        }
                         throw ApiException.rule(
                                 "invalid_tenant", "The plan, currency or modules are not valid for a new tenant.");
                     }
                     TenantAdmins.Invitation admin = tenantAdmins.inviteFirstAdmin(
-                            request.admin().fullName(),
-                            request.admin().email(),
-                            request.admin().phone(),
-                            operator);
+                            request.adminFullName(), request.adminEmail(), request.adminPhone(), operator);
                     Map<String, Object> after = new LinkedHashMap<>();
                     after.put("slug", slug);
                     after.put("plan", request.planCode());
                     after.put("modules", modules);
                     after.put("head_office_branch_id", headOffice);
+                    after.put("subscription_status", subscription);
                     audit.record(
                             AuditLog.Entry.created("core.tenant.created", "core.tenant", tenantId, headOffice, after),
                             operator,
                             "platform");
                     platformAudit.record("platform.tenant.created", operator, tenantId, after);
-                    return admin;
-                }));
-        return new CreatedTenantResponse(
-                transactions.execute(status -> tenant(tenantId)),
-                headOffice,
-                new FirstAdminInvitation(invitation.userId(), invitation.url(), invitation.expiresAt()));
+                    Created created =
+                            new Created(tenantId, slug, headOffice, admin.userId(), admin.url(), admin.expiresAt());
+                    steps.after(created);
+                    return created;
+                })));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean slugAvailable(String slug) {
+        return slug != null
+                && hosts.isValidSlug(slug)
+                && jdbc.sql("SELECT count(*) FROM platform_list_tenants() WHERE slug = ?")
+                                .param(slug)
+                                .query(Long.class)
+                                .single()
+                        == 0;
     }
 
     @Transactional

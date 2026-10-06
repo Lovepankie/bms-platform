@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { retail, type DailyProfit, type Valuation } from '../../../api/retail';
+import { businessToday, daysBefore, retail, type DailyProfit, type Valuation } from '../../../api/retail';
 import { showQty } from './maths';
 import { BranchRequired, Gate, Problem, money, useSingleBranch } from './ui';
 
@@ -85,16 +85,16 @@ export function ProfitTable({ report }: { report: DailyProfit }) {
           ))}
         </tbody>
       </table></div>
+      <p className="hint">Usage and damage reports count here. Stock-take differences do not: they are in the books, not in this report.</p>
     </>
   );
 }
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
-
 function ProfitPage() {
   const { branchId, branchName } = useSingleBranch();
-  const [to, setTo] = useState(() => iso(new Date()));
-  const [from, setFrom] = useState(() => iso(new Date(Date.now() - 6 * 86400000)));
+  // The last seven days in the business's timezone, the server's own business date (#112 item 9).
+  const [to, setTo] = useState(() => businessToday());
+  const [from, setFrom] = useState(() => daysBefore(businessToday(), 6));
   const profit = useQuery({ queryKey: ['retail', 'profit', branchId, from, to], queryFn: () => retail.dailyProfit({ branchId: branchId ?? '', from, to }), enabled: branchId !== null && from <= to });
   return (
     <Gate screen="profit" title="Daily profit">

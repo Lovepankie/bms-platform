@@ -23,7 +23,7 @@ export function transferLineHint(line: TransferLineDraft): string | null {
   if (milli === null) return 'Enter a quantity above zero.';
   const { qty, unit } = line.product;
   if (qty !== undefined && milli > Math.max(milliOf(qty), 0)) {
-    return `Only ${qty.startsWith('-') ? '0' : showQty(qty)} ${unit ?? 'items'} at the branch you are moving from.`;
+    return `Only ${qty.startsWith('-') ? '0' : showQty(qty)} ${unit ?? 'items'} in stock at this branch.`;
   }
   return null;
 }

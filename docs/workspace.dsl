@@ -27,6 +27,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         cashier          = person "Cashier" "Records disbursements, repayments, deposits, withdrawals and payouts."
         accountant       = person "Accountant" "Keeps the general ledger, closes periods, runs financial reports."
         auditor          = person "Auditor" "Read-only access to records, reports and the audit log."
+        applicant        = person "Applicant" "A business that applies on the public sign-up page of the platform host; has no account until the operator activates it (ADR-024)."
         member           = person "Member" "A tenant's borrower, saver or investor. Uses the member area, receives SMS; USSD in phase 2."
 
         # ==================================================================
@@ -46,8 +47,9 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 audit         = component "Audit" "Append-only audit log written in the same transaction as each change; platform audit log; search and CSV export." "core" "core"
                 approvals     = component "Approvals" "Maker-checker requests with payload snapshots; executes approved actions through actions registered by the owning modules (ADR-015)." "core" "core"
                 platform      = component "Platform Console" "Tenant creation with head office, modules and first admin; module switching; subscriptions and suspension; tenant admin MFA reset. Served only on the platform host to platform operators (ADR-016, ADR-018)." "core" "core"
+                onboarding    = component "Onboarding" "Public sign-up and applicant page endpoints with rate limits and a honeypot; the applications queue with the possible-repeat warning; Verify, Needs info, Reject; Activate, which creates the tenant through the platform console's TenantProvisioning and queues the activation email in the same transaction; nightly expiry and 90 day deletion (ADR-024)." "core" "core"
                 ledger        = component "General Ledger" "Chart of accounts, periods, post_entry, reversals, trial balance, subledger reconciliation (ADR-004)." "core" "core"
-                notifications = component "Notifications" "Outgoing message port; a recording fake adapter until providers are chosen. Later: templates, outbox, SMS and email adapters, delivery reports." "core" "core"
+                notifications = component "Notifications" "Outgoing message port with a recording fake adapter, and the platform outbox (ADR-024): rows written in the cause's transaction, a sender job with SKIP LOCKED claims, SMTP email over implicit TLS and Telegram operator alerts, each off when unconfigured; failed rows for the operator portal. Later: tenant templates, SMS adapters, delivery reports." "core" "core"
                 documents     = component "Documents" "PDF rendering, uploads, object storage keys, signed download URLs." "core" "core"
                 reporting     = component "Reporting" "Report catalogue, parameters, report runs, exports." "core" "core"
                 imports       = component "Imports" "Batches, rows, issues, review queue, preview, commit orchestration; templates are registered by modules." "core" "core"
@@ -86,12 +88,14 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         smsAggregator  = softwareSystem "SMS and USSD Aggregator" "Outbound SMS, delivery reports, USSD sessions in phase 2. Provider pending ADR-013." "external"
         paymentGateway = softwareSystem "Payment Gateway" "Mobile money and card collections, callbacks, status queries, settlement reports. Provider pending ADR-011." "external"
         mobileMoney    = softwareSystem "Mobile Money Operators" "MTN MoMo and Airtel Money wallets. Reached only through the payment gateway." "external"
-        emailService   = softwareSystem "Transactional Email Service" "Staff invitations, password resets, report-ready notices." "external"
+        emailService   = softwareSystem "Transactional Email Service" "SMTP over implicit TLS (port 465): activation and applicant links, operator alerts; later staff invitations, password resets, report-ready notices (ADR-024)." "external"
+        telegram       = softwareSystem "Telegram Bot API" "sendMessage to the operator chat: alerts for new applications (ADR-024)." "external"
 
         # ==================================================================
         # PEOPLE TO SYSTEM
         # ==================================================================
-        platformOperator -> bms.web "Creates and supervises tenants in the platform console"
+        platformOperator -> bms.web "Creates and supervises tenants in the platform console; verifies and activates applications in the operator portal"
+        applicant        -> bms.web "Applies on the sign-up page and follows the application on the applicant page"
         tenantAdmin      -> bms.web "Configures users, branches, products and settings"
         branchManager    -> bms.web "Approves loans and checker actions"
         loanOfficer      -> bms.web "Registers members, captures and appraises applications, logs collections"
@@ -211,6 +215,15 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.platform    -> bms.db "Creates and changes tenants through the platform SECURITY DEFINER functions"
         bms.api.platform    -> bms.api.identity "Invites the first tenant admin; resets a tenant admin's MFA"
         bms.api.platform    -> bms.api.audit "Writes the platform audit log and the tenant's first audit row"
+        bms.web -> bms.api.onboarding "Sign-up, applicant page, applications queue, decisions and Activate"
+        bms.web -> bms.api.notifications "Operator portal: messages not sent, send again"
+        bms.api.onboarding  -> bms.db "Applications through their SECURITY DEFINER functions only (V23, ADR-016)"
+        bms.api.onboarding  -> bms.api.platform "Creates the tenant through TenantProvisioning, in one transaction with the activation"
+        bms.api.onboarding  -> bms.api.notifications "Queues applicant emails, the activation email and operator alerts in the outbox"
+        bms.api.onboarding  -> bms.api.audit "Writes the platform audit log"
+        bms.api.onboarding  -> bms.api.tenancy "Builds links from BMS_PLATFORM_HOST and BMS_TENANT_HOST_PATTERN"
+        bms.api.notifications -> emailService "Sends outbox email" "SMTPS"
+        bms.api.notifications -> telegram "Sends operator alerts" "HTTPS"
         bms.api.jobs        -> bms.db "Polls scheduled_tasks; reads the outbox; runs nightly jobs one tenant per transaction" "SQL"
         bms.api.jobs        -> bms.storage "Stores rendered PDFs and report files" "S3 API"
         bms.api.jobs        -> smsAggregator "Sends SMS" "HTTPS"

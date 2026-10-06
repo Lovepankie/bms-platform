@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { RETAIL_CURRENCY, retail, type Product } from '../../../api/retail';
+import { branchLabel } from '../../../auth/branch';
 import { formatMinor } from '../../../components/money';
+import { useStockedBranches } from '../branch-picker';
 import { useStaff } from '../context';
 import { showQty } from './maths';
 import { canSeeProfit, canUse, type RetailScreen } from './permissions';
@@ -54,7 +56,34 @@ export function Gate({ screen, title, children }: { screen: RetailScreen; title:
 export function useSingleBranch(): { branchId: string | null; branchName: string } {
   const { me, branch } = useStaff();
   const found = (me.branches ?? []).find((b) => b.id === branch);
-  return { branchId: found?.id ?? null, branchName: found ? `${found.code ?? ''} ${found.name ?? ''}`.trim() : '' };
+  return { branchId: found?.id ?? null, branchName: branchLabel(found) };
+}
+
+/**
+ * Says plainly when the chosen branch holds no stock (#103), with a button for each of the user's
+ * branches that does. Shows nothing while that is unknown or for a session without a stock read.
+ */
+export function NoStockHere({ branchId }: { branchId: string }) {
+  const { me, chooseBranch } = useStaff();
+  const stocked = useStockedBranches(me);
+  if (!stocked.data || stocked.data.includes(branchId)) return null;
+  const others = (me.branches ?? []).filter((b) => b.id && stocked.data.includes(b.id));
+  return (
+    <div role="status" className="alert alert-warning">
+      <div className="stack">
+        <p>This branch holds no stock. Switch branch?</p>
+        {chooseBranch && others.length > 0 && (
+          <p className="cluster">
+            {others.map((b) => (
+              <button key={b.id} type="button" className="btn-sm" onClick={() => chooseBranch(b.id ?? '')}>
+                {branchLabel(b)}
+              </button>
+            ))}
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function BranchRequired() {

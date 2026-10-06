@@ -5,6 +5,8 @@
  * tenant's only admin (FR-IAM-12). Only platform operators reach it. It changes tenants through
  * the SECURITY DEFINER platform functions of migration V2 (ADR-016), and acts inside one tenant
  * only through {@code TenantContext.callAs}, so the transaction manager still binds that tenant.
+ * Public API: {@link com.rincoltech.bms.core.platform.TenantProvisioning}, the one tenant creation
+ * path, which onboarding's Activate uses (ADR-024).
  */
 @ApplicationModule(
         id = "core.platform",

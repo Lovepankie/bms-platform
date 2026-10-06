@@ -16,6 +16,294 @@
         },
         "required" : [ "password", "token" ]
       },
+      "ActivateApplicationRequest" : {
+        "properties" : {
+          "agent_code" : {
+            "description" : "Ignored in this release: agents arrive later",
+            "maxLength" : 40,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "modules" : {
+            "items" : {
+              "pattern" : "^[a-z]{2,30}$",
+              "type" : "string"
+            },
+            "maxItems" : 5,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "payment_note" : {
+            "description" : "Required when paid: a free text note of the payment received",
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "plan_code" : {
+            "description" : "Default starter",
+            "pattern" : "^[a-z0-9_-]{1,40}$",
+            "type" : "string"
+          },
+          "slug" : {
+            "description" : "FR-TEN-02 rules; cannot change later",
+            "maxLength" : 63,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "term" : {
+            "minLength" : 1,
+            "pattern" : "monthly|annual",
+            "type" : "string"
+          },
+          "way_in" : {
+            "description" : "trial: one month free; paid: payment received",
+            "minLength" : 1,
+            "pattern" : "trial|paid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "modules", "slug", "term", "way_in" ]
+      },
+      "ActivationResult" : {
+        "properties" : {
+          "activated_now" : {
+            "description" : "False when the application was already activated: nothing was done",
+            "type" : "boolean"
+          },
+          "admin_invitation_expires_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "admin_invitation_url" : {
+            "description" : "The admin's one-time link, shown once (also emailed); null on a repeat",
+            "type" : "string"
+          },
+          "application" : {
+            "$ref" : "#/components/schemas/Application"
+          },
+          "tenant_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenant_slug" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ApplicantLinkRequest" : {
+        "properties" : {
+          "token" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "token" ]
+      },
+      "ApplicantReplyRequest" : {
+        "properties" : {
+          "reply" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "token" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reply", "token" ]
+      },
+      "ApplicantView" : {
+        "description" : "What the applicant sees: no contact details",
+        "properties" : {
+          "business_name" : {
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "email_verified" : {
+            "type" : "boolean"
+          },
+          "modules" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "operator_note" : {
+            "description" : "The operator's question, while the status is needs_info",
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "reject_reason" : {
+            "description" : "The reason, when rejected",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "submitted, needs_info, verified, activated, rejected or expired",
+            "type" : "string"
+          },
+          "term" : {
+            "type" : "string"
+          },
+          "way_in" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Application" : {
+        "properties" : {
+          "activated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "activated_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "activated_tenant_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "activated_tenant_slug" : {
+            "type" : "string"
+          },
+          "activation_note" : {
+            "type" : "string"
+          },
+          "activation_term" : {
+            "type" : "string"
+          },
+          "activation_way" : {
+            "type" : "string"
+          },
+          "agent_code" : {
+            "type" : "string"
+          },
+          "applicant_reply" : {
+            "type" : "string"
+          },
+          "business_name" : {
+            "type" : "string"
+          },
+          "contact_email" : {
+            "type" : "string"
+          },
+          "contact_name" : {
+            "type" : "string"
+          },
+          "contact_phone" : {
+            "type" : "string"
+          },
+          "country" : {
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decided_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "email_verified_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "modules" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "operator_note" : {
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "reject_reason" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "submitted, needs_info, verified, activated, rejected or expired",
+            "type" : "string"
+          },
+          "term" : {
+            "type" : "string"
+          },
+          "updated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "way_in" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ApplicationDetail" : {
+        "properties" : {
+          "application" : {
+            "$ref" : "#/components/schemas/Application"
+          },
+          "possible_duplicates" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PossibleDuplicate"
+            },
+            "type" : "array"
+          },
+          "suggested_slug" : {
+            "description" : "A free slug from the business name (FR-TEN-02); editable at Activate",
+            "type" : "string"
+          }
+        }
+      },
+      "ApplicationList" : {
+        "properties" : {
+          "counts" : {
+            "additionalProperties" : {
+              "description" : "Applications in the queue per status, whatever the filter",
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "description" : "Applications in the queue per status, whatever the filter",
+            "type" : "object"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Application"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "ApplicationNoteRequest" : {
+        "properties" : {
+          "note" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "note" ]
+      },
       "Approval" : {
         "properties" : {
           "action_type" : {
@@ -2321,6 +2609,67 @@
           }
         }
       },
+      "OutboxFailure" : {
+        "properties" : {
+          "attempts" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "channel" : {
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "failed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "last_error" : {
+            "description" : "The error class, never a message text or an address",
+            "type" : "string"
+          },
+          "recipient" : {
+            "description" : "Masked to its last 4 characters",
+            "type" : "string"
+          },
+          "template_key" : {
+            "type" : "string"
+          }
+        }
+      },
+      "OutboxStatus" : {
+        "properties" : {
+          "counts" : {
+            "additionalProperties" : {
+              "description" : "Rows per status: pending, sent, failed",
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "description" : "Rows per status: pending, sent, failed",
+            "type" : "object"
+          },
+          "enabled_channels" : {
+            "description" : "Channels whose sender is configured; rows of the others stay pending",
+            "items" : {
+              "description" : "Channels whose sender is configured; rows of the others stay pending",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "failures" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OutboxFailure"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "Plan" : {
         "description" : "Limits only; prices are not stored in this repository",
         "properties" : {
@@ -2434,6 +2783,37 @@
               "$ref" : "#/components/schemas/PlatformTenant"
             },
             "type" : "array"
+          }
+        }
+      },
+      "PossibleDuplicate" : {
+        "description" : "Another application or tenant that may be the same business",
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "application or tenant",
+            "type" : "string"
+          },
+          "matched_on" : {
+            "description" : "email, phone, business_name",
+            "items" : {
+              "description" : "email, phone, business_name",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "reference" : {
+            "description" : "The application reference or the tenant slug",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
           }
         }
       },
@@ -4294,6 +4674,87 @@
             "type" : "string"
           }
         }
+      },
+      "SignUpAccepted" : {
+        "description" : "The same answer whether or not the email is already known",
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SignUpRequest" : {
+        "properties" : {
+          "agent_code" : {
+            "description" : "Recorded; agents arrive later",
+            "maxLength" : 40,
+            "minLength" : 0,
+            "pattern" : "^[A-Za-z0-9-]*$",
+            "type" : "string"
+          },
+          "business_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "contact_email" : {
+            "description" : "ASCII only: an address needing SMTPUTF8 is refused",
+            "format" : "email",
+            "maxLength" : 254,
+            "minLength" : 0,
+            "pattern" : "^[\\x21-\\x7E]+$",
+            "type" : "string"
+          },
+          "contact_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "contact_phone" : {
+            "description" : "Local or international form; stored as E.164",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "country" : {
+            "description" : "ISO 3166 alpha-2: UG, KE, TZ or RW",
+            "minLength" : 1,
+            "pattern" : "UG|KE|TZ|RW",
+            "type" : "string"
+          },
+          "message" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "modules" : {
+            "items" : {
+              "pattern" : "^[a-z]{2,30}$",
+              "type" : "string"
+            },
+            "maxItems" : 5,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "term" : {
+            "minLength" : 1,
+            "pattern" : "monthly|annual",
+            "type" : "string"
+          },
+          "way_in" : {
+            "description" : "trial: one month free; paid: subscribe now",
+            "minLength" : 1,
+            "pattern" : "trial|paid",
+            "type" : "string"
+          },
+          "website" : {
+            "description" : "Leave empty. A hidden field: a value marks the request as automated",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "business_name", "contact_email", "contact_name", "contact_phone", "country", "modules", "term", "way_in" ]
       },
       "StoredDocument" : {
         "properties" : {
@@ -7290,6 +7751,207 @@
         "tags" : [ "users" ]
       }
     },
+    "/api/v1/platform/applications" : {
+      "get" : {
+        "operationId" : "platformListApplications",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "pattern" : "submitted|needs_info|verified|activated|rejected|expired",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApplicationList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The applications queue with counts (FR-ONB-05)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/applications/{application_id}" : {
+      "get" : {
+        "operationId" : "platformGetApplication",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "application_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApplicationDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One application with the possible duplicates (FR-ONB-05)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/applications/{application_id}/activate" : {
+      "post" : {
+        "operationId" : "platformActivateApplication",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "application_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ActivateApplicationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ActivationResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Create the tenant and send the activation link; a repeat does nothing (FR-ONB-07)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/applications/{application_id}/needs-info" : {
+      "post" : {
+        "operationId" : "platformApplicationNeedsInfo",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "application_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApplicationNoteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApplicationDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask the applicant for more information; they see the note (FR-ONB-06)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/applications/{application_id}/reject" : {
+      "post" : {
+        "operationId" : "platformRejectApplication",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "application_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApplicationNoteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApplicationDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reject with a reason the applicant sees (FR-ONB-06)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/applications/{application_id}/verify" : {
+      "post" : {
+        "operationId" : "platformVerifyApplication",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "application_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApplicationDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The operator verified the business (FR-ONB-06)",
+        "tags" : [ "platform" ]
+      }
+    },
     "/api/v1/platform/auth/login" : {
       "post" : {
         "operationId" : "platformLogin",
@@ -7486,6 +8148,46 @@
         "tags" : [ "platform-auth" ]
       }
     },
+    "/api/v1/platform/outbox" : {
+      "get" : {
+        "operationId" : "platformOutbox",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OutboxStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Outbox counts and the failed rows (FR-NTF-09)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/outbox/{outbox_id}/retry" : {
+      "post" : {
+        "operationId" : "platformRetryOutbox",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "outbox_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Send a failed row again, if younger than its link's lifetime (FR-NTF-09)",
+        "tags" : [ "platform" ]
+      }
+    },
     "/api/v1/platform/plans" : {
       "get" : {
         "operationId" : "platformListPlans",
@@ -7503,6 +8205,122 @@
         },
         "summary" : "Plans with their limits (FR-TEN-04)",
         "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/sign-up/applications" : {
+      "post" : {
+        "operationId" : "signUpApply",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SignUpRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignUpAccepted"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Apply: the form of spec section 4; a link to confirm the email is sent (FR-ONB-01, FR-ONB-02)",
+        "tags" : [ "sign-up" ]
+      }
+    },
+    "/api/v1/platform/sign-up/reply" : {
+      "post" : {
+        "operationId" : "signUpReply",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApplicantReplyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApplicantView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Answer the operator's question; the application returns to the queue (FR-ONB-04)",
+        "tags" : [ "sign-up" ]
+      }
+    },
+    "/api/v1/platform/sign-up/status" : {
+      "post" : {
+        "operationId" : "signUpStatus",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApplicantLinkRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApplicantView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The applicant page (FR-ONB-04)",
+        "tags" : [ "sign-up" ]
+      }
+    },
+    "/api/v1/platform/sign-up/verify" : {
+      "post" : {
+        "operationId" : "signUpVerify",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApplicantLinkRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApplicantView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Confirm the email with the link token; the application joins the queue (FR-ONB-02)",
+        "tags" : [ "sign-up" ]
       }
     },
     "/api/v1/platform/tenants" : {
