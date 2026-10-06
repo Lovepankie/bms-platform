@@ -33,6 +33,24 @@ export function permissionsOf(me: Pick<Me, 'permissions'>): string[] {
   return me.permissions ?? [];
 }
 
+/**
+ * The branches of the session where `permission` is held. `/me` sends each permission's scope
+ * (`permission_scopes`); a payload without them offers every branch, and a permission the user does
+ * not hold offers none.
+ */
+export function branchesWhere<B extends { id?: string }>(
+  me: Pick<Me, 'permission_scopes'> & { branches?: B[] },
+  permission: string,
+): B[] {
+  const branches = me.branches ?? [];
+  if (!me.permission_scopes) return branches;
+  const scope = me.permission_scopes[permission];
+  if (!scope) return [];
+  if (scope.all_branches) return branches;
+  const ids = new Set(scope.branch_ids ?? []);
+  return branches.filter((b) => b.id && ids.has(b.id));
+}
+
 export function canSeeProfit(me: Pick<Me, 'permissions'>): boolean {
   return permissionsOf(me).includes(PROFIT);
 }

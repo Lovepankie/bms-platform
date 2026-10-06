@@ -189,7 +189,7 @@ export function StockPage() {
         <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={negativeOnly} onChange={(e) => setNegativeOnly(e.target.checked)} />
         Show only negative stock
       </label>
-      {!all && branchId === null && <BranchRequired />}
+      {!all && branchId === null && <BranchRequired permission={'retail.stock.read'} />}
       {result.isPending && (all || branchId !== null) && <p className="loading">Loading</p>}
       <Problem error={result.error} />
       {!all && one.data && <StockTable rows={one.data} showCost={canProfit} />}

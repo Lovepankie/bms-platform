@@ -201,7 +201,7 @@ function RecordSale() {
   return (
     <Gate screen="sale" title="Record a sale">
       {branchId === null ? (
-        <BranchRequired />
+        <BranchRequired permission="retail.sale.create" />
       ) : sale ? (
         <Receipt sale={sale} onNew={() => { setSale(null); setRound((n) => n + 1); }} />
       ) : (

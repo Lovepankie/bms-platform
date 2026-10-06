@@ -119,7 +119,7 @@ function StocktakePage() {
   return (
     <Gate screen="stocktake" title="Stock-take">
       {branchId === null ? (
-        <BranchRequired />
+        <BranchRequired permission={'retail.stocktake.commit'} />
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>

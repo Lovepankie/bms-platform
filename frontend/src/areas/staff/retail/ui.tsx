@@ -6,7 +6,7 @@ import { formatMinor } from '../../../components/money';
 import { useStockedBranches } from '../branch-picker';
 import { useStaff } from '../context';
 import { showQty } from './maths';
-import { canSeeProfit, canUse, type RetailScreen } from './permissions';
+import { branchesWhere, canSeeProfit, canUse, type RetailScreen } from './permissions';
 
 // Shared pieces of the retail screens. Phone first: one column, 44px tap targets, labels on every
 // input, a visible focus ring, and state shown in words as well as colour.
@@ -126,11 +126,12 @@ export function CategoryLabel({ category }: { category?: string }) {
 
 /**
  * A screen that writes works on one branch. With "All branches" chosen it offers each of the user's
- * branches as a button instead of pointing at the Branch box (#144).
+ * branches where the screen's `permission` is held as a button instead of pointing at the Branch box
+ * (#144).
  */
-export function BranchRequired() {
+export function BranchRequired({ permission }: { permission: string }) {
   const { me, chooseBranch } = useStaff();
-  const branches = (me.branches ?? []).filter((b) => b.id);
+  const branches = branchesWhere(me, permission).filter((b) => b.id);
   return (
     <div role="note" className="alert alert-info">
       <div className="stack">

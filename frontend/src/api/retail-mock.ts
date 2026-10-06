@@ -30,11 +30,14 @@ const ADMIN_PERMISSIONS = [
 
 /** A fake signed-in user for the mock session, so the app runs without a backend. */
 export function mockMe(role: string | undefined): Me & { modules: string[] } {
+  const permissions = role === 'sales' ? SALES_PERMISSIONS : ADMIN_PERMISSIONS;
+  const scope = role === 'sales' ? { all_branches: false, branch_ids: [BRANCH_A, BRANCH_B] } : { all_branches: true, branch_ids: [] };
   return {
     user_id: '00000000-0000-4000-8000-0000000000f1',
     full_name: role === 'sales' ? 'Test Seller 01' : 'Test Admin 01',
     kind: 'staff',
-    permissions: role === 'sales' ? SALES_PERMISSIONS : ADMIN_PERMISSIONS,
+    permissions,
+    permission_scopes: Object.fromEntries(permissions.map((p) => [p, scope])),
     all_branches: role !== 'sales',
     default_branch_id: BRANCH_A,
     branches: MOCK_BRANCHES,

@@ -152,7 +152,7 @@ function ValuationPage() {
   });
   return (
     <Gate screen="valuation" title="Stock value">
-      {!all && branchId === null ? <BranchRequired /> : (
+      {!all && branchId === null ? <BranchRequired permission="retail.stock.read" /> : (
         <>
           <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
           {valuation.isPending && <p className="loading">Loading</p>}
@@ -246,7 +246,7 @@ function ProfitPage() {
   });
   return (
     <Gate screen="profit" title="Daily profit">
-      {!all && branchId === null ? <BranchRequired /> : (
+      {!all && branchId === null ? <BranchRequired permission="retail.profit.read" /> : (
         <>
           <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
           <div className="rt-row">

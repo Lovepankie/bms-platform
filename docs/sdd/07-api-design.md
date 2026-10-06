@@ -329,7 +329,7 @@ port (8081), which is never published outside the container network.
 | POST | `/auth/member/login` | public | `{phone, pin}` (P2) |
 | POST | `/auth/refresh` | refresh cookie | Rotates refresh token. FR-IAM-07 |
 | POST | `/auth/logout` | authenticated staff | Revokes the session family; clears the cookie |
-| GET | `/me` | authenticated staff | User, roles, permissions, `all_branches`, the branches to switch between, the default branch, MFA state and unused recovery codes. FR-BR-03 |
+| GET | `/me` | authenticated staff | User, roles, permissions, `permission_scopes` (per permission key `{all_branches, branch_ids}`, so a screen offers only the branches where its permission is held, ADR-017), `all_branches`, the branches to switch between, the default branch, MFA state and unused recovery codes. FR-BR-03 |
 
 The refresh token never appears in a response body: it is the `__Host-bms_rt` cookie of section 7.4.1.
 

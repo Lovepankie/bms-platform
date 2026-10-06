@@ -14,6 +14,7 @@ import { TransferForm, TransferSummary } from './transfer';
 import { TransferList, showDate } from './transfers';
 import { UsageForm } from './usage';
 import { SaleDetail, SaleList, saleState } from './sales';
+import { branchesWhere } from './permissions';
 import { BranchRequired, Gate, NoStockHere, Problem } from './ui';
 import { ALL_BRANCHES } from '../../../auth/branch';
 
@@ -401,11 +402,26 @@ describe('All branches (#144)', () => {
   });
 
   it('a write screen asks for a branch and offers each as a button', () => {
-    const html = inAll(<BranchRequired />);
+    const html = inAll(<BranchRequired permission="retail.stocktake.commit" />);
     expect(html).toContain('Choose a branch');
     expect(html).toContain('<button type="button" class="btn-sm">Test Branch A (BR1)</button>');
     expect(html).toContain('Test Branch B (BR2)');
     expect(html).not.toContain('Branch box');
+  });
+
+  it('offers only the branches where the screen\'s permission is held', () => {
+    const me = mockMe('admin');
+    me.permission_scopes = { ...me.permission_scopes, 'retail.usage.report': { all_branches: false, branch_ids: [me.branches?.[1]?.id ?? ''] } };
+    const html = renderToString(
+      <QueryClientProvider client={new QueryClient()}>
+        <StaffContext.Provider value={{ me, branch: ALL_BRANCHES, chooseBranch: () => undefined }}><BranchRequired permission="retail.usage.report" /></StaffContext.Provider>
+      </QueryClientProvider>,
+    );
+    expect(html).toContain('Test Branch B (BR2)');
+    expect(html).not.toContain('Test Branch A');
+    expect(branchesWhere(me, 'retail.sale.create')).toHaveLength(2);
+    expect(branchesWhere(me, 'retail.nothing')).toHaveLength(0);
+    expect(branchesWhere({ branches: me.branches }, 'retail.usage.report')).toHaveLength(2);
   });
 
   it('Stock value shows each branch and the total', () => {

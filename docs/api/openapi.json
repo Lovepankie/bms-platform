@@ -2225,6 +2225,13 @@
           "mfa_required" : {
             "type" : "boolean"
           },
+          "permission_scopes" : {
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/MePermissionScope"
+            },
+            "description" : "Per permission key, the branches it applies in",
+            "type" : "object"
+          },
           "permissions" : {
             "items" : {
               "type" : "string"
@@ -2264,6 +2271,21 @@
           },
           "name" : {
             "type" : "string"
+          }
+        }
+      },
+      "MePermissionScope" : {
+        "description" : "Per permission key, the branches it applies in",
+        "properties" : {
+          "all_branches" : {
+            "type" : "boolean"
+          },
+          "branch_ids" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
           }
         }
       },

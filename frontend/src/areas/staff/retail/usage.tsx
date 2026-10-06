@@ -97,7 +97,7 @@ function UsagePage() {
   return (
     <Gate screen="usage" title="Usage and damage">
       {branchId === null ? (
-        <BranchRequired />
+        <BranchRequired permission={'retail.usage.report'} />
       ) : done ? (
         <section aria-label="Saved">
           <h2>Saved</h2>

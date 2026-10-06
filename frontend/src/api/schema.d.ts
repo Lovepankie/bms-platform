@@ -2910,6 +2910,10 @@ export interface components {
             kind?: string;
             mfa_enabled?: boolean;
             mfa_required?: boolean;
+            /** @description Per permission key, the branches it applies in */
+            permission_scopes?: {
+                [key: string]: components["schemas"]["MePermissionScope"];
+            };
             permissions?: string[];
             phone_e164?: string;
             roles?: components["schemas"]["RoleAssignment"][];
@@ -2924,6 +2928,11 @@ export interface components {
             id?: string;
             is_head_office?: boolean;
             name?: string;
+        };
+        /** @description Per permission key, the branches it applies in */
+        MePermissionScope: {
+            all_branches?: boolean;
+            branch_ids?: string[];
         };
         Member: {
             alt_phone_e164?: string;

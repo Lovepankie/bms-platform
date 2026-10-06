@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /** Bodies of {@code /api/v1/users}, {@code /api/v1/roles} and {@code /api/v1/me} (section 7.11.4). */
@@ -69,6 +70,10 @@ final class UserApi {
     @Schema(name = "MeBranch")
     record MeBranch(UUID id, String code, String name, boolean isHeadOffice) {}
 
+    /** Where one permission applies: every branch, or the listed ones (ADR-017). */
+    @Schema(name = "MePermissionScope")
+    record MePermissionScope(boolean allBranches, List<UUID> branchIds) {}
+
     /**
      * What the frontend shows and hides by (chapter 8 section 8.3.3), and the branches the user can
      * switch between (FR-BR-03). {@code all_branches} lets the user pick "All branches" (FR-BR-04).
@@ -82,6 +87,10 @@ final class UserApi {
             String phoneE164,
             List<RoleAssignment> roles,
             List<String> permissions,
+
+            @Schema(description = "Per permission key, the branches it applies in")
+            Map<String, MePermissionScope> permissionScopes,
+
             boolean allBranches,
             List<MeBranch> branches,
             UUID defaultBranchId,
