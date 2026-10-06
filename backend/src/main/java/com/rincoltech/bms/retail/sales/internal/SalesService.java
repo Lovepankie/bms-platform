@@ -306,6 +306,10 @@ class SalesService {
         Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
         if (after != null) {
             String direction = newestFirst ? "desc:" : "asc:";
+            if (!after.sortKey().startsWith("desc:") && !after.sortKey().startsWith("asc:")) {
+                throw new ApiException(
+                        HttpStatus.BAD_REQUEST, "malformed_request", "Malformed request", "Invalid cursor.");
+            }
             if (!after.sortKey().startsWith(direction)) {
                 throw ApiException.validation(List.of(new FieldProblem(
                         "cursor", "invalid", "The cursor was issued for the other newest_first direction.")));
