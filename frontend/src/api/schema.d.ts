@@ -312,6 +312,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The tenant's display name, theme colour and logo URL (public) */
+        get: operations["getBranding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/branding/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The tenant's logo image (public, cacheable) */
+        get: operations["getBrandingLogo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/documents/{document_id}": {
         parameters: {
             query?: never;
@@ -1593,6 +1627,24 @@ export interface paths {
         patch: operations["updateSettings"];
         trace?: never;
     };
+    "/api/v1/settings/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upload or replace the business logo: PNG, JPEG or WebP, 1 MB, 128 px or more (FR-TEN-08) */
+        put: operations["uploadLogo"];
+        post?: never;
+        /** Remove the business logo; the file is kept (FR-TEN-08) */
+        delete: operations["removeLogo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -1823,6 +1875,15 @@ export interface components {
         };
         BranchList: {
             items?: components["schemas"]["Branch"][];
+        };
+        Branding: {
+            display_name?: string;
+            /** @description Same-origin URL of the logo image, or null */
+            logo_url?: string;
+            /** @description #RRGGBB or null: the platform look */
+            theme_primary?: string;
+            /** @description #FFFFFF or #111111, the readable text colour on themePrimary; null with it */
+            theme_text?: string;
         };
         Collateral: {
             /** Format: uuid */
@@ -3471,13 +3532,24 @@ export interface components {
             approval_validity_days?: number;
             disabled_collateral_types?: string[];
             display_name?: string;
+            /** @description True once the admin has saved a business name of their own */
+            display_name_set?: boolean;
+            /**
+             * Format: uuid
+             * @description The current logo (a core document of this tenant), or null; set through PUT /settings/logo
+             */
+            logo_document_id?: string;
             /** Format: int32 */
             max_active_loans_per_member?: number;
             receipt_footer?: string;
             require_mfa_all_staff?: boolean;
+            /** @description True once the business set-up checklist has been dismissed */
+            setup_dismissed?: boolean;
             sms_sender_name?: string;
             sms_window_end?: string;
             sms_window_start?: string;
+            /** @description Brand colour #RRGGBB, or null for the platform look (FR-TEN-08) */
+            theme_primary?: string;
             /** Format: int32 */
             version?: number;
         };
@@ -3573,10 +3645,13 @@ export interface components {
             max_active_loans_per_member?: number;
             receipt_footer?: string;
             require_mfa_all_staff?: boolean;
+            setup_dismissed?: boolean;
             /** @description Subject to aggregator approval */
             sms_sender_name?: string;
             sms_window_end?: string;
             sms_window_start?: string;
+            /** @description #RRGGBB; white or near-black text on it must reach contrast 4.5 (FR-TEN-08) */
+            theme_primary?: string;
         };
         /** @description Omitted fields are unchanged */
         UpdateUserRequest: {
@@ -4083,6 +4158,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Branch"];
+                };
+            };
+        };
+    };
+    getBranding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branding"];
+                };
+            };
+        };
+    };
+    getBrandingLogo: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-None-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
                 };
             };
         };
@@ -6430,6 +6547,53 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateTenantSettingsRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantSettings"];
+                };
+            };
+        };
+    };
+    uploadLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantSettings"];
+                };
+            };
+        };
+    };
+    removeLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {

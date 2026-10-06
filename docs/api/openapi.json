@@ -261,6 +261,25 @@
           }
         }
       },
+      "Branding" : {
+        "properties" : {
+          "display_name" : {
+            "type" : "string"
+          },
+          "logo_url" : {
+            "description" : "Same-origin URL of the logo image, or null",
+            "type" : "string"
+          },
+          "theme_primary" : {
+            "description" : "#RRGGBB or null: the platform look",
+            "type" : "string"
+          },
+          "theme_text" : {
+            "description" : "#FFFFFF or #111111, the readable text colour on themePrimary; null with it",
+            "type" : "string"
+          }
+        }
+      },
       "Collateral" : {
         "properties" : {
           "branch_id" : {
@@ -4214,6 +4233,15 @@
           "display_name" : {
             "type" : "string"
           },
+          "display_name_set" : {
+            "description" : "True once the admin has saved a business name of their own",
+            "type" : "boolean"
+          },
+          "logo_document_id" : {
+            "description" : "The current logo (a core document of this tenant), or null; set through PUT /settings/logo",
+            "format" : "uuid",
+            "type" : "string"
+          },
           "max_active_loans_per_member" : {
             "format" : "int32",
             "type" : "integer"
@@ -4224,6 +4252,10 @@
           "require_mfa_all_staff" : {
             "type" : "boolean"
           },
+          "setup_dismissed" : {
+            "description" : "True once the business set-up checklist has been dismissed",
+            "type" : "boolean"
+          },
           "sms_sender_name" : {
             "type" : "string"
           },
@@ -4231,6 +4263,10 @@
             "type" : "string"
           },
           "sms_window_start" : {
+            "type" : "string"
+          },
+          "theme_primary" : {
+            "description" : "Brand colour #RRGGBB, or null for the platform look (FR-TEN-08)",
             "type" : "string"
           },
           "version" : {
@@ -4524,6 +4560,9 @@
           "require_mfa_all_staff" : {
             "type" : "boolean"
           },
+          "setup_dismissed" : {
+            "type" : "boolean"
+          },
           "sms_sender_name" : {
             "description" : "Subject to aggregator approval",
             "pattern" : "^[A-Za-z0-9 ]{3,11}$",
@@ -4535,6 +4574,11 @@
           },
           "sms_window_start" : {
             "pattern" : "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+            "type" : "string"
+          },
+          "theme_primary" : {
+            "description" : "#RRGGBB; white or near-black text on it must reach contrast 4.5 (FR-TEN-08)",
+            "pattern" : "^#[0-9A-Fa-f]{6}$",
             "type" : "string"
           }
         }
@@ -5277,6 +5321,53 @@
         },
         "summary" : "Deactivate a branch (FR-BR-01)",
         "tags" : [ "branches" ]
+      }
+    },
+    "/api/v1/branding" : {
+      "get" : {
+        "operationId" : "getBranding",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branding"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's display name, theme colour and logo URL (public)",
+        "tags" : [ "branding" ]
+      }
+    },
+    "/api/v1/branding/logo" : {
+      "get" : {
+        "operationId" : "getBrandingLogo",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "If-None-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's logo image (public, cacheable)",
+        "tags" : [ "branding" ]
       }
     },
     "/api/v1/documents/{document_id}" : {
@@ -8665,6 +8756,58 @@
           }
         },
         "summary" : "Change tenant settings, audited with before and after (FR-TEN-08)",
+        "tags" : [ "settings" ]
+      }
+    },
+    "/api/v1/settings/logo" : {
+      "delete" : {
+        "operationId" : "removeLogo",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove the business logo; the file is kept (FR-TEN-08)",
+        "tags" : [ "settings" ]
+      },
+      "put" : {
+        "operationId" : "uploadLogo",
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "required" : [ "file" ],
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Upload or replace the business logo: PNG, JPEG or WebP, 1 MB, 128 px or more (FR-TEN-08)",
         "tags" : [ "settings" ]
       }
     },
