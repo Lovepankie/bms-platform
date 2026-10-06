@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-10-06). Builds on ADR-016 (platform operations through definer functions) and
+Accepted (2026-10-06, by the dev lead after review by the lending session, the retail session and Dennis). Builds on ADR-016 (platform operations through definer functions) and
 ADR-008 (scheduler). Extends FR-TEN-03 to FR-TEN-06. Specification: `docs/specs/self-onboarding-and-subscriptions.md`.
 
 ## Context

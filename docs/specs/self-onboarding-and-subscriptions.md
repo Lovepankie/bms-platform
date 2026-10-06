@@ -1,6 +1,6 @@
 # Self-onboarding, subscriptions and agents
 
-**Status:** Draft for review · **Owner:** Hillary · **Decision record:** ADR-024 · **Applies to:** every vertical (lending, retail, later others)
+**Status:** Accepted (2026-10-06) · **Owner:** Hillary · **Decision record:** ADR-024 · **Applies to:** every vertical (lending, retail, later others)
 
 All worked examples use fabricated round figures in UGX. The real list prices, discounts and any
 agent arrangement are configuration entered by the platform operator in the operator portal. They
@@ -195,12 +195,20 @@ that fails three times stays `failed` and appears in the operator portal.
 
 ## 13. Build order
 
-1. Subscription model, price book, payments and the operator portal: tenant list, confirm a payment,
-   activate (enough for assisted customers, and the base of everything below).
-2. Applications, the public sign-up page, email verification and the activation email.
-3. The tenant billing screen, the trial clock and the reminders; then, only once reminders are live,
-   the scheduled state changes with the safeguards of section 5.
-4. Agents and commissions.
+The first slice replaces the operator creating tenants by hand and sending invitation links: a business
+signs up and the operator activates it. Payments, prices and commissions follow.
+
+1. **Sign-up to activation.** The application table, the public sign-up page with email verification,
+   the operator portal with the applications queue and one Activate action (modules, term, way in) that
+   creates the tenant through the existing function and sends the activation link, the email adapter,
+   and the outbox with its Email and Telegram senders. The payment is recorded by the operator by hand
+   in this slice (a note on the subscription), so the first customers can go live.
+2. **Prices and payments.** The price book, per-subscription deal prices, the payment record with the
+   "I have paid" claim on the tenant billing screen and the operator confirm action, which becomes the
+   one action that activates a paid subscription.
+3. **Trial clock and reminders.** The trial starting at first sign-in, the reminders, and, only once
+   reminders are live, the guarded scheduled state changes of section 5. The WhatsApp relay of section 11.
+4. **Agents and commissions.**
 
 Each step carries its migration and docs; migration numbers for this work are announced on issue #50
 before use, one migration pull request at a time, each taking the next free number at merge time (the
