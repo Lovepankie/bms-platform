@@ -40,7 +40,10 @@ host is one small shared machine, so an unverified stranger must not be able to 
    scheduled transitions are off by default per tenant, run only after reminders have been sent, skip
    complimentary and pilot tenants, and hand a tenant with recent trading to the operator to confirm
    instead of suspending it. The transitions ship after the reminders.
-7. **The operator portal is a new frontend area on the platform host**, backed by the platform
+7. **Notifications go through an outbox with pull-based relays where the platform cannot reach the
+   sender.** Email and Telegram are sent from the platform host; WhatsApp is sent by a relay on the host
+   that runs the bridge, which pulls and acknowledges outbox rows, so nothing is opened inbound.
+8. **The operator portal is a new frontend area on the platform host**, backed by the platform
    endpoints and definer functions of ADR-016; tenant-facing billing lives inside the tenant.
 
 ## Consequences

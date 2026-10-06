@@ -144,8 +144,8 @@ with a reversing entry and a new payment. The same record shape lets a gateway c
 A new area of the frontend on the platform host, for platform operators only (today there is no UI):
 applications queue; tenants with subscription state and period; payments to confirm; commissions owed
 and paid; price book; agents; the global new-trials switch. Every action is written to
-`platform_audit_log`. A new application or a payment claim is also exposed on a queue endpoint so a
-notifier outside this repository (for example the operator's phone) can forward it.
+`platform_audit_log`. A new application or a payment claim also writes an operator alert to the outbox (section 11), so
+the operator's phone hears about it on Telegram and WhatsApp without watching the portal.
 
 ## 9. The tenant billing screen
 
@@ -162,8 +162,25 @@ field check, and the operator's verification as the real gate.
 
 ## 11. Notifications
 
-An email adapter for the existing notification port (activation link, verification link, reminders,
-operator alerts). The provider is configuration; no provider is chosen in this spec.
+Every message goes through one **outbox** (a table: channel, recipient, text, status, attempts,
+timestamps). The application writes to it in the same transaction as the change that causes the
+message; a sender per channel takes pending rows, sends them and records the result.
+
+- **Email** (activation and verification links, reminders, operator alerts): an adapter for the
+  existing notification port, sending from the Pi. The provider is configuration (an SMTP account over
+  implicit TLS, or a transactional API once the sender domain is verified); the choice is not in this
+  spec.
+- **Telegram** (operator alerts): the bot API, sent from the Pi.
+- **WhatsApp** (operator alerts and customer reminders): the platform host cannot reach the WhatsApp
+  bridge, which listens only on its own machine. A small relay on the always-on host that runs the
+  bridge **pulls** pending WhatsApp rows over HTTPS with its own token, sends them through the local
+  bridge, and acknowledges each one. Nothing is opened inbound; the token can only read and
+  acknowledge WhatsApp outbox rows. The relay cleans phone numbers with the rule that refuses an
+  ambiguous number (it never guesses a country code), because the bridge reports success even for a
+  number that is not on WhatsApp.
+
+Delivery is at least once with an idempotency key per row, so a retry never sends a second copy. A row
+that fails three times stays `failed` and appears in the operator portal.
 
 ## 12. Security and data
 
