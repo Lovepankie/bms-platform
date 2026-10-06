@@ -36,7 +36,11 @@ host is one small shared machine, so an unverified stranger must not be able to 
    flat per payment, or one-off) belongs to a subscription and an agent and applies from its
    effective date; confirming a payment stores a commission line with the rule it used. Rules change
    only forward, lines are immutable, and commissions never reach anything the customer sees.
-6. **The operator portal is a new frontend area on the platform host**, backed by the platform
+6. **Automatic suspension is opt-in and guarded.** Moving a tenant to read only stops its till, so the
+   scheduled transitions are off by default per tenant, run only after reminders have been sent, skip
+   complimentary and pilot tenants, and hand a tenant with recent trading to the operator to confirm
+   instead of suspending it. The transitions ship after the reminders.
+7. **The operator portal is a new frontend area on the platform host**, backed by the platform
    endpoints and definer functions of ADR-016; tenant-facing billing lives inside the tenant.
 
 ## Consequences
@@ -50,6 +54,9 @@ Worse: the operator confirms every payment by hand, so confirmation speed is the
 friction (the portal queue and a forwarded alert keep it short); a free month invites repeat claims
 (matched on phone, email and business name, with an operator warning); a trial clock that starts at
 first sign-in lets an unused trial linger (the operator can expire it).
+
+A tenant may stay `active` past its due date until the operator or an opted-in job acts; that is a
+deliberate cost, chosen over cutting a shop off by surprise.
 
 To watch: the number of concurrent trials on the staging host (a global switch stops new ones), the
 volume of mail the new adapter sends, and that no commercial figures or agent terms are ever written to

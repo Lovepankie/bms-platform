@@ -42,7 +42,12 @@ per-staff add-on pricing, agent logins.
   negotiated). A deal price is stored on the subscription as an agreed amount per term; the price
   book is not changed. The customer sees one flat figure.
 - Adding a module mid-term re-prices the subscription from the next period; the operator can charge
-  the difference once as a separate payment.
+  the difference once as a separate payment. Enabling a module is idempotent: its default chart,
+  roles and permissions are seeded through the same platform function as at tenant creation, and
+  enabling it twice changes nothing. Removing a module hides it (404 `module_not_enabled`) and keeps
+  all its data, so it can be enabled again (FR-TEN-03).
+- Entitlement is the tenant's enabled-module row, checked before any permission. The price book is
+  keyed by module key, so a new vertical needs a key and no other change.
 - Limits (branches, staff users, active records) come from the plan as today (FR-TEN-04, chapter 6
   `plans`). A plan no longer carries a price.
 - A **complimentary** subscription (price 0, no payments expected) is allowed and audited, for
@@ -93,10 +98,25 @@ records so nothing is special-cased.
 ## 5. Subscription lifecycle (extends FR-TEN-05)
 
 States stay `trial`, `active`, `past_due`, `suspended`, `cancelled`. New columns: term, agreed price,
-period start and end, trial end. A scheduled job (db-scheduler, ADR-008) moves `active` to `past_due`
-on the day after the period end, and `past_due` to `suspended` after a grace period (default 7 days,
-a platform setting). Cancelling takes effect at the end of the paid period. No refunds in this
-release.
+period start and end, trial end. Cancelling takes effect at the end of the paid period. No refunds in this release.
+
+**Automatic transitions are safe by construction, because a read-only tenant cannot sell at its
+till.** A scheduled job (db-scheduler, ADR-008) may move `active` to `past_due` and `past_due` to
+`suspended` only when all of these hold:
+
+1. The tenant has automatic transitions switched on (a per-tenant setting, **off by default**; the
+   operator switches it on for tenants that agreed to it).
+2. The tenant has been sent reminders: at 7 days and 1 day before the period end, on the due day, and
+   on each of the first days of `past_due`, by email to the admin. The scheduled transitions ship
+   **after** the reminders do (build step 3), never before.
+3. The tenant is not complimentary and not a pilot tenant (those are exempt, a flag on the
+   subscription).
+4. For a tenant with recent trading (a sale, restock, loan or repayment in the last 14 days), the job
+   does not suspend by itself: it puts the tenant on the operator's "confirm before suspending" list
+   with the last trading date, and the operator confirms or extends the grace. The grace period
+   before `suspended` is a platform setting (default 7 days).
+
+A tenant can always be moved by hand by the operator, as today (FR-TEN-05), with the reason audited.
 
 ## 6. Payments (FR-PAY-01 to FR-PAY-05)
 
@@ -160,7 +180,8 @@ operator alerts). The provider is configuration; no provider is chosen in this s
 1. Subscription model, price book, payments and the operator portal: tenant list, confirm a payment,
    activate (enough for assisted customers, and the base of everything below).
 2. Applications, the public sign-up page, email verification and the activation email.
-3. The tenant billing screen, the trial clock, reminders and the scheduled state changes.
+3. The tenant billing screen, the trial clock and the reminders; then, only once reminders are live,
+   the scheduled state changes with the safeguards of section 5.
 4. Agents and commissions.
 
 Each step carries its migration and docs; migration numbers for this work are claimed on issue #50
