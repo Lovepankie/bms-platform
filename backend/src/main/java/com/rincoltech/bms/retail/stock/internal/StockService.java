@@ -105,7 +105,7 @@ class StockService {
             String query, UUID categoryId, boolean negativeOnly, String level, Integer limit, String cursor) {
         Long atMost = atMostOf(level);
         Principal principal = CurrentPrincipal.require();
-        List<Branch> visible = branches.visible("retail.stock.read");
+        List<Branch> visible = branches.visible("retail.stock.read", repo.branchesHoldingBalance());
         List<UUID> ids = visible.stream().map(Branch::id).toList();
         List<StockBranch> columns = visible.stream()
                 .map(b -> new StockBranch(b.id(), b.code(), b.name(), b.headOffice()))

@@ -563,4 +563,28 @@ class RetailParityIT extends IntegrationTest {
                 ADMIN);
         assertThat(wrong2.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
+
+    // ---- G. Inactive branches in All branches (review of #154) ------------------------------
+
+    @Test
+    void allBranchesKeepsAnInactiveBranchThatStillHoldsStockAndDropsAnEmptyOne() {
+        stockInTwoBranches();
+        TestDatabase.owner()
+                .sql("UPDATE branches SET status = 'inactive' WHERE id = ?")
+                .param(t.secondBranch())
+                .update();
+        JsonNode page = ok(api.get("/stock/all-branches", ADMIN));
+        assertThat(page.get("branches")).hasSize(2);
+        assertThat(row(page, "PAR-BULB").get("negative").asBoolean()).isTrue();
+        assertThat(row(page, "PAR-CABLE").get("total_qty").asString()).isEqualTo("15.000");
+
+        // Once the closed branch is emptied it is no longer a column.
+        TestDatabase.owner()
+                .sql("UPDATE retail_stock_balances SET qty = 0 WHERE branch_id = ?")
+                .param(t.secondBranch())
+                .update();
+        JsonNode after = ok(api.get("/stock/all-branches", ADMIN));
+        assertThat(after.get("branches")).hasSize(1);
+        assertThat(after.toString()).doesNotContain(t.secondBranch().toString());
+    }
 }
