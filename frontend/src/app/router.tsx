@@ -138,6 +138,14 @@ const retailTransfersRoute = retailScreen('/transfers').lazy(() => import('../ar
 const retailValuationRoute = retailScreen('/valuation').lazy(() => import('../areas/staff/retail/profit').then((m) => m.ValuationRoute));
 const retailProfitRoute = retailScreen('/profit').lazy(() => import('../areas/staff/retail/profit').then((m) => m.Route));
 
+const staffLendingRoute = createRoute({ getParentRoute: () => staffRoute, path: '/lending', component: Outlet });
+const lendingLoansRoute = createRoute({ getParentRoute: () => staffLendingRoute, path: '/' }).lazy(() =>
+  import('../areas/staff/lending/loans').then((m) => m.Route),
+);
+const lendingLoanRoute = createRoute({ getParentRoute: () => staffLendingRoute, path: '/loans/$loanId' }).lazy(() =>
+  import('../areas/staff/lending/loan').then((m) => m.Route),
+);
+
 const memberRoute = createRoute({ getParentRoute: () => rootRoute, path: '/member' }).lazy(() =>
   import('../areas/member/route').then((m) => m.Route),
 );
@@ -158,7 +166,7 @@ export const router = createRouter({
         retailTransfersRoute,
         retailValuationRoute,
         retailProfitRoute,
-      ])]),
+      ]), staffLendingRoute.addChildren([lendingLoansRoute, lendingLoanRoute])]),
     memberRoute,
   ]),
 });

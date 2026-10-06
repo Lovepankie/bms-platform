@@ -67,17 +67,20 @@ class LoanController {
 
     @GetMapping
     @RequiresPermission("lending.loans.read")
-    @Operation(summary = "List loans in the caller's branch scope", operationId = "listLoans")
+    @Operation(
+            summary = "List loans in the caller's branch scope; q searches loan number, member number or name",
+            operationId = "listLoans")
     LoanPage list(
             @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
             @RequestParam(name = "status", required = false) List<String> statuses,
             @RequestParam(name = "member_id", required = false) UUID memberId,
             @RequestParam(name = "officer_user_id", required = false) UUID officerId,
             @RequestParam(name = "product_id", required = false) UUID productId,
+            @RequestParam(name = "q", required = false) String q,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
         return service.list(
-                branchIds, statuses == null ? List.of() : statuses, memberId, officerId, productId, limit, cursor);
+                branchIds, statuses == null ? List.of() : statuses, memberId, officerId, productId, q, limit, cursor);
     }
 
     @PostMapping

@@ -1,0 +1,66 @@
+# Runbook: fill a staging lending tenant with fabricated data (`seed-lending`)
+
+**Requirements:** increment 5 demo (issue #108) · **Decision:** ADR-025 decision 4 ·
+**Design:** SDD chapter 5 section 5.4 (`lending.seed`), chapter 7 section 7.11.13
+
+The command gives an empty lending tenant on **staging** a small, fully fabricated loan book, so the
+pilot tenant's staff can try the loan screens with fake data before their own register is imported
+(increment 7):
+
+- 15 members (`Test Borrower 01` to `15`, phones `+256700000001` to `15`, KYC verified);
+- 4 loan products (`FAB-BULLET`, `FAB-MONTHLY` with a 2% deducted fee, `FAB-DECLINE` with an upfront
+  fee, `FAB-WEEKLY` with an added fee and the early settlement rebate), all rates invented;
+- 12 applications in every state before the money: draft, submitted, appraised, approved, rejected
+  and cancelled;
+- 6 loans disbursed 10 to 100 days back with 11 repayments between them: one paid off with a
+  credit, some partly paid, some overdue, one untouched.
+
+Every disbursement and repayment goes through the same code as staff (`LoanServicing`), so each
+posts its journal, receipt or voucher number and audit row; the trial balance balances and loans
+receivable equals the loans' principal outstanding.
+
+```
+java -jar bms-api.jar seed-lending --tenant <slug>
+```
+
+Exit status 0 means the tenant was seeded; 1 means it was refused and **nothing was written**; 2 is
+a usage error.
+
+## Safety rules (enforced by the command)
+
+- **Never production.** The command exits 1 when `BMS_ENVIRONMENT` is `production`. It is a named
+  command of the API image and never runs at startup; the image's default command is the web
+  application.
+- **Empty tenants only.** It refuses a tenant that holds any member, loan product, loan or journal
+  entry, so it can never mix fabricated rows with real ones.
+- **Once.** It records the audit action `lending.seed.fabricated` (the marker) and refuses any
+  tenant that carries it.
+- **One transaction.** A failure part way leaves the tenant exactly as it was.
+- It runs as `bms_app` under the tenant's row-level security, like the API, and needs the lending
+  module switched on for the tenant (`docs/runbooks/onboard-tenant.md`).
+
+## Run on staging
+
+On the staging host, from `/opt/bms` (the host installs `compose.pi-staging.yml` as `compose.yml`):
+
+```bash
+cd /opt/bms
+docker compose --project-name bms -f compose.yml run --rm --no-deps \
+  -e JAVA_TOOL_OPTIONS='-XX:MaxRAMPercentage=50 -XX:+UseSerialGC -XX:TieredStopAtLevel=1' \
+  api seed-lending --tenant <slug>
+```
+
+The stack is capped at 900 MB (ADR-018): run it when nothing else heavy is running. The command
+prints one line, for example
+`seed-lending: tenant <slug>: 15 members, 4 products, 12 applications, 6 disbursed loans, 11 repayments (all fabricated)`.
+
+## Run locally
+
+`make seed-lending` seeds the fabricated `demo` tenant of `make dev` (override with
+`SEED_SLUG=<slug>`). A second run is refused by the marker; `make clean` and `make dev` start over.
+
+## Removing the fabricated data
+
+There is no delete: journals, transactions and allocations are append-only (ADR-004). A tenant that
+was seeded keeps its fabricated book. When the pilot moves to real data, it does so on production
+(or on a new staging tenant), never on top of a seeded tenant.

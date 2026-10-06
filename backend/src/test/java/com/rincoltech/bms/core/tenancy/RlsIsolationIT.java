@@ -348,6 +348,29 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), transfer, t.tenantId())
                 .update();
+        // Loan servicing (increment 5, #108): a schedule item, a repayment on the fixture journal, its allocation.
+        UUID item = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO lending_schedule_items (id, tenant_id, loan_id, item_no, due_date, principal_due_minor,
+                                                            interest_due_minor, status)
+                        VALUES (?, ?, ?, 1, DATE '2026-02-15', 100000, 10000, 'pending')
+                        """).params(item, t.tenantId(), loan).update();
+        UUID repayment = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO lending_loan_transactions (id, tenant_id, branch_id, loan_id, txn_type, amount_minor,
+                                                               currency, value_date, payment_method_key, receipt_no,
+                                                               journal_entry_id, source)
+                        VALUES (?, ?, ?, ?, 'repayment', 1000, 'UGX', DATE '2026-01-15', 'cash', 'RC-HQ-999999', ?, 'staff')
+                        """)
+                .params(repayment, t.tenantId(), t.headOffice(), loan, entry)
+                .update();
+        owner.sql("""
+                        INSERT INTO lending_repayment_allocations (id, tenant_id, transaction_id, applies_to_txn_id,
+                                                                   schedule_item_id, component, amount_minor)
+                        VALUES (?, ?, ?, ?, ?, 'principal', 1000)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), repayment, repayment, item)
+                .update();
     }
 
     static String randomHash() {
@@ -616,6 +639,20 @@ class RlsIsolationIT {
                         "INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type) VALUES (?, ?, 'system', 'test.fixture.created', 'test')")
                 .params(UUID.randomUUID(), a.tenantId())
                 .update();
+        // The loan servicing ledgers are append-only too (#108).
+        for (String table : List.of("lending_loan_transactions", "lending_repayment_allocations")) {
+            assertThatThrownBy(() -> asApp(
+                            a.tenantId(),
+                            c -> count(c, "WITH d AS (DELETE FROM " + table + " RETURNING 1) SELECT count(*) FROM d")))
+                    .as(table)
+                    .hasStackTraceContaining("permission denied");
+            assertThatThrownBy(() -> TestDatabase.owner()
+                            .sql("DELETE FROM " + table + " WHERE tenant_id = ?")
+                            .param(a.tenantId())
+                            .update())
+                    .as(table)
+                    .hasStackTraceContaining("append-only");
+        }
         // Even the owner is refused unless a migration explicitly opts in.
         assertThatThrownBy(() -> TestDatabase.owner()
                         .sql("DELETE FROM audit_log WHERE tenant_id = ?")

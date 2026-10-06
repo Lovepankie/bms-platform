@@ -138,6 +138,9 @@ final class LoanApi {
                             + " proposed (else today's) date; display only")
             List<ScheduleItem> provisionalSchedule,
 
+            @Schema(description = "Balances, DPD and dates once disbursed (FR-DIS-04, R-DPD); zeros before")
+            ServicingApi.LoanBalances balances,
+
             UUID createdBy,
             Instant createdAt,
             Instant updatedAt,
@@ -149,12 +152,19 @@ final class LoanApi {
             String loanNo,
             UUID branchId,
             UUID memberId,
+            String memberNo,
+            String memberName,
             String status,
             String purposeCategory,
             long requestedPrincipalMinor,
             int requestedTermCount,
+            Long approvedPrincipalMinor,
             String currency,
             UUID officerUserId,
+            LocalDate disbursedOn,
+            long totalOutstandingMinor,
+            int daysPastDue,
+            LocalDate nextDueDate,
             Instant createdAt) {}
 
     @Schema(name = "LoanPage")

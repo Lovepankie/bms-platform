@@ -535,9 +535,33 @@ approver submitted or appraised the loan, FR-APR-03), `above_requested_principal
 reason `approval_expired` (FR-ORG-08), audited with actor kind `system`. Both `approved_at` and
 the expiry bound come from the business clock (AGENTS.md rule 7), never the database's `now()`.
 
+Built (#108, increment 5, ADR-025): disbursement, schedule, transactions, repayments, reversal,
+payoff quote and write-off. Every money-moving route requires `Idempotency-Key` (section 7.8; a
+replay answers `Idempotent-Replayed: true`). `POST .../disbursements` takes
+`{disbursement_date, payment_method_key, external_reference?}` on an `approved` loan and answers
+`LoanActionOutcome` `{loan_id, executed, approval_request_id, loan_status}`: 201 when it executed
+below the tenant's `loan_disbursement` threshold, else 202 with the pending request (checker
+`lending.disbursements.authorise`). `POST .../repayments` takes `{amount_minor, value_date,
+payment_method_key, external_reference?}` on an `active` loan (a `written_off` loan records a
+`recovery`) and answers 201 `RepaymentResult` `{transaction, loan_status, balances}` with the
+allocation rows. `POST .../transactions/{txn_id}/reverse` and `POST .../write-off` take `{reason}`
+and answer 202 with the pending request. `GET .../schedule` returns the items and a `totals` row;
+`GET .../transactions` returns every money event newest first with its allocation rows
+(`applies_to_txn_id`, `item_no`, `component`, `amount_minor`); `GET .../payoff-quote?value_date=`
+(today by default) returns principal, interest, fees, penalties, rebate and total. `GET` of a loan
+now carries `balances` (disbursed and maturity dates, outstanding by component, arrears, DPD, next
+due date, total paid, credit balance), and the list takes `q` (loan or member number by prefix,
+member name by any part) and returns the member's number and name, the outstanding total, DPD and
+the next due date. `payment_method_key` is `cash`, `bank`, `mtn_momo` or `airtel_money`. Codes (422
+unless stated): `value_date_in_future`, `before_disbursement`, `before_last_repayment`,
+`payment_method_unmapped`, `fees_exceed_principal`, `period_closed`, `not_reversible`,
+`nothing_to_write_off`, 409 `already_reversed`, 409 `invalid_status_transition` (a second
+disbursement, FR-DIS-03; a repayment on a closed loan; a quote on a loan that is not active), 409
+`approval_already_pending`, and the idempotency codes of section 7.8.
+
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/lending/loans` | `lending.loans.read` | Filters: `status`, `member_id`, `officer_user_id`, `product_id`, `dpd_from`, `dpd_to`, `disbursed_on_from/_to` |
+| GET | `/lending/loans` | `lending.loans.read` | Filters: `status`, `member_id`, `officer_user_id`, `product_id`, `q` (built); `dpd_from`, `dpd_to`, `disbursed_on_from/_to` (increment 8) |
 | POST | `/lending/loans` | `lending.loans.create` | Draft application. FR-ORG-01 |
 | GET | `/lending/loans/{loan_id}` | `lending.loans.read` | Includes balances, DPD, PAR bucket, guarantors, collateral |
 | PATCH | `/lending/loans/{loan_id}` | `lending.loans.create` | Draft only |

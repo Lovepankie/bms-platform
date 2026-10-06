@@ -191,6 +191,13 @@ Coverage gate for the lending calculation code: 95 percent lines (NFR-MNT-02).
   normalised exactly as the catalogue normalises them (review F9).
 - **Normalisation tables.** Every table of examples in chapter 13 section 13.6 is a
   parametrised unit test.
+- **Loan servicing golden tests** (`ServicingTest`, #108). Fabricated schedules from worked
+  examples B and C (built by `ScheduleCalculator`) run through R-ALLOC, R-PAYOFF (flat with and
+  without the rebate, declining), R-DPD and the FR-REP-05 replay; every allocation row, quote and
+  balance is asserted to the minor unit. `LoanServicingIT` then checks every journal line of each
+  event type of chapter 6 section 6.6.3 on PostgreSQL, idempotent retries, and after each test that
+  the trial balance balances and loans receivable equals each loan's principal outstanding.
+  `LendingSeedIT` checks the same for the fabricated seed.
 - **Report golden tests.** Each report in chapter 14 runs over its fabricated dataset and
   is compared with a committed expected output (JSON), including the PAR worked example.
 - **Document golden tests.** Each PDF template renders fabricated data; the test compares
