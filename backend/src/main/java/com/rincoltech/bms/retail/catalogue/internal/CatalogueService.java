@@ -142,7 +142,6 @@ class CatalogueService {
         after.put("description", p.description());
         after.put("category_id", p.categoryId());
         after.put("unit_id", p.unitId());
-        after.put("cost_minor", p.costMinor());
         after.put("sell_minor", p.sellMinor());
         audit.record(AuditLog.Entry.created("retail.product.created", PRODUCT, p.id(), null, after));
         return visible(repo.find(p.id()).orElseThrow());
@@ -228,17 +227,26 @@ class CatalogueService {
         return visible(repo.find(id).orElseThrow());
     }
 
-    /** FR-RET-02: a manual price edit, under the product's row lock, with its history row and audit. */
+    /**
+     * FR-RET-02: a manual price edit under If-Match, with the product's row lock, its history row
+     * and audit. {@code price_unchanged} never depends on a cost the caller may not read (#77): for
+     * a caller without {@code retail.profit.read} a request that names a cost always goes ahead.
+     */
     @Transactional
-    Product editPrices(UUID id, PriceEditRequest r) {
+    Product editPrices(UUID id, String ifMatch, PriceEditRequest r) {
+        int expected = Versions.fromIfMatch(ifMatch);
         if (r.costMinor() == null && r.sellMinor() == null) {
             throw ApiException.validation(
                     List.of(new FieldProblem("sell_minor", "required", "Give a new cost, a new sell price or both.")));
         }
         Product before = repo.lock(id).orElseThrow(ApiException::notFound);
+        if (before.version() != expected) {
+            throw Versions.conflict(before.version());
+        }
         long cost = r.costMinor() == null ? before.costMinor() : r.costMinor();
         long sell = r.sellMinor() == null ? before.sellMinor() : r.sellMinor();
-        if (cost == before.costMinor() && sell == before.sellMinor()) {
+        boolean costUnchanged = mayReadCost() ? cost == before.costMinor() : r.costMinor() == null;
+        if (costUnchanged && sell == before.sellMinor()) {
             throw ApiException.rule("price_unchanged", "The new prices equal the current ones.");
         }
         changePrices(before, cost, sell, "manual", null, r.reason().trim());
@@ -268,7 +276,6 @@ class CatalogueService {
                 locked.id());
         Map<String, Object> was = new LinkedHashMap<>();
         Map<String, Object> now = new LinkedHashMap<>();
-        diff(was, now, "cost_minor", locked.costMinor(), cost);
         diff(was, now, "sell_minor", locked.sellMinor(), sell);
         now.put("source", source);
         if (sourceId != null) {

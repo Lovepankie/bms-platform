@@ -174,7 +174,6 @@ class UsageService {
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("kind", r.kind());
         after.put("reason", reason);
-        after.put("cost_total_minor", total);
         after.put("lines", lines.size());
         audit.record(AuditLog.Entry.created("retail.usage.reported", USAGE, id, branch, after));
         UsageReport report = new UsageReport(id, branch, r.kind(), reason, on, currency, total, lines, clock.now(), by);

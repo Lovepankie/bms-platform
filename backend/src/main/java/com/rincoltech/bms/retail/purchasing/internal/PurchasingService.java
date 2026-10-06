@@ -253,7 +253,6 @@ class PurchasingService {
         after.put("purchase_no", purchaseNo);
         after.put("supplier_id", r.supplierId());
         after.put("payment_method", r.paymentMethod());
-        after.put("total_minor", total);
         after.put("lines", lines.size());
         audit.record(AuditLog.Entry.created("retail.purchase.created", PURCHASE, id, null, after));
         return repo.find(id).orElseThrow();

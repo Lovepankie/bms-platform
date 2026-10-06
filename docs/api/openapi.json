@@ -7797,6 +7797,13 @@
             "format" : "uuid",
             "type" : "string"
           }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
         } ],
         "requestBody" : {
           "content" : {
@@ -7820,7 +7827,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Edit prices by hand, with a history row (FR-RET-02)",
+        "summary" : "Edit prices by hand under If-Match, with a history row (FR-RET-02)",
         "tags" : [ "retail-catalogue" ]
       }
     },

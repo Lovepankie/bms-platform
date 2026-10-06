@@ -76,6 +76,18 @@ public final class RetailTestSupport {
         return call(HttpMethod.POST, path, body, permissions, branchIds, Map.of("Idempotency-Key", key));
     }
 
+    /** A manual price edit under If-Match, with the version read just before (#77). */
+    public ResponseEntity<JsonNode> editPrices(UUID productId, Object body, String permissions) {
+        String etag = get("/products/" + productId, ADMIN).getHeaders().getETag();
+        return call(
+                HttpMethod.POST,
+                "/products/" + productId + "/prices",
+                body,
+                permissions,
+                "*",
+                Map.of("If-Match", etag));
+    }
+
     /** A sale at a branch of one line, as an admin, with a fresh key. */
     public ResponseEntity<JsonNode> sell(UUID branchId, String method, UUID productId, String qty) {
         Map<String, Object> body = new LinkedHashMap<>();

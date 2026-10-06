@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { RETAIL_CURRENCY, retail, type Product, type Purchase, type PurchasePayment, type PurchaseRequest } from '../../../api/retail';
 import { parseMinor } from '../../../components/money';
 import { useStaff } from '../context';
-import { useIdempotencyKey } from './idempotency';
+import { usePersistedDraft } from './idempotency';
 import { lineTotalMinor, parseQty, qtyString } from './maths';
 import { Gate, Note, Problem, money, useProfitAccess } from './ui';
 
@@ -65,18 +65,31 @@ const METHODS: { value: PurchasePayment; label: string }[] = [
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
+/** What the restock form keeps with its key in this tab until saved or cleared (#77). */
+interface RestockDraft {
+  supplierId: string;
+  newSupplier: string;
+  purchasedOn: string;
+  method: PurchasePayment;
+  lines: RestockLine[];
+}
+
 export function RestockForm({ onSaved }: { onSaved?: (p: Purchase) => void }) {
   const { me, branch } = useStaff();
   const canProfit = useProfitAccess();
   const queryClient = useQueryClient();
-  const key = useIdempotencyKey();
   const branches = (me.branches ?? []).filter((b) => b.id);
+  const { key, draft, setDraft, finish, discard } = usePersistedDraft<RestockDraft>(`restock:${me.user_id ?? ''}`, {
+    supplierId: '', newSupplier: '', purchasedOn: todayIso(), method: 'cash', lines: [],
+  });
+  const { supplierId, newSupplier, purchasedOn, method, lines } = draft;
+  const field = <K extends keyof RestockDraft>(k: K) => (v: RestockDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
+  const setSupplierId = field('supplierId');
+  const setNewSupplier = field('newSupplier');
+  const setPurchasedOn = field('purchasedOn');
+  const setMethod = field('method');
+  const setLines = (f: (ls: RestockLine[]) => RestockLine[]) => setDraft((d) => ({ ...d, lines: f(d.lines) }));
   const [search, setSearch] = useState('');
-  const [supplierId, setSupplierId] = useState('');
-  const [newSupplier, setNewSupplier] = useState('');
-  const [purchasedOn, setPurchasedOn] = useState(todayIso);
-  const [method, setMethod] = useState<PurchasePayment>('cash');
-  const [lines, setLines] = useState<RestockLine[]>([]);
 
   const products = useQuery({ queryKey: ['retail', 'products', 'all', search], queryFn: () => retail.listProducts({ query: search }) });
   const suppliers = useQuery({ queryKey: ['retail', 'suppliers'], queryFn: () => retail.listSuppliers() });
@@ -84,10 +97,15 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase) => void }) {
   const save = useMutation({
     mutationFn: async () => {
       let id = supplierId;
-      if (!id && newSupplier.trim()) id = (await retail.createSupplier({ name: newSupplier.trim() })).id ?? '';
+      if (!id && newSupplier.trim()) {
+        id = (await retail.createSupplier({ name: newSupplier.trim() })).id ?? '';
+        // Kept in the draft, so a retry after a failed restock does not add the supplier twice.
+        setDraft((d) => ({ ...d, supplierId: id, newSupplier: '' }));
+      }
       return retail.createPurchase(buildPurchase({ supplierId: id, purchasedOn, method, lines }), key);
     },
     onSuccess: (p) => {
+      finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       onSaved?.(p);
     },
@@ -186,6 +204,9 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase) => void }) {
       <p className="rt-total" aria-live="polite">Total cost {money(restockTotal(lines))}</p>
       <Problem error={save.error} />
       <button type="submit" className="rt-primary" disabled={blocked || save.isPending}>{save.isPending ? 'Saving' : 'Save restock'}</button>
+      {lines.length > 0 && !save.isPending && (
+        <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this restock</button>
+      )}
     </form>
   );
 }

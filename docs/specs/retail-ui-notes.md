@@ -22,8 +22,12 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 Sale, usage, stock, stock-take, valuation and profit work on the branch chosen in the staff header; with
 "All branches" they ask for one branch. Restock takes a quantity per branch the user can see.
 
-Behaviour worth knowing: the sale, restock and usage forms generate one `Idempotency-Key` when opened and keep
-it for every re-render and retry; "New sale" mounts a fresh form with a fresh key. Money is integer minor units
+Behaviour worth knowing: the sale, restock and usage forms generate one `Idempotency-Key` per draft and keep it,
+with the draft, in the tab's `sessionStorage` (per user and, for sale and usage, per branch) for every re-render,
+retry and reload, until the server answers with success or the user taps "Clear this sale" (or form, or restock),
+which starts a fresh draft with a fresh key (#77). A reload in the middle of a save therefore posts the same entry
+once. "New sale" mounts a fresh form with a fresh key. A supplier added inside a restock is kept in the draft once
+created, so a retry does not add it twice. Money is integer minor units
 (`UGX`, no decimals) and quantities are integer thousandths in the forms, so no float touches an amount. The
 totals shown while typing are a preview; the server's response is the receipt.
 
@@ -55,7 +59,9 @@ no setting, ADR-020 decision 4, #64) and a price at or below cost with `price_be
 `VITE_RETAIL_MOCK=1 npm run dev` (in `frontend/`) serves fabricated products, branches and balances from
 `src/api/retail-mock.ts`, signs in a fake user (no backend needed) and runs every screen. Any value other than
 empty, `0` or `false` turns it on; leave it unset for the real API. `VITE_RETAIL_MOCK_ROLE=sales` gives the sales
-role; the default is admin. The mock returns the real response shapes, omits cost and profit without
+role; the default is admin. `retail-mock.ts` is imported dynamically only when `VITE_RETAIL_MOCK` is set at build
+time, so a production build contains none of it (#77: `npm run build` without the flag emits no mock chunk and no
+mock data). The mock returns the real response shapes, omits cost and profit without
 `retail.profit.read`, replays a repeated `Idempotency-Key`, refuses a reused key and a sale above the balance
 with the server's codes, and updates prices on a restock. The vitest suites use it as the test adapter.
 

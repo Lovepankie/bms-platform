@@ -92,7 +92,7 @@ class RetailValuationReviewIT extends IntegrationTest {
     void aBranchWithNoStockButAnInventoryBalanceIsReported() {
         restock(c, t.headOffice(), "10", 100, today);
         restock(c, t.secondBranch(), "10", 100, today);
-        assertThat(api.post("/products/" + c + "/prices", Map.of("cost_minor", 50, "reason", "Test edit"), ADMIN)
+        assertThat(api.editPrices(c, Map.of("cost_minor", 50, "reason", "Test edit"), ADMIN)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);
         assertThat(api.sell(t.headOffice(), "cash", c, "10").getStatusCode()).isEqualTo(HttpStatus.CREATED);
