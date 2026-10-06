@@ -14,6 +14,10 @@ preview, commit, reconciliation. The pilot register is its first **template**,
 `pilot_loan_register_v1`, registered by the lending module (chapter 5 section 5.4.3).
 Requirements: FR-IMP-01 to FR-IMP-09, FR-GL-09.
 
+ADR-025 makes this framework the one onboarding pipeline for every tenant's data, with canonical
+templates per vertical and versioned mappings per customer sheet (section 13.14,
+`docs/specs/customer-data-onboarding.md`).
+
 ## 13.2 Principles
 
 1. **Every source row is kept.** Each row below the header becomes one `import_rows`
@@ -566,3 +570,52 @@ no row; a dry run writes nothing and prints the same report; another tenant is u
 cases (#73): a price edited through the API between two runs survives the re-run with no new
 history row and the product counted as existing; a zero-difference balance is existing on both
 runs; a code that NFKC makes longer than 40 characters is a skipped row, not a failed file.
+
+## 13.14 Customer data onboarding for every tenant (ADR-025; #125)
+
+Sections 13.1 to 13.12 design the framework for one lending sheet; section 13.13 describes the
+retail command. ADR-025 makes the framework the one pipeline for every tenant's data, and
+`docs/specs/customer-data-onboarding.md` specifies it; the operator's procedure is the template
+`docs/runbooks/customer-data-cutover.md`. What changes in this chapter's design:
+
+- **Runs over batches.** An `import_runs` row owns the batches of one onboarding attempt (one batch
+  per file or tab), with the states `draft`, `uploaded`, `in_review`, `ready`, `committing`,
+  `committed`, `signed_off`, `purged` and `cancelled`. The run records the cutover moment, the
+  policy decisions (the receivable decision for credit sales without payments, and the
+  disbursement assumption of 13.8 row 15), the dry run report, the verified pre-import dump and
+  the sign-off.
+- **Quarantine.** Uploaded files are encrypted with a per-run key under a quarantine prefix. The
+  `import_*` tables are the staging area; no vertical or ledger table is written before commit.
+  Columns a mapping ignores are not stored in `import_rows.raw`. Limits: 25 MB per file, 100,000
+  rows per batch, 200 columns, streaming parsers.
+- **Canonical templates and mappings.** A template (`retail_v1`, `lending_loans_v1`, later savings
+  and investments) is code in its vertical, registered with the core. A customer's sheet is a
+  versioned mapping document in `import_mappings` (append-only), validated against the template:
+  columns to fields, value maps, the date convention and row rules such as the sub-header rows of
+  13.5. `pilot_loan_register_v1` of this chapter becomes the `lending_loans_v1` template with the
+  pilot register as its first mapping. A new resolution kind, `map_value`, adds a value map from
+  the review queue and creates a new mapping version.
+- **Issue codes.** Every template has a stable code catalogue (13.7 for lending; the shared and
+  retail codes are in the spec, section 3.4.1). Messages are plain language and carry the field,
+  file and line, never a personal value.
+- **Dry run and commit.** The dry run is the commit in one outer transaction that is rolled back,
+  with the same report as `import-retail`. Commit is maker-checker (`import_commit`), one
+  transaction per batch in dependency order; the register batch of this chapter stays one
+  transaction (13.10). Every created record and every opening journal is registered in
+  `import_refs` by `source_ref` in the same transaction (the generalisation of `retail_import_refs`),
+  so an interrupted run resumes from the first uncommitted batch and a re-run writes nothing
+  twice. A commit needs a verified pre-import dump recorded on the run; restoring it is the only
+  whole-run rollback.
+- **Guards.** A commit into a tenant that already trades is refused unless an audited operator
+  override is approved by the dev lead; one `committing` run per tenant and an advisory lock per
+  batch; a platform kill switch and a per-run halt checked between batches and every 1,000 rows; a
+  10 minute statement timeout per batch transaction; rows dated after the cutover moment refused.
+- **Reconciliation and deletion.** The reconciliation of 13.11 gains stock quantity and value,
+  receivables, arrears buckets and a balanced ledger check, and is signed in the app. Sign-off starts
+  the deletion of the quarantined files, the per-run key, the staging personal values and the
+  pre-import dump within 30 days, with a certificate of deletion.
+- **Rehearsal.** Each run is rehearsed against last night's production backup restored into a
+  throwaway database before cutover day.
+
+The build order is the spec's section 9. FR-IMP-01 to FR-IMP-09 keep their meaning; the new
+requirements are written with the tasks that build them.

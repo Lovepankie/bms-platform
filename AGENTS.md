@@ -283,6 +283,8 @@ Accepted (this list is the ADR index):
 - ADR-019 Collateral release as an approval action, and the interim duplicate pledge rule (proposed, #24)
 - ADR-020 Retail vertical brought forward; stock as append-only movements; retail events post to the
   ledger (proposed, #50)
+- ADR-025 One onboarding pipeline for customer data: quarantined staging, canonical templates with
+  versioned mappings, resumable maker-checker commit (proposed, #125)
 
 Pending (cite only as "pending ADR-NNN"):
 
