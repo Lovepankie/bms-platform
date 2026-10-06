@@ -28,33 +28,65 @@ function AreaChooser() {
     : classifyHost(window.location.hostname, hosts.data);
   if (area.kind === 'platform') {
     return (
-      <main>
-        <h1>BMS Platform console</h1>
-        <p>The platform console is not built yet. Tenants sign in at their own address.</p>
+      <main className="landing">
+        <section className="card landing-hero">
+          <BrandMark />
+          <span className="badge badge-info">Coming soon</span>
+          <h1>BMS Platform console</h1>
+          <p className="lead">The platform console is not built yet. Tenants sign in at their own address.</p>
+        </section>
       </main>
     );
   }
   if (area.kind === 'unknown') {
     return (
-      <main>
-        <h1>BMS Platform</h1>
-        <p>No BMS tenant is served at this address. Check the address you were given.</p>
+      <main className="landing">
+        <section className="card landing-hero">
+          <BrandMark />
+          <h1>BMS Platform</h1>
+          <p className="lead">No BMS tenant is served at this address. Check the address you were given.</p>
+        </section>
       </main>
     );
   }
   return (
-    <main>
-      <h1>BMS Platform</h1>
-      <ul>
-        <li>
-          <Link to="/sign-in">Staff sign-in</Link>
-        </li>
-        <li>
-          <Link to="/member">Member</Link>
-        </li>
-      </ul>
+    <main className="landing">
+      <section className="card landing-hero">
+        <BrandMark />
+        <h1>BMS Platform</h1>
+        <p className="lead">Sales, stock, members and loans for your business, in one place.</p>
+        <ul className="landing-actions">
+          <li>
+            <Link to="/sign-in" className="btn btn-primary btn-lg btn-block">
+              Staff sign-in
+            </Link>
+          </li>
+          <li>
+            <Link to="/member" className="btn btn-lg btn-block">
+              Member portal
+            </Link>
+          </li>
+        </ul>
+      </section>
+      <div className="landing-help">
+        <div className="card card-muted">
+          <h2>Staff</h2>
+          <p>Use the email or phone and password from your invitation.</p>
+        </div>
+        <div className="card card-muted">
+          <h2>Members</h2>
+          <p>See your balances, loan schedule and payments.</p>
+        </div>
+      </div>
     </main>
   );
+}
+
+// The brand on the landing page: the host's logo when it has one, else a wordmark of its name.
+function BrandMark() {
+  const brand = useShellBrand();
+  if (brand.logoSrc) return <img className="brand-logo" src={brand.logoSrc} alt={brand.name} />;
+  return <div className="wordmark">{brand.name}</div>;
 }
 
 const rootRoute = createRootRoute({ component: RootLayout });

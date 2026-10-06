@@ -1,0 +1,106 @@
+/*
+ * The page frame around the shared shell (shell.tsx, #87). The shell's markup is unchanged: its
+ * brand bar and footer become full-width bands, and the content gets a centred column.
+ */
+
+.app-shell {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.brand-bar {
+  margin: 0;
+  min-height: 64px;
+  padding: var(--space-3) max(var(--space-4), calc((100% - var(--content-width)) / 2 + var(--space-4)));
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: inset 0 3px 0 var(--color-accent);
+}
+
+.brand-bar img {
+  max-height: 40px;
+  max-width: 180px;
+}
+
+.brand-bar .brand-name {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}
+
+.app-content {
+  width: 100%;
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-7);
+}
+
+.app-footer {
+  margin-top: 0;
+  padding: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.app-footer a {
+  align-items: center;
+  min-height: var(--tap);
+}
+
+.app-footer img {
+  height: 24px;
+  width: auto;
+}
+
+/* Page header: title, a line under it, and actions on the right on wide screens. */
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.page-header h1 {
+  margin: 0;
+}
+
+.page-header p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+}
+
+.stack {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.grid-auto {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+}
+
+@media (min-width: 720px) {
+  .app-content {
+    padding: var(--space-6) var(--space-5) var(--space-8);
+  }
+
+  h1 {
+    font-size: var(--text-3xl);
+  }
+}

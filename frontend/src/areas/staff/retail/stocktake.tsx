@@ -19,7 +19,7 @@ export function StocktakeReview({ stocktake, onCommit, committing }: { stocktake
       {changed.length === 0 ? (
         <p>Every counted item matches the system.</p>
       ) : (
-        <table>
+        <div className="table-wrap"><table>
           <thead>
             <tr>
               <th>Item</th>
@@ -43,7 +43,7 @@ export function StocktakeReview({ stocktake, onCommit, committing }: { stocktake
               );
             })}
           </tbody>
-        </table>
+        </table></div>
       )}
       {stocktake.status === 'draft' && onCommit && (
         <button type="button" className="rt-primary" disabled={committing} onClick={onCommit}>
@@ -91,7 +91,7 @@ function CountSheet({ branchId }: { branchId: string }) {
       <Note>Type the counted quantity for each item you counted. Leave an item blank to skip it.</Note>
       <label htmlFor="count-search">Search by name</label>
       <input id="count-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
-      {stock.isPending && <p>Loading</p>}
+      {stock.isPending && <p className="loading">Loading</p>}
       <Problem error={stock.error} />
       {rows.map((r) => {
         const id = r.product_id ?? '';
@@ -121,7 +121,7 @@ function StocktakePage() {
         <BranchRequired />
       ) : (
         <>
-          <p>Branch: {branchName}</p>
+          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <CountSheet key={branchId} branchId={branchId} />
         </>
       )}

@@ -18,36 +18,40 @@ function StaffHome() {
 
   return (
     <main>
-      <h1>Staff area</h1>
-      <p>
-        API: <strong>{health.data ?? 'checking'}</strong>
-      </p>
+      <div className="page-header">
+        <h1>Staff area</h1>
+        <span className={health.data === 'UP' ? 'badge badge-success' : 'badge'}>
+          API: {health.data ?? 'checking'}
+        </span>
+      </div>
       {canReadMembers && (
         <>
           <h2>Members</h2>
-          {members.isPending && <p>Loading members</p>}
-          {members.isError && <p>Could not load members.</p>}
+          {members.isPending && <p className="loading">Loading members</p>}
+          {members.isError && <p role="alert" className="alert alert-danger">Could not load members.</p>}
           {members.data && (
-            <table>
-              <thead>
-                <tr>
-                  <th>Member no</th>
-                  <th>Name</th>
-                  <th>Phone</th>
-                  <th>KYC</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(members.data.items ?? []).map((m) => (
-                  <tr key={m.id}>
-                    <td>{m.member_no}</td>
-                    <td>{m.full_name}</td>
-                    <td>{m.phone_e164_masked}</td>
-                    <td>{m.kyc_status}</td>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Member no</th>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>KYC</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {(members.data.items ?? []).map((m) => (
+                    <tr key={m.id}>
+                      <td>{m.member_no}</td>
+                      <td>{m.full_name}</td>
+                      <td>{m.phone_e164_masked}</td>
+                      <td>{m.kyc_status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </>
       )}

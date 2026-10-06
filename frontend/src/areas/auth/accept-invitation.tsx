@@ -35,26 +35,29 @@ function AcceptInvitation() {
 
   if (!token) {
     return (
-      <main>
+      <main className="card auth-card">
         <h1>Invitation</h1>
-        <p>This invitation link is not complete. Ask your administrator for a new one.</p>
+        <p role="alert" className="alert alert-warning">This invitation link is not complete. Ask your administrator for a new one.</p>
       </main>
     );
   }
   if (done) {
     return (
-      <main>
+      <main className="card auth-card">
         <h1>Welcome</h1>
-        <p>Your password is set.</p>
-        <Link to="/sign-in">Sign in</Link>
+        <p className="alert alert-success">Your password is set. You can sign in now.</p>
+        <Link to="/sign-in" className="btn btn-primary btn-block">
+          Sign in
+        </Link>
       </main>
     );
   }
   return (
-    <main>
+    <main className="card auth-card">
       <h1>Accept your invitation</h1>
-      {message && <p role="alert">{message}</p>}
-      <form onSubmit={(e) => void submit(e)} style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
+      <p className="lead">Choose a password for your staff account. You will use it with your email or phone to sign in.</p>
+      {message && <p role="alert" className="alert alert-danger">{message}</p>}
+      <form onSubmit={(e) => void submit(e)} className="form-stack">
         <label>
           New password (at least 10 characters)
           <input
@@ -75,7 +78,7 @@ function AcceptInvitation() {
             required
           />
         </label>
-        <button disabled={busy}>Set password</button>
+        <button className="btn-primary" disabled={busy}>{busy ? 'Saving' : 'Set password'}</button>
       </form>
     </main>
   );

@@ -154,7 +154,7 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase) => void }) {
       </ul>
 
       <h2>Items</h2>
-      {lines.length === 0 && <p>No items yet.</p>}
+      {lines.length === 0 && <p className="empty-state">No items yet.</p>}
       {lines.map((l, i) => {
         const newSell = parseMinor(l.sell, RETAIL_CURRENCY);
         const newCost = parseMinor(l.cost, RETAIL_CURRENCY);
@@ -186,7 +186,7 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase) => void }) {
               {canProfit && newCost !== null && l.product.cost_minor !== undefined && newCost !== l.product.cost_minor ? ` Cost will change from ${money(l.product.cost_minor)} to ${money(newCost)}.` : ''}
             </p>
             {problems[i] && <p className="rt-flag">{problems[i]}</p>}
-            <button type="button" onClick={() => setLines((ls) => ls.filter((_, n) => n !== i))} aria-label={`Remove ${l.product.description}`}>Remove</button>
+            <button type="button" className="btn-ghost" onClick={() => setLines((ls) => ls.filter((_, n) => n !== i))} aria-label={`Remove ${l.product.description}`}>Remove</button>
           </div>
         );
       })}
