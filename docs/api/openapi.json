@@ -9369,6 +9369,13 @@
           }
         }, {
           "in" : "query",
+          "name" : "owing",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
           "name" : "newest_first",
           "required" : false,
           "schema" : {

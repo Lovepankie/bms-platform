@@ -7049,6 +7049,7 @@ export interface operations {
                 product_id?: string;
                 buyer?: string;
                 status?: string;
+                owing?: string;
                 newest_first?: boolean;
                 limit?: number;
                 cursor?: string;

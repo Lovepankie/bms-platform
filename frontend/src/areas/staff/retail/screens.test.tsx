@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { renderToString as render } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { businessToday, type AllBranchesStock, type DailyProfit, type Product, type Purchase, type Sale, type Stocktake, type StockRow, type Transfer, type Valuation } from '../../../api/retail';
+import { businessToday, salesParams, type AllBranchesStock, type DailyProfit, type Product, type Purchase, type Sale, type Stocktake, type StockRow, type Transfer, type Valuation } from '../../../api/retail';
 import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { Receipt, SaleForm } from './sale';
@@ -13,7 +13,7 @@ import { RestockForm, RestockSaved } from './restock';
 import { TransferForm, TransferSummary } from './transfer';
 import { TransferList, showDate } from './transfers';
 import { UsageForm } from './usage';
-import { SaleDetail, SaleList, keepCredit, saleState } from './sales';
+import { SaleDetail, SaleList, saleState } from './sales';
 import { BranchRequired, Gate, NoStockHere, Problem } from './ui';
 import { ALL_BRANCHES } from '../../../auth/branch';
 
@@ -486,14 +486,11 @@ describe('Credit sales and All sales (#145)', () => {
     expect(renderToString(<SaleList items={[base]} today={today} onOpen={() => undefined} />)).not.toContain('Test Branch A');
   });
 
-  it('filters credit sales by what is owed', () => {
-    const paid = { ...base, id: 's2', paid_minor: 12000, balance_minor: 0 };
-    const late = { ...base, id: 's3', due_date: '2026-09-01' };
-    const ids = (owing: 'all' | 'owing' | 'overdue' | 'paid') => keepCredit([base, paid, late], owing, today).map((s) => s.id);
-    expect(ids('all')).toEqual(['s1', 's2', 's3']);
-    expect(ids('owing')).toEqual(['s1', 's3']);
-    expect(ids('overdue')).toEqual(['s3']);
-    expect(ids('paid')).toEqual(['s2']);
+  it('sends the owing filter to the server and leaves empty filters out', () => {
+    expect(salesParams({ paymentMethod: 'credit', status: 'completed', owing: 'overdue', buyer: '' })).toMatchObject({
+      payment_method: 'credit', status: 'completed', owing: 'overdue', newest_first: true, limit: 50, buyer: undefined,
+    });
+    expect(salesParams({ paymentMethod: 'credit' }).owing).toBeUndefined();
   });
 
   it('opens a sale with its lines, and shows profit only with the permission', () => {

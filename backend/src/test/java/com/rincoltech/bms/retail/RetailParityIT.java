@@ -457,4 +457,110 @@ class RetailParityIT extends IntegrationTest {
                 .isEqualTo(t.headOffice().toString());
         assertThat(ok(r).toString()).doesNotContain("profit").doesNotContain("cost");
     }
+
+    // ---- F. The owing filter, buyer search and cursor direction (review of #154) -----------------
+
+    /** A credit sale of one cable; {@code days} is the sale's age and {@code dueInDays} may be negative. */
+    UUID creditSale(int days, int dueInDays, UUID customerId, String buyerName) {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("branch_id", t.headOffice());
+        body.put("sale_date", today.minusDays(days).toString());
+        body.put("payment_method", "credit");
+        body.put("due_date", today.plusDays(dueInDays).toString());
+        if (customerId != null) {
+            body.put("customer_id", customerId);
+        }
+        if (buyerName != null) {
+            body.put("buyer_name", buyerName);
+        }
+        body.put("lines", java.util.List.of(Map.of("product_id", cable, "qty", "1")));
+        ResponseEntity<JsonNode> r =
+                api.postKeyed("/sales", body, ADMIN, "*", UUID.randomUUID().toString());
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.CREATED);
+        return RetailTestSupport.id(r);
+    }
+
+    java.util.Set<String> ids(JsonNode page) {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        page.get("items").forEach(r -> out.add(r.get("id").asString()));
+        return out;
+    }
+
+    @Test
+    void theOwingFilterRunsOnTheServerAcrossMoreThanOnePageOfCreditSales() {
+        api.stockUp(t.headOffice(), cable, "100");
+        // The oldest three are overdue (one of them paid off); 52 newer ones are not yet due.
+        UUID overdueA = creditSale(60, -20, null, "Test Buyer 01");
+        UUID overdueB = creditSale(59, -19, null, "Test Buyer 01");
+        UUID overduePaid = creditSale(58, -18, null, "Test Buyer 01");
+        for (int i = 0; i < 52; i++) {
+            creditSale(10, 30, null, "Test Buyer 02");
+        }
+        assertThat(api.postKeyed(
+                                "/sales/" + overduePaid + "/payments",
+                                Map.of("amount_minor", 1_500, "method", "cash"),
+                                ADMIN,
+                                "*",
+                                UUID.randomUUID().toString())
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+
+        // The first page of the plain list (50 rows) holds none of the three: the old client filter missed them.
+        JsonNode firstPage = ok(api.get("/sales?payment_method=credit&newest_first=true&limit=50", ADMIN));
+        assertThat(ids(firstPage)).doesNotContain(overdueA.toString(), overdueB.toString());
+
+        JsonNode overdue = ok(api.get("/sales?payment_method=credit&owing=overdue&limit=50", ADMIN));
+        assertThat(ids(overdue)).containsExactlyInAnyOrder(overdueA.toString(), overdueB.toString());
+        JsonNode owing = ok(api.get("/sales?owing=owing&limit=100", ADMIN));
+        assertThat(owing.get("items")).hasSize(54);
+        assertThat(ids(owing)).doesNotContain(overduePaid.toString());
+        JsonNode paid = ok(api.get("/sales?owing=paid", ADMIN));
+        assertThat(ids(paid)).containsExactly(overduePaid.toString());
+    }
+
+    @Test
+    void aVoidedCreditSaleIsNeverOwingOrOverdue() {
+        api.stockUp(t.headOffice(), cable, "100");
+        UUID s = creditSale(30, -5, null, "Test Buyer 01");
+        assertThat(api.post("/sales/" + s + "/void", Map.of("reason", "Test void"), ADMIN)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(count("?owing=overdue")).isZero();
+        assertThat(count("?owing=owing")).isZero();
+        assertThat(count("?owing=paid")).isZero();
+    }
+
+    @Test
+    void anUnknownOwingValueIsAValidationError() {
+        ResponseEntity<JsonNode> r = api.get("/sales?owing=late", ADMIN);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(r.getBody().toString()).contains("owing");
+    }
+
+    @Test
+    void buyerSearchAlsoMatchesTheLinkedCustomersName() {
+        api.stockUp(t.headOffice(), cable, "100");
+        UUID customer = RetailTestSupport.id(api.post("/customers", Map.of("name", "Test Customer Zed"), ADMIN));
+        UUID linked = creditSale(1, 10, customer, null);
+        creditSale(1, 10, null, "Test Buyer 01");
+        assertThat(ids(ok(api.get("/sales?buyer=customer zed", ADMIN)))).containsExactly(linked.toString());
+        assertThat(count("?buyer=test")).isEqualTo(2);
+    }
+
+    @Test
+    void aCursorIsRefusedForTheOtherDirection() {
+        threeSales();
+        JsonNode newest = ok(api.get("/sales?newest_first=true&limit=1", ADMIN));
+        String cursor = newest.get("next_cursor").asString();
+        ResponseEntity<JsonNode> wrong = api.get("/sales?newest_first=false&limit=1&cursor=" + cursor, ADMIN);
+        assertThat(wrong.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(wrong.getBody().toString()).contains("cursor");
+        JsonNode oldest = ok(api.get("/sales?limit=1", ADMIN));
+        ResponseEntity<JsonNode> wrong2 = api.get(
+                "/sales?newest_first=true&limit=1&cursor="
+                        + oldest.get("next_cursor").asString(),
+                ADMIN);
+        assertThat(wrong2.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+    }
 }

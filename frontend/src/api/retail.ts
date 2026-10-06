@@ -72,7 +72,17 @@ export interface SalesQuery {
   paymentMethod?: SalePayment;
   productId?: string;
   status?: 'completed' | 'voided';
+  /** Credit sales only: still owing, overdue, or fully paid. Filtered on the server, across every page. */
+  owing?: 'owing' | 'overdue' | 'paid';
   cursor?: string;
+}
+
+/** The query string of a sales list: newest first, 50 a page, empty filters left out. */
+export function salesParams({ branchId, from, to, buyer, paymentMethod, productId, status, owing, cursor }: SalesQuery) {
+  return {
+    branch_id: branchId ? [branchId] : undefined, from: from || undefined, to: to || undefined, buyer: buyer || undefined,
+    payment_method: paymentMethod, product_id: productId || undefined, status, owing, newest_first: true, limit: 50, cursor,
+  };
 }
 
 export type SalePayment = 'cash' | 'mobile_money' | 'bank' | 'credit';
@@ -174,17 +184,8 @@ const realRetail: RetailApi = {
     return { branches, items };
   },
 
-  async listSales({ branchId, from, to, buyer, paymentMethod, productId, status, cursor }) {
-    return unwrap(
-      await api.GET('/api/v1/retail/sales', {
-        params: {
-          query: {
-            branch_id: branchId ? [branchId] : undefined, from: from || undefined, to: to || undefined, buyer: buyer || undefined,
-            payment_method: paymentMethod, product_id: productId || undefined, status, newest_first: true, limit: 50, cursor,
-          },
-        },
-      }),
-    );
+  async listSales(q) {
+    return unwrap(await api.GET('/api/v1/retail/sales', { params: { query: salesParams(q) } }));
   },
 
   async getSale(id) {

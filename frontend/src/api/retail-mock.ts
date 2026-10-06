@@ -179,12 +179,14 @@ export function createMockRetail(): RetailApi {
         return cost({ product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor }, { cost_minor: p.costMinor });
       }).filter((r) => (!negativeOnly || r.negative) && atLevel(Number(r.qty), level))),
 
-    listSales: ({ branchId, from, to, buyer, paymentMethod, productId, status, cursor }) => {
+    listSales: ({ branchId, from, to, buyer, paymentMethod, productId, status, owing, cursor }) => {
       const wanted = [...sales].reverse().filter((x) =>
         (!branchId || x.branch_id === branchId) && (!from || (x.sale_date ?? '') >= from) && (!to || (x.sale_date ?? '') <= to)
         && (!buyer || (x.buyer_name ?? '').toLowerCase().includes(buyer.trim().toLowerCase()))
         && (!paymentMethod || x.payment_method === paymentMethod) && (!productId || (x.lines ?? []).some((l) => l.product_id === productId))
-        && (!status || x.status === status));
+        && (!status || x.status === status)
+        && (!owing || (x.payment_method === 'credit' && x.status === 'completed' && (owing === 'paid' ? (x.balance_minor ?? 0) <= 0
+          : (x.balance_minor ?? 0) > 0 && (owing === 'owing' || (x.due_date ?? '9999') < businessToday())))));
       const start = cursor ? Number(cursor) : 0;
       const items = wanted.slice(start, start + 50).map(visibleSale);
       return delay({ items, ...(start + 50 < wanted.length ? { next_cursor: String(start + 50) } : {}) });

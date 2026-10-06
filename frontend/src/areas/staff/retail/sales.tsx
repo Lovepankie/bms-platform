@@ -167,14 +167,6 @@ const OWING: { value: Owing; label: string }[] = [
   { value: 'paid', label: 'Paid' },
 ];
 
-/** The credit sales a state filter keeps. */
-export function keepCredit(items: Sale[], owing: Owing, today: string): Sale[] {
-  return items.filter((s) => {
-    const label = saleState(s, today).label;
-    return owing === 'all' || (owing === 'paid' ? label === 'Paid' : owing === 'overdue' ? label === 'Overdue' : label !== 'Paid');
-  });
-}
-
 function CreditSales() {
   const { all, branchId, branchName } = useBranchView();
   const nameOf = useBranchName();
@@ -182,7 +174,7 @@ function CreditSales() {
   const [owing, setOwing] = useState<Owing>('all');
   const [open, setOpen] = useState<string | null>(null);
   const today = businessToday();
-  const { query, items } = useSales({ branchId: all ? undefined : (branchId ?? undefined), buyer, paymentMethod: 'credit', status: 'completed' }, all || branchId !== null);
+  const { query, items } = useSales({ branchId: all ? undefined : (branchId ?? undefined), buyer, paymentMethod: 'credit', status: 'completed', owing: owing === 'all' ? undefined : owing }, all || branchId !== null);
   return (
     <Gate screen="creditSales" title="Credit sales">
       {open ? (
@@ -198,7 +190,7 @@ function CreditSales() {
           </select>
           {query.isPending && query.fetchStatus !== 'idle' && <p className="loading">Loading</p>}
           <Problem error={query.error} />
-          {query.data && <SaleList items={keepCredit(items, owing, today)} today={today} credit onOpen={setOpen} branchOf={all ? nameOf : undefined} />}
+          {query.data && <SaleList items={items} today={today} credit onOpen={setOpen} branchOf={all ? nameOf : undefined} />}
           <More query={query} />
         </>
       )}

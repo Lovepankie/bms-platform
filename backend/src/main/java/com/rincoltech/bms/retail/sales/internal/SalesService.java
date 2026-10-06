@@ -267,6 +267,8 @@ class SalesService {
         return visible(repo.find(id, false).orElseThrow().sale());
     }
 
+    private static final java.util.Set<String> OWING_FILTERS = java.util.Set.of("owing", "overdue", "paid");
+
     private static final java.util.Set<String> PAYMENT_METHODS =
             java.util.Set.of("cash", "mobile_money", "bank", "credit");
 
@@ -280,9 +282,14 @@ class SalesService {
             UUID productId,
             String buyer,
             String status,
+            String owing,
             boolean newestFirst,
             Integer limit,
             String cursor) {
+        if (owing != null && !OWING_FILTERS.contains(owing)) {
+            throw ApiException.validation(
+                    List.of(new FieldProblem("owing", "invalid", "owing is owing, overdue or paid.")));
+        }
         if (paymentMethod != null && !PAYMENT_METHODS.contains(paymentMethod)) {
             throw ApiException.validation(List.of(new FieldProblem(
                     "payment_method", "invalid", "payment_method is cash, mobile_money, bank or credit.")));
@@ -298,9 +305,15 @@ class SalesService {
         UUID afterId = null;
         Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
         if (after != null) {
-            afterCreated = after.at();
+            String direction = newestFirst ? "desc:" : "asc:";
+            if (!after.sortKey().startsWith(direction)) {
+                throw ApiException.validation(List.of(new FieldProblem(
+                        "cursor", "invalid", "The cursor was issued for the other newest_first direction.")));
+            }
+            afterCreated = new Cursor.Key(after.sortKey().substring(direction.length()), after.id()).at();
             afterId = after.id();
         }
+        LocalDate today = owing == null ? null : clock.today(tenant.profile().timezone());
         List<Sale> rows = repo.page(
                 filter,
                 from,
@@ -310,6 +323,8 @@ class SalesService {
                 productId,
                 buyer == null || buyer.isBlank() ? null : buyer.trim(),
                 status,
+                owing,
+                today,
                 newestFirst,
                 afterCreated,
                 afterId,
@@ -317,8 +332,8 @@ class SalesService {
         boolean more = rows.size() > size;
         List<Sale> items = more ? rows.subList(0, size) : rows;
         String next = more
-                ? Cursor.encode(
-                        items.getLast().createdAt() + "|" + items.getLast().id())
+                ? Cursor.encode((newestFirst ? "desc:" : "asc:")
+                        + items.getLast().createdAt() + "|" + items.getLast().id())
                 : null;
         return new SalePage(items.stream().map(SalesService::visible).toList(), next);
     }

@@ -74,6 +74,8 @@ class SalesRepository {
             UUID productId,
             String buyer,
             String status,
+            String owing,
+            LocalDate today,
             boolean newestFirst,
             Instant afterCreated,
             UUID afterId,
@@ -109,7 +111,8 @@ class SalesRepository {
             params.put("productId", productId);
         }
         if (buyer != null) {
-            sql.append(" AND buyer_name ILIKE :buyer");
+            sql.append(" AND (buyer_name ILIKE :buyer OR EXISTS (SELECT 1 FROM retail_customers c"
+                    + " WHERE c.id = retail_sales.customer_id AND c.name ILIKE :buyer))");
             params.put(
                     "buyer",
                     "%" + buyer.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
@@ -117,6 +120,17 @@ class SalesRepository {
         if (status != null) {
             sql.append(" AND status = :status");
             params.put("status", status);
+        }
+        if (owing != null) {
+            sql.append(" AND payment_method = 'credit' AND status = 'completed'");
+            switch (owing) {
+                case "owing" -> sql.append(" AND total_minor > paid_minor");
+                case "overdue" -> {
+                    sql.append(" AND total_minor > paid_minor AND due_date < :today");
+                    params.put("today", Date.valueOf(today));
+                }
+                default -> sql.append(" AND total_minor <= paid_minor");
+            }
         }
         if (afterCreated != null) {
             sql.append(newestFirst ? " AND (created_at, id) < " : " AND (created_at, id) > ")
