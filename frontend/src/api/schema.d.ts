@@ -3183,6 +3183,8 @@ export interface components {
         RetailAllBranchesStock: {
             branches?: components["schemas"]["RetailStockBranch"][];
             items?: components["schemas"]["RetailAllBranchesRow"][];
+            /** @description A total at or below this is low stock; the same for every branch */
+            low_stock_threshold?: string;
             next_cursor?: string;
         };
         /** @description One entry per branch of the page, in the page's branch order */
@@ -3622,6 +3624,8 @@ export interface components {
             /** Format: uuid */
             branch_id?: string;
             items?: components["schemas"]["RetailStockRow"][];
+            /** @description A quantity at or below this is low stock (FR-RET-03); the same for every branch */
+            low_stock_threshold?: string;
             next_cursor?: string;
         };
         RetailStockRow: {
@@ -7192,6 +7196,7 @@ export interface operations {
                 query?: string;
                 category_id?: string;
                 negative_only?: boolean;
+                stock_level?: string;
                 limit?: number;
                 cursor?: string;
             };
@@ -7218,6 +7223,7 @@ export interface operations {
                 query?: string;
                 category_id?: string;
                 negative_only?: boolean;
+                stock_level?: string;
                 limit?: number;
                 cursor?: string;
             };

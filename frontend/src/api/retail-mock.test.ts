@@ -166,4 +166,18 @@ describe('retail mock adapter (real response shapes)', () => {
     expect(report.sales_minor).toBeGreaterThan(0);
     expect((report.rows ?? []).reduce((s, r) => s + (r.profit_minor ?? 0), 0)).toBe(report.profit_minor);
   });
+
+  it('keeps out of stock to zero or less and low stock to 5 or fewer, for one branch and for all', async () => {
+    const api = createMockRetail();
+    const out = await api.listStock({ branchId: branch, level: 'out' });
+    const low = await api.listStock({ branchId: branch, level: 'low' });
+    expect(out.length).toBeGreaterThan(0);
+    expect(out.every((r) => Number(r.qty) <= 0)).toBe(true);
+    expect(low.every((r) => Number(r.qty) <= 5)).toBe(true);
+    expect(low.length).toBeGreaterThanOrEqual(out.length);
+    const stock = await api.listStock({ branchId: branch });
+    expect(stock.filter((r) => Number(r.qty) <= 5)).toHaveLength(low.length);
+    const all = await api.listStockAllBranches({ level: 'low' });
+    expect(all.items.every((r) => Number(r.total_qty) <= 5)).toBe(true);
+  });
 });

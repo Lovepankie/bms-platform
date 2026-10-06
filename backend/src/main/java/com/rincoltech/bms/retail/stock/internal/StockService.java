@@ -56,6 +56,14 @@ class StockService {
 
     static final String STOCKTAKE = "retail.stocktake";
     static final String PROFIT_READ = "retail.profit.read";
+    /**
+     * A product at or below this quantity is low stock (#145). One constant for every tenant until a
+     * retail settings group exists; the settings catalogue holds only core and lending keys today.
+     */
+    static final long LOW_STOCK_MILLI = 5_000;
+
+    static final String LEVEL_OUT = "out";
+    static final String LEVEL_LOW = "low";
     static final int DEFAULT_LIMIT = 100;
     static final int MAX_LIMIT = 500;
 
@@ -93,7 +101,9 @@ class StockService {
      * every branch of the page, since one cost cannot be shown for some branches and hidden for others.
      */
     @Transactional(readOnly = true)
-    AllBranchesPage allBranches(String query, UUID categoryId, boolean negativeOnly, Integer limit, String cursor) {
+    AllBranchesPage allBranches(
+            String query, UUID categoryId, boolean negativeOnly, String level, Integer limit, String cursor) {
+        Long atMost = atMostOf(level);
         Principal principal = CurrentPrincipal.require();
         List<Branch> visible = branches.visible("retail.stock.read");
         List<UUID> ids = visible.stream().map(Branch::id).toList();
@@ -101,7 +111,7 @@ class StockService {
                 .map(b -> new StockBranch(b.id(), b.code(), b.name(), b.headOffice()))
                 .toList();
         if (ids.isEmpty()) {
-            return new AllBranchesPage(columns, List.of(), null);
+            return new AllBranchesPage(columns, List.of(), Quantities.format(lowStock()), null);
         }
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
@@ -110,6 +120,7 @@ class StockService {
                 blankToNull(query),
                 categoryId,
                 negativeOnly,
+                atMost,
                 after == null ? null : after.sortKey(),
                 after == null ? null : after.id(),
                 size + 1);
@@ -141,12 +152,20 @@ class StockService {
         String next = more
                 ? Cursor.encode(page.getLast().code() + "|" + page.getLast().id())
                 : null;
-        return new AllBranchesPage(columns, items, next);
+        return new AllBranchesPage(columns, items, Quantities.format(lowStock()), next);
     }
 
     /** FR-RET-03: a branch's balances, negatives flagged. */
     @Transactional(readOnly = true)
-    StockPage stock(UUID branchId, String query, UUID categoryId, boolean negativeOnly, Integer limit, String cursor) {
+    StockPage stock(
+            UUID branchId,
+            String query,
+            UUID categoryId,
+            boolean negativeOnly,
+            String level,
+            Integer limit,
+            String cursor) {
+        Long atMost = atMostOf(level);
         UUID branch = branches.resolve("retail.stock.read", branchId);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
@@ -155,6 +174,7 @@ class StockService {
                 query == null || query.isBlank() ? null : query.trim(),
                 categoryId,
                 negativeOnly,
+                atMost,
                 after == null ? null : after.sortKey(),
                 after == null ? null : after.id(),
                 size + 1);
@@ -181,6 +201,7 @@ class StockService {
                                         r.sellMinor(),
                                         null))
                         .toList(),
+                Quantities.format(lowStock()),
                 next);
     }
 
@@ -388,6 +409,24 @@ class StockService {
      * Cost on a branch-bound row needs {@code retail.profit.read} in that row's branch, not in any
      * branch (ADR-017; review F5).
      */
+    private static BigDecimal lowStock() {
+        return BigDecimal.valueOf(LOW_STOCK_MILLI, 3);
+    }
+
+    /** The quantity a level filter keeps at or below, in thousandths; null for no level (#145). */
+    private static Long atMostOf(String level) {
+        if (level == null || level.isBlank()) {
+            return null;
+        }
+        return switch (level) {
+            case LEVEL_OUT -> 0L;
+            case LEVEL_LOW -> LOW_STOCK_MILLI;
+            default ->
+                throw ApiException.validation(
+                        List.of(new FieldProblem("stock_level", "invalid", "stock_level is out or low.")));
+        };
+    }
+
     static boolean mayReadCost(UUID branchId) {
         return CurrentPrincipal.require().may(PROFIT_READ, branchId);
     }

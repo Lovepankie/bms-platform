@@ -6,7 +6,7 @@ import { businessToday, type AllBranchesStock, type DailyProfit, type Product, t
 import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { Receipt, SaleForm } from './sale';
-import { AllBranchesList, AllBranchesTable, StockPage, StockTable } from './stock';
+import { AllBranchesList, AllBranchesTable, StockLevelFilter, StockPage, StockTable } from './stock';
 import { StocktakeReview } from './stocktake';
 import { BranchTotals, ProfitTable, ValuationTable } from './profit';
 import { RestockForm, RestockSaved } from './restock';
@@ -105,6 +105,24 @@ describe('stock screen', () => {
     expect(html).toContain('for="stock-category"');
     expect(html).toContain('All categories');
     expect(html).toContain('>Lighting</option>');
+  });
+});
+
+describe('low stock and out of stock tabs', () => {
+  it('offers all items, out of stock and low stock with the chosen one pressed', () => {
+    const html = renderToString(<StockLevelFilter level="low" onChange={() => undefined} />);
+    expect(html).toContain('>All items<');
+    expect(html).toContain('>Out of stock<');
+    expect(html).toContain('aria-pressed="true">Low stock<');
+    expect(html).toContain('aria-pressed="false">Out of stock<');
+    expect(html).toContain('including those that are out of stock');
+  });
+
+  it('the Stock page starts on all items', () => {
+    const client = new QueryClient();
+    const html = page('sales', <StockPage />, client);
+    expect(html).toContain('aria-pressed="true">All items<');
+    expect(html).not.toContain('including those that are out of stock');
   });
 });
 
@@ -373,7 +391,7 @@ describe('All branches (#144)', () => {
 
   it('the Stock page with All branches shows the table, not a request to choose a branch', () => {
     const client = new QueryClient();
-    client.setQueryData(['retail', 'stock', 'all-branches', '', '', false], data);
+    client.setQueryData(['retail', 'stock', 'all-branches', '', '', false, ''], data);
     const html = inAll(<StockPage />, 'admin', client);
     expect(html).toContain('All branches');
     expect(html).toContain('LED bulb 9W screw');

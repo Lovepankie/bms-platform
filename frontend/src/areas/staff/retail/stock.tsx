@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { Fragment, useState } from 'react';
-import { retail, type AllBranchesStock, type StockRow } from '../../../api/retail';
+import { retail, type AllBranchesStock, type StockLevel, type StockRow } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
 import { showQty } from './maths';
 import { BranchRequired, CategoryLabel, Gate, NoStockHere, Problem, money, useBranchView, useIsPhone, useProfitAccess } from './ui';
@@ -128,6 +128,29 @@ export function AllBranchesList({ data, showCost }: { data: AllBranchesStock; sh
   );
 }
 
+const LEVELS: { value: StockLevel | ''; label: string }[] = [
+  { value: '', label: 'All items' },
+  { value: 'out', label: 'Out of stock' },
+  { value: 'low', label: 'Low stock' },
+];
+
+/** Tabs for the stock lists: everything, out of stock (zero or less) or low stock (5 or fewer, out included). */
+export function StockLevelFilter({ level, onChange }: { level: StockLevel | ''; onChange: (level: StockLevel | '') => void }) {
+  return (
+    <>
+      <div className="cluster filters" role="group" aria-label="Show">
+        {LEVELS.map((l) => (
+          <button key={l.value} type="button" className="btn-sm" aria-pressed={level === l.value} onClick={() => onChange(l.value)}>
+            {l.label}
+          </button>
+        ))}
+      </div>
+      {level === 'out' && <p className="hint">Items with none left, or less than none.</p>}
+      {level === 'low' && <p className="hint">Items with 5 or fewer left, including those that are out of stock.</p>}
+    </>
+  );
+}
+
 export function StockPage() {
   const { all, branchId, branchName: name } = useBranchView();
   const canProfit = useProfitAccess();
@@ -135,15 +158,16 @@ export function StockPage() {
   const [query, setQuery] = useState('');
   const [negativeOnly, setNegativeOnly] = useState(false);
   const [categoryId, setCategoryId] = useState('');
+  const [level, setLevel] = useState<StockLevel | ''>('');
   const categories = useQuery({ queryKey: ['retail', 'categories'], queryFn: () => retail.listCategories() });
   const one = useQuery({
-    queryKey: ['retail', 'stock', branchId, query, categoryId, negativeOnly],
-    queryFn: () => retail.listStock({ branchId: branchId ?? '', query, categoryId, negativeOnly }),
+    queryKey: ['retail', 'stock', branchId, query, categoryId, negativeOnly, level],
+    queryFn: () => retail.listStock({ branchId: branchId ?? '', query, categoryId, negativeOnly, level: level || undefined }),
     enabled: !all && branchId !== null,
   });
   const many = useQuery({
-    queryKey: ['retail', 'stock', 'all-branches', query, categoryId, negativeOnly],
-    queryFn: () => retail.listStockAllBranches({ query, categoryId, negativeOnly }),
+    queryKey: ['retail', 'stock', 'all-branches', query, categoryId, negativeOnly, level],
+    queryFn: () => retail.listStockAllBranches({ query, categoryId, negativeOnly, level: level || undefined }),
     enabled: all,
   });
   const result = all ? many : one;
@@ -151,6 +175,7 @@ export function StockPage() {
     <Gate screen="stock" title="Stock">
       <p className="branch-line">Branch: <strong>{all ? 'All branches' : name}</strong></p>
       {!all && branchId !== null && <NoStockHere branchId={branchId} />}
+      <StockLevelFilter level={level} onChange={setLevel} />
       <label htmlFor="stock-search">Search by name, code or category</label>
       <input id="stock-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
       <label htmlFor="stock-category">Category</label>

@@ -38,6 +38,7 @@ class StockRepository {
             String query,
             UUID categoryId,
             boolean negativeOnly,
+            Long atMostMilli,
             String afterCode,
             UUID afterId,
             int limit) {
@@ -63,6 +64,10 @@ class StockRepository {
         }
         if (negativeOnly) {
             sql.append(" AND coalesce(b.qty, 0) < 0");
+        }
+        if (atMostMilli != null) {
+            sql.append(" AND coalesce(b.qty, 0) <= :atMost");
+            params.put("atMost", java.math.BigDecimal.valueOf(atMostMilli, 3));
         }
         if (afterCode != null) {
             sql.append(" AND (p.code, p.id) > (:afterCode, :afterId)");
@@ -111,6 +116,7 @@ class StockRepository {
             String query,
             UUID categoryId,
             boolean negativeOnly,
+            Long atMostMilli,
             String afterCode,
             UUID afterId,
             int limit) {
@@ -139,6 +145,10 @@ class StockRepository {
         }
         if (negativeOnly) {
             sql.append(" AND coalesce(t.negs, 0) > 0");
+        }
+        if (atMostMilli != null) {
+            sql.append(" AND coalesce(t.total, 0) <= :atMost");
+            params.put("atMost", java.math.BigDecimal.valueOf(atMostMilli, 3));
         }
         if (afterCode != null) {
             sql.append(" AND (p.code, p.id) > (:afterCode, :afterId)");

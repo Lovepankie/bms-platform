@@ -77,6 +77,8 @@ const PRODUCTS: MockProduct[] = [
   costMinor: costMinor as number, sellMinor: sellMinor as number,
 }));
 
+/** The server's level filter: out is zero or less, low is at or below 5 (so it includes out). */
+const atLevel = (qty: number, level?: 'out' | 'low'): boolean => level === undefined || qty <= (level === 'out' ? 0 : 5);
 const toMilli = (text: string): number => Math.round(Number(text) * 1000);
 const fromMilli = (m: number): string => `${m < 0 ? '-' : ''}${Math.floor(Math.abs(m) / 1000)}.${String(Math.abs(m) % 1000).padStart(3, '0')}`;
 const lineTotal = (price: number, qtyMilli: number): number => Number((BigInt(price) * BigInt(qtyMilli) + 500n) / 1000n);
@@ -157,7 +159,7 @@ export function createMockRetail(): RetailApi {
 
     listCategories: () => delay([...CATEGORIES]),
 
-    listStockAllBranches: ({ query, categoryId: category, negativeOnly }) =>
+    listStockAllBranches: ({ query, categoryId: category, negativeOnly, level }) =>
       delay({
         branches: MOCK_BRANCHES.map((b) => ({ id: b.id, code: b.code, name: b.name, head_office: b.is_head_office })),
         items: [...products.values()].filter((p) => matches(p, query) && (!category || categoryId(p.category) === category)).map((p): AllBranchesRow => {
@@ -167,14 +169,14 @@ export function createMockRetail(): RetailApi {
             total_qty: fromMilli(balancesMilli.reduce((x, y) => x + y, 0)), negative: balancesMilli.some((m) => m < 0), sell_minor: p.sellMinor,
             balances: MOCK_BRANCHES.map((b, i) => ({ branch_id: b.id, qty: fromMilli(balancesMilli[i] ?? 0), negative: (balancesMilli[i] ?? 0) < 0 })),
           }, { cost_minor: p.costMinor });
-        }).filter((r) => !negativeOnly || r.negative),
+        }).filter((r) => (!negativeOnly || r.negative) && atLevel(Number(r.total_qty), level)),
       }),
 
-    listStock: ({ branchId, query, categoryId: category, negativeOnly }) =>
+    listStock: ({ branchId, query, categoryId: category, negativeOnly, level }) =>
       delay([...products.values()].filter((p) => matches(p, query) && (!category || categoryId(p.category) === category)).map((p): StockRow => {
         const milli = bal(branchId, p.id);
         return cost({ product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor }, { cost_minor: p.costMinor });
-      }).filter((r) => !negativeOnly || r.negative)),
+      }).filter((r) => (!negativeOnly || r.negative) && atLevel(Number(r.qty), level))),
 
     listCustomers: () => delay([...customers]),
     listSuppliers: () => delay([...suppliers]),

@@ -50,9 +50,10 @@ class StockController {
             @RequestParam(name = "query", required = false) String query,
             @RequestParam(name = "category_id", required = false) UUID categoryId,
             @RequestParam(name = "negative_only", required = false, defaultValue = "false") boolean negativeOnly,
+            @RequestParam(name = "stock_level", required = false) String level,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.stock(branchId, query, categoryId, negativeOnly, limit, cursor);
+        return service.stock(branchId, query, categoryId, negativeOnly, level, limit, cursor);
     }
 
     @GetMapping("/stock/all-branches")
@@ -64,9 +65,10 @@ class StockController {
             @RequestParam(name = "query", required = false) String query,
             @RequestParam(name = "category_id", required = false) UUID categoryId,
             @RequestParam(name = "negative_only", required = false, defaultValue = "false") boolean negativeOnly,
+            @RequestParam(name = "stock_level", required = false) String level,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.allBranches(query, categoryId, negativeOnly, limit, cursor);
+        return service.allBranches(query, categoryId, negativeOnly, level, limit, cursor);
     }
 
     @GetMapping("/stock/movements")

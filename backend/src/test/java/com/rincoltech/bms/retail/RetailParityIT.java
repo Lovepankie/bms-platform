@@ -319,4 +319,63 @@ class RetailParityIT extends IntegrationTest {
         assertThat(profit.get("sales_minor").asLong()).isEqualTo(4_500);
         assertThat(profit.get("profit_minor").asLong()).isEqualTo(1_500);
     }
+
+    // ---- D. Low stock and out of stock ------------------------------------------------------
+
+    /** Head office holds 10 cable and 4 bulb (setUp), plus 6 high, 5 five, 0 zero and minus 1 owed. */
+    void stockLevels() {
+        UUID high = api.product("PAR-HIGH", 100, 150);
+        UUID five = api.product("PAR-FIVE", 100, 150);
+        api.product("PAR-ZERO", 100, 150);
+        UUID owed = api.product("PAR-OWED", 100, 150);
+        api.stockUp(t.headOffice(), high, "6");
+        api.stockUp(t.headOffice(), five, "5");
+        api.importedBalance(t.headOffice(), owed, "-1");
+    }
+
+    java.util.List<String> codes(JsonNode page) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        page.get("items").forEach(r -> out.add(r.get("code").asString()));
+        return out;
+    }
+
+    @Test
+    void outOfStockIsZeroOrLessAndLowStockIsAtOrBelowTheThreshold() {
+        stockLevels();
+        JsonNode out = ok(api.get("/stock?branch_id=" + t.headOffice() + "&stock_level=out", ADMIN));
+        assertThat(codes(out)).containsExactly("PAR-OWED", "PAR-ZERO");
+        JsonNode low = ok(api.get("/stock?branch_id=" + t.headOffice() + "&stock_level=low", ADMIN));
+        assertThat(codes(low)).containsExactly("PAR-BULB", "PAR-FIVE", "PAR-OWED", "PAR-ZERO");
+        assertThat(low.get("low_stock_threshold").asString()).isEqualTo("5.000");
+        JsonNode all = ok(api.get("/stock?branch_id=" + t.headOffice(), ADMIN));
+        assertThat(codes(all)).hasSize(6);
+        assertThat(all.get("low_stock_threshold").asString()).isEqualTo("5.000");
+    }
+
+    @Test
+    void theLevelFilterCombinesWithCategoryAndSearch() {
+        stockLevels();
+        JsonNode low = ok(api.get("/stock?branch_id=" + t.headOffice() + "&stock_level=low&query=five", ADMIN));
+        assertThat(codes(low)).containsExactly("PAR-FIVE");
+    }
+
+    @Test
+    void anUnknownLevelIsAValidationError() {
+        ResponseEntity<JsonNode> r = api.get("/stock?branch_id=" + t.headOffice() + "&stock_level=empty", ADMIN);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(r.getBody().toString()).contains("stock_level");
+    }
+
+    @Test
+    void allBranchesJudgesTheLevelOnTheTotalAcrossBranches() {
+        stockLevels();
+        api.stockUp(t.secondBranch(), cable, "1");
+        api.stockUp(t.secondBranch(), bulb, "3");
+        // Bulb totals 7 across branches and is no longer low; five stays at 5; cable stays at 11.
+        JsonNode low = ok(api.get("/stock/all-branches?stock_level=low", ADMIN));
+        assertThat(codes(low)).containsExactly("PAR-FIVE", "PAR-OWED", "PAR-ZERO");
+        assertThat(low.get("low_stock_threshold").asString()).isEqualTo("5.000");
+        assertThat(codes(ok(api.get("/stock/all-branches?stock_level=out", ADMIN))))
+                .containsExactly("PAR-OWED", "PAR-ZERO");
+    }
 }

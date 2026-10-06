@@ -59,13 +59,16 @@ export function daysBefore(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Stock lists can show only items out of stock (zero or less) or low (at or below the server's threshold, 5). */
+export type StockLevel = 'out' | 'low';
+
 export type SalePayment = 'cash' | 'mobile_money' | 'bank' | 'credit';
 export type PurchasePayment = 'cash' | 'bank' | 'credit';
 
 export interface RetailApi {
   listProducts(q: { query?: string; branchId?: string }): Promise<Product[]>;
   listCategories(): Promise<Category[]>;
-  listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean }): Promise<StockRow[]>;
+  listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel }): Promise<StockRow[]>;
   listCustomers(): Promise<Customer[]>;
   listSuppliers(): Promise<Supplier[]>;
   createSupplier(body: { name: string }): Promise<Supplier>;
@@ -75,7 +78,7 @@ export interface RetailApi {
   createStocktake(body: StocktakeRequest): Promise<Stocktake>;
   commitStocktake(id: string): Promise<Stocktake>;
   /** Every product with its balance in each branch the caller may read (#144). */
-  listStockAllBranches(q: { query?: string; categoryId?: string; negativeOnly?: boolean }): Promise<AllBranchesStock>;
+  listStockAllBranches(q: { query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel }): Promise<AllBranchesStock>;
   /** One branch, or every branch in the caller's scope when `branchId` is absent (#144). */
   valuation(q: { branchId?: string; asOf?: string }): Promise<Valuation>;
   /** The branches in the caller's stock scope holding a quantity above zero of anything (#103). */
@@ -123,13 +126,13 @@ const realRetail: RetailApi = {
     return unwrap(await api.GET('/api/v1/retail/categories')).items ?? [];
   },
 
-  async listStock({ branchId, query, categoryId, negativeOnly }) {
+  async listStock({ branchId, query, categoryId, negativeOnly, level }) {
     const rows: StockRow[] = [];
     let cursor: string | undefined;
     do {
       const page = unwrap(
         await api.GET('/api/v1/retail/stock', {
-          params: { query: { branch_id: branchId, query: query || undefined, category_id: categoryId || undefined, negative_only: negativeOnly || undefined, limit: PAGE, cursor } },
+          params: { query: { branch_id: branchId, query: query || undefined, category_id: categoryId || undefined, negative_only: negativeOnly || undefined, stock_level: level, limit: PAGE, cursor } },
         }),
       );
       rows.push(...(page.items ?? []));
@@ -138,14 +141,14 @@ const realRetail: RetailApi = {
     return rows;
   },
 
-  async listStockAllBranches({ query, categoryId, negativeOnly }) {
+  async listStockAllBranches({ query, categoryId, negativeOnly, level }) {
     const items: AllBranchesRow[] = [];
     let branches: StockBranch[] = [];
     let cursor: string | undefined;
     do {
       const page = unwrap(
         await api.GET('/api/v1/retail/stock/all-branches', {
-          params: { query: { query: query || undefined, category_id: categoryId || undefined, negative_only: negativeOnly || undefined, limit: PAGE, cursor } },
+          params: { query: { query: query || undefined, category_id: categoryId || undefined, negative_only: negativeOnly || undefined, stock_level: level, limit: PAGE, cursor } },
         }),
       );
       branches = page.branches ?? branches;

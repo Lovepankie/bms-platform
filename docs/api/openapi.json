@@ -2923,6 +2923,10 @@
             },
             "type" : "array"
           },
+          "low_stock_threshold" : {
+            "description" : "A total at or below this is low stock; the same for every branch",
+            "type" : "string"
+          },
           "next_cursor" : {
             "type" : "string"
           }
@@ -3884,6 +3888,10 @@
               "$ref" : "#/components/schemas/RetailStockRow"
             },
             "type" : "array"
+          },
+          "low_stock_threshold" : {
+            "description" : "A quantity at or below this is low stock (FR-RET-03); the same for every branch",
+            "type" : "string"
           },
           "next_cursor" : {
             "type" : "string"
@@ -9570,6 +9578,13 @@
           }
         }, {
           "in" : "query",
+          "name" : "stock_level",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
           "name" : "limit",
           "required" : false,
           "schema" : {
@@ -9625,6 +9640,13 @@
           "schema" : {
             "default" : false,
             "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "stock_level",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         }, {
           "in" : "query",
