@@ -125,6 +125,30 @@ steps passed, among them:
 A TOTP code is accepted once, so a script that enrols and then signs in must wait for the next 30 second window.
 The script and its screenshots are not committed.
 
+## Verification of stock transfers (#84)
+
+The same shape of stack (`docker compose up --no-build`, the API image wrapping the jar built by `mvn verify` and
+the web image wrapping `npm run build`, both built outside the repository), migrated to V22, with a fresh fabricated
+retail tenant created with `deploy/sql/create-tenant.sql`, `platform_set_tenant_modules` and
+`deploy/sql/invite-tenant-admin.sql`: an admin with TOTP, a `retail_sales` user at the head office, a second branch
+`BR2`, two products counted in at the head office. A Playwright script drove Chromium at 360px; 35 of 35 steps
+passed, among them:
+
+- the admin sees Move stock and Stock moves; the form names the source branch and the picker its stock; three
+  units move from head office to `BR2` and the summary shows the branches and the value at cost; both balances
+  moved;
+- a quantity above the source's balance shows the hint and disables Move stock;
+- **refusal:** the form was filled with the whole balance, another till moved one unit meanwhile, and Move stock
+  was refused with 422 `insufficient_stock` and the plain message; nothing moved;
+- Stock moves lists both transfers; cancelling the first moves the stock back; after `BR2` sold what the second
+  brought, its cancel is refused with `transfer_stock_moved` and the server's message naming `BR2` and the code;
+- valuation at cost equals the stock left at cost, unchanged by the moves;
+- the sales user has no Move stock tile, gets "no access" on its URL, sees transfers without a cancel form or any
+  cost (no retail response to that session carried cost), and the sales column gets 403 on `POST /retail/transfers`;
+- no screen overflowed sideways at 360px.
+
+The script and its screenshots are not committed.
+
 ## Left to do
 
 - Void a sale, pay a credit sale, price edit and price history screens (not in R6).
