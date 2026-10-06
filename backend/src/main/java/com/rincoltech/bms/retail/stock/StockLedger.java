@@ -13,8 +13,8 @@ import java.util.UUID;
  * the sum of its movements. Balance rows are locked in branch and product order, so concurrent
  * multi-line events cannot deadlock.
  *
- * <p>A {@code sale}, {@code usage} or {@code damage} movement that would take a balance below zero
- * is always refused with 422 {@code insufficient_stock}; there is no setting to allow it (ADR-020
+ * <p>A {@code sale}, {@code usage}, {@code damage} or {@code transfer_out} movement that would take a
+ * balance below zero is always refused with 422 {@code insufficient_stock}; there is no setting to allow it (ADR-020
  * decision 4). Imports ({@code legacy_balance}) and stock-take adjustments are not guarded.
  */
 public interface StockLedger {
@@ -42,7 +42,8 @@ public interface StockLedger {
 
     /**
      * @param kind {@code opening}, {@code purchase}, {@code sale}, {@code usage}, {@code damage},
-     *     {@code adjustment}, {@code return} or {@code legacy_balance}
+     *     {@code adjustment}, {@code return}, {@code legacy_balance}, {@code transfer_out} or {@code
+     *     transfer_in}; a transfer kind is linked to the transfer named by {@code sourceId}
      * @param qty signed: negative for stock leaving the branch
      * @param unitCostMinor the product's cost when the movement happens (valuation snapshot)
      */

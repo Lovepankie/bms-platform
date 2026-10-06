@@ -48,6 +48,12 @@ It holds no real data. The golden test uses a fabricated fixture of the same sha
 - **Stock-takes and returns recorded as restocks.** The restock log carries rows whose supplier text
   marks stock found at a count and customer returns. The importer maps them to `adjustment` and
   `return` movements, not purchases, and they post no supplier payable.
+- **Shop-to-shop moves recorded as restocks.** The restock log also carries moves of stock from one
+  shop to another, as a negative quantity at one branch and a positive one at the other. They are
+  exported as `adjustment` rows, signed per branch, and stay adjustments after the import: the
+  importer creates no transfer and imported history is not rewritten. New moves are recorded as
+  stock transfers (`retail_transfers`, movement kinds `transfer_out` and `transfer_in`; FR-RET-16,
+  issue #84).
 - **Hard-coded totals.** The valuation view shows its totals on one fixed row number of the product
   master. They are not data and are not imported.
 - **Restock prices.** The restock form pre-fills cost and sell price from the product and staff may

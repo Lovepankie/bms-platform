@@ -48,6 +48,9 @@ dictionary section 4. For each tab:
    reports a code with a special space or a control character inside.
 5. Mark the restock rows whose supplier text means a stock-take as `"kind": "adjustment"` (signed per
    branch) and customer returns as `"kind": "return"`. Everything else is `"purchase"`.
+   Shop-to-shop moves in the source are imported the same way, as signed adjustments at each branch:
+   the importer has no transfer kind, and the platform's stock transfers (FR-RET-16, #84) are for new
+   data only.
 6. Write `balances.jsonl` from the product master's per-branch quantity columns: one row per branch
    and product, including zeros and negatives.
 7. Do not export the cash book tabs (expenses, banking, withdrawals, advances, daily savings) or the
@@ -259,3 +262,7 @@ Then:
   then on.
 - Plan the first stock-take for every branch with negative balances; its adjustments replace the
   legacy balances (ADR-020 decision 9).
+- From the cutover on, move stock between shops with **Move stock** (stock transfers, FR-RET-16), not
+  with a pair of adjustments. Imported history is not rewritten: the shop-to-shop moves already
+  imported stay adjustments in both branches' history, and no transfer is created for them (ADR-020
+  amendment of 2026-10-06).

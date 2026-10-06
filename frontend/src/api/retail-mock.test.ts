@@ -69,4 +69,38 @@ describe('retail mock adapter (real response shapes)', () => {
     await expect(api.commitStocktake(draft.id ?? '')).rejects.toMatchObject({ code: 'stocktake_committed' });
     expect((await api.listStock({ branchId: branch })).find((r) => r.product_id === row?.product_id)?.qty).toBe('10.000');
   });
+
+  it('moves stock between branches at cost, refuses beyond the source balance, and voids once', async () => {
+    setMockProfitAccess(true);
+    const api = createMockRetail();
+    const to = mockMe('admin').branches?.[1]?.id ?? '';
+    const [p] = await api.listProducts({ branchId: branch });
+    const held = async (b: string) => Number((await api.listStock({ branchId: b })).find((r) => r.product_id === p?.id)?.qty);
+    const [a0, b0] = [await held(branch), await held(to)];
+    const body = { from_branch_id: branch, to_branch_id: to, lines: [{ product_id: p?.id ?? '', qty: '2.000' }] };
+    const t = await api.createTransfer(body, 'move-key-1');
+    expect(t.cost_total_minor).toBeGreaterThan(0);
+    expect((await api.createTransfer(body, 'move-key-1')).id).toBe(t.id);
+    expect([a0 - (await held(branch)), (await held(to)) - b0]).toEqual([2, 2]);
+    await expect(api.createTransfer({ ...body, lines: [{ product_id: p?.id ?? '', qty: '9999.000' }] }, 'move-key-2'))
+      .rejects.toMatchObject({ status: 422, code: 'insufficient_stock' });
+    expect((await api.listTransfers({ branchId: to })).items).toHaveLength(1);
+    expect((await api.voidTransfer(t.id ?? '', 'Test wrong branch')).status).toBe('voided');
+    expect(await held(branch)).toBe(a0);
+    await expect(api.voidTransfer(t.id ?? '', 'Test')).rejects.toMatchObject({ code: 'transfer_voided' });
+  });
+
+  it('refuses a void once the destination no longer holds the stock, and hides cost without profit read', async () => {
+    setMockProfitAccess(false);
+    const api = createMockRetail();
+    const to = mockMe('admin').branches?.[1]?.id ?? '';
+    const [p] = await api.listProducts({ branchId: branch });
+    const t = await api.createTransfer({ from_branch_id: branch, to_branch_id: to, lines: [{ product_id: p?.id ?? '', qty: '1.000' }] }, 'move-key-3');
+    expect(JSON.stringify(t)).not.toMatch(/cost/i);
+    expect(JSON.stringify(await api.getTransfer(t.id ?? ''))).not.toMatch(/cost/i);
+    const all = Number((await api.listStock({ branchId: to })).find((r) => r.product_id === p?.id)?.qty);
+    await api.createSale({ branch_id: to, payment_method: 'cash', lines: [{ product_id: p?.id ?? '', qty: all.toFixed(3) }] }, 'empty-the-shelf');
+    await expect(api.voidTransfer(t.id ?? '', 'Test')).rejects.toMatchObject({ status: 422, code: 'transfer_stock_moved' });
+    setMockProfitAccess(true);
+  });
 });

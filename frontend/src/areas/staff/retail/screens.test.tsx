@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { renderToString as render } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { DailyProfit, Product, Sale, Stocktake, StockRow, Valuation } from '../../../api/retail';
+import type { DailyProfit, Product, Sale, Stocktake, StockRow, Transfer, Valuation } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { Receipt, SaleForm } from './sale';
@@ -10,6 +10,8 @@ import { StockTable } from './stock';
 import { StocktakeReview } from './stocktake';
 import { ProfitTable, ValuationTable } from './profit';
 import { RestockForm } from './restock';
+import { TransferForm, TransferSummary } from './transfer';
+import { TransferList } from './transfers';
 import { UsageForm } from './usage';
 import { Gate } from './ui';
 
@@ -161,5 +163,38 @@ describe('valuation and profit', () => {
     const html = renderToString(<ProfitTable report={report} />);
     expect(html).toContain('(loss)');
     expect(html).toContain('-UGX 2,500');
+  });
+});
+
+describe('stock moves', () => {
+  const [from, to] = mockMe('admin').branches ?? [];
+  const moved: Transfer = {
+    id: 'tr1', from_branch_id: from?.id, to_branch_id: to?.id, transfer_date: '2026-10-06', status: 'completed', currency: 'UGX',
+    lines: [{ line_no: 1, product_id: 'p1', code: 'P003', description: 'LED bulb 9W screw', qty: '2.000', unit_cost_minor: 3500, line_cost_minor: 7000 }],
+    cost_total_minor: 7000,
+  };
+
+  it('shows a sales user no Move stock screen', () => {
+    expect(page('sales', <Gate screen="transfer" title="Move stock"><p>FORM</p></Gate>)).toContain('You do not have access');
+  });
+
+  it('offers the other branches as destinations and the source stock with each item', () => {
+    const client = new QueryClient();
+    client.setQueryData(['retail', 'products', branch, ''], products);
+    const html = page('admin', <TransferForm fromBranchId={branch} />, client);
+    expect(html).toContain('for="transfer-to"');
+    expect(html).toContain('Test Branch B');
+    expect(html).not.toContain('>BR1 Test Branch A</option>');
+    expect(html).toContain('in stock here');
+    expect(html).toContain('for="transfer-search"');
+    expect(html).not.toMatch(/each,/);
+  });
+
+  it('lists moves in words and shows the value at cost only with retail.profit.read', () => {
+    const list = page('sales', <TransferList items={[moved, { ...moved, id: 'tr2', status: 'voided' }]} onOpen={() => undefined} />);
+    expect(list).toContain('BR1 Test Branch A to BR2 Test Branch B, 1 item');
+    expect(list).toContain('cancelled');
+    expect(page('sales', <TransferSummary transfer={moved} />)).not.toMatch(/cost/i);
+    expect(page('admin', <TransferSummary transfer={moved} />)).toContain('Value at cost: UGX 7,000');
   });
 });

@@ -7,7 +7,10 @@ import type { Me } from '../../../api/client';
 
 export const PROFIT = 'retail.profit.read';
 
-export type RetailScreen = 'sale' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'valuation' | 'profit';
+export type RetailScreen =
+  | 'sale' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit';
+
+export const TRANSFER = 'retail.stock.transfer';
 
 const NEEDS: Record<RetailScreen, string[]> = {
   sale: ['retail.sale.create'],
@@ -15,6 +18,9 @@ const NEEDS: Record<RetailScreen, string[]> = {
   usage: ['retail.usage.report'],
   stock: ['retail.stock.read'],
   stocktake: ['retail.stocktake.commit', 'retail.stock.read'],
+  // Moving stock needs the transfer permission; the list of transfers is a stock read.
+  transfer: [TRANSFER, 'retail.stock.read'],
+  transfers: ['retail.stock.read'],
   // Stock value is a stock read; its cost columns and the profit report need retail.profit.read.
   valuation: ['retail.stock.read'],
   profit: [PROFIT],
@@ -53,6 +59,8 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'usage', path: '/staff/retail/usage', label: 'Usage and damage', hint: 'Items used or damaged' },
   { screen: 'stock', path: '/staff/retail/stock', label: 'Stock', hint: 'What is on the shelf' },
   { screen: 'stocktake', path: '/staff/retail/stocktake', label: 'Stock-take', hint: 'Count and correct stock' },
+  { screen: 'transfer', path: '/staff/retail/transfer', label: 'Move stock', hint: 'Send stock to another branch' },
+  { screen: 'transfers', path: '/staff/retail/transfers', label: 'Stock moves', hint: 'Stock sent between branches' },
   { screen: 'valuation', path: '/staff/retail/valuation', label: 'Stock value', hint: 'Stock at cost and at price' },
   { screen: 'profit', path: '/staff/retail/profit', label: 'Daily profit', hint: 'Profit per day' },
 ];
