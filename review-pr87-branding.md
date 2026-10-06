@@ -1,0 +1,61 @@
+# Review of PR #87 (feat/85-tenant-branding), 2026-10-06
+
+Verdict: **CHANGES REQUESTED**
+
+Scope: `git diff origin/main...origin/feat/85-tenant-branding` read in full (backend, frontend, docs, openapi). Nothing run except dependency and dash scans; CI not consulted. Issue #85 used as the spec.
+
+## What I verified and found sound
+
+- Tenant resolution is the existing `TenantResolutionFilter`: `request.getServerName()` only, `X-Forwarded-Host` neutralised by `remoteip.host-header`, `X-Tenant` refused outside dev/test, lower-casing, port and trailing dot yield no slug. Branding adds no new resolution path. Unknown host gives 404 `unknown_tenant`; suspended tenants are served.
+- Public responses carry only `display_name`, a re-validated `theme_primary`/`theme_text` (server re-checks stored colour with `BrandColour.readableText`), and `logo_url`. Nothing else.
+- Logo content type comes from the stored row and is filtered to png/jpeg; `nosniff`, `inline`, CSP present. ETag is the sha256 of the stored bytes, so a replaced logo gets a new ETag and a new `?v=<document id>` URL.
+- Upload: `core.settings.manage`, tenant scoped by RLS and `TenantContext`; SVG refused by content (UTF-16 handled) before decode; GIF/other refused by magic; format always re-encoded with metadata ignored on read and not written; 128 px floor and 512 px ceiling; dimensions read via `getWidth/getHeight` before `read()`; the `core.documents` re-encode semaphore (2 slots, 10 s, 503) is used.
+- `imageio-webp` is the real `com.twelvemonkeys.imageio:imageio-webp`, 3.15.2 is the current release on Central, pinned by property, BSD-3 licence. The non-logo `prepare` path still only admits PNG/JPEG magic, so the plugin does not widen it.
+- `theme_primary`: regex enforced with `matches()` (no trailing newline hole), stored upper case, 3-digit hex refused, `#767676` passes (4.54), `#777777` fails (4.48 white, 4.2 dark). Backend and `contrast.ts` use the same formula and constants. `fail-on-unknown-properties: true`, so `logo_document_id` in a PATCH body is a 400 (read-only holds). Unknown stored keys are preserved and ignored by `resolve`. Audit rows carry was/now of changed keys only; no secrets. Concurrent PATCH is serialised by `FOR UPDATE` plus `If-Match`.
+- Frontend: no `dangerouslySetInnerHTML`; CSS custom properties set through `style.setProperty` from server-validated hex; inline preview style only rendered when `check.ok`; footer link `rel="noopener noreferrer"`; shell is the root layout so every area and the platform host get brand bar and footer; the Caddy CSP (`style-src 'self'`) does not block CSSOM writes.
+- No Flyway migration. No em or en dashes in added lines (Python scan over the diff). No `Co-Authored-By` in the PR's commit messages. No commercial figures or client names seen; the only logo asset is the Rincoltech one the issue asks for.
+
+## Blocking
+
+1. **Unauthenticated route reads object storage on every hit, even for a 304.**
+   `BrandingController.java:50-65`, `BrandingService.java:65-72`, `DocumentService.java:210-217`, `R2ObjectStorage.get`.
+   `service.logo()` loads the full object (`getObjectAsBytes`) and only then compares `If-None-Match`. Every request costs three DB queries (resolve, settings, documents) plus one R2 GET. There is no server cache and no rate limit anywhere in the repo or the Caddyfiles. Exploit: `while true; do curl https://<any-tenant-host>/api/v1/branding/logo; done`, parallelised, with or without `If-None-Match`, burns R2 operations (billable), egress from R2, DB connections and heap (up to about 1 MB per request) for a host that is trivially guessable. The 1 h `max-age` only helps well-behaved browsers.
+   Fix: (a) compare the ETag against `documents.sha256` from the row BEFORE reading the object, so a 304 touches no storage (add a `Documents.contentMeta(id)` returning type and sha256); (b) keep a small in-process cache (Caffeine, a few entries of at most 1 MB, keyed by document id, which is immutable) so the 200 path does not hit R2 either; (c) add a per-IP rate limit for `/api/v1/branding*` at Cloudflare or Caddy and say so in chapter 8. Also catch `SdkException` from `get` and answer 404/503 instead of a 500 on this public route.
+
+## Non-blocking (fix in this PR if cheap, otherwise file a Task)
+
+2. **`Documents.content(UUID)` is a new permission-free read of any document by id** (`Documents.java`, `DocumentService.java:210-217`). Today only the logo route calls it, but any module may now read any document (member ID images, loan documents) by id and bypass `DocumentAccess`; RLS only limits it to the current tenant. Fix: make it logo specific, for example `Documents.publicContent(UUID id, String subjectType)` that returns empty unless the row has that subject type (`core.tenant`) and `subject_id = current tenant`, or move the public serve behind a `PublicAsset` marker the module must register. Add an ArchUnit/Modulith test that only `core.tenancy` calls it.
+
+3. **Logo decode memory is capped at 16 MP, not at what a logo needs** (`DocumentService.java:344`, called from `prepareImage` at 205). A tiny, highly compressible 4000 x 4000 PNG (a few KB, so it passes the 1 MB limit) is fully decoded: about 64 MB raster, plus `getScaledInstance(..., SCALE_AREA_AVERAGING)` copies, and two re-encode slots run in parallel. The staging API container is `mem_limit: 448m` with `MaxRAMPercentage=50` (about 224 MB heap, `compose.pi-staging.yml:139-144`), so one tenant admin can OOM the shared API for all tenants (same exposure already exists on the 5 MB document path, but the logo policy gives a cheap fix). Fix: add `maxPixels` to `ImagePolicy` (for example 4 MP, 2048 px per edge) and check it where the 16 MP check is; replace `getScaledInstance` by a two-step `drawImage` with bilinear or use `AffineTransformOp`. Add a test with a 5000 x 5000 solid PNG.
+
+4. **Size limit is applied after buffering up to 5 MB.** `SettingsController.java:136-139`. Spring has already parsed the whole multipart (global 5 MB/6 MB caps) and `getBytes()` copies it before the 1 MB rule in `prepareImage`. Bounded and authenticated, so not an emergency. Fix: `if (file.getSize() > BrandingService.LOGO.maxBytes()) 413` before `getBytes()`; ideally a per-route `MultipartConfigElement` is not needed.
+
+5. **No post-re-encode size check in `prepareImage`** (`DocumentService.java:205-206`; `prepare` has one at 166). The result is bounded by 512 x 512 x 4 bytes in practice (about 1 MB), but the guarantee is implicit. Fix: reject or log when `stored.length > policy.maxBytes() * 2`.
+
+6. **EXIF orientation is stripped but not applied** (`transcode`). A phone-camera JPEG with orientation 6 becomes a sideways logo permanently. Fix: read orientation (TwelveMonkeys `imageio-metadata` is already on the classpath) and rotate before scaling, or document the limitation in chapter 8.8 and on the screen.
+
+7. **Cache and ETag details for shared caches.** `BrandingController.java:56-59`.
+   - Cross-tenant leak analysis: the path is identical on every host, but (a) browser caches are per origin; (b) Cloudflare's default cache key includes the hostname and it does not cache extension-less `/api/...` paths unless a Cache Everything rule exists (then the key still includes host unless a custom key is set); (c) the URL the app uses carries `?v=<document id>`, unique per tenant. So no leak with the stated topology (cloudflared to Caddy to API, no cache module in either Caddyfile). It is, however, one misconfiguration away: the route ignores `v`, so a cache that ignores query strings or keys on path only serves tenant A's logo to tenant B for 1 h. Fix: add `Vary: Host` (harmless, defence in depth) or, better, make the logo URL tenant specific in the path and validate `v` equals the current `logo_document_id` (404 otherwise), then use `immutable, max-age=31536000` safely. Document the Cloudflare rule "never Cache Everything / ignore query string on /api/v1/branding" in the deployment notes.
+   - `If-None-Match` handling is a plain `equals`. Cloudflare and Caddy weaken ETags (`W/"..."`) on revalidation and clients may send lists or `*`, so conditional requests silently become 200s. Use `ServletWebRequest.checkNotModified` or strip `W/` and split the list.
+   - The Caddy `header` block sets a site-wide CSP; check on staging with `curl -I` that the logo response keeps `default-src 'none'; sandbox` (the doc promises it). `nosniff` is duplicated either way.
+
+8. **Existence signal.** Unknown host answers `unknown_tenant`; a real tenant with no logo answers `not_found` on `/logo` and 200 on `/branding`. This distinguishes real from unknown tenants, but so does every other public tenant route (sign-in) and the issue accepts it. No timing equalisation exists; I did not find one needed. Mention in chapter 8 that tenant existence is not secret.
+
+9. **Set-up screen resets unsaved edits.** `frontend/src/areas/staff/setup.tsx:56-61`. The effect re-seeds name, footer and colour whenever `loaded.version` changes, and the logo upload, remove and dismiss all bump the version. An admin who typed a name and then uploads a logo loses the typed name (the suggested colour survives only because `setColour(found)` runs after the refetch). Fix: seed only fields the user has not touched, or keep dirty state.
+
+10. **A theme colour cannot be cleared.** `UpdateSettingsRequest.themePrimary` null means unchanged, the regex rejects `""`, and the screen skips `colour === ''`. Once set, the tenant cannot return to the platform look. Fix: accept explicit `null` (a separate `clear_theme` flag or JSON merge-patch) and add a "Use the platform colour" button.
+
+11. **Logo upload ignores `If-Match` but bumps `version`**, so the admin's next PATCH from a stale form gets 409. The screen refetches, so it works, but document it (chapter 7). R2 `put` runs inside the transaction holding the `tenant_settings` row lock; keep it short or `prepare` and `put` before `lock()`.
+
+12. **Test gaps against the issue's definition of done.** No polyglot test (PNG with a script or ZIP trailer, JPEG with appended HTML), no decompression-bomb test (large canvas, small file) for the logo path, no animated WebP/APNG test, no semaphore exhaustion test for `prepareImage` (503 `uploads_busy`), no `#767676`/`#777777` boundary vector shared between `BrandColourTest` and `contrast.test.ts` (the reference values are two hand copies), no test that a 304 does not read storage (it does today, finding 1).
+
+13. **Docs and contract.**
+   - Chapter 7 says PATCH answers "422 `insufficient_contrast`" in one row and "a field error of `validation_failed`" in another; the code is the latter. Make the table consistent.
+   - `openapi.json` documents only 200 for `getBrandingLogo` and `uploadLogo` (no 304, 404, 413, 415, 422, 503), so `schema.d.ts` gives the client no typed errors. Add `@ApiResponse` entries.
+   - Chapter 8 says the logo is "a `core.tenant` document that `core.settings.read` holders may fetch through the signed URL route"; correct per `TenantDocumentAccess`, but `kind == "staff"` is checked while the public route is not covered by `DocumentAccess` at all (see finding 2). Say so.
+
+14. **Minor frontend.** `createObjectURL` in `loadLogo` (dev only) is never revoked; `ImageBitmap` from `createImageBitmap(file)` in `suggestFrom` is never `close()`d (bounded, since the server accepted the file first, and the 64 x 64 bucket map is bounded at 4096 keys); `--brand` accepts near-white, which makes the 4 px brand-bar border invisible on a white page (spec only asks for text contrast; consider a 3:1 non-text rule for `--brand` against white or a note in 11.2.5); the hex field has no `aria-invalid`/`aria-describedby` linking it to the `role="alert"` message.
+
+## Items checked and not a problem
+
+Host variants (uppercase, port, trailing dot, extra labels, `X-Forwarded-Host`, `X-Tenant`) cannot reach another tenant; the logo row is RLS scoped and `logo_document_id` is only written by `replaceLogo`; WebP plugin is only reachable from the logo path; polyglot bytes cannot survive re-encode; SVG/GIF are refused by content; 3-digit and whitespace hex are refused on both sides; no mock data or hard-coded brand colour outside the `theme.css` defaults; no migration; licence and pin fine.
