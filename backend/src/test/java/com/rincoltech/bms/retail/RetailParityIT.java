@@ -587,4 +587,82 @@ class RetailParityIT extends IntegrationTest {
         assertThat(after.get("branches")).hasSize(1);
         assertThat(after.toString()).doesNotContain(t.secondBranch().toString());
     }
+
+    // ---- H. Isolation, escaping and partial scope (review of #154) --------------------------
+
+    @Test
+    void anotherTenantsCategoryIdFindsNothingAndNeverLeaks() {
+        TestDatabase.Fixture other = TestDatabase.tenant("retail-par-other", false, true);
+        RetailTestSupport theirs = new RetailTestSupport(http, other);
+        UUID foreign = theirs.category("Test Foreign Category");
+        UUID theirProduct = theirs.product("FOREIGN-1", 100, 200);
+        theirs.stockUp(other.headOffice(), theirProduct, "3");
+        assertThat(ok(api.get("/stock?branch_id=" + t.headOffice() + "&category_id=" + foreign, ADMIN))
+                        .get("items"))
+                .isEmpty();
+        assertThat(ok(api.get("/stock/all-branches?category_id=" + foreign, ADMIN))
+                        .get("items"))
+                .isEmpty();
+        assertThat(ok(api.get("/products?category_id=" + foreign, ADMIN)).get("items"))
+                .isEmpty();
+        // The valuation has no category filter; it still lists only this tenant's categories.
+        JsonNode v = ok(api.get("/reports/valuation", ADMIN));
+        assertThat(v.toString()).doesNotContain(foreign.toString()).doesNotContain("FOREIGN-1");
+    }
+
+    @Test
+    void aLiteralPercentOrUnderscoreInASearchIsNotAWildcard() {
+        api.stockUp(t.headOffice(), cable, "100");
+        creditSale(1, 10, null, "Test Buyer A_1");
+        creditSale(1, 10, null, "Test Buyer AX1");
+        assertThat(count("?buyer=%")).isZero();
+        assertThat(count("?buyer=_")).isEqualTo(1);
+        assertThat(count("?buyer=x_")).isZero();
+        assertThat(count("?buyer=buyer a_1")).isEqualTo(1);
+        creditSale(1, 10, null, "Test 50% Buyer");
+        assertThat(count("?buyer=%")).isEqualTo(1);
+        assertThat(count("?buyer=50%")).isEqualTo(1);
+
+        for (String q : new String[] {"%", "_"}) {
+            assertThat(ok(api.get("/stock?branch_id=" + t.headOffice() + "&query=" + q, ADMIN))
+                            .get("items"))
+                    .as("stock query %s", q)
+                    .isEmpty();
+            assertThat(ok(api.get("/stock/all-branches?query=" + q, ADMIN)).get("items"))
+                    .as("all-branches query %s", q)
+                    .isEmpty();
+            assertThat(ok(api.get("/products?query=" + q, ADMIN)).get("items"))
+                    .as("products query %s", q)
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void aCallerHoldingStockAndProfitAtHeadOfficeOnlySeesCostForThatColumnAlone() {
+        stockInTwoBranches();
+        ResponseEntity<JsonNode> r = api.call(
+                HttpMethod.GET,
+                "/stock/all-branches",
+                null,
+                "retail.stock.read,retail.profit.read",
+                t.headOffice().toString(),
+                Map.of());
+        JsonNode page = ok(r);
+        assertThat(page.get("branches")).hasSize(1);
+        JsonNode c = row(page, "PAR-CABLE");
+        assertThat(c.get("cost_minor").asLong()).isEqualTo(1_000);
+        assertThat(c.get("balances")).hasSize(1);
+        assertThat(c.get("total_qty").asString()).isEqualTo("10.000");
+        assertThat(page.toString()).doesNotContain(t.secondBranch().toString());
+        // The same caller reading the valuation sees profit for head office rows and no other branch.
+        JsonNode v = ok(api.call(
+                HttpMethod.GET,
+                "/reports/valuation",
+                null,
+                "retail.stock.read,retail.profit.read",
+                t.headOffice().toString(),
+                Map.of()));
+        assertThat(v.has("expected_profit_minor")).isTrue();
+        assertThat(v.toString()).doesNotContain(t.secondBranch().toString());
+    }
 }
