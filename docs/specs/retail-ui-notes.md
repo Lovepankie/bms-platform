@@ -33,7 +33,7 @@ totals shown while typing are a preview; the server's response is the receipt.
 
 ## Look and navigation (#95)
 
-The screens draw with the shared design layer (`docs/specs/design-system.md`); their own classes
+The screens draw with the shared design layer (`docs/ui/design-system.md`); their own classes
 (`.rt-card`, `.rt-row`, `.rt-total`, `.rt-flag`, `.rt-primary`) are styled in `src/app/ui/retail.css`.
 The inline `<style>` element the screens used to render (`RetailStyles`) is gone: the production CSP
 (`style-src 'self'`) refused it, so on a server the screens had no styles at all. `RetailStyles` stays as

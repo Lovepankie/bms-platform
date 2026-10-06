@@ -90,7 +90,7 @@ Every area draws with one design layer in the Rincol Tech look: white surfaces o
 Open Sans (self-hosted from `@fontsource-variable/open-sans`, so no font CDN and nothing extra in the
 CSP), bold headings, 8px corners and soft shadows. The tokens are CSS custom properties in
 `frontend/src/app/theme.css`; the component styles are in `frontend/src/app/ui/`, imported once by
-`main.tsx`. The catalogue and the rules for new screens are in `docs/specs/design-system.md`.
+`main.tsx`. The catalogue and the rules for new screens are in `docs/ui/design-system.md`.
 
 | Group | Tokens (examples) |
 |---|---|

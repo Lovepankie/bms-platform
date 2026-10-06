@@ -1,7 +1,7 @@
 /*
  * The design layer (#95): the self-hosted Open Sans face, then the component styles, all reading the
  * tokens in ../theme.css. Imported once by main.tsx, after theme.css. Catalogue and rules:
- * docs/specs/design-system.md.
+ * docs/ui/design-system.md.
  */
 @import '@fontsource-variable/open-sans/wght.css';
 @import './base.css';

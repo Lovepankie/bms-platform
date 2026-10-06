@@ -45,4 +45,34 @@ describe('design tokens', () => {
     }
     expect(contrast(token('--rt-blue-strong'), token('--rt-blue-tint'))).toBeGreaterThanOrEqual(4.5);
   });
+
+  it('a tenant theme_primary only changes the accent family, derived from --brand', () => {
+    const block = css.match(/:root\[style\*='--brand'\]\s*\{([^}]*)\}/);
+    expect(block).not.toBeNull();
+    const props = [...(block?.[1] ?? '').matchAll(/(--[a-z-]+):\s*([^;]+);/g)];
+    const allowed = new Set(['--color-accent', '--color-accent-tint', '--color-info-tint', '--color-link', '--color-focus']);
+    expect(props.length).toBeGreaterThan(0);
+    for (const [, name, value] of props) {
+      expect(allowed.has(name as string), `${name} must not change with the tenant colour`).toBe(true);
+      expect(value, `${name} must be derived from --brand`).toContain('var(--brand)');
+    }
+  });
+
+  it('every colour defined on :root belongs to the Rincol tokens or the tenant brand pair', () => {
+    for (const block of css.matchAll(/(?:^|\n):root\s*\{([^}]*)\}/g)) {
+      for (const [, name, value] of (block[1] ?? '').matchAll(/(--[a-z0-9-]+):\s*([^;]+);/g)) {
+        const isColour = /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|color-mix\(/.test(value as string);
+        if (!isColour) continue;
+        expect(
+          /^--(rt-|color-|brand|shadow|focus)/.test(name as string),
+          `${name} sets a colour outside the Rincol tokens`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('uses no font other than the self-hosted Open Sans family', () => {
+    expect(css).not.toMatch(/Campton/i);
+    expect(css).not.toMatch(/https?:\/\/fonts\.(googleapis|gstatic)\.com/);
+  });
 });

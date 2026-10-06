@@ -95,7 +95,7 @@ The platform host and a tenant without a colour show the Rincol blue.
 ## Checks
 
 - `npm test` runs the token contrast test.
-- The screenshot walk in `docs/specs/screenshots/README.md` checks every screen route for sideways
+- The screenshot walk in `docs/ui/design-system/README.md` checks every screen route for sideways
   overflow at 360px and runs axe-core (WCAG 2.1 A and AA rules, colour contrast included).
 
 ## Not yet

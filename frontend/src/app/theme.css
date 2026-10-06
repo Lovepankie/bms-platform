@@ -81,7 +81,7 @@ body {
 }
 
 /*
- * The Rincol Tech design tokens (#95, docs/specs/design-system.md). Everything a screen draws comes
+ * The Rincol Tech design tokens (#95, docs/ui/design-system.md). Everything a screen draws comes
  * from these custom properties; no component writes a raw colour, size or shadow. The Rincol blue
  * #00adef reads at only 2.5:1 on white, so it is the accent (borders, rings, graphics, tints) and
  * the darker #0077b6 (4.87:1 with white) carries text, links and button fills. The platform host

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-// Inline SVG icons for the design layer (#95, docs/specs/design-system.md): 24px line icons that
+// Inline SVG icons for the design layer (#95, docs/ui/design-system.md): 24px line icons that
 // take the text colour, drawn here so no image is fetched and the CSP needs nothing extra. Every
 // icon is decorative (aria-hidden); the text next to it carries the meaning.
 
