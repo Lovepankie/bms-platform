@@ -14,8 +14,6 @@ type Step =
   | { kind: 'enrol'; mfaToken: string; enrolment: MfaEnrolment }
   | { kind: 'codes'; codes: string[] };
 
-const box = { display: 'grid', gap: 8, maxWidth: 360 } as const;
-
 function SignIn() {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>({ kind: 'password' });
@@ -24,6 +22,11 @@ function SignIn() {
   const [code, setCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  function copySecret(secret: string) {
+    void navigator.clipboard?.writeText(secret).then(() => setCopied(true));
+  }
 
   async function afterSignIn(body: SignInResponse) {
     if (body.status === 'signed_in' && body.access_token) {
@@ -97,12 +100,13 @@ function SignIn() {
   }
 
   return (
-    <main>
+    <main className="card auth-card">
       <h1>Staff sign-in</h1>
-      {message && <p role="alert">{message}</p>}
+      {step.kind === 'password' && <p className="lead">Use the email or phone and the password you set from your invitation.</p>}
+      {message && <p role="alert" className="alert alert-danger">{message}</p>}
 
       {step.kind === 'password' && (
-        <form onSubmit={submitPassword} style={box}>
+        <form onSubmit={submitPassword} className="form-stack">
           <label>
             Email or phone
             <input value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" required />
@@ -117,47 +121,56 @@ function SignIn() {
               required
             />
           </label>
-          <button disabled={busy}>Sign in</button>
+          <button className="btn-primary" disabled={busy}>{busy ? 'Signing in' : 'Sign in'}</button>
         </form>
       )}
 
       {step.kind === 'challenge' && (
-        <form onSubmit={(e) => submitChallenge(e, step.mfaToken)} style={box}>
-          <p>Enter the code from your authenticator app. Lost your phone? Enter one of your recovery codes.</p>
+        <form onSubmit={(e) => submitChallenge(e, step.mfaToken)} className="form-stack">
+          <p className="muted">Enter the code from your authenticator app. Lost your phone? Enter one of your recovery codes.</p>
           <label>
             Code
-            <input value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" required />
+            <input className="input-code" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" required />
           </label>
-          <button disabled={busy}>Verify</button>
+          <button className="btn-primary" disabled={busy}>Verify</button>
         </form>
       )}
 
       {step.kind === 'enrol' && (
-        <form onSubmit={(e) => submitEnrolment(e, step.mfaToken)} style={box}>
-          <p>Your role requires a second factor. Add this account to an authenticator app, then enter the code it shows.</p>
-          <p>
-            Secret: <code>{step.enrolment.secret}</code>
-          </p>
-          <p style={{ wordBreak: 'break-all', fontSize: 12 }}>
-            <a href={step.enrolment.otpauth_uri}>{step.enrolment.otpauth_uri}</a>
+        <form onSubmit={(e) => submitEnrolment(e, step.mfaToken)} className="form-stack">
+          <h2>Set up your authenticator app</h2>
+          <p className="muted">Your role needs a second step at sign-in. It keeps your account safe even if someone learns your password.</p>
+          <ol className="steps">
+            <li>Open an authenticator app on your phone, for example Google Authenticator or Microsoft Authenticator.</li>
+            <li>Add an account and type in this setup key, or open the link on this phone.</li>
+            <li>Enter the 6 digit code the app shows.</li>
+          </ol>
+          <div className="secret-box">
+            <code aria-label="Setup key">{step.enrolment.secret}</code>
+            <button type="button" className="btn-sm" onClick={() => copySecret(step.enrolment.secret ?? '')}>
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <p className="hint">
+            <a href={step.enrolment.otpauth_uri}>Open in my authenticator app</a>
           </p>
           <label>
             Code from the app
-            <input value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" required />
+            <input className="input-code" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" required />
           </label>
-          <button disabled={busy}>Turn on</button>
+          <button className="btn-primary" disabled={busy}>Turn on</button>
         </form>
       )}
 
       {step.kind === 'codes' && (
-        <section style={box}>
-          <h2>Your recovery codes</h2>
+        <section className="form-stack">
+          <h2>Save your recovery codes</h2>
           <p>
             Each code signs you in once if you lose your phone. Save them somewhere safe now: they are shown only this
             once.
           </p>
-          <pre>{recoveryCodesText(step.codes)}</pre>
-          <button onClick={() => void navigate({ to: '/staff' })}>I have saved them</button>
+          <pre className="codes-box">{recoveryCodesText(step.codes)}</pre>
+          <button className="btn-primary" onClick={() => void navigate({ to: '/staff' })}>I have saved them</button>
         </section>
       )}
     </main>

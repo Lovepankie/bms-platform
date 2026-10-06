@@ -10,9 +10,9 @@ import { BranchRequired, Gate, Problem, money, useProfitAccess, useSingleBranch 
 // sends no cost field to anyone else.
 
 export function StockTable({ rows, showCost }: { rows: StockRow[]; showCost: boolean }) {
-  if (rows.length === 0) return <p>No items found.</p>;
+  if (rows.length === 0) return <p className="empty-state">No items found.</p>;
   return (
-    <table>
+    <div className="table-wrap" tabIndex={0}><table>
       <thead>
         <tr>
           <th>Item</th>
@@ -34,7 +34,7 @@ export function StockTable({ rows, showCost }: { rows: StockRow[]; showCost: boo
           </tr>
         ))}
       </tbody>
-    </table>
+    </table></div>
   );
 }
 
@@ -54,14 +54,14 @@ function StockPage() {
         <BranchRequired />
       ) : (
         <>
-          <p>Branch: {branchName}</p>
+          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <label htmlFor="stock-search">Search by name or code</label>
           <input id="stock-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
           <label style={{ fontWeight: 400 }}>
             <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={negativeOnly} onChange={(e) => setNegativeOnly(e.target.checked)} />
             Show only negative stock
           </label>
-          {stock.isPending && <p>Loading</p>}
+          {stock.isPending && <p className="loading">Loading</p>}
           <Problem error={stock.error} />
           {stock.data && <StockTable rows={stock.data} showCost={canProfit} />}
         </>

@@ -5,7 +5,9 @@ import { api, fetchMe, fetchSettings, type Me } from '../../api/client';
 import { loadRetailMock, retailMockEnabled } from '../../api/retail';
 import { ALL_BRANCHES, initialBranch, loadBranch, saveBranch } from '../../auth/branch';
 import { getAccessToken, refreshSession, setAccessToken, subscribe } from '../../auth/session';
+import { icons } from '../../components/icons';
 import { StaffContext } from './context';
+import { RetailNav } from './retail/nav';
 import { canSeeProfit, showRetail } from './retail/permissions';
 
 // The staff area layout: restores the session from the refresh cookie, shows who is signed in,
@@ -55,7 +57,7 @@ function StaffLayout() {
   }, [me.data]);
 
   if (restoring || !me.data) {
-    return <p>{me.isError ? 'Could not load your profile.' : 'Loading'}</p>;
+    return me.isError ? <p role="alert" className="alert alert-danger">Could not load your profile.</p> : <p className="loading">Loading</p>;
   }
 
   const profile = me.data;
@@ -77,32 +79,38 @@ function StaffLayout() {
 
   return (
     <StaffContext.Provider value={{ me: profile, branch }}>
-      <header style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
-        <strong>{profile.full_name}</strong>
-        <label>
-          Branch{' '}
-          <select value={branch ?? ''} onChange={(e) => choose(e.target.value)}>
-            {profile.all_branches && <option value={ALL_BRANCHES}>All branches</option>}
-            {(profile.branches ?? []).map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.code} {b.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <nav style={{ display: 'flex', gap: 12 }}>
-          <Link to="/staff">Home</Link>
+      <header className="staff-bar">
+        <div className="staff-bar-top">
+          <span className="staff-user">
+            <span className="avatar">{icons.user}</span>
+            <span className="staff-user-name">{profile.full_name}</span>
+          </span>
+          <label className="branch-picker">
+            Branch{' '}
+            <select value={branch ?? ''} onChange={(e) => choose(e.target.value)}>
+              {profile.all_branches && <option value={ALL_BRANCHES}>All branches</option>}
+              {(profile.branches ?? []).map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.code} {b.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
+        </div>
+        <nav className="tabs" aria-label="Staff areas">
+          <Link to="/staff" activeOptions={{ exact: true }}>Home</Link>
           {canSeeApprovals && <Link to="/staff/approvals">Approvals</Link>}
           {showRetail(profile) && <Link to="/staff/retail">Retail</Link>}
           {managesSettings && <Link to="/staff/setup">Business set-up</Link>}
         </nav>
-        <button onClick={() => void signOut()}>Sign out</button>
       </header>
       {profile.mfa_enabled && recoveryCodesLeft <= 2 && (
-        <p role="status">
+        <p role="status" className="alert alert-warning">
           You have {recoveryCodesLeft} recovery codes left. Ask an admin to reset your MFA if you run out.
         </p>
       )}
+      {pathname.startsWith('/staff/retail') && showRetail(profile) && <RetailNav me={profile} />}
       <Outlet />
     </StaffContext.Provider>
   );

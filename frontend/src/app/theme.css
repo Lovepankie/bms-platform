@@ -79,3 +79,110 @@ body {
 .app-footer a {
   display: inline-flex;
 }
+
+/*
+ * The Rincol Tech design tokens (#95, docs/ui/design-system.md). Everything a screen draws comes
+ * from these custom properties; no component writes a raw colour, size or shadow. The Rincol blue
+ * #00adef reads at only 2.5:1 on white, so it is the accent (borders, rings, graphics, tints) and
+ * the darker #0077b6 (4.87:1 with white) carries text, links and button fills. The platform host
+ * shows the Rincol default; a tenant colour set by the shell as --brand replaces it, see below.
+ */
+:root {
+  --rt-blue: #00adef;
+  --rt-blue-strong: #0077b6;
+  --rt-blue-tint: #eef9fe; /* the strong blue reads at 4.55:1 on it */
+  --rt-grey-50: #f5f7f9;
+  --rt-grey-100: #eeeeee;
+  --rt-grey-200: #e5e5e5;
+  --rt-grey-400: #9e9e9e;
+  --rt-grey-500: #868e96;
+  --rt-grey-600: #5c6370;
+  --rt-grey-900: #1d2939;
+
+  /* The Rincol default of the shell's brand pair; a tenant colour replaces both inline. */
+  --brand: var(--rt-blue-strong);
+  --brand-contrast: #ffffff;
+
+  /* Colour roles */
+  --color-bg: var(--rt-grey-50);
+  --color-surface: #ffffff;
+  --color-surface-muted: #fafbfc;
+  --color-border: var(--rt-grey-200);
+  --color-border-strong: var(--rt-grey-500); /* 3.3:1 on white: input edges must be seen */
+  --color-text: var(--rt-grey-900);
+  --color-text-muted: var(--rt-grey-600);
+  --color-primary: var(--brand);
+  --color-on-primary: var(--brand-contrast);
+  --color-primary-hover: color-mix(in srgb, var(--color-primary) 86%, #000);
+  --color-accent: var(--rt-blue);
+  --color-accent-tint: var(--rt-blue-tint);
+  --color-link: var(--rt-blue-strong);
+  --color-focus: var(--rt-blue-strong);
+  --color-danger: #b42318;
+  --color-danger-tint: #fef3f2;
+  --color-success: #067647;
+  --color-success-tint: #ecfdf3;
+  --color-warning: #b54708;
+  --color-warning-tint: #fffaeb;
+  --color-info-tint: var(--rt-blue-tint);
+
+  /* Type */
+  --font-sans: 'Open Sans Variable', 'Open Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+  --weight-regular: 400;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --leading: 1.5;
+  --leading-tight: 1.2;
+
+  /* Spacing, 4px steps */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 56px;
+
+  /* Shape and depth */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-lg: 0 12px 32px -8px rgba(16, 24, 40, 0.18), 0 4px 8px -4px rgba(16, 24, 40, 0.06);
+
+  /* Layers */
+  --z-nav: 100;
+  --z-overlay: 200;
+  --z-modal: 300;
+  --z-toast: 400;
+
+  /* Interaction */
+  --tap: 44px;
+  --focus-ring: 0 0 0 4px color-mix(in srgb, var(--color-accent) 30%, transparent);
+  --content-width: 1120px;
+  --transition: 120ms ease;
+}
+
+/*
+ * A tenant colour is set inline on <html> by the shell. It then becomes the accent too, and links
+ * and focus rings use a darkened mix of it, because --brand is readable with --brand-contrast but
+ * not necessarily as text on white.
+ */
+:root[style*='--brand'] {
+  --color-accent: var(--brand);
+  --color-accent-tint: color-mix(in srgb, var(--brand) 10%, #fff);
+  --color-info-tint: color-mix(in srgb, var(--brand) 10%, #fff);
+  --color-link: color-mix(in srgb, var(--brand) 70%, #000);
+  --color-focus: color-mix(in srgb, var(--brand) 70%, #000);
+}

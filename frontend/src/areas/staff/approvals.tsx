@@ -37,28 +37,30 @@ function Row({ item, id }: { item: Approval; id: string }) {
   return (
     <tr>
       <td>{item.action_type}</td>
-      <td>{item.amount_minor != null && item.currency ? formatMinor(item.amount_minor, item.currency) : ''}</td>
+      <td className="num">{item.amount_minor != null && item.currency ? formatMinor(item.amount_minor, item.currency) : ''}</td>
       <td>{item.requested_by_name ?? item.requested_by}</td>
       <td>{item.requested_at ? new Date(item.requested_at).toLocaleString() : ''}</td>
       <td>
-        {item.can_decide && (
-          <>
-            <input placeholder="Note (required to reject)" value={note} onChange={(e) => setNote(e.target.value)} />{' '}
-            <button disabled={decide.isPending} onClick={() => decide.mutate('approve')}>
-              Approve
-            </button>{' '}
-            <button disabled={decide.isPending || note.trim() === ''} onClick={() => decide.mutate('reject')}>
-              Reject
+        <div className="decision">
+          {item.can_decide && (
+            <>
+              <input placeholder="Note (required to reject)" aria-label="Note" value={note} onChange={(e) => setNote(e.target.value)} />{' '}
+              <button className="btn-primary" disabled={decide.isPending} onClick={() => decide.mutate('approve')}>
+                Approve
+              </button>{' '}
+              <button className="btn-danger" disabled={decide.isPending || note.trim() === ''} onClick={() => decide.mutate('reject')}>
+                Reject
+              </button>
+            </>
+          )}
+          {item.can_cancel && (
+            <button disabled={decide.isPending} onClick={() => decide.mutate('cancel')}>
+              Cancel my request
             </button>
-          </>
-        )}
-        {item.can_cancel && (
-          <button disabled={decide.isPending} onClick={() => decide.mutate('cancel')}>
-            Cancel my request
-          </button>
-        )}
-        {item.execution_error && <p role="alert">Last attempt failed: {item.execution_error}</p>}
-        {message && <p role="alert">{message}</p>}
+          )}
+          {item.execution_error && <p role="alert" className="alert alert-danger">Last attempt failed: {item.execution_error}</p>}
+          {message && <p role="alert" className="alert alert-danger">{message}</p>}
+        </div>
       </td>
     </tr>
   );
@@ -76,24 +78,26 @@ function Approvals() {
   return (
     <main>
       <h1>Approvals</h1>
-      {pending.isPending && <p>Loading</p>}
-      {pending.isError && <p>Could not load approvals.</p>}
-      {pending.data && items.length === 0 && <p>Nothing waiting.</p>}
+      {pending.isPending && <p className="loading">Loading</p>}
+      {pending.isError && <p role="alert" className="alert alert-danger">Could not load approvals.</p>}
+      {pending.data && items.length === 0 && <p className="empty-state">Nothing waiting.</p>}
       {items.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Action</th>
-              <th>Amount</th>
-              <th>Requested by</th>
-              <th>Requested at</th>
-              <th>Decision</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => item.id && <Row key={item.id} item={item} id={item.id} />)}
-          </tbody>
-        </table>
+        <div className="table-wrap" tabIndex={0}>
+          <table>
+            <thead>
+              <tr>
+                <th>Action</th>
+                <th className="num">Amount</th>
+                <th>Requested by</th>
+                <th>Requested at</th>
+                <th>Decision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => item.id && <Row key={item.id} item={item} id={item.id} />)}
+            </tbody>
+          </table>
+        </div>
       )}
     </main>
   );

@@ -70,7 +70,7 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
       </ul>
 
       <h2>Items</h2>
-      {lines.length === 0 && <p>No items yet.</p>}
+      {lines.length === 0 && <p className="empty-state">No items yet.</p>}
       {lines.map((l, i) => (
         <div key={l.product.id} className="rt-card">
           <strong>{l.product.description}</strong>
@@ -78,7 +78,7 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
           <input id={`uq-${i}`} inputMode="decimal" value={l.qty} aria-invalid={parseQty(l.qty) === null}
             onChange={(e) => setLines((ls) => ls.map((x, n) => (n === i ? { ...x, qty: e.target.value } : x)))} />
           {parseQty(l.qty) === null && <p className="rt-flag">Enter a quantity above zero.</p>}
-          <button type="button" aria-label={`Remove ${l.product.description}`} onClick={() => setLines((ls) => ls.filter((_, n) => n !== i))}>Remove</button>
+          <button type="button" className="btn-ghost" aria-label={`Remove ${l.product.description}`} onClick={() => setLines((ls) => ls.filter((_, n) => n !== i))}>Remove</button>
         </div>
       ))}
       <Problem error={save.error} />
@@ -106,7 +106,7 @@ function UsagePage() {
         </section>
       ) : (
         <>
-          <p>Branch: {branchName}</p>
+          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <UsageForm key={`${branchId}-${round}`} branchId={branchId} onSaved={setDone} />
         </>
       )}

@@ -17,7 +17,7 @@ export function ValuationTable({ valuation }: { valuation: Valuation }) {
         {withCost && <>At cost {money(valuation.value_at_cost_minor ?? 0)}<br /></>}
         At selling price {money(valuation.expected_sales_minor ?? 0)}
       </p>
-      <table>
+      <div className="table-wrap" tabIndex={0}><table>
         <thead>
           <tr>
             <th>Item</th>
@@ -36,7 +36,7 @@ export function ValuationTable({ valuation }: { valuation: Valuation }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </>
   );
 }
@@ -48,8 +48,8 @@ function ValuationPage() {
     <Gate screen="valuation" title="Stock value">
       {branchId === null ? <BranchRequired /> : (
         <>
-          <p>Branch: {branchName}</p>
-          {valuation.isPending && <p>Loading</p>}
+          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
+          {valuation.isPending && <p className="loading">Loading</p>}
           <Problem error={valuation.error} />
           {valuation.data && <ValuationTable valuation={valuation.data} />}
         </>
@@ -63,7 +63,7 @@ export function ProfitTable({ report }: { report: DailyProfit }) {
   return (
     <>
       <p className="rt-total">Profit for the period {money(report.profit_minor ?? 0)}</p>
-      <table>
+      <div className="table-wrap" tabIndex={0}><table>
         <thead>
           <tr>
             <th>Day</th>
@@ -84,7 +84,7 @@ export function ProfitTable({ report }: { report: DailyProfit }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </>
   );
 }
@@ -100,13 +100,13 @@ function ProfitPage() {
     <Gate screen="profit" title="Daily profit">
       {branchId === null ? <BranchRequired /> : (
         <>
-          <p>Branch: {branchName}</p>
+          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <div className="rt-row">
             <div><label htmlFor="from">From</label><input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
             <div><label htmlFor="to">To</label><input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
           </div>
           {from > to && <p role="alert" className="rt-flag">The start date must not be after the end date.</p>}
-          {profit.isPending && from <= to && <p>Loading</p>}
+          {profit.isPending && from <= to && <p className="loading">Loading</p>}
           <Problem error={profit.error} />
           {profit.data && <ProfitTable report={profit.data} />}
         </>

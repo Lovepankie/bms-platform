@@ -28,7 +28,7 @@ export function Receipt({ sale, onNew }: { sale: Sale; onNew?: () => void }) {
         Paid by {METHODS.find((m) => m.value === sale.payment_method)?.label ?? sale.payment_method} on {sale.sale_date}
         {sale.buyer_name ? `, buyer ${sale.buyer_name}` : ''}
       </p>
-      <table>
+      <div className="table-wrap" tabIndex={0}><table>
         <thead>
           <tr>
             <th>Item</th>
@@ -47,7 +47,7 @@ export function Receipt({ sale, onNew }: { sale: Sale; onNew?: () => void }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
       <p className="rt-total">Total {money(sale.total_minor ?? 0)}</p>
       {(sale.balance_minor ?? 0) > 0 && (
         <p>
@@ -104,7 +104,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
       <ProductPicker id="sale-search" branchId={branchId} showPrice onAdd={add} />
 
       <h2>Items</h2>
-      {draft.lines.length === 0 && <p>No items yet. Search above and tap Add.</p>}
+      {draft.lines.length === 0 && <p className="empty-state">No items yet. Search above and tap Add.</p>}
       {draft.lines.map((l, i) => {
         const f = lineFigures(l);
         const hint = lineHint(l);
@@ -122,9 +122,9 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
               </div>
             </div>
             {hint && <p role="alert" className="rt-flag">{hint}</p>}
-            <p>
+            <p className="line-foot">
               {f ? `Line total ${money(f.totalMinor)}` : <span className="rt-flag">Check quantity and price</span>}{' '}
-              <button type="button" onClick={() => setDraft((d) => ({ ...d, lines: d.lines.filter((_, n) => n !== i) }))} aria-label={`Remove ${l.product.description}`}>
+              <button type="button" className="btn-ghost" onClick={() => setDraft((d) => ({ ...d, lines: d.lines.filter((_, n) => n !== i) }))} aria-label={`Remove ${l.product.description}`}>
                 Remove
               </button>
             </p>
@@ -206,7 +206,7 @@ function RecordSale() {
         <Receipt sale={sale} onNew={() => { setSale(null); setRound((n) => n + 1); }} />
       ) : (
         <>
-          <p>Branch: {branchName}</p>
+          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <SaleForm key={`${branchId}-${round}`} branchId={branchId} onSaved={setSale} />
         </>
       )}
