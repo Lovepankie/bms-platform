@@ -21,8 +21,8 @@ public final class RetailTestSupport {
 
     /** The admin column of the chapter 8 matrix for retail. */
     public static final String ADMIN = "retail.catalogue.manage,retail.price.edit,retail.customer.manage,"
-            + "retail.sale.create,retail.sale.read,retail.sale.void,retail.stock.read,retail.stocktake.commit,"
-            + "retail.purchase.create,retail.usage.report,retail.profit.read";
+            + "retail.sale.create,retail.sale.read,retail.sale.void,retail.stock.read,retail.stock.transfer,"
+            + "retail.stocktake.commit,retail.purchase.create,retail.usage.report,retail.profit.read";
 
     /** The sales column of the chapter 8 matrix for retail. */
     public static final String SALES =

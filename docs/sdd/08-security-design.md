@@ -189,6 +189,7 @@ platform API and holds no tenant permissions.
 | `retail.sale.read` | Y | | | | | | | Y |
 | `retail.sale.void` | Y | | | | | | | |
 | `retail.stock.read` | Y | | | | | | | Y |
+| `retail.stock.transfer` | Y | | | | | | | |
 | `retail.stocktake.commit` | Y | | | | | | | |
 | `retail.purchase.create` | Y | | | | | | | |
 | `retail.usage.report` | Y | | | | | | | Y |
@@ -216,6 +217,13 @@ Notes:
   user with profit read at branch A only sees no cost on branch B's stock, movements, sales or
   valuation (review F5); tenant-wide products and price history need it in any branch. The sales
   role holds no `core.*` permission; the PWA reads the user's branches from `/me`.
+- `retail.stock.transfer` (issue #84, migration V22, FR-RET-16) moves stock from one branch to
+  another. It is money-moving (it posts an inventory entry at each branch) and goes to the roles
+  that restock, which in the default roles is the tenant admin only. Its branch scope is checked
+  on the source branch, for the transfer and for its void; the destination may be any active
+  branch of the tenant. Listing and reading transfers needs `retail.stock.read` in the source or
+  the destination branch, and the cost fields need `retail.profit.read` in either of them, because
+  the same cost is posted to both branches' inventory accounts.
 - `retail.price.below_cost` (issue #64, ADR-020 decision 5) lets a sale line be priced at or below
   the product's cost. It is in the catalogue (migration V13) but no default role holds it, not even
   the tenant admin: it is meant for a custom role, and roles are not yet tenant-editable, so today
@@ -328,8 +336,8 @@ the lending module is switched on (runbook `docs/runbooks/`, onboarding a tenant
 - Retail audit payloads carry no cost, cost total, loss, gain or purchase total (all at cost),
   because audit readers such as the auditor and branch manager do not hold `retail.profit.read`
   (#77, ADR-020 decision 10). They record facts at selling value, counts and ids (sale number and
-  total, line counts, adjusted lines, payment method, supplier); a price change records the sell
-  price diff and its source only. Cost stays in the documents and journals, whose reads apply the
+  total, line counts, adjusted lines, payment method, supplier; a transfer's branches, date and
+  line count); a price change records the sell price diff and its source only. Cost stays in the documents and journals, whose reads apply the
   permission.
 - `audit_log`, `journal_entries`, `journal_lines` and the other append-only tables in
   chapter 6 section 6.2.4 reject UPDATE and DELETE for the application role.
