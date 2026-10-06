@@ -21,7 +21,7 @@ Phone files are 360x740, desktop files 1280x800; no screen overflowed sideways a
 | `09-credit-sale-detail-phone` | A sale opened: facts, lines, paid and still owed, profit (admin only) |
 | `10-all-sales-phone` | All sales with its filters |
 | `11-sale-choose-branch-phone` | Record a sale with All branches chosen: the branches as buttons |
-| `20-stock-all-branches-desktop` | Stock with All branches on a wide screen: a quantity column per branch and the total |
+| `20-stock-all-branches-desktop` | Stock with All branches on a wide screen with three branches: the Item and Total columns stay in view (sticky), the branch columns are the ones that scroll, and Price and Cost are not cut off. Re-taken after the review of #154 from the built-in fabricated mock data (`VITE_RETAIL_MOCK=1`, three branches, headless Chromium at 1280x800), not the real stack |
 | `22-credit-sales-desktop` | Credit sales on a wide screen |
 
 The walk scripts are not committed.

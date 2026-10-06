@@ -60,7 +60,7 @@ export function AllBranchesTable({ data, showCost: mayCost }: { data: AllBranche
   const showCost = mayCost && data.items.some((r) => r.cost_minor !== undefined);
   if (data.items.length === 0) return <p className="empty-state">No items found.</p>;
   return (
-    <div className="table-wrap" tabIndex={0}><table>
+    <div className="table-wrap" tabIndex={0}><table className="stock-matrix">
       <thead>
         <tr>
           <th>Item</th>
