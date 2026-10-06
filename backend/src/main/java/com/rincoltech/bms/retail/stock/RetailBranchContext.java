@@ -31,6 +31,15 @@ public class RetailBranchContext {
         return visible(permission, Set.of());
     }
 
+    /** Ids of the inactive branches the permission covers: the only ones a balance can keep in a column. */
+    public List<UUID> inactiveInScope(String permission) {
+        Principal principal = CurrentPrincipal.require();
+        return branches.all().stream()
+                .filter(b -> !b.active() && principal.may(permission, b.id()))
+                .map(Branches.Branch::id)
+                .toList();
+    }
+
     /**
      * As {@link #visible(String)}, and also an inactive branch named in {@code holding}: a closed
      * branch that still holds a non-zero balance stays a column so the totals agree with the valuation.

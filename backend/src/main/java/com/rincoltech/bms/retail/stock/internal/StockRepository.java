@@ -173,14 +173,19 @@ class StockRepository {
                 .list();
     }
 
-    /** Balances of the given products in the given branches, keyed by product then branch. */
-    /** The branches holding a non-zero balance of anything, whether or not the branch is still active. */
-    java.util.Set<UUID> branchesHoldingBalance() {
-        return new java.util.HashSet<>(jdbc.sql("SELECT DISTINCT branch_id FROM retail_stock_balances WHERE qty <> 0")
+    /** The candidate branches holding a non-zero balance of anything; the caller passes its inactive branches in scope. */
+    java.util.Set<UUID> branchesHoldingBalance(List<UUID> candidates) {
+        if (candidates.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return new java.util.HashSet<>(jdbc.sql(
+                        "SELECT DISTINCT branch_id FROM retail_stock_balances WHERE qty <> 0 AND branch_id = ANY(:ids)")
+                .param("ids", candidates.toArray(UUID[]::new))
                 .query(UUID.class)
                 .list());
     }
 
+    /** Balances of the given products in the given branches, keyed by product then branch. */
     Map<UUID, Map<UUID, BigDecimal>> balances(List<UUID> productIds, List<UUID> branchIds) {
         Map<UUID, Map<UUID, BigDecimal>> out = new LinkedHashMap<>();
         if (productIds.isEmpty()) {

@@ -152,6 +152,8 @@ for real; the stub is for curl and tests.
   the cursor encodes the sort key plus `id` as a tiebreaker. Every list decodes it with the
   kernel's one parser (`Cursor.decodeKey`): a cursor that is not base64url, has no `|`, has a
   bad `id` or, on a timestamp-ordered list, a bad timestamp is 400 `malformed_request`, never a 500.
+  Operational note (#145): sales-list cursors issued before the deploy that added the direction have none
+  and are refused with 400 `malformed_request`, so a client part-way through a sales list must restart the list.
 - Filters are query parameters named after fields: `status=active&status=closed`
   (repeatable means OR), ranges as `<field>_from` and `<field>_to` (inclusive), free
   search as `q`.

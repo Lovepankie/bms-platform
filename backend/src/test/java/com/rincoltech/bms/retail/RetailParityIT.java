@@ -519,6 +519,48 @@ class RetailParityIT extends IntegrationTest {
         assertThat(ids(paid)).containsExactly(overduePaid.toString());
     }
 
+    /**
+     * The overdue boundary uses the tenant's business date, not UTC: a sale due today is still owing,
+     * one due yesterday is overdue. The tenant is put in a zone whose date differs from UTC's right now
+     * (one of two far-apart zones always does), so a query on the UTC date would fail this.
+     */
+    @Test
+    void aSaleDueOnTheTenantsBusinessDateIsNotOverdueButTheDayBeforeIs() {
+        java.time.ZoneId zone = java.time.ZoneId.of("Pacific/Kiritimati");
+        java.time.LocalDate utcToday = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        if (java.time.LocalDate.now(zone).equals(utcToday)) {
+            zone = java.time.ZoneId.of("Pacific/Pago_Pago");
+        }
+        java.time.LocalDate today = java.time.LocalDate.now(zone);
+        assertThat(today).isNotEqualTo(utcToday);
+        TestDatabase.owner()
+                .sql("UPDATE tenants SET timezone = ? WHERE id = ?")
+                .params(zone.getId(), t.tenantId())
+                .update();
+        api.stockUp(t.headOffice(), cable, "10");
+        UUID dueToday = creditSaleDue(today.minusDays(3), today);
+        UUID dueYesterday = creditSaleDue(today.minusDays(3), today.minusDays(1));
+
+        JsonNode overdue = ok(api.get("/sales?owing=overdue&limit=50", ADMIN));
+        assertThat(ids(overdue)).containsExactly(dueYesterday.toString());
+        JsonNode owing = ok(api.get("/sales?owing=owing&limit=50", ADMIN));
+        assertThat(ids(owing)).containsExactlyInAnyOrder(dueToday.toString(), dueYesterday.toString());
+    }
+
+    UUID creditSaleDue(java.time.LocalDate saleDate, java.time.LocalDate dueDate) {
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("branch_id", t.headOffice());
+        body.put("sale_date", saleDate.toString());
+        body.put("payment_method", "credit");
+        body.put("due_date", dueDate.toString());
+        body.put("buyer_name", "Test Buyer 01");
+        body.put("lines", java.util.List.of(Map.of("product_id", cable, "qty", "1")));
+        ResponseEntity<JsonNode> r =
+                api.postKeyed("/sales", body, ADMIN, "*", UUID.randomUUID().toString());
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.CREATED);
+        return RetailTestSupport.id(r);
+    }
+
     @Test
     void aVoidedCreditSaleIsNeverOwingOrOverdue() {
         api.stockUp(t.headOffice(), cable, "100");
