@@ -64,8 +64,9 @@ These are adopted into chapter 3 section 3.28 by R1; FR-RET-16 by issue #84.
 Cash book (expenses, banking, withdrawals, advances to the owner or company, a daily savings
 target), wider financial and sales reports, receipt photos and location capture, offline use,
 barcode scanning, weighted average cost, supplier statements beyond
-trade creditors, SMS receipts, returns other than a void. The cash book is likely partly core
-(pending ADR-022).
+trade creditors, SMS receipts, returns other than a void. The cash book is designed in ADR-022
+(proposed): a retail sub-domain, not core, with its requirements in FR-RET-17 to FR-RET-32
+and the comparison with the pilot app in `docs/specs/retail-cash-book.md`.
 
 ## 5. Onboarding a retail tenant
 
