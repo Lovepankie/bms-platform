@@ -69,9 +69,27 @@ class SalesController {
             @RequestParam(name = "from", required = false) LocalDate from,
             @RequestParam(name = "to", required = false) LocalDate to,
             @RequestParam(name = "customer_id", required = false) UUID customerId,
+            @RequestParam(name = "payment_method", required = false) String paymentMethod,
+            @RequestParam(name = "product_id", required = false) UUID productId,
+            @RequestParam(name = "buyer", required = false) String buyer,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "owing", required = false) String owing,
+            @RequestParam(name = "newest_first", required = false, defaultValue = "false") boolean newestFirst,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.list(branchIds, from, to, customerId, limit, cursor);
+        return service.list(
+                branchIds,
+                from,
+                to,
+                customerId,
+                paymentMethod,
+                productId,
+                buyer,
+                status,
+                owing,
+                newestFirst,
+                limit,
+                cursor);
     }
 
     @GetMapping("/sales/{sale_id}")

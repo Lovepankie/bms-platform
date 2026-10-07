@@ -41,6 +41,9 @@ env:
 jobs:
   model:
     runs-on: [self-hosted, hillary-pi]
+    # A stalled image pull once held the only runner for over two hours; the job normally takes
+    # about five minutes.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 

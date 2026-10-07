@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RetailError } from './retail';
+import { RetailError, businessToday } from './retail';
 import { createMockRetail, mockMe, setMockProfitAccess } from './retail-mock';
 
 const branch = mockMe('admin').branches?.[0]?.id ?? '';
@@ -101,6 +101,115 @@ describe('retail mock adapter (real response shapes)', () => {
     const all = Number((await api.listStock({ branchId: to })).find((r) => r.product_id === p?.id)?.qty);
     await api.createSale({ branch_id: to, payment_method: 'cash', lines: [{ product_id: p?.id ?? '', qty: all.toFixed(3) }] }, 'empty-the-shelf');
     await expect(api.voidTransfer(t.id ?? '', 'Test')).rejects.toMatchObject({ status: 422, code: 'transfer_stock_moved' });
+    setMockProfitAccess(true);
+  });
+
+  it('gives every item a category, filters stock by it and searches by its text', async () => {
+    const api = createMockRetail();
+    const [cables] = await api.listCategories();
+    const stock = await api.listStock({ branchId: branch });
+    expect(stock.every((r) => r.category && r.category_id)).toBe(true);
+    const only = await api.listStock({ branchId: branch, categoryId: cables?.id });
+    expect(only.length).toBeGreaterThan(0);
+    expect(only.every((r) => r.category === cables?.name)).toBe(true);
+    expect(only.length).toBeLessThan(stock.length);
+    const found = await api.listProducts({ query: 'lighting', branchId: branch });
+    expect(found.length).toBeGreaterThan(0);
+    expect(found.every((p) => p.category === 'Lighting')).toBe(true);
+  });
+
+  it('values stock with expected profit per item, category and total only with retail.profit.read', async () => {
+    setMockProfitAccess(true);
+    const v = await createMockRetail().valuation({ branchId: branch });
+    const row = (v.rows ?? []).find((r) => (r.qty ?? '0') !== '0.000' && (r.value_at_cost_minor ?? 0) > 0);
+    expect(row?.expected_profit_minor).toBe((row?.expected_sales_minor ?? 0) - (row?.value_at_cost_minor ?? 0));
+    expect(v.expected_profit_minor).toBe((v.expected_sales_minor ?? 0) - (v.value_at_cost_minor ?? 0));
+    expect(v.expected_profit_bp).toBe(Math.round(((v.expected_profit_minor ?? 0) * 10000) / (v.value_at_cost_minor ?? 1)));
+    expect((v.categories ?? []).reduce((s, c) => s + (c.expected_profit_minor ?? 0), 0)).toBe(v.expected_profit_minor);
+    setMockProfitAccess(false);
+    const plain = JSON.stringify(await createMockRetail().valuation({ branchId: branch }));
+    expect(plain).not.toMatch(/cost|profit/i);
+    expect(plain).toContain('categories');
+    setMockProfitAccess(true);
+  });
+
+  it('lists every product with a balance per branch, a total and a negative flag per cell', async () => {
+    setMockProfitAccess(true);
+    const api = createMockRetail();
+    const { branches, items } = await api.listStockAllBranches({});
+    expect(branches).toHaveLength(2);
+    const stock = await Promise.all((await api.listStock({ branchId: branches[0]?.id ?? '' })).map(async (r) => r));
+    expect(items).toHaveLength(stock.length);
+    for (const r of items) {
+      expect(r.balances).toHaveLength(2);
+      const sum = (r.balances ?? []).reduce((s, c) => s + Number(c.qty), 0);
+      expect(Number(r.total_qty)).toBeCloseTo(sum, 3);
+      expect(r.negative).toBe((r.balances ?? []).some((c) => c.negative));
+    }
+    expect(items.some((r) => r.negative)).toBe(true);
+    expect((await api.listStockAllBranches({ negativeOnly: true })).items.every((r) => r.negative)).toBe(true);
+    setMockProfitAccess(false);
+    expect(JSON.stringify(await createMockRetail().listStockAllBranches({}))).not.toMatch(/cost/i);
+    setMockProfitAccess(true);
+  });
+
+  it('values and reports profit for every branch when no branch is named', async () => {
+    setMockProfitAccess(true);
+    const api = createMockRetail();
+    const products = await api.listProducts({ branchId: branch });
+    await api.createSale(cash(products[1]?.id ?? '', '1.000'), 'all-branches-key');
+    const v = await api.valuation({});
+    expect(v.branches).toHaveLength(2);
+    expect((v.branches ?? []).reduce((s, b) => s + (b.expected_sales_minor ?? 0), 0)).toBe(v.expected_sales_minor);
+    const today = businessToday();
+    const report = await api.dailyProfit({ from: today, to: today });
+    expect(report.sales_minor).toBeGreaterThan(0);
+    expect((report.rows ?? []).reduce((s, r) => s + (r.profit_minor ?? 0), 0)).toBe(report.profit_minor);
+  });
+
+  it('keeps out of stock to zero or less and low stock to 5 or fewer, for one branch and for all', async () => {
+    const api = createMockRetail();
+    const out = await api.listStock({ branchId: branch, level: 'out' });
+    const low = await api.listStock({ branchId: branch, level: 'low' });
+    expect(out.length).toBeGreaterThan(0);
+    expect(out.every((r) => Number(r.qty) <= 0)).toBe(true);
+    expect(low.every((r) => Number(r.qty) <= 5)).toBe(true);
+    expect(low.length).toBeGreaterThanOrEqual(out.length);
+    const stock = await api.listStock({ branchId: branch });
+    expect(stock.filter((r) => Number(r.qty) <= 5)).toHaveLength(low.length);
+    const all = await api.listStockAllBranches({ level: 'low' });
+    expect(all.items.every((r) => Number(r.total_qty) <= 5)).toBe(true);
+  });
+
+  it('lists sales newest first, narrowed by payment method, buyer, product, branch, status and dates', async () => {
+    setMockProfitAccess(true);
+    const api = createMockRetail();
+    const all = (await api.listSales({})).items ?? [];
+    expect(all.length).toBeGreaterThan(3);
+    const dates = all.map((s) => s.sale_date ?? '');
+    expect([...dates].sort().reverse()).toEqual(dates);
+    const credit = (await api.listSales({ paymentMethod: 'credit' })).items ?? [];
+    expect(credit.length).toBeGreaterThan(0);
+    expect(credit.every((s) => s.payment_method === 'credit')).toBe(true);
+    const owes = (await api.listSales({ buyer: 'buyer 02' })).items ?? [];
+    expect(owes.length).toBeGreaterThan(0);
+    expect(owes.every((s) => s.buyer_name === 'Test Buyer 02')).toBe(true);
+    const product = all[0]?.lines?.[0]?.product_id;
+    expect(((await api.listSales({ productId: product })).items ?? []).every((s) => s.lines?.some((l) => l.product_id === product))).toBe(true);
+    expect(((await api.listSales({ branchId: branch })).items ?? []).every((s) => s.branch_id === branch)).toBe(true);
+    expect((await api.listSales({ status: 'voided' })).items).toHaveLength(0);
+    expect((await api.listSales({ to: '2000-01-01' })).items).toHaveLength(0);
+    const one = await api.getSale(all[0]?.id ?? '');
+    expect(one.lines?.length).toBeGreaterThan(0);
+    await expect(api.getSale('nope')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('hides cost and profit from the sales lists without retail.profit.read', async () => {
+    setMockProfitAccess(false);
+    const api = createMockRetail();
+    const page = await api.listSales({});
+    expect(JSON.stringify(page)).not.toMatch(/cost|profit/i);
+    expect(JSON.stringify(await api.getSale(page.items?.[0]?.id ?? ''))).not.toMatch(/cost|profit/i);
     setMockProfitAccess(true);
   });
 });

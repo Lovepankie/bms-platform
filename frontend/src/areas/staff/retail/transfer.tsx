@@ -7,6 +7,7 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { buildTransfer, transferLineHint, transferProblem, type TransferDraft } from './transfer-state';
+import { needsOf } from './permissions';
 import { BranchRequired, Gate, NoStockHere, ProductPicker, Problem, money, useProfitAccess, useSingleBranch } from './ui';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
@@ -117,7 +118,7 @@ function MoveStock() {
   return (
     <Gate screen="transfer" title="Move stock">
       {branchId === null ? (
-        <BranchRequired />
+        <BranchRequired permissions={needsOf('transfer')} />
       ) : done ? (
         <TransferSummary transfer={done} onNew={() => { setDone(null); setRound((n) => n + 1); }} />
       ) : (

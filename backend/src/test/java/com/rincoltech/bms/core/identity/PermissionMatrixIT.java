@@ -122,6 +122,15 @@ class PermissionMatrixIT extends IntegrationTest {
             me.get("permissions").forEach(p -> held.add(p.asString()));
             assertThat(held).as("permissions of %s", role).isEqualTo(expected.get(role));
             assertThat(me.get("all_branches").asBoolean()).isEqualTo(branch == null);
+            // The per-permission scopes the PWA offers branches by: one entry per permission held.
+            JsonNode scopes = me.get("permission_scopes");
+            Set<String> scoped = new TreeSet<>();
+            scopes.properties().forEach(e -> scoped.add(e.getKey()));
+            assertThat(scoped).as("scoped permissions of %s", role).isEqualTo(held);
+            scopes.forEach(sc -> {
+                assertThat(sc.get("all_branches").asBoolean()).isEqualTo(branch == null);
+                assertThat(sc.get("branch_ids").size()).isEqualTo(branch == null ? 0 : 1);
+            });
         }
     }
 

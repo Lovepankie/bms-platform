@@ -295,6 +295,7 @@ Accepted (this list is the ADR index):
   (proposed, issue #147, design only; spec `docs/specs/retail-cash-book.md`)
 - ADR-024 Self-onboarding with operator verification, per-module subscriptions and manual payments
   (spec `docs/specs/self-onboarding-and-subscriptions.md`; build step 1 is #89)
+- ADR-029 One fixed low stock threshold for retail, a per-tenant settings group later (#145)
 
 Pending (cite only as "pending ADR-NNN"):
 

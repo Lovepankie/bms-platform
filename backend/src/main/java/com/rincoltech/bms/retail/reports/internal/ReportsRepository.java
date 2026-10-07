@@ -28,6 +28,8 @@ class ReportsRepository {
             UUID productId,
             String code,
             String description,
+            UUID categoryId,
+            String category,
             String unit,
             BigDecimal qty,
             long costMinor,
@@ -49,10 +51,12 @@ class ReportsRepository {
                      GROUP BY branch_id, product_id""";
             params.put("asOf", Date.valueOf(asOf));
         }
-        StringBuilder sql = new StringBuilder("SELECT q.branch_id, q.product_id, p.code, p.description, u.name AS unit,"
-                + " q.qty, p.cost_minor, p.sell_minor FROM (" + quantities + ") q"
-                + " JOIN retail_products p ON p.id = q.product_id JOIN retail_units u ON u.id = p.unit_id"
-                + " WHERE q.qty <> 0");
+        StringBuilder sql = new StringBuilder(
+                "SELECT q.branch_id, q.product_id, p.code, p.description, p.category_id, c.name AS category,"
+                        + " u.name AS unit, q.qty, p.cost_minor, p.sell_minor FROM (" + quantities + ") q"
+                        + " JOIN retail_products p ON p.id = q.product_id JOIN retail_units u ON u.id = p.unit_id"
+                        + " JOIN retail_categories c ON c.id = p.category_id"
+                        + " WHERE q.qty <> 0");
         if (branchIds != null) {
             if (branchIds.isEmpty()) {
                 return List.of();
@@ -68,6 +72,8 @@ class ReportsRepository {
                         rs.getObject("product_id", UUID.class),
                         rs.getString("code"),
                         rs.getString("description"),
+                        rs.getObject("category_id", UUID.class),
+                        rs.getString("category"),
                         rs.getString("unit"),
                         rs.getBigDecimal("qty"),
                         rs.getLong("cost_minor"),

@@ -101,7 +101,7 @@ class CatalogueRepository {
         return jdbc.sql(LOCK).param(id).query(CatalogueRepository::product).optional();
     }
 
-    /** One page ordered by code; {@code query} matches the code or the description. */
+    /** One page ordered by code; {@code query} matches the code, the description or the category name. */
     List<Product> page(
             String query, UUID categoryId, Boolean active, UUID branchId, String afterCode, UUID afterId, int limit) {
         Map<String, Object> params = new LinkedHashMap<>();
@@ -116,7 +116,7 @@ class CatalogueRepository {
             params.put("branchId", branchId);
         }
         if (query != null) {
-            sql.append(" AND (p.code ILIKE :q OR p.description ILIKE :q)");
+            sql.append(" AND (p.code ILIKE :q OR p.description ILIKE :q OR c.name ILIKE :q)");
             params.put(
                     "q", "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
         }

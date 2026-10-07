@@ -1675,6 +1675,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/stock/all-branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every product with its balance in each branch the caller may read (#144) */
+        get: operations["listRetailStockAllBranches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/stock/movements": {
         parameters: {
             query?: never;
@@ -2893,6 +2910,10 @@ export interface components {
             kind?: string;
             mfa_enabled?: boolean;
             mfa_required?: boolean;
+            /** @description Per permission key, the branches it applies in */
+            permission_scopes?: {
+                [key: string]: components["schemas"]["MePermissionScope"];
+            };
             permissions?: string[];
             phone_e164?: string;
             roles?: components["schemas"]["RoleAssignment"][];
@@ -2907,6 +2928,11 @@ export interface components {
             id?: string;
             is_head_office?: boolean;
             name?: string;
+        };
+        /** @description Per permission key, the branches it applies in */
+        MePermissionScope: {
+            all_branches?: boolean;
+            branch_ids?: string[];
         };
         Member: {
             alt_phone_e164?: string;
@@ -3138,6 +3164,45 @@ export interface components {
             in_scope?: boolean;
             member_no?: string;
             relationship?: string;
+        };
+        /** @description One product with its balance in every branch of the page */
+        RetailAllBranchesRow: {
+            /** @description One entry per branch of the page, in the page's branch order */
+            balances?: components["schemas"]["RetailBranchBalance"][];
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
+            code?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch of the page
+             */
+            cost_minor?: number;
+            description?: string;
+            /** @description True when any branch's balance is below zero */
+            negative?: boolean;
+            /** Format: uuid */
+            product_id?: string;
+            /** Format: int64 */
+            sell_minor?: number;
+            /** @description The sum over the branches of the page */
+            total_qty?: string;
+            unit?: string;
+        };
+        RetailAllBranchesStock: {
+            branches?: components["schemas"]["RetailStockBranch"][];
+            items?: components["schemas"]["RetailAllBranchesRow"][];
+            /** @description A total at or below this is low stock; the same for every branch */
+            low_stock_threshold?: string;
+            next_cursor?: string;
+        };
+        /** @description One entry per branch of the page, in the page's branch order */
+        RetailBranchBalance: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** @description Below zero in this branch */
+            negative?: boolean;
+            qty?: string;
         };
         RetailBranchQty: {
             /** Format: uuid */
@@ -3527,6 +3592,13 @@ export interface components {
              */
             sale_date?: string;
         };
+        RetailStockBranch: {
+            code?: string;
+            head_office?: boolean;
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+        };
         RetailStockMovement: {
             /** Format: date-time */
             at?: string;
@@ -3561,9 +3633,14 @@ export interface components {
             /** Format: uuid */
             branch_id?: string;
             items?: components["schemas"]["RetailStockRow"][];
+            /** @description A quantity at or below this is low stock (FR-RET-03); the same for every branch */
+            low_stock_threshold?: string;
             next_cursor?: string;
         };
         RetailStockRow: {
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
             code?: string;
             /**
              * Format: int64
@@ -3806,7 +3883,18 @@ export interface components {
             /** Format: date */
             as_of?: string;
             branches?: components["schemas"]["RetailValuationBranch"][];
+            categories?: components["schemas"]["RetailValuationCategory"][];
             currency?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero
+             */
+            expected_profit_bp?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected sales less value at cost
+             */
+            expected_profit_minor?: number;
             /** Format: int64 */
             expected_sales_minor?: number;
             rows?: components["schemas"]["RetailValuationRow"][];
@@ -3819,6 +3907,16 @@ export interface components {
         RetailValuationBranch: {
             /** Format: uuid */
             branch_id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero
+             */
+            expected_profit_bp?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected sales less value at cost
+             */
+            expected_profit_minor?: number;
             /** Format: int64 */
             expected_sales_minor?: number;
             /**
@@ -3837,11 +3935,37 @@ export interface components {
              */
             value_at_cost_minor?: number;
         };
+        /** @description Totals of every reported branch for one category */
+        RetailValuationCategory: {
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero
+             */
+            expected_profit_bp?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            expected_profit_minor?: number;
+            /** Format: int64 */
+            expected_sales_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            value_at_cost_minor?: number;
+        };
         RetailValuationRow: {
             /** @description True when qty times a price is too large to hold; the row's values are absent and left out of the totals */
             amount_out_of_range?: boolean;
             /** Format: uuid */
             branch_id?: string;
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
             code?: string;
             /**
              * Format: int64
@@ -3849,6 +3973,16 @@ export interface components {
              */
             cost_minor?: number;
             description?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero
+             */
+            expected_profit_bp?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected sales less value at cost; absent when amount_out_of_range
+             */
+            expected_profit_minor?: number;
             /**
              * Format: int64
              * @description qty times the current sell price; absent when amount_out_of_range
@@ -6920,6 +7054,12 @@ export interface operations {
                 from?: string;
                 to?: string;
                 customer_id?: string;
+                payment_method?: string;
+                product_id?: string;
+                buyer?: string;
+                status?: string;
+                owing?: string;
+                newest_first?: boolean;
                 limit?: number;
                 cursor?: string;
             };
@@ -7069,7 +7209,9 @@ export interface operations {
             query?: {
                 branch_id?: string;
                 query?: string;
+                category_id?: string;
                 negative_only?: boolean;
+                stock_level?: string;
                 limit?: number;
                 cursor?: string;
             };
@@ -7086,6 +7228,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailStockPage"];
+                };
+            };
+        };
+    };
+    listRetailStockAllBranches: {
+        parameters: {
+            query?: {
+                query?: string;
+                category_id?: string;
+                negative_only?: boolean;
+                stock_level?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAllBranchesStock"];
                 };
             };
         };
