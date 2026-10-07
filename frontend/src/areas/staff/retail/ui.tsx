@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { RETAIL_CURRENCY, retail, type Product } from '../../../api/retail';
 import { ALL_BRANCHES, branchLabel } from '../../../auth/branch';
 import { formatMinor } from '../../../components/money';
@@ -26,6 +26,28 @@ export function Note({ children }: { children: ReactNode }) {
       {children}
     </p>
   );
+}
+
+/** A success message on the screen (read by assistive technology); the toast of {@link useToast} repeats it for a few seconds. */
+export function Success({ children }: { children: ReactNode }) {
+  return <p role="status" className="alert alert-success">{children}</p>;
+}
+
+/**
+ * A short toast above the bottom bar (`.toast`), gone after four seconds. It repeats the on-screen
+ * success message and is hidden from assistive technology, which already has that message (#146).
+ * Render `toast` anywhere in the screen and call `show` when a save succeeds.
+ */
+export function useToast(): { show: (message: string) => void; toast: ReactNode } {
+  const [text, setText] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const show = (message: string) => {
+    setText(message);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setText(null), 4000);
+  };
+  return { show, toast: text ? <p className="toast" aria-hidden="true">{text}</p> : null };
 }
 
 export function Problem({ error }: { error: unknown }) {

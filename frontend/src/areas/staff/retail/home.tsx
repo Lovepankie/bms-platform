@@ -21,7 +21,7 @@ function RetailHome() {
         {screens.map((s) => (
           <li key={s.screen}>
             <Link className="rt-tile tile" to={s.path as never}>
-              <span className="icon-chip">{icons[s.screen]}</span>
+              <span className="icon-chip">{icons[s.screen as keyof typeof icons]}</span>
               <strong>{s.label}</strong>
               <span className="tile-hint">{s.hint}</span>
             </Link>
