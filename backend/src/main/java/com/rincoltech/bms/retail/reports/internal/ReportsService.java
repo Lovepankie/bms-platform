@@ -8,6 +8,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.retail.reports.internal.ReportsApi.BranchTotal;
+import com.rincoltech.bms.retail.reports.internal.ReportsApi.CategoryTotal;
 import com.rincoltech.bms.retail.reports.internal.ReportsApi.DailyProfit;
 import com.rincoltech.bms.retail.reports.internal.ReportsApi.ProfitRow;
 import com.rincoltech.bms.retail.reports.internal.ReportsApi.Valuation;
@@ -15,12 +16,16 @@ import com.rincoltech.bms.retail.reports.internal.ReportsApi.ValuationRow;
 import com.rincoltech.bms.retail.reports.internal.ReportsRepository.DayFigures;
 import com.rincoltech.bms.retail.reports.internal.ReportsRepository.Holding;
 import com.rincoltech.bms.retail.stock.Quantities;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -64,6 +69,8 @@ class ReportsService {
         }
         List<ValuationRow> rows = new ArrayList<>();
         Map<UUID, long[]> byBranch = new LinkedHashMap<>();
+        // Per category: sales, cost (cost-visible rows only) and whether every row's cost is visible.
+        Map<UUID, CategoryAcc> byCategory = new LinkedHashMap<>();
         for (Holding h : repo.holdings(filter, asOf)) {
             boolean cost = principal.may(PROFIT_READ, h.branchId());
             long[] t = byBranch.computeIfAbsent(h.branchId(), b -> new long[2]);
@@ -78,15 +85,23 @@ class ReportsService {
                 expected = null;
                 atCost = null;
             }
+            CategoryAcc c = byCategory.computeIfAbsent(h.categoryId(), id -> new CategoryAcc(h.category()));
             if (expected != null) {
                 t[0] = Math.addExact(t[0], expected);
                 t[1] = Math.addExact(t[1], atCost);
+                c.sales = Math.addExact(c.sales, expected);
+                if (cost) {
+                    c.cost = Math.addExact(c.cost, atCost);
+                }
             }
+            c.costEverywhere &= cost;
             rows.add(new ValuationRow(
                     h.branchId(),
                     h.productId(),
                     h.code(),
                     h.description(),
+                    h.categoryId(),
+                    h.category(),
                     h.unit(),
                     Quantities.format(h.qty()),
                     h.qty().signum() < 0,
@@ -94,7 +109,9 @@ class ReportsService {
                     expected,
                     expected == null,
                     cost ? h.costMinor() : null,
-                    cost ? atCost : null));
+                    cost ? atCost : null,
+                    cost && expected != null ? Math.subtractExact(expected, atCost) : null,
+                    cost && expected != null ? basisPoints(Math.subtractExact(expected, atCost), atCost) : null));
         }
         Map<UUID, Long> inventory = principal.hasPermission(PROFIT_READ)
                 ? accounts.balanceByBranch("inventory", asOf == null ? today : asOf)
@@ -125,15 +142,60 @@ class ReportsService {
                     t[0],
                     cost ? t[1] : null,
                     cost ? account : null,
-                    cost ? Math.subtractExact(t[1], account) : null));
+                    cost ? Math.subtractExact(t[1], account) : null,
+                    cost ? Math.subtractExact(t[0], t[1]) : null,
+                    cost ? basisPoints(Math.subtractExact(t[0], t[1]), t[1]) : null));
         }
+        boolean costTotal = costEverywhere && principal.hasPermission(PROFIT_READ);
+        List<CategoryTotal> categories = new ArrayList<>();
+        byCategory.entrySet().stream()
+                .sorted(Comparator.comparing(e -> e.getValue().name.toLowerCase(Locale.ROOT)))
+                .forEach(e -> {
+                    CategoryAcc c = e.getValue();
+                    boolean cost = c.costEverywhere && principal.hasPermission(PROFIT_READ);
+                    categories.add(new CategoryTotal(
+                            e.getKey(),
+                            c.name,
+                            c.sales,
+                            cost ? c.cost : null,
+                            cost ? Math.subtractExact(c.sales, c.cost) : null,
+                            cost ? basisPoints(Math.subtractExact(c.sales, c.cost), c.cost) : null));
+                });
         return new Valuation(
                 asOf == null ? today : asOf,
                 tenant.profile().currency(),
                 rows,
                 branches,
+                categories,
                 expectedTotal,
-                costEverywhere && principal.hasPermission(PROFIT_READ) ? atCostTotal : null);
+                costTotal ? atCostTotal : null,
+                costTotal ? Math.subtractExact(expectedTotal, atCostTotal) : null,
+                costTotal ? basisPoints(Math.subtractExact(expectedTotal, atCostTotal), atCostTotal) : null);
+    }
+
+    private static final class CategoryAcc {
+        final String name;
+        long sales;
+        long cost;
+        boolean costEverywhere = true;
+
+        CategoryAcc(String name) {
+            this.name = name;
+        }
+    }
+
+    /**
+     * Profit over cost in basis points, half up; null when the cost is not above zero, where a
+     * percentage over cost has no meaning.
+     */
+    static Long basisPoints(long profit, long cost) {
+        if (cost <= 0) {
+            return null;
+        }
+        return BigDecimal.valueOf(profit)
+                .multiply(BigDecimal.valueOf(10_000))
+                .divide(BigDecimal.valueOf(cost), 0, RoundingMode.HALF_UP)
+                .longValueExact();
     }
 
     /** FR-RET-10: sale lines less their cost snapshots less usage and damage at cost, per branch and day. */

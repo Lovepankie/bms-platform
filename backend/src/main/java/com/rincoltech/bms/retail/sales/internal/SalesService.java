@@ -267,8 +267,37 @@ class SalesService {
         return visible(repo.find(id, false).orElseThrow().sale());
     }
 
+    private static final java.util.Set<String> OWING_FILTERS = java.util.Set.of("owing", "overdue", "paid");
+
+    private static final java.util.Set<String> PAYMENT_METHODS =
+            java.util.Set.of("cash", "mobile_money", "bank", "credit");
+
     @Transactional(readOnly = true)
-    SalePage list(List<UUID> branchIds, LocalDate from, LocalDate to, UUID customerId, Integer limit, String cursor) {
+    SalePage list(
+            List<UUID> branchIds,
+            LocalDate from,
+            LocalDate to,
+            UUID customerId,
+            String paymentMethod,
+            UUID productId,
+            String buyer,
+            String status,
+            String owing,
+            boolean newestFirst,
+            Integer limit,
+            String cursor) {
+        if (owing != null && !OWING_FILTERS.contains(owing)) {
+            throw ApiException.validation(
+                    List.of(new FieldProblem("owing", "invalid", "owing is owing, overdue or paid.")));
+        }
+        if (paymentMethod != null && !PAYMENT_METHODS.contains(paymentMethod)) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "payment_method", "invalid", "payment_method is cash, mobile_money, bank or credit.")));
+        }
+        if (status != null && !status.equals("completed") && !status.equals("voided")) {
+            throw ApiException.validation(
+                    List.of(new FieldProblem("status", "invalid", "status is completed or voided.")));
+        }
         Principal principal = CurrentPrincipal.require();
         List<UUID> filter = principal.branchFilter("retail.sale.read", branchIds);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
@@ -276,15 +305,39 @@ class SalesService {
         UUID afterId = null;
         Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
         if (after != null) {
-            afterCreated = after.at();
+            String direction = newestFirst ? "desc:" : "asc:";
+            if (!after.sortKey().startsWith("desc:") && !after.sortKey().startsWith("asc:")) {
+                throw new ApiException(
+                        HttpStatus.BAD_REQUEST, "malformed_request", "Malformed request", "Invalid cursor.");
+            }
+            if (!after.sortKey().startsWith(direction)) {
+                throw ApiException.validation(List.of(new FieldProblem(
+                        "cursor", "invalid", "The cursor was issued for the other newest_first direction.")));
+            }
+            afterCreated = new Cursor.Key(after.sortKey().substring(direction.length()), after.id()).at();
             afterId = after.id();
         }
-        List<Sale> rows = repo.page(filter, from, to, customerId, afterCreated, afterId, size + 1);
+        LocalDate today = owing == null ? null : clock.today(tenant.profile().timezone());
+        List<Sale> rows = repo.page(
+                filter,
+                from,
+                to,
+                customerId,
+                paymentMethod,
+                productId,
+                buyer == null || buyer.isBlank() ? null : buyer.trim(),
+                status,
+                owing,
+                today,
+                newestFirst,
+                afterCreated,
+                afterId,
+                size + 1);
         boolean more = rows.size() > size;
         List<Sale> items = more ? rows.subList(0, size) : rows;
         String next = more
-                ? Cursor.encode(
-                        items.getLast().createdAt() + "|" + items.getLast().id())
+                ? Cursor.encode((newestFirst ? "desc:" : "asc:")
+                        + items.getLast().createdAt() + "|" + items.getLast().id())
                 : null;
         return new SalePage(items.stream().map(SalesService::visible).toList(), next);
     }

@@ -70,6 +70,13 @@ class SalesRepository {
             LocalDate from,
             LocalDate to,
             UUID customerId,
+            String paymentMethod,
+            UUID productId,
+            String buyer,
+            String status,
+            String owing,
+            LocalDate today,
+            boolean newestFirst,
             Instant afterCreated,
             UUID afterId,
             int limit) {
@@ -94,12 +101,45 @@ class SalesRepository {
             sql.append(" AND customer_id = :customerId");
             params.put("customerId", customerId);
         }
+        if (paymentMethod != null) {
+            sql.append(" AND payment_method = :paymentMethod");
+            params.put("paymentMethod", paymentMethod);
+        }
+        if (productId != null) {
+            sql.append(" AND EXISTS (SELECT 1 FROM retail_sale_lines l WHERE l.sale_id = retail_sales.id"
+                    + " AND l.product_id = :productId)");
+            params.put("productId", productId);
+        }
+        if (buyer != null) {
+            sql.append(" AND (buyer_name ILIKE :buyer OR EXISTS (SELECT 1 FROM retail_customers c"
+                    + " WHERE c.id = retail_sales.customer_id AND c.name ILIKE :buyer))");
+            params.put(
+                    "buyer",
+                    "%" + buyer.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+        }
+        if (status != null) {
+            sql.append(" AND status = :status");
+            params.put("status", status);
+        }
+        if (owing != null) {
+            sql.append(" AND payment_method = 'credit' AND status = 'completed'");
+            switch (owing) {
+                case "owing" -> sql.append(" AND total_minor > paid_minor");
+                case "overdue" -> {
+                    sql.append(" AND total_minor > paid_minor AND due_date < :today");
+                    params.put("today", Date.valueOf(today));
+                }
+                default -> sql.append(" AND total_minor <= paid_minor");
+            }
+        }
         if (afterCreated != null) {
-            sql.append(" AND (created_at, id) > (:afterCreated, :afterId)");
+            sql.append(newestFirst ? " AND (created_at, id) < " : " AND (created_at, id) > ")
+                    .append("(:afterCreated, :afterId)");
             params.put("afterCreated", Timestamp.from(afterCreated));
             params.put("afterId", afterId);
         }
-        sql.append(" ORDER BY created_at, id LIMIT :limit");
+        sql.append(newestFirst ? " ORDER BY created_at DESC, id DESC" : " ORDER BY created_at, id")
+                .append(" LIMIT :limit");
         params.put("limit", limit);
         return jdbc.sql(sql.toString()).params(params).query((rs, n) -> header(rs)).list().stream()
                 .map(this::withLines)

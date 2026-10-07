@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import { RETAIL_CURRENCY, retail, type Product } from '../../../api/retail';
-import { branchLabel } from '../../../auth/branch';
+import { ALL_BRANCHES, branchLabel } from '../../../auth/branch';
 import { formatMinor } from '../../../components/money';
 import { useStockedBranches } from '../branch-picker';
 import { useStaff } from '../context';
 import { showQty } from './maths';
-import { canSeeProfit, canUse, type RetailScreen } from './permissions';
+import { branchesWhere, canSeeProfit, canUse, type RetailScreen } from './permissions';
 
 // Shared pieces of the retail screens. Phone first: one column, 44px tap targets, labels on every
 // input, a visible focus ring, and state shown in words as well as colour.
@@ -60,6 +60,39 @@ export function useSingleBranch(): { branchId: string | null; branchName: string
 }
 
 /**
+ * The branch choice of a read screen: one concrete branch, or "All branches" (#144). The write screens
+ * keep using {@link useSingleBranch}.
+ */
+export function useBranchView(): { all: boolean; branchId: string | null; branchName: string } {
+  const { branch } = useStaff();
+  const one = useSingleBranch();
+  return { all: branch === ALL_BRANCHES, ...one };
+}
+
+/** The name of a branch of the session, for a branch id the server sent. */
+export function useBranchName(): (id: string | undefined) => string {
+  const { me } = useStaff();
+  return (id) => branchLabel((me.branches ?? []).find((b) => b.id === id));
+}
+
+const PHONE = '(max-width: 719px)';
+const subscribePhone = (notify: () => void) => {
+  if (typeof window === 'undefined' || !window.matchMedia) return () => undefined;
+  const query = window.matchMedia(PHONE);
+  query.addEventListener('change', notify);
+  return () => query.removeEventListener('change', notify);
+};
+
+/** True below 720px, where a wide table gives way to one card per row. False when rendered without a window. */
+export function useIsPhone(): boolean {
+  return useSyncExternalStore(
+    subscribePhone,
+    () => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(PHONE).matches,
+    () => false,
+  );
+}
+
+/**
  * Says plainly when the chosen branch holds no stock (#103), with a button for each of the user's
  * branches that does. Shows nothing while that is unknown or for a session without a stock read.
  */
@@ -86,8 +119,42 @@ export function NoStockHere({ branchId }: { branchId: string }) {
   );
 }
 
-export function BranchRequired() {
-  return <Note>Choose one branch in the Branch box at the top of the page first.</Note>;
+/** The product's category as a small grey label under its name; nothing when the product has none. */
+export function CategoryLabel({ category }: { category?: string }) {
+  return category ? <span className="hint">{category}</span> : null;
+}
+
+/**
+ * A screen that writes works on one branch. With "All branches" chosen it offers each of the user's
+ * branches where the screen's `permissions` are all held as a button instead of pointing at the Branch
+ * box (#144). With no such branch it says so.
+ */
+export function BranchRequired({ permissions }: { permissions: string[] }) {
+  const { me, chooseBranch } = useStaff();
+  const branches = (me.branches ?? []).filter(
+    (b) => b.id && permissions.every((p) => branchesWhere(me, p).some((x) => x.id === b.id)),
+  );
+  if (branches.length === 0) {
+    return (
+      <div role="note" className="alert alert-info">
+        <p>You have no branch where you can do this. Ask an administrator for access.</p>
+      </div>
+    );
+  }
+  return (
+    <div role="note" className="alert alert-info">
+      <div className="stack">
+        <p>Choose a branch to continue:</p>
+        <p className="cluster">
+          {branches.map((b) => (
+            <button key={b.id} type="button" className="btn-sm" disabled={!chooseBranch} onClick={() => chooseBranch?.(b.id ?? '')}>
+              {branchLabel(b)}
+            </button>
+          ))}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export function useProfitAccess(): boolean {
@@ -111,7 +178,7 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false }: {
   });
   return (
     <>
-      <label htmlFor={id}>Find an item by name or code</label>
+      <label htmlFor={id}>Find an item by name, code or category</label>
       <input id={id} type="search" value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
       {products.isError && <Problem error={products.error} />}
       <ul style={{ listStyle: 'none', padding: 0, maxHeight: 220, overflowY: 'auto' }}>
@@ -121,6 +188,8 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false }: {
               <span>
                 <strong>{p.description}</strong> ({p.code})
                 <br />
+                <CategoryLabel category={p.category} />
+                {p.category && <br />}
                 {showPrice && `${money(p.sell_minor ?? 0)} each, `}in stock here:{' '}
                 {p.qty !== undefined && p.qty.startsWith('-') ? <span className="rt-flag">{showQty(p.qty)} (negative)</span> : showQty(p.qty ?? '0')}{' '}
                 {p.unit}

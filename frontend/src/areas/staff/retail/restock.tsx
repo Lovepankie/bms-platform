@@ -7,7 +7,7 @@ import { parseMinor } from '../../../components/money';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { lineTotalMinor, parseQty, qtyString } from './maths';
-import { Gate, Note, Problem, money, useProfitAccess } from './ui';
+import { CategoryLabel, Gate, Note, Problem, money, useProfitAccess } from './ui';
 
 // Restock (FR-RET-06): supplier, lines with cost, sell price and a quantity per branch. Saving sets
 // the product's cost and sell price in the same transaction and leaves a price history row.
@@ -152,12 +152,12 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase, context: Rest
       <label htmlFor="bought-on">Bought on</label>
       <input id="bought-on" type="date" value={purchasedOn} onChange={(e) => setPurchasedOn(e.target.value)} />
 
-      <label htmlFor="restock-search">Find an item by name or code</label>
+      <label htmlFor="restock-search">Find an item by name, code or category</label>
       <input id="restock-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
       <ul style={{ listStyle: 'none', padding: 0, maxHeight: 180, overflowY: 'auto' }}>
         {(products.data ?? []).slice(0, 20).map((p) => (
           <li key={p.id} className="rt-card rt-row">
-            <span><strong>{p.description}</strong> ({p.code})</span>
+            <span><strong>{p.description}</strong> ({p.code})<br /><CategoryLabel category={p.category} /></span>
             <button type="button" onClick={() => add(p)} aria-label={`Add ${p.description}`}>Add</button>
           </li>
         ))}

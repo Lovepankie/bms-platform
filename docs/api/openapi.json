@@ -2225,6 +2225,13 @@
           "mfa_required" : {
             "type" : "boolean"
           },
+          "permission_scopes" : {
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/MePermissionScope"
+            },
+            "description" : "Per permission key, the branches it applies in",
+            "type" : "object"
+          },
           "permissions" : {
             "items" : {
               "type" : "string"
@@ -2264,6 +2271,21 @@
           },
           "name" : {
             "type" : "string"
+          }
+        }
+      },
+      "MePermissionScope" : {
+        "description" : "Per permission key, the branches it applies in",
+        "properties" : {
+          "all_branches" : {
+            "type" : "boolean"
+          },
+          "branch_ids" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
           }
         }
       },
@@ -2856,6 +2878,94 @@
             "type" : "string"
           },
           "relationship" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailAllBranchesRow" : {
+        "description" : "One product with its balance in every branch of the page",
+        "properties" : {
+          "balances" : {
+            "description" : "One entry per branch of the page, in the page's branch order",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailBranchBalance"
+            },
+            "type" : "array"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "cost_minor" : {
+            "description" : "Present only with retail.profit.read in every branch of the page",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "negative" : {
+            "description" : "True when any branch's balance is below zero",
+            "type" : "boolean"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sell_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_qty" : {
+            "description" : "The sum over the branches of the page",
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailAllBranchesStock" : {
+        "properties" : {
+          "branches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailStockBranch"
+            },
+            "type" : "array"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailAllBranchesRow"
+            },
+            "type" : "array"
+          },
+          "low_stock_threshold" : {
+            "description" : "A total at or below this is low stock; the same for every branch",
+            "type" : "string"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailBranchBalance" : {
+        "description" : "One entry per branch of the page, in the page's branch order",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "negative" : {
+            "description" : "Below zero in this branch",
+            "type" : "boolean"
+          },
+          "qty" : {
             "type" : "string"
           }
         }
@@ -3707,6 +3817,23 @@
         },
         "required" : [ "lines", "payment_method" ]
       },
+      "RetailStockBranch" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "head_office" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
       "RetailStockMovement" : {
         "properties" : {
           "at" : {
@@ -3784,6 +3911,10 @@
             },
             "type" : "array"
           },
+          "low_stock_threshold" : {
+            "description" : "A quantity at or below this is low stock (FR-RET-03); the same for every branch",
+            "type" : "string"
+          },
           "next_cursor" : {
             "type" : "string"
           }
@@ -3791,6 +3922,13 @@
       },
       "RetailStockRow" : {
         "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "code" : {
             "type" : "string"
           },
@@ -4309,8 +4447,24 @@
             },
             "type" : "array"
           },
+          "categories" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailValuationCategory"
+            },
+            "type" : "array"
+          },
           "currency" : {
             "type" : "string"
+          },
+          "expected_profit_bp" : {
+            "description" : "Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_profit_minor" : {
+            "description" : "Present only with retail.profit.read; expected sales less value at cost",
+            "format" : "int64",
+            "type" : "integer"
           },
           "expected_sales_minor" : {
             "format" : "int64",
@@ -4335,6 +4489,16 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "expected_profit_bp" : {
+            "description" : "Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_profit_minor" : {
+            "description" : "Present only with retail.profit.read; expected sales less value at cost",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "expected_sales_minor" : {
             "format" : "int64",
             "type" : "integer"
@@ -4356,6 +4520,37 @@
           }
         }
       },
+      "RetailValuationCategory" : {
+        "description" : "Totals of every reported branch for one category",
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "expected_profit_bp" : {
+            "description" : "Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_profit_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value_at_cost_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "RetailValuationRow" : {
         "properties" : {
           "amount_out_of_range" : {
@@ -4363,6 +4558,13 @@
             "type" : "boolean"
           },
           "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
             "format" : "uuid",
             "type" : "string"
           },
@@ -4376,6 +4578,16 @@
           },
           "description" : {
             "type" : "string"
+          },
+          "expected_profit_bp" : {
+            "description" : "Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_profit_minor" : {
+            "description" : "Present only with retail.profit.read; expected sales less value at cost; absent when amount_out_of_range",
+            "format" : "int64",
+            "type" : "integer"
           },
           "expected_sales_minor" : {
             "description" : "qty times the current sell price; absent when amount_out_of_range",
@@ -9150,6 +9362,50 @@
           }
         }, {
           "in" : "query",
+          "name" : "payment_method",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "buyer",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "owing",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "newest_first",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
           "name" : "limit",
           "required" : false,
           "schema" : {
@@ -9372,11 +9628,26 @@
           }
         }, {
           "in" : "query",
+          "name" : "category_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
           "name" : "negative_only",
           "required" : false,
           "schema" : {
             "default" : false,
             "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "stock_level",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         }, {
           "in" : "query",
@@ -9407,6 +9678,71 @@
           }
         },
         "summary" : "A branch's stock balances, negatives flagged (FR-RET-03)",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/stock/all-branches" : {
+      "get" : {
+        "operationId" : "listRetailStockAllBranches",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "category_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "negative_only",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "stock_level",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailAllBranchesStock"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every product with its balance in each branch the caller may read (#144)",
         "tags" : [ "retail-stock" ]
       }
     },

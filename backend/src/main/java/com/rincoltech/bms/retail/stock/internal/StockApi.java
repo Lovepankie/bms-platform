@@ -28,6 +28,8 @@ final class StockApi {
             UUID productId,
             String code,
             String description,
+            UUID categoryId,
+            String category,
             String unit,
             String qty,
 
@@ -40,7 +42,58 @@ final class StockApi {
             Long costMinor) {}
 
     @Schema(name = "RetailStockPage")
-    record StockPage(UUID branchId, List<StockRow> items, String nextCursor) {}
+    record StockPage(
+            UUID branchId,
+            List<StockRow> items,
+
+            @Schema(description = "A quantity at or below this is low stock (FR-RET-03); the same for every branch")
+            String lowStockThreshold,
+
+            String nextCursor) {}
+
+    @Schema(name = "RetailStockBranch")
+    record StockBranch(UUID id, String code, String name, boolean headOffice) {}
+
+    @Schema(name = "RetailBranchBalance")
+    record BranchBalance(
+            UUID branchId,
+            String qty,
+
+            @Schema(description = "Below zero in this branch")
+            boolean negative) {}
+
+    @Schema(name = "RetailAllBranchesRow", description = "One product with its balance in every branch of the page")
+    record AllBranchesRow(
+            UUID productId,
+            String code,
+            String description,
+            UUID categoryId,
+            String category,
+            String unit,
+
+            @Schema(description = "The sum over the branches of the page")
+            String totalQty,
+
+            @Schema(description = "True when any branch's balance is below zero")
+            boolean negative,
+
+            long sellMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY + " in every branch of the page")
+            Long costMinor,
+
+            @Schema(description = "One entry per branch of the page, in the page's branch order")
+            List<BranchBalance> balances) {}
+
+    @Schema(name = "RetailAllBranchesStock")
+    record AllBranchesPage(
+            List<StockBranch> branches,
+            List<AllBranchesRow> items,
+
+            @Schema(description = "A total at or below this is low stock; the same for every branch")
+            String lowStockThreshold,
+
+            String nextCursor) {}
 
     @Schema(name = "RetailStockMovement")
     record MovementRow(

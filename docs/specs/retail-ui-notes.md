@@ -14,7 +14,9 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 | `/staff/retail/sale` | Record a sale, then the receipt summary | `retail.sale.create` |
 | `/staff/retail/restock` | Restock: supplier, lines, per-branch quantities | `retail.purchase.create` |
 | `/staff/retail/usage` | Usage and damage | `retail.usage.report` |
-| `/staff/retail/stock` | Stock per branch, search, negative flag | `retail.stock.read` |
+| `/staff/retail/credit-sales` | Credit sales: buyer, date, amount, due date, state; open a sale | `retail.sale.read` |
+| `/staff/retail/sales` | All sales: filters by dates, buyer, paid by and item; open a sale | `retail.sale.read` |
+| `/staff/retail/stock` | Stock per branch or All branches, search, category filter, Out of stock and Low stock tabs, negative flag | `retail.stock.read` |
 | `/staff/retail/stocktake` | Count, review variance, commit | `retail.stocktake.commit` and `retail.stock.read` |
 | `/staff/retail/transfer` | Move stock: to which branch, items with the source's stock, date and note | `retail.stock.transfer` and `retail.stock.read` |
 | `/staff/retail/transfers` | Stock moves from or to the branch; open one; cancel it | `retail.stock.read` (cancel: `retail.stock.transfer`) |
@@ -224,9 +226,48 @@ from Town to Second Shop. A Playwright script drove Chromium at 360px and 390px;
   branch "Only 12 piece in stock at this branch.";
 - no page overflowed sideways.
 
+## The parity pass (#145, #144)
+
+`docs/specs/retail-ui-parity.md` lists every AppSheet view against its screen. What this pass added:
+
+- **Categories.** Stock has a Category column and a category select ("All categories"); search matches the
+  category text; the sale, restock, usage, Move stock and stock-take pickers show the category as a small grey
+  label (`CategoryLabel` in `ui.tsx`) and search it. The API: `category_id` and the category on stock rows,
+  `query` matches the category name on stock and products.
+- **Expected profit.** Stock value shows Expected profit and Profit % (over cost, from `expected_profit_bp`) in
+  the total, per item and per branch, and a By category table; all of it only with `retail.profit.read`, since the
+  server sends none of it otherwise (the same rule as cost, PR #78). Without that permission the screen shows the
+  prices and the By category table at selling price only.
+- **All branches (#144).** With "All branches" in the Branch box, Stock calls `GET /retail/stock/all-branches`:
+  a column per branch, a Total, the Negative flag on each cell; below 720px (`useIsPhone`) each item is a card
+  with the total and a Show branches button. Stock value adds a By branch table (the server's branch totals) and
+  names the branch on each item row; Daily profit adds a By branch table and sums the days across branches. The
+  write screens (sale, usage, stock-take, Move stock; Restock already chose its branches per line) still need one
+  branch, and now say "Choose a branch to continue:" with a button for each of the user's branches.
+- **Out of stock and Low stock.** Tabs on Stock (`stock_level=out|low`): out is zero or less, low is 5 or fewer
+  and so includes out of stock. The threshold is a constant in the API (`StockService.LOW_STOCK_MILLI`) because
+  the settings catalogue has no retail group (ADR-029); in All branches the level is judged on the total.
+- **Credit sales and All sales.** Two screens on the sales list API (new filters `payment_method`, `product_id`,
+  `buyer`, `status`, `newest_first`), linked from the retail home. A card shows the buyer, date and amount; a
+  credit sale adds the due date, what is still owed and a state badge (Paid, Part paid, Unpaid, Overdue; the
+  words carry the meaning). Tapping a sale shows its lines. Profit shows only when the server sent it.
+
+### Verification of the parity pass
+
+The same shape of stack as the walkthrough fixes (real API on the dev profile, the built PWA, headless Chromium, a
+real sign-in with TOTP) on a fabricated tenant with three branches, five categories and twelve products
+(`docs/ui/design-system/parity/`, with a README). Stock, Stock value, Daily profit, Credit sales, All sales and the
+write-screen branch message were opened at 360px and 1280px with "All branches" and with one branch: no screen
+overflowed sideways, and the first pass led to these changes: on a phone the category sits under the item name and the
+cost and usage of a day under its name (so quantity, price, sales and profit stay in view), Stock value's headline
+is a two column table instead of large wrapping text, branch and category totals are one card each on a phone, and a
+sale in a list is a card with an Open button instead of a blue link-like row. The backend suite (`mvn verify`: 119
+unit and 330 integration tests, including `RetailParityIT`) is green.
+
 ## Left to do
 
-- Void a sale, pay a credit sale, price edit and price history screens (not in R6).
+- Void a sale, pay a credit sale, price edit and price history screens (not in R6), and the catalogue management
+  screens; see `docs/specs/retail-ui-parity.md`.
 - The component tests render static markup (no DOM in the test setup); the browser run above covers behaviour.
 - Offline use, barcode scanning and receipts to SMS are out of the first release.
 - The tenant's timezone and a transfer number are not in the API; when they are, use them (#112).
