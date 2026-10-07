@@ -3106,6 +3106,11 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "stocktake_difference_minor" : {
+            "description" : "Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "to" : {
             "format" : "date",
             "type" : "string"
@@ -3139,6 +3144,11 @@
             "type" : "integer"
           },
           "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "stocktake_difference_minor" : {
+            "description" : "Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor",
             "format" : "int64",
             "type" : "integer"
           },

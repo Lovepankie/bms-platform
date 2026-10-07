@@ -242,6 +242,17 @@ describe('valuation and profit', () => {
     expect(html).toContain('(loss)');
     expect(html).toContain('-UGX 2,500');
   });
+
+  it('shows the stock-take difference as its own column, minus for a loss (#121)', () => {
+    const report: DailyProfit = {
+      from: '2026-10-05', to: '2026-10-05', currency: 'UGX', sales_minor: 3000, cost_of_sales_minor: 1000, usage_cost_minor: 0, stocktake_difference_minor: -600, profit_minor: 1400,
+      rows: [{ branch_id: branch, date: '2026-10-05', sales_minor: 3000, cost_of_sales_minor: 1000, gross_profit_minor: 2000, usage_cost_minor: 0, stocktake_difference_minor: -600, profit_minor: 1400 }],
+    };
+    const html = renderToString(<ProfitTable report={report} />);
+    expect(html).toContain('Stock-take difference');
+    expect(html).toContain('-UGX 600');
+    expect(html).toContain('UGX 1,400');
+  });
 });
 
 describe('stock moves', () => {

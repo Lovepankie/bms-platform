@@ -3256,6 +3256,11 @@ export interface components {
             rows?: components["schemas"]["RetailDailyProfitRow"][];
             /** Format: int64 */
             sales_minor?: number;
+            /**
+             * Format: int64
+             * @description Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor
+             */
+            stocktake_difference_minor?: number;
             /** Format: date */
             to?: string;
             /** Format: int64 */
@@ -3274,6 +3279,11 @@ export interface components {
             profit_minor?: number;
             /** Format: int64 */
             sales_minor?: number;
+            /**
+             * Format: int64
+             * @description Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor
+             */
+            stocktake_difference_minor?: number;
             /** Format: int64 */
             usage_cost_minor?: number;
         };

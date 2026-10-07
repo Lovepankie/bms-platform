@@ -124,4 +124,35 @@ class ReportsRepository {
                         rs.getLong("usage")))
                 .list();
     }
+
+    record Difference(UUID branchId, LocalDate date, BigDecimal qty, long costMinor) {}
+
+    /**
+     * ADR-020 and #121: the committed stock-take adjustments, one row per line, at the cost the
+     * ledger posted them at, on the business date the stock-take was committed. A negative qty is a
+     * shortage (a loss), a positive one a surplus (a gain).
+     */
+    List<Difference> stocktakeDifferences(List<UUID> branchIds, LocalDate from, LocalDate to) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("from", Date.valueOf(from));
+        params.put("to", Date.valueOf(to));
+        String filter = "";
+        if (branchIds != null) {
+            if (branchIds.isEmpty()) {
+                return List.of();
+            }
+            filter = " AND branch_id IN (:branchIds)";
+            params.put("branchIds", branchIds);
+        }
+        return jdbc.sql("SELECT branch_id, business_date, qty, unit_cost_minor FROM retail_stock_movements"
+                        + " WHERE kind = 'adjustment' AND source_type = 'retail.stocktake'"
+                        + " AND business_date BETWEEN :from AND :to" + filter)
+                .params(params)
+                .query((rs, n) -> new Difference(
+                        rs.getObject("branch_id", UUID.class),
+                        rs.getDate("business_date").toLocalDate(),
+                        rs.getBigDecimal("qty"),
+                        rs.getLong("unit_cost_minor")))
+                .list();
+    }
 }

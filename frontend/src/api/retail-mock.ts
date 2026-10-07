@@ -329,13 +329,13 @@ export function createMockRetail(): RetailApi {
           const costMinor = own.reduce((s, x) => s + x.costTotal, 0);
           const usageMinor = id === (branchId ?? BRANCH_A) ? (usageCostByDay.get(date) ?? 0) : 0;
           if (salesMinor === 0 && costMinor === 0 && usageMinor === 0 && ids.length > 1) continue;
-          rows.push({ branch_id: id, date, sales_minor: salesMinor, cost_of_sales_minor: costMinor, gross_profit_minor: salesMinor - costMinor, usage_cost_minor: usageMinor, profit_minor: salesMinor - costMinor - usageMinor });
+          rows.push({ branch_id: id, date, sales_minor: salesMinor, cost_of_sales_minor: costMinor, gross_profit_minor: salesMinor - costMinor, usage_cost_minor: usageMinor, stocktake_difference_minor: 0, profit_minor: salesMinor - costMinor - usageMinor });
         }
       }
       const sum = (pick: (r: DailyProfitRow) => number | undefined) => rows.reduce((s, r) => s + (pick(r) ?? 0), 0);
       const report: DailyProfit = {
         from, to, currency: 'UGX', rows, sales_minor: sum((r) => r.sales_minor), cost_of_sales_minor: sum((r) => r.cost_of_sales_minor),
-        usage_cost_minor: sum((r) => r.usage_cost_minor), profit_minor: sum((r) => r.profit_minor),
+        usage_cost_minor: sum((r) => r.usage_cost_minor), stocktake_difference_minor: 0, profit_minor: sum((r) => r.profit_minor),
       };
       return delay(report);
     },

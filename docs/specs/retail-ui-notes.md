@@ -76,10 +76,10 @@ totals shown while typing are a preview; the server's response is the receipt.
 - **Restock saved (#112 items 10 and 11).** The confirmation names the supplier, the restock number
   (`purchase_no`) and date, and lists each line whose sell price changed ("sell price changed from X to Y")
   and, for a user with `retail.profit.read`, whose cost changed.
-- **Daily profit and stock-takes (#112 item 8).** The report counts sales, their cost and usage and damage
-  reports. A committed stock-take posts its variance to the `stock_shrinkage` account in the ledger, but the
-  report does not read it, so a stock-take loss is in the books and not in daily profit. The screen now says
-  so under the table; whether shrinkage belongs in the report is left for a decision (ADR-020).
+- **Daily profit and stock-takes (#112 item 8, decided in #121).** The report counts sales, their cost, usage and
+  damage reports, and the net stock-take difference as its own column "Stock-take difference" (negative for a
+  loss, positive for a gain, at cost, on the day the stock-take was committed), included in the profit. It is the
+  same figure the ledger holds in `stock_shrinkage`.
 
 ## Look and navigation (#95)
 
@@ -271,4 +271,3 @@ unit and 330 integration tests, including `RetailParityIT`) is green.
 - The component tests render static markup (no DOM in the test setup); the browser run above covers behaviour.
 - Offline use, barcode scanning and receipts to SMS are out of the first release.
 - The tenant's timezone and a transfer number are not in the API; when they are, use them (#112).
-- Whether stock-take shrinkage belongs in daily profit (#112 item 8).

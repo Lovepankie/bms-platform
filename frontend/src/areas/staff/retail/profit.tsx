@@ -175,11 +175,11 @@ function ValuationPage() {
   );
 }
 
-type Figures = { sales: number; cost: number; usage: number; profit: number };
+type Figures = { sales: number; cost: number; usage: number; difference: number; profit: number };
 const add = (to: Figures, r: DailyProfitRow): Figures => ({
-  sales: to.sales + (r.sales_minor ?? 0), cost: to.cost + (r.cost_of_sales_minor ?? 0), usage: to.usage + (r.usage_cost_minor ?? 0), profit: to.profit + (r.profit_minor ?? 0),
+  sales: to.sales + (r.sales_minor ?? 0), cost: to.cost + (r.cost_of_sales_minor ?? 0), usage: to.usage + (r.usage_cost_minor ?? 0), difference: to.difference + (r.stocktake_difference_minor ?? 0), profit: to.profit + (r.profit_minor ?? 0),
 });
-const none = (): Figures => ({ sales: 0, cost: 0, usage: 0, profit: 0 });
+const none = (): Figures => ({ sales: 0, cost: 0, usage: 0, difference: 0, profit: 0 });
 
 function FiguresTable({ label, rows }: { label: string; rows: { key: string; name: string; f: Figures }[] }) {
   // On a phone the cost and usage go under the name, so Sales and Profit stay in view.
@@ -192,16 +192,18 @@ function FiguresTable({ label, rows }: { label: string; rows: { key: string; nam
           <th className="num">Sales</th>
           {!phone && <th className="num">Cost</th>}
           {!phone && <th className="num">Usage</th>}
+          {!phone && <th className="num">Stock-take difference</th>}
           <th className="num">Profit</th>
         </tr>
       </thead>
       <tbody>
         {rows.map(({ key, name, f }) => (
           <tr key={key}>
-            <td>{name}{phone && <><br /><span className="hint">Cost {money(f.cost)}, usage {money(f.usage)}</span></>}</td>
+            <td>{name}{phone && <><br /><span className="hint">Cost {money(f.cost)}, usage {money(f.usage)}, stock-take difference {money(f.difference)}</span></>}</td>
             <td className="num">{money(f.sales)}</td>
             {!phone && <td className="num">{money(f.cost)}</td>}
             {!phone && <td className="num">{money(f.usage)}</td>}
+            {!phone && <td className="num">{money(f.difference)}</td>}
             <td className="num">{money(f.profit)}{f.profit < 0 ? ' (loss)' : ''}</td>
           </tr>
         ))}
@@ -234,7 +236,7 @@ export function ProfitTable({ report, nameOf }: { report: DailyProfit; nameOf?: 
         </>
       )}
       <FiguresTable label="Day" rows={days} />
-      <p className="hint">Usage and damage reports count here. Stock-take differences do not: they are in the books, not in this report.</p>
+      <p className="hint">Usage and damage reports count here. The stock-take difference is the value of what a count found missing (a minus) or extra (a plus), at cost, on the day the count was committed.</p>
     </>
   );
 }
