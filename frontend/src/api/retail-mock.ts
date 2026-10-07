@@ -1,5 +1,5 @@
 import type {
-  AllBranchesRow, Category, Customer, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockRow, Supplier, Transfer, Usage, Valuation,
+  AllBranchesRow, Category, Customer, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockRow, Supplier, Transfer, Unit, Usage, Valuation,
   ValuationRow,
 } from './retail';
 import { RetailError, businessToday, daysBefore } from './retail';
@@ -25,7 +25,7 @@ const SALES_PERMISSIONS = [
 ];
 const ADMIN_PERMISSIONS = [
   ...SALES_PERMISSIONS, 'retail.catalogue.manage', 'retail.price.edit', 'retail.sale.void',
-  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read',
+  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage',
 ];
 
 /** A fake signed-in user for the mock session, so the app runs without a backend. */
@@ -53,13 +53,16 @@ export function setMockProfitAccess(allowed: boolean): void {
   profitAccess = allowed;
 }
 
-interface MockProduct { id: string; code: string; description: string; category: string; unit: string; costMinor: number; sellMinor: number }
+interface MockProduct { id: string; code: string; description: string; category: string; unit: string; costMinor: number; sellMinor: number; active?: boolean; version?: number }
+
+/** The mock's page size for credit buyers, as the API's default limit is 50. */
+const CUSTOMER_PAGE = 50;
 
 const CATEGORIES: Category[] = ['Cables', 'Lighting', 'Fittings', 'Solar'].map((name, i) => ({
   id: `00000000-0000-4000-8000-0000000c${String(i + 1).padStart(4, '0')}`,
   name,
+  version: 1,
 }));
-const categoryId = (name: string): string => CATEGORIES.find((c) => c.name === name)?.id ?? '';
 
 const PRODUCTS: MockProduct[] = [
   ['P001', 'Cables', '2.5mm twin cable 100m roll', 'roll', 185000, 230000],
@@ -107,9 +110,28 @@ export function createMockRetail(): RetailApi {
     balances.set(`${BRANCH_A}|${p.id}`, (i % 5 === 3 ? -2 : 4 + i * 3) * 1000);
     balances.set(`${BRANCH_B}|${p.id}`, (i % 7 === 2 ? 0 : 2 + i) * 1000);
   });
-  const products = new Map(PRODUCTS.map((p) => [p.id, { ...p }]));
-  const customers: Customer[] = [{ id: 'c0000000-0000-4000-8000-000000000001', name: 'Test Buyer 01', contact: '+256700000001' }];
-  const suppliers: Supplier[] = [{ id: 's0000000-0000-4000-8000-000000000001', name: 'Test Supplier 01', active: true }];
+  const products = new Map<string, MockProduct>(PRODUCTS.map((p) => [p.id, { ...p, active: true, version: 1 }]));
+  // Categories and units of this mock instance: renamed and switched off by the management screens (#146).
+  const cats: { id: string; name: string; active: boolean; version: number }[] = CATEGORIES.map((c) => ({ id: c.id ?? '', name: c.name ?? '', active: true, version: 1 }));
+  const unitNames = [...new Set(PRODUCTS.map((p) => p.unit))];
+  const unitRows: { id: string; name: string; active: boolean; version: number }[] = unitNames.map((name, i) => ({ id: `00000000-0000-4000-8000-0000000d${String(i + 1).padStart(4, '0')}`, name, active: true, version: 1 }));
+  const categoryId = (name: string): string => cats.find((c) => c.name === name)?.id ?? '';
+  const history = new Map<string, PriceChange[]>();
+  const used = <K extends 'category' | 'unit'>(key: K, name: string) => [...products.values()].filter((p) => p[key] === name).length;
+  const refreshed = <T extends { name?: string }>(row: T, key: 'category' | 'unit') => ({ ...row, product_count: used(key, row.name ?? '') });
+  const asProduct = (p: MockProduct): Product =>
+    cost({ id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, sell_minor: p.sellMinor, currency: 'UGX', active: p.active !== false, version: p.version ?? 1 }, { cost_minor: p.costMinor });
+  const clash = (list: { id: string; name: string }[], id: string, name: string, code: string, what: string) => {
+    if (list.some((x) => x.id !== id && x.name.toLowerCase() === name.trim().toLowerCase())) refuse(409, code, `A ${what} with this name exists.`);
+  };
+  const staleRow = (row: { version?: number }, version: number) => {
+    if ((row.version ?? 1) !== version) refuse(409, 'version_conflict', 'This was changed by someone else. Reload and try again.');
+  };
+  const stale = (p: MockProduct, version: number) => {
+    if ((p.version ?? 1) !== version) refuse(412, 'version_conflict', 'This item was changed by someone else. Reload and try again.');
+  };
+  const customers: Customer[] = [{ id: 'c0000000-0000-4000-8000-000000000001', name: 'Test Buyer 01', contact: '+256700000001', version: 1 }];
+  const suppliers: Supplier[] = [{ id: 's0000000-0000-4000-8000-000000000001', name: 'Test Supplier 01', active: true, version: 1 }];
   const stocktakes = new Map<string, Stocktake>();
   const sales: (Sale & { costTotal: number })[] = [];
   const usageCostByDay = new Map<string, number>();
@@ -150,7 +172,7 @@ export function createMockRetail(): RetailApi {
 
   return {
     listProducts: ({ query, branchId }) =>
-      delay([...products.values()].filter((p) => matches(p, query)).map((p): Product => {
+      delay([...products.values()].filter((p) => p.active !== false && matches(p, query)).map((p): Product => {
         const row: Product = {
           id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, sell_minor: p.sellMinor, currency: 'UGX', active: true,
         };
@@ -161,7 +183,147 @@ export function createMockRetail(): RetailApi {
         return cost(row, { cost_minor: p.costMinor });
       })),
 
-    listCategories: () => delay([...CATEGORIES]),
+    listCategories: () => delay(cats.map((c) => refreshed(c, 'category') as Category)),
+
+    listCatalogue: ({ query, categoryId: category, active, cursor }) => {
+      const wanted = [...products.values()]
+        .filter((p) => matches(p, query) && (!category || categoryId(p.category) === category) && (active === undefined || (p.active !== false) === active))
+        .sort((a, b) => a.code.localeCompare(b.code));
+      const start = cursor ? Number(cursor) : 0;
+      return delay({ items: wanted.slice(start, start + 50).map(asProduct), ...(start + 50 < wanted.length ? { next_cursor: String(start + 50) } : {}) });
+    },
+
+    getProduct: (id) => run(() => asProduct(find(id))),
+
+    createProduct: (body) =>
+      run(() => {
+        const code = (body.code ?? '').trim();
+        if ([...products.values()].some((x) => x.code.toLowerCase() === code.toLowerCase())) refuse(409, 'duplicate_product_code', 'A product with this code exists (codes ignore case).');
+        const category = cats.find((c) => c.id === body.category_id);
+        const unit = unitRows.find((u) => u.id === body.unit_id);
+        if (!category || !unit) return refuse(422, 'validation_failed', 'Choose a category and a unit.');
+        if (!category.active || !unit.active) refuse(422, 'inactive_category', 'This category or unit is switched off. Choose another one.');
+        const p: MockProduct = { id: nextId('b'), code, description: (body.description ?? '').trim(), category: category.name, unit: unit.name, costMinor: body.cost_minor ?? 0, sellMinor: body.sell_minor ?? 0, active: true, version: 1 };
+        products.set(p.id, p);
+        history.set(p.id, [{ id: nextId('h'), at: new Date().toISOString(), source: 'initial', new_sell_minor: p.sellMinor, currency: 'UGX', ...(profitAccess ? { new_cost_minor: p.costMinor } : {}) }]);
+        return asProduct(p);
+      }),
+
+    updateProduct: (id, version, body) =>
+      run(() => {
+        const p = find(id);
+        stale(p, version);
+        const code = body.code === undefined ? p.code : body.code.trim();
+        if ([...products.values()].some((x) => x.id !== id && x.code.toLowerCase() === code.toLowerCase())) refuse(409, 'duplicate_product_code', 'A product with this code exists (codes ignore case).');
+        const category = body.category_id ? cats.find((c) => c.id === body.category_id) : undefined;
+        const unit = body.unit_id ? unitRows.find((u) => u.id === body.unit_id) : undefined;
+        if (category && !category.active && category.name !== p.category) refuse(422, 'inactive_category', 'This category is switched off. Choose another one.');
+        Object.assign(p, {
+          code, description: body.description === undefined ? p.description : body.description.trim(),
+          category: category?.name ?? p.category, unit: unit?.name ?? p.unit, active: body.active ?? p.active, version: (p.version ?? 1) + 1,
+        });
+        return asProduct(p);
+      }),
+
+    editPrices: (id, version, body) =>
+      run(() => {
+        const p = find(id);
+        stale(p, version);
+        const nextCost = body.cost_minor ?? p.costMinor;
+        const nextSell = body.sell_minor ?? p.sellMinor;
+        if (nextCost === p.costMinor && nextSell === p.sellMinor) refuse(422, 'price_unchanged', 'The new prices equal the current ones.');
+        history.set(id, [...(history.get(id) ?? []), {
+          id: nextId('h'), at: new Date().toISOString(), source: 'manual', old_sell_minor: p.sellMinor, new_sell_minor: nextSell, currency: 'UGX', reason: body.reason,
+          ...(profitAccess ? { old_cost_minor: p.costMinor, new_cost_minor: nextCost } : {}),
+        }]);
+        Object.assign(p, { costMinor: nextCost, sellMinor: nextSell, version: (p.version ?? 1) + 1 });
+        return asProduct(p);
+      }),
+
+    priceHistory: (id) => run(() => ((find(id) && history.get(id)) || undefined)?.map((h) => (profitAccess ? h : { ...h, old_cost_minor: undefined, new_cost_minor: undefined })) || [{ id: nextId('h'), at: '2026-09-01T08:00:00Z', source: 'initial', new_sell_minor: find(id).sellMinor, currency: 'UGX', ...(profitAccess ? { new_cost_minor: find(id).costMinor } : {}) }]),
+
+    importProducts: (csv, dryRun) =>
+      run(() => {
+        const lines = csv.split(/\r?\n/).filter((l) => l.trim() !== '');
+        const sep = lines[0]?.includes('\t') ? '\t' : ',';
+        const head = (lines[0] ?? '').split(sep).map((h) => h.trim().toLowerCase().replace(/[\s-]+/g, '_'));
+        for (const need of ['code', 'description', 'category', 'unit', 'sell_price']) {
+          if (!head.includes(need)) refuse(422, 'validation_failed', `The file needs a column called ${need.replace('_', ' ')}.`);
+        }
+        if (head.includes('cost_price') && !profitAccess) refuse(422, 'cost_not_allowed', 'The cost price column needs permission to see costs. Take that column out of the file and try again.');
+        const seen = new Set<string>();
+        const rows = lines.slice(1).map((l, i) => {
+          const c = l.split(sep).map((x) => x.trim());
+          const get = (n: string) => c[head.indexOf(n)] ?? '';
+          const code = get('code');
+          const base = { line: i + 2, code, description: get('description') };
+          if (!/^\d+$/.test(get('sell_price').replace(/,/g, ''))) return { ...base, outcome: 'error', message: 'The sell price must be a whole number, for example 12000.' };
+          if ([...products.values()].some((p) => p.code.toLowerCase() === code.toLowerCase())) return { ...base, outcome: 'skipped', message: 'An item with this code exists already.' };
+          if (seen.has(code.toLowerCase())) return { ...base, outcome: 'skipped', message: 'This code is repeated in the file; the first row is used.' };
+          seen.add(code.toLowerCase());
+          return { ...base, outcome: 'added', message: dryRun ? 'Would be added.' : 'Added.' };
+        });
+        const count = (o: string) => rows.filter((r) => r.outcome === o).length;
+        if (!dryRun && count('error') > 0) refuse(422, 'import_has_errors', `${count('error')} rows have a problem. Nothing was added. Run the check to see which rows, fix them and try again.`);
+        if (!dryRun) {
+          lines.slice(1).forEach((l) => {
+            const c = l.split(sep).map((x) => x.trim());
+            const get = (n: string) => c[head.indexOf(n)] ?? '';
+            if ([...products.values()].some((p) => p.code.toLowerCase() === get('code').toLowerCase())) return;
+            const id = nextId('b');
+            products.set(id, { id, code: get('code'), description: get('description'), category: get('category'), unit: get('unit'), costMinor: 0, sellMinor: Number(get('sell_price').replace(/,/g, '')), active: true, version: 1 });
+          });
+        }
+        return { dry_run: dryRun, rows_read: rows.length, added: count('added'), skipped: count('skipped'), errors: count('error'), categories_created: [], units_created: [], rows };
+      }),
+
+    createCategory: (name) =>
+      run(() => {
+        clash(cats, '', name, 'duplicate_category', 'category');
+        const c = { id: nextId('c'), name: name.trim(), active: true, version: 1 };
+        cats.push(c);
+        return refreshed(c, 'category') as Category;
+      }),
+
+    updateCategory: (id, version, body) =>
+      run(() => {
+        const c = cats.find((x) => x.id === id);
+        if (!c) return refuse(404, 'not_found', 'That could not be found.');
+        staleRow(c, version);
+        if (body.name !== undefined) {
+          clash(cats, id, body.name, 'duplicate_category', 'category');
+          for (const p of products.values()) if (p.category === c.name) p.category = body.name.trim();
+          c.name = body.name.trim();
+        }
+        c.active = body.active ?? c.active;
+        c.version += 1;
+        return refreshed(c, 'category') as Category;
+      }),
+
+    listUnits: () => delay(unitRows.map((u) => refreshed(u, 'unit') as Unit)),
+
+    createUnit: (name) =>
+      run(() => {
+        clash(unitRows, '', name, 'duplicate_unit', 'unit');
+        const u = { id: nextId('d'), name: name.trim(), active: true, version: 1 };
+        unitRows.push(u);
+        return refreshed(u, 'unit') as Unit;
+      }),
+
+    updateUnit: (id, version, body) =>
+      run(() => {
+        const u = unitRows.find((x) => x.id === id);
+        if (!u) return refuse(404, 'not_found', 'That could not be found.');
+        staleRow(u, version);
+        if (body.name !== undefined) {
+          clash(unitRows, id, body.name, 'duplicate_unit', 'unit');
+          for (const p of products.values()) if (p.unit === u.name) p.unit = body.name.trim();
+          u.name = body.name.trim();
+        }
+        u.active = body.active ?? u.active;
+        u.version += 1;
+        return refreshed(u, 'unit') as Unit;
+      }),
 
     listStockAllBranches: ({ query, categoryId: category, negativeOnly, level }) =>
       delay({
@@ -200,13 +362,58 @@ export function createMockRetail(): RetailApi {
       return found ? delay(visibleSale(found)) : Promise.reject(new RetailError('That could not be found.', 404, 'not_found'));
     },
 
-    listCustomers: () => delay([...customers]),
-    listSuppliers: () => delay([...suppliers]),
-    createSupplier: (body) => {
-      const s: Supplier = { id: nextId('s'), name: body.name, active: true };
-      suppliers.push(s);
-      return delay(s);
+    listCustomers: () =>
+      delay(customers.map((c) => ({ ...c, balance_minor: sales.filter((x) => x.payment_method === 'credit' && x.status === 'completed' && x.buyer_name === c.name).reduce((sum, x) => sum + (x.balance_minor ?? 0), 0) }))),
+    listCustomerPage: ({ query, cursor }) => {
+      const q = (query ?? '').trim().toLowerCase();
+      const all = customers
+        .filter((c) => !q || (c.name ?? '').toLowerCase().includes(q))
+        .sort((a, b) => (a.name ?? '').toLowerCase().localeCompare((b.name ?? '').toLowerCase()));
+      const start = cursor ? Number(cursor) : 0;
+      const items = all.slice(start, start + CUSTOMER_PAGE);
+      return delay({ items, ...(start + CUSTOMER_PAGE < all.length ? { next_cursor: String(start + CUSTOMER_PAGE) } : {}) });
     },
+    listSuppliers: () => delay([...suppliers]),
+    createSupplier: (body) =>
+      run(() => {
+        clash(suppliers as { id: string; name: string }[], '', body.name, 'duplicate_supplier', 'supplier');
+        const s: Supplier = { id: nextId('s'), name: body.name.trim(), active: true, version: 1, ...(body.contact?.trim() ? { contact: body.contact.trim() } : {}) };
+        suppliers.push(s);
+        return s;
+      }),
+
+    updateSupplier: (id, version, body) =>
+      run(() => {
+        const s = suppliers.find((x) => x.id === id);
+        if (!s) return refuse(404, 'not_found', 'That could not be found.');
+        staleRow(s, version);
+        if (body.name !== undefined) {
+          clash(suppliers as { id: string; name: string }[], id, body.name, 'duplicate_supplier', 'supplier');
+          s.name = body.name.trim();
+        }
+        if (body.contact !== undefined) s.contact = body.contact.trim() || undefined;
+        s.active = body.active ?? s.active;
+        s.version = (s.version ?? 1) + 1;
+        return { ...s };
+      }),
+
+    createCustomer: (body) =>
+      run(() => {
+        const c: Customer = { id: nextId('c'), name: body.name.trim(), version: 1, ...(body.contact?.trim() ? { contact: body.contact.trim() } : {}) };
+        customers.push(c);
+        return c;
+      }),
+
+    updateCustomer: (id, version, body) =>
+      run(() => {
+        const c = customers.find((x) => x.id === id);
+        if (!c) return refuse(404, 'not_found', 'That could not be found.');
+        staleRow(c, version);
+        if (body.name !== undefined) c.name = body.name.trim();
+        if (body.contact !== undefined) c.contact = body.contact.trim() || undefined;
+        c.version = (c.version ?? 1) + 1;
+        return { ...c };
+      }),
 
     createSale: (body, key) =>
       run(() => once(`sale|${key}`, body, (): Sale => {
@@ -329,13 +536,13 @@ export function createMockRetail(): RetailApi {
           const costMinor = own.reduce((s, x) => s + x.costTotal, 0);
           const usageMinor = id === (branchId ?? BRANCH_A) ? (usageCostByDay.get(date) ?? 0) : 0;
           if (salesMinor === 0 && costMinor === 0 && usageMinor === 0 && ids.length > 1) continue;
-          rows.push({ branch_id: id, date, sales_minor: salesMinor, cost_of_sales_minor: costMinor, gross_profit_minor: salesMinor - costMinor, usage_cost_minor: usageMinor, profit_minor: salesMinor - costMinor - usageMinor });
+          rows.push({ branch_id: id, date, sales_minor: salesMinor, cost_of_sales_minor: costMinor, gross_profit_minor: salesMinor - costMinor, usage_cost_minor: usageMinor, stocktake_difference_minor: 0, profit_minor: salesMinor - costMinor - usageMinor });
         }
       }
       const sum = (pick: (r: DailyProfitRow) => number | undefined) => rows.reduce((s, r) => s + (pick(r) ?? 0), 0);
       const report: DailyProfit = {
         from, to, currency: 'UGX', rows, sales_minor: sum((r) => r.sales_minor), cost_of_sales_minor: sum((r) => r.cost_of_sales_minor),
-        usage_cost_minor: sum((r) => r.usage_cost_minor), profit_minor: sum((r) => r.profit_minor),
+        usage_cost_minor: sum((r) => r.usage_cost_minor), stocktake_difference_minor: 0, profit_minor: sum((r) => r.profit_minor),
       };
       return delay(report);
     },

@@ -1277,6 +1277,10 @@ adds the `retail.price.below_cost` permission to the catalogue and grants it to 
 `V14__retail_review_fixes.sql` (#68) adds `business_date` to stock movements, the product code and
 amount CHECKs and the sale header and stock-take line guards (sections 6.11.2 and 6.11.3). The
 retired setting `retail_allow_negative_stock` needs no migration: a stored key is ignored on read.
+`V28__retail_catalogue_management.sql` (#146) adds `active` and `updated_at` to `retail_categories` and
+`retail_units`, `updated_at` to `retail_suppliers` and `retail_customers`, and grants `bms_app` UPDATE on
+the four so a shop can rename them and switch a category, unit or supplier off, and a `version` integer
+(default 1) on the four for optimistic locking (expand only).
 `V20__retail_import_refs.sql` (#55) creates `retail_import_refs` (append-only) for the
 `import-retail` command (section 6.11.4). It took V20 while the retail fixes were still open;
 Flyway applies the gap in order after V14. `outOfOrder` stays off, so V15 to V19 are never used:
@@ -1334,12 +1338,14 @@ module on again adds nothing. `S` marks `is_system_controlled`.
 | 5100 | Cost of goods sold | expense | `cost_of_goods_sold` | |
 | 5110 | Stock shrinkage | expense | `stock_shrinkage` | |
 
-### `retail_categories`, `retail_units` (RLS; `bms_app` SELECT, INSERT)
+### `retail_categories`, `retail_units` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
 | Column | Type | Notes |
 |---|---|---|
 | `id`, `tenant_id`, `created_at`, `created_by` | standard | |
 | `name` | varchar(100) for categories, varchar(30) for units | Unique per tenant ignoring case (FR-RET-01) |
+| `active`, `updated_at` | boolean default true, timestamptz | V28: a row in use is switched off, never deleted |
+| `version` | integer default 1 | V28: bumped by every update; the `If-Match` value. `retail_suppliers` and `retail_customers` carry it too |
 
 ### `retail_products` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
@@ -1468,9 +1474,9 @@ commit that would leave a balance negative is refused with `stock_moved_since_co
 `unit_cost_minor` it was valued at. One line per product. Once committed, the stock-take and its
 lines are refused any UPDATE (trigger `retail_stocktake_guard_update`, V14, review F10).
 
-### `retail_customers` (RLS; `bms_app` SELECT, INSERT)
+### `retail_customers` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
-Credit buyers: `name varchar(200)`, `contact varchar(100)` kept as entered, `created_by`.
+Credit buyers: `name varchar(200)`, `contact varchar(100)` kept as entered, `created_by`, `updated_at` (V28).
 
 ### `retail_sales` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
@@ -1505,9 +1511,9 @@ is computed from these, never from the product's current prices (ADR-020 decisio
 `(tenant_id, sale_id) INCLUDE (line_total_minor, line_cost_minor)` (V26): a list page loads the lines
 of all its sales in one statement, and the daily profit sums them without reading the heap.
 
-### `retail_suppliers` (RLS; `bms_app` SELECT, INSERT)
+### `retail_suppliers` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
-`name varchar(200)` unique per tenant ignoring case, `contact`, `active`, `created_by`.
+`name varchar(200)` unique per tenant ignoring case, `contact`, `active`, `created_by`, `updated_at` (V28).
 
 ### `retail_purchases`, `retail_purchase_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
 

@@ -7,6 +7,7 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.PurchaseReque
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.Supplier;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierList;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierRequest;
+import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.UpdateSupplierRequest;
 import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,6 +19,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -48,7 +51,21 @@ class PurchasingController {
     @RequiresPermission("retail.purchase.create")
     @Operation(summary = "Add a supplier (FR-RET-06)", operationId = "createRetailSupplier")
     ResponseEntity<Supplier> createSupplier(@Valid @RequestBody SupplierRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createSupplier(request));
+        Supplier created = service.createSupplier(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .eTag(String.valueOf(created.version()))
+                .body(created);
+    }
+
+    @PatchMapping("/suppliers/{supplier_id}")
+    @RequiresPermission("retail.catalogue.manage")
+    @Operation(summary = "Edit or deactivate a supplier (#146); never deleted", operationId = "updateRetailSupplier")
+    ResponseEntity<Supplier> updateSupplier(
+            @PathVariable("supplier_id") UUID id,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody UpdateSupplierRequest request) {
+        Supplier s = service.updateSupplier(id, ifMatch, request);
+        return ResponseEntity.ok().eTag(String.valueOf(s.version())).body(s);
     }
 
     @PostMapping("/purchases")

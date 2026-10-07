@@ -21,7 +21,9 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ProductPage;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Unit;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitList;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateCategoryRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateProductRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateUnitRequest;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +72,7 @@ class CatalogueService {
 
     @Transactional
     Category createCategory(CategoryRequest r) {
-        Category c = new Category(UUID.randomUUID(), r.name().trim());
+        Category c = new Category(UUID.randomUUID(), r.name().trim(), true, 0, 1);
         try {
             repo.insertCategory(c.id(), c.name(), CurrentPrincipal.require().userId());
         } catch (DuplicateKeyException e) {
@@ -83,7 +85,7 @@ class CatalogueService {
 
     @Transactional
     Unit createUnit(UnitRequest r) {
-        Unit u = new Unit(UUID.randomUUID(), r.name().trim());
+        Unit u = new Unit(UUID.randomUUID(), r.name().trim(), true, 0, 1);
         try {
             repo.insertUnit(u.id(), u.name(), CurrentPrincipal.require().userId());
         } catch (DuplicateKeyException e) {
@@ -94,12 +96,81 @@ class CatalogueService {
         return u;
     }
 
+    /** Rename or (de)activate; the row stays, so products and history keep their meaning (#146). */
+    @Transactional
+    Category updateCategory(UUID id, String ifMatch, UpdateCategoryRequest r) {
+        int expected = Versions.fromIfMatch(ifMatch);
+        Category before = repo.category(id).orElseThrow(ApiException::notFound);
+        if (before.version() != expected) {
+            throw Versions.conflict(before.version());
+        }
+        String name = r.name() == null ? before.name() : r.name().trim();
+        boolean active = r.active() == null ? before.active() : r.active();
+        if (name.isEmpty()) {
+            throw ApiException.validation(List.of(new FieldProblem("name", "invalid", "The name must not be blank.")));
+        }
+        Map<String, Object> was = new LinkedHashMap<>();
+        Map<String, Object> now = new LinkedHashMap<>();
+        diff(was, now, "name", before.name(), name);
+        diff(was, now, "active", before.active(), active);
+        if (now.isEmpty()) {
+            return before;
+        }
+        try {
+            if (repo.updateCategory(id, name, active, expected) == 0) {
+                throw staleCategory(id);
+            }
+        } catch (DuplicateKeyException e) {
+            throw duplicate("duplicate_category", "A category with this name exists.");
+        }
+        audit.record(new AuditLog.Entry("retail.category.updated", "retail.category", id, null, was, now));
+        return repo.category(id).orElseThrow();
+    }
+
+    @Transactional
+    Unit updateUnit(UUID id, String ifMatch, UpdateUnitRequest r) {
+        int expected = Versions.fromIfMatch(ifMatch);
+        Unit before = repo.unit(id).orElseThrow(ApiException::notFound);
+        if (before.version() != expected) {
+            throw Versions.conflict(before.version());
+        }
+        String name = r.name() == null ? before.name() : r.name().trim();
+        boolean active = r.active() == null ? before.active() : r.active();
+        if (name.isEmpty()) {
+            throw ApiException.validation(List.of(new FieldProblem("name", "invalid", "The name must not be blank.")));
+        }
+        Map<String, Object> was = new LinkedHashMap<>();
+        Map<String, Object> now = new LinkedHashMap<>();
+        diff(was, now, "name", before.name(), name);
+        diff(was, now, "active", before.active(), active);
+        if (now.isEmpty()) {
+            return before;
+        }
+        try {
+            if (repo.updateUnit(id, name, active, expected) == 0) {
+                throw staleUnit(id);
+            }
+        } catch (DuplicateKeyException e) {
+            throw duplicate("duplicate_unit", "A unit with this name exists.");
+        }
+        audit.record(new AuditLog.Entry("retail.unit.updated", "retail.unit", id, null, was, now));
+        return repo.unit(id).orElseThrow();
+    }
+
+    private ApiException staleCategory(UUID id) {
+        return repo.category(id).map(c -> Versions.conflict(c.version())).orElseGet(ApiException::notFound);
+    }
+
+    private ApiException staleUnit(UUID id) {
+        return repo.unit(id).map(u -> Versions.conflict(u.version())).orElseGet(ApiException::notFound);
+    }
+
     // ---- Products ------------------------------------------------------------------------
 
     /** FR-RET-01, FR-RET-02: the product and its first history row, source {@code initial}. */
     @Transactional
     Product create(CreateProductRequest r) {
-        requireCategoryAndUnit(r.categoryId(), r.unitId());
+        requireCategoryAndUnit(r.categoryId(), r.unitId(), null, null);
         UUID by = CurrentPrincipal.require().userId();
         Product p = new Product(
                 UUID.randomUUID(),
@@ -186,7 +257,9 @@ class CatalogueService {
         }
         requireCategoryAndUnit(
                 r.categoryId() == null ? before.categoryId() : r.categoryId(),
-                r.unitId() == null ? before.unitId() : r.unitId());
+                r.unitId() == null ? before.unitId() : r.unitId(),
+                before.categoryId(),
+                before.unitId());
         Product after = new Product(
                 id,
                 r.code() == null ? before.code() : code(r.code()),
@@ -309,13 +382,24 @@ class CatalogueService {
         return principal.hasPermission(PROFIT_READ);
     }
 
-    private void requireCategoryAndUnit(UUID categoryId, UUID unitId) {
-        if (!repo.categoryExists(categoryId)) {
+    /** The category and unit exist, and a newly chosen one (not the product's current one) is active. */
+    private void requireCategoryAndUnit(UUID categoryId, UUID unitId, UUID currentCategoryId, UUID currentUnitId) {
+        Category category = repo.category(categoryId).orElse(null);
+        if (category == null) {
             throw ApiException.validation(
                     List.of(new FieldProblem("category_id", "unknown_category", "No such category.")));
         }
-        if (!repo.unitExists(unitId)) {
+        if (!category.active() && !categoryId.equals(currentCategoryId)) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "category_id", "inactive_category", "This category is switched off. Choose another one.")));
+        }
+        Unit unit = repo.unit(unitId).orElse(null);
+        if (unit == null) {
             throw ApiException.validation(List.of(new FieldProblem("unit_id", "unknown_unit", "No such unit.")));
+        }
+        if (!unit.active() && !unitId.equals(currentUnitId)) {
+            throw ApiException.validation(List.of(
+                    new FieldProblem("unit_id", "inactive_unit", "This unit is switched off. Choose another one.")));
         }
     }
 

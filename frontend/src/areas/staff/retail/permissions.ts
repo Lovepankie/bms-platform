@@ -8,7 +8,11 @@ import type { Me } from '../../../api/client';
 export const PROFIT = 'retail.profit.read';
 
 export type RetailScreen =
-  | 'sale' | 'creditSales' | 'salesHistory' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit';
+  | 'sale' | 'creditSales' | 'salesHistory' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit'
+  | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer';
+
+/** The catalogue management screens (#146); the Catalogue tile opens when any of them may be used. */
+export const CATALOGUE_SCREENS: RetailScreen[] = ['products', 'categories', 'units', 'suppliers', 'buyers'];
 
 export const TRANSFER = 'retail.stock.transfer';
 
@@ -27,6 +31,16 @@ const NEEDS: Record<RetailScreen, string[]> = {
   // Stock value is a stock read; its cost columns and the profit report need retail.profit.read.
   valuation: ['retail.stock.read'],
   profit: [PROFIT],
+  // The Catalogue home needs nothing itself: canUse opens it when any screen under it may be used.
+  catalogue: [],
+  // The lists these screens read are stock, purchase and sale reads; changing them needs the manage permissions.
+  products: ['retail.catalogue.manage', 'retail.stock.read'],
+  categories: ['retail.catalogue.manage', 'retail.stock.read'],
+  units: ['retail.catalogue.manage', 'retail.stock.read'],
+  suppliers: ['retail.catalogue.manage', 'retail.purchase.create'],
+  buyers: ['retail.customer.manage', 'retail.sale.read'],
+  // Importing items needs the catalogue permission; core.settings.manage is the administrator's (#146).
+  importer: ['retail.catalogue.manage', 'retail.stock.read', 'core.settings.manage'],
 };
 
 /** Every permission a screen needs. */
@@ -61,6 +75,7 @@ export function canSeeProfit(me: Pick<Me, 'permissions'>): boolean {
 }
 
 export function canUse(me: Pick<Me, 'permissions'>, screen: RetailScreen): boolean {
+  if (screen === 'catalogue') return CATALOGUE_SCREENS.some((s) => canUse(me, s));
   const held = permissionsOf(me);
   return NEEDS[screen].every((p) => held.includes(p));
 }
@@ -91,6 +106,16 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'transfers', path: '/staff/retail/transfers', label: 'Stock moves', hint: 'Stock sent between branches' },
   { screen: 'valuation', path: '/staff/retail/valuation', label: 'Stock value', hint: 'Stock at cost and at price' },
   { screen: 'profit', path: '/staff/retail/profit', label: 'Daily profit', hint: 'Profit per day' },
+  { screen: 'catalogue', path: '/staff/retail/catalogue', label: 'Catalogue', hint: 'Items, categories, units, suppliers and credit buyers' },
+];
+
+/** The screens under Catalogue, in the order the Catalogue home lists them. */
+export const CATALOGUE_LINKS: { screen: RetailScreen; path: string; label: string; hint: string }[] = [
+  { screen: 'products', path: '/staff/retail/catalogue/products', label: 'Items', hint: 'Add or change an item, change its price' },
+  { screen: 'categories', path: '/staff/retail/catalogue/categories', label: 'Categories', hint: 'Group your items' },
+  { screen: 'units', path: '/staff/retail/catalogue/units', label: 'Units', hint: 'Piece, roll, kilogram and so on' },
+  { screen: 'suppliers', path: '/staff/retail/catalogue/suppliers', label: 'Suppliers', hint: 'Who you buy from' },
+  { screen: 'buyers', path: '/staff/retail/catalogue/buyers', label: 'Credit buyers', hint: 'Who buys on credit' },
 ];
 
 export function screensFor(me: Pick<Me, 'permissions'>) {

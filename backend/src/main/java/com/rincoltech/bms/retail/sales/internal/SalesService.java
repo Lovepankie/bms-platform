@@ -10,6 +10,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Customer;
@@ -26,6 +27,7 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleLine;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleLineRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SalePage;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.UpdateCustomerRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.VoidRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.Header;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.NewLine;
@@ -494,17 +496,62 @@ class SalesService {
 
     @Transactional
     Customer createCustomer(CustomerRequest r) {
-        Customer c = new Customer(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), null);
+        Customer c = new Customer(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), null, null, 1);
         repo.insertCustomer(c, CurrentPrincipal.require().userId());
         audit.record(AuditLog.Entry.created(
                 "retail.customer.created", "retail.customer", c.id(), null, Map.of("name", c.name())));
         return repo.customer(c.id()).orElseThrow();
     }
 
+    /** #146: edit a credit buyer's name or contact. Nothing else about a buyer changes, and none is deleted. */
+    @Transactional
+    Customer updateCustomer(UUID id, String ifMatch, UpdateCustomerRequest r) {
+        int expected = Versions.fromIfMatch(ifMatch);
+        Customer before = repo.customer(id).orElseThrow(ApiException::notFound);
+        if (before.version() != expected) {
+            throw Versions.conflict(before.version());
+        }
+        String name = r.name() == null ? before.name() : r.name().trim();
+        String contact = r.contact() == null ? before.contact() : blankToNull(r.contact());
+        if (name.isEmpty()) {
+            throw ApiException.validation(
+                    List.of(new ApiException.FieldProblem("name", "invalid", "The name must not be blank.")));
+        }
+        Map<String, Object> was = new java.util.LinkedHashMap<>();
+        Map<String, Object> now = new java.util.LinkedHashMap<>();
+        if (!name.equals(before.name())) {
+            was.put("name", before.name());
+            now.put("name", name);
+        }
+        if (!java.util.Objects.equals(contact, before.contact())) {
+            now.put("contact_changed", true);
+        }
+        if (now.isEmpty()) {
+            return before;
+        }
+        if (repo.updateCustomer(id, name, contact, expected) == 0) {
+            throw repo.customer(id).map(c -> Versions.conflict(c.version())).orElseGet(ApiException::notFound);
+        }
+        audit.record(new AuditLog.Entry("retail.customer.updated", "retail.customer", id, null, was, now));
+        return repo.customer(id).orElseThrow();
+    }
+
     @Transactional(readOnly = true)
-    CustomerList customers(String query, Integer limit) {
+    CustomerList customers(String query, Integer limit, String cursor) {
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
-        return new CustomerList(repo.customers(blankToNull(query), size));
+        com.rincoltech.bms.kernel.Cursor.Key after =
+                com.rincoltech.bms.kernel.Cursor.decodeKey(cursor).orElse(null);
+        List<SalesRepository.CustomerRow> rows = repo.customers(
+                blankToNull(query), size + 1, CurrentPrincipal.require().branchFilter("retail.sale.read", null), after);
+        boolean more = rows.size() > size;
+        List<SalesRepository.CustomerRow> page = more ? rows.subList(0, size) : rows;
+        // The key is the database's own lower(name), so the cursor agrees with the ORDER BY.
+        String next = more
+                ? com.rincoltech.bms.kernel.Cursor.encode(page.getLast().sortKey() + "|"
+                        + page.getLast().customer().id())
+                : null;
+        return new CustomerList(
+                page.stream().map(SalesRepository.CustomerRow::customer).toList(), next);
     }
 
     /** FR-RET-05: what the customer owes on credit sales in the caller's branch scope. */
