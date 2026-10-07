@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mockMe } from '../../../api/retail-mock';
+import { shortcutsFor } from './nav';
 import { canSeeProfit, canUse, screensFor, showRetail } from './permissions';
 
 describe('retail permission gating', () => {
@@ -77,5 +78,19 @@ describe('retail permission gating', () => {
     expect(showRetail({ permissions: [] })).toBe(false);
     expect(showRetail({ permissions: ['retail.sale.create'], modules: ['lending'] })).toBe(false);
     expect(showRetail({ permissions: ['retail.sale.create'], modules: ['retail'] })).toBe(true);
+  });
+});
+
+describe('the retail bottom bar', () => {
+  it('follows the pilot order: Sales, Banked, Savings, Expenses, Advances', () => {
+    expect(shortcutsFor(mockMe('admin')).map((s) => s.screen)).toEqual(['sale', 'banking', 'savings', 'expenses', 'advances']);
+  });
+
+  it('gives a cashier only the shortcuts their permissions allow, then the stock ones', () => {
+    expect(shortcutsFor(mockMe('cashier')).map((s) => s.screen)).toEqual(['sale', 'banking', 'savings', 'expenses', 'stock']);
+  });
+
+  it('keeps the old shortcuts for a user with no cash book permission', () => {
+    expect(shortcutsFor(mockMe('sales')).map((s) => s.screen)).toEqual(['sale', 'stock', 'usage']);
   });
 });

@@ -13,11 +13,16 @@ const SHORTCUTS: Partial<Record<RetailScreen, string>> = {
 };
 const MAX_SHORTCUTS = 5;
 
-export function RetailNav({ me }: { me: Pick<Me, 'permissions'> }) {
+/** The shortcuts the session may use, in the pilot's order, at most as many as the bar has room for. */
+export function shortcutsFor(me: Pick<Me, 'permissions'>) {
   const order = Object.keys(SHORTCUTS) as RetailScreen[];
-  const shortcuts = SCREENS.filter((s) => canUse(me, s.screen) && s.screen in SHORTCUTS)
+  return SCREENS.filter((s) => canUse(me, s.screen) && s.screen in SHORTCUTS)
     .sort((a, b) => order.indexOf(a.screen) - order.indexOf(b.screen))
     .slice(0, MAX_SHORTCUTS);
+}
+
+export function RetailNav({ me }: { me: Pick<Me, 'permissions'> }) {
+  const shortcuts = shortcutsFor(me);
   return (
     <nav className="bottom-nav" aria-label="Retail">
       <Link to="/staff/retail" activeOptions={{ exact: true }}>
