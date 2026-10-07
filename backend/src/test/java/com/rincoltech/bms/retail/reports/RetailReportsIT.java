@@ -181,6 +181,60 @@ class RetailReportsIT extends IntegrationTest {
     }
 
     /**
+     * #121: a committed stock-take of A counted 1 short (loss 1,000) and B counted 2 over (gain 400)
+     * shows as its own line of minus 600; profit is sales less cost of sales less usage plus the net
+     * difference, 300 less 600 is minus 300, and the stock_shrinkage account of the ledger agrees.
+     */
+    @Test
+    void stocktakeDifferencesAreTheirOwnLineAndAgreeWithTheLedger() {
+        Map<String, Object> body = Map.of(
+                "branch_id",
+                t.headOffice(),
+                "lines",
+                List.of(Map.of("product_id", a, "counted_qty", "6"), Map.of("product_id", b, "counted_qty", "2")));
+        UUID stocktake = RetailTestSupport.id(api.post("/stocktakes", body, ADMIN));
+        assertThat(api.post("/stocktakes/" + stocktake + "/commit", Map.of(), ADMIN)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        JsonNode p = api.get("/reports/profit/daily", ADMIN).getBody();
+        assertThat(p.get("rows")).hasSize(1);
+        JsonNode row = p.get("rows").get(0);
+        assertThat(row.get("stocktake_difference_minor").asLong()).isEqualTo(-600);
+        assertThat(row.get("usage_cost_minor").asLong()).isEqualTo(1_000);
+        assertThat(row.get("profit_minor").asLong()).isEqualTo(-300);
+        assertThat(p.get("stocktake_difference_minor").asLong()).isEqualTo(-600);
+        assertThat(p.get("profit_minor").asLong()).isEqualTo(3_900 - 2_600 - 1_000 - 600);
+
+        Long shrinkage = TestDatabase.owner()
+                .sql("""
+                        SELECT sum(l.debit - l.credit) FROM journal_lines l JOIN journal_entries e ON e.id = l.entry_id
+                          JOIN gl_accounts a ON a.id = l.account_id
+                         WHERE l.tenant_id = ? AND a.system_key = 'stock_shrinkage' AND e.source_type = 'retail.stocktake'
+                        """)
+                .param(t.tenantId())
+                .query(Long.class)
+                .single();
+        assertThat(-shrinkage).isEqualTo(p.get("stocktake_difference_minor").asLong());
+    }
+
+    /** #121: only the caller's branches count, and the report is refused without retail.profit.read. */
+    @Test
+    void stocktakeDifferenceIsScopedAndNeverReachesACallerWithoutProfitRead() {
+        api.stockUp(t.secondBranch(), b, "4");
+        JsonNode p = api.get("/reports/profit/daily", ADMIN).getBody();
+        assertThat(p.get("stocktake_difference_minor").asLong()).isEqualTo(800);
+
+        String email = Api.email("shop");
+        UUID user = Api.staff(t, email, new Role("retail_sales", t.headOffice()));
+        Api signedIn = Api.tenant(http, t.slug());
+        Session session = signedIn.signIn(user, email, Api.PASSWORD, null);
+        var refused = signedIn.get("/api/v1/retail/reports/profit/daily", session.accessToken());
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(String.valueOf(refused.getBody())).doesNotContain("stocktake_difference");
+    }
+
+    /**
      * Review F10: profit is the sum of the append-only sale lines of non-voided sales, so a changed
      * sale header (written here through the owner's maintenance escape hatch) does not change past
      * profit. The header accepts only the columns a payment, a void or posting may change, and a

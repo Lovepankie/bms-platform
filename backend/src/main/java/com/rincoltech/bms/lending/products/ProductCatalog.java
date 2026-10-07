@@ -1,5 +1,6 @@
 package com.rincoltech.bms.lending.products;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,6 +19,15 @@ public interface ProductCatalog {
      */
     long addedFeesMinor(UUID productVersionId, long principalMinor);
 
+    /**
+     * Every fee of the version computed for a principal (FR-PRD-02), so disbursement deducts,
+     * collects or schedules each one exactly as the product states.
+     */
+    List<FeeCharge> fees(UUID productVersionId, long principalMinor);
+
+    /** One fee for one principal; {@code timing} is {@code deducted_at_disbursement}, {@code added_to_loan} or {@code paid_upfront}. */
+    record FeeCharge(String name, String timing, long amountMinor) {}
+
     record ProductTerms(
             UUID productId,
             String productCode,
@@ -32,7 +42,13 @@ public interface ProductCatalog {
             long maxPrincipalMinor,
             boolean requiresCollateral,
             Integer minCollateralCoverBp,
-            boolean requiresGuarantor) {
+            boolean requiresGuarantor,
+            List<String> allocationOrder,
+            boolean flatEarlySettlementRebate) {
+
+        public ProductTerms {
+            allocationOrder = List.copyOf(allocationOrder);
+        }
 
         /** The calculator terms for a chosen term count. */
         public ScheduleCalculator.Terms withTermCount(int termCount) {

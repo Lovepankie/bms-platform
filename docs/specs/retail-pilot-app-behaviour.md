@@ -74,6 +74,6 @@ trail beyond the sheet's own history, and a valuation total that depends on a fi
 | Shop fixed by user profile | Kept as branch scope |
 | Stock before and after stored on the row | Replaced by derived balances |
 | Credit sale edited in place | Replaced by payments against the sale (FR-RET-05) |
-| Daily savings, cash banked, expenses, advances | Later, with the cash book (pending ADR-022) |
+| Daily savings, cash banked, expenses, advances | The cash book (ADR-022, proposed): see `docs/specs/retail-cash-book.md` for the field by field disposition |
 | Location with distance from the shop | Later |
 | Valuation totals on a fixed row | Replaced by the valuation report (FR-RET-09) |

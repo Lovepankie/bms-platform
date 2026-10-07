@@ -64,6 +64,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 collateral    = component "Lending: Collateral" "Collateral register, valuations, custody events, photos and scans; release as a maker-checker action (ADR-019)." "lending" "lending"
                 savings       = component "Lending: Savings" "Savings products, accounts, deposits, withdrawals, interest." "lending" "lending"
                 investments   = component "Lending: Investments" "Fixed-term investments, returns, maturity, payout and rollover." "lending" "lending"
+                lendingSeed   = component "Lending: Fabricated Seed" "The seed-lending command: fills one empty staging tenant with fabricated members, products, applications and serviced loans; refused in production and on a tenant holding data (ADR-026)." "lending" "lending"
                 collections   = component "Lending: Collections" "Due and arrears lists, officer assignment, collection actions, promises to pay." "lending" "lending"
 
                 # ---------------- retail vertical (ADR-020) ----------------
@@ -73,6 +74,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 retailReports    = component "Retail: Reports" "Stock valuation at cost and expected sales at price per branch, the revaluation difference against the inventory account, daily profit per branch from the sale snapshots; cost and profit only with retail.profit.read." "retail" "retail"
                 retailPurchasing = component "Retail: Purchasing" "Suppliers and restocks that set product prices, with history, in the same transaction as the stock movements and the per-branch journals." "retail" "retail"
                 retailImports    = component "Retail: Imports" "The one-off import-retail command: reads a normalised JSON Lines export and writes historical documents and movements (no journals), legacy balance movements and one opening journal per branch, keyed by source reference so a re-run adds nothing (ADR-020 decision 9)." "retail" "retail"
+                retailCashbook   = component "Retail: Cash book (proposed, ADR-022)" "Daily savings with the profit-based suggestion, cash banked with the server-computed expected amount, withdrawals from the bank, company expenses by category and item, advances to the owner or company with repayments; every event voidable and posted through the ledger; daily cash summary, banking and expenses reports." "retail" "retail"
             }
 
             migrate = container "Migrate" "One-shot container run before the application containers switch: applies the Flyway migrations as bms_owner, then exits (ADR-006)." "API image, migrate command" "app"
@@ -124,7 +126,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         # COMPONENT LEVEL (inside the API)
         # ==================================================================
         bms.web -> bms.api.identity "Signs in; loads permissions and branch scope"
-        bms.web -> bms.api.tenancy "Tenant settings and branches; public branding (logo, theme colour) for the shell"
+        bms.web -> bms.api.tenancy "Tenant settings and branches; public branding (logo, theme colour, enabled modules) for the shell and the landing page"
         bms.web -> bms.api.platform "Platform console: tenants, modules, subscriptions"
         bms.web -> bms.api.audit "Searches and exports the audit log"
         bms.web -> bms.api.members "Registers, searches and verifies members"
@@ -149,9 +151,14 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.loans       -> bms.api.documents "Queues receipts, vouchers and schedules"
         bms.api.loans       -> bms.api.audit "Writes audit rows"
         bms.api.loans       -> bms.db "Reads and writes loans, schedule items, transactions and allocations"
-        bms.api.approvals   -> bms.api.loans "Executes approved loan actions through the executor registry"
+        bms.api.approvals   -> bms.api.loans "Executes approved loan_disbursement, repayment_reversal and loan_write_off through the action registry (ADR-015, ADR-026)"
         bms.api.approvals   -> bms.api.audit "Writes decisions to the audit log"
         bms.api.collections -> bms.api.loans "Reads due and overdue schedule items"
+        platformOperator -> bms.api.lendingSeed "Runs seed-lending on the staging host for a pilot tenant"
+        bms.api.lendingSeed -> bms.api.jobs "Binds the tenant by slug for the command"
+        bms.api.lendingSeed -> bms.api.loans "Disburses and repays through LoanServicing, so postings match staff postings"
+        bms.api.lendingSeed -> bms.api.audit "Records the lending.seed.fabricated marker"
+        bms.api.lendingSeed -> bms.db "Fabricated members, products and applications"
         bms.api.collateral  -> bms.api.members "Links items to the pledging member"
         bms.api.collateral  -> bms.api.approvals "Requests collateral_release, maker-checker with no threshold (ADR-015, ADR-019)"
         bms.api.approvals   -> bms.api.collateral "Executes an approved release through CollateralReleaseAction (ADR-019)"
@@ -194,6 +201,17 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.web -> bms.api.retailReports "Valuation; daily profit (admins)"
         bms.api.retailReports -> bms.api.ledger "Reads the inventory account balance per branch"
         bms.api.retailReports -> bms.db "Reads balances, movements, sales and usage (read model)"
+        bms.web -> bms.api.retailCashbook "Savings, banking, withdrawals, expenses, advances and cash reports (proposed)"
+        bms.api.retailCashbook -> bms.api.retailSales "Reads the day's cash sales and credit payments; profit for the savings suggestion"
+        bms.api.retailCashbook -> bms.api.retailReports "Reads the daily profit (only for callers with retail.profit.read)"
+        bms.api.retailCashbook -> bms.api.retailPurchasing "Reads the day's cash restocks, which leave the till"
+        bms.api.retailCashbook -> bms.api.retailStock "Reuses the retail posting and idempotency helpers"
+        bms.api.retailCashbook -> bms.api.ledger "Posts and reverses one entry per event in the record's branch; reads the cash on hand balance"
+        bms.api.retailCashbook -> bms.api.audit "Writes audit rows; a savings create carries only flags, never the amount or the profit"
+        bms.api.retailCashbook -> bms.api.tenancy "Resolves the branch and the tenant time zone; reads the savings rate and tolerance settings"
+        bms.api.retailCashbook -> bms.api.documents "Links an optional receipt photo to an expense"
+        bms.api.retailCashbook -> bms.db "Savings, bankings, withdrawals, expenses, advances, repayments, expense lists"
+        bms.api.retailImports -> bms.api.retailCashbook "Historical cash book rows and the opening journal (proposed)"
         platformOperator -> bms.api.retailImports "Runs import-retail on the host with the tenant's export mounted read only"
         bms.api.retailImports -> bms.api.jobs "Binds the tenant by slug for the command"
         bms.api.retailImports -> bms.api.tenancy "Creates missing branches through the branch rules"

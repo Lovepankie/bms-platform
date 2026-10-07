@@ -5,8 +5,10 @@ import { api, fetchMe, fetchSettings, type Me } from '../../api/client';
 import { loadRetailMock, retailMockEnabled } from '../../api/retail';
 import { getAccessToken, refreshSession, setAccessToken, subscribe } from '../../auth/session';
 import { icons } from '../../components/icons';
+import { BrandLoader } from '../../components/states';
 import { BranchPicker, useActiveBranch } from './branch-picker';
 import { StaffContext } from './context';
+import { showLending } from './lending/permissions';
 import { RetailNav } from './retail/nav';
 import { canSeeProfit, showRetail } from './retail/permissions';
 
@@ -53,7 +55,7 @@ function StaffLayout() {
   }, [pathname, settings.data, navigate]);
 
   if (restoring || !me.data || !ready) {
-    return me.isError ? <p role="alert" className="alert alert-danger">Could not load your profile.</p> : <p className="loading">Loading</p>;
+    return me.isError ? <p role="alert" className="alert alert-danger">Could not load your profile.</p> : <BrandLoader />;
   }
 
   const profile = me.data;
@@ -82,6 +84,7 @@ function StaffLayout() {
         <nav className="tabs" aria-label="Staff areas">
           <Link to="/staff" activeOptions={{ exact: true }}>Home</Link>
           {canSeeApprovals && <Link to="/staff/approvals">Approvals</Link>}
+          {showLending(profile) && <Link to="/staff/lending">Loans</Link>}
           {showRetail(profile) && <Link to="/staff/retail">Retail</Link>}
           {managesSettings && <Link to="/staff/setup">Business set-up</Link>}
         </nav>

@@ -208,6 +208,7 @@ Notes:
   document list shows ID images only to those who may open them, and a document with no known
   kind is denied (fail closed). If auditors need the
   images later, a read-only audit permission is added then (#29, decided by the dev lead).
+- The retail CSV product import (#146) is for administrators only: the route declares `retail.catalogue.manage` and the service also requires `core.settings.manage`, which only the tenant admin holds, so a custom role granted the catalogue permission alone cannot run it; its cost column needs `retail.profit.read`.
 - Retail (ADR-020): the admin role is the tenant admin, who holds every `retail.*` permission
   except `retail.price.below_cost`; the sales role (`retail_sales`) holds sale create and read,
   stock read, usage report and customer manage, scoped to its assigned branches. Lending roles hold no retail permission. Cost, cost
@@ -217,6 +218,25 @@ Notes:
   user with profit read at branch A only sees no cost on branch B's stock, movements, sales or
   valuation (review F5); tenant-wide products and price history need it in any branch. The sales
   role holds no `core.*` permission; the PWA reads the user's branches from `/me`.
+- Retail cash book (ADR-022, **proposed**, FR-RET-32): the ten proposed `retail.cashbook.*`,
+  `retail.savings.*`, `retail.banking.record`, `retail.expense.*`, `retail.withdrawal.record` and
+  `retail.advance.*` permissions are listed in the separate table "Proposed cash book permissions"
+  below this list, **not** in the matrix above, because they are not seeded: `PermissionMatrixIT`
+  parses every row of the matrix above that has a backticked three-part key and eight cells and
+  compares it with `role_permissions`, so a proposed row there would fail the build on `main`. The
+  cash book migration moves the ten rows into the matrix in the same pull request that seeds them.
+  The tenant admin holds all ten. The sales role holds read, savings record, banking record and
+  expense record for its assigned branches, as the pilot does; it does **not** hold
+  `retail.savings.overwrite` by default, which is a default pending the Owner's answer to open
+  question 5, not a decision. Withdrawals and advances (both ways) are owner or admin only, a
+  deliberate change from the pilot, where every signed-in user could record advances and their
+  payments (open question 6). One rule covers every profit-derived figure: the day's profit, the
+  savings suggestion, `suggested_minor` and **every response field that carries a savings amount**
+  need `retail.profit.read` and are absent, not null, without it (a savings amount is half the
+  profit, so it leaks it), and so does `cash_purchases_minor` and every figure embedding it, because a restock total is a purchase total at cost (a caller without `retail.profit.read`, the sales role included, is shown `cash_expected_minor` only: takings less voids, expenses and advances paid out, plus repayments, before cash purchases and savings; ADR-022 decision 13, relaxable by the Owner, open question 8); a caller without `retail.profit.read` cannot send a savings amount at all (422 `amount_requires_profit_access`) and never sees `overwritten`; the audit payload of a savings record carries neither the amount nor
+  the suggestion (FR-RET-19, ADR-022 decision 12). Voiding needs `retail.cashbook.void`. No cash
+  book approval action is registered (open question 3); if one is, its row joins section 8.4 with a
+  threshold set first.
 - `retail.stock.transfer` (issue #84, migration V22, FR-RET-16) moves stock from one branch to
   another. It is money-moving (it posts an inventory entry at each branch) and goes to the roles
   that restock, which in the default roles is the tenant admin only. Its branch scope is checked
@@ -234,6 +254,22 @@ Notes:
 - The matrix is seeded by migration V2 and `PermissionMatrixIT` asserts the seeded
   `role_permissions` equal this table, read from this file (FR-IAM-02). Changing a cell is a
   pull request that changes this chapter and a new migration together.
+
+Proposed cash book permissions (ADR-022, not yet seeded, so deliberately outside the matrix
+above and not read by `PermissionMatrixIT`; this table has four columns, not eight):
+
+| Permission (proposed) | Tenant admin | Sales role, default | Note |
+|---|---|---|---|
+| `retail.cashbook.read` | Y | Y | Cash book lists and the daily cash summary, branch scoped |
+| `retail.savings.record` | Y | Y | Record the day's savings |
+| `retail.savings.overwrite` | Y | no | Pending open question 5; the sales role does not hold it until the Owner answers |
+| `retail.banking.record` | Y | Y | Record cash banked |
+| `retail.expense.record` | Y | Y | Record an expense |
+| `retail.expense.manage` | Y | no | Categories, items and parties |
+| `retail.withdrawal.record` | Y | no | Owner or admin only |
+| `retail.advance.create` | Y | no | Owner or admin only (open question 6) |
+| `retail.advance.repay` | Y | no | Owner or admin only (open question 6) |
+| `retail.cashbook.void` | Y | no | Void any cash book record |
 
 Platform permissions, held only by platform operators (super admins) on the platform host,
 never by a tenant role:
@@ -314,6 +350,14 @@ CHECK constraint as well as the service.
 | `member_branch_transfer` | `lending.members.update` | `lending.members.transfer_approve` | No |
 | `import_commit` | `core.imports.manage` | `core.imports.approve_commit` | No |
 | `member_credit_refund` | `lending.repayments.create` | `lending.credits.refund_approve` | Yes |
+
+Registered so far: `collateral_release` (#13); `loan_disbursement`, `repayment_reversal` and
+`loan_write_off` (#108, `lending.loans`, ADR-026). Increment 5 needed no new permission: every route
+it adds declares a permission already in the matrix above (`lending.disbursements.request`,
+`lending.repayments.create`, `lending.repayments.reverse_request`, `lending.loans.write_off_request`,
+and `lending.loans.read` for the schedule, transactions and payoff quote), and the route permission
+test covers them. The `seed-lending` command has no route and no permission: it is refused in
+production and on any tenant holding data (`docs/runbooks/seed-lending.md`).
 
 Action types are contributed by the modules that own them (ADR-015): each is a registered
 `ApprovalAction` whose maker and checker permissions must equal its row above. Every
@@ -441,6 +485,8 @@ GitHub Actions deploy secrets live in the `staging` and `production` environment
   must rate limit them per client address (a Cloudflare rule on `/api/v1/branding*`, for example 60
   requests a minute), and the edge must never apply "Cache Everything" or ignore the query string
   or host for `/api/v1/branding*`. That a tenant exists is not a secret: sign-in pages already show it.
+  `GET /branding` also lists the tenant's enabled module keys (#99): the landing page already shows
+  which modules a tenant runs, so the keys add nothing secret; no counts, plan or limits are exposed.
 - PDFs are stored as uploaded: only images are re-encoded, so a PDF's embedded JavaScript,
   launch actions or links are not removed. The control is how files are served: every signed
   download URL (R2 presign and the test fake alike) carries `Content-Disposition: attachment` with

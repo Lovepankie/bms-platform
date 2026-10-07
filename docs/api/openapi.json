@@ -558,6 +558,14 @@
             "description" : "Same-origin URL of the logo image, or null",
             "type" : "string"
           },
+          "modules" : {
+            "description" : "Keys of the modules the tenant has switched on, sorted (#99): what the landing and sign-in copy may promise",
+            "items" : {
+              "description" : "Keys of the modules the tenant has switched on, sorted (#99): what the landing and sign-in copy may promise",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "theme_primary" : {
             "description" : "#RRGGBB or null: the platform look",
             "type" : "string"
@@ -1210,6 +1218,25 @@
           }
         }
       },
+      "DisbursementRequest" : {
+        "properties" : {
+          "disbursement_date" : {
+            "description" : "Today or earlier, in an open period",
+            "format" : "date",
+            "type" : "string"
+          },
+          "external_reference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "pattern" : "cash|bank|mtn_momo|airtel_money",
+            "type" : "string"
+          }
+        },
+        "required" : [ "disbursement_date", "payment_method_key" ]
+      },
       "DownloadUrl" : {
         "properties" : {
           "expires_at" : {
@@ -1423,6 +1450,9 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "balances" : {
+            "$ref" : "#/components/schemas/LoanBalances"
+          },
           "branch_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -1553,6 +1583,47 @@
           }
         }
       },
+      "LoanActionOutcome" : {
+        "description" : "executed: the action took effect now (below the tenant's threshold); otherwise it waits for a checker as approval_request_id",
+        "properties" : {
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "executed" : {
+            "type" : "boolean"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "loan_status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "LoanAllocation" : {
+        "properties" : {
+          "amount_minor" : {
+            "description" : "Negative on a reversal's rows",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "applies_to_txn_id" : {
+            "description" : "The repayment whose money the row moves",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "component" : {
+            "type" : "string"
+          },
+          "item_no" : {
+            "description" : "Null for an overpayment",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
       "LoanAppraisal" : {
         "properties" : {
           "appraised_by" : {
@@ -1650,6 +1721,76 @@
           }
         }
       },
+      "LoanBalances" : {
+        "description" : "FR-DIS-04, R-DPD: the loan's position as of its last money event",
+        "properties" : {
+          "arrears_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "closed_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "credit_balance_minor" : {
+            "description" : "Overpayment held for the member (R-ALLOC step 4)",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "days_past_due" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "disbursed_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "fees_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "last_repayment_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "maturity_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "next_due_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "penalties_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_disbursed_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "written_off_on" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
       "LoanDecisionRequest" : {
         "properties" : {
           "approved_principal_minor" : {
@@ -1721,6 +1862,10 @@
       },
       "LoanListItem" : {
         "properties" : {
+          "approved_principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "branch_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -1732,6 +1877,14 @@
           "currency" : {
             "type" : "string"
           },
+          "days_past_due" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "disbursed_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"
@@ -1741,6 +1894,16 @@
           },
           "member_id" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "member_name" : {
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "next_due_date" : {
+            "format" : "date",
             "type" : "string"
           },
           "officer_user_id" : {
@@ -1760,6 +1923,10 @@
           },
           "status" : {
             "type" : "string"
+          },
+          "total_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         }
       },
@@ -2135,6 +2302,37 @@
           }
         }
       },
+      "LoanReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "LoanSchedule" : {
+        "description" : "FR-DIS-04: the items and a totals row that equals the loan totals",
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanScheduleRow"
+            },
+            "type" : "array"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/LoanScheduleRow"
+          }
+        }
+      },
       "LoanScheduleItem" : {
         "description" : "FR-ORG-03, FR-ORG-06: from the requested (once approved, the approved) terms and the proposed (else today's) date; display only",
         "properties" : {
@@ -2159,6 +2357,78 @@
             "type" : "integer"
           },
           "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "LoanScheduleRow" : {
+        "properties" : {
+          "due_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "fees_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fees_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "paid_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "penalties_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "penalties_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "description" : "pending, due, overdue, partially_paid, paid, waived or written_off; null on totals",
+            "type" : "string"
+          },
+          "total_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "waived_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "written_off_minor" : {
             "format" : "int64",
             "type" : "integer"
           }
@@ -2195,6 +2465,81 @@
           }
         }
       },
+      "LoanTransaction" : {
+        "properties" : {
+          "allocations" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanAllocation"
+            },
+            "type" : "array"
+          },
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "external_reference" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "journal_entry_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "receipt_no" : {
+            "description" : "RC- receipt of a repayment or recovery, VC- voucher of a disbursement",
+            "type" : "string"
+          },
+          "recorded_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reversed_by_txn_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reverses_txn_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "txn_type" : {
+            "type" : "string"
+          },
+          "value_date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "LoanTransactionList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanTransaction"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "Me" : {
         "properties" : {
           "all_branches" : {
@@ -2224,6 +2569,13 @@
           },
           "mfa_required" : {
             "type" : "boolean"
+          },
+          "permission_scopes" : {
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/MePermissionScope"
+            },
+            "description" : "Per permission key, the branches it applies in",
+            "type" : "object"
           },
           "permissions" : {
             "items" : {
@@ -2264,6 +2616,21 @@
           },
           "name" : {
             "type" : "string"
+          }
+        }
+      },
+      "MePermissionScope" : {
+        "description" : "Per permission key, the branches it applies in",
+        "properties" : {
+          "all_branches" : {
+            "type" : "boolean"
+          },
+          "branch_ids" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
           }
         }
       },
@@ -2670,6 +3037,46 @@
           }
         }
       },
+      "PayoffQuote" : {
+        "description" : "R-PAYOFF as at value_date; rebate is interest not charged",
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "fees_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "penalties_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rebate_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value_date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
       "Plan" : {
         "description" : "Limits only; prices are not stored in this repository",
         "properties" : {
@@ -2860,6 +3267,132 @@
           }
         }
       },
+      "RepaymentRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 1000000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "external_reference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "pattern" : "cash|bank|mtn_momo|airtel_money",
+            "type" : "string"
+          },
+          "value_date" : {
+            "description" : "Today or earlier, not before the disbursement or the loan's latest repayment, in an open period",
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor", "payment_method_key", "value_date" ]
+      },
+      "RepaymentResult" : {
+        "properties" : {
+          "balances" : {
+            "$ref" : "#/components/schemas/LoanBalances"
+          },
+          "loan_status" : {
+            "type" : "string"
+          },
+          "transaction" : {
+            "$ref" : "#/components/schemas/LoanTransaction"
+          }
+        }
+      },
+      "RetailAllBranchesRow" : {
+        "description" : "One product with its balance in every branch of the page",
+        "properties" : {
+          "balances" : {
+            "description" : "One entry per branch of the page, in the page's branch order",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailBranchBalance"
+            },
+            "type" : "array"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "cost_minor" : {
+            "description" : "Present only with retail.profit.read in every branch of the page",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "negative" : {
+            "description" : "True when any branch's balance is below zero",
+            "type" : "boolean"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sell_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_qty" : {
+            "description" : "The sum over the branches of the page",
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailAllBranchesStock" : {
+        "properties" : {
+          "branches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailStockBranch"
+            },
+            "type" : "array"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailAllBranchesRow"
+            },
+            "type" : "array"
+          },
+          "low_stock_threshold" : {
+            "description" : "A total at or below this is low stock; the same for every branch",
+            "type" : "string"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailBranchBalance" : {
+        "description" : "One entry per branch of the page, in the page's branch order",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "negative" : {
+            "description" : "Below zero in this branch",
+            "type" : "boolean"
+          },
+          "qty" : {
+            "type" : "string"
+          }
+        }
+      },
       "RetailBranchQty" : {
         "properties" : {
           "branch_id" : {
@@ -2875,12 +3408,25 @@
       },
       "RetailCategory" : {
         "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"
           },
           "name" : {
             "type" : "string"
+          },
+          "product_count" : {
+            "description" : "Products (active or not) that use this category",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "description" : "Send as If-Match when updating",
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -2904,8 +3450,26 @@
         },
         "required" : [ "name" ]
       },
+      "RetailCategoryUpdate" : {
+        "description" : "Omitted fields are unchanged; a category is never deleted",
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "maxLength" : 100,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        }
+      },
       "RetailCustomer" : {
         "properties" : {
+          "balance_minor" : {
+            "description" : "In the list only: owed on credit sales in the caller's branch scope",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "contact" : {
             "type" : "string"
           },
@@ -2919,6 +3483,11 @@
           },
           "name" : {
             "type" : "string"
+          },
+          "version" : {
+            "description" : "Send as If-Match when updating",
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -2951,6 +3520,9 @@
               "$ref" : "#/components/schemas/RetailCustomer"
             },
             "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
           }
         }
       },
@@ -2968,6 +3540,21 @@
           }
         },
         "required" : [ "name" ]
+      },
+      "RetailCustomerUpdate" : {
+        "description" : "Omitted fields are unchanged; an empty contact clears it",
+        "properties" : {
+          "contact" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        }
       },
       "RetailDailyProfit" : {
         "properties" : {
@@ -2993,6 +3580,11 @@
             "type" : "array"
           },
           "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "stocktake_difference_minor" : {
+            "description" : "Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor",
             "format" : "int64",
             "type" : "integer"
           },
@@ -3029,6 +3621,11 @@
             "type" : "integer"
           },
           "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "stocktake_difference_minor" : {
+            "description" : "Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor",
             "format" : "int64",
             "type" : "integer"
           },
@@ -3297,6 +3894,81 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        }
+      },
+      "RetailProductImportRequest" : {
+        "properties" : {
+          "csv" : {
+            "description" : "The CSV text: a header row, then one item per row. Columns code, description, category, unit, sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated.",
+            "maxLength" : 1000000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "csv" ]
+      },
+      "RetailProductImportResult" : {
+        "properties" : {
+          "added" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "categories_created" : {
+            "description" : "Categories that are new (would be created on a dry run, were created on an apply)",
+            "items" : {
+              "description" : "Categories that are new (would be created on a dry run, were created on an apply)",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "dry_run" : {
+            "type" : "boolean"
+          },
+          "errors" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailProductImportRow"
+            },
+            "type" : "array"
+          },
+          "rows_read" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "skipped" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "units_created" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailProductImportRow" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "line" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "outcome" : {
+            "description" : "added, skipped (the code exists already or repeats in the file) or error",
+            "type" : "string"
           }
         }
       },
@@ -3707,6 +4379,23 @@
         },
         "required" : [ "lines", "payment_method" ]
       },
+      "RetailStockBranch" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "head_office" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
       "RetailStockMovement" : {
         "properties" : {
           "at" : {
@@ -3784,6 +4473,10 @@
             },
             "type" : "array"
           },
+          "low_stock_threshold" : {
+            "description" : "A quantity at or below this is low stock (FR-RET-03); the same for every branch",
+            "type" : "string"
+          },
           "next_cursor" : {
             "type" : "string"
           }
@@ -3791,6 +4484,13 @@
       },
       "RetailStockRow" : {
         "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "code" : {
             "type" : "string"
           },
@@ -3958,6 +4658,11 @@
           },
           "name" : {
             "type" : "string"
+          },
+          "version" : {
+            "description" : "Send as If-Match when updating",
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -3985,6 +4690,24 @@
           }
         },
         "required" : [ "name" ]
+      },
+      "RetailSupplierUpdate" : {
+        "description" : "Omitted fields are unchanged; an empty contact clears it",
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "contact" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        }
       },
       "RetailTransfer" : {
         "properties" : {
@@ -4148,12 +4871,25 @@
       },
       "RetailUnit" : {
         "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"
           },
           "name" : {
             "type" : "string"
+          },
+          "product_count" : {
+            "description" : "Products (active or not) that use this unit",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "description" : "Send as If-Match when updating",
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -4176,6 +4912,19 @@
           }
         },
         "required" : [ "name" ]
+      },
+      "RetailUnitUpdate" : {
+        "description" : "Omitted fields are unchanged; a unit is never deleted",
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "maxLength" : 30,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        }
       },
       "RetailUsageLine" : {
         "properties" : {
@@ -4309,8 +5058,24 @@
             },
             "type" : "array"
           },
+          "categories" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailValuationCategory"
+            },
+            "type" : "array"
+          },
           "currency" : {
             "type" : "string"
+          },
+          "expected_profit_bp" : {
+            "description" : "Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_profit_minor" : {
+            "description" : "Present only with retail.profit.read; expected sales less value at cost",
+            "format" : "int64",
+            "type" : "integer"
           },
           "expected_sales_minor" : {
             "format" : "int64",
@@ -4335,6 +5100,16 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "expected_profit_bp" : {
+            "description" : "Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_profit_minor" : {
+            "description" : "Present only with retail.profit.read; expected sales less value at cost",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "expected_sales_minor" : {
             "format" : "int64",
             "type" : "integer"
@@ -4356,6 +5131,37 @@
           }
         }
       },
+      "RetailValuationCategory" : {
+        "description" : "Totals of every reported branch for one category",
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "expected_profit_bp" : {
+            "description" : "Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_profit_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value_at_cost_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "RetailValuationRow" : {
         "properties" : {
           "amount_out_of_range" : {
@@ -4363,6 +5169,13 @@
             "type" : "boolean"
           },
           "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
             "format" : "uuid",
             "type" : "string"
           },
@@ -4376,6 +5189,16 @@
           },
           "description" : {
             "type" : "string"
+          },
+          "expected_profit_bp" : {
+            "description" : "Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_profit_minor" : {
+            "description" : "Present only with retail.profit.read; expected sales less value at cost; absent when amount_out_of_range",
+            "format" : "int64",
+            "type" : "integer"
           },
           "expected_sales_minor" : {
             "description" : "qty times the current sell price; absent when amount_out_of_range",
@@ -5959,7 +6782,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "The tenant's display name, theme colour and logo URL (public)",
+        "summary" : "The tenant's display name, theme colour, logo URL and enabled modules (public)",
         "tags" : [ "branding" ]
       }
     },
@@ -6680,6 +7503,13 @@
           }
         }, {
           "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
           "name" : "limit",
           "required" : false,
           "schema" : {
@@ -6706,7 +7536,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "List loans in the caller's branch scope",
+        "summary" : "List loans in the caller's branch scope; q searches loan number, member number or name",
         "tags" : [ "lending-loans" ]
       },
       "post" : {
@@ -7014,6 +7844,51 @@
         "tags" : [ "lending-loans" ]
       }
     },
+    "/api/v1/lending/loans/{loan_id}/disbursements" : {
+      "post" : {
+        "operationId" : "requestLoanDisbursement",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DisbursementRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request disbursement of an approved loan (FR-DIS-01); 201 when executed below the threshold, 202 when it waits for a checker",
+        "tags" : [ "lending-loans" ]
+      }
+    },
     "/api/v1/lending/loans/{loan_id}/guarantors" : {
       "put" : {
         "operationId" : "setLoanGuarantors",
@@ -7059,6 +7934,87 @@
         "tags" : [ "lending-loans" ]
       }
     },
+    "/api/v1/lending/loans/{loan_id}/payoff-quote" : {
+      "get" : {
+        "operationId" : "getLoanPayoffQuote",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "value_date",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PayoffQuote"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The payoff amount as at a value date, today by default (FR-REP-06)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/repayments" : {
+      "post" : {
+        "operationId" : "recordLoanRepayment",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RepaymentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RepaymentResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record a repayment, allocated per R-ALLOC; a recovery on a written-off loan (FR-REP-01 to FR-REP-04, FR-LCL-03)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
     "/api/v1/lending/loans/{loan_id}/return" : {
       "post" : {
         "operationId" : "returnLoan",
@@ -7101,6 +8057,34 @@
           }
         },
         "summary" : "Return an application to draft with a note",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/schedule" : {
+      "get" : {
+        "operationId" : "getLoanSchedule",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanSchedule"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The repayment schedule with a totals row (FR-DIS-04)",
         "tags" : [ "lending-loans" ]
       }
     },
@@ -7164,6 +8148,132 @@
           }
         },
         "summary" : "Submit a draft, freezing its terms (FR-ORG-03)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/transactions" : {
+      "get" : {
+        "operationId" : "listLoanTransactions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanTransactionList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The loan's money events with their allocations, newest first",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/transactions/{txn_id}/reverse" : {
+      "post" : {
+        "operationId" : "requestLoanTransactionReversal",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "txn_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoanReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request the reversal of a repayment or recovery, with a reason (FR-REP-05)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/write-off" : {
+      "post" : {
+        "operationId" : "requestLoanWriteOff",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoanReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request write-off of an active loan, with a reason (FR-LCL-02)",
         "tags" : [ "lending-loans" ]
       }
     },
@@ -8604,6 +9714,51 @@
         "tags" : [ "retail-catalogue" ]
       }
     },
+    "/api/v1/retail/categories/{category_id}" : {
+      "patch" : {
+        "operationId" : "updateRetailCategory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "category_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCategoryUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCategory"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rename or deactivate a category (#146); never deleted",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
     "/api/v1/retail/customers" : {
       "get" : {
         "operationId" : "listRetailCustomers",
@@ -8621,6 +9776,13 @@
           "schema" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -8663,6 +9825,51 @@
           }
         },
         "summary" : "Add a credit buyer (FR-RET-05)",
+        "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/customers/{customer_id}" : {
+      "patch" : {
+        "operationId" : "updateRetailCustomer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "customer_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCustomerUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCustomer"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit a credit buyer's name or contact (#146)",
         "tags" : [ "retail-sales" ]
       }
     },
@@ -8783,6 +9990,44 @@
           }
         },
         "summary" : "Create a product with its first prices (FR-RET-01)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/products/import" : {
+      "post" : {
+        "operationId" : "importRetailProducts",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "dry_run",
+          "required" : false,
+          "schema" : {
+            "default" : true,
+            "type" : "boolean"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailProductImportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailProductImportResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Import items from CSV for a new client: dry run first, then apply; administrators only (#146)",
         "tags" : [ "retail-catalogue" ]
       }
     },
@@ -9150,6 +10395,50 @@
           }
         }, {
           "in" : "query",
+          "name" : "payment_method",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "buyer",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "owing",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "newest_first",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
           "name" : "limit",
           "required" : false,
           "schema" : {
@@ -9372,11 +10661,26 @@
           }
         }, {
           "in" : "query",
+          "name" : "category_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
           "name" : "negative_only",
           "required" : false,
           "schema" : {
             "default" : false,
             "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "stock_level",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         }, {
           "in" : "query",
@@ -9407,6 +10711,71 @@
           }
         },
         "summary" : "A branch's stock balances, negatives flagged (FR-RET-03)",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/stock/all-branches" : {
+      "get" : {
+        "operationId" : "listRetailStockAllBranches",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "category_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "negative_only",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "stock_level",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailAllBranchesStock"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every product with its balance in each branch the caller may read (#144)",
         "tags" : [ "retail-stock" ]
       }
     },
@@ -9608,6 +10977,51 @@
           }
         },
         "summary" : "Add a supplier (FR-RET-06)",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/suppliers/{supplier_id}" : {
+      "patch" : {
+        "operationId" : "updateRetailSupplier",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "supplier_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailSupplierUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplier"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit or deactivate a supplier (#146); never deleted",
         "tags" : [ "retail-purchasing" ]
       }
     },
@@ -9825,6 +11239,51 @@
           }
         },
         "summary" : "Create a unit of measure (FR-RET-01)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/units/{unit_id}" : {
+      "patch" : {
+        "operationId" : "updateRetailUnit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "unit_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailUnitUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailUnit"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rename or deactivate a unit of measure (#146); never deleted",
         "tags" : [ "retail-catalogue" ]
       }
     },

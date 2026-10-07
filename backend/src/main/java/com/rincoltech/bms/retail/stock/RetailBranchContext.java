@@ -7,6 +7,7 @@ import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.Principal.BranchScope;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +24,31 @@ public class RetailBranchContext {
 
     RetailBranchContext(Branches branches) {
         this.branches = branches;
+    }
+
+    /** The active branches the permission covers, head office first: the columns of an all-branches read. */
+    public List<Branches.Branch> visible(String permission) {
+        return visible(permission, Set.of());
+    }
+
+    /** Ids of the inactive branches the permission covers: the only ones a balance can keep in a column. */
+    public List<UUID> inactiveInScope(String permission) {
+        Principal principal = CurrentPrincipal.require();
+        return branches.all().stream()
+                .filter(b -> !b.active() && principal.may(permission, b.id()))
+                .map(Branches.Branch::id)
+                .toList();
+    }
+
+    /**
+     * As {@link #visible(String)}, and also an inactive branch named in {@code holding}: a closed
+     * branch that still holds a non-zero balance stays a column so the totals agree with the valuation.
+     */
+    public List<Branches.Branch> visible(String permission, Set<UUID> holding) {
+        Principal principal = CurrentPrincipal.require();
+        return branches.all().stream()
+                .filter(b -> (b.active() || holding.contains(b.id())) && principal.may(permission, b.id()))
+                .toList();
     }
 
     public UUID resolve(String permission, UUID requested) {

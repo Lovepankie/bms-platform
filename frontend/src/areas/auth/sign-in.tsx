@@ -3,6 +3,7 @@ import { type FormEvent, useState } from 'react';
 import { api, type MfaEnrolment, problemOf, type SignInResponse } from '../../api/client';
 import { normaliseSecondFactor, recoveryCodesText } from '../../auth/codes';
 import { setAccessToken } from '../../auth/session';
+import { illustrations } from '../../components/illustrations';
 
 // Staff sign-in (FR-IAM-04 to FR-IAM-06, FR-IAM-11): password, then the second factor when the
 // account has one, or TOTP enrolment when the role requires it. Recovery codes are shown once,
@@ -101,6 +102,7 @@ function SignIn() {
 
   return (
     <main className="card auth-card">
+      {step.kind === 'password' && <span className="auth-art">{illustrations.secure}</span>}
       <h1>Staff sign-in</h1>
       {step.kind === 'password' && <p className="lead">Use the email or phone and the password you set from your invitation.</p>}
       {message && <p role="alert" className="alert alert-danger">{message}</p>}

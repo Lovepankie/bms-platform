@@ -3,7 +3,9 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type Stocktake, type StocktakeLine } from '../../../api/retail';
 import { milliOf, parseCount, showQty } from './maths';
-import { BranchRequired, Gate, Note, Problem, useSingleBranch } from './ui';
+import { SkeletonList } from '../../../components/states';
+import { BranchRequired, CategoryLabel, Gate, Note, Problem, useSingleBranch } from './ui';
+import { needsOf } from './permissions';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
 // out, then commit to write the adjustments. Only counted rows are sent.
@@ -85,19 +87,20 @@ function CountSheet({ branchId }: { branchId: string }) {
       </>
     );
   }
-  const rows = (stock.data ?? []).filter((r) => !query.trim() || (r.description ?? '').toLowerCase().includes(query.trim().toLowerCase()));
+  const rows = (stock.data ?? []).filter((r) => !query.trim() || `${r.description ?? ''} ${r.code ?? ''} ${r.category ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()));
   return (
     <>
       <Note>Type the counted quantity for each item you counted. Leave an item blank to skip it.</Note>
-      <label htmlFor="count-search">Search by name</label>
+      <label htmlFor="count-search">Search by name, code or category</label>
       <input id="count-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
-      {stock.isPending && <p className="loading">Loading</p>}
+      {stock.isPending && <SkeletonList label="Loading stock" />}
       <Problem error={stock.error} />
       {rows.map((r) => {
         const id = r.product_id ?? '';
         return (
           <div key={id} className="rt-card">
             <label htmlFor={`count-${id}`}>{r.description} ({r.unit})</label>
+            <CategoryLabel category={r.category} />
             <input id={`count-${id}`} inputMode="decimal" value={counts[id] ?? ''} placeholder="Counted"
               aria-invalid={(counts[id] ?? '').trim() !== '' && parseCount(counts[id] ?? '') === null}
               onChange={(e) => setCounts({ ...counts, [id]: e.target.value })} />
@@ -118,7 +121,7 @@ function StocktakePage() {
   return (
     <Gate screen="stocktake" title="Stock-take">
       {branchId === null ? (
-        <BranchRequired />
+        <BranchRequired permissions={needsOf('stocktake')} />
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>

@@ -6,7 +6,9 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, type Draft } from './sale-state';
+import { EmptyState } from '../../../components/states';
 import { BranchRequired, Gate, NoStockHere, Note, ProductPicker, Problem, money, useProfitAccess, useSingleBranch } from './ui';
+import { needsOf } from './permissions';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -104,7 +106,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
       <ProductPicker id="sale-search" branchId={branchId} showPrice onAdd={add} />
 
       <h2>Items</h2>
-      {draft.lines.length === 0 && <p className="empty-state">No items yet. Search above and tap Add.</p>}
+      {draft.lines.length === 0 && <EmptyState art="noSales" title="No items yet.">Search above and tap Add.</EmptyState>}
       {draft.lines.map((l, i) => {
         const f = lineFigures(l);
         const hint = lineHint(l);
@@ -201,7 +203,7 @@ function RecordSale() {
   return (
     <Gate screen="sale" title="Record a sale">
       {branchId === null ? (
-        <BranchRequired />
+        <BranchRequired permissions={needsOf('sale')} />
       ) : sale ? (
         <Receipt sale={sale} onNew={() => { setSale(null); setRound((n) => n + 1); }} />
       ) : (

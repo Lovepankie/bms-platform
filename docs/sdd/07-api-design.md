@@ -152,6 +152,8 @@ for real; the stub is for curl and tests.
   the cursor encodes the sort key plus `id` as a tiebreaker. Every list decodes it with the
   kernel's one parser (`Cursor.decodeKey`): a cursor that is not base64url, has no `|`, has a
   bad `id` or, on a timestamp-ordered list, a bad timestamp is 400 `malformed_request`, never a 500.
+  Operational note (#145): sales-list cursors issued before the deploy that added the direction have none
+  and are refused with 400 `malformed_request`, so a client part-way through a sales list must restart the list.
 - Filters are query parameters named after fields: `status=active&status=closed`
   (repeatable means OR), ranges as `<field>_from` and `<field>_to` (inclusive), free
   search as `q`.
@@ -188,7 +190,7 @@ published under the platform host.
 | 404 | Not found or outside branch scope; `unknown_tenant`; `module_not_enabled`; `link_invalid` (an applicant link that is malformed, unknown, replaced or expired, one answer for all, ADR-024) |
 | 413 | `file_too_large`: an upload over 5 MB, or a logo over 1 MB (chapter 8 section 8.8) |
 | 415 | `unsupported_file_type`: an upload that is not JPEG, PNG or PDF by content (a logo: not PNG, JPEG or WebP, or an image that cannot be decoded) |
-| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, `approval_already_pending`, `mfa_already_enrolled`, `mfa_not_enrolled`, `mfa_enrolment_not_started`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`, `duplicate_email`, `duplicate_phone`, `duplicate_branch_code`, `duplicate_slug`, `duplicate_product_code`); `transaction_conflict` (the database aborted the transaction as a deadlock victim or serialisation loser; nothing was saved, `Retry-After` is set and the same request may be retried with the same `Idempotency-Key`); `stock_moved_since_count` (a retail stock-take whose lines moved after the count so far that the adjustment would leave a negative balance; recount them); `application_state` (an onboarding decision or reply the application's status does not allow), `application_not_verified` (Activate before Verify), `outbox_not_failed` (send again on a row that has not failed), `outbox_too_old` (send again on a row older than its link's 7 day lifetime); `conflict` for any other unique or foreign key violation |
+| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, `approval_already_pending`, `mfa_already_enrolled`, `mfa_not_enrolled`, `mfa_enrolment_not_started`, duplicates (`duplicate_nin`, the cash book's `duplicate_category`, `duplicate_item`, `duplicate_party`, `duplicate_import`, `collateral_already_pledged`, `duplicate_email`, `duplicate_phone`, `duplicate_branch_code`, `duplicate_slug`, `duplicate_product_code`); the cash book's `cash_record_voided` (any cash book record voided twice), `savings_exists` (a second active savings record for a branch and date), `suggestion_changed` (the savings suggestion changed since the form was shown; the body carries the new `suggestion_token`, ADR-022 decision 11) and `advance_has_repayments`; `transaction_conflict` (the database aborted the transaction as a deadlock victim or serialisation loser; nothing was saved, `Retry-After` is set and the same request may be retried with the same `Idempotency-Key`); `stock_moved_since_count` (a retail stock-take whose lines moved after the count so far that the adjustment would leave a negative balance; recount them); `application_state` (an onboarding decision or reply the application's status does not allow), `application_not_verified` (Activate before Verify), `outbox_not_failed` (send again on a row that has not failed), `outbox_too_old` (send again on a row older than its link's 7 day lifetime); `conflict` for any other unique or foreign key violation |
 | 422 | Validation and business rule failures (codes below) |
 | 423 | `tenant_suspended`, `account_locked` |
 | 428 | `precondition_required`: a `PATCH`, or a state transition or retail price edit, without `If-Match` (section 7.9) |
@@ -214,12 +216,12 @@ from identity, tenancy and approvals (increment 1): `weak_password`, `invitation
 `invitation_expired`, `invalid_mfa_code` (enrolment and recovery code replacement),
 `cannot_deactivate_self`, `cannot_reset_own_mfa`, `last_tenant_admin`, `not_a_tenant_admin`,
 `head_office_required`, `invalid_tenant`, `module_not_allowed`, `unknown_action_type`,
-`approval_execution_failed`; and from retail (ADR-020): `insufficient_stock`, `price_below_cost`; and from any money route: `amount_out_of_range` (exact arithmetic on minor units overflowed; every retail `*_minor` input is also bounded at 10^13 by validation and a database CHECK, review F7).
+`approval_execution_failed`; and from retail (ADR-020): `insufficient_stock`, `price_below_cost`; and from the retail cash book (ADR-022): `reason_required`, `explanation_required`, `item_not_in_category`, `category_inactive`, `account_not_expense`, `party_kind_not_allowed`, `suggestion_token_required`, `amount_requires_profit_access`, `repayment_exceeds_balance`, `advance_settled` and `branch_required`; and from any money route: `amount_out_of_range` (exact arithmetic on minor units overflowed; every retail `*_minor` input is also bounded at 10^13 by validation and a database CHECK, review F7).
 
 Entries of the `errors` array carry their own `code`: `invalid` (a Bean Validation failure;
 the message says which), `required`, `unknown_branch` (a branch that does not exist, is inactive
 or is outside the caller's scope, deliberately indistinguishable), `invalid_phone`,
-`invalid_nin`, `unknown_role`, `invalid_slug`, `weak_password`. Every response, success or error,
+`invalid_nin`, `unknown_role`, `invalid_slug`, `weak_password`, `future_date` (a business date after today in the tenant's time zone). Every response, success or error,
 carries the `X-Request-Id` header.
 
 ## 7.8 Idempotency (money-moving endpoints)
@@ -329,7 +331,7 @@ port (8081), which is never published outside the container network.
 | POST | `/auth/member/login` | public | `{phone, pin}` (P2) |
 | POST | `/auth/refresh` | refresh cookie | Rotates refresh token. FR-IAM-07 |
 | POST | `/auth/logout` | authenticated staff | Revokes the session family; clears the cookie |
-| GET | `/me` | authenticated staff | User, roles, permissions, `all_branches`, the branches to switch between, the default branch, MFA state and unused recovery codes. FR-BR-03 |
+| GET | `/me` | authenticated staff | User, roles, permissions, `permission_scopes` (per permission key `{all_branches, branch_ids}`, so a screen offers only the branches where its permission is held, ADR-017), `all_branches`, the branches to switch between, the default branch, MFA state and unused recovery codes. FR-BR-03 |
 
 The refresh token never appears in a response body: it is the `__Host-bms_rt` cookie of section 7.4.1.
 
@@ -378,14 +380,14 @@ carries it in the URL fragment, which no server receives.
 | PATCH | `/settings` | `core.settings.manage` | FR-TEN-08. Includes `theme_primary` (`#RRGGBB`, or an empty string to clear it back to the platform look; a colour with no readable text colour is a 422 `validation_failed` with the field error `insufficient_contrast`) and `setup_dismissed` |
 | PUT | `/settings/logo` | `core.settings.manage` | `multipart/form-data` field `file`: PNG, JPEG or WebP, 1 MB, 128 px or more; re-encoded and scaled to 512 px; returns the settings. Takes no `If-Match` but bumps the settings `version`, so a form holding the old version must refetch before its next `PATCH`. A logo over 4 megapixels is 422 `image_too_large`. FR-TEN-08 |
 | DELETE | `/settings/logo` | `core.settings.manage` | Clears the logo; the file is kept. Idempotent |
-| GET | `/branding` | public | `{display_name, theme_primary, theme_text, logo_url}` for the tenant of the request host; `logo_url` is `/api/v1/branding/logo?v=<document id>` or null. FR-TEN-08 |
+| GET | `/branding` | public | `{display_name, theme_primary, theme_text, logo_url, modules}` for the tenant of the request host; `logo_url` is `/api/v1/branding/logo?v=<document id>` or null; `modules` is the sorted list of enabled module keys (`lending`, `retail`), so the landing page promises only what the tenant has (#99). FR-TEN-08 |
 | GET | `/branding/logo` | public | The logo image: `Content-Type` from the stored value (`image/png` or `image/jpeg`), `Cache-Control: public, max-age=3600`, `ETag` (304 on `If-None-Match`), `X-Content-Type-Options: nosniff`, `Content-Disposition: inline`, `Content-Security-Policy: default-src 'none'; sandbox`; 404 `not_found` when there is no logo; 503 `logo_unavailable` when storage cannot be read; `Vary: Host`; the optional `v` parameter must be a UUID and only busts caches. FR-TEN-08 |
 
 The two branding routes are public by design: they take no token, the tenant is resolved from the
 host like every tenant route (an unknown host is 404 `unknown_tenant`; the platform host has no
 tenant, so they answer 404 there and the PWA shows the Rincoltech brand without calling them), and
 they work for a suspended tenant (reads). They expose only the display name, a colour and one
-re-encoded image of that tenant.
+re-encoded image of that tenant, and the keys of its enabled modules (no counts, plans or settings).
 | GET | `/branches` | `core.branches.read` | |
 | POST | `/branches` | `core.branches.manage` | FR-BR-01 |
 | GET, PATCH | `/branches/{branch_id}` | read / manage | |
@@ -572,9 +574,33 @@ approver submitted or appraised the loan, FR-APR-03), `above_requested_principal
 reason `approval_expired` (FR-ORG-08), audited with actor kind `system`. Both `approved_at` and
 the expiry bound come from the business clock (AGENTS.md rule 7), never the database's `now()`.
 
+Built (#108, increment 5, ADR-026): disbursement, schedule, transactions, repayments, reversal,
+payoff quote and write-off. Every money-moving route requires `Idempotency-Key` (section 7.8; a
+replay answers `Idempotent-Replayed: true`). `POST .../disbursements` takes
+`{disbursement_date, payment_method_key, external_reference?}` on an `approved` loan and answers
+`LoanActionOutcome` `{loan_id, executed, approval_request_id, loan_status}`: 201 when it executed
+below the tenant's `loan_disbursement` threshold, else 202 with the pending request (checker
+`lending.disbursements.authorise`). `POST .../repayments` takes `{amount_minor, value_date,
+payment_method_key, external_reference?}` on an `active` loan (a `written_off` loan records a
+`recovery`) and answers 201 `RepaymentResult` `{transaction, loan_status, balances}` with the
+allocation rows. `POST .../transactions/{txn_id}/reverse` and `POST .../write-off` take `{reason}`
+and answer 202 with the pending request. `GET .../schedule` returns the items and a `totals` row;
+`GET .../transactions` returns every money event newest first with its allocation rows
+(`applies_to_txn_id`, `item_no`, `component`, `amount_minor`); `GET .../payoff-quote?value_date=`
+(today by default) returns principal, interest, fees, penalties, rebate and total. `GET` of a loan
+now carries `balances` (disbursed and maturity dates, outstanding by component, arrears, DPD, next
+due date, total paid, credit balance), and the list takes `q` (loan or member number by prefix,
+member name by any part) and returns the member's number and name, the outstanding total, DPD and
+the next due date. `payment_method_key` is `cash`, `bank`, `mtn_momo` or `airtel_money`. Codes (422
+unless stated): `value_date_in_future`, `before_disbursement`, `before_last_repayment`,
+`payment_method_unmapped`, `fees_exceed_principal`, `period_closed`, `not_reversible`,
+`nothing_to_write_off`, 409 `already_reversed`, 409 `invalid_status_transition` (a second
+disbursement, FR-DIS-03; a repayment on a closed loan; a quote on a loan that is not active), 409
+`approval_already_pending`, and the idempotency codes of section 7.8.
+
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/lending/loans` | `lending.loans.read` | Filters: `status`, `member_id`, `officer_user_id`, `product_id`, `dpd_from`, `dpd_to`, `disbursed_on_from/_to` |
+| GET | `/lending/loans` | `lending.loans.read` | Filters: `status`, `member_id`, `officer_user_id`, `product_id`, `q` (built); `dpd_from`, `dpd_to`, `disbursed_on_from/_to` (increment 8) |
 | POST | `/lending/loans` | `lending.loans.create` | Draft application. FR-ORG-01 |
 | GET | `/lending/loans/{loan_id}` | `lending.loans.read` | Includes balances, DPD, PAR bucket, guarantors, collateral |
 | PATCH | `/lending/loans/{loan_id}` | `lending.loans.create` | Draft only |
@@ -696,9 +722,11 @@ Built (#51, catalogue):
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/retail/categories`, `/retail/units` | `retail.stock.read` | `{items: [{id, name}]}` |
+| GET | `/retail/categories`, `/retail/units` | `retail.stock.read` | `{items: [{id, name, active, product_count}]}`; `product_count` is the products, active or not, that use the row (#146) |
 | POST | `/retail/categories`, `/retail/units` | `retail.catalogue.manage` | `{name}`; 409 `duplicate_category`, `duplicate_unit` (names ignore case). FR-RET-01 |
-| GET | `/retail/products` | `retail.stock.read` | Filters `query` (code or description), `category_id`, `active`; `limit`, `cursor`, ordered by code. Row: `{id, code, description, category_id, category, unit_id, unit, sell_minor, cost_minor*, currency, active, version}` |
+| POST | `/retail/products/import` | `retail.catalogue.manage` and, checked in the service, `core.settings.manage` (administrators only; 403 `permission_denied` otherwise) | `dry_run` (default `true`), body `{csv}`: a header row then one item per row, columns `code`, `description`, `category`, `unit`, `sell price` and optionally `cost price` (comma, semicolon or tab separated, quotes allowed, at most 2,000 rows and 1,000,000 characters). Codes are normalised by `RetailCatalogue.normaliseCode`; categories and units are created on demand by name ignoring case and surrounding spaces, so `Drinks` and `drinks` in one file are one new row, and a switched-off category or unit is an error row naming the line; amounts are in major units read with the tenant currency's exponent (whole numbers for UGX, up to two decimals for a two-decimal currency), as integer minor units with no floating point. An apply that meets a clash raised by a concurrent change returns 409 `import_conflict` and adds nothing. Returns `{dry_run, rows_read, added, skipped, errors, categories_created, units_created, rows: [{line, code, description, outcome, message}]}` where `outcome` is `added`, `skipped` (the code exists, or repeats in the file) or `error`. A dry run changes nothing. An apply with any error row adds nothing (422 `import_has_errors`); applying again skips every row already added, so it is idempotent on the code. A `cost price` column needs `retail.profit.read` (422 `cost_not_allowed` otherwise) and a cost at or above the sell price is an error row. Each item is audited as `retail.product.created` without cost, plus one `retail.product.imported` summary (#146) |
+| PATCH | `/retail/categories/{category_id}`, `/retail/units/{unit_id}` | `retail.catalogue.manage` | `{name?, active?}` under `If-Match` with the `version` last read (428 `precondition_required` without it, 409 `version_conflict` when stale; the response carries the new `ETag`); rename or switch off, never deleted; 409 `duplicate_category`, `duplicate_unit`; 404 for another tenant's id. A switched-off row stays on its products but cannot be chosen for a new product or a product's change (422 `inactive_category`, `inactive_unit`). Audited as `retail.category.updated`, `retail.unit.updated` (#146) |
+| GET | `/retail/products` | `retail.stock.read` | Filters `query` (code, description or category name), `category_id`, `active`; `limit`, `cursor`, ordered by code. Row: `{id, code, description, category_id, category, unit_id, unit, sell_minor, cost_minor*, currency, active, version}` |
 | POST | `/retail/products` | `retail.catalogue.manage` | `{code, description, category_id, unit_id, cost_minor, sell_minor}`; writes the `initial` history row; 409 `duplicate_product_code`. FR-RET-01 |
 | GET, PATCH | `/retail/products/{product_id}` | read / `retail.catalogue.manage` | PATCH needs `If-Match` and edits `code`, `description`, `category_id`, `unit_id`, `active` only; a price in the body is 400 |
 | POST | `/retail/products/{product_id}/prices` | `retail.price.edit` | `{cost_minor?, sell_minor?, reason}` with `If-Match` (428 without it, 409 `version_conflict` on a stale version, #77); at least one price; 422 `price_unchanged`, which never depends on a cost the caller may not read: without `retail.profit.read` a body naming `cost_minor` always goes ahead, so resending the current cost writes a history and audit row that change nothing, by design (#77); writes a `manual` history row and audit. FR-RET-02 |
@@ -711,17 +739,19 @@ branch when the permission's scope has exactly one; otherwise 422 `branch_requir
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET | `/retail/products?branch_id=` | `retail.stock.read` | Each row adds `qty` and `negative` for that branch |
-| GET | `/retail/stock` | `retail.stock.read` | `branch_id`, `query`, `negative_only`, `limit`, `cursor`. Row: `{product_id, code, description, unit, qty, negative, sell_minor, cost_minor*}`. FR-RET-03 |
+| GET | `/retail/stock` | `retail.stock.read` | `branch_id`, `query` (code, description or category name), `category_id`, `negative_only`, `stock_level` (`out`: quantity zero or less; `low`: at or below the low stock threshold, which includes out of stock; any other value is 422), `limit`, `cursor`; the page also carries `low_stock_threshold` (a quantity string, `5.000`, one constant for every tenant until a retail settings group exists, `StockService.LOW_STOCK_MILLI`, ADR-029, #145). Row: `{product_id, code, description, category_id, category, unit, qty, negative, sell_minor, cost_minor*}`. FR-RET-03 |
+| GET | `/retail/stock/all-branches` | `retail.stock.read` | Every product with its balance in each branch the caller may read that is active or, when inactive, still holds a non-zero balance (#144; an empty inactive branch is left out, so the totals agree with the valuation): `query` (code, description or category name), `category_id`, `negative_only` (any branch below zero), `stock_level` (as on `/retail/stock`, judged on the total across the listed branches), `limit`, `cursor`. `{low_stock_threshold, branches: [{id, code, name, head_office}], items: [{product_id, code, description, category_id, category, unit, total_qty, negative, sell_minor, cost_minor*, balances: [{branch_id, qty, negative}]}], next_cursor}`; `balances` has one entry per listed branch, zero where no balance exists; `cost_minor` shows only when the caller holds `retail.profit.read` in every listed branch. Reports without `branch_id` (`/retail/reports/valuation`, `/retail/reports/profit/daily`) already cover every branch in scope, with a total per branch |
 | GET | `/retail/stock/movements` | `retail.stock.read` | `branch_id` (repeatable, scoped), `product_id`, `from`, `to`. Row: `{id, at, branch_id, product_id, kind, qty, unit_cost_minor*, source_type, source_id, reverses_movement_id, historical, note, by}` |
 | POST | `/retail/stocktakes` | `retail.stocktake.commit` | `{branch_id?, lines: [{product_id, counted_qty}], note?}`; returns each line's `expected_qty` and `variance_qty`. FR-RET-08 |
 | GET | `/retail/stocktakes/{stocktake_id}` | `retail.stock.read` | Draft or committed |
 | POST | `/retail/stocktakes/{stocktake_id}/commit` | `retail.stocktake.commit` | Adjustment movements of counted less `expected_qty` (the variance when counted, so later movements stay in the balance), posted at cost; 409 `stocktake_committed`; 409 `stock_moved_since_count` when later movements would make an adjusted balance negative (recount those lines) |
 | POST | `/retail/sales` | `retail.sale.create` | **M**. `{branch_id?, sale_date?, payment_method, customer_id?, buyer_name?, buyer_contact?, due_date?, lines: [{product_id, qty, unit_price_minor?}]}`; 422 `insufficient_stock` when a line exceeds the branch's stock (always; ADR-020 decision 4); 422 `price_below_cost` when a line's unit price is not above the product's cost and the caller lacks `retail.price.below_cost` (the message never carries the cost; ADR-020 decision 5). Response: the sale with `lines`, `total_minor`, `paid_minor`, `balance_minor`, `cost_total_minor*`, `profit_minor*`, and per line `unit_cost_minor*`, `line_cost_minor*`. FR-RET-04 |
-| GET | `/retail/sales` | `retail.sale.read` | `branch_id` (repeatable, scoped), `from`, `to`, `customer_id`, `limit`, `cursor` |
+| GET | `/retail/sales` | `retail.sale.read` | `branch_id` (repeatable, scoped), `from`, `to` (by sale date), `customer_id`, `buyer` (part of the buyer's name or of the linked credit buyer's name; `%` and `_` are literal), `payment_method` (`cash`, `mobile_money`, `bank` or `credit`; else 422), `product_id` (a sale with a line of that product), `status` (`completed` or `voided`; else 422), `owing` (`owing`: a completed credit sale with a balance above zero; `overdue`: owing and `due_date` before the tenant's business date; `paid`: a completed credit sale with no balance; anything else 422; applied in SQL before paging, so it holds across every page), `newest_first` (default false: oldest first), `limit`, `cursor` (the cursor records the `newest_first` direction it was issued for; one sent with the other direction is 422 on `cursor`) (#145) |
 | GET | `/retail/sales/{sale_id}` | `retail.sale.read` | 404 outside scope |
 | POST | `/retail/sales/{sale_id}/void` | `retail.sale.void` | `{reason}`; 409 `sale_voided`; 422 `sale_has_payments` for a credit sale with payments |
-| GET | `/retail/customers` | `retail.sale.read` | `query`, `limit` |
+| GET | `/retail/customers` | `retail.sale.read` | `query`, `limit`, `cursor` (ordered by lower-cased name then id; `next_cursor` when more); each item carries `version` and `balance_minor`, what the buyer owes on credit sales in every branch the caller may read, whichever branch is chosen (#146) |
 | POST | `/retail/customers` | `retail.customer.manage` | `{name, contact?}` |
+| PATCH | `/retail/customers/{customer_id}` | `retail.customer.manage` | `{name?, contact?}` (an empty contact clears it) under `If-Match` (428 without it, 409 `version_conflict` when stale); audited as `retail.customer.updated` without the contact (#146) |
 | GET | `/retail/customers/{customer_id}/balance` | `retail.sale.read` | `{customer_id, currency, balance_minor, open_sales: [...]}` over credit sales in the caller's scope. FR-RET-05 |
 
 Built (#53, purchasing, usage and payments):
@@ -729,6 +759,7 @@ Built (#53, purchasing, usage and payments):
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET, POST | `/retail/suppliers` | `retail.purchase.create` | `{name, contact?}`; 409 `duplicate_supplier` |
+| PATCH | `/retail/suppliers/{supplier_id}` | `retail.catalogue.manage` | `{name?, contact?, active?}` under `If-Match` (428 without it, 409 `version_conflict` when stale); an empty contact clears it, a switched-off supplier is refused on a new restock (422 `inactive_supplier`), never deleted; audited as `retail.supplier.updated` without the contact (#146) |
 | POST | `/retail/purchases` | `retail.purchase.create` | **M**. `{supplier_id?, purchased_on, payment_method: cash, bank or credit, note?, lines: [{product_id, cost_minor, sell_minor?, qty_by_branch: [{branch_id, qty}]}]}`; every branch must be in the caller's scope; sets the product prices and history atomically, latest line wins. FR-RET-06 |
 | GET | `/retail/purchases` | `retail.purchase.create` | `from`, `to`, `supplier_id`, `limit`, `cursor`; purchases that moved stock into the caller's branches. A branch-scoped caller sees only their branches' `qty_by_branch`, with `qty_total`, `line_total_minor` and `total_minor` recomputed from them (lines with nothing in scope left out); an all-branch caller sees the whole document (review F11) |
 | POST | `/retail/usage` | `retail.usage.report` | **M**. `{branch_id?, kind: used or damaged, reason, occurred_on?, lines: [{product_id, qty}]}`; response `cost_total_minor*`, per line `unit_cost_minor*`, `line_cost_minor*`; 422 `insufficient_stock` past the branch's stock (ADR-020 decision 4). FR-RET-07 |
@@ -739,8 +770,8 @@ Built (#54, reports):
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/retail/reports/valuation` | `retail.stock.read` | `branch_id` (repeatable, scoped), `as_of` (not in the future; quantities are summed by each movement's business date, the date its journal carries). A row whose quantity times a price does not fit is flagged `amount_out_of_range`, its values left out and excluded from the totals, so one product never fails the report. `{as_of, currency, rows: [{branch_id, product_id, code, description, unit, qty, negative, sell_minor, expected_sales_minor, amount_out_of_range, cost_minor*, value_at_cost_minor*}], branches: [{branch_id, expected_sales_minor, value_at_cost_minor*, inventory_account_minor*, revaluation_difference_minor*}], expected_sales_minor, value_at_cost_minor*}`; `branches` lists every branch in the filter that holds stock or has a non-zero `inventory` balance (review F3). FR-RET-09 |
-| GET | `/retail/reports/profit/daily` | `retail.profit.read` | `branch_id` (repeatable, scoped), `from`, `to` (default the last 30 days, at most 366). `{from, to, currency, rows: [{branch_id, date, sales_minor, cost_of_sales_minor, gross_profit_minor, usage_cost_minor, profit_minor}], sales_minor, cost_of_sales_minor, usage_cost_minor, profit_minor}`. FR-RET-10 |
+| GET | `/retail/reports/valuation` | `retail.stock.read` | `branch_id` (repeatable, scoped), `as_of` (not in the future; quantities are summed by each movement's business date, the date its journal carries). A row whose quantity times a price does not fit is flagged `amount_out_of_range`, its values left out and excluded from the totals, so one product never fails the report. `{as_of, currency, rows: [{branch_id, product_id, code, description, category_id, category, unit, qty, negative, sell_minor, expected_sales_minor, amount_out_of_range, cost_minor*, value_at_cost_minor*, expected_profit_minor*, expected_profit_bp*}], branches: [{branch_id, expected_sales_minor, value_at_cost_minor*, inventory_account_minor*, revaluation_difference_minor*, expected_profit_minor*, expected_profit_bp*}], categories: [{category_id, category, expected_sales_minor, value_at_cost_minor*, expected_profit_minor*, expected_profit_bp*}], expected_sales_minor, value_at_cost_minor*, expected_profit_minor*, expected_profit_bp*}`; expected profit is expected sales less value at cost, and `expected_profit_bp` is that profit over value at cost in basis points (2500 is 25 percent, half up), absent when the value at cost is not above zero (#145); a category line shows cost and profit only when the caller holds `retail.profit.read` in every branch that contributes to it, as the overall total does; `branches` lists every branch in the filter that holds stock or has a non-zero `inventory` balance (review F3). FR-RET-09 |
+| GET | `/retail/reports/profit/daily` | `retail.profit.read` | `branch_id` (repeatable, scoped), `from`, `to` (default the last 30 days, at most 366). `{from, to, currency, rows: [{branch_id, date, sales_minor, cost_of_sales_minor, gross_profit_minor, usage_cost_minor, stocktake_difference_minor, profit_minor}], sales_minor, cost_of_sales_minor, usage_cost_minor, stocktake_difference_minor, profit_minor}`. `stocktake_difference_minor` is the value at cost of committed stock-take adjustments on the day the stock-take was committed, negative for a loss and positive for a gain (the net of the `stock_shrinkage` postings of `retail.stocktake`, #121), and is included in `profit_minor`. The whole report needs `retail.profit.read`, so no caller without it receives the field. FR-RET-10 |
 
 Built (#84, stock transfers between branches; FR-RET-16):
 
@@ -756,6 +787,88 @@ destination branch: the same cost is posted to both branches' inventory accounts
 `/retail/stock/movements` show the lines as `transfer_out` and `transfer_in` with `source_type`
 `retail.transfer` and `source_id` the transfer; a void adds the opposite kinds with `source_type`
 `retail.transfer_void` and `reverses_movement_id` set.
+
+### 7.11.21 Retail cash book (`/retail`, proposed, ADR-022)
+
+**Proposed, not built:** the contract the build must meet, and the source of `openapi.json` after it.
+Refused with 404 `module_not_enabled` unless retail is switched on. Conventions are those of section
+7.11.20: snake_case, branch scope on every row (ADR-017, 404 outside scope), `*` fields absent (not
+null) without `retail.profit.read` (for the cash book that includes every savings amount, the cash restock total `cash_purchases_minor` and every figure net of them, ADR-022 decision 13), **M** requires `Idempotency-Key` (section 7.8). A request for one
+branch takes `branch_id`, or the caller's one branch when the permission's scope has exactly one;
+otherwise 422 `branch_required`. Dates are business dates in the tenant's zone, default today, never in
+the future (a record posts on its own `business_date`, which may be earlier than its `created_at`, and a void posts on the day it is made, shown as a `*_voids_minor` line on the void day and never rewriting the record's day, ADR-022 decision 9): a future date is a field problem, as in a transfer's `transfer_date`: 422 `validation_failed` with an `errors` entry `{field: business_date, code: future_date}` (the field is `paid_on`, `banked_at` or `withdrawn_at` on those routes). Every record in a response carries `by`, `at`, `voided`, `historical`.
+Every void takes `{reason}`, is **M**, needs `retail.cashbook.void`, and is 409 `cash_record_voided` the
+second time (the `<thing>_voided` style of `sale_voided` and `transfer_voided`).
+
+Lists and the expense setup (FR-RET-17):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/expense-categories` | `retail.cashbook.read` | `{items: [{id, name, expense_account_id, active, items: [{id, name, requires_explanation, active}]}]}`; `active` filter |
+| POST | `/retail/expense-categories` | `retail.expense.manage` | `{name, expense_account_id?}`; 409 `duplicate_category`; `expense_account_id` must be a postable expense account (422 `account_not_expense`) |
+| PATCH | `/retail/expense-categories/{category_id}` | `retail.expense.manage` | `{name?, expense_account_id?, active?, sort_order?}`; requires `If-Match` (428 without, 409 `version_conflict` on a stale version); 409 `duplicate_category` |
+| POST | `/retail/expense-categories/{category_id}/items` | `retail.expense.manage` | `{name, requires_explanation?}`; 409 `duplicate_item` |
+| PATCH | `/retail/expense-categories/{category_id}/items/{item_id}` | `retail.expense.manage` | `{name?, requires_explanation?, active?}`; requires `If-Match` (428 without, 409 `version_conflict` on a stale version); 409 `duplicate_item` |
+| GET | `/retail/cash-parties` | `retail.cashbook.read` | `query`, `kind`, `limit` (default 50, at most 200), `cursor` |
+| POST | `/retail/cash-parties` | `retail.expense.record` or `retail.advance.create` | `{name, contact?, kind}`; `kind` one of `owner`, `staff`, `related_entity`, `supplier`, `other`; 409 `duplicate_party`; 422 `party_kind_not_allowed` when an advance names a `supplier` or `other` party |
+
+Daily savings (FR-RET-18 to FR-RET-20):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/savings/suggestion` | `retail.savings.record` | `branch_id?`, `date?`. `{branch_id, business_date, total_sold_minor, suggestion_token, suggested_minor*, daily_profit_minor*, existing_id}`; `suggestion_token` is an opaque keyed hash of the suggestion (it reveals nothing, so every caller gets it); `suggested_minor` and the profit are `*`, absent without `retail.profit.read`; `existing_id` is the active record for the day, if any |
+| POST | `/retail/savings` | `retail.savings.record` | **M**. `{branch_id?, business_date?, suggestion_token, amount_minor?, overwrite_reason?}`; `suggestion_token` is the one the form was shown (422 `suggestion_token_required` when missing); an omitted amount takes the suggestion; a caller without `retail.profit.read` may not send `amount_minor` or `overwrite_reason` at all (422 `amount_requires_profit_access`, "only the default can be recorded without profit access"; the default is applied server-side, so no accepted-or-refused answer reveals the suggestion); a caller with `retail.profit.read` sending an amount differing from the suggestion the token stands for needs `retail.savings.overwrite` (403) and a reason (422 `reason_required`); if the suggestion has changed since the token was issued the answer is 409 `suggestion_changed` with the new `suggestion_token` (and `suggested_minor*`) and nothing is written, never a false overwrite; 409 `savings_exists`. The response echoes `amount_minor` to the writer only when the writer typed it; a default taken by a caller without `retail.profit.read` is not echoed (`amount_minor*`) |
+| GET | `/retail/savings` | `retail.cashbook.read` | `branch_id` (repeatable), `from`, `to`, `include_voided`, `limit` (default 50, at most 200), `cursor`; row `{id, branch_id, business_date, amount_minor*, total_sold_minor, overwritten*, suggested_minor*, by, at}` (a savings amount is profit-derived, ADR-022 decision 13, so without `retail.profit.read` the row shows that savings were recorded but not how much); grouped client-side by shop, year and month |
+| POST | `/retail/savings/{savings_id}/void` | `retail.cashbook.void` | Reverses the entry and frees the day |
+
+Cash banked (FR-RET-21 to FR-RET-23):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/bankings/expected` | `retail.banking.record` | `branch_id?`, `date?`. `{branch_id, business_date, cash_takings_minor, cash_sale_voids_minor, expense_voids_minor, advance_voids_minor, repayment_voids_minor, cash_purchases_minor*, savings_minor*, savings_voids_minor*, expenses_minor, advances_out_minor, repayments_in_minor, cash_expected_minor, expected_minor*, banked_so_far_minor}`; `cash_expected_minor` is takings, less cash sale voids, less expenses and advances paid out, plus repayments (with the expense, advance and repayment voids of the day), **before cash purchases and before savings**, and is what a caller without `retail.profit.read` is shown; `cash_purchases_minor` (a total at cost), `savings_minor` and `expected_minor` (net of both) are `*`; the form shows it and prefills with `expected_minor` (or `cash_expected_minor` when that is all the caller may see, which for a cashier is the takings figure less their own till payments) |
+| POST | `/retail/bankings` | `retail.banking.record` | **M**. `{branch_id?, business_date?, amount_minor, banked_at?, reference?}`; stores `expected_minor`; response adds `difference_minor*`, `flag*` and `warnings*: [cash_below_banked?]` (gated like the other balance figures: cash on hand is net of savings and cash purchases, so the warning is absent without `retail.profit.read`; `bank_balance_negative` on withdrawals is not affected); stored `expected_minor*` is profit-gated too; never refused for exceeding cash |
+| GET | `/retail/bankings` | `retail.cashbook.read` | `branch_id`, `from`, `to`, `include_voided`, `limit` (default 50, at most 200), `cursor` |
+| POST | `/retail/bankings/{banking_id}/void` | `retail.cashbook.void` | |
+| POST | `/retail/withdrawals` | `retail.withdrawal.record` | **M**. `{branch_id?, business_date?, amount_minor, withdrawn_at?, purpose?}`; response may carry `warnings: [bank_balance_negative]` |
+| GET | `/retail/withdrawals` | `retail.cashbook.read` | Same filters, with `limit` (default 50, at most 200) and `cursor` |
+| POST | `/retail/withdrawals/{withdrawal_id}/void` | `retail.cashbook.void` | |
+
+Expenses (FR-RET-24):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/retail/expenses` | `retail.expense.record` | **M**. `{branch_id?, business_date?, category_id, item_id, party_id?, amount_minor, explanation?, receipt_document_id?}`; 422 `item_not_in_category`, `explanation_required`, `category_inactive` |
+| GET | `/retail/expenses` | `retail.cashbook.read` | `branch_id`, `from`, `to`, `category_id`, `item_id`, `include_voided`, `limit`, `cursor` |
+| POST | `/retail/expenses/{expense_id}/void` | `retail.cashbook.void` | |
+
+Advances and repayments (FR-RET-26):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/retail/advances` | `retail.advance.create` | **M**. `{branch_id?, business_date?, party_id, taken_by_party_id?, principal_minor, purpose?}`; response has `advance_no` |
+| GET | `/retail/advances` | `retail.cashbook.read` | `branch_id`, `party_id`, `open_only` (balance above zero, what the repayment form lists), `from`, `to`, `limit` (default 50, at most 200), `cursor`; row adds `repaid_minor`, `balance_minor` |
+| GET | `/retail/advances/{advance_id}` | `retail.cashbook.read` | With its repayments |
+| POST | `/retail/advances/{advance_id}/repayments` | `retail.advance.repay` | **M**. `{branch_id?, amount_minor, method: cash, mobile_money or bank, paid_on?}` (`branch_id` is the branch that receives the money, scoped, default the advance's branch); 422 `repayment_exceeds_balance`, `advance_settled`; returns the new balance |
+| POST | `/retail/advances/{advance_id}/void` | `retail.cashbook.void` | 409 `advance_has_repayments` |
+| POST | `/retail/advances/{advance_id}/repayments/{repayment_id}/void` | `retail.cashbook.void` | |
+
+Reports (FR-RET-23, FR-RET-27, FR-RET-29), all `branch_id` (repeatable, scoped), `from`, `to` (default
+the last 30 days, at most 366), also `format=csv` through the report runs of section 7.11.8:
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/reports/cash/daily` | `retail.cashbook.read` | Per branch and day: `cash_takings_minor`, `cash_sale_voids_minor`, `expense_voids_minor`, `advance_voids_minor`, `repayment_voids_minor`, `banking_voids_minor`, `withdrawal_voids_minor`, `cash_purchases_minor*`, `expenses_minor`, `advances_out_minor`, `repayments_in_minor`, `withdrawals_in_minor`, `banked_minor`, `cash_expected_minor`, `ledger_basis`, `historical` (an imported day: no running total, see below), and the savings-embedding figures `opening_minor*`, `savings_minor*`, `savings_voids_minor*`, `closing_minor*`, `other_movements_minor*`, `expected_to_bank_minor*`, `unbanked_running_minor*`; `daily_profit_minor*` |
+| GET | `/retail/reports/cash/banking` | `retail.cashbook.read` | Per branch and day: `cash_expected_minor`, `banked_minor`, and `expected_minor*`, `difference_minor*`, `flag*` (`ok`, `shortfall`, `surplus`, `not_banked`), `unbanked_running_minor*` (all net of savings, so profit-gated), `entries: [{id, amount_minor, banked_at, by}]`; filter `flag`; an imported (historical) day has `historical: true` and no `unbanked_running_minor`, and does not count in the running total of the live days, which starts at the first live day |
+| GET | `/retail/reports/cash/expenses` | `retail.cashbook.read` | `group_by` (`category`, `item`, `branch`, `month`), totals, count; no voided rows |
+| GET | `/retail/reports/cash/savings` | `retail.cashbook.read` | Per branch and day `total_sold_minor`; `overwritten*`, `amount_minor*`, `suggested_minor*`, `daily_profit_minor*` |
+| GET | `/retail/reports/cash/advances` | `retail.cashbook.read` | Outstanding by party: principal, repaid, balance, oldest advance date |
+
+Error codes: the cash book's codes are listed in section 7.7 (409 `cash_record_voided`, `savings_exists`,
+`suggestion_changed`, `advance_has_repayments`, `duplicate_category`, `duplicate_item`,
+`duplicate_party`; 422 `reason_required`, `explanation_required`, `item_not_in_category`,
+`category_inactive`, `account_not_expense`, `party_kind_not_allowed`, `suggestion_token_required`, `amount_requires_profit_access`,
+`repayment_exceeds_balance`, `advance_settled`, `branch_required`; the field code `future_date`). The cash book has no import endpoint; its history comes through the
+`import-retail` command (chapter 13 section 13.13).
 
 ## 7.12 Example: record a repayment
 

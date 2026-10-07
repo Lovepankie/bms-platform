@@ -124,6 +124,14 @@ transaction set it raises `invalid input syntax for type uuid: ""` (the transact
 has reverted to empty). Both are errors, never rows (NFR-ISO-03). A table with no rows returns
 none either way, because the policy is only evaluated against rows.
 
+The policy compares `tenant_id` with `current_setting(...)` directly. Wrapping the setting in a
+sub-select, so it is evaluated once per statement instead of once per row read, was measured and
+rejected (ADR-028): with the indexes of section 6.12 it saved about a quarter on a few reports, but
+it hides the tenant from the planner's statistics, and a valuation report became 13 times slower on
+a large tenant. Under the policy only *leakproof* predicates (equality and range on uuid, dates,
+timestamps and text) can be index conditions: `lower(col) = ...`, `ILIKE` and trigram `%` run as
+filters after the tenant's rows are found (section 6.12).
+
 Two `SECURITY DEFINER` functions, owned by `bms_owner`, with
 `SET search_path = public, pg_temp`, are the only sanctioned way around the policy:
 
@@ -644,7 +652,8 @@ Index `(tenant_id, branch_id, entry_date)`, `(tenant_id, source_type, source_id)
 | `memo` | `text` | |
 
 `CHECK (debit >= 0 AND credit >= 0)`, `CHECK ((debit > 0) <> (credit > 0))`.
-Index `(tenant_id, account_id)`, `(tenant_id, subledger_type, subledger_id)`.
+Index `(tenant_id, account_id) INCLUDE (entry_id, debit, credit)` (V26, section 6.12),
+`(tenant_id, subledger_type, subledger_id)`.
 
 Balance enforcement: a constraint trigger
 `CREATE CONSTRAINT TRIGGER journal_entry_balance_check AFTER INSERT ON journal_lines
@@ -908,7 +917,8 @@ creation and replaced by the approved terms at approval.
 
 Indexes: `(tenant_id, member_id)`, `(tenant_id, branch_id, status)`,
 `(tenant_id, officer_user_id, status)`, `(tenant_id, status, next_due_date)`,
-`(tenant_id, status, days_past_due) WHERE status = 'active'`. The approver CHECK is named
+`(tenant_id, status, days_past_due) WHERE status = 'active'`, and `(tenant_id, created_at, id)` for
+the list's order (V26). The approver CHECK is named
 `lending_loans_approver_is_not_submitter_or_appraiser`. Guarantor and pledge rows of a draft are
 replaced as a whole, so `bms_app` holds DELETE on those two tables only, and triggers
 (`lending_loan_collateral_guard`, `lending_loan_guarantors_guard`) refuse any insert, delete or
@@ -1013,6 +1023,9 @@ item's value (`pledge_exceeds_value`).
 
 `CHECK` for each component: `paid + waived <= due`. Index `(tenant_id, due_date, status)`,
 `(tenant_id, loan_id, item_no)`.
+Built in `V29` (#108). The trigger `lending_schedule_items_guard` refuses any change of `loan_id`,
+`item_no`, `due_date` or the principal, interest and fee due once written; only the paid, waived,
+written-off, penalty and status columns move.
 
 ### `lending_loan_charges`
 
@@ -1036,7 +1049,8 @@ Partial unique `(tenant_id, schedule_item_id, period_no) WHERE charge_type = 'pe
 | `value_date` | `date NOT NULL` | |
 | `payment_method_key` | `text` | |
 | `external_reference` | `varchar(100)` | Mobile money or bank reference. |
-| `receipt_no` | `varchar(30)` | For repayments. |
+| `receipt_no` | `varchar(30)` | `RC-<branch>-NNNNNN` for a repayment, recovery or upfront fee; `VC-<branch>-NNNNNN` for a disbursement (FR-DOC-04). Partial unique `(tenant_id, receipt_no)`. |
+| `reason` | `text` | Reversal and write-off reason. |
 | `reverses_txn_id` | `uuid` | `UNIQUE (tenant_id, reverses_txn_id)` |
 | `journal_entry_id` | `uuid` | NULL only when `is_historic`. |
 | `approval_request_id` | `uuid` | |
@@ -1046,13 +1060,22 @@ Partial unique `(tenant_id, schedule_item_id, period_no) WHERE charge_type = 'pe
 | `recorded_by` | `uuid` | |
 
 Index `(tenant_id, loan_id, value_date)`, `(tenant_id, branch_id, value_date, txn_type)`.
+Built in `V29` (#108): `payment_method_key` is one of `cash`, `bank`, `mtn_momo`, `airtel_money`
+(ADR-026 maps each to a seeded account until FR-GL-08); `CHECK (is_historic OR journal_entry_id IS NOT
+NULL)`; `CHECK ((txn_type = 'reversal') = (reverses_txn_id IS NOT NULL))`; partial unique
+`(tenant_id, loan_id) WHERE txn_type = 'disbursement'` (FR-DIS-03).
 
 ### `lending_repayment_allocations` (append-only)
 
-`id`, `tenant_id`, `created_at`, `transaction_id uuid NOT NULL`,
-`schedule_item_id uuid` (NULL for `overpayment`), `component text NOT NULL`
-[`penalty`, `fee`, `interest`, `principal`, `overpayment`], `amount_minor bigint NOT NULL`
-(negative only on rows belonging to a `reversal` transaction).
+`id`, `tenant_id`, `created_at`, `transaction_id uuid NOT NULL` (the transaction that wrote the
+row), `applies_to_txn_id uuid NOT NULL` (the repayment whose money the row moves; equal to
+`transaction_id` on a repayment's own rows), `schedule_item_id uuid` (NULL exactly for
+`overpayment`), `component text NOT NULL` [`penalty`, `fee`, `interest`, `principal`, `overpayment`,
+`interest_rebate`], `amount_minor bigint NOT NULL` (`<> 0`; negative only on rows belonging to a
+`reversal` transaction, which writes the reversed repayment's rows negated and the differences of
+every later repayment it re-allocates, ADR-026). `interest_rebate` is the early settlement rebate of
+R-PAYOFF: interest waived, not cash. Indexes `(tenant_id, transaction_id)`,
+`(tenant_id, applies_to_txn_id)`. Built in `V29` (#108).
 
 ### `lending_loan_daily_snapshots`
 
@@ -1204,7 +1227,7 @@ erDiagram
   the application containers switch (ADR-006; `docs/sdd/10-cicd-pipeline.md`). The integration
   tests apply the same files with the same code. An applied migration is never edited.
 - Migrations are **expand and contract**: a release only adds (tables, nullable columns,
-  new CHECK values, indexes built `CONCURRENTLY`); removing or renaming happens in a
+  new CHECK values, indexes); removing or renaming happens in a
   later release after no deployed code uses the old shape. The previous release's code
   must run against the new schema, because rollback swaps containers without reversing
   migrations.
@@ -1213,6 +1236,13 @@ erDiagram
   chapter 15 fails otherwise, and the isolation test asks for a factory row for the new table.
 - Seed data (currencies, plans, roles, permissions, role permissions) is applied by
   migrations and is idempotent.
+- Indexes are built with plain `CREATE INDEX` inside the migration's transaction, which blocks
+  writes to that table until the migration commits (ADR-028). The lock time of every build is
+  measured with `scripts/db-bench` at 25 times the data and written in the migration; a migration
+  that touches existing tables starts with `SET LOCAL lock_timeout = '5s'`, so it fails fast behind
+  a long report instead of queueing every request. When a build would block writes for longer than
+  about 30 seconds on production, it goes in its own non-transactional migration with
+  `CREATE INDEX CONCURRENTLY` (Flyway `executeInTransaction=false` for that file only).
 
 ### 6.9.1 Tables that exist so far
 
@@ -1260,6 +1290,10 @@ adds the `retail.price.below_cost` permission to the catalogue and grants it to 
 `V14__retail_review_fixes.sql` (#68) adds `business_date` to stock movements, the product code and
 amount CHECKs and the sale header and stock-take line guards (sections 6.11.2 and 6.11.3). The
 retired setting `retail_allow_negative_stock` needs no migration: a stored key is ignored on read.
+`V28__retail_catalogue_management.sql` (#146) adds `active` and `updated_at` to `retail_categories` and
+`retail_units`, `updated_at` to `retail_suppliers` and `retail_customers`, and grants `bms_app` UPDATE on
+the four so a shop can rename them and switch a category, unit or supplier off, and a `version` integer
+(default 1) on the four for optimistic locking (expand only).
 `V20__retail_import_refs.sql` (#55) creates `retail_import_refs` (append-only) for the
 `import-retail` command (section 6.11.4). It took V20 while the retail fixes were still open;
 Flyway applies the gap in order after V14. `outOfOrder` stays off, so V15 to V19 are never used:
@@ -1271,8 +1305,12 @@ account in `bms_seed_retail_chart` and for every tenant that switched retail on 
 movement kinds and the movements' `transfer_id` link (sections 6.11.1 and 6.11.2). It takes the next
 number free on `main` when it merges, so it may be renumbered then. `V23__onboarding_applications_and_outbox.sql` (#89, ADR-024) creates
 `onboarding_applications` and `notification_outbox` (section 6.4) with `onboarding_normalise_name`,
-`onboarding_email_key` and their definer functions. The next migration is V24 (`MigrationOrderIT`,
-chapter 15 section 15.4.3).
+`onboarding_email_key` and their definer functions. `V26__database_optimisation.sql` (#107, ADR-028) changes indexes
+and a storage setting only (section 6.12). `V28__retail_catalogue_management.sql` is the retail
+catalogue management (#146). `V29__lending_disbursement_repayments.sql` (#108, ADR-026) is lending
+increment 5: schedule items, loan transactions and repayment allocations (section 6.7). V24, V25
+and V27 stay unused: with `outOfOrder` off a number below an applied one can never run. The next
+migration is V30 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items
 
@@ -1315,12 +1353,14 @@ module on again adds nothing. `S` marks `is_system_controlled`.
 | 5100 | Cost of goods sold | expense | `cost_of_goods_sold` | |
 | 5110 | Stock shrinkage | expense | `stock_shrinkage` | |
 
-### `retail_categories`, `retail_units` (RLS; `bms_app` SELECT, INSERT)
+### `retail_categories`, `retail_units` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
 | Column | Type | Notes |
 |---|---|---|
 | `id`, `tenant_id`, `created_at`, `created_by` | standard | |
 | `name` | varchar(100) for categories, varchar(30) for units | Unique per tenant ignoring case (FR-RET-01) |
+| `active`, `updated_at` | boolean default true, timestamptz | V28: a row in use is switched off, never deleted |
+| `version` | integer default 1 | V28: bumped by every update; the `If-Match` value. `retail_suppliers` and `retail_customers` carry it too |
 
 ### `retail_products` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
@@ -1397,6 +1437,12 @@ Imported history (sales, purchases, adjustments, returns, usage, legacy balances
 | `historical` | boolean | Imported history (FR-RET-12); default false |
 | `note`, `recorded_by` | | |
 
+Indexes: `(tenant_id, branch_id, product_id, business_date) INCLUDE (qty, kind, historical)`, which
+serves reconciliation, valuation as of a date and the import's positions from the index alone
+(V26, replacing the V11 balance index and the V14 business date index); `(tenant_id, source_type,
+source_id)`; `(tenant_id, occurred_at, id)` for the movements list, whose local-date filter adds an
+instant range so this index applies (section 6.12); `(tenant_id, transfer_id)` partial.
+
 ### `retail_stock_balances` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
 Primary key `(tenant_id, branch_id, product_id)`, `qty numeric(14,3)`, `updated_at`. Written only by
@@ -1404,7 +1450,10 @@ Primary key `(tenant_id, branch_id, product_id)`, `qty numeric(14,3)`, `updated_
 taken in branch and product order). Product rows are locked only by restocks and price edits, with
 `FOR NO KEY UPDATE` (see purchases below). The nightly job `retail.stock-reconciliation` compares each row
 with the sum of its movements and records any difference as a system audit row
-(`retail.stock.reconciliation_mismatch`); it never corrects a balance.
+(`retail.stock.reconciliation_mismatch`); it never corrects a balance. Every movement updates a
+row here, so the table keeps free space on each page (`fillfactor = 80`) and has no index on `qty`
+(V26 dropped the partial `qty < 0` index, which no query used and which made every update non-HOT):
+balance updates are HOT and do not grow the indexes (section 6.12).
 
 ### `retail_transfers` (RLS; `bms_app` SELECT, INSERT, UPDATE of the void only)
 
@@ -1440,9 +1489,9 @@ commit that would leave a balance negative is refused with `stock_moved_since_co
 `unit_cost_minor` it was valued at. One line per product. Once committed, the stock-take and its
 lines are refused any UPDATE (trigger `retail_stocktake_guard_update`, V14, review F10).
 
-### `retail_customers` (RLS; `bms_app` SELECT, INSERT)
+### `retail_customers` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
-Credit buyers: `name varchar(200)`, `contact varchar(100)` kept as entered, `created_by`.
+Credit buyers: `name varchar(200)`, `contact varchar(100)` kept as entered, `created_by`, `updated_at` (V28).
 
 ### `retail_sales` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
@@ -1465,15 +1514,21 @@ The trigger `retail_sales_guard_update` (V14, review F10) lets an UPDATE change 
 entry ids (once, from null); any other change is refused, for `bms_app` and the owner alike (the
 owner's `bms.allow_mutation` maintenance switch of `reject_mutation` applies).
 
+Indexes: `(tenant_id, branch_id, sale_date, created_at, id)` for a branch's list,
+`(tenant_id, created_at, id)` for the list's order across branches, `(tenant_id, sale_date) INCLUDE
+(id, branch_id, status)` for the daily profit (both V26), `(tenant_id, customer_id)` partial.
+
 ### `retail_sale_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
 
 `line_no`, `product_id`, `qty numeric(14,3) > 0`, and the snapshots `unit_price_minor` and
 `unit_cost_minor` with `line_total_minor` and `line_cost_minor` (each rounded half up once). Profit
-is computed from these, never from the product's current prices (ADR-020 decision 5).
+is computed from these, never from the product's current prices (ADR-020 decision 5). Index
+`(tenant_id, sale_id) INCLUDE (line_total_minor, line_cost_minor)` (V26): a list page loads the lines
+of all its sales in one statement, and the daily profit sums them without reading the heap.
 
-### `retail_suppliers` (RLS; `bms_app` SELECT, INSERT)
+### `retail_suppliers` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
-`name varchar(200)` unique per tenant ignoring case, `contact`, `active`, `created_by`.
+`name varchar(200)` unique per tenant ignoring case, `contact`, `active`, `created_by`, `updated_at` (V28).
 
 ### `retail_purchases`, `retail_purchase_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
 
@@ -1564,3 +1619,241 @@ as `bms_app` under the tenant's row-level security:
 
 Primary key `(tenant_id, source_file, source_ref)`: a row already present is skipped, so a re-run
 of the same export adds nothing.
+
+### 6.11.5 Cash book (proposed, ADR-022; FR-RET-17 to FR-RET-32)
+
+**Design only: no migration exists.** The migration takes the next free Flyway version at merge
+time, above the highest on any open branch (`outOfOrder` is off), announced on issue #50; this
+section is its specification. Every table below is tenant-owned with forced row-level security
+(`bms_apply_tenant_rls`), a `tenant_id` first in every key, composite foreign keys on
+`(tenant_id, id)`, and the standard columns `id`, `tenant_id`, `created_at`, `created_by`. Money is
+`bigint` minor units with a `currency`, CHECK `0 < amount_minor <= 10^13` (savings: `>= 0`).
+Business dates are `date` in the tenant's zone (`tenants.timezone`), never in the future (checked by
+the service with the kernel clock); the instant is a separate `timestamptz`. Rows are append-only
+except the void columns (changed once) and, on `retail_advances` only, `repaid_minor` (changed on every
+repayment, see its guard below), by a guard trigger on each table (the pattern of
+`retail_sales_guard_update`, and the owner's `bms.allow_mutation` switch of `reject_mutation`).
+
+**Chart additions** (seeded by `bms_seed_retail_chart`, also for tenants that switched retail on
+earlier; a code or key the tenant already has is kept). Code 5900 and key `operating_expenses` are
+the lending chart's (section 6.6.2), reused so a tenant with both verticals keeps one such account,
+the way 1190 is shared; a tenant that has it from lending gets no second account:
+
+| Code | Name | Type | `system_key` |
+|---|---|---|---|
+| 1015 | Savings reserve (restricted cash) | asset | `savings_reserve` |
+| 1250 | Advances to owner and related parties | asset | `owner_advances` |
+| 5900 | Operating expenses | expense | `operating_expenses` |
+
+#### Tables
+
+| Table | Grants (`bms_app`) | Purpose |
+|---|---|---|
+| `retail_expense_categories` | SELECT, INSERT, UPDATE | Category lists: `name varchar(100)`, `expense_account_id` (nullable, composite FK to ledger accounts; null means `operating_expenses`; a trigger checks on insert and update that the account has `account_type = 'expense'`, `is_postable` and `is_active`, so a header, asset or inactive account is refused, 422 `account_not_expense`), `active`, `sort_order`. Unique `(tenant_id, lower(name))` |
+| `retail_expense_items` | SELECT, INSERT, UPDATE | `category_id` (composite FK), `name varchar(100)`, `requires_explanation boolean` (the pilot's "others"), `active`. Unique `(tenant_id, category_id, lower(name))` |
+| `retail_cash_parties` | SELECT, INSERT, UPDATE | Beneficiaries and advance parties: `name varchar(200)`, `contact varchar(100)` kept as entered, `kind` (`owner`, `staff`, `related_entity`, `supplier`, `other`; there is deliberately no `company` kind: an advance to the tenant's own business is not a receivable, ADR-022 open question 9). The party of an advance must be `owner`, `staff` or `related_entity` (service rule), `active`. Unique `(tenant_id, kind, lower(name))` |
+| `retail_daily_savings` | SELECT, INSERT, UPDATE (void only) | One record per branch and date, below |
+| `retail_cash_bankings` | SELECT, INSERT, UPDATE (void only) | Cash banked, below |
+| `retail_cash_withdrawals` | SELECT, INSERT, UPDATE (void only) | Withdrawals from bank, below |
+| `retail_expenses` | SELECT, INSERT, UPDATE (void only) | Company expenses, below |
+| `retail_advances` | SELECT, INSERT, UPDATE (`repaid_minor`, void) | Advances to owner or company, below |
+| `retail_advance_repayments` | SELECT, INSERT, UPDATE (void only) | Repayments, below |
+
+Categories, items and parties are never deleted (`active` is cleared). No UPDATE of a name once a
+record refers to it is blocked, because records snapshot the names they were written with.
+
+#### `retail_daily_savings`
+
+| Column | Type | Notes |
+|---|---|---|
+| `branch_id`, `business_date` | uuid, date | The shop and the trading day |
+| `amount_minor`, `currency` | bigint, text | The amount set aside, `>= 0` |
+| `suggested_minor` | bigint | The server's suggestion when written (day's profit times `savings_rate_bp`, half up, zero for a loss). Readable only with `retail.profit.read` (as is `amount_minor`, a savings amount being half the profit, ADR-022 decision 13; the API omits both without it) |
+| `overwritten` | boolean | CHECK `(suggested_minor IS NULL AND NOT overwritten) OR (suggested_minor IS NOT NULL AND overwritten = (amount_minor <> suggested_minor))`: a historical row has no suggestion (the pilot never stored one) so it is never `overwritten`, and the reason rule below does not apply to it |
+| `overwrite_reason` | text | CHECK: not null and at least 5 characters when `overwritten` |
+| `total_sold_minor` | bigint | Snapshot of the day's completed sales total, shown on the screen (a read-only column in the pilot) |
+| `occurred_at`, `recorded_by` | | Kernel clock instant, user |
+| `journal_entry_id` | uuid | Null when the amount is zero or the row is historical |
+| `historical`, `voided_at`, `voided_by`, `void_reason` | | |
+
+Index `UNIQUE (tenant_id, branch_id, business_date) WHERE voided_at IS NULL` (one active record per
+shop per day). Index `(tenant_id, branch_id, business_date)` for the lists and reports.
+
+#### `retail_cash_bankings`
+
+| Column | Type | Notes |
+|---|---|---|
+| `branch_id`, `business_date` | | The trading day banked for |
+| `amount_minor`, `currency` | | The amount banked, `> 0` |
+| `expected_minor` | bigint | Snapshot of the expected amount to bank when entered (never supplied by the client). May be negative when the till paid out more than it took. Net of savings, so profit-derived: readable only with `retail.profit.read` |
+| `banked_at` | timestamptz | The pilot's datetime |
+| `reference` | varchar(100) | Optional deposit slip number |
+| `recorded_by`, `journal_entry_id`, `historical`, void columns | | |
+
+Several rows per branch and date are allowed. Index `(tenant_id, branch_id, business_date)`.
+
+#### `retail_cash_withdrawals`
+
+`branch_id`, `business_date`, `amount_minor > 0`, `currency`, `withdrawn_at`, `purpose varchar(300)`,
+`recorded_by`, `journal_entry_id`, `historical`, void columns. Index `(tenant_id, branch_id,
+business_date)`. The pilot form has no shop; `branch_id` defaults to the caller's one branch, else the head office
+branch when it is in the caller's scope, else the request must name one (422 `branch_required`);
+an imported row with no shop takes the tenant's single head office branch whatever any scope is
+(open question 7).
+
+#### `retail_expenses`
+
+| Column | Type | Notes |
+|---|---|---|
+| `branch_id`, `business_date` | | |
+| `category_id`, `item_id` | uuid | Composite FKs; the service refuses an item of another category |
+| `category_name`, `item_name` | varchar(100) | Snapshots, so a rename never changes an old record, and so an imported row whose list entry is missing keeps what was written |
+| `party_id` | uuid | Optional beneficiary |
+| `amount_minor`, `currency` | | The pilot's Total Cost, `> 0` |
+| `explanation` | varchar(500) | Required when the item `requires_explanation` (service rule, FR-RET-24) |
+| `receipt_document_id` | uuid | Optional, `core.documents` |
+| `occurred_at`, `recorded_by`, `journal_entry_id`, `historical`, void columns | | |
+
+Indexes `(tenant_id, branch_id, business_date)` and `(tenant_id, category_id, business_date)` for the
+expenses report.
+
+#### `retail_advances`, `retail_advance_repayments`
+
+An advance: `branch_id` (the source shop), `advance_no` from the tenant sequence
+`retail_advance_no` (`RA00000001`, sequential like the pilot's ids; an imported advance takes the
+next value too, in business date then source id order, and the pilot's id lives only in
+`retail_import_refs` and the note, so an imported number can never collide with a live one), `party_id` (kind `owner`, `staff` or `related_entity`),
+`taken_by_party_id` (optional, the pilot's "who took the money"), `principal_minor > 0`, `currency`,
+`purpose varchar(300)`, `business_date`, `repaid_minor` (CHECK `0 <= repaid_minor <= principal_minor`; a stored running total, **not** an independent balance: it is changed only by the repayment insert and the repayment void, in the same transaction and under the advance's row lock, like `retail_sales.paid_minor`), `note`, `journal_entry_id`,
+`historical`, void columns. The balance is `principal_minor - repaid_minor`; the pilot's "loans with
+balance above zero" is `repaid_minor < principal_minor` and not voided. Unique `(tenant_id,
+advance_no)`. A repayment: `advance_id`, `branch_id` (the branch that receives the money, within the caller's scope, defaulting to the advance's branch; the posting is made in this branch, so its `cash_on_hand`, `mobile_money` or `bank` is debited and `owner_advances` credited there), `amount_minor > 0`, `method` (`cash`, `mobile_money`,
+`bank`), `paid_on`, `recorded_by`, `journal_entry_id`, `historical`, void columns; index
+`(tenant_id, advance_id)`. An advance with a non-voided repayment cannot be voided; voiding a
+repayment lowers `repaid_minor` under the lock. **Guard on `retail_advances`:** the guard trigger
+refuses every UPDATE except the void columns (once) and `repaid_minor`, and it refuses a
+`repaid_minor` change that is not equal to the sum of the advance's non-voided repayments after
+the change (a deferred constraint trigger on `retail_advance_repayments` compares the two), so no
+session, `bms_app` included, can set an arbitrary figure; a repayment row itself is append-only
+except its void columns. A reconciliation test asserts, after concurrent repayments and voids,
+that `repaid_minor` equals the sum of non-voided repayments for every advance, and that a direct
+UPDATE of `repaid_minor` to another value is refused.
+
+#### Cash book posting rules (FR-RET-20 to FR-RET-26)
+
+Every rule posts through `post_entry` in the transaction of its event, one entry, in the record's
+`branch_id`, `source_module = 'retail'`. A zero amount posts nothing. A void posts the reversal
+(`reverses_entry_id` set) with the key `<key>:void`. Historical rows post nothing. The opening entry is dated the day **before** the first live day (the day before the importer's first live date, default the import day), so the first live day's `opening_minor` equals the carried balance and the opening is not an `other_movements_minor` of that day.
+
+| Event | Debit | Credit | Idempotency key |
+|---|---|---|---|
+| Daily savings | `savings_reserve` | `cash_on_hand` | `retail.savings:<id>` |
+| Cash banked | `bank` | `cash_on_hand` | `retail.banking:<id>` |
+| Withdrawal from bank | `cash_on_hand` | `bank` | `retail.withdrawal:<id>` |
+| Expense | the category's expense account (`operating_expenses` when unmapped) | `cash_on_hand` | `retail.expense:<id>` |
+| Advance paid out | `owner_advances`, advance as subledger | `cash_on_hand` | `retail.advance:<id>` |
+| Repayment of an advance | `cash_on_hand`, `mobile_money` or `bank` by method | `owner_advances`, advance as subledger | `retail.advance_repayment:<id>` |
+| Opening, per branch, at import | `cash_on_hand`, `bank`, `savings_reserve` balances, and one `owner_advances` line **per outstanding advance** with that advance as subledger | `opening_balance_equity` | `retail.cash_opening:<branch>` |
+
+#### Derived figures (read model, no table)
+
+For a branch and a business date, in the tenant's zone:
+
+- **Cash takings** = sum of `retail_sales.total_minor` where `payment_method = 'cash'` and
+  `sale_date` is the date (a sale voided later is counted here too, on its own day), plus
+  `retail_sale_payments.amount_minor` where `method = 'cash'` and `paid_on` is the date. Credit,
+  mobile money and bank sales are not cash takings (open question 2). A credit sale with payments
+  cannot be voided (`sale_has_payments`), so payments never need a void line.
+- **One void rule.** Every cash book record posts on its own `business_date` (which may be earlier
+  than `created_at` for a back-dated record) and counts there whether or not it is voided later;
+  its reversal posts on the **void date**, the business date of `voided_at` in the tenant's zone,
+  and shows as a separate voids line on that day. A void is never back-dated onto the record's day:
+  the ledger holds the record on its day and the reversal on the void day, and closing must equal
+  the ledger at the end of each day. A record voided the day it is dated nets to zero. The lines
+  are `cash_sale_voids_minor` (sum of `total_minor` of cash sales whose void falls on the date),
+  `savings_voids_minor`, `expense_voids_minor`, `advance_voids_minor`, `banking_voids_minor`,
+  `repayment_voids_minor` and `withdrawal_voids_minor` (each the sum of the amounts of records of
+  that kind voided on the date; a repayment void counts only for a cash repayment in the cash
+  movement).
+- **Cash purchases** = per branch, the amount of the entry `retail.purchase:<id>:<branch>` (the
+  branch's quantities times the line costs, rounded per branch) of each purchase whose
+  `payment_method = 'cash'` and `purchased_on` is the date; for a historical purchase the same
+  amount worked from its movements. Bank and credit purchases are not cash. Cash restocks credit
+  `cash_on_hand` (ADR-020 decision 7), so they leave the till.
+- **Cash expected** (`cash_expected_minor`, what a caller without `retail.profit.read` sees) = cash takings, less cash sale voids, less cash expenses and advances paid out, plus cash repayments received, plus `expense_voids_minor` and `advance_voids_minor`, less `repayment_voids_minor`: it **excludes cash purchases and savings**, so it carries no cost and no profit.
+- **Expected to bank** = cash takings, less cash sale voids, less cash purchases, less savings,
+  less cash expenses, less advances paid out, plus cash repayments received (each by its own
+  `business_date`, voided or not), plus `savings_voids_minor`, `expense_voids_minor` and
+  `advance_voids_minor`, less `repayment_voids_minor` (all of the void date). A banking or
+  withdrawal void moves the banked or withdrawn line, not the expected amount. It is computed from
+  the rows and the same query serves the form, the snapshot `expected_minor` and the reports.
+- **Difference** = sum of `amount_minor` banked for the date, less `banking_voids_minor` of the date, less expected, and the flag
+  from the tenant tolerance. **Running unbanked** = cumulative sum of (expected less banked) over the
+  branch's **live** days, starting at the first live day (the day after the cash opening journal)
+  with nothing carried in. Imported (historical) days are listed separately in the banking report,
+  with their own expected, banked and difference, and are excluded from `unbanked_running_minor`:
+  the pilot's expected figure was virtual and often wrong, and its drift must not follow the shop
+  forever.
+- **Daily cash summary closing** = opening plus every listed movement; it is compared with the
+  ledger's `cash_on_hand` for the branch on that date (`LedgerAccounts.balanceByBranch`), and the
+  remainder is reported as `other_movements_minor`. Imported days have no journals, so they carry
+  `ledger_basis: false` and no opening or closing.
+- **Savings suggestion** = daily profit (section 6.11.3) times `retail.cashbook.savings_rate_bp`
+  (tenant setting, default 5000), rounded half up per branch and day.
+
+Tenant settings added (chapter 6 `tenant_settings`, default if unset): `retail.cashbook.savings_rate_bp`
+(5000) and `retail.cashbook.tolerance_minor` (0).
+
+**Import references.** `retail_import_refs.source_file` gains the values `savings`, `expenses`,
+`banking`, `withdrawals`, `advances`, `advance_payments` and `cash_opening` (the CHECK is widened in
+the cash book migration); the key `(tenant_id, source_file, source_ref)` is unchanged.
+
+
+## 6.12 Performance and indexing (issue #107, ADR-028)
+
+Measured with `scripts/db-bench`: a throwaway PostgreSQL 17 container holding 25 times the staging
+data (50 tenants of mixed size, one large retail tenant with 40 percent of the retail rows; 500,000
+sales, 1.5 million sale lines, 1.6 million stock movements, 2.1 million audit rows; 3.6 GB), every
+hot query of the code taken as `bms_app` with row-level security on, under the staging settings
+(176 MB, one CPU, 48 MB `shared_buffers`) and the production ones. ADR-028 has the before and after
+table.
+
+**Index rules.**
+
+- Every index of a tenant-owned table leads with `tenant_id`: the policy's
+  `tenant_id = current_setting(...)` is then an index condition, evaluated once per scan.
+- Then the equality columns, then the range or sort column, matching the query's `ORDER BY` for a
+  keyset list, so a page reads its rows and stops (`(tenant_id, created_at, id)` for the sales and
+  loans lists).
+- Only leakproof predicates become index conditions under the policy (section 6.3.2). A search by
+  `ILIKE` or trigram similarity runs as a filter over the tenant's rows; that is fine at the sizes
+  measured (product search 4 to 6 ms, member search 19 ms, duplicate check 121 ms on the staging
+  settings at 25 times the data) and is the first thing to revisit if a tenant grows far beyond.
+- Reports that aggregate many rows read a covering index (`INCLUDE`) instead of the heap: stock
+  movements per branch and product, sale line totals per sale, journal line amounts per account.
+  Append-only tables are vacuumed by insert-driven autovacuum, which keeps the visibility map set
+  so these stay index-only scans.
+- No index on a column that every hot update changes; free space (`fillfactor`) on the one table
+  updated on every sale (`retail_stock_balances`). `retail_sales`, `idempotency_keys` and
+  `tenant_sequences` were measured at 100 percent HOT updates already and keep the default.
+- An index no query uses is dropped (V26 dropped five), and a new one is added only with a plan
+  that shows it used.
+
+**Query rules.** A list loads the children of a page in one statement (`IN (...)` over the page's
+ids), never one statement per row (sales, transfers and purchases, V26 release). A date filter on a
+timestamp keeps an instant range next to any local-date expression so the index applies. Lists are
+keyset paginated and never count; reports are bounded by their date range and branch filter.
+
+**Not done, with the reason.** No pre-aggregated profit or valuation table: the year profit report
+takes 472 ms at 25 times the data on the staging settings, well inside a report's budget. No JSON
+indexes: no query filters on a JSON column. No extended statistics: measured without effect once
+the covering index exists. JIT and parallel query keep their defaults: no measurable difference on
+the staging settings. `notification_outbox` (V23, #89) merged after these measurements and was not
+measured; its claim reads the partial index on pending rows. `notifications` and
+`lending_schedule_items` do not exist yet; their indexes follow the same rules and are measured when
+they arrive.
+
+**Connections.** Every pool connection starts with `statement_timeout` and
+`idle_in_transaction_session_timeout` of 60 s (`BMS_DB_STATEMENT_TIMEOUT`,
+`BMS_DB_IDLE_IN_TRANSACTION_TIMEOUT`). Pool sizes and server settings: chapter 9 and
+`docs/runbooks/database-tuning.md`; health checks: `docs/runbooks/database-health-check.md`.

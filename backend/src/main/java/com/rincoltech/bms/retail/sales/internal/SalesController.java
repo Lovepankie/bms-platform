@@ -11,6 +11,7 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.PaymentResult;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Sale;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SalePage;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.UpdateCustomerRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.VoidRequest;
 import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +25,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -69,9 +71,27 @@ class SalesController {
             @RequestParam(name = "from", required = false) LocalDate from,
             @RequestParam(name = "to", required = false) LocalDate to,
             @RequestParam(name = "customer_id", required = false) UUID customerId,
+            @RequestParam(name = "payment_method", required = false) String paymentMethod,
+            @RequestParam(name = "product_id", required = false) UUID productId,
+            @RequestParam(name = "buyer", required = false) String buyer,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "owing", required = false) String owing,
+            @RequestParam(name = "newest_first", required = false, defaultValue = "false") boolean newestFirst,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.list(branchIds, from, to, customerId, limit, cursor);
+        return service.list(
+                branchIds,
+                from,
+                to,
+                customerId,
+                paymentMethod,
+                productId,
+                buyer,
+                status,
+                owing,
+                newestFirst,
+                limit,
+                cursor);
     }
 
     @GetMapping("/sales/{sale_id}")
@@ -117,15 +137,30 @@ class SalesController {
     @Operation(summary = "Credit buyers", operationId = "listRetailCustomers")
     CustomerList customers(
             @RequestParam(name = "query", required = false) String query,
-            @RequestParam(name = "limit", required = false) Integer limit) {
-        return service.customers(query, limit);
+            @RequestParam(name = "limit", required = false) Integer limit,
+            @RequestParam(name = "cursor", required = false) String cursor) {
+        return service.customers(query, limit, cursor);
     }
 
     @PostMapping("/customers")
     @RequiresPermission("retail.customer.manage")
     @Operation(summary = "Add a credit buyer (FR-RET-05)", operationId = "createRetailCustomer")
     ResponseEntity<Customer> createCustomer(@Valid @RequestBody CustomerRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createCustomer(request));
+        Customer created = service.createCustomer(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .eTag(String.valueOf(created.version()))
+                .body(created);
+    }
+
+    @PatchMapping("/customers/{customer_id}")
+    @RequiresPermission("retail.customer.manage")
+    @Operation(summary = "Edit a credit buyer's name or contact (#146)", operationId = "updateRetailCustomer")
+    ResponseEntity<Customer> updateCustomer(
+            @PathVariable("customer_id") UUID id,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody UpdateCustomerRequest request) {
+        Customer c = service.updateCustomer(id, ifMatch, request);
+        return ResponseEntity.ok().eTag(String.valueOf(c.version())).body(c);
     }
 
     @GetMapping("/customers/{customer_id}/balance")
