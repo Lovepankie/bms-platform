@@ -209,23 +209,41 @@ class ReportsService {
             throw ApiException.validation(List.of(
                     new FieldProblem("from", "invalid", "from must be on or before to, at most 366 days apart.")));
         }
+        Map<String, long[]> days = new java.util.TreeMap<>();
+        Map<String, UUID> branchOf = new LinkedHashMap<>();
+        Map<String, LocalDate> dateOf = new LinkedHashMap<>();
+        for (DayFigures d : repo.daily(filter, start, end)) {
+            long[] f = figures(days, branchOf, dateOf, d.branchId(), d.date());
+            f[0] = d.sales();
+            f[1] = d.costOfSales();
+            f[2] = d.usageCost();
+        }
+        for (ReportsRepository.Difference d : repo.stocktakeDifferences(filter, start, end)) {
+            long[] f = figures(days, branchOf, dateOf, d.branchId(), d.date());
+            long value = Quantities.value(d.qty().abs(), d.costMinor());
+            f[3] = Math.addExact(f[3], d.qty().signum() < 0 ? -value : value);
+        }
         List<ProfitRow> rows = new ArrayList<>();
         long sales = 0;
         long costOfSales = 0;
         long usage = 0;
-        for (DayFigures d : repo.daily(filter, start, end)) {
-            long gross = Math.subtractExact(d.sales(), d.costOfSales());
+        long difference = 0;
+        for (Map.Entry<String, long[]> e : days.entrySet()) {
+            long[] f = e.getValue();
+            long gross = Math.subtractExact(f[0], f[1]);
             rows.add(new ProfitRow(
-                    d.branchId(),
-                    d.date(),
-                    d.sales(),
-                    d.costOfSales(),
+                    branchOf.get(e.getKey()),
+                    dateOf.get(e.getKey()),
+                    f[0],
+                    f[1],
                     gross,
-                    d.usageCost(),
-                    Math.subtractExact(gross, d.usageCost())));
-            sales = Math.addExact(sales, d.sales());
-            costOfSales = Math.addExact(costOfSales, d.costOfSales());
-            usage = Math.addExact(usage, d.usageCost());
+                    f[2],
+                    f[3],
+                    Math.addExact(Math.subtractExact(gross, f[2]), f[3])));
+            sales = Math.addExact(sales, f[0]);
+            costOfSales = Math.addExact(costOfSales, f[1]);
+            usage = Math.addExact(usage, f[2]);
+            difference = Math.addExact(difference, f[3]);
         }
         return new DailyProfit(
                 start,
@@ -235,6 +253,20 @@ class ReportsService {
                 sales,
                 costOfSales,
                 usage,
-                Math.subtractExact(Math.subtractExact(sales, costOfSales), usage));
+                difference,
+                Math.addExact(Math.subtractExact(Math.subtractExact(sales, costOfSales), usage), difference));
+    }
+
+    /** One row of sales, cost of sales, usage and stock-take difference per day then branch (hex order, as the database sorts uuids). */
+    private static long[] figures(
+            Map<String, long[]> days,
+            Map<String, UUID> branchOf,
+            Map<String, LocalDate> dateOf,
+            UUID branch,
+            LocalDate date) {
+        String key = date + "|" + branch;
+        branchOf.putIfAbsent(key, branch);
+        dateOf.putIfAbsent(key, date);
+        return days.computeIfAbsent(key, k -> new long[4]);
     }
 }

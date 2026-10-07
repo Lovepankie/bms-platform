@@ -2993,12 +2993,25 @@
       },
       "RetailCategory" : {
         "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"
           },
           "name" : {
             "type" : "string"
+          },
+          "product_count" : {
+            "description" : "Products (active or not) that use this category",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "description" : "Send as If-Match when updating",
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -3022,8 +3035,26 @@
         },
         "required" : [ "name" ]
       },
+      "RetailCategoryUpdate" : {
+        "description" : "Omitted fields are unchanged; a category is never deleted",
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "maxLength" : 100,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        }
+      },
       "RetailCustomer" : {
         "properties" : {
+          "balance_minor" : {
+            "description" : "In the list only: owed on credit sales in the caller's branch scope",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "contact" : {
             "type" : "string"
           },
@@ -3037,6 +3068,11 @@
           },
           "name" : {
             "type" : "string"
+          },
+          "version" : {
+            "description" : "Send as If-Match when updating",
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -3069,6 +3105,9 @@
               "$ref" : "#/components/schemas/RetailCustomer"
             },
             "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
           }
         }
       },
@@ -3086,6 +3125,21 @@
           }
         },
         "required" : [ "name" ]
+      },
+      "RetailCustomerUpdate" : {
+        "description" : "Omitted fields are unchanged; an empty contact clears it",
+        "properties" : {
+          "contact" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        }
       },
       "RetailDailyProfit" : {
         "properties" : {
@@ -3111,6 +3165,11 @@
             "type" : "array"
           },
           "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "stocktake_difference_minor" : {
+            "description" : "Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor",
             "format" : "int64",
             "type" : "integer"
           },
@@ -3147,6 +3206,11 @@
             "type" : "integer"
           },
           "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "stocktake_difference_minor" : {
+            "description" : "Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor",
             "format" : "int64",
             "type" : "integer"
           },
@@ -3415,6 +3479,81 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        }
+      },
+      "RetailProductImportRequest" : {
+        "properties" : {
+          "csv" : {
+            "description" : "The CSV text: a header row, then one item per row. Columns code, description, category, unit, sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated.",
+            "maxLength" : 1000000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "csv" ]
+      },
+      "RetailProductImportResult" : {
+        "properties" : {
+          "added" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "categories_created" : {
+            "description" : "Categories that are new (would be created on a dry run, were created on an apply)",
+            "items" : {
+              "description" : "Categories that are new (would be created on a dry run, were created on an apply)",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "dry_run" : {
+            "type" : "boolean"
+          },
+          "errors" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailProductImportRow"
+            },
+            "type" : "array"
+          },
+          "rows_read" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "skipped" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "units_created" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailProductImportRow" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "line" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "outcome" : {
+            "description" : "added, skipped (the code exists already or repeats in the file) or error",
+            "type" : "string"
           }
         }
       },
@@ -4104,6 +4243,11 @@
           },
           "name" : {
             "type" : "string"
+          },
+          "version" : {
+            "description" : "Send as If-Match when updating",
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -4131,6 +4275,24 @@
           }
         },
         "required" : [ "name" ]
+      },
+      "RetailSupplierUpdate" : {
+        "description" : "Omitted fields are unchanged; an empty contact clears it",
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "contact" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        }
       },
       "RetailTransfer" : {
         "properties" : {
@@ -4294,12 +4456,25 @@
       },
       "RetailUnit" : {
         "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"
           },
           "name" : {
             "type" : "string"
+          },
+          "product_count" : {
+            "description" : "Products (active or not) that use this unit",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "description" : "Send as If-Match when updating",
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -4322,6 +4497,19 @@
           }
         },
         "required" : [ "name" ]
+      },
+      "RetailUnitUpdate" : {
+        "description" : "Omitted fields are unchanged; a unit is never deleted",
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "maxLength" : 30,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        }
       },
       "RetailUsageLine" : {
         "properties" : {
@@ -8824,6 +9012,51 @@
         "tags" : [ "retail-catalogue" ]
       }
     },
+    "/api/v1/retail/categories/{category_id}" : {
+      "patch" : {
+        "operationId" : "updateRetailCategory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "category_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCategoryUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCategory"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rename or deactivate a category (#146); never deleted",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
     "/api/v1/retail/customers" : {
       "get" : {
         "operationId" : "listRetailCustomers",
@@ -8841,6 +9074,13 @@
           "schema" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -8883,6 +9123,51 @@
           }
         },
         "summary" : "Add a credit buyer (FR-RET-05)",
+        "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/customers/{customer_id}" : {
+      "patch" : {
+        "operationId" : "updateRetailCustomer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "customer_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCustomerUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCustomer"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit a credit buyer's name or contact (#146)",
         "tags" : [ "retail-sales" ]
       }
     },
@@ -9003,6 +9288,44 @@
           }
         },
         "summary" : "Create a product with its first prices (FR-RET-01)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/products/import" : {
+      "post" : {
+        "operationId" : "importRetailProducts",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "dry_run",
+          "required" : false,
+          "schema" : {
+            "default" : true,
+            "type" : "boolean"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailProductImportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailProductImportResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Import items from CSV for a new client: dry run first, then apply; administrators only (#146)",
         "tags" : [ "retail-catalogue" ]
       }
     },
@@ -9955,6 +10278,51 @@
         "tags" : [ "retail-purchasing" ]
       }
     },
+    "/api/v1/retail/suppliers/{supplier_id}" : {
+      "patch" : {
+        "operationId" : "updateRetailSupplier",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "supplier_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailSupplierUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplier"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit or deactivate a supplier (#146); never deleted",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
     "/api/v1/retail/transfers" : {
       "get" : {
         "operationId" : "listRetailTransfers",
@@ -10169,6 +10537,51 @@
           }
         },
         "summary" : "Create a unit of measure (FR-RET-01)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/units/{unit_id}" : {
+      "patch" : {
+        "operationId" : "updateRetailUnit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "unit_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailUnitUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailUnit"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rename or deactivate a unit of measure (#146); never deleted",
         "tags" : [ "retail-catalogue" ]
       }
     },

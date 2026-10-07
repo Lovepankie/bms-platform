@@ -13,6 +13,9 @@ final class ReportsApi {
     static final String PERCENT =
             "; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero";
 
+    static final String DIFFERENCE =
+            "Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor";
+
     private ReportsApi() {}
 
     @Schema(name = "RetailValuationRow")
@@ -118,6 +121,7 @@ final class ReportsApi {
             long costOfSalesMinor,
             long grossProfitMinor,
             long usageCostMinor,
+            @Schema(description = DIFFERENCE) long stocktakeDifferenceMinor,
             long profitMinor) {}
 
     @Schema(name = "RetailDailyProfit")
@@ -129,5 +133,6 @@ final class ReportsApi {
             long salesMinor,
             long costOfSalesMinor,
             long usageCostMinor,
+            @Schema(description = DIFFERENCE) long stocktakeDifferenceMinor,
             long profitMinor) {}
 }

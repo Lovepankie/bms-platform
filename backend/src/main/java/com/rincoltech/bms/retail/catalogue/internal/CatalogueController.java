@@ -5,6 +5,8 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Category;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.CategoryList;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.CategoryRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.CreateProductRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ImportRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ImportResult;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceEditRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceHistory;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Product;
@@ -12,7 +14,9 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ProductPage;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Unit;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitList;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateCategoryRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateProductRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateUnitRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -38,9 +42,11 @@ import org.springframework.web.bind.annotation.RestController;
 class CatalogueController {
 
     private final CatalogueService service;
+    private final ProductImportService importer;
 
-    CatalogueController(CatalogueService service) {
+    CatalogueController(CatalogueService service, ProductImportService importer) {
         this.service = service;
+        this.importer = importer;
     }
 
     @GetMapping("/categories")
@@ -54,7 +60,34 @@ class CatalogueController {
     @RequiresPermission("retail.catalogue.manage")
     @Operation(summary = "Create a product category (FR-RET-01)", operationId = "createRetailCategory")
     ResponseEntity<Category> createCategory(@Valid @RequestBody CategoryRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createCategory(request));
+        Category created = service.createCategory(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .eTag(String.valueOf(created.version()))
+                .body(created);
+    }
+
+    @PatchMapping("/categories/{category_id}")
+    @RequiresPermission("retail.catalogue.manage")
+    @Operation(summary = "Rename or deactivate a category (#146); never deleted", operationId = "updateRetailCategory")
+    ResponseEntity<Category> updateCategory(
+            @PathVariable("category_id") UUID id,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody UpdateCategoryRequest request) {
+        Category c = service.updateCategory(id, ifMatch, request);
+        return ResponseEntity.ok().eTag(String.valueOf(c.version())).body(c);
+    }
+
+    @PatchMapping("/units/{unit_id}")
+    @RequiresPermission("retail.catalogue.manage")
+    @Operation(
+            summary = "Rename or deactivate a unit of measure (#146); never deleted",
+            operationId = "updateRetailUnit")
+    ResponseEntity<Unit> updateUnit(
+            @PathVariable("unit_id") UUID id,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody UpdateUnitRequest request) {
+        Unit u = service.updateUnit(id, ifMatch, request);
+        return ResponseEntity.ok().eTag(String.valueOf(u.version())).body(u);
     }
 
     @GetMapping("/units")
@@ -68,7 +101,10 @@ class CatalogueController {
     @RequiresPermission("retail.catalogue.manage")
     @Operation(summary = "Create a unit of measure (FR-RET-01)", operationId = "createRetailUnit")
     ResponseEntity<Unit> createUnit(@Valid @RequestBody UnitRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createUnit(request));
+        Unit created = service.createUnit(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .eTag(String.valueOf(created.version()))
+                .body(created);
     }
 
     @GetMapping("/products")
@@ -94,6 +130,17 @@ class CatalogueController {
         return ResponseEntity.created(URI.create("/api/v1/retail/products/" + created.id()))
                 .eTag(String.valueOf(created.version()))
                 .body(created);
+    }
+
+    @PostMapping("/products/import")
+    @RequiresPermission("retail.catalogue.manage")
+    @Operation(
+            summary = "Import items from CSV for a new client: dry run first, then apply; administrators only (#146)",
+            operationId = "importRetailProducts")
+    ImportResult importProducts(
+            @RequestParam(name = "dry_run", required = false, defaultValue = "true") boolean dryRun,
+            @Valid @RequestBody ImportRequest request) {
+        return importer.run(request.csv(), dryRun);
     }
 
     @GetMapping("/products/{product_id}")

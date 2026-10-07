@@ -61,6 +61,13 @@ const retailTransferRoute = retailScreen('/transfer').lazy(() => import('../area
 const retailTransfersRoute = retailScreen('/transfers').lazy(() => import('../areas/staff/retail/transfers').then((m) => m.Route));
 const retailValuationRoute = retailScreen('/valuation').lazy(() => import('../areas/staff/retail/profit').then((m) => m.ValuationRoute));
 const retailProfitRoute = retailScreen('/profit').lazy(() => import('../areas/staff/retail/profit').then((m) => m.Route));
+const retailCatalogueRoute = retailScreen('/catalogue').lazy(() => import('../areas/staff/retail/catalogue').then((m) => m.Route));
+const retailProductsRoute = retailScreen('/catalogue/products').lazy(() => import('../areas/staff/retail/catalogue-products').then((m) => m.ProductsRoute));
+const retailCategoriesRoute = retailScreen('/catalogue/categories').lazy(() => import('../areas/staff/retail/catalogue-lists').then((m) => m.CategoriesRoute));
+const retailUnitsRoute = retailScreen('/catalogue/units').lazy(() => import('../areas/staff/retail/catalogue-lists').then((m) => m.UnitsRoute));
+const retailSuppliersRoute = retailScreen('/catalogue/suppliers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.SuppliersRoute));
+const retailImportRoute = retailScreen('/catalogue/import').lazy(() => import('../areas/staff/retail/catalogue-import').then((m) => m.ImportRoute));
+const retailBuyersRoute = retailScreen('/catalogue/buyers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.BuyersRoute));
 
 // The living style page (#106): every component and illustration, for development builds and the
 // platform host only (the page itself checks); a chunk of its own, so no tenant downloads it.
@@ -120,6 +127,13 @@ export const router = createRouter({
         retailTransfersRoute,
         retailValuationRoute,
         retailProfitRoute,
+        retailCatalogueRoute,
+        retailProductsRoute,
+        retailCategoriesRoute,
+        retailUnitsRoute,
+        retailSuppliersRoute,
+        retailBuyersRoute,
+        retailImportRoute,
       ])]),
     memberRoute,
     styleRoute,

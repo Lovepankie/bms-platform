@@ -1431,6 +1431,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/categories/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename or deactivate a category (#146); never deleted */
+        patch: operations["updateRetailCategory"];
+        trace?: never;
+    };
     "/api/v1/retail/customers": {
         parameters: {
             query?: never;
@@ -1447,6 +1464,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/customers/{customer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a credit buyer's name or contact (#146) */
+        patch: operations["updateRetailCustomer"];
         trace?: never;
     };
     "/api/v1/retail/customers/{customer_id}/balance": {
@@ -1478,6 +1512,23 @@ export interface paths {
         put?: never;
         /** Create a product with its first prices (FR-RET-01) */
         post: operations["createRetailProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import items from CSV for a new client: dry run first, then apply; administrators only (#146) */
+        post: operations["importRetailProducts"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1778,6 +1829,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/suppliers/{supplier_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit or deactivate a supplier (#146); never deleted */
+        patch: operations["updateRetailSupplier"];
+        trace?: never;
+    };
     "/api/v1/retail/transfers": {
         parameters: {
             query?: never;
@@ -1846,6 +1914,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/units/{unit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename or deactivate a unit of measure (#146); never deleted */
+        patch: operations["updateRetailUnit"];
         trace?: never;
     };
     "/api/v1/retail/usage": {
@@ -3213,9 +3298,20 @@ export interface components {
             qty: string;
         };
         RetailCategory: {
+            active?: boolean;
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: int32
+             * @description Products (active or not) that use this category
+             */
+            product_count?: number;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
         };
         RetailCategoryList: {
             items?: components["schemas"]["RetailCategory"][];
@@ -3223,13 +3319,28 @@ export interface components {
         RetailCategoryRequest: {
             name: string;
         };
+        /** @description Omitted fields are unchanged; a category is never deleted */
+        RetailCategoryUpdate: {
+            active?: boolean;
+            name?: string;
+        };
         RetailCustomer: {
+            /**
+             * Format: int64
+             * @description In the list only: owed on credit sales in the caller's branch scope
+             */
+            balance_minor?: number;
             contact?: string;
             /** Format: date-time */
             created_at?: string;
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
         };
         /** @description Credit sales in the caller's branch scope */
         RetailCustomerBalance: {
@@ -3242,10 +3353,16 @@ export interface components {
         };
         RetailCustomerList: {
             items?: components["schemas"]["RetailCustomer"][];
+            next_cursor?: string;
         };
         RetailCustomerRequest: {
             contact?: string;
             name: string;
+        };
+        /** @description Omitted fields are unchanged; an empty contact clears it */
+        RetailCustomerUpdate: {
+            contact?: string;
+            name?: string;
         };
         RetailDailyProfit: {
             /** Format: int64 */
@@ -3258,6 +3375,11 @@ export interface components {
             rows?: components["schemas"]["RetailDailyProfitRow"][];
             /** Format: int64 */
             sales_minor?: number;
+            /**
+             * Format: int64
+             * @description Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor
+             */
+            stocktake_difference_minor?: number;
             /** Format: date */
             to?: string;
             /** Format: int64 */
@@ -3276,6 +3398,11 @@ export interface components {
             profit_minor?: number;
             /** Format: int64 */
             sales_minor?: number;
+            /**
+             * Format: int64
+             * @description Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor
+             */
+            stocktake_difference_minor?: number;
             /** Format: int64 */
             usage_cost_minor?: number;
         };
@@ -3403,6 +3530,34 @@ export interface components {
             updated_at?: string;
             /** Format: int32 */
             version?: number;
+        };
+        RetailProductImportRequest: {
+            /** @description The CSV text: a header row, then one item per row. Columns code, description, category, unit, sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated. */
+            csv: string;
+        };
+        RetailProductImportResult: {
+            /** Format: int32 */
+            added?: number;
+            /** @description Categories that are new (would be created on a dry run, were created on an apply) */
+            categories_created?: string[];
+            dry_run?: boolean;
+            /** Format: int32 */
+            errors?: number;
+            rows?: components["schemas"]["RetailProductImportRow"][];
+            /** Format: int32 */
+            rows_read?: number;
+            /** Format: int32 */
+            skipped?: number;
+            units_created?: string[];
+        };
+        RetailProductImportRow: {
+            code?: string;
+            description?: string;
+            /** Format: int32 */
+            line?: number;
+            message?: string;
+            /** @description added, skipped (the code exists already or repeats in the file) or error */
+            outcome?: string;
         };
         RetailProductPage: {
             items?: components["schemas"]["RetailProduct"][];
@@ -3721,6 +3876,11 @@ export interface components {
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
         };
         RetailSupplierList: {
             items?: components["schemas"]["RetailSupplier"][];
@@ -3728,6 +3888,12 @@ export interface components {
         RetailSupplierRequest: {
             contact?: string;
             name: string;
+        };
+        /** @description Omitted fields are unchanged; an empty contact clears it */
+        RetailSupplierUpdate: {
+            active?: boolean;
+            contact?: string;
+            name?: string;
         };
         RetailTransfer: {
             /**
@@ -3810,15 +3976,31 @@ export interface components {
             reason: string;
         };
         RetailUnit: {
+            active?: boolean;
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: int32
+             * @description Products (active or not) that use this unit
+             */
+            product_count?: number;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
         };
         RetailUnitList: {
             items?: components["schemas"]["RetailUnit"][];
         };
         RetailUnitRequest: {
             name: string;
+        };
+        /** @description Omitted fields are unchanged; a unit is never deleted */
+        RetailUnitUpdate: {
+            active?: boolean;
+            name?: string;
         };
         RetailUsageLine: {
             code?: string;
@@ -6730,11 +6912,40 @@ export interface operations {
             };
         };
     };
+    updateRetailCategory: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCategoryUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCategory"];
+                };
+            };
+        };
+    };
     listRetailCustomers: {
         parameters: {
             query?: {
                 query?: string;
                 limit?: number;
+                cursor?: string;
             };
             header?: never;
             path?: never;
@@ -6763,6 +6974,34 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RetailCustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomer"];
+                };
+            };
+        };
+    };
+    updateRetailCustomer: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCustomerUpdate"];
             };
         };
         responses: {
@@ -6846,6 +7085,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    importRetailProducts: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailProductImportRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProductImportResult"];
                 };
             };
         };
@@ -7400,6 +7665,34 @@ export interface operations {
             };
         };
     };
+    updateRetailSupplier: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                supplier_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSupplierUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplier"];
+                };
+            };
+        };
+    };
     listRetailTransfers: {
         parameters: {
             query?: {
@@ -7531,6 +7824,34 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RetailUnitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailUnit"];
+                };
+            };
+        };
+    };
+    updateRetailUnit: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                unit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailUnitUpdate"];
             };
         };
         responses: {

@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -38,15 +39,54 @@ class CatalogueRepository {
     // ---- Categories and units ------------------------------------------------------------
 
     List<Category> categories() {
-        return jdbc.sql("SELECT id, name FROM retail_categories ORDER BY lower(name), id")
-                .query((rs, n) -> new Category(rs.getObject("id", UUID.class), rs.getString("name")))
+        return jdbc.sql("""
+                        SELECT c.id, c.name, c.active, c.version, (SELECT count(*) FROM retail_products p WHERE p.category_id = c.id) AS used
+                          FROM retail_categories c ORDER BY lower(c.name), c.id
+                        """)
+                .query((rs, n) -> new Category(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("name"),
+                        rs.getBoolean("active"),
+                        rs.getInt("used"),
+                        rs.getInt("version")))
                 .list();
     }
 
     List<Unit> units() {
-        return jdbc.sql("SELECT id, name FROM retail_units ORDER BY lower(name), id")
-                .query((rs, n) -> new Unit(rs.getObject("id", UUID.class), rs.getString("name")))
+        return jdbc.sql("""
+                        SELECT u.id, u.name, u.active, u.version, (SELECT count(*) FROM retail_products p WHERE p.unit_id = u.id) AS used
+                          FROM retail_units u ORDER BY lower(u.name), u.id
+                        """)
+                .query((rs, n) -> new Unit(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("name"),
+                        rs.getBoolean("active"),
+                        rs.getInt("used"),
+                        rs.getInt("version")))
                 .list();
+    }
+
+    Optional<Category> category(UUID id) {
+        return categories().stream().filter(c -> c.id().equals(id)).findFirst();
+    }
+
+    Optional<Unit> unit(UUID id) {
+        return units().stream().filter(u -> u.id().equals(id)).findFirst();
+    }
+
+    /** Rows changed: 0 when the version moved since it was read (the predicate is the optimistic lock). */
+    int updateCategory(UUID id, String name, boolean active, int expectedVersion) {
+        return jdbc.sql(
+                        "UPDATE retail_categories SET name = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
+                .params(name, active, id, expectedVersion)
+                .update();
+    }
+
+    int updateUnit(UUID id, String name, boolean active, int expectedVersion) {
+        return jdbc.sql(
+                        "UPDATE retail_units SET name = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
+                .params(name, active, id, expectedVersion)
+                .update();
     }
 
     boolean categoryExists(UUID id) {
@@ -77,6 +117,56 @@ class CatalogueRepository {
                         INSERT INTO retail_units (id, tenant_id, name, created_by)
                         VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?)
                         """).params(id, name, createdBy).update();
+    }
+
+    /** Lower-cased name to id, for the import's lookups. */
+    Map<String, UUID> categoryIdsByName() {
+        return namesToIds("retail_categories");
+    }
+
+    Map<String, UUID> unitIdsByName() {
+        return namesToIds("retail_units");
+    }
+
+    /** Lower-cased names of switched-off categories, which an import must not add items to. */
+    Set<String> inactiveCategoryNames() {
+        return inactiveNames("retail_categories");
+    }
+
+    Set<String> inactiveUnitNames() {
+        return inactiveNames("retail_units");
+    }
+
+    private Set<String> inactiveNames(String table) {
+        return new java.util.HashSet<>(jdbc.sql("SELECT lower(name) FROM " + table + " WHERE NOT active")
+                .query(String.class)
+                .list());
+    }
+
+    /** Decimal places of a currency (UGX 0, KES 2), from the currencies table. */
+    int currencyExponent(String currency) {
+        return jdbc.sql("SELECT exponent FROM currencies WHERE code = ?")
+                .param(currency)
+                .query(Integer.class)
+                .single();
+    }
+
+    private Map<String, UUID> namesToIds(String table) {
+        Map<String, UUID> ids = new java.util.HashMap<>();
+        jdbc.sql("SELECT id, lower(name) AS n FROM " + table)
+                .query((rs, n) -> {
+                    ids.put(rs.getString("n"), rs.getObject("id", UUID.class));
+                    return 0;
+                })
+                .list();
+        return ids;
+    }
+
+    /** Every product code of the tenant, lower-cased. */
+    java.util.Set<String> productCodes() {
+        return new java.util.HashSet<>(jdbc.sql("SELECT lower(code) FROM retail_products")
+                .query(String.class)
+                .list());
     }
 
     // ---- Products ------------------------------------------------------------------------

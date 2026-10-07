@@ -9,7 +9,7 @@ import { Receipt, SaleForm } from './sale';
 import { AllBranchesList, AllBranchesTable, StockLevelFilter, StockPage, StockTable } from './stock';
 import { StocktakeReview } from './stocktake';
 import { BranchTotals, ProfitTable, ValuationTable } from './profit';
-import { RestockForm, RestockSaved } from './restock';
+import { RestockForm, RestockSaved, supplierOptions } from './restock';
 import { TransferForm, TransferSummary } from './transfer';
 import { TransferList, showDate } from './transfers';
 import { UsageForm } from './usage';
@@ -143,6 +143,16 @@ describe('restock screen', () => {
     expect(html).toMatch(/changes the cost and sell price/);
     expect(html).toContain('for="supplier"');
   });
+
+  it('offers only suppliers that are switched on, and keeps a chosen one visible', () => {
+    const all = [
+      { id: 's1', name: 'Test Supplier 01', active: true, version: 1 },
+      { id: 's2', name: 'Test Supplier 02', active: false, version: 1 },
+      { id: 's3', name: 'Test Supplier 03', version: 1 },
+    ];
+    expect(supplierOptions(all, '').map((s) => s.id)).toEqual(['s1', 's3']);
+    expect(supplierOptions(all, 's2').map((s) => s.id)).toEqual(['s1', 's2', 's3']);
+  });
 });
 
 describe('usage screen', () => {
@@ -241,6 +251,17 @@ describe('valuation and profit', () => {
     const html = renderToString(<ProfitTable report={report} />);
     expect(html).toContain('(loss)');
     expect(html).toContain('-UGX 2,500');
+  });
+
+  it('shows the stock-take difference as its own column, minus for a loss (#121)', () => {
+    const report: DailyProfit = {
+      from: '2026-10-05', to: '2026-10-05', currency: 'UGX', sales_minor: 3000, cost_of_sales_minor: 1000, usage_cost_minor: 0, stocktake_difference_minor: -600, profit_minor: 1400,
+      rows: [{ branch_id: branch, date: '2026-10-05', sales_minor: 3000, cost_of_sales_minor: 1000, gross_profit_minor: 2000, usage_cost_minor: 0, stocktake_difference_minor: -600, profit_minor: 1400 }],
+    };
+    const html = renderToString(<ProfitTable report={report} />);
+    expect(html).toContain('Stock-take<br/>difference');
+    expect(html).toContain('-UGX 600');
+    expect(html).toContain('UGX 1,400');
   });
 });
 

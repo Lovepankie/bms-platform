@@ -120,11 +120,27 @@ final class SalesApi {
             @NotBlank @Size(max = 200) String name,
             @Size(max = 100) String contact) {}
 
+    @Schema(name = "RetailCustomerUpdate", description = "Omitted fields are unchanged; an empty contact clears it")
+    record UpdateCustomerRequest(
+            @Size(min = 1, max = 200) String name,
+            @Size(max = 100) String contact) {}
+
     @Schema(name = "RetailCustomer")
-    record Customer(UUID id, String name, String contact, Instant createdAt) {}
+    record Customer(
+            UUID id,
+            String name,
+            String contact,
+            Instant createdAt,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "In the list only: owed on credit sales in the caller's branch scope")
+            Long balanceMinor,
+
+            @Schema(description = "Send as If-Match when updating")
+            int version) {}
 
     @Schema(name = "RetailCustomerList")
-    record CustomerList(List<Customer> items) {}
+    record CustomerList(List<Customer> items, String nextCursor) {}
 
     @Schema(name = "RetailOpenSale")
     record OpenSale(

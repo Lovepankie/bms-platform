@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { RETAIL_CURRENCY, businessToday, retail, type Product, type Purchase, type PurchasePayment, type PurchaseRequest } from '../../../api/retail';
+import { RETAIL_CURRENCY, businessToday, retail, type Product, type Supplier, type Purchase, type PurchasePayment, type PurchaseRequest } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
 import { parseMinor } from '../../../components/money';
 import { useStaff } from '../context';
@@ -79,6 +79,11 @@ export interface RestockContext {
   before: Record<string, { sell?: number; cost?: number }>;
 }
 
+/** Suppliers a restock may choose: switched-off ones are left out, except one already chosen on the draft, shown with a note. */
+export function supplierOptions(all: Supplier[], chosenId: string): Supplier[] {
+  return all.filter((s) => s.active !== false || s.id === chosenId);
+}
+
 export function RestockForm({ onSaved }: { onSaved?: (p: Purchase, context: RestockContext) => void }) {
   const { me, branch } = useStaff();
   const canProfit = useProfitAccess();
@@ -139,8 +144,8 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase, context: Rest
       <label htmlFor="supplier">Supplier</label>
       <select id="supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
         <option value="">No supplier</option>
-        {(suppliers.data ?? []).map((s) => (
-          <option key={s.id} value={s.id}>{s.name}</option>
+        {supplierOptions(suppliers.data ?? [], supplierId).map((s) => (
+          <option key={s.id} value={s.id}>{s.active === false ? `${s.name} (switched off)` : s.name}</option>
         ))}
       </select>
       {supplierId === '' && (
