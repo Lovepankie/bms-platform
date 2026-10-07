@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -120,6 +121,29 @@ class CatalogueRepository {
 
     Map<String, UUID> unitIdsByName() {
         return namesToIds("retail_units");
+    }
+
+    /** Lower-cased names of switched-off categories, which an import must not add items to. */
+    Set<String> inactiveCategoryNames() {
+        return inactiveNames("retail_categories");
+    }
+
+    Set<String> inactiveUnitNames() {
+        return inactiveNames("retail_units");
+    }
+
+    private Set<String> inactiveNames(String table) {
+        return new java.util.HashSet<>(jdbc.sql("SELECT lower(name) FROM " + table + " WHERE NOT active")
+                .query(String.class)
+                .list());
+    }
+
+    /** Decimal places of a currency (UGX 0, KES 2), from the currencies table. */
+    int currencyExponent(String currency) {
+        return jdbc.sql("SELECT exponent FROM currencies WHERE code = ?")
+                .param(currency)
+                .query(Integer.class)
+                .single();
     }
 
     private Map<String, UUID> namesToIds(String table) {

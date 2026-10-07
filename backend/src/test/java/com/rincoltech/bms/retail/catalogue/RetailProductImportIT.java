@@ -8,6 +8,7 @@ import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.retail.RetailTestSupport;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -174,5 +175,114 @@ class RetailProductImportIT extends IntegrationTest {
                 ADMINISTRATOR);
         assertThat(r.getBody().get("added").asInt()).isEqualTo(1);
         assertThat(r.getBody().get("skipped").asInt()).isZero();
+    }
+
+    @Test
+    void twoSpellingsOfOneNewCategoryAndUnitAreOneRowInTheDryRunAndTheApply() {
+        String csv = HEADER + "\nIMP-1,Test cola,Drinks,Crate,100\nIMP-2,Test juice,drinks ,crate,200\n";
+        JsonNode dry = run(csv, true, ADMINISTRATOR).getBody();
+        assertThat(dry.get("errors").asInt()).isZero();
+        assertThat(dry.get("categories_created")).hasSize(1);
+        assertThat(dry.get("categories_created").get(0).asString()).isEqualTo("Drinks");
+        assertThat(dry.get("units_created")).hasSize(1);
+        assertThat(dry.get("units_created").get(0).asString()).isEqualTo("Crate");
+
+        ResponseEntity<JsonNode> applied = run(csv, false, ADMINISTRATOR);
+        assertThat(applied.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(applied.getBody().get("added").asInt()).isEqualTo(2);
+        assertThat(applied.getBody().get("categories_created")).hasSize(1);
+        assertThat(api.get("/categories", ADMIN).getBody().get("items")).hasSize(1);
+        assertThat(api.get("/units", ADMIN).getBody().get("items")).hasSize(1);
+        assertThat(products()).isEqualTo(2);
+    }
+
+    @Test
+    void anExistingCategoryAndUnitAreMatchedIgnoringCase() {
+        api.category("Drinks");
+        api.unit("Crate");
+        String csv = HEADER + "\nIMP-1,Test cola,DRINKS,crate,100\n";
+        JsonNode dry = run(csv, true, ADMINISTRATOR).getBody();
+        assertThat(dry.get("categories_created")).isEmpty();
+        assertThat(dry.get("units_created")).isEmpty();
+        assertThat(run(csv, false, ADMINISTRATOR).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(api.get("/categories", ADMIN).getBody().get("items")).hasSize(1);
+        assertThat(api.get("/units", ADMIN).getBody().get("items")).hasSize(1);
+    }
+
+    @Test
+    void aSwitchedOffCategoryOrUnitIsAnErrorOnThatRowInTheDryRunAndTheApply() {
+        UUID category = api.category("Old Drinks");
+        UUID unit = api.unit("Old Crate");
+        TestDatabase.owner()
+                .sql("UPDATE retail_categories SET active = false WHERE id = ?")
+                .param(category)
+                .update();
+        TestDatabase.owner()
+                .sql("UPDATE retail_units SET active = false WHERE id = ?")
+                .param(unit)
+                .update();
+        String csv = HEADER + "\nIMP-1,Test cola,old drinks,piece,100\nIMP-2,Test juice,Cables,OLD CRATE,200\n"
+                + "IMP-3,Test fine,Cables,piece,300\n";
+        JsonNode dry = run(csv, true, ADMINISTRATOR).getBody();
+        assertThat(dry.get("errors").asInt()).isEqualTo(2);
+        assertThat(dry.get("added").asInt()).isEqualTo(1);
+        assertThat(dry.get("rows").get(0).get("message").asString())
+                .contains("Line 2")
+                .contains("old drinks")
+                .contains("switched off");
+        assertThat(dry.get("rows").get(1).get("message").asString())
+                .contains("OLD CRATE")
+                .contains("switched off");
+        ResponseEntity<JsonNode> applied = run(csv, false, ADMINISTRATOR);
+        assertThat(applied.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(applied.getBody().get("code").asString()).isEqualTo("import_has_errors");
+        assertThat(products()).isZero();
+    }
+
+    @Test
+    void pricesAreReadInMajorUnitsWithTheTenantCurrencyExponent() {
+        String csv = HEADER + "\nIMP-1,Test whole,Cables,roll,\"12,000\"\nIMP-2,Test decimal,Cables,roll,12000.50\n";
+        JsonNode ugx = run(csv, true, ADMINISTRATOR).getBody();
+        assertThat(ugx.get("added").asInt()).isEqualTo(1);
+        assertThat(ugx.get("errors").asInt()).isEqualTo(1);
+        assertThat(ugx.get("rows").get(1).get("message").asString()).contains("whole number");
+        assertThat(run(csv.replace("12000.50", "13000"), false, ADMINISTRATOR).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(api.get("/products?query=IMP-1", ADMIN)
+                        .getBody()
+                        .get("items")
+                        .get(0)
+                        .get("sell_minor")
+                        .asLong())
+                .isEqualTo(12_000);
+    }
+
+    @Test
+    void aTwoDecimalCurrencyTenantImportsDecimalsAsMinorUnits() {
+        TestDatabase.owner()
+                .sql("UPDATE tenants SET currency = 'KES' WHERE id = ?")
+                .param(t.tenantId())
+                .update();
+        String csv = HEADER + "\nIMP-1,Test whole,Cables,roll,120\nIMP-2,Test decimal,Cables,roll,\"1,200.50\"\n"
+                + "IMP-3,Test too fine,Cables,roll,10.505\n";
+        JsonNode dry = run(csv, true, ADMINISTRATOR).getBody();
+        assertThat(dry.get("added").asInt()).isEqualTo(2);
+        assertThat(dry.get("errors").asInt()).isEqualTo(1);
+        assertThat(run(csv.replace("10.505", "10.50"), false, ADMINISTRATOR).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(api.get("/products?query=IMP-1", ADMIN)
+                        .getBody()
+                        .get("items")
+                        .get(0)
+                        .get("sell_minor")
+                        .asLong())
+                .isEqualTo(12_000);
+        assertThat(api.get("/products?query=IMP-2", ADMIN)
+                        .getBody()
+                        .get("items")
+                        .get(0)
+                        .get("sell_minor")
+                        .asLong())
+                .isEqualTo(120_050);
     }
 }

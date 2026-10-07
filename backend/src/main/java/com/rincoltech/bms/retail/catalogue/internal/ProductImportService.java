@@ -15,12 +15,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -92,8 +92,12 @@ class ProductImportService {
         Set<String> existing = repo.productCodes();
         Map<String, UUID> categories = repo.categoryIdsByName();
         Map<String, UUID> units = repo.unitIdsByName();
-        Set<String> newCategories = new LinkedHashSet<>();
-        Set<String> newUnits = new LinkedHashSet<>();
+        Set<String> offCategories = repo.inactiveCategoryNames();
+        Set<String> offUnits = repo.inactiveUnitNames();
+        int exponent = repo.currencyExponent(tenant.profile().currency());
+        // Keyed on lower(trim(name)) like the unique index; the first spelling in the file names the new row.
+        Map<String, String> newCategories = new LinkedHashMap<>();
+        Map<String, String> newUnits = new LinkedHashMap<>();
         Set<String> seen = new HashSet<>();
         List<ImportRow> report = new ArrayList<>();
         List<Pending> pending = new ArrayList<>();
@@ -113,8 +117,8 @@ class ProductImportService {
             String code = RetailCatalogue.normaliseCode(rawCode).orElse(null);
             String category = cell(cells, columns, "category").strip();
             String unit = cell(cells, columns, "unit").strip();
-            Long sell = amount(cell(cells, columns, "sell_price"));
-            Long cost = withCost ? amount(cell(cells, columns, "cost_price")) : Long.valueOf(0);
+            Long sell = amount(cell(cells, columns, "sell_price"), exponent);
+            Long cost = withCost ? amount(cell(cells, columns, "cost_price"), exponent) : Long.valueOf(0);
             boolean costBlank = withCost && cell(cells, columns, "cost_price").isBlank();
             if (code == null) {
                 problem = "The code is empty or holds a special character.";
@@ -127,9 +131,9 @@ class ProductImportService {
             } else if (unit.isEmpty() || unit.length() > 30) {
                 problem = "The unit is empty or longer than 30 characters.";
             } else if (sell == null) {
-                problem = "The sell price must be a whole number, for example 12000.";
+                problem = "The sell price must be " + example(exponent, 12000) + ".";
             } else if (cost == null && !costBlank) {
-                problem = "The cost price must be a whole number, for example 9000.";
+                problem = "The cost price must be " + example(exponent, 9000) + ".";
             } else if (sell > RetailCatalogue.MAX_AMOUNT_MINOR
                     || (cost != null && cost > RetailCatalogue.MAX_AMOUNT_MINOR)) {
                 problem = "A price is too large.";
@@ -158,11 +162,24 @@ class ProductImportService {
                         "This code is repeated in the file; the first row is used."));
                 continue;
             }
-            if (!categories.containsKey(category.toLowerCase(Locale.ROOT))) {
-                newCategories.add(category);
+            String categoryKey = category.toLowerCase(Locale.ROOT);
+            String unitKey = unit.toLowerCase(Locale.ROOT);
+            String off = offCategories.contains(categoryKey)
+                    ? "category \"" + category + "\" is switched off. Switch it on or use another category."
+                    : offUnits.contains(unitKey)
+                            ? "unit \"" + unit + "\" is switched off. Switch it on or use another unit."
+                            : null;
+            if (off != null) {
+                seen.remove(key);
+                errors++;
+                report.add(new ImportRow(line, code, description.strip(), "error", "Line " + line + ": the " + off));
+                continue;
             }
-            if (!units.containsKey(unit.toLowerCase(Locale.ROOT))) {
-                newUnits.add(unit);
+            if (!categories.containsKey(categoryKey)) {
+                newCategories.putIfAbsent(categoryKey, category);
+            }
+            if (!units.containsKey(unitKey)) {
+                newUnits.putIfAbsent(unitKey, unit);
             }
             added++;
             report.add(new ImportRow(line, code, description.strip(), "added", dryRun ? "Would be added." : "Added."));
@@ -175,7 +192,13 @@ class ProductImportService {
                         errors + (errors == 1 ? " row has" : " rows have")
                                 + " a problem. Nothing was added. Run the check to see which rows, fix them and try again.");
             }
-            apply(pending, categories, units, newCategories, newUnits, added, skipped, principal.userId());
+            try {
+                apply(pending, categories, units, newCategories, newUnits, added, skipped, principal.userId());
+            } catch (DuplicateKeyException e) {
+                throw ApiException.rule(
+                        "import_conflict",
+                        "Another change added an item code, category or unit with the same name while this file was being applied. Nothing was added. Run the check again and apply the file again.");
+            }
         }
         return new ImportResult(
                 dryRun,
@@ -183,8 +206,8 @@ class ProductImportService {
                 added,
                 skipped,
                 errors,
-                List.copyOf(dryRun || errors == 0 ? newCategories : Set.of()),
-                List.copyOf(dryRun || errors == 0 ? newUnits : Set.of()),
+                List.copyOf(dryRun || errors == 0 ? newCategories.values() : List.<String>of()),
+                List.copyOf(dryRun || errors == 0 ? newUnits.values() : List.<String>of()),
                 report);
     }
 
@@ -192,24 +215,26 @@ class ProductImportService {
             List<Pending> pending,
             Map<String, UUID> categories,
             Map<String, UUID> units,
-            Set<String> newCategories,
-            Set<String> newUnits,
+            Map<String, String> newCategories,
+            Map<String, String> newUnits,
             int added,
             int skipped,
             UUID by) {
         Map<String, UUID> categoryIds = new HashMap<>(categories);
         Map<String, UUID> unitIds = new HashMap<>(units);
-        for (String name : newCategories) {
+        for (Map.Entry<String, String> e : newCategories.entrySet()) {
+            String name = e.getValue();
             UUID id = UUID.randomUUID();
             repo.insertCategory(id, name, by);
-            categoryIds.put(name.toLowerCase(Locale.ROOT), id);
+            categoryIds.put(e.getKey(), id);
             audit.record(AuditLog.Entry.created(
                     "retail.category.created", "retail.category", id, null, Map.of("name", name)));
         }
-        for (String name : newUnits) {
+        for (Map.Entry<String, String> e : newUnits.entrySet()) {
+            String name = e.getValue();
             UUID id = UUID.randomUUID();
             repo.insertUnit(id, name, by);
-            unitIds.put(name.toLowerCase(Locale.ROOT), id);
+            unitIds.put(e.getKey(), id);
             audit.record(AuditLog.Entry.created("retail.unit.created", "retail.unit", id, null, Map.of("name", name)));
         }
         String currency = tenant.profile().currency();
@@ -293,13 +318,31 @@ class ProductImportService {
         return i == null || i >= cells.size() ? "" : cells.get(i);
     }
 
-    /** A whole, non-negative amount, with or without thousands commas; null when it is anything else. */
-    private static Long amount(String text) {
+    /**
+     * A non-negative amount in major units, with or without thousands commas, as integer minor units
+     * for a currency with {@code exponent} decimals (the same rule as the screens' parseMinor); a
+     * fraction is accepted only up to the exponent. Null when it is anything else. No floating point.
+     */
+    private static Long amount(String text, int exponent) {
         String clean = text.strip().replace(",", "");
-        if (!clean.matches("\\d{1,15}")) {
+        java.util.regex.Matcher m = AMOUNT.matcher(clean);
+        if (!m.matches()) {
             return null;
         }
-        return Long.parseLong(clean);
+        String fraction = m.group(2) == null ? "" : m.group(2);
+        if (fraction.length() > exponent) {
+            return null;
+        }
+        return new java.math.BigDecimal(m.group(1) + fraction + "0".repeat(exponent - fraction.length()))
+                .longValueExact();
+    }
+
+    private static final java.util.regex.Pattern AMOUNT = java.util.regex.Pattern.compile("(\\d{1,15})(?:\\.(\\d+))?");
+
+    private static String example(int exponent, long whole) {
+        return exponent == 0
+                ? "a whole number, for example " + whole
+                : "an amount with at most " + exponent + " decimals, for example " + whole + " or " + whole + ".50";
     }
 
     private static ApiException problem(String field, String message) {
