@@ -58,8 +58,10 @@ only retail has this need.
    touches profit. A withdrawal carries a branch in the platform (the pilot form has no shop; the
    ledger needs one), defaulting to the head office branch of the caller's scope.
 5. **An expense debits an expense account chosen by its category and credits cash.** Each expense
-   category maps to a ledger expense account (default code 5200 `expense_general`, **Operating
-   expenses**; the Owner may add accounts and map categories to them). Items inherit the account of
+   category maps to a ledger expense account (default code 5900 `operating_expenses`, **Operating
+   expenses**, the lending chart's code and key, reused exactly as decision 4 reuses 1190 for
+   transfers so a tenant with both verticals keeps one account; the Owner may add accounts and map
+   categories to them). Items inherit the account of
    their category. The credit is `cash_on_hand` in version one: the pilot form has no payment
    channel, so an expense is a till payment.
 6. **An advance debits `owner_advances` and credits the source shop's cash; a repayment is the
@@ -70,7 +72,9 @@ only retail has this need.
    repayment may arrive by `cash`, `mobile_money` or `bank` and debits that account.
 7. **Chart additions** (seeded by the idempotent `bms_seed_retail_chart` like ADR-020's chart, and
    for tenants that switched retail on earlier): 1015 `savings_reserve`, 1250 `owner_advances`,
-   5200 `expense_general`. A code or key the tenant already has is kept.
+   and 5900 `operating_expenses` (added to the retail chart only where the tenant has not got it
+   already from lending, with the lending chart's code and key). A code or key the tenant already
+   has is kept.
 8. **Posting rules.** Every cash book event posts one balanced entry through `post_entry`, in the
    transaction of the event, with `source_module = 'retail'` and an idempotency key
    `retail.<kind>:<id>` (the table is in chapter 6 section 6.11.5). A void posts the reversal of

@@ -1579,19 +1579,21 @@ except the void columns, changed once by a guard trigger on each table (the patt
 `retail_sales_guard_update`, and the owner's `bms.allow_mutation` switch of `reject_mutation`).
 
 **Chart additions** (seeded by `bms_seed_retail_chart`, also for tenants that switched retail on
-earlier; a code or key the tenant already has is kept):
+earlier; a code or key the tenant already has is kept). Code 5900 and key `operating_expenses` are
+the lending chart's (section 6.6.2), reused so a tenant with both verticals keeps one such account,
+the way 1190 is shared; a tenant that has it from lending gets no second account:
 
 | Code | Name | Type | `system_key` |
 |---|---|---|---|
 | 1015 | Savings reserve (restricted cash) | asset | `savings_reserve` |
 | 1250 | Advances to owner and company | asset | `owner_advances` |
-| 5200 | Operating expenses | expense | `expense_general` |
+| 5900 | Operating expenses | expense | `operating_expenses` |
 
 #### Tables
 
 | Table | Grants (`bms_app`) | Purpose |
 |---|---|---|
-| `retail_expense_categories` | SELECT, INSERT, UPDATE | Category lists: `name varchar(100)`, `expense_account_id` (nullable, composite FK to ledger accounts; null means `expense_general`), `active`, `sort_order`. Unique `(tenant_id, lower(name))` |
+| `retail_expense_categories` | SELECT, INSERT, UPDATE | Category lists: `name varchar(100)`, `expense_account_id` (nullable, composite FK to ledger accounts; null means `operating_expenses`), `active`, `sort_order`. Unique `(tenant_id, lower(name))` |
 | `retail_expense_items` | SELECT, INSERT, UPDATE | `category_id` (composite FK), `name varchar(100)`, `requires_explanation boolean` (the pilot's "others"), `active`. Unique `(tenant_id, category_id, lower(name))` |
 | `retail_cash_parties` | SELECT, INSERT, UPDATE | Beneficiaries and advance parties: `name varchar(200)`, `contact varchar(100)` kept as entered, `kind` (`owner`, `company`, `staff`, `supplier`, `other`), `active`. Unique `(tenant_id, kind, lower(name))` |
 | `retail_daily_savings` | SELECT, INSERT, UPDATE (void only) | One record per branch and date, below |
@@ -1682,7 +1684,7 @@ Every rule posts through `post_entry` in the transaction of its event, one entry
 | Daily savings | `savings_reserve` | `cash_on_hand` | `retail.savings:<id>` |
 | Cash banked | `bank` | `cash_on_hand` | `retail.banking:<id>` |
 | Withdrawal from bank | `cash_on_hand` | `bank` | `retail.withdrawal:<id>` |
-| Expense | the category's expense account (`expense_general` when unmapped) | `cash_on_hand` | `retail.expense:<id>` |
+| Expense | the category's expense account (`operating_expenses` when unmapped) | `cash_on_hand` | `retail.expense:<id>` |
 | Advance paid out | `owner_advances`, advance as subledger | `cash_on_hand` | `retail.advance:<id>` |
 | Repayment of an advance | `cash_on_hand`, `mobile_money` or `bank` by method | `owner_advances`, advance as subledger | `retail.advance_repayment:<id>` |
 | Opening, per branch, at import | `cash_on_hand`, `bank`, `savings_reserve` and `owner_advances` balances | `opening_balance_equity` | `retail.cash_opening:<branch>` |
