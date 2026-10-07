@@ -39,6 +39,9 @@ class SalesRepository {
     }
 
     /** A sale header with its journal entries, for the service. */
+    /** A listed buyer with the key the list is ordered by, as the database computed it (for the cursor). */
+    record CustomerRow(Customer customer, String sortKey) {}
+
     record Header(Sale sale, UUID saleEntryId, UUID costEntryId) {}
 
     /** A line to insert. */
@@ -355,14 +358,14 @@ class SalesRepository {
     }
 
     /** The list, each buyer with what they owe on credit sales in the given branches (null: every branch). */
-    List<Customer> customers(
+    List<CustomerRow> customers(
             String query, int limit, List<UUID> branchIds, com.rincoltech.bms.kernel.Cursor.Key after) {
         if (branchIds != null && branchIds.isEmpty()) {
             return customers(query, limit, List.of(new UUID(0, 0)), after);
         }
         Map<String, Object> params = new LinkedHashMap<>();
         StringBuilder sql = new StringBuilder("""
-                SELECT c.id, c.name, c.contact, c.created_at, c.version,
+                SELECT c.id, c.name, c.contact, c.created_at, c.version, lower(c.name) AS sort_key,
                        (SELECT coalesce(sum(s.total_minor - s.paid_minor), 0) FROM retail_sales s
                          WHERE s.customer_id = c.id AND s.payment_method = 'credit' AND s.status = 'completed'
                            AND s.paid_minor < s.total_minor""");
@@ -385,13 +388,15 @@ class SalesRepository {
         params.put("limit", limit);
         return jdbc.sql(sql.toString())
                 .params(params)
-                .query((rs, n) -> new Customer(
-                        rs.getObject("id", UUID.class),
-                        rs.getString("name"),
-                        rs.getString("contact"),
-                        instant(rs, "created_at"),
-                        rs.getLong("owed"),
-                        rs.getInt("version")))
+                .query((rs, n) -> new CustomerRow(
+                        new Customer(
+                                rs.getObject("id", UUID.class),
+                                rs.getString("name"),
+                                rs.getString("contact"),
+                                instant(rs, "created_at"),
+                                rs.getLong("owed"),
+                                rs.getInt("version")),
+                        rs.getString("sort_key")))
                 .list();
     }
 

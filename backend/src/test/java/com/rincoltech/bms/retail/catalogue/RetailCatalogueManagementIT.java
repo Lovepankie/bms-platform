@@ -415,6 +415,40 @@ class RetailCatalogueManagementIT extends IntegrationTest {
         return RetailTestSupport.id(r);
     }
 
+    /** The cursor carries the database's own lower(name), so no row is skipped or repeated at a page edge. */
+    @Test
+    void creditBuyersWithNonAsciiNamesPageWithoutSkippingOrRepeating() {
+        List<String> names = List.of(
+                "\u0130a Test Buyer", "ia Test Buyer", "\u00c9cole Test Buyer", "ecole Test Buyer", "Zed Test Buyer");
+        for (String name : names) {
+            api.post("/customers", Map.of("name", name), ADMIN);
+        }
+        List<String> seen = new java.util.ArrayList<>();
+        String cursor = null;
+        do {
+            JsonNode page = api.get("/customers?limit=1" + (cursor == null ? "" : "&cursor=" + cursor), ADMIN)
+                    .getBody();
+            page.get("items").forEach(i -> seen.add(i.get("name").asString()));
+            cursor = page.get("next_cursor") == null || page.get("next_cursor").isNull()
+                    ? null
+                    : page.get("next_cursor").asString();
+        } while (cursor != null && seen.size() < 10);
+        assertThat(seen).hasSize(names.size()).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(names);
+    }
+
+    @Test
+    void aPercentOrUnderscoreInTheSearchMatchesOnlyThoseCharacters() {
+        for (String name : List.of("Test 50% Buyer", "Test 50 Buyer", "Test A_B Buyer", "Test AxB Buyer")) {
+            api.post("/customers", Map.of("name", name), ADMIN);
+        }
+        JsonNode percent = api.get("/customers?query=50%", ADMIN).getBody().get("items");
+        assertThat(percent).hasSize(1);
+        assertThat(percent.get(0).get("name").asString()).isEqualTo("Test 50% Buyer");
+        JsonNode underscore = api.get("/customers?query=a_b", ADMIN).getBody().get("items");
+        assertThat(underscore).hasSize(1);
+        assertThat(underscore.get(0).get("name").asString()).isEqualTo("Test A_B Buyer");
+    }
+
     @Test
     void creditBuyersPageByCursorAndSearchOnTheServer() {
         for (String name : List.of("Test Buyer C", "Test Buyer A", "Test Other", "Test Buyer B")) {

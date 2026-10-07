@@ -541,15 +541,17 @@ class SalesService {
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         com.rincoltech.bms.kernel.Cursor.Key after =
                 com.rincoltech.bms.kernel.Cursor.decodeKey(cursor).orElse(null);
-        List<Customer> rows = repo.customers(
+        List<SalesRepository.CustomerRow> rows = repo.customers(
                 blankToNull(query), size + 1, CurrentPrincipal.require().branchFilter("retail.sale.read", null), after);
         boolean more = rows.size() > size;
-        List<Customer> items = more ? rows.subList(0, size) : rows;
+        List<SalesRepository.CustomerRow> page = more ? rows.subList(0, size) : rows;
+        // The key is the database's own lower(name), so the cursor agrees with the ORDER BY.
         String next = more
-                ? com.rincoltech.bms.kernel.Cursor.encode(items.getLast().name().toLowerCase(java.util.Locale.ROOT)
-                        + "|" + items.getLast().id())
+                ? com.rincoltech.bms.kernel.Cursor.encode(page.getLast().sortKey() + "|"
+                        + page.getLast().customer().id())
                 : null;
-        return new CustomerList(items, next);
+        return new CustomerList(
+                page.stream().map(SalesRepository.CustomerRow::customer).toList(), next);
     }
 
     /** FR-RET-05: what the customer owes on credit sales in the caller's branch scope. */
