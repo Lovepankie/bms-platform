@@ -100,13 +100,33 @@ class OutboxTemplates {
                             + " {emails} confirmation emails. New sign-ups are answered but nothing is sent until the"
                             + " hour passes. Check the edge rule and the portal."));
 
-    Rendered render(String channel, String templateKey, Map<String, String> params) {
-        Map<String, Template> byKey = switch (channel) {
+    /**
+     * Member receipts (chapter 11 section 11.3.1). Short enough for one SMS; no name, only the
+     * account number. Nothing sends them until an SMS sender exists (pending ADR-013).
+     */
+    private static final Map<String, Template> SMS = Map.of(
+            "savings.deposit",
+            new Template(
+                    null,
+                    "{tenant_name}: Deposit of {currency} {amount} on account {account_no}. Receipt {receipt_no}."
+                            + " Balance {currency} {balance}."),
+            "savings.withdrawal",
+            new Template(
+                    null,
+                    "{tenant_name}: Withdrawal of {currency} {amount} from account {account_no}. Voucher {receipt_no}."
+                            + " Balance {currency} {balance}."));
+
+    private static Map<String, Template> byChannel(String channel) {
+        return switch (channel) {
             case "email" -> EMAIL;
             case "telegram" -> TELEGRAM;
+            case "sms" -> SMS;
             default -> Map.of();
         };
-        Template template = byKey.get(templateKey);
+    }
+
+    Rendered render(String channel, String templateKey, Map<String, String> params) {
+        Template template = byChannel(channel).get(templateKey);
         if (template == null) {
             throw new IllegalArgumentException("no " + channel + " template " + templateKey);
         }
@@ -116,7 +136,7 @@ class OutboxTemplates {
 
     /** The placeholders a template uses, for the render tests. */
     static java.util.Set<String> placeholders(String channel, String templateKey) {
-        Template template = (channel.equals("email") ? EMAIL : TELEGRAM).get(templateKey);
+        Template template = byChannel(channel).get(templateKey);
         java.util.Set<String> names = new java.util.TreeSet<>();
         for (String text : new String[] {template.subject(), template.text()}) {
             if (text != null) {
@@ -128,8 +148,7 @@ class OutboxTemplates {
 
     /** The template keys of a channel, for the render test. */
     static List<String> keys(String channel) {
-        return (channel.equals("email") ? EMAIL : TELEGRAM)
-                .keySet().stream().sorted().toList();
+        return byChannel(channel).keySet().stream().sorted().toList();
     }
 
     private static String fill(String text, Map<String, String> params) {

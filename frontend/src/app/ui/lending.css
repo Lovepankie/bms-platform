@@ -125,3 +125,65 @@
 .ln form > button.btn-block {
   margin-top: var(--space-3);
 }
+
+/*
+ * Savings (increment 9): the sub-navigation, the confirmation step of a money form and the
+ * statement's date range. The rest reuses the loan screens' classes above.
+ */
+.sv-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+}
+
+.sv-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.sv-nav a[aria-current='page'],
+.sv-nav a.active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-tint);
+}
+
+.sv-confirm {
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius);
+  background: var(--color-accent-tint);
+}
+
+.sv-confirm h3 {
+  margin: 0 0 var(--space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.sv-confirm ul {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-4);
+}
+
+.sv-confirm li {
+  margin: var(--space-1) 0;
+}
+
+.sv-confirm-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  gap: var(--space-2);
+}
+
+.sv-range {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-3) 0;
+}

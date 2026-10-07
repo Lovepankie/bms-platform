@@ -43,7 +43,7 @@ spreadsheet for one agreed period is recommended.
 
 | # | Increment | Delivers | Depends on |
 |---|---|---|---|
-| 9 | Savings | FR-SAV-01 to FR-SAV-07, savings SMS events, savings reports | Open question 2 |
+| 9 | Savings | FR-SAV-01 to FR-SAV-07, savings SMS events, savings reports. Built in #151 (ADR-032): the answers to open question 2 become product settings; the SMS are queued until an SMS sender exists | Open question 2 |
 | 10 | Investments | FR-INV-01 to FR-INV-07, investment reports | Open question 3 |
 | 11 | Member portal (PWA) | FR-IAM-09, FR-IAM-10, FR-MSS-01 to FR-MSS-03, FR-MSS-05, FR-MSS-06, FR-ORG-09, NFR-OFF-01 to NFR-OFF-06, NFR-PERF-06 | Increments 9 and 10 for the savings and investment screens |
 | 12 | Online payments | FR-PAY-01 to FR-PAY-06, FR-MSS-04 | Pending ADR-011; open question 6 |

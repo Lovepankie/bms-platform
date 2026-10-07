@@ -140,7 +140,7 @@ within one 160 character GSM-7 segment where possible:
 | `loan.due_today` | On the due date | `{tenant_name}: {currency} {amount} for loan {loan_no} is due today.` |
 | `loan.overdue_1`, `loan.overdue_7`, `loan.overdue_30` | At 1, 7 and 30 DPD | `{tenant_name}: Loan {loan_no} is {dpd} days overdue. Amount in arrears {currency} {arrears}. Please pay to avoid penalties.` |
 | `loan.closed` | Loan closed | `{tenant_name}: Loan {loan_no} is fully paid. Thank you.` |
-| `savings.deposit`, `savings.withdrawal` | Transaction recorded | `{tenant_name}: {txn_type} of {currency} {amount} on account {account_no}. Balance {balance}.` |
+| `savings.deposit`, `savings.withdrawal` | Transaction recorded by staff (a closure's payout too); queued in the outbox, not sent until an SMS sender exists (ADR-032) | `{tenant_name}: Deposit of {currency} {amount} on account {account_no}. Receipt {receipt_no}. Balance {currency} {balance}.` (a withdrawal says Withdrawal and Voucher) |
 | `investment.funded`, `investment.maturing`, `investment.paid_out` | Lifecycle | Similar pattern |
 | `auth.member_otp` | Activation or PIN reset | `{code} is your {tenant_name} code. It expires in 10 minutes. Do not share it.` |
 

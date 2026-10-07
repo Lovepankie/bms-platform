@@ -107,9 +107,9 @@ core.payments         -> core.ledger, core.notifications (booking is delegated t
 core.reporting        -> core.documents
 lending               -> any core module
 lending.loans         -> lending.members, lending.products, lending.collateral, lending.savings (transfer)
-lending.seed          -> lending.loans (LoanServicing)
+lending.seed          -> lending.loans (LoanServicing), lending.savings (SavingsServicing)
 lending.collections   -> lending.loans, lending.members
-lending.savings       -> lending.members
+lending.savings       -> lending.members (member lookup, the receipt SMS phone; ADR-032)
 lending.investments   -> lending.members, lending.savings (monthly return credit)
 lending.collateral    -> lending.members
 ```

@@ -1163,6 +1163,24 @@
         },
         "required" : [ "category_id", "code", "cost_minor", "description", "sell_minor", "unit_id" ]
       },
+      "CreateSavingsProductRequest" : {
+        "properties" : {
+          "code" : {
+            "minLength" : 1,
+            "pattern" : "[A-Z0-9][A-Z0-9-]{1,19}",
+            "type" : "string"
+          },
+          "currency" : {
+            "description" : "The tenant's currency when omitted",
+            "pattern" : "[A-Z]{3}",
+            "type" : "string"
+          },
+          "terms" : {
+            "$ref" : "#/components/schemas/SavingsProductTerms"
+          }
+        },
+        "required" : [ "code", "terms" ]
+      },
       "CreateTenantRequest" : {
         "properties" : {
           "admin" : {
@@ -2975,6 +2993,24 @@
             "type" : "array"
           }
         }
+      },
+      "OpenSavingsAccountRequest" : {
+        "properties" : {
+          "branch_id" : {
+            "description" : "The member's home branch when omitted (FR-BR-05)",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "member_id", "product_id" ]
       },
       "OutboxFailure" : {
         "properties" : {
@@ -5296,6 +5332,707 @@
           }
         }
       },
+      "SavingsAccount" : {
+        "properties" : {
+          "account_no" : {
+            "type" : "string"
+          },
+          "accrued_interest_minor" : {
+            "description" : "Interest earned since the last posting through balances_through, an estimate rounded for display; the posting rounds once over the whole period",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "available_minor" : {
+            "description" : "The most a withdrawal may take now: balance less hold, minimum balance and fee",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "balances_through" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "closed_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "hold_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "interest_calc" : {
+            "type" : "string"
+          },
+          "interest_posting" : {
+            "type" : "string"
+          },
+          "interest_rate_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "last_interest_posted_to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "last_member_txn_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "member_name" : {
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "min_balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "opened_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "product_code" : {
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "product_name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "active, dormant, frozen or closed",
+            "type" : "string"
+          },
+          "status_reason" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "withdrawal_fee_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "SavingsAccountPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SavingsAccount"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SavingsActionOutcome" : {
+        "description" : "executed: the action took effect now (below the tenant's threshold); otherwise it waits for a checker as approval_request_id. transaction is the withdrawal when executed",
+        "properties" : {
+          "account" : {
+            "$ref" : "#/components/schemas/SavingsAccount"
+          },
+          "account_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "executed" : {
+            "type" : "boolean"
+          },
+          "transaction" : {
+            "$ref" : "#/components/schemas/SavingsTransaction"
+          }
+        }
+      },
+      "SavingsBalanceRow" : {
+        "properties" : {
+          "account_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "account_no" : {
+            "type" : "string"
+          },
+          "balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "last_member_txn_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "member_name" : {
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "product_code" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SavingsBalancesReport" : {
+        "description" : "lending.savings_balances (chapter 14 section 14.5): balances as at the end of a day; totals per product and branch reconcile to member_savings",
+        "properties" : {
+          "as_at" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SavingsBalanceRow"
+            },
+            "type" : "array"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totals" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SavingsTotal"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "SavingsCloseRequest" : {
+        "properties" : {
+          "external_reference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "pattern" : "cash|bank|mtn_momo|airtel_money",
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "payment_method_key" ]
+      },
+      "SavingsDepositResult" : {
+        "properties" : {
+          "account" : {
+            "$ref" : "#/components/schemas/SavingsAccount"
+          },
+          "transaction" : {
+            "$ref" : "#/components/schemas/SavingsTransaction"
+          }
+        }
+      },
+      "SavingsMoneyRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "external_reference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "pattern" : "cash|bank|mtn_momo|airtel_money",
+            "type" : "string"
+          },
+          "value_date" : {
+            "description" : "Today when omitted; today or earlier, after the last day the nightly job has closed",
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor", "payment_method_key" ]
+      },
+      "SavingsMovementRow" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "closing_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "deposits_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fees_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "net_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "opening_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_code" : {
+            "type" : "string"
+          },
+          "reversals_in_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reversals_out_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "withdrawals_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "SavingsMovementsReport" : {
+        "description" : "lending.savings_movements (chapter 14 section 14.5): movements by value date in the range",
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SavingsMovementRow"
+            },
+            "type" : "array"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "total" : {
+            "$ref" : "#/components/schemas/SavingsMovementRow"
+          }
+        }
+      },
+      "SavingsProduct" : {
+        "properties" : {
+          "accounts" : {
+            "description" : "Accounts on the product; the interest fields are locked when above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "dormancy_days" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "interest_calc" : {
+            "type" : "string"
+          },
+          "interest_posting" : {
+            "type" : "string"
+          },
+          "interest_rate_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "max_withdrawal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "max_withdrawals_per_month" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "min_balance_for_interest_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "min_balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "min_opening_balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "withdrawal_fee_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "SavingsProductList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SavingsProduct"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "SavingsProductTerms" : {
+        "description" : "FR-SAV-01: the product's rules",
+        "properties" : {
+          "dormancy_days" : {
+            "description" : "Days without a member deposit or withdrawal before the account is dormant (FR-SAV-06)",
+            "format" : "int32",
+            "maximum" : 3650,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "interest_calc" : {
+            "pattern" : "none|daily_balance|minimum_monthly_balance",
+            "type" : "string"
+          },
+          "interest_posting" : {
+            "pattern" : "monthly|quarterly|yearly",
+            "type" : "string"
+          },
+          "interest_rate_bp" : {
+            "description" : "Per year, in basis points; 0 with interest_calc none",
+            "format" : "int32",
+            "maximum" : 10000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "max_withdrawal_minor" : {
+            "description" : "The most one withdrawal may take; none when omitted",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "max_withdrawals_per_month" : {
+            "description" : "Withdrawals allowed per calendar month; none when omitted",
+            "format" : "int32",
+            "maximum" : 1000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "min_balance_for_interest_minor" : {
+            "description" : "A day or month below this balance earns nothing; 0 when omitted",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "min_balance_minor" : {
+            "description" : "A withdrawal never takes the balance below this; 0 when omitted",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "min_opening_balance_minor" : {
+            "description" : "The first deposit's minimum; 0 when omitted",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "name" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "withdrawal_fee_minor" : {
+            "description" : "Flat fee per withdrawal; 0 when omitted",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "interest_calc", "interest_posting", "interest_rate_bp", "name" ]
+      },
+      "SavingsReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "SavingsStatement" : {
+        "description" : "Movements recorded in the range by value date, in recording order",
+        "properties" : {
+          "account_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "account_no" : {
+            "type" : "string"
+          },
+          "closing_balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SavingsStatementLine"
+            },
+            "type" : "array"
+          },
+          "member_name" : {
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "opening_balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_name" : {
+            "type" : "string"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "total_credits_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_debits_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "SavingsStatementLine" : {
+        "properties" : {
+          "balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "credit_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "debit_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "receipt_no" : {
+            "type" : "string"
+          },
+          "seq" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "txn_type" : {
+            "type" : "string"
+          },
+          "value_date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "SavingsTotal" : {
+        "properties" : {
+          "accounts" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "product_code" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SavingsTransaction" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "balance_after_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "credit" : {
+            "description" : "True when the money went into the account",
+            "type" : "boolean"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "external_reference" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "receipt_no" : {
+            "type" : "string"
+          },
+          "recorded_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "related_txn_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reversed_by_txn_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reverses_txn_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "seq" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "txn_type" : {
+            "description" : "deposit, withdrawal, interest, fee, transfer_in, transfer_out or reversal",
+            "type" : "string"
+          },
+          "value_date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "SavingsTransactionPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SavingsTransaction"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SavingsWithdrawalRequest" : {
+        "description" : "Dated the day it executes: today, or the day a checker approves it",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "external_reference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "pattern" : "cash|bank|mtn_momo|airtel_money",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor", "payment_method_key" ]
+      },
       "SchedulePreview" : {
         "properties" : {
           "deducted_at_disbursement_minor" : {
@@ -5948,6 +6685,19 @@
             "type" : "string"
           }
         }
+      },
+      "UpdateSavingsProductRequest" : {
+        "description" : "The interest fields cannot change once an account uses the product",
+        "properties" : {
+          "status" : {
+            "pattern" : "active|archived",
+            "type" : "string"
+          },
+          "terms" : {
+            "$ref" : "#/components/schemas/SavingsProductTerms"
+          }
+        },
+        "required" : [ "status", "terms" ]
       },
       "UpdateTenantSettingsRequest" : {
         "properties" : {
@@ -8840,6 +9590,748 @@
         },
         "summary" : "Confirm or reject a suggested link (FR-MEM-07)",
         "tags" : [ "lending-members" ]
+      }
+    },
+    "/api/v1/lending/savings-accounts" : {
+      "get" : {
+        "operationId" : "listSavingsAccounts",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "member_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsAccountPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List savings accounts in the caller's branch scope, by account number",
+        "tags" : [ "lending-savings" ]
+      },
+      "post" : {
+        "operationId" : "openSavingsAccount",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OpenSavingsAccountRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsAccount"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Open a savings account for a member (FR-SAV-02); a member may hold several",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-accounts/{account_id}" : {
+      "get" : {
+        "operationId" : "getSavingsAccount",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "account_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsAccount"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A savings account with its balance and accrued interest",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-accounts/{account_id}/close" : {
+      "post" : {
+        "operationId" : "requestSavingsClosure",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "account_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SavingsCloseRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request closure (FR-SAV-07): interest to date, then the whole balance paid out",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-accounts/{account_id}/deposits" : {
+      "post" : {
+        "operationId" : "recordSavingsDeposit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "account_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SavingsMoneyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsDepositResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record a deposit (FR-SAV-03)",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-accounts/{account_id}/freeze" : {
+      "post" : {
+        "operationId" : "freezeSavingsAccount",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "account_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SavingsReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsAccount"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Freeze an account: no withdrawal or closure until unfrozen",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-accounts/{account_id}/reactivate" : {
+      "post" : {
+        "operationId" : "reactivateSavingsAccount",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "account_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SavingsReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsAccount"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reactivate a dormant account (FR-SAV-06)",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-accounts/{account_id}/statement" : {
+      "get" : {
+        "operationId" : "getSavingsStatement",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "account_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsStatement"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The account statement for a range of value dates; the last three months by default",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-accounts/{account_id}/transactions" : {
+      "get" : {
+        "operationId" : "listSavingsTransactions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "account_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsTransactionPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The account's movements with running balances, newest first (FR-SAV-04)",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-accounts/{account_id}/transactions/{txn_id}/reverse" : {
+      "post" : {
+        "operationId" : "requestSavingsReversal",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "account_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "txn_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SavingsReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request the reversal of a deposit or a withdrawal (with its fee), with a reason; always checked",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-accounts/{account_id}/unfreeze" : {
+      "post" : {
+        "operationId" : "unfreezeSavingsAccount",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "account_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SavingsReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsAccount"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Unfreeze an account",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-accounts/{account_id}/withdrawals" : {
+      "post" : {
+        "operationId" : "requestSavingsWithdrawal",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "account_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SavingsWithdrawalRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request a withdrawal (FR-SAV-03); 201 when executed below the threshold, 202 when it waits for a checker",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-products" : {
+      "get" : {
+        "operationId" : "listSavingsProducts",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsProductList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List savings products",
+        "tags" : [ "lending-savings" ]
+      },
+      "post" : {
+        "operationId" : "createSavingsProduct",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateSavingsProductRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsProduct"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Create a savings product (FR-SAV-01)",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-products/{product_id}" : {
+      "get" : {
+        "operationId" : "getSavingsProduct",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsProduct"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A savings product",
+        "tags" : [ "lending-savings" ]
+      },
+      "put" : {
+        "operationId" : "updateSavingsProduct",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateSavingsProductRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsProduct"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Update or archive a savings product; its interest terms are locked once an account uses it",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-reports/balances" : {
+      "get" : {
+        "operationId" : "getSavingsBalancesReport",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "as_at",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsBalancesReport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Savings balances as at the end of a day (today by default), per account, with totals per product and branch",
+        "tags" : [ "lending-savings" ]
+      }
+    },
+    "/api/v1/lending/savings-reports/movements" : {
+      "get" : {
+        "operationId" : "getSavingsMovementsReport",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SavingsMovementsReport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Savings movements by value date (this month by default): opening, deposits, withdrawals, interest, fees, reversals, closing",
+        "tags" : [ "lending-savings" ]
       }
     },
     "/api/v1/me" : {

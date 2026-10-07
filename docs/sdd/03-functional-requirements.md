@@ -638,13 +638,42 @@ How the pilot tenant's savings products work is an open question
 (`docs/specs/lending-mvp-scope.md`). These requirements define a configurable product
 that covers common voluntary savings.
 
+**Built in increment 9 (issue #151, ADR-032, migration `V30`).** The rules below as built:
+
+- A product also carries withdrawal limits (`max_withdrawal_minor` per withdrawal and
+  `max_withdrawals_per_month` per calendar month, both optional) and a minimum balance for interest
+  (`min_balance_for_interest_minor`: a day or a month below it earns nothing). Its interest terms
+  (currency, rate, calculation, posting frequency, minimum for interest) cannot change once an
+  account uses it (`product_in_use`); a change is a new product. Archiving stops new accounts.
+- The first deposit on an account must reach the product's minimum opening balance
+  (`below_minimum_opening`). Opening an account moves no money.
+- A movement is dated today or earlier, not before the account opened, and after the last day the
+  nightly end of day has written (`value_date_closed`); a withdrawal is dated the day it executes.
+- A withdrawal may take at most the balance less any hold, the minimum balance and the withdrawal
+  fee (`insufficient_balance`), within the product's limits (`withdrawal_limit_exceeded`,
+  `withdrawal_count_exceeded`). The fee is its own movement and journal, linked to the withdrawal.
+  At or above the tenant's threshold it is the `savings_withdrawal` action; every check runs again
+  when the checker approves.
+- A deposit or a withdrawal (with its fee) can be reversed through `savings_reversal`, always with
+  a checker, while the account is not closed and, for a deposit, still holds it. Interest and fees
+  are not reversed on their own.
+- An account may be frozen and unfrozen with a reason by a holder of
+  `lending.savings.withdraw_approve`; a frozen or dormant account takes deposits but pays nothing out.
+- Interest: `minimum_monthly_balance` counts a month only when the account was open on every day of
+  it and the period covers all of it. Interest is dated the period end; when that month is closed
+  in the ledger the journal is dated the run date. Closing (FR-SAV-07) posts interest to yesterday,
+  dated the closing day, then pays out the whole balance with no fee.
+- Deposits and withdrawals by staff queue the `savings.deposit` and `savings.withdrawal` SMS of
+  chapter 11 section 11.3.1 in the outbox; no SMS is sent until an SMS sender exists
+  (pending ADR-013).
+
 | ID | Requirement | Acceptance criteria | Phase |
 |---|---|---|---|
 | FR-SAV-01 | A tenant admin shall create a savings product with: code, name, currency, interest rate (bp per year), interest calculation (`none`, `daily_balance`, `minimum_monthly_balance`), interest posting frequency (`monthly`, `quarterly`, `yearly`), minimum opening balance, minimum balance, withdrawal fee (flat), and dormancy days. | Validation per field. | P2 |
 | FR-SAV-02 | A loan officer shall open a savings account for a member on a product; the account number is `SV` plus 6 digits. | A member may hold several accounts. | P2 |
 | FR-SAV-03 | A cashier shall record deposits (idempotency key required) and withdrawals. A withdrawal may not take the balance below the minimum balance plus any hold. Withdrawals at or above the tenant threshold are maker-checker. | Tests for limit and threshold. | P2 |
 | FR-SAV-04 | Each transaction shall store the running balance after it, and the account balance shall be updated under a row lock. | 50 concurrent deposits produce the exact final balance. | P2 |
-| FR-SAV-05 | Interest shall be computed per product: `daily_balance` sums end-of-day balance x rate / 365 over the period; `minimum_monthly_balance` uses the lowest end-of-day balance in each month x rate / 12. Interest is rounded once per posting (R-ROUND) and posted on the last day of the posting period by the nightly job. | Worked examples with fabricated balances in tests; posting is idempotent per account and period. | P2 |
+| FR-SAV-05 | Interest shall be computed per product: `daily_balance` sums end-of-day balance x rate / 365 over the period; `minimum_monthly_balance` uses the lowest end-of-day balance in each month x rate / 12. Interest is rounded once per posting (R-ROUND) and posted on the last day of the posting period by the nightly job. | Worked examples with fabricated balances in tests; posting is idempotent per account and period. The nightly end of day writes one end-of-day balance per account and day and catches up missed days. | P2 |
 | FR-SAV-06 | An account with no member-initiated transaction for the product's dormancy days shall become `dormant`; withdrawals from a dormant account require a branch manager to reactivate it. | Tested. | P2 |
 | FR-SAV-07 | A member may close an account, withdrawing the whole balance after any final interest posting. | Closing posts interest to date first. | P2 |
 

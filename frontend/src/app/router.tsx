@@ -82,6 +82,14 @@ const lendingLoansRoute = createRoute({ getParentRoute: () => staffLendingRoute,
 const lendingLoanRoute = createRoute({ getParentRoute: () => staffLendingRoute, path: '/loans/$loanId' }).lazy(() =>
   import('../areas/staff/lending/loan').then((m) => m.Route),
 );
+const lendingScreen = <P extends string>(path: P) => createRoute({ getParentRoute: () => staffLendingRoute, path });
+const savingsRoute = lendingScreen('/savings').lazy(() => import('../areas/staff/lending/savings').then((m) => m.Route));
+const savingsProductsRoute = lendingScreen('/savings/products').lazy(() => import('../areas/staff/lending/savings-products').then((m) => m.Route));
+const savingsAccountRoute = lendingScreen('/savings/accounts/$accountId').lazy(() => import('../areas/staff/lending/savings-account').then((m) => m.Route));
+const savingsStatementRoute = lendingScreen('/savings/accounts/$accountId/statement').lazy(() =>
+  import('../areas/staff/lending/savings-statement').then((m) => m.Route),
+);
+const memberSavingsRoute = lendingScreen('/members/$memberId/savings').lazy(() => import('../areas/staff/lending/member-savings').then((m) => m.Route));
 
 const signUpRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sign-up' }).lazy(() =>
   import('../areas/onboarding/sign-up').then((m) => m.Route),
@@ -142,7 +150,15 @@ export const router = createRouter({
         retailSuppliersRoute,
         retailBuyersRoute,
         retailImportRoute,
-      ]), staffLendingRoute.addChildren([lendingLoansRoute, lendingLoanRoute])]),
+      ]), staffLendingRoute.addChildren([
+        lendingLoansRoute,
+        lendingLoanRoute,
+        savingsRoute,
+        savingsProductsRoute,
+        savingsAccountRoute,
+        savingsStatementRoute,
+        memberSavingsRoute,
+      ])]),
     memberRoute,
     styleRoute,
     signUpRoute,

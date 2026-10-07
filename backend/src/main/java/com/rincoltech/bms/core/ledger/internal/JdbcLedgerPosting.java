@@ -6,6 +6,7 @@ import com.rincoltech.bms.core.tenancy.TenantSequences;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.dao.DuplicateKeyException;
@@ -32,6 +33,17 @@ class JdbcLedgerPosting implements LedgerPosting {
     @Transactional(propagation = Propagation.MANDATORY)
     public PostedEntry post(EntryRequest request) {
         return insert(request, null);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean periodOpen(LocalDate date) {
+        return jdbc.sql("SELECT status FROM gl_periods WHERE year = ? AND month = ?")
+                .params(date.getYear(), date.getMonthValue())
+                .query(String.class)
+                .optional()
+                .map("open"::equals)
+                .orElse(true);
     }
 
     @Override

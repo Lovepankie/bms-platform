@@ -225,12 +225,19 @@ activity in 90 days.
 ### `lending.savings_balances`
 
 Parameters: `as_at`, branches, product. Per account: member, balance, status, last member
-transaction. Totals per product and branch reconcile to `member_savings`.
+transaction. Totals per product and branch reconcile to `member_savings`. Served as JSON by
+`GET /lending/savings-reports/balances` until the report catalogue serves files (#151): balances
+by value date from the movements, so they agree with the end-of-day balances of chapter 6.
 
 ### `lending.savings_movements`
 
 Parameters: date range, branches, product. Deposits, withdrawals, interest posted, fees,
-net movement; opening and closing totals.
+net movement; opening and closing totals. Served as JSON by `GET /lending/savings-reports/movements`
+(#151), per branch and product, with reversals into and out of accounts shown apart.
+
+The savings figures of the insights page (balances, inflows net of reversed deposits, outflows net
+of reversed withdrawals and fees, interest paid, dormant accounts) come from the same queries
+through the `SavingsMetrics` interface (ADR-032).
 
 ### `lending.investments_register`
 

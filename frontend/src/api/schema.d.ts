@@ -1038,6 +1038,264 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/savings-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List savings accounts in the caller's branch scope, by account number */
+        get: operations["listSavingsAccounts"];
+        put?: never;
+        /** Open a savings account for a member (FR-SAV-02); a member may hold several */
+        post: operations["openSavingsAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-accounts/{account_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A savings account with its balance and accrued interest */
+        get: operations["getSavingsAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-accounts/{account_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request closure (FR-SAV-07): interest to date, then the whole balance paid out */
+        post: operations["requestSavingsClosure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-accounts/{account_id}/deposits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a deposit (FR-SAV-03) */
+        post: operations["recordSavingsDeposit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-accounts/{account_id}/freeze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Freeze an account: no withdrawal or closure until unfrozen */
+        post: operations["freezeSavingsAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-accounts/{account_id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivate a dormant account (FR-SAV-06) */
+        post: operations["reactivateSavingsAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-accounts/{account_id}/statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The account statement for a range of value dates; the last three months by default */
+        get: operations["getSavingsStatement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-accounts/{account_id}/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The account's movements with running balances, newest first (FR-SAV-04) */
+        get: operations["listSavingsTransactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-accounts/{account_id}/transactions/{txn_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request the reversal of a deposit or a withdrawal (with its fee), with a reason; always checked */
+        post: operations["requestSavingsReversal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-accounts/{account_id}/unfreeze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unfreeze an account */
+        post: operations["unfreezeSavingsAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-accounts/{account_id}/withdrawals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request a withdrawal (FR-SAV-03); 201 when executed below the threshold, 202 when it waits for a checker */
+        post: operations["requestSavingsWithdrawal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List savings products */
+        get: operations["listSavingsProducts"];
+        put?: never;
+        /** Create a savings product (FR-SAV-01) */
+        post: operations["createSavingsProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-products/{product_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A savings product */
+        get: operations["getSavingsProduct"];
+        /** Update or archive a savings product; its interest terms are locked once an account uses it */
+        put: operations["updateSavingsProduct"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-reports/balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Savings balances as at the end of a day (today by default), per account, with totals per product and branch */
+        get: operations["getSavingsBalancesReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/savings-reports/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Savings movements by value date (this month by default): opening, deposits, withdrawals, interest, fees, reversals, closing */
+        get: operations["getSavingsMovementsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -2691,6 +2949,12 @@ export interface components {
             /** Format: uuid */
             unit_id: string;
         };
+        CreateSavingsProductRequest: {
+            code: string;
+            /** @description The tenant's currency when omitted */
+            currency?: string;
+            terms: components["schemas"]["SavingsProductTerms"];
+        };
         CreateTenantRequest: {
             admin: components["schemas"]["FirstAdminRequest"];
             /** @description Default UGX */
@@ -3438,6 +3702,17 @@ export interface components {
         };
         NextOfKinList: {
             items?: components["schemas"]["NextOfKin"][];
+        };
+        OpenSavingsAccountRequest: {
+            /**
+             * Format: uuid
+             * @description The member's home branch when omitted (FR-BR-05)
+             */
+            branch_id?: string;
+            /** Format: uuid */
+            member_id: string;
+            /** Format: uuid */
+            product_id: string;
         };
         OutboxFailure: {
             /** Format: int32 */
@@ -4529,6 +4804,326 @@ export interface components {
         RoleCatalogue: {
             items?: components["schemas"]["Role"][];
         };
+        SavingsAccount: {
+            account_no?: string;
+            /**
+             * Format: int64
+             * @description Interest earned since the last posting through balances_through, an estimate rounded for display; the posting rounds once over the whole period
+             */
+            accrued_interest_minor?: number;
+            /**
+             * Format: int64
+             * @description The most a withdrawal may take now: balance less hold, minimum balance and fee
+             */
+            available_minor?: number;
+            /** Format: int64 */
+            balance_minor?: number;
+            /** Format: date */
+            balances_through?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            closed_on?: string;
+            currency?: string;
+            /** Format: int64 */
+            hold_minor?: number;
+            /** Format: uuid */
+            id?: string;
+            interest_calc?: string;
+            interest_posting?: string;
+            /** Format: int32 */
+            interest_rate_bp?: number;
+            /** Format: date */
+            last_interest_posted_to?: string;
+            /** Format: date */
+            last_member_txn_on?: string;
+            /** Format: uuid */
+            member_id?: string;
+            member_name?: string;
+            member_no?: string;
+            /** Format: int64 */
+            min_balance_minor?: number;
+            /** Format: date */
+            opened_on?: string;
+            product_code?: string;
+            /** Format: uuid */
+            product_id?: string;
+            product_name?: string;
+            /** @description active, dormant, frozen or closed */
+            status?: string;
+            status_reason?: string;
+            /** Format: int32 */
+            version?: number;
+            /** Format: int64 */
+            withdrawal_fee_minor?: number;
+        };
+        SavingsAccountPage: {
+            items?: components["schemas"]["SavingsAccount"][];
+            next_cursor?: string;
+        };
+        /** @description executed: the action took effect now (below the tenant's threshold); otherwise it waits for a checker as approval_request_id. transaction is the withdrawal when executed */
+        SavingsActionOutcome: {
+            account?: components["schemas"]["SavingsAccount"];
+            /** Format: uuid */
+            account_id?: string;
+            /** Format: uuid */
+            approval_request_id?: string;
+            executed?: boolean;
+            transaction?: components["schemas"]["SavingsTransaction"];
+        };
+        SavingsBalanceRow: {
+            /** Format: uuid */
+            account_id?: string;
+            account_no?: string;
+            /** Format: int64 */
+            balance_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            last_member_txn_on?: string;
+            member_name?: string;
+            member_no?: string;
+            product_code?: string;
+            status?: string;
+        };
+        /** @description lending.savings_balances (chapter 14 section 14.5): balances as at the end of a day; totals per product and branch reconcile to member_savings */
+        SavingsBalancesReport: {
+            /** Format: date */
+            as_at?: string;
+            currency?: string;
+            rows?: components["schemas"]["SavingsBalanceRow"][];
+            /** Format: int64 */
+            total_minor?: number;
+            totals?: components["schemas"]["SavingsTotal"][];
+        };
+        SavingsCloseRequest: {
+            external_reference?: string;
+            payment_method_key: string;
+            reason?: string;
+        };
+        SavingsDepositResult: {
+            account?: components["schemas"]["SavingsAccount"];
+            transaction?: components["schemas"]["SavingsTransaction"];
+        };
+        SavingsMoneyRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            external_reference?: string;
+            payment_method_key: string;
+            /**
+             * Format: date
+             * @description Today when omitted; today or earlier, after the last day the nightly job has closed
+             */
+            value_date?: string;
+        };
+        SavingsMovementRow: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: int64 */
+            closing_minor?: number;
+            /** Format: int64 */
+            deposits_minor?: number;
+            /** Format: int64 */
+            fees_minor?: number;
+            /** Format: int64 */
+            interest_minor?: number;
+            /** Format: int64 */
+            net_minor?: number;
+            /** Format: int64 */
+            opening_minor?: number;
+            product_code?: string;
+            /** Format: int64 */
+            reversals_in_minor?: number;
+            /** Format: int64 */
+            reversals_out_minor?: number;
+            /** Format: int64 */
+            withdrawals_minor?: number;
+        };
+        /** @description lending.savings_movements (chapter 14 section 14.5): movements by value date in the range */
+        SavingsMovementsReport: {
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            rows?: components["schemas"]["SavingsMovementRow"][];
+            /** Format: date */
+            to?: string;
+            total?: components["schemas"]["SavingsMovementRow"];
+        };
+        SavingsProduct: {
+            /**
+             * Format: int64
+             * @description Accounts on the product; the interest fields are locked when above zero
+             */
+            accounts?: number;
+            code?: string;
+            currency?: string;
+            /** Format: int32 */
+            dormancy_days?: number;
+            /** Format: uuid */
+            id?: string;
+            interest_calc?: string;
+            interest_posting?: string;
+            /** Format: int32 */
+            interest_rate_bp?: number;
+            /** Format: int64 */
+            max_withdrawal_minor?: number;
+            /** Format: int32 */
+            max_withdrawals_per_month?: number;
+            /** Format: int64 */
+            min_balance_for_interest_minor?: number;
+            /** Format: int64 */
+            min_balance_minor?: number;
+            /** Format: int64 */
+            min_opening_balance_minor?: number;
+            name?: string;
+            status?: string;
+            /** Format: int32 */
+            version?: number;
+            /** Format: int64 */
+            withdrawal_fee_minor?: number;
+        };
+        SavingsProductList: {
+            items?: components["schemas"]["SavingsProduct"][];
+        };
+        /** @description FR-SAV-01: the product's rules */
+        SavingsProductTerms: {
+            /**
+             * Format: int32
+             * @description Days without a member deposit or withdrawal before the account is dormant (FR-SAV-06)
+             */
+            dormancy_days?: number;
+            interest_calc: string;
+            interest_posting: string;
+            /**
+             * Format: int32
+             * @description Per year, in basis points; 0 with interest_calc none
+             */
+            interest_rate_bp: number;
+            /**
+             * Format: int64
+             * @description The most one withdrawal may take; none when omitted
+             */
+            max_withdrawal_minor?: number;
+            /**
+             * Format: int32
+             * @description Withdrawals allowed per calendar month; none when omitted
+             */
+            max_withdrawals_per_month?: number;
+            /**
+             * Format: int64
+             * @description A day or month below this balance earns nothing; 0 when omitted
+             */
+            min_balance_for_interest_minor?: number;
+            /**
+             * Format: int64
+             * @description A withdrawal never takes the balance below this; 0 when omitted
+             */
+            min_balance_minor?: number;
+            /**
+             * Format: int64
+             * @description The first deposit's minimum; 0 when omitted
+             */
+            min_opening_balance_minor?: number;
+            name: string;
+            /**
+             * Format: int64
+             * @description Flat fee per withdrawal; 0 when omitted
+             */
+            withdrawal_fee_minor?: number;
+        };
+        SavingsReasonRequest: {
+            reason: string;
+        };
+        /** @description Movements recorded in the range by value date, in recording order */
+        SavingsStatement: {
+            /** Format: uuid */
+            account_id?: string;
+            account_no?: string;
+            /** Format: int64 */
+            closing_balance_minor?: number;
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            lines?: components["schemas"]["SavingsStatementLine"][];
+            member_name?: string;
+            member_no?: string;
+            /** Format: int64 */
+            opening_balance_minor?: number;
+            product_name?: string;
+            /** Format: date */
+            to?: string;
+            /** Format: int64 */
+            total_credits_minor?: number;
+            /** Format: int64 */
+            total_debits_minor?: number;
+        };
+        SavingsStatementLine: {
+            /** Format: int64 */
+            balance_minor?: number;
+            /** Format: int64 */
+            credit_minor?: number;
+            /** Format: int64 */
+            debit_minor?: number;
+            description?: string;
+            receipt_no?: string;
+            /** Format: int32 */
+            seq?: number;
+            txn_type?: string;
+            /** Format: date */
+            value_date?: string;
+        };
+        SavingsTotal: {
+            /** Format: int64 */
+            accounts?: number;
+            /** Format: int64 */
+            balance_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            product_code?: string;
+        };
+        SavingsTransaction: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: uuid */
+            approval_request_id?: string;
+            /** Format: int64 */
+            balance_after_minor?: number;
+            /** @description True when the money went into the account */
+            credit?: boolean;
+            currency?: string;
+            external_reference?: string;
+            /** Format: uuid */
+            id?: string;
+            payment_method_key?: string;
+            reason?: string;
+            receipt_no?: string;
+            /** Format: date-time */
+            recorded_at?: string;
+            /** Format: uuid */
+            related_txn_id?: string;
+            /** Format: uuid */
+            reversed_by_txn_id?: string;
+            /** Format: uuid */
+            reverses_txn_id?: string;
+            /** Format: int32 */
+            seq?: number;
+            source?: string;
+            /** @description deposit, withdrawal, interest, fee, transfer_in, transfer_out or reversal */
+            txn_type?: string;
+            /** Format: date */
+            value_date?: string;
+        };
+        SavingsTransactionPage: {
+            items?: components["schemas"]["SavingsTransaction"][];
+            next_cursor?: string;
+        };
+        /** @description Dated the day it executes: today, or the day a checker approves it */
+        SavingsWithdrawalRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            external_reference?: string;
+            payment_method_key: string;
+        };
         SchedulePreview: {
             /**
              * Format: int64
@@ -4770,6 +5365,11 @@ export interface components {
             description?: string;
             /** Format: uuid */
             unit_id?: string;
+        };
+        /** @description The interest fields cannot change once an account uses the product */
+        UpdateSavingsProductRequest: {
+            status: string;
+            terms: components["schemas"]["SavingsProductTerms"];
         };
         UpdateTenantSettingsRequest: {
             allow_loans_before_kyc_verified?: boolean;
@@ -6685,6 +7285,464 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NextOfKin"];
+                };
+            };
+        };
+    };
+    listSavingsAccounts: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                member_id?: string;
+                status?: string[];
+                product_id?: string;
+                q?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsAccountPage"];
+                };
+            };
+        };
+    };
+    openSavingsAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenSavingsAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsAccount"];
+                };
+            };
+        };
+    };
+    getSavingsAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsAccount"];
+                };
+            };
+        };
+    };
+    requestSavingsClosure: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsCloseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsActionOutcome"];
+                };
+            };
+        };
+    };
+    recordSavingsDeposit: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsMoneyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsDepositResult"];
+                };
+            };
+        };
+    };
+    freezeSavingsAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsAccount"];
+                };
+            };
+        };
+    };
+    reactivateSavingsAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsAccount"];
+                };
+            };
+        };
+    };
+    getSavingsStatement: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsStatement"];
+                };
+            };
+        };
+    };
+    listSavingsTransactions: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsTransactionPage"];
+                };
+            };
+        };
+    };
+    requestSavingsReversal: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                account_id: string;
+                txn_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsActionOutcome"];
+                };
+            };
+        };
+    };
+    unfreezeSavingsAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsAccount"];
+                };
+            };
+        };
+    };
+    requestSavingsWithdrawal: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsWithdrawalRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsActionOutcome"];
+                };
+            };
+        };
+    };
+    listSavingsProducts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsProductList"];
+                };
+            };
+        };
+    };
+    createSavingsProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSavingsProductRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsProduct"];
+                };
+            };
+        };
+    };
+    getSavingsProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsProduct"];
+                };
+            };
+        };
+    };
+    updateSavingsProduct: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSavingsProductRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsProduct"];
+                };
+            };
+        };
+    };
+    getSavingsBalancesReport: {
+        parameters: {
+            query?: {
+                as_at?: string;
+                branch_id?: string[];
+                product_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsBalancesReport"];
+                };
+            };
+        };
+    };
+    getSavingsMovementsReport: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                branch_id?: string[];
+                product_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsMovementsReport"];
                 };
             };
         };

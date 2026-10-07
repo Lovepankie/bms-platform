@@ -17,6 +17,12 @@ public interface MemberLookup {
     Optional<MemberSummary> lock(UUID memberId);
 
     /**
+     * The member's primary phone in E.164, for a transaction receipt SMS (chapter 11 section 11.3).
+     * Personal data: never logged, never returned in a response of the calling module.
+     */
+    Optional<String> smsPhone(UUID memberId);
+
+    /**
      * Members linked to this one through next of kin (the relationship view of chapter 6 section
      * 6.7), both directions; used for the exposure rule of chapter 3 section 3.18.1.
      */
