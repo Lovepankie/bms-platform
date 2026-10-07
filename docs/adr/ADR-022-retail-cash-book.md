@@ -4,7 +4,8 @@
 
 Proposed (2026-10-06, issue #147). Design only: no code and no migration come with this record.
 It becomes Accepted on merge of the pull request that carries it, and the accounting treatment in
-decisions 3 to 7 stays provisional until the Owner confirms it (open questions 1 to 4 at the end).
+decisions 3 to 7 stays provisional until the Owner confirms it (open questions 1, 2 and 4 at the end are the build gate; the rest have a stated default).
+Decisions 4, 5, 6 and 13 name their open questions where they depend on one.
 Completes the cash book that ADR-020 left out of the first release ("pending ADR-022"). Amends
 nothing in ADR-020.
 
@@ -250,7 +251,10 @@ parts to core with a new ADR instead of reaching across.
 
 ## Open questions for the Owner
 
-Do not guess these; nothing in the build starts until 1, 2 and 4 are answered.
+Do not guess these. **The build gate is questions 1, 2 and 4** (the real lists, the credit rule and
+the reserve treatment): nothing in the build starts until those three are answered. Questions 3 and
+5 to 9 each have a default in this record, which stays a default pending the answer, and bind only
+the part they name. Question 8 and 9 were added in review.
 
 1. **The real expense categories and items.** The pilot app's expense categories tab holds the
    list and which items need an explanation. It is exported with the cash book import
@@ -266,11 +270,18 @@ Do not guess these; nothing in the build starts until 1, 2 and 4 are answered.
 4. **The savings reserve's account treatment.** Recommended: a restricted cash asset
    (`savings_reserve`), not an expense and not equity. Where is the reserve held physically (a
    separate box, the bank, a mobile money wallet)? Are there withdrawals from the reserve, and for
-   what?
+   what? **Version one has no event that releases the reserve** (money set aside only grows, and
+   nothing moves it back to cash or spends it). If the answer is yes, a `reserve release` record
+   (debit `cash_on_hand` or `bank`, credit `savings_reserve`, owner or admin only, void by reversal)
+   is added to the design before the build, a gap this question exists to close; if no, the reserve
+   is a pure accumulator and that is stated to the Owner.
 5. **Who may overwrite the savings amount, and may shop staff see the default?** The pilot lets any
    user overwrite it and shows the default, which reveals half the profit. Recommended: any holder
    of `retail.savings.record` may record, overwrites need a reason and are audited, and the profit
-   itself stays admin only. Say if staff should not see or change the amount.
+   itself stays admin only. Until it is answered, **the default matrix does not grant
+   `retail.savings.overwrite` to the sales role** (only the tenant admin holds it), so the safer
+   behaviour is the default and a change is a role mapping, not a rebuild; the pilot's behaviour
+   (any user may overwrite) is the alternative. What staff may see of savings is question 8.
 6. **Are advances recorded by admins only, and who may record repayments?** The pilot lets any
    signed-in user do both; this design makes both owner or admin only.
 7. **Should the withdrawal form have a shop?** The pilot form has none; the ledger needs a branch.

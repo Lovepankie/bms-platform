@@ -71,13 +71,13 @@ cannot be read is listed, never guessed or dropped.
 
 ## 8. For the Owner to sign off
 
-Tick or correct each line. The build does not start on lines 1 to 4 until they are answered.
+Tick or correct each line. The build does not start until lines 1, 2 and 4 are answered; the other lines have a default in ADR-022 that stays a default until you answer.
 
 1. [ ] The real expense categories and items, which need an explanation, and the account each maps to.
 2. [ ] Credit sales are not cash, so they are left out of the expected amount to bank until they are paid in cash. Cash expenses and cash advances paid from the till reduce it.
 3. [ ] Withdrawals and advances need no approval in version one (owner or admin only). If they do: above what amount?
-4. [ ] Savings go to a savings reserve account (an asset), not an expense. Where is that money kept?
-5. [ ] Shop staff may record savings and overwrite the amount with a reason, and see the default. Or not?
+4. [ ] Savings go to a savings reserve account (an asset), not an expense. Where is that money kept? Is money ever taken back out of the reserve, and why? (Version one has no such record; if yes, one is added before the build.)
+5. [ ] Shop staff may record savings; only the owner or admin overwrite the amount, with a reason, until you say otherwise. Should shop staff be allowed to overwrite? (See line 8 for what they see.)
 6. [ ] Only owner or admin record advances and repayments. The hidden processing fee is dropped.
 7. [ ] A withdrawal is recorded against a shop (default the head office).
 8. [ ] Savings amounts count as profit, so only people who may see profit see them (shop staff see the cash expected figure, not the net amount to bank). Or may shop staff see them?
