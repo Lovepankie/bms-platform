@@ -6,6 +6,14 @@ name: CI
 
 on:
   pull_request:
+    # Prose-only changes cannot affect a build or a test (only comments in code mention these
+    # folders), so they skip the long jobs on the single Pi runner. docs/sdd, docs/api, docs/adr and
+    # AGENTS.md are NOT listed: tests read them (permission matrix, OpenAPI snapshot, ADR index).
+    paths-ignore:
+      - "docs/specs/**"
+      - "docs/runbooks/**"
+      - "docs/ui/**"
+      - "CONTEXT.md"
   push:
     branches: [main]
   workflow_dispatch:
