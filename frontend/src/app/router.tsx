@@ -165,6 +165,7 @@ const retailProductsRoute = retailScreen('/catalogue/products').lazy(() => impor
 const retailCategoriesRoute = retailScreen('/catalogue/categories').lazy(() => import('../areas/staff/retail/catalogue-lists').then((m) => m.CategoriesRoute));
 const retailUnitsRoute = retailScreen('/catalogue/units').lazy(() => import('../areas/staff/retail/catalogue-lists').then((m) => m.UnitsRoute));
 const retailSuppliersRoute = retailScreen('/catalogue/suppliers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.SuppliersRoute));
+const retailImportRoute = retailScreen('/catalogue/import').lazy(() => import('../areas/staff/retail/catalogue-import').then((m) => m.ImportRoute));
 const retailBuyersRoute = retailScreen('/catalogue/buyers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.BuyersRoute));
 
 const signUpRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sign-up' }).lazy(() =>
@@ -225,6 +226,7 @@ export const router = createRouter({
         retailUnitsRoute,
         retailSuppliersRoute,
         retailBuyersRoute,
+        retailImportRoute,
       ])]),
     memberRoute,
     signUpRoute,

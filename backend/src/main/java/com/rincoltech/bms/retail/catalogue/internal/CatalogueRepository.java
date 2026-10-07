@@ -113,6 +113,33 @@ class CatalogueRepository {
                         """).params(id, name, createdBy).update();
     }
 
+    /** Lower-cased name to id, for the import's lookups. */
+    Map<String, UUID> categoryIdsByName() {
+        return namesToIds("retail_categories");
+    }
+
+    Map<String, UUID> unitIdsByName() {
+        return namesToIds("retail_units");
+    }
+
+    private Map<String, UUID> namesToIds(String table) {
+        Map<String, UUID> ids = new java.util.HashMap<>();
+        jdbc.sql("SELECT id, lower(name) AS n FROM " + table)
+                .query((rs, n) -> {
+                    ids.put(rs.getString("n"), rs.getObject("id", UUID.class));
+                    return 0;
+                })
+                .list();
+        return ids;
+    }
+
+    /** Every product code of the tenant, lower-cased. */
+    java.util.Set<String> productCodes() {
+        return new java.util.HashSet<>(jdbc.sql("SELECT lower(code) FROM retail_products")
+                .query(String.class)
+                .list());
+    }
+
     // ---- Products ------------------------------------------------------------------------
 
     Optional<Product> find(UUID id) {

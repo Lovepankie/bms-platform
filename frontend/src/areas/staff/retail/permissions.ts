@@ -39,8 +39,8 @@ const NEEDS: Record<RetailScreen, string[]> = {
   units: ['retail.catalogue.manage', 'retail.stock.read'],
   suppliers: ['retail.catalogue.manage', 'retail.purchase.create'],
   buyers: ['retail.customer.manage', 'retail.sale.read'],
-  // Importing items needs the catalogue permission; the server also asks for an administrator (#146).
-  importer: ['retail.catalogue.manage', 'retail.stock.read'],
+  // Importing items needs the catalogue permission; core.settings.manage is the administrator's (#146).
+  importer: ['retail.catalogue.manage', 'retail.stock.read', 'core.settings.manage'],
 };
 
 /** Every permission a screen needs. */

@@ -3461,6 +3461,81 @@
           }
         }
       },
+      "RetailProductImportRequest" : {
+        "properties" : {
+          "csv" : {
+            "description" : "The CSV text: a header row, then one item per row. Columns code, description, category, unit, sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated.",
+            "maxLength" : 1000000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "csv" ]
+      },
+      "RetailProductImportResult" : {
+        "properties" : {
+          "added" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "categories_created" : {
+            "description" : "Categories that are new (would be created on a dry run, were created on an apply)",
+            "items" : {
+              "description" : "Categories that are new (would be created on a dry run, were created on an apply)",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "dry_run" : {
+            "type" : "boolean"
+          },
+          "errors" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailProductImportRow"
+            },
+            "type" : "array"
+          },
+          "rows_read" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "skipped" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "units_created" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailProductImportRow" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "line" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "outcome" : {
+            "description" : "added, skipped (the code exists already or repeats in the file) or error",
+            "type" : "string"
+          }
+        }
+      },
       "RetailProductPage" : {
         "properties" : {
           "items" : {
@@ -9161,6 +9236,44 @@
           }
         },
         "summary" : "Create a product with its first prices (FR-RET-01)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/products/import" : {
+      "post" : {
+        "operationId" : "importRetailProducts",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "dry_run",
+          "required" : false,
+          "schema" : {
+            "default" : true,
+            "type" : "boolean"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailProductImportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailProductImportResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Import items from CSV for a new client: dry run first, then apply; administrators only (#146)",
         "tags" : [ "retail-catalogue" ]
       }
     },

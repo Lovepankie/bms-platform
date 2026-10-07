@@ -1518,6 +1518,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/products/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import items from CSV for a new client: dry run first, then apply; administrators only (#146) */
+        post: operations["importRetailProducts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/products/{product_id}": {
         parameters: {
             query?: never;
@@ -3500,6 +3517,34 @@ export interface components {
             updated_at?: string;
             /** Format: int32 */
             version?: number;
+        };
+        RetailProductImportRequest: {
+            /** @description The CSV text: a header row, then one item per row. Columns code, description, category, unit, sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated. */
+            csv: string;
+        };
+        RetailProductImportResult: {
+            /** Format: int32 */
+            added?: number;
+            /** @description Categories that are new (would be created on a dry run, were created on an apply) */
+            categories_created?: string[];
+            dry_run?: boolean;
+            /** Format: int32 */
+            errors?: number;
+            rows?: components["schemas"]["RetailProductImportRow"][];
+            /** Format: int32 */
+            rows_read?: number;
+            /** Format: int32 */
+            skipped?: number;
+            units_created?: string[];
+        };
+        RetailProductImportRow: {
+            code?: string;
+            description?: string;
+            /** Format: int32 */
+            line?: number;
+            message?: string;
+            /** @description added, skipped (the code exists already or repeats in the file) or error */
+            outcome?: string;
         };
         RetailProductPage: {
             items?: components["schemas"]["RetailProduct"][];
@@ -7012,6 +7057,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    importRetailProducts: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailProductImportRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProductImportResult"];
                 };
             };
         };

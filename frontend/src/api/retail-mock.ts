@@ -25,7 +25,7 @@ const SALES_PERMISSIONS = [
 ];
 const ADMIN_PERMISSIONS = [
   ...SALES_PERMISSIONS, 'retail.catalogue.manage', 'retail.price.edit', 'retail.sale.void',
-  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read',
+  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage',
 ];
 
 /** A fake signed-in user for the mock session, so the app runs without a backend. */
@@ -235,6 +235,41 @@ export function createMockRetail(): RetailApi {
       }),
 
     priceHistory: (id) => run(() => ((find(id) && history.get(id)) || undefined)?.map((h) => (profitAccess ? h : { ...h, old_cost_minor: undefined, new_cost_minor: undefined })) || [{ id: nextId('h'), at: '2026-09-01T08:00:00Z', source: 'initial', new_sell_minor: find(id).sellMinor, currency: 'UGX', ...(profitAccess ? { new_cost_minor: find(id).costMinor } : {}) }]),
+
+    importProducts: (csv, dryRun) =>
+      run(() => {
+        const lines = csv.split(/\r?\n/).filter((l) => l.trim() !== '');
+        const sep = lines[0]?.includes('\t') ? '\t' : ',';
+        const head = (lines[0] ?? '').split(sep).map((h) => h.trim().toLowerCase().replace(/[\s-]+/g, '_'));
+        for (const need of ['code', 'description', 'category', 'unit', 'sell_price']) {
+          if (!head.includes(need)) refuse(422, 'validation_failed', `The file needs a column called ${need.replace('_', ' ')}.`);
+        }
+        if (head.includes('cost_price') && !profitAccess) refuse(422, 'cost_not_allowed', 'The cost price column needs permission to see costs. Take that column out of the file and try again.');
+        const seen = new Set<string>();
+        const rows = lines.slice(1).map((l, i) => {
+          const c = l.split(sep).map((x) => x.trim());
+          const get = (n: string) => c[head.indexOf(n)] ?? '';
+          const code = get('code');
+          const base = { line: i + 2, code, description: get('description') };
+          if (!/^\d+$/.test(get('sell_price').replace(/,/g, ''))) return { ...base, outcome: 'error', message: 'The sell price must be a whole number, for example 12000.' };
+          if ([...products.values()].some((p) => p.code.toLowerCase() === code.toLowerCase())) return { ...base, outcome: 'skipped', message: 'An item with this code exists already.' };
+          if (seen.has(code.toLowerCase())) return { ...base, outcome: 'skipped', message: 'This code is repeated in the file; the first row is used.' };
+          seen.add(code.toLowerCase());
+          return { ...base, outcome: 'added', message: dryRun ? 'Would be added.' : 'Added.' };
+        });
+        const count = (o: string) => rows.filter((r) => r.outcome === o).length;
+        if (!dryRun && count('error') > 0) refuse(422, 'import_has_errors', `${count('error')} rows have a problem. Nothing was added. Run the check to see which rows, fix them and try again.`);
+        if (!dryRun) {
+          lines.slice(1).forEach((l) => {
+            const c = l.split(sep).map((x) => x.trim());
+            const get = (n: string) => c[head.indexOf(n)] ?? '';
+            if ([...products.values()].some((p) => p.code.toLowerCase() === get('code').toLowerCase())) return;
+            const id = nextId('b');
+            products.set(id, { id, code: get('code'), description: get('description'), category: get('category'), unit: get('unit'), costMinor: 0, sellMinor: Number(get('sell_price').replace(/,/g, '')), active: true, version: 1 });
+          });
+        }
+        return { dry_run: dryRun, rows_read: rows.length, added: count('added'), skipped: count('skipped'), errors: count('error'), categories_created: [], units_created: [], rows };
+      }),
 
     createCategory: (name) =>
       run(() => {

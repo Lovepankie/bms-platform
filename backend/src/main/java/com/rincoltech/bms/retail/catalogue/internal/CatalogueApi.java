@@ -176,4 +176,39 @@ final class CatalogueApi {
 
     @Schema(name = "RetailPriceHistory")
     record PriceHistory(List<PriceChange> items) {}
+
+    @Schema(name = "RetailProductImportRequest")
+    record ImportRequest(
+            @NotBlank
+            @Size(max = ProductImportService.MAX_CHARS)
+            @Schema(
+                    description =
+                            "The CSV text: a header row, then one item per row. Columns code, description, category, unit,"
+                                    + " sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated.")
+            String csv) {}
+
+    @Schema(name = "RetailProductImportRow")
+    record ImportRow(
+            int line,
+            String code,
+            String description,
+
+            @Schema(description = "added, skipped (the code exists already or repeats in the file) or error")
+            String outcome,
+
+            String message) {}
+
+    @Schema(name = "RetailProductImportResult")
+    record ImportResult(
+            boolean dryRun,
+            int rowsRead,
+            int added,
+            int skipped,
+            int errors,
+
+            @Schema(description = "Categories that are new (would be created on a dry run, were created on an apply)")
+            List<String> categoriesCreated,
+
+            List<String> unitsCreated,
+            List<ImportRow> rows) {}
 }

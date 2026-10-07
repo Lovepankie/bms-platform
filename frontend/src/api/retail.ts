@@ -23,6 +23,8 @@ export type PriceChange = S['RetailPriceChange'];
 export type NewProduct = S['CreateRetailProductRequest'];
 export type ProductChange = S['UpdateRetailProductRequest'];
 export type PriceEdit = S['RetailPriceEditRequest'];
+export type ImportResult = S['RetailProductImportResult'];
+export type ImportRow = S['RetailProductImportRow'];
 export type Customer = S['RetailCustomer'];
 export type Supplier = S['RetailSupplier'];
 export type SaleRequest = S['RetailSaleRequest'];
@@ -106,6 +108,8 @@ export interface RetailApi {
   /** A price change under If-Match; the server writes the history row. */
   editPrices(id: string, version: number, body: PriceEdit): Promise<Product>;
   priceHistory(id: string): Promise<PriceChange[]>;
+  /** The CSV item import: a dry run reports, an apply adds the rows that are fine (administrators only). */
+  importProducts(csv: string, dryRun: boolean): Promise<ImportResult>;
   createCategory(name: string): Promise<Category>;
   updateCategory(id: string, body: { name?: string; active?: boolean }): Promise<Category>;
   listUnits(): Promise<Unit[]>;
@@ -205,6 +209,10 @@ const realRetail: RetailApi = {
 
   async priceHistory(id) {
     return unwrap(await api.GET('/api/v1/retail/products/{product_id}/price-history', { params: { path: { product_id: id } } })).items ?? [];
+  },
+
+  async importProducts(csv, dryRun) {
+    return unwrap(await api.POST('/api/v1/retail/products/import', { params: { query: { dry_run: dryRun } }, body: { csv } }));
   },
 
   async createCategory(name) {

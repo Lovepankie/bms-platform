@@ -5,6 +5,8 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Category;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.CategoryList;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.CategoryRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.CreateProductRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ImportRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ImportResult;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceEditRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceHistory;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Product;
@@ -40,9 +42,11 @@ import org.springframework.web.bind.annotation.RestController;
 class CatalogueController {
 
     private final CatalogueService service;
+    private final ProductImportService importer;
 
-    CatalogueController(CatalogueService service) {
+    CatalogueController(CatalogueService service, ProductImportService importer) {
         this.service = service;
+        this.importer = importer;
     }
 
     @GetMapping("/categories")
@@ -112,6 +116,17 @@ class CatalogueController {
         return ResponseEntity.created(URI.create("/api/v1/retail/products/" + created.id()))
                 .eTag(String.valueOf(created.version()))
                 .body(created);
+    }
+
+    @PostMapping("/products/import")
+    @RequiresPermission("retail.catalogue.manage")
+    @Operation(
+            summary = "Import items from CSV for a new client: dry run first, then apply; administrators only (#146)",
+            operationId = "importRetailProducts")
+    ImportResult importProducts(
+            @RequestParam(name = "dry_run", required = false, defaultValue = "true") boolean dryRun,
+            @Valid @RequestBody ImportRequest request) {
+        return importer.run(request.csv(), dryRun);
     }
 
     @GetMapping("/products/{product_id}")

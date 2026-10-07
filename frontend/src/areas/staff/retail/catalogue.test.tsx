@@ -6,6 +6,7 @@ import type { Category, Customer, PriceChange, Product } from '../../../api/reta
 import { createMockRetail, mockMe, setMockProfitAccess } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { catalogueLinksFor } from './catalogue';
+import { ImportReport } from './catalogue-import';
 import { NamedRow, usedText } from './catalogue-lists';
 import { PersonRow } from './catalogue-people';
 import { PriceForm, PriceHistory, ProductCard, ProductForm, belowCostHint, showWhen } from './catalogue-products';
@@ -195,5 +196,52 @@ describe('the mock catalogue (the server rules the screens rely on)', () => {
     expect(edited.contact).toBe('+256700000009');
     const [supplier] = await api.listSuppliers();
     expect((await api.updateSupplier(supplier?.id ?? '', { active: false })).active).toBe(false);
+  });
+});
+
+describe('importing items from a file', () => {
+  const csv = 'code,description,category,unit,sell price\nIMP-1,Test cable,Cables,roll,12000\nP003,Test existing,Lighting,piece,500\nIMP-2,Test bulb,Lighting,piece,abc\n';
+
+  it('is for an administrator only', () => {
+    const catalogueManager = { permissions: ['retail.catalogue.manage', 'retail.stock.read'] };
+    expect(canUse(catalogueManager, 'importer')).toBe(false);
+    expect(canUse({ permissions: [...catalogueManager.permissions, 'core.settings.manage'] }, 'importer')).toBe(true);
+    expect(canUse(mockMe('sales'), 'importer')).toBe(false);
+    const html = page('admin', <Gate screen="importer" title="Import items"><p>FORM</p></Gate>, catalogueManager.permissions);
+    expect(html).toContain('You do not have access');
+    expect(html).not.toContain('FORM');
+  });
+
+  it('reports rows to add, skip and fix, in words', async () => {
+    setMockProfitAccess(true);
+    const api = createMockRetail();
+    const dry = await api.importProducts(csv, true);
+    expect([dry.added, dry.skipped, dry.errors]).toEqual([1, 1, 1]);
+    const html = renderToString(<ImportReport result={dry} />);
+    expect(html).toContain('What would happen');
+    expect(html).toContain('<strong>1</strong> to add');
+    expect(html).toContain('An item with this code exists already.');
+    expect(html).toContain('The sell price must be a whole number');
+    expect((await api.listCatalogue({ query: 'IMP-1' })).items).toHaveLength(0);
+  });
+
+  it('adds nothing while a row has a problem, and adding twice adds once', async () => {
+    setMockProfitAccess(true);
+    const api = createMockRetail();
+    await expect(api.importProducts(csv, false)).rejects.toMatchObject({ code: 'import_has_errors' });
+    const clean = csv.replace('abc', '900');
+    const first = await api.importProducts(clean, false);
+    expect([first.added, first.skipped]).toEqual([2, 1]);
+    const again = await api.importProducts(clean, false);
+    expect([again.added, again.skipped]).toEqual([0, 3]);
+    expect((await api.listCatalogue({ query: 'IMP-' })).items).toHaveLength(2);
+    expect(renderToString(<ImportReport result={first} />)).toContain('What was done');
+  });
+
+  it('refuses the cost column to a session that may not see costs', async () => {
+    setMockProfitAccess(false);
+    const api = createMockRetail();
+    await expect(api.importProducts(csv.replace('sell price', 'sell price,cost price'), true)).rejects.toMatchObject({ code: 'cost_not_allowed' });
+    setMockProfitAccess(true);
   });
 });
