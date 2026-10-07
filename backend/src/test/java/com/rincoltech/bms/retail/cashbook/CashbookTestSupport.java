@@ -129,4 +129,50 @@ public final class CashbookTestSupport {
                 .query(String.class)
                 .list();
     }
+
+    /** A one-line sale at a branch on a day, as an admin, with a fresh key. */
+    public ResponseEntity<JsonNode> sale(UUID branch, String method, UUID product, String qty, LocalDate date) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("branch_id", branch);
+        body.put("payment_method", method);
+        body.put("sale_date", date.toString());
+        if (method.equals("credit")) {
+            body.put("buyer_name", "Test Buyer 01");
+        }
+        body.put("lines", java.util.List.of(Map.of("product_id", product, "qty", qty)));
+        return post("/sales", body, ALL);
+    }
+
+    public ResponseEntity<JsonNode> pay(UUID sale, long amount, String method, LocalDate paidOn) {
+        return post(
+                "/sales/" + sale + "/payments",
+                Map.of("amount_minor", amount, "method", method, "paid_on", paidOn.toString()),
+                ALL);
+    }
+
+    /** A restock of one product into one branch, paid by the given method. */
+    public ResponseEntity<JsonNode> restock(
+            UUID branch, UUID product, long cost, long sell, String qty, String method, LocalDate date) {
+        Map<String, Object> line = new LinkedHashMap<>();
+        line.put("product_id", product);
+        line.put("cost_minor", cost);
+        line.put("sell_minor", sell);
+        line.put("qty_by_branch", java.util.List.of(Map.of("branch_id", branch, "qty", qty)));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("purchased_on", date.toString());
+        body.put("payment_method", method);
+        body.put("lines", java.util.List.of(line));
+        return post("/purchases", body, ALL);
+    }
+
+    /** Sets a tenant setting key of the cash book directly, as the owner. */
+    public void setting(String key, long value) {
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO tenant_settings (id, tenant_id, settings) VALUES (gen_random_uuid(), ?, jsonb_build_object(?::text, ?::bigint))
+                        ON CONFLICT (tenant_id) DO UPDATE SET settings = tenant_settings.settings || jsonb_build_object(?::text, ?::bigint)
+                        """)
+                .params(tenant.tenantId(), key, value, key, value)
+                .update();
+    }
 }

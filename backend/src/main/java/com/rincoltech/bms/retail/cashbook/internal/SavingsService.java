@@ -73,11 +73,15 @@ class SavingsService {
 
     /** The day's profit times the rate, rounded half up; zero when the profit is not positive. */
     long suggested(long profitMinor) {
+        return suggested(profitMinor, support.savingsRateBp());
+    }
+
+    static long suggested(long profitMinor, long rateBp) {
         if (profitMinor <= 0) {
             return 0;
         }
         return BigDecimal.valueOf(profitMinor)
-                .multiply(BigDecimal.valueOf(support.savingsRateBp()))
+                .multiply(BigDecimal.valueOf(rateBp))
                 .divide(BigDecimal.valueOf(10_000), 0, RoundingMode.HALF_UP)
                 .longValueExact();
     }
