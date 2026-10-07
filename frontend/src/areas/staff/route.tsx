@@ -8,6 +8,7 @@ import { icons } from '../../components/icons';
 import { BrandLoader } from '../../components/states';
 import { BranchPicker, useActiveBranch } from './branch-picker';
 import { StaffContext } from './context';
+import { showLending } from './lending/permissions';
 import { RetailNav } from './retail/nav';
 import { canSeeProfit, showRetail } from './retail/permissions';
 
@@ -83,6 +84,7 @@ function StaffLayout() {
         <nav className="tabs" aria-label="Staff areas">
           <Link to="/staff" activeOptions={{ exact: true }}>Home</Link>
           {canSeeApprovals && <Link to="/staff/approvals">Approvals</Link>}
+          {showLending(profile) && <Link to="/staff/lending">Loans</Link>}
           {showRetail(profile) && <Link to="/staff/retail">Retail</Link>}
           {managesSettings && <Link to="/staff/setup">Business set-up</Link>}
         </nav>

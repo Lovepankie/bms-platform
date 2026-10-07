@@ -413,10 +413,13 @@ class LoanRepository {
             UUID memberId,
             UUID officerId,
             UUID productId,
+            String q,
             Instant afterCreated,
             UUID afterId,
             int limit) {
-        StringBuilder sql = new StringBuilder("SELECT l.* FROM lending_loans l WHERE true");
+        StringBuilder sql = new StringBuilder(
+                "SELECT l.*, m.member_no, m.full_name FROM lending_loans l JOIN lending_members m ON m.id = l.member_id"
+                        + " WHERE true");
         Map<String, Object> p = new LinkedHashMap<>();
         if (branchIds != null) {
             if (branchIds.isEmpty()) {
@@ -442,6 +445,13 @@ class LoanRepository {
                     " AND l.product_version_id IN (SELECT id FROM lending_loan_product_versions WHERE product_id = :productId)");
             p.put("productId", productId);
         }
+        if (q != null) {
+            // Loan or member number by prefix, member name by any part (the trigram index serves it).
+            sql.append(" AND (l.loan_no ILIKE :prefix OR m.member_no ILIKE :prefix OR m.full_name ILIKE :part)");
+            String escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+            p.put("prefix", escaped + "%");
+            p.put("part", "%" + escaped + "%");
+        }
         if (afterCreated != null) {
             sql.append(" AND (l.created_at, l.id) > (:afterCreated, :afterId)");
             p.put("afterCreated", Timestamp.from(afterCreated));
@@ -456,12 +466,22 @@ class LoanRepository {
                         rs.getString("loan_no"),
                         rs.getObject("branch_id", UUID.class),
                         rs.getObject("member_id", UUID.class),
+                        rs.getString("member_no"),
+                        rs.getString("full_name"),
                         rs.getString("status"),
                         rs.getString("purpose_category"),
                         rs.getLong("requested_principal_minor"),
                         rs.getInt("requested_term_count"),
+                        rs.getObject("approved_principal_minor", Long.class),
                         rs.getString("currency"),
                         rs.getObject("officer_user_id", UUID.class),
+                        rs.getObject("disbursed_on", LocalDate.class),
+                        rs.getLong("principal_outstanding_minor")
+                                + rs.getLong("interest_outstanding_minor")
+                                + rs.getLong("fees_outstanding_minor")
+                                + rs.getLong("penalties_outstanding_minor"),
+                        rs.getInt("days_past_due"),
+                        rs.getObject("next_due_date", LocalDate.class),
                         instant(rs.getTimestamp("created_at"))))
                 .list();
     }

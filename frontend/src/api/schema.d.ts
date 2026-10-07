@@ -578,7 +578,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List loans in the caller's branch scope */
+        /** List loans in the caller's branch scope; q searches loan number, member number or name */
         get: operations["listLoans"];
         put?: never;
         /** Create a draft application (FR-ORG-01) */
@@ -676,6 +676,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/loans/{loan_id}/disbursements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request disbursement of an approved loan (FR-DIS-01); 201 when executed below the threshold, 202 when it waits for a checker */
+        post: operations["requestLoanDisbursement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/loans/{loan_id}/guarantors": {
         parameters: {
             query?: never;
@@ -693,6 +710,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/loans/{loan_id}/payoff-quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The payoff amount as at a value date, today by default (FR-REP-06) */
+        get: operations["getLoanPayoffQuote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/repayments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a repayment, allocated per R-ALLOC; a recovery on a written-off loan (FR-REP-01 to FR-REP-04, FR-LCL-03) */
+        post: operations["recordLoanRepayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/loans/{loan_id}/return": {
         parameters: {
             query?: never;
@@ -704,6 +755,23 @@ export interface paths {
         put?: never;
         /** Return an application to draft with a note */
         post: operations["returnLoan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The repayment schedule with a totals row (FR-DIS-04) */
+        get: operations["getLoanSchedule"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -738,6 +806,57 @@ export interface paths {
         put?: never;
         /** Submit a draft, freezing its terms (FR-ORG-03) */
         post: operations["submitLoan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The loan's money events with their allocations, newest first */
+        get: operations["listLoanTransactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/transactions/{txn_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request the reversal of a repayment or recovery, with a reason (FR-REP-05) */
+        post: operations["requestLoanTransactionReversal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/write-off": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request write-off of an active loan, with a reason (FR-LCL-02) */
+        post: operations["requestLoanWriteOff"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2591,6 +2710,15 @@ export interface components {
             head_office_branch_id?: string;
             tenant?: components["schemas"]["PlatformTenant"];
         };
+        DisbursementRequest: {
+            /**
+             * Format: date
+             * @description Today or earlier, in an open period
+             */
+            disbursement_date: string;
+            external_reference?: string;
+            payment_method_key: string;
+        };
         DownloadUrl: {
             /** Format: date-time */
             expires_at?: string;
@@ -2670,6 +2798,7 @@ export interface components {
             approved_principal_minor?: number;
             /** Format: int32 */
             approved_term_count?: number;
+            balances?: components["schemas"]["LoanBalances"];
             /** Format: uuid */
             branch_id?: string;
             cancelled_reason?: string;
@@ -2722,6 +2851,33 @@ export interface components {
             /** Format: int32 */
             version?: number;
         };
+        /** @description executed: the action took effect now (below the tenant's threshold); otherwise it waits for a checker as approval_request_id */
+        LoanActionOutcome: {
+            /** Format: uuid */
+            approval_request_id?: string;
+            executed?: boolean;
+            /** Format: uuid */
+            loan_id?: string;
+            loan_status?: string;
+        };
+        LoanAllocation: {
+            /**
+             * Format: int64
+             * @description Negative on a reversal's rows
+             */
+            amount_minor?: number;
+            /**
+             * Format: uuid
+             * @description The repayment whose money the row moves
+             */
+            applies_to_txn_id?: string;
+            component?: string;
+            /**
+             * Format: int32
+             * @description Null for an overpayment
+             */
+            item_no?: number;
+        };
         LoanAppraisal: {
             /** Format: uuid */
             appraised_by?: string;
@@ -2764,6 +2920,44 @@ export interface components {
             monthly_obligations_minor?: number;
             visit_notes?: string;
         };
+        /** @description FR-DIS-04, R-DPD: the loan's position as of its last money event */
+        LoanBalances: {
+            /** Format: int64 */
+            arrears_minor?: number;
+            /** Format: date */
+            closed_on?: string;
+            /**
+             * Format: int64
+             * @description Overpayment held for the member (R-ALLOC step 4)
+             */
+            credit_balance_minor?: number;
+            /** Format: int32 */
+            days_past_due?: number;
+            /** Format: date */
+            disbursed_on?: string;
+            /** Format: int64 */
+            fees_outstanding_minor?: number;
+            /** Format: int64 */
+            interest_outstanding_minor?: number;
+            /** Format: date */
+            last_repayment_on?: string;
+            /** Format: date */
+            maturity_date?: string;
+            /** Format: date */
+            next_due_date?: string;
+            /** Format: int64 */
+            penalties_outstanding_minor?: number;
+            /** Format: int64 */
+            principal_disbursed_minor?: number;
+            /** Format: int64 */
+            principal_outstanding_minor?: number;
+            /** Format: int64 */
+            total_outstanding_minor?: number;
+            /** Format: int64 */
+            total_paid_minor?: number;
+            /** Format: date */
+            written_off_on?: string;
+        };
         LoanDecisionRequest: {
             /**
              * Format: int64
@@ -2796,16 +2990,26 @@ export interface components {
             relationship?: string;
         };
         LoanListItem: {
+            /** Format: int64 */
+            approved_principal_minor?: number;
             /** Format: uuid */
             branch_id?: string;
             /** Format: date-time */
             created_at?: string;
             currency?: string;
+            /** Format: int32 */
+            days_past_due?: number;
+            /** Format: date */
+            disbursed_on?: string;
             /** Format: uuid */
             id?: string;
             loan_no?: string;
             /** Format: uuid */
             member_id?: string;
+            member_name?: string;
+            member_no?: string;
+            /** Format: date */
+            next_due_date?: string;
             /** Format: uuid */
             officer_user_id?: string;
             purpose_category?: string;
@@ -2814,6 +3018,8 @@ export interface components {
             /** Format: int32 */
             requested_term_count?: number;
             status?: string;
+            /** Format: int64 */
+            total_outstanding_minor?: number;
         };
         LoanNoteRequest: {
             note: string;
@@ -2960,6 +3166,17 @@ export interface components {
             /** Format: int32 */
             version_no?: number;
         };
+        LoanReasonRequest: {
+            reason: string;
+        };
+        /** @description FR-DIS-04: the items and a totals row that equals the loan totals */
+        LoanSchedule: {
+            currency?: string;
+            items?: components["schemas"]["LoanScheduleRow"][];
+            /** Format: uuid */
+            loan_id?: string;
+            totals?: components["schemas"]["LoanScheduleRow"];
+        };
         /** @description FR-ORG-03, FR-ORG-06: from the requested (once approved, the approved) terms and the proposed (else today's) date; display only */
         LoanScheduleItem: {
             /** Format: date */
@@ -2975,6 +3192,42 @@ export interface components {
             /** Format: int64 */
             total_minor?: number;
         };
+        LoanScheduleRow: {
+            /** Format: date */
+            due_date?: string;
+            /** Format: int64 */
+            fees_due_minor?: number;
+            /** Format: int64 */
+            fees_paid_minor?: number;
+            /** Format: int64 */
+            interest_due_minor?: number;
+            /** Format: int64 */
+            interest_paid_minor?: number;
+            /** Format: int32 */
+            no?: number;
+            /** Format: int64 */
+            outstanding_minor?: number;
+            /** Format: date */
+            paid_on?: string;
+            /** Format: int64 */
+            penalties_due_minor?: number;
+            /** Format: int64 */
+            penalties_paid_minor?: number;
+            /** Format: int64 */
+            principal_due_minor?: number;
+            /** Format: int64 */
+            principal_paid_minor?: number;
+            /** @description pending, due, overdue, partially_paid, paid, waived or written_off; null on totals */
+            status?: string;
+            /** Format: int64 */
+            total_due_minor?: number;
+            /** Format: int64 */
+            total_paid_minor?: number;
+            /** Format: int64 */
+            waived_minor?: number;
+            /** Format: int64 */
+            written_off_minor?: number;
+        };
         LoanStatusChange: {
             /** Format: date-time */
             at?: string;
@@ -2986,6 +3239,37 @@ export interface components {
         };
         LoanStatusHistory: {
             items?: components["schemas"]["LoanStatusChange"][];
+        };
+        LoanTransaction: {
+            allocations?: components["schemas"]["LoanAllocation"][];
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: uuid */
+            approval_request_id?: string;
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            external_reference?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            journal_entry_id?: string;
+            payment_method_key?: string;
+            reason?: string;
+            /** @description RC- receipt of a repayment or recovery, VC- voucher of a disbursement */
+            receipt_no?: string;
+            /** Format: uuid */
+            recorded_by?: string;
+            /** Format: uuid */
+            reversed_by_txn_id?: string;
+            /** Format: uuid */
+            reverses_txn_id?: string;
+            txn_type?: string;
+            /** Format: date */
+            value_date?: string;
+        };
+        LoanTransactionList: {
+            items?: components["schemas"]["LoanTransaction"][];
         };
         Me: {
             all_branches?: boolean;
@@ -3180,6 +3464,26 @@ export interface components {
             enabled_channels?: string[];
             failures?: components["schemas"]["OutboxFailure"][];
         };
+        /** @description R-PAYOFF as at value_date; rebate is interest not charged */
+        PayoffQuote: {
+            currency?: string;
+            /** Format: int64 */
+            fees_minor?: number;
+            /** Format: int64 */
+            interest_minor?: number;
+            /** Format: uuid */
+            loan_id?: string;
+            /** Format: int64 */
+            penalties_minor?: number;
+            /** Format: int64 */
+            principal_minor?: number;
+            /** Format: int64 */
+            rebate_minor?: number;
+            /** Format: int64 */
+            total_minor?: number;
+            /** Format: date */
+            value_date?: string;
+        };
         /** @description Limits only; prices are not stored in this repository */
         Plan: {
             allowed_modules?: string[];
@@ -3251,6 +3555,22 @@ export interface components {
             in_scope?: boolean;
             member_no?: string;
             relationship?: string;
+        };
+        RepaymentRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            external_reference?: string;
+            payment_method_key: string;
+            /**
+             * Format: date
+             * @description Today or earlier, not before the disbursement or the loan's latest repayment, in an open period
+             */
+            value_date: string;
+        };
+        RepaymentResult: {
+            balances?: components["schemas"]["LoanBalances"];
+            loan_status?: string;
+            transaction?: components["schemas"]["LoanTransaction"];
         };
         /** @description One product with its balance in every branch of the page */
         RetailAllBranchesRow: {
@@ -5476,6 +5796,7 @@ export interface operations {
                 member_id?: string;
                 officer_user_id?: string;
                 product_id?: string;
+                q?: string;
                 limit?: number;
                 cursor?: string;
             };
@@ -5704,6 +6025,34 @@ export interface operations {
             };
         };
     };
+    requestLoanDisbursement: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisbursementRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanActionOutcome"];
+                };
+            };
+        };
+    };
     setLoanGuarantors: {
         parameters: {
             query?: never;
@@ -5732,6 +6081,58 @@ export interface operations {
             };
         };
     };
+    getLoanPayoffQuote: {
+        parameters: {
+            query?: {
+                value_date?: string;
+            };
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoffQuote"];
+                };
+            };
+        };
+    };
+    recordLoanRepayment: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepaymentResult"];
+                };
+            };
+        };
+    };
     returnLoan: {
         parameters: {
             query?: never;
@@ -5756,6 +6157,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    getLoanSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanSchedule"];
                 };
             };
         };
@@ -5802,6 +6225,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    listLoanTransactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanTransactionList"];
+                };
+            };
+        };
+    };
+    requestLoanTransactionReversal: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                loan_id: string;
+                txn_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoanReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanActionOutcome"];
+                };
+            };
+        };
+    };
+    requestLoanWriteOff: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoanReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanActionOutcome"];
                 };
             };
         };

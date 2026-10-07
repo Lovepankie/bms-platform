@@ -1,0 +1,127 @@
+/*
+ * The staff lending screens (frontend/src/areas/staff/lending): the loans list, the loan page and
+ * its action forms. They reuse the retail page frame (.rt, .rt-card, .rt-primary, .rt-flag) and
+ * add only what a loan needs, with the shared tokens. No inline styles: the production CSP
+ * (style-src 'self') refuses them.
+ */
+
+.ln-search {
+  margin-bottom: var(--space-4);
+}
+
+.ln-search .rt-row {
+  align-items: stretch;
+  flex-wrap: nowrap;
+}
+
+/* A list of loans or transactions: one card per row, the whole card a 44px+ tap target. */
+.ln-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ln-list > li {
+  margin: var(--space-2) 0;
+}
+
+.rt.ln ul.ln-list:has(> li.rt-card) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.ln-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: var(--tap);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.ln-item:hover {
+  border-color: var(--color-accent);
+  text-decoration: none;
+}
+
+.ln-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.ln-item-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.ln-muted {
+  margin: var(--space-1) 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.ln-head p {
+  margin: var(--space-1) 0;
+}
+
+/* The actions on a loan: full-width buttons on a phone, a row from 720px. */
+.ln-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.ln-actions > button[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-tint);
+}
+
+/* Label and figure pairs: balances and the payoff quote. */
+.ln-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-3) 0 0;
+}
+
+.ln-facts dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.ln-facts dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ln-facts .ln-strong {
+  color: var(--color-text);
+  font-weight: var(--weight-bold);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-2);
+}
+
+.ln textarea {
+  min-height: calc(var(--tap) * 2);
+}
+
+.ln fieldset + label,
+.ln form > button.btn-block {
+  margin-top: var(--space-3);
+}

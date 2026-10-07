@@ -34,7 +34,7 @@ class MigrationOrderIT {
     /** The migrations already merged and deployed: their numbers never change and none is removed. */
     static final List<String> MERGED = List.of(
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26",
-            "28");
+            "28", "29");
 
     /**
      * Every migration file on the classpath, in numeric order. A new migration PR adds its file and

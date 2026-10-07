@@ -67,6 +67,7 @@ class LoanService {
     private final CurrentTenant currentTenant;
     private final AuditLog audit;
     private final BusinessClock clock;
+    private final ServicingRepository servicing;
 
     LoanService(
             LoanRepository repo,
@@ -77,7 +78,8 @@ class LoanService {
             TenantSettings settings,
             CurrentTenant currentTenant,
             AuditLog audit,
-            BusinessClock clock) {
+            BusinessClock clock,
+            ServicingRepository servicing) {
         this.repo = repo;
         this.members = members;
         this.products = products;
@@ -87,6 +89,7 @@ class LoanService {
         this.currentTenant = currentTenant;
         this.audit = audit;
         this.clock = clock;
+        this.servicing = servicing;
     }
 
     /**
@@ -177,6 +180,7 @@ class LoanService {
             UUID memberId,
             UUID officerId,
             UUID productId,
+            String q,
             Integer limit,
             String cursor) {
         Principal principal = CurrentPrincipal.require();
@@ -194,6 +198,7 @@ class LoanService {
                 memberId,
                 officerId,
                 productId,
+                q == null || q.isBlank() ? null : q.trim(),
                 afterCreated,
                 afterId,
                 size + 1);
@@ -579,6 +584,7 @@ class LoanService {
                 guarantors,
                 pledges,
                 schedule,
+                servicing.balances(l.id()).orElseThrow(),
                 l.createdBy(),
                 l.createdAt(),
                 l.updatedAt(),
