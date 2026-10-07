@@ -1575,7 +1575,8 @@ section is its specification. Every table below is tenant-owned with forced row-
 `bigint` minor units with a `currency`, CHECK `0 < amount_minor <= 10^13` (savings: `>= 0`).
 Business dates are `date` in the tenant's zone (`tenants.timezone`), never in the future (checked by
 the service with the kernel clock); the instant is a separate `timestamptz`. Rows are append-only
-except the void columns, changed once by a guard trigger on each table (the pattern of
+except the void columns (changed once) and, on `retail_advances` only, `repaid_minor` (changed on every
+repayment, see its guard below), by a guard trigger on each table (the pattern of
 `retail_sales_guard_update`, and the owner's `bms.allow_mutation` switch of `reject_mutation`).
 
 **Chart additions** (seeded by `bms_seed_retail_chart`, also for tenants that switched retail on
@@ -1593,7 +1594,7 @@ the way 1190 is shared; a tenant that has it from lending gets no second account
 
 | Table | Grants (`bms_app`) | Purpose |
 |---|---|---|
-| `retail_expense_categories` | SELECT, INSERT, UPDATE | Category lists: `name varchar(100)`, `expense_account_id` (nullable, composite FK to ledger accounts; null means `operating_expenses`), `active`, `sort_order`. Unique `(tenant_id, lower(name))` |
+| `retail_expense_categories` | SELECT, INSERT, UPDATE | Category lists: `name varchar(100)`, `expense_account_id` (nullable, composite FK to ledger accounts; null means `operating_expenses`; a trigger checks on insert and update that the account has `account_type = 'expense'`, `is_postable` and `is_active`, so a header, asset or inactive account is refused, 422 `account_not_expense`), `active`, `sort_order`. Unique `(tenant_id, lower(name))` |
 | `retail_expense_items` | SELECT, INSERT, UPDATE | `category_id` (composite FK), `name varchar(100)`, `requires_explanation boolean` (the pilot's "others"), `active`. Unique `(tenant_id, category_id, lower(name))` |
 | `retail_cash_parties` | SELECT, INSERT, UPDATE | Beneficiaries and advance parties: `name varchar(200)`, `contact varchar(100)` kept as entered, `kind` (`owner`, `staff`, `related_entity`, `supplier`, `other`; there is deliberately no `company` kind: an advance to the tenant's own business is not a receivable, ADR-022 open question 9). The party of an advance must be `owner`, `staff` or `related_entity` (service rule), `active`. Unique `(tenant_id, kind, lower(name))` |
 | `retail_daily_savings` | SELECT, INSERT, UPDATE (void only) | One record per branch and date, below |
@@ -1613,7 +1614,7 @@ record refers to it is blocked, because records snapshot the names they were wri
 | `branch_id`, `business_date` | uuid, date | The shop and the trading day |
 | `amount_minor`, `currency` | bigint, text | The amount set aside, `>= 0` |
 | `suggested_minor` | bigint | The server's suggestion when written (day's profit times `savings_rate_bp`, half up, zero for a loss). Readable only with `retail.profit.read` (as is `amount_minor`, a savings amount being half the profit, ADR-022 decision 13; the API omits both without it) |
-| `overwritten` | boolean | `amount_minor <> suggested_minor`; CHECK ties the two |
+| `overwritten` | boolean | CHECK `(suggested_minor IS NULL AND NOT overwritten) OR (suggested_minor IS NOT NULL AND overwritten = (amount_minor <> suggested_minor))`: a historical row has no suggestion (the pilot never stored one) so it is never `overwritten`, and the reason rule below does not apply to it |
 | `overwrite_reason` | text | CHECK: not null and at least 5 characters when `overwritten` |
 | `total_sold_minor` | bigint | Snapshot of the day's completed sales total, shown on the screen (a read-only column in the pilot) |
 | `occurred_at`, `recorded_by` | | Kernel clock instant, user |
@@ -1668,14 +1669,20 @@ An advance: `branch_id` (the source shop), `advance_no` from the tenant sequence
 next value too, in business date then source id order, and the pilot's id lives only in
 `retail_import_refs` and the note, so an imported number can never collide with a live one), `party_id` (kind `owner`, `staff` or `related_entity`),
 `taken_by_party_id` (optional, the pilot's "who took the money"), `principal_minor > 0`, `currency`,
-`purpose varchar(300)`, `business_date`, `repaid_minor` (CHECK `0 <= repaid_minor <= principal_minor`,
-raised only under the advance's row lock, like `retail_sales.paid_minor`), `note`, `journal_entry_id`,
+`purpose varchar(300)`, `business_date`, `repaid_minor` (CHECK `0 <= repaid_minor <= principal_minor`; a stored running total, **not** an independent balance: it is changed only by the repayment insert and the repayment void, in the same transaction and under the advance's row lock, like `retail_sales.paid_minor`), `note`, `journal_entry_id`,
 `historical`, void columns. The balance is `principal_minor - repaid_minor`; the pilot's "loans with
 balance above zero" is `repaid_minor < principal_minor` and not voided. Unique `(tenant_id,
 advance_no)`. A repayment: `advance_id`, `branch_id` (the branch that receives the money, within the caller's scope, defaulting to the advance's branch; the posting is made in this branch, so its `cash_on_hand`, `mobile_money` or `bank` is debited and `owner_advances` credited there), `amount_minor > 0`, `method` (`cash`, `mobile_money`,
 `bank`), `paid_on`, `recorded_by`, `journal_entry_id`, `historical`, void columns; index
 `(tenant_id, advance_id)`. An advance with a non-voided repayment cannot be voided; voiding a
-repayment lowers `repaid_minor` under the lock.
+repayment lowers `repaid_minor` under the lock. **Guard on `retail_advances`:** the guard trigger
+refuses every UPDATE except the void columns (once) and `repaid_minor`, and it refuses a
+`repaid_minor` change that is not equal to the sum of the advance's non-voided repayments after
+the change (a deferred constraint trigger on `retail_advance_repayments` compares the two), so no
+session, `bms_app` included, can set an arbitrary figure; a repayment row itself is append-only
+except its void columns. A reconciliation test asserts, after concurrent repayments and voids,
+that `repaid_minor` equals the sum of non-voided repayments for every advance, and that a direct
+UPDATE of `repaid_minor` to another value is refused.
 
 #### Cash book posting rules (FR-RET-20 to FR-RET-26)
 
