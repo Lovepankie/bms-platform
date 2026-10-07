@@ -46,6 +46,7 @@ class ModularityTest {
                         "lending.manifest",
                         "lending.members",
                         "lending.products",
+                        "retail.cashbook",
                         "retail.catalogue",
                         "retail.imports",
                         "retail.manifest",
@@ -89,6 +90,41 @@ class ModularityTest {
             assertThat(targets)
                     .as("dependencies of %s", module.getIdentifier())
                     .noneMatch(t -> t.startsWith("lending."));
+        }
+    }
+
+    /**
+     * ADR-022 decision 1: the cash book declares exactly the stated dependencies, no retail module
+     * but the importer depends on it, and it reaches no lending package (an advance is not a loan,
+     * decision 2).
+     */
+    @Test
+    void theCashBookDeclaresOnlyItsAllowedDependenciesAndOnlyTheImporterUsesIt() {
+        ApplicationModule cashbook = MODULES.getModuleByName("retail.cashbook").orElseThrow();
+        assertThat(cashbook.getDirectDependencies(MODULES).stream()
+                        .map(ApplicationModuleDependency::getTargetModule)
+                        .map(m -> m.getIdentifier().toString()))
+                .isSubsetOf(
+                        "kernel",
+                        "core.tenancy",
+                        "core.audit",
+                        "core.ledger",
+                        "core.documents",
+                        "retail.sales",
+                        "retail.purchasing",
+                        "retail.reports",
+                        "retail.stock")
+                .noneMatch(t -> t.startsWith("lending."));
+        for (ApplicationModule module : MODULES) {
+            String id = module.getIdentifier().toString();
+            if (!id.startsWith("retail.") || id.equals("retail.imports") || id.equals("retail.cashbook")) {
+                continue;
+            }
+            assertThat(module.getDirectDependencies(MODULES).stream()
+                            .map(ApplicationModuleDependency::getTargetModule)
+                            .map(m -> m.getIdentifier().toString()))
+                    .as("dependencies of %s", id)
+                    .doesNotContain("retail.cashbook");
         }
     }
 

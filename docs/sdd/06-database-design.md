@@ -1,4 +1,7 @@
-# 6. Database Design
+**Built in migration `V29__retail_cash_book.sql` (issue #147).** Flyway runs with `outOfOrder` off, so
+the number is the next free one above every open branch (V24 to V28 were held by other open pull
+requests when it was written); the owner session renumbers it at merge time if another lands first.
+This section is its specification. # 6. Database Design
 
 **Status:** Draft · **Owner:** Hillary
 
@@ -1571,7 +1574,7 @@ of the same export adds nothing.
 time, above the highest on any open branch (`outOfOrder` is off), announced on issue #50; this
 section is its specification. Every table below is tenant-owned with forced row-level security
 (`bms_apply_tenant_rls`), a `tenant_id` first in every key, composite foreign keys on
-`(tenant_id, id)`, and the standard columns `id`, `tenant_id`, `created_at`, `created_by`. Money is
+`(tenant_id, id)`, and the standard columns `id`, `tenant_id`, `created_at`; the lists carry `created_by` and the record tables `recorded_by`. Money is
 `bigint` minor units with a `currency`, CHECK `0 < amount_minor <= 10^13` (savings: `>= 0`).
 Business dates are `date` in the tenant's zone (`tenants.timezone`), never in the future (checked by
 the service with the kernel clock); the instant is a separate `timestamptz`. Rows are append-only

@@ -38,18 +38,28 @@ public interface RetailBooks {
         }
     }
 
-    record Leg(String systemKey, boolean debit, long amountMinor, String subledgerType, UUID subledgerId) {
+    /**
+     * One side of an entry, naming its account by {@code systemKey} or, for an account the tenant
+     * chose (an expense category's, ADR-022 decision 5), by {@code accountId} with the key null.
+     */
+    record Leg(
+            String systemKey, UUID accountId, boolean debit, long amountMinor, String subledgerType, UUID subledgerId) {
 
         public static Leg debit(String systemKey, long amountMinor) {
-            return new Leg(systemKey, true, amountMinor, null, null);
+            return new Leg(systemKey, null, true, amountMinor, null, null);
         }
 
         public static Leg credit(String systemKey, long amountMinor) {
-            return new Leg(systemKey, false, amountMinor, null, null);
+            return new Leg(systemKey, null, false, amountMinor, null, null);
+        }
+
+        /** A debit to a specific account of the tenant. */
+        public static Leg debitAccount(UUID accountId, long amountMinor) {
+            return new Leg(null, accountId, true, amountMinor, null, null);
         }
 
         public Leg withSubledger(String type, UUID id) {
-            return new Leg(systemKey, debit, amountMinor, type, id);
+            return new Leg(systemKey, accountId, debit, amountMinor, type, id);
         }
     }
 }

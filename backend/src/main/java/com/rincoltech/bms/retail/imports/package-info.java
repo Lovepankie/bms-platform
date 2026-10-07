@@ -18,7 +18,8 @@
             "retail.catalogue",
             "retail.stock",
             "retail.sales",
-            "retail.purchasing"
+            "retail.purchasing",
+            "retail.cashbook"
         })
 package com.rincoltech.bms.retail.imports;
 

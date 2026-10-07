@@ -194,6 +194,16 @@ platform API and holds no tenant permissions.
 | `retail.purchase.create` | Y | | | | | | | |
 | `retail.usage.report` | Y | | | | | | | Y |
 | `retail.profit.read` | Y | | | | | | | |
+| `retail.cashbook.read` | Y | | | | | | | Y |
+| `retail.savings.record` | Y | | | | | | | Y |
+| `retail.savings.overwrite` | Y | | | | | | | |
+| `retail.banking.record` | Y | | | | | | | Y |
+| `retail.expense.record` | Y | | | | | | | Y |
+| `retail.expense.manage` | Y | | | | | | | |
+| `retail.withdrawal.record` | Y | | | | | | | |
+| `retail.advance.create` | Y | | | | | | | |
+| `retail.advance.repay` | Y | | | | | | | |
+| `retail.cashbook.void` | Y | | | | | | | |
 
 Notes:
 
@@ -217,13 +227,9 @@ Notes:
   user with profit read at branch A only sees no cost on branch B's stock, movements, sales or
   valuation (review F5); tenant-wide products and price history need it in any branch. The sales
   role holds no `core.*` permission; the PWA reads the user's branches from `/me`.
-- Retail cash book (ADR-022, **proposed**, FR-RET-32): the ten proposed `retail.cashbook.*`,
+- Retail cash book (ADR-022, FR-RET-32, migration V29): the ten `retail.cashbook.*`,
   `retail.savings.*`, `retail.banking.record`, `retail.expense.*`, `retail.withdrawal.record` and
-  `retail.advance.*` permissions are listed in the separate table "Proposed cash book permissions"
-  below this list, **not** in the matrix above, because they are not seeded: `PermissionMatrixIT`
-  parses every row of the matrix above that has a backticked three-part key and eight cells and
-  compares it with `role_permissions`, so a proposed row there would fail the build on `main`. The
-  cash book migration moves the ten rows into the matrix in the same pull request that seeds them.
+  `retail.advance.*` permissions are rows of the matrix above, seeded by the cash book migration.
   The tenant admin holds all ten. The sales role holds read, savings record, banking record and
   expense record for its assigned branches, as the pilot does; it does **not** hold
   `retail.savings.overwrite` by default, which is a default pending the Owner's answer to open
@@ -253,22 +259,6 @@ Notes:
 - The matrix is seeded by migration V2 and `PermissionMatrixIT` asserts the seeded
   `role_permissions` equal this table, read from this file (FR-IAM-02). Changing a cell is a
   pull request that changes this chapter and a new migration together.
-
-Proposed cash book permissions (ADR-022, not yet seeded, so deliberately outside the matrix
-above and not read by `PermissionMatrixIT`; this table has four columns, not eight):
-
-| Permission (proposed) | Tenant admin | Sales role, default | Note |
-|---|---|---|---|
-| `retail.cashbook.read` | Y | Y | Cash book lists and the daily cash summary, branch scoped |
-| `retail.savings.record` | Y | Y | Record the day's savings |
-| `retail.savings.overwrite` | Y | no | Pending open question 5; the sales role does not hold it until the Owner answers |
-| `retail.banking.record` | Y | Y | Record cash banked |
-| `retail.expense.record` | Y | Y | Record an expense |
-| `retail.expense.manage` | Y | no | Categories, items and parties |
-| `retail.withdrawal.record` | Y | no | Owner or admin only |
-| `retail.advance.create` | Y | no | Owner or admin only (open question 6) |
-| `retail.advance.repay` | Y | no | Owner or admin only (open question 6) |
-| `retail.cashbook.void` | Y | no | Void any cash book record |
 
 Platform permissions, held only by platform operators (super admins) on the platform host,
 never by a tenant role:
