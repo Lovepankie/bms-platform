@@ -93,20 +93,24 @@ only retail has this need.
 8. **Posting rules.** Every cash book event posts one balanced entry through `post_entry`, in the
    transaction of the event, with `source_module = 'retail'` and an idempotency key
    `retail.<kind>:<id>` (the table is in chapter 6 section 6.11.5). A void posts the reversal of
-   each entry. Entries of amount zero are not posted (a savings amount of zero is a valid record).
+   each entry, dated the void date (decision 9). Entries of amount zero are not posted (a savings amount of zero is a valid record).
 9. **Cash position per shop and day is derived, never stored.** For a branch and business date:
    opening (the `cash_on_hand` balance on the previous day), plus cash takings (cash sales and cash
    payments on credit sales), less cash sale voids dated that day, less cash purchases (restocks
    paid from the till, which credit `cash_on_hand`, ADR-020 decision 7), less savings set aside,
    less cash expenses, less advances paid out, plus advance repayments received in cash, plus
-   withdrawals from the bank, less cash banked, equals closing. **A sale void is dated the day it
-   is made, not the sale's day** (the reversal posts on the void's business date, as ADR-020
-   requires): the original day's takings are not restated, and the void shows as its own line,
-   `cash_sale_voids_minor`, on the void date. Justification: closing must equal the ledger at the
-   end of every day, and the ledger holds the sale on its day and the reversal on the void day; a
-   restated past day would stop agreeing with the ledger as of that day. A sale voided the same
-   day nets to zero. The cost of this rule is that a late void shows as a lower expected amount
-   on the void day, and the unbanked running total nets the two days out. Closing must equal the ledger's `cash_on_hand` balance at the end of the day;
+   withdrawals from the bank, less cash banked, plus the day's voids lines, equals closing. **One void rule for the whole cash book:** every record (a sale, a savings record, a banking, a withdrawal, an expense, an advance, a repayment) posts to the ledger on its own `business_date`, which for a back-dated record may be earlier than the day it was created (`created_at`), and a record counts on that day whether or not it is voided later; its reversal posts on the **void date** (the day the void is made, in the tenant's zone, the retail convention of ADR-020), and the summary shows it there as a separate voids line. A past day is never rewritten. The lines are `cash_sale_voids_minor` (a cash sale voided that day, less),
+   `savings_voids_minor` (a savings record voided that day, more), `expense_voids_minor` (more),
+   `advance_voids_minor` (more), `repayment_voids_minor` (a cash repayment voided that day, less),
+   `banking_voids_minor` (a banking voided that day, more) and `withdrawal_voids_minor` (less).
+   Justification: closing must equal the ledger at the end of every day, and the ledger holds the
+   record on its day and the reversal on the void day; a restated past day would stop agreeing
+   with the ledger as of that day. A record voided the day it is dated nets to zero. The cost is
+   that a late void shows as a changed expected amount on the void day, and the unbanked running
+   total nets the two days out. A correction entered after a void keeps the date the user gives
+   it, so a back-dated re-entry posts to that earlier day; the earlier day's closing, read now,
+   includes it, and agrees with the ledger as of that day read now, but a banking snapshot
+   (`expected_minor`) is not rewritten. Closing must equal the ledger's `cash_on_hand` balance at the end of the day;
    any difference is shown as `other_movements_minor` (a manual journal or an unlisted source),
    never hidden. The **unbanked running total** is the cumulative sum, from the shop's first live
    cash book day, of expected less banked per day. For days imported from the pilot (no journals) the
@@ -116,7 +120,9 @@ only retail has this need.
 10. **Expected amount to bank is computed on the server** for a branch and date, as the day's cash
     takings, less cash sale voids dated the day, less cash purchases (restocks paid in cash from the
     till), less the day's savings, less cash expenses and advances paid out of the till, plus cash
-    advance repayments received. Cash takings are sales of method `cash` by
+    advance repayments received, plus the day's voids lines for savings, expenses and advances and
+    less those for repayments (decision 9; a banking or withdrawal void moves banked cash or
+    withdrawals, not the expected amount). Records voided later still count on their own day. Cash takings are sales of method `cash` by
     `sale_date` (a sale voided later is still counted on its own day and reversed on the void day,
     decision 9), plus payments on credit sales of method `cash` by `paid_on`. Credit sales are not
     cash and are excluded until paid (recommended, open question 2). Mobile money and bank sales are
@@ -243,8 +249,9 @@ which costs them the net amount to bank; the design chooses the gate over the le
 **Watch for:** the cash position must reconcile with the ledger's `cash_on_hand`; a manual journal
 to cash shows as `other_movements_minor` and should be rare. Tenant time zone matters at midnight:
 a sale at 23:50 local belongs to that day. A tenant that never records savings keeps a zero
-reserve, which is valid. Voiding a savings record after the day's banking was entered changes the
-expected figure of that day, so the report recomputes and may show a surplus. The tolerance and
+reserve, which is valid. Voiding a savings or expense record on a later day does not change the
+earlier day: the void shows as its own voids line on the void day and lowers or raises that day's
+expected amount (decision 9), so a shop that banked on the void day sees a flag on that day. The tolerance and
 the rate are tenant settings; their defaults (0 and 5000) are not a policy decision. `ModularityTest`
 must keep `retail.cashbook` off lending. When lending adds its own cash handling, extract the shared
 parts to core with a new ADR instead of reaching across.
