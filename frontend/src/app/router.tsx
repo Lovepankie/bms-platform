@@ -162,6 +162,9 @@ const retailValuationRoute = retailScreen('/valuation').lazy(() => import('../ar
 const retailProfitRoute = retailScreen('/profit').lazy(() => import('../areas/staff/retail/profit').then((m) => m.Route));
 const retailBankingRoute = retailScreen('/banking').lazy(() => import('../areas/staff/retail/banking').then((m) => m.Route));
 const retailBankingReportRoute = retailScreen('/banking-report').lazy(() => import('../areas/staff/retail/banking').then((m) => m.ReportRoute));
+const retailExpensesRoute = retailScreen('/expenses').lazy(() => import('../areas/staff/retail/expenses').then((m) => m.Route));
+const retailExpensesReportRoute = retailScreen('/expenses-report').lazy(() => import('../areas/staff/retail/expenses').then((m) => m.ReportRoute));
+const retailExpenseListsRoute = retailScreen('/expense-lists').lazy(() => import('../areas/staff/retail/expense-lists').then((m) => m.Route));
 const retailSavingsRoute = retailScreen('/savings').lazy(() => import('../areas/staff/retail/savings').then((m) => m.Route));
 
 const signUpRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sign-up' }).lazy(() =>
@@ -217,6 +220,9 @@ export const router = createRouter({
         retailValuationRoute,
         retailProfitRoute,
         retailSavingsRoute,
+        retailExpensesRoute,
+        retailExpensesReportRoute,
+        retailExpenseListsRoute,
         retailBankingRoute,
         retailBankingReportRoute,
       ])]),
