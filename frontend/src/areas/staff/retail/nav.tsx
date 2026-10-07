@@ -22,7 +22,7 @@ export function RetailNav({ me }: { me: Pick<Me, 'permissions'> }) {
       </Link>
       {shortcuts.map((s) => (
         <Link key={s.screen} to={s.path as never}>
-          {icons[s.screen]}
+          {icons[s.screen as keyof typeof icons]}
           <span>{SHORTCUTS[s.screen]}</span>
         </Link>
       ))}

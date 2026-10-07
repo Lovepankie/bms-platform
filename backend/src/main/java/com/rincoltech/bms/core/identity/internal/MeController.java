@@ -1,6 +1,7 @@
 package com.rincoltech.bms.core.identity.internal;
 
 import com.rincoltech.bms.core.identity.internal.UserApi.MeBranch;
+import com.rincoltech.bms.core.identity.internal.UserApi.MePermissionScope;
 import com.rincoltech.bms.core.identity.internal.UserApi.MeResponse;
 import com.rincoltech.bms.core.identity.internal.UserApi.RoleCatalogue;
 import com.rincoltech.bms.core.identity.internal.UserApi.RoleResponse;
@@ -14,6 +15,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -65,12 +68,27 @@ class MeController {
                 user.phoneE164(),
                 user.roles(),
                 principal.permissions().stream().sorted().toList(),
+                permissionScopes(principal),
                 principal.allBranches(),
                 workable,
                 defaultBranch,
                 user.mfaEnabled(),
                 accounts.mfaRequired(user.id()),
                 accounts.unusedRecoveryCodes(user.id()));
+    }
+
+    private static Map<String, MePermissionScope> permissionScopes(Principal principal) {
+        Map<String, MePermissionScope> out = new TreeMap<>();
+        principal
+                .scopes()
+                .forEach((permission, scope) -> out.put(
+                        permission,
+                        new MePermissionScope(
+                                scope.all(),
+                                scope.all()
+                                        ? List.of()
+                                        : scope.branchIds().stream().sorted().toList())));
+        return out;
     }
 
     @GetMapping("/roles")

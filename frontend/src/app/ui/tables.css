@@ -93,3 +93,153 @@ tfoot td {
     padding: var(--space-3) var(--space-4);
   }
 }
+
+/*
+ * Tables that become cards on a phone (#106): add .table-cards to the .table-wrap and a data-label
+ * on every <td> (the column's header text). Below 560px each row is a card and each cell a
+ * label and value pair, so nothing scrolls sideways; a .cell-stack cell (controls, long text) puts
+ * its value under its label. From 560px it is the ordinary table.
+ */
+@media (max-width: 559px) {
+  .table-cards {
+    overflow: visible;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .table-cards table,
+  .table-cards tbody,
+  .table-cards tr,
+  .table-cards td {
+    display: block;
+  }
+
+  .table-cards thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .table-cards tr {
+    margin: 0 0 var(--space-3);
+    padding: var(--space-1) 0;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .table-cards td,
+  .table-cards td:first-child,
+  .table-cards td:last-child {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    min-width: 0;
+    padding: var(--space-2) var(--space-4);
+    text-align: right;
+  }
+
+  .table-cards td::before {
+    content: attr(data-label);
+    flex: none;
+    max-width: 50%;
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-bold);
+    letter-spacing: 0.05em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .table-cards td:first-child {
+    font-weight: var(--weight-semibold);
+  }
+
+  .table-cards td.cell-stack {
+    display: grid;
+    justify-content: stretch;
+    gap: var(--space-2);
+    text-align: left;
+  }
+
+  .table-cards td:empty {
+    display: none;
+  }
+
+  .table-cards td:last-child {
+    border-bottom: 0;
+  }
+
+  .table-cards .decision {
+    min-width: 0;
+  }
+
+  .table-cards tbody tr:hover td {
+    background: none;
+  }
+}
+
+/*
+ * Stock in every branch (#144): the Item and Total columns stay in view while only the branch columns
+ * scroll sideways, so a third or fourth branch never pushes Price and Cost off the screen.
+ */
+.stock-matrix {
+  --stock-item-w: 8.5rem;
+  --stock-total-w: 5.5rem;
+}
+
+.stock-matrix th:first-child,
+.stock-matrix td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  width: var(--stock-item-w);
+  min-width: var(--stock-item-w);
+  max-width: var(--stock-item-w);
+  overflow-wrap: anywhere;
+  background: var(--color-surface);
+}
+
+.stock-matrix th:nth-child(2),
+.stock-matrix td:nth-child(2) {
+  position: sticky;
+  left: var(--stock-item-w);
+  z-index: 1;
+  box-sizing: border-box;
+  width: var(--stock-total-w);
+  min-width: var(--stock-total-w);
+  max-width: var(--stock-total-w);
+  background: var(--color-surface);
+  box-shadow: 1px 0 0 var(--color-border);
+}
+
+.stock-matrix th:first-child,
+.stock-matrix th:nth-child(2) {
+  z-index: 2;
+  background: var(--color-surface-muted);
+}
+
+/* The sticky cells follow the row highlight too. */
+@media (hover: hover) {
+  .stock-matrix tbody tr:hover td {
+    background: var(--color-surface-muted);
+  }
+}
+
+.stock-matrix th {
+  white-space: normal;
+  min-width: 4.5em;
+}
+
+.stock-matrix th,
+.stock-matrix td {
+  padding-left: var(--space-2);
+  padding-right: var(--space-2);
+}

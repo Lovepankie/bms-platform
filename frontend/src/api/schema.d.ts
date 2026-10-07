@@ -319,7 +319,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The tenant's display name, theme colour and logo URL (public) */
+        /** The tenant's display name, theme colour, logo URL and enabled modules (public) */
         get: operations["getBranding"];
         put?: never;
         post?: never;
@@ -578,7 +578,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List loans in the caller's branch scope; q searches loan number, member number or name */
+        /** List loans in the caller's branch scope */
         get: operations["listLoans"];
         put?: never;
         /** Create a draft application (FR-ORG-01) */
@@ -676,23 +676,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/lending/loans/{loan_id}/disbursements": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Request disbursement of an approved loan (FR-DIS-01); 201 when executed below the threshold, 202 when it waits for a checker */
-        post: operations["requestLoanDisbursement"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/lending/loans/{loan_id}/guarantors": {
         parameters: {
             query?: never;
@@ -710,40 +693,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/lending/loans/{loan_id}/payoff-quote": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The payoff amount as at a value date, today by default (FR-REP-06) */
-        get: operations["getLoanPayoffQuote"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/lending/loans/{loan_id}/repayments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Record a repayment, allocated per R-ALLOC; a recovery on a written-off loan (FR-REP-01 to FR-REP-04, FR-LCL-03) */
-        post: operations["recordLoanRepayment"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/lending/loans/{loan_id}/return": {
         parameters: {
             query?: never;
@@ -755,23 +704,6 @@ export interface paths {
         put?: never;
         /** Return an application to draft with a note */
         post: operations["returnLoan"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/lending/loans/{loan_id}/schedule": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The repayment schedule with a totals row (FR-DIS-04) */
-        get: operations["getLoanSchedule"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -806,57 +738,6 @@ export interface paths {
         put?: never;
         /** Submit a draft, freezing its terms (FR-ORG-03) */
         post: operations["submitLoan"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/lending/loans/{loan_id}/transactions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The loan's money events with their allocations, newest first */
-        get: operations["listLoanTransactions"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/lending/loans/{loan_id}/transactions/{txn_id}/reverse": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Request the reversal of a repayment or recovery, with a reason (FR-REP-05) */
-        post: operations["requestLoanTransactionReversal"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/lending/loans/{loan_id}/write-off": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Request write-off of an active loan, with a reason (FR-LCL-02) */
-        post: operations["requestLoanWriteOff"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1550,6 +1431,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/categories/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename or deactivate a category (#146); never deleted */
+        patch: operations["updateRetailCategory"];
+        trace?: never;
+    };
     "/api/v1/retail/customers": {
         parameters: {
             query?: never;
@@ -1566,6 +1464,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/customers/{customer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a credit buyer's name or contact (#146) */
+        patch: operations["updateRetailCustomer"];
         trace?: never;
     };
     "/api/v1/retail/customers/{customer_id}/balance": {
@@ -1597,6 +1512,23 @@ export interface paths {
         put?: never;
         /** Create a product with its first prices (FR-RET-01) */
         post: operations["createRetailProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import items from CSV for a new client: dry run first, then apply; administrators only (#146) */
+        post: operations["importRetailProducts"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1794,6 +1726,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/stock/all-branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every product with its balance in each branch the caller may read (#144) */
+        get: operations["listRetailStockAllBranches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/stock/movements": {
         parameters: {
             query?: never;
@@ -1880,6 +1829,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/suppliers/{supplier_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit or deactivate a supplier (#146); never deleted */
+        patch: operations["updateRetailSupplier"];
+        trace?: never;
+    };
     "/api/v1/retail/transfers": {
         parameters: {
             query?: never;
@@ -1948,6 +1914,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/units/{unit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename or deactivate a unit of measure (#146); never deleted */
+        patch: operations["updateRetailUnit"];
         trace?: never;
     };
     "/api/v1/retail/usage": {
@@ -2361,6 +2344,8 @@ export interface components {
             display_name?: string;
             /** @description Same-origin URL of the logo image, or null */
             logo_url?: string;
+            /** @description Keys of the modules the tenant has switched on, sorted (#99): what the landing and sign-in copy may promise */
+            modules?: string[];
             /** @description #RRGGBB or null: the platform look */
             theme_primary?: string;
             /** @description #FFFFFF or #111111, the readable text colour on themePrimary; null with it */
@@ -2606,15 +2591,6 @@ export interface components {
             head_office_branch_id?: string;
             tenant?: components["schemas"]["PlatformTenant"];
         };
-        DisbursementRequest: {
-            /**
-             * Format: date
-             * @description Today or earlier, in an open period
-             */
-            disbursement_date: string;
-            external_reference?: string;
-            payment_method_key: string;
-        };
         DownloadUrl: {
             /** Format: date-time */
             expires_at?: string;
@@ -2694,7 +2670,6 @@ export interface components {
             approved_principal_minor?: number;
             /** Format: int32 */
             approved_term_count?: number;
-            balances?: components["schemas"]["LoanBalances"];
             /** Format: uuid */
             branch_id?: string;
             cancelled_reason?: string;
@@ -2747,33 +2722,6 @@ export interface components {
             /** Format: int32 */
             version?: number;
         };
-        /** @description executed: the action took effect now (below the tenant's threshold); otherwise it waits for a checker as approval_request_id */
-        LoanActionOutcome: {
-            /** Format: uuid */
-            approval_request_id?: string;
-            executed?: boolean;
-            /** Format: uuid */
-            loan_id?: string;
-            loan_status?: string;
-        };
-        LoanAllocation: {
-            /**
-             * Format: int64
-             * @description Negative on a reversal's rows
-             */
-            amount_minor?: number;
-            /**
-             * Format: uuid
-             * @description The repayment whose money the row moves
-             */
-            applies_to_txn_id?: string;
-            component?: string;
-            /**
-             * Format: int32
-             * @description Null for an overpayment
-             */
-            item_no?: number;
-        };
         LoanAppraisal: {
             /** Format: uuid */
             appraised_by?: string;
@@ -2816,44 +2764,6 @@ export interface components {
             monthly_obligations_minor?: number;
             visit_notes?: string;
         };
-        /** @description FR-DIS-04, R-DPD: the loan's position as of its last money event */
-        LoanBalances: {
-            /** Format: int64 */
-            arrears_minor?: number;
-            /** Format: date */
-            closed_on?: string;
-            /**
-             * Format: int64
-             * @description Overpayment held for the member (R-ALLOC step 4)
-             */
-            credit_balance_minor?: number;
-            /** Format: int32 */
-            days_past_due?: number;
-            /** Format: date */
-            disbursed_on?: string;
-            /** Format: int64 */
-            fees_outstanding_minor?: number;
-            /** Format: int64 */
-            interest_outstanding_minor?: number;
-            /** Format: date */
-            last_repayment_on?: string;
-            /** Format: date */
-            maturity_date?: string;
-            /** Format: date */
-            next_due_date?: string;
-            /** Format: int64 */
-            penalties_outstanding_minor?: number;
-            /** Format: int64 */
-            principal_disbursed_minor?: number;
-            /** Format: int64 */
-            principal_outstanding_minor?: number;
-            /** Format: int64 */
-            total_outstanding_minor?: number;
-            /** Format: int64 */
-            total_paid_minor?: number;
-            /** Format: date */
-            written_off_on?: string;
-        };
         LoanDecisionRequest: {
             /**
              * Format: int64
@@ -2886,26 +2796,16 @@ export interface components {
             relationship?: string;
         };
         LoanListItem: {
-            /** Format: int64 */
-            approved_principal_minor?: number;
             /** Format: uuid */
             branch_id?: string;
             /** Format: date-time */
             created_at?: string;
             currency?: string;
-            /** Format: int32 */
-            days_past_due?: number;
-            /** Format: date */
-            disbursed_on?: string;
             /** Format: uuid */
             id?: string;
             loan_no?: string;
             /** Format: uuid */
             member_id?: string;
-            member_name?: string;
-            member_no?: string;
-            /** Format: date */
-            next_due_date?: string;
             /** Format: uuid */
             officer_user_id?: string;
             purpose_category?: string;
@@ -2914,8 +2814,6 @@ export interface components {
             /** Format: int32 */
             requested_term_count?: number;
             status?: string;
-            /** Format: int64 */
-            total_outstanding_minor?: number;
         };
         LoanNoteRequest: {
             note: string;
@@ -3062,17 +2960,6 @@ export interface components {
             /** Format: int32 */
             version_no?: number;
         };
-        LoanReasonRequest: {
-            reason: string;
-        };
-        /** @description FR-DIS-04: the items and a totals row that equals the loan totals */
-        LoanSchedule: {
-            currency?: string;
-            items?: components["schemas"]["LoanScheduleRow"][];
-            /** Format: uuid */
-            loan_id?: string;
-            totals?: components["schemas"]["LoanScheduleRow"];
-        };
         /** @description FR-ORG-03, FR-ORG-06: from the requested (once approved, the approved) terms and the proposed (else today's) date; display only */
         LoanScheduleItem: {
             /** Format: date */
@@ -3088,42 +2975,6 @@ export interface components {
             /** Format: int64 */
             total_minor?: number;
         };
-        LoanScheduleRow: {
-            /** Format: date */
-            due_date?: string;
-            /** Format: int64 */
-            fees_due_minor?: number;
-            /** Format: int64 */
-            fees_paid_minor?: number;
-            /** Format: int64 */
-            interest_due_minor?: number;
-            /** Format: int64 */
-            interest_paid_minor?: number;
-            /** Format: int32 */
-            no?: number;
-            /** Format: int64 */
-            outstanding_minor?: number;
-            /** Format: date */
-            paid_on?: string;
-            /** Format: int64 */
-            penalties_due_minor?: number;
-            /** Format: int64 */
-            penalties_paid_minor?: number;
-            /** Format: int64 */
-            principal_due_minor?: number;
-            /** Format: int64 */
-            principal_paid_minor?: number;
-            /** @description pending, due, overdue, partially_paid, paid, waived or written_off; null on totals */
-            status?: string;
-            /** Format: int64 */
-            total_due_minor?: number;
-            /** Format: int64 */
-            total_paid_minor?: number;
-            /** Format: int64 */
-            waived_minor?: number;
-            /** Format: int64 */
-            written_off_minor?: number;
-        };
         LoanStatusChange: {
             /** Format: date-time */
             at?: string;
@@ -3136,37 +2987,6 @@ export interface components {
         LoanStatusHistory: {
             items?: components["schemas"]["LoanStatusChange"][];
         };
-        LoanTransaction: {
-            allocations?: components["schemas"]["LoanAllocation"][];
-            /** Format: int64 */
-            amount_minor?: number;
-            /** Format: uuid */
-            approval_request_id?: string;
-            /** Format: date-time */
-            created_at?: string;
-            currency?: string;
-            external_reference?: string;
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            journal_entry_id?: string;
-            payment_method_key?: string;
-            reason?: string;
-            /** @description RC- receipt of a repayment or recovery, VC- voucher of a disbursement */
-            receipt_no?: string;
-            /** Format: uuid */
-            recorded_by?: string;
-            /** Format: uuid */
-            reversed_by_txn_id?: string;
-            /** Format: uuid */
-            reverses_txn_id?: string;
-            txn_type?: string;
-            /** Format: date */
-            value_date?: string;
-        };
-        LoanTransactionList: {
-            items?: components["schemas"]["LoanTransaction"][];
-        };
         Me: {
             all_branches?: boolean;
             branches?: components["schemas"]["MeBranch"][];
@@ -3177,6 +2997,10 @@ export interface components {
             kind?: string;
             mfa_enabled?: boolean;
             mfa_required?: boolean;
+            /** @description Per permission key, the branches it applies in */
+            permission_scopes?: {
+                [key: string]: components["schemas"]["MePermissionScope"];
+            };
             permissions?: string[];
             phone_e164?: string;
             roles?: components["schemas"]["RoleAssignment"][];
@@ -3191,6 +3015,11 @@ export interface components {
             id?: string;
             is_head_office?: boolean;
             name?: string;
+        };
+        /** @description Per permission key, the branches it applies in */
+        MePermissionScope: {
+            all_branches?: boolean;
+            branch_ids?: string[];
         };
         Member: {
             alt_phone_e164?: string;
@@ -3351,26 +3180,6 @@ export interface components {
             enabled_channels?: string[];
             failures?: components["schemas"]["OutboxFailure"][];
         };
-        /** @description R-PAYOFF as at value_date; rebate is interest not charged */
-        PayoffQuote: {
-            currency?: string;
-            /** Format: int64 */
-            fees_minor?: number;
-            /** Format: int64 */
-            interest_minor?: number;
-            /** Format: uuid */
-            loan_id?: string;
-            /** Format: int64 */
-            penalties_minor?: number;
-            /** Format: int64 */
-            principal_minor?: number;
-            /** Format: int64 */
-            rebate_minor?: number;
-            /** Format: int64 */
-            total_minor?: number;
-            /** Format: date */
-            value_date?: string;
-        };
         /** @description Limits only; prices are not stored in this repository */
         Plan: {
             allowed_modules?: string[];
@@ -3443,21 +3252,44 @@ export interface components {
             member_no?: string;
             relationship?: string;
         };
-        RepaymentRequest: {
-            /** Format: int64 */
-            amount_minor: number;
-            external_reference?: string;
-            payment_method_key: string;
+        /** @description One product with its balance in every branch of the page */
+        RetailAllBranchesRow: {
+            /** @description One entry per branch of the page, in the page's branch order */
+            balances?: components["schemas"]["RetailBranchBalance"][];
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
+            code?: string;
             /**
-             * Format: date
-             * @description Today or earlier, not before the disbursement or the loan's latest repayment, in an open period
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch of the page
              */
-            value_date: string;
+            cost_minor?: number;
+            description?: string;
+            /** @description True when any branch's balance is below zero */
+            negative?: boolean;
+            /** Format: uuid */
+            product_id?: string;
+            /** Format: int64 */
+            sell_minor?: number;
+            /** @description The sum over the branches of the page */
+            total_qty?: string;
+            unit?: string;
         };
-        RepaymentResult: {
-            balances?: components["schemas"]["LoanBalances"];
-            loan_status?: string;
-            transaction?: components["schemas"]["LoanTransaction"];
+        RetailAllBranchesStock: {
+            branches?: components["schemas"]["RetailStockBranch"][];
+            items?: components["schemas"]["RetailAllBranchesRow"][];
+            /** @description A total at or below this is low stock; the same for every branch */
+            low_stock_threshold?: string;
+            next_cursor?: string;
+        };
+        /** @description One entry per branch of the page, in the page's branch order */
+        RetailBranchBalance: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** @description Below zero in this branch */
+            negative?: boolean;
+            qty?: string;
         };
         RetailBranchQty: {
             /** Format: uuid */
@@ -3466,9 +3298,20 @@ export interface components {
             qty: string;
         };
         RetailCategory: {
+            active?: boolean;
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: int32
+             * @description Products (active or not) that use this category
+             */
+            product_count?: number;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
         };
         RetailCategoryList: {
             items?: components["schemas"]["RetailCategory"][];
@@ -3476,13 +3319,28 @@ export interface components {
         RetailCategoryRequest: {
             name: string;
         };
+        /** @description Omitted fields are unchanged; a category is never deleted */
+        RetailCategoryUpdate: {
+            active?: boolean;
+            name?: string;
+        };
         RetailCustomer: {
+            /**
+             * Format: int64
+             * @description In the list only: owed on credit sales in the caller's branch scope
+             */
+            balance_minor?: number;
             contact?: string;
             /** Format: date-time */
             created_at?: string;
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
         };
         /** @description Credit sales in the caller's branch scope */
         RetailCustomerBalance: {
@@ -3495,10 +3353,16 @@ export interface components {
         };
         RetailCustomerList: {
             items?: components["schemas"]["RetailCustomer"][];
+            next_cursor?: string;
         };
         RetailCustomerRequest: {
             contact?: string;
             name: string;
+        };
+        /** @description Omitted fields are unchanged; an empty contact clears it */
+        RetailCustomerUpdate: {
+            contact?: string;
+            name?: string;
         };
         RetailDailyProfit: {
             /** Format: int64 */
@@ -3511,6 +3375,11 @@ export interface components {
             rows?: components["schemas"]["RetailDailyProfitRow"][];
             /** Format: int64 */
             sales_minor?: number;
+            /**
+             * Format: int64
+             * @description Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor
+             */
+            stocktake_difference_minor?: number;
             /** Format: date */
             to?: string;
             /** Format: int64 */
@@ -3529,6 +3398,11 @@ export interface components {
             profit_minor?: number;
             /** Format: int64 */
             sales_minor?: number;
+            /**
+             * Format: int64
+             * @description Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor
+             */
+            stocktake_difference_minor?: number;
             /** Format: int64 */
             usage_cost_minor?: number;
         };
@@ -3656,6 +3530,34 @@ export interface components {
             updated_at?: string;
             /** Format: int32 */
             version?: number;
+        };
+        RetailProductImportRequest: {
+            /** @description The CSV text: a header row, then one item per row. Columns code, description, category, unit, sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated. */
+            csv: string;
+        };
+        RetailProductImportResult: {
+            /** Format: int32 */
+            added?: number;
+            /** @description Categories that are new (would be created on a dry run, were created on an apply) */
+            categories_created?: string[];
+            dry_run?: boolean;
+            /** Format: int32 */
+            errors?: number;
+            rows?: components["schemas"]["RetailProductImportRow"][];
+            /** Format: int32 */
+            rows_read?: number;
+            /** Format: int32 */
+            skipped?: number;
+            units_created?: string[];
+        };
+        RetailProductImportRow: {
+            code?: string;
+            description?: string;
+            /** Format: int32 */
+            line?: number;
+            message?: string;
+            /** @description added, skipped (the code exists already or repeats in the file) or error */
+            outcome?: string;
         };
         RetailProductPage: {
             items?: components["schemas"]["RetailProduct"][];
@@ -3847,6 +3749,13 @@ export interface components {
              */
             sale_date?: string;
         };
+        RetailStockBranch: {
+            code?: string;
+            head_office?: boolean;
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+        };
         RetailStockMovement: {
             /** Format: date-time */
             at?: string;
@@ -3881,9 +3790,14 @@ export interface components {
             /** Format: uuid */
             branch_id?: string;
             items?: components["schemas"]["RetailStockRow"][];
+            /** @description A quantity at or below this is low stock (FR-RET-03); the same for every branch */
+            low_stock_threshold?: string;
             next_cursor?: string;
         };
         RetailStockRow: {
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
             code?: string;
             /**
              * Format: int64
@@ -3962,6 +3876,11 @@ export interface components {
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
         };
         RetailSupplierList: {
             items?: components["schemas"]["RetailSupplier"][];
@@ -3969,6 +3888,12 @@ export interface components {
         RetailSupplierRequest: {
             contact?: string;
             name: string;
+        };
+        /** @description Omitted fields are unchanged; an empty contact clears it */
+        RetailSupplierUpdate: {
+            active?: boolean;
+            contact?: string;
+            name?: string;
         };
         RetailTransfer: {
             /**
@@ -4051,15 +3976,31 @@ export interface components {
             reason: string;
         };
         RetailUnit: {
+            active?: boolean;
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: int32
+             * @description Products (active or not) that use this unit
+             */
+            product_count?: number;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
         };
         RetailUnitList: {
             items?: components["schemas"]["RetailUnit"][];
         };
         RetailUnitRequest: {
             name: string;
+        };
+        /** @description Omitted fields are unchanged; a unit is never deleted */
+        RetailUnitUpdate: {
+            active?: boolean;
+            name?: string;
         };
         RetailUsageLine: {
             code?: string;
@@ -4126,7 +4067,18 @@ export interface components {
             /** Format: date */
             as_of?: string;
             branches?: components["schemas"]["RetailValuationBranch"][];
+            categories?: components["schemas"]["RetailValuationCategory"][];
             currency?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero
+             */
+            expected_profit_bp?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected sales less value at cost
+             */
+            expected_profit_minor?: number;
             /** Format: int64 */
             expected_sales_minor?: number;
             rows?: components["schemas"]["RetailValuationRow"][];
@@ -4139,6 +4091,16 @@ export interface components {
         RetailValuationBranch: {
             /** Format: uuid */
             branch_id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero
+             */
+            expected_profit_bp?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected sales less value at cost
+             */
+            expected_profit_minor?: number;
             /** Format: int64 */
             expected_sales_minor?: number;
             /**
@@ -4157,11 +4119,37 @@ export interface components {
              */
             value_at_cost_minor?: number;
         };
+        /** @description Totals of every reported branch for one category */
+        RetailValuationCategory: {
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero
+             */
+            expected_profit_bp?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            expected_profit_minor?: number;
+            /** Format: int64 */
+            expected_sales_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read
+             */
+            value_at_cost_minor?: number;
+        };
         RetailValuationRow: {
             /** @description True when qty times a price is too large to hold; the row's values are absent and left out of the totals */
             amount_out_of_range?: boolean;
             /** Format: uuid */
             branch_id?: string;
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
             code?: string;
             /**
              * Format: int64
@@ -4169,6 +4157,16 @@ export interface components {
              */
             cost_minor?: number;
             description?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero
+             */
+            expected_profit_bp?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read; expected sales less value at cost; absent when amount_out_of_range
+             */
+            expected_profit_minor?: number;
             /**
              * Format: int64
              * @description qty times the current sell price; absent when amount_out_of_range
@@ -5478,7 +5476,6 @@ export interface operations {
                 member_id?: string;
                 officer_user_id?: string;
                 product_id?: string;
-                q?: string;
                 limit?: number;
                 cursor?: string;
             };
@@ -5707,34 +5704,6 @@ export interface operations {
             };
         };
     };
-    requestLoanDisbursement: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string;
-            };
-            path: {
-                loan_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DisbursementRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoanActionOutcome"];
-                };
-            };
-        };
-    };
     setLoanGuarantors: {
         parameters: {
             query?: never;
@@ -5763,58 +5732,6 @@ export interface operations {
             };
         };
     };
-    getLoanPayoffQuote: {
-        parameters: {
-            query?: {
-                value_date?: string;
-            };
-            header?: never;
-            path: {
-                loan_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PayoffQuote"];
-                };
-            };
-        };
-    };
-    recordLoanRepayment: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string;
-            };
-            path: {
-                loan_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RepaymentRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RepaymentResult"];
-                };
-            };
-        };
-    };
     returnLoan: {
         parameters: {
             query?: never;
@@ -5839,28 +5756,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Loan"];
-                };
-            };
-        };
-    };
-    getLoanSchedule: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                loan_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoanSchedule"];
                 };
             };
         };
@@ -5907,85 +5802,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Loan"];
-                };
-            };
-        };
-    };
-    listLoanTransactions: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                loan_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoanTransactionList"];
-                };
-            };
-        };
-    };
-    requestLoanTransactionReversal: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string;
-            };
-            path: {
-                loan_id: string;
-                txn_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoanReasonRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoanActionOutcome"];
-                };
-            };
-        };
-    };
-    requestLoanWriteOff: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string;
-            };
-            path: {
-                loan_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoanReasonRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoanActionOutcome"];
                 };
             };
         };
@@ -7096,11 +6912,40 @@ export interface operations {
             };
         };
     };
+    updateRetailCategory: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCategoryUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCategory"];
+                };
+            };
+        };
+    };
     listRetailCustomers: {
         parameters: {
             query?: {
                 query?: string;
                 limit?: number;
+                cursor?: string;
             };
             header?: never;
             path?: never;
@@ -7129,6 +6974,34 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RetailCustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomer"];
+                };
+            };
+        };
+    };
+    updateRetailCustomer: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCustomerUpdate"];
             };
         };
         responses: {
@@ -7212,6 +7085,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    importRetailProducts: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailProductImportRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProductImportResult"];
                 };
             };
         };
@@ -7422,6 +7321,12 @@ export interface operations {
                 from?: string;
                 to?: string;
                 customer_id?: string;
+                payment_method?: string;
+                product_id?: string;
+                buyer?: string;
+                status?: string;
+                owing?: string;
+                newest_first?: boolean;
                 limit?: number;
                 cursor?: string;
             };
@@ -7571,7 +7476,9 @@ export interface operations {
             query?: {
                 branch_id?: string;
                 query?: string;
+                category_id?: string;
                 negative_only?: boolean;
+                stock_level?: string;
                 limit?: number;
                 cursor?: string;
             };
@@ -7588,6 +7495,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailStockPage"];
+                };
+            };
+        };
+    };
+    listRetailStockAllBranches: {
+        parameters: {
+            query?: {
+                query?: string;
+                category_id?: string;
+                negative_only?: boolean;
+                stock_level?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAllBranchesStock"];
                 };
             };
         };
@@ -7717,6 +7651,34 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RetailSupplierRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplier"];
+                };
+            };
+        };
+    };
+    updateRetailSupplier: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                supplier_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSupplierUpdate"];
             };
         };
         responses: {
@@ -7862,6 +7824,34 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RetailUnitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailUnit"];
+                };
+            };
+        };
+    };
+    updateRetailUnit: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                unit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailUnitUpdate"];
             };
         };
         responses: {

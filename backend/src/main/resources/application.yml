@@ -21,6 +21,13 @@ spring:
     password: ${BMS_APP_PASSWORD:}
     hikari:
       maximum-pool-size: ${BMS_DB_POOL_SIZE:10}
+      # Every connection of the pool starts with these limits (issue #107, ADR-028): a runaway
+      # statement or a transaction left open cannot hold a connection, or the row locks it took, for
+      # ever. Well above the slowest report measured at 25 times the staging data.
+      data-source-properties:
+        options: >-
+          -c statement_timeout=${BMS_DB_STATEMENT_TIMEOUT:60s}
+          -c idle_in_transaction_session_timeout=${BMS_DB_IDLE_IN_TRANSACTION_TIMEOUT:60s}
   # Migrations never run on application start: the one-shot `migrate` command runs them as
   # bms_owner before the application containers switch (ADR-006). spring-boot-flyway is not on
   # the classpath, so there is no Flyway auto-configuration to switch off.

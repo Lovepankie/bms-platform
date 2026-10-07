@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.stock.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.ledger.LedgerPosting.PostedEntry;
+import com.rincoltech.bms.core.tenancy.Branches.Branch;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
@@ -18,14 +19,19 @@ import com.rincoltech.bms.retail.stock.RetailBooks.Posting;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.Movement;
+import com.rincoltech.bms.retail.stock.internal.StockApi.AllBranchesPage;
+import com.rincoltech.bms.retail.stock.internal.StockApi.AllBranchesRow;
+import com.rincoltech.bms.retail.stock.internal.StockApi.BranchBalance;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementRow;
+import com.rincoltech.bms.retail.stock.internal.StockApi.StockBranch;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockRow;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Stocktake;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeLine;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeLineRequest;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeRequest;
+import com.rincoltech.bms.retail.stock.internal.StockRepository.ProductTotal;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -50,6 +56,14 @@ class StockService {
 
     static final String STOCKTAKE = "retail.stocktake";
     static final String PROFIT_READ = "retail.profit.read";
+    /**
+     * A product at or below this quantity is low stock (#145). One constant for every tenant until a
+     * retail settings group exists; the settings catalogue holds only core and lending keys today.
+     */
+    static final long LOW_STOCK_MILLI = 5_000;
+
+    static final String LEVEL_OUT = "out";
+    static final String LEVEL_LOW = "low";
     static final int DEFAULT_LIMIT = 100;
     static final int MAX_LIMIT = 500;
 
@@ -81,16 +95,87 @@ class StockService {
         this.audit = audit;
     }
 
+    /**
+     * FR-RET-03, #144: every product with its balance in each branch the caller may read, a total and
+     * the negative flag per branch. Cost shows only when the caller holds {@code retail.profit.read} in
+     * every branch of the page, since one cost cannot be shown for some branches and hidden for others.
+     */
+    @Transactional(readOnly = true)
+    AllBranchesPage allBranches(
+            String query, UUID categoryId, boolean negativeOnly, String level, Integer limit, String cursor) {
+        Long atMost = atMostOf(level);
+        Principal principal = CurrentPrincipal.require();
+        List<Branch> visible = branches.visible(
+                "retail.stock.read", repo.branchesHoldingBalance(branches.inactiveInScope("retail.stock.read")));
+        List<UUID> ids = visible.stream().map(Branch::id).toList();
+        List<StockBranch> columns = visible.stream()
+                .map(b -> new StockBranch(b.id(), b.code(), b.name(), b.headOffice()))
+                .toList();
+        if (ids.isEmpty()) {
+            return new AllBranchesPage(columns, List.of(), Quantities.format(lowStock()), null);
+        }
+        int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
+        Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
+        List<ProductTotal> rows = repo.allBranches(
+                ids,
+                blankToNull(query),
+                categoryId,
+                negativeOnly,
+                atMost,
+                after == null ? null : after.sortKey(),
+                after == null ? null : after.id(),
+                size + 1);
+        boolean more = rows.size() > size;
+        List<ProductTotal> page = more ? rows.subList(0, size) : rows;
+        Map<UUID, Map<UUID, BigDecimal>> held =
+                repo.balances(page.stream().map(ProductTotal::id).toList(), ids);
+        boolean cost = ids.stream().allMatch(b -> principal.may(PROFIT_READ, b));
+        List<AllBranchesRow> items = page.stream()
+                .map(p -> new AllBranchesRow(
+                        p.id(),
+                        p.code(),
+                        p.description(),
+                        p.categoryId(),
+                        p.category(),
+                        p.unit(),
+                        Quantities.format(p.total()),
+                        p.negative(),
+                        p.sellMinor(),
+                        cost ? p.costMinor() : null,
+                        ids.stream()
+                                .map(b -> {
+                                    BigDecimal q =
+                                            held.getOrDefault(p.id(), Map.of()).getOrDefault(b, BigDecimal.ZERO);
+                                    return new BranchBalance(b, Quantities.format(q), q.signum() < 0);
+                                })
+                                .toList()))
+                .toList();
+        String next = more
+                ? Cursor.encode(page.getLast().code() + "|" + page.getLast().id())
+                : null;
+        return new AllBranchesPage(columns, items, Quantities.format(lowStock()), next);
+    }
+
     /** FR-RET-03: a branch's balances, negatives flagged. */
     @Transactional(readOnly = true)
-    StockPage stock(UUID branchId, String query, boolean negativeOnly, Integer limit, String cursor) {
+    StockPage stock(
+            UUID branchId,
+            String query,
+            UUID categoryId,
+            boolean negativeOnly,
+            String level,
+            Integer limit,
+            String cursor) {
+        Long atMost = atMostOf(level);
         UUID branch = branches.resolve("retail.stock.read", branchId);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
         List<StockRow> rows = repo.stock(
                 branch,
                 query == null || query.isBlank() ? null : query.trim(),
+                categoryId,
                 negativeOnly,
+                atMost,
                 after == null ? null : after.sortKey(),
                 after == null ? null : after.id(),
                 size + 1);
@@ -109,12 +194,15 @@ class StockService {
                                         r.productId(),
                                         r.code(),
                                         r.description(),
+                                        r.categoryId(),
+                                        r.category(),
                                         r.unit(),
                                         r.qty(),
                                         r.negative(),
                                         r.sellMinor(),
                                         null))
                         .toList(),
+                Quantities.format(lowStock()),
                 next);
     }
 
@@ -322,6 +410,24 @@ class StockService {
      * Cost on a branch-bound row needs {@code retail.profit.read} in that row's branch, not in any
      * branch (ADR-017; review F5).
      */
+    private static BigDecimal lowStock() {
+        return BigDecimal.valueOf(LOW_STOCK_MILLI, 3);
+    }
+
+    /** The quantity a level filter keeps at or below, in thousandths; null for no level (#145). */
+    private static Long atMostOf(String level) {
+        if (level == null || level.isBlank()) {
+            return null;
+        }
+        return switch (level) {
+            case LEVEL_OUT -> 0L;
+            case LEVEL_LOW -> LOW_STOCK_MILLI;
+            default ->
+                throw ApiException.validation(
+                        List.of(new FieldProblem("stock_level", "invalid", "stock_level is out or low.")));
+        };
+    }
+
     static boolean mayReadCost(UUID branchId) {
         return CurrentPrincipal.require().may(PROFIT_READ, branchId);
     }

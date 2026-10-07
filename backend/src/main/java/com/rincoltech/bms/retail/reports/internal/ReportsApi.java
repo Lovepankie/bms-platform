@@ -10,6 +10,11 @@ import java.util.UUID;
 final class ReportsApi {
 
     static final String COST_ONLY = "Present only with retail.profit.read";
+    static final String PERCENT =
+            "; expected profit over value at cost in basis points (2500 is 25 percent), rounded half up; absent when the value at cost is not above zero";
+
+    static final String DIFFERENCE =
+            "Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor";
 
     private ReportsApi() {}
 
@@ -19,6 +24,8 @@ final class ReportsApi {
             UUID productId,
             String code,
             String description,
+            UUID categoryId,
+            String category,
             String unit,
             String qty,
             boolean negative,
@@ -37,7 +44,14 @@ final class ReportsApi {
             Long costMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY + "; qty times the current cost")
-            Long valueAtCostMinor) {}
+            Long valueAtCostMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = COST_ONLY + "; expected sales less value at cost; absent when amount_out_of_range")
+            Long expectedProfitMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY + PERCENT)
+            Long expectedProfitBp) {}
 
     @Schema(name = "RetailValuationBranch")
     record BranchTotal(
@@ -56,7 +70,29 @@ final class ReportsApi {
                     description =
                             COST_ONLY
                                     + "; value at cost less the inventory account: the revaluation difference of ADR-020 decision 8")
-            Long revaluationDifferenceMinor) {}
+            Long revaluationDifferenceMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = COST_ONLY + "; expected sales less value at cost")
+            Long expectedProfitMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY + PERCENT)
+            Long expectedProfitBp) {}
+
+    @Schema(name = "RetailValuationCategory", description = "Totals of every reported branch for one category")
+    record CategoryTotal(
+            UUID categoryId,
+            String category,
+            long expectedSalesMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)
+            Long valueAtCostMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)
+            Long expectedProfitMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY + PERCENT)
+            Long expectedProfitBp) {}
 
     @Schema(name = "RetailValuation")
     record Valuation(
@@ -64,10 +100,18 @@ final class ReportsApi {
             String currency,
             List<ValuationRow> rows,
             List<BranchTotal> branches,
+            List<CategoryTotal> categories,
             long expectedSalesMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)
-            Long valueAtCostMinor) {}
+            Long valueAtCostMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = COST_ONLY + "; expected sales less value at cost")
+            Long expectedProfitMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY + PERCENT)
+            Long expectedProfitBp) {}
 
     @Schema(name = "RetailDailyProfitRow")
     record ProfitRow(
@@ -77,6 +121,7 @@ final class ReportsApi {
             long costOfSalesMinor,
             long grossProfitMinor,
             long usageCostMinor,
+            @Schema(description = DIFFERENCE) long stocktakeDifferenceMinor,
             long profitMinor) {}
 
     @Schema(name = "RetailDailyProfit")
@@ -88,5 +133,6 @@ final class ReportsApi {
             long salesMinor,
             long costOfSalesMinor,
             long usageCostMinor,
+            @Schema(description = DIFFERENCE) long stocktakeDifferenceMinor,
             long profitMinor) {}
 }

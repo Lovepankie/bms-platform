@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.stock.internal;
 
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
+import com.rincoltech.bms.retail.stock.internal.StockApi.AllBranchesPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Stocktake;
@@ -47,10 +48,27 @@ class StockController {
     StockPage stock(
             @RequestParam(name = "branch_id", required = false) UUID branchId,
             @RequestParam(name = "query", required = false) String query,
+            @RequestParam(name = "category_id", required = false) UUID categoryId,
             @RequestParam(name = "negative_only", required = false, defaultValue = "false") boolean negativeOnly,
+            @RequestParam(name = "stock_level", required = false) String level,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.stock(branchId, query, negativeOnly, limit, cursor);
+        return service.stock(branchId, query, categoryId, negativeOnly, level, limit, cursor);
+    }
+
+    @GetMapping("/stock/all-branches")
+    @RequiresPermission("retail.stock.read")
+    @Operation(
+            summary = "Every product with its balance in each branch the caller may read (#144)",
+            operationId = "listRetailStockAllBranches")
+    AllBranchesPage allBranches(
+            @RequestParam(name = "query", required = false) String query,
+            @RequestParam(name = "category_id", required = false) UUID categoryId,
+            @RequestParam(name = "negative_only", required = false, defaultValue = "false") boolean negativeOnly,
+            @RequestParam(name = "stock_level", required = false) String level,
+            @RequestParam(name = "limit", required = false) Integer limit,
+            @RequestParam(name = "cursor", required = false) String cursor) {
+        return service.allBranches(query, categoryId, negativeOnly, level, limit, cursor);
     }
 
     @GetMapping("/stock/movements")

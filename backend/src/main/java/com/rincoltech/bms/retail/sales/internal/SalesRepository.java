@@ -13,6 +13,8 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +41,9 @@ class SalesRepository {
     }
 
     /** A sale header with its journal entries, for the service. */
+    /** A listed buyer with the key the list is ordered by, as the database computed it (for the cursor). */
+    record CustomerRow(Customer customer, String sortKey) {}
+
     record Header(Sale sale, UUID saleEntryId, UUID costEntryId) {}
 
     /** A line to insert. */
@@ -70,6 +75,13 @@ class SalesRepository {
             LocalDate from,
             LocalDate to,
             UUID customerId,
+            String paymentMethod,
+            UUID productId,
+            String buyer,
+            String status,
+            String owing,
+            LocalDate today,
+            boolean newestFirst,
             Instant afterCreated,
             UUID afterId,
             int limit) {
@@ -94,16 +106,50 @@ class SalesRepository {
             sql.append(" AND customer_id = :customerId");
             params.put("customerId", customerId);
         }
+        if (paymentMethod != null) {
+            sql.append(" AND payment_method = :paymentMethod");
+            params.put("paymentMethod", paymentMethod);
+        }
+        if (productId != null) {
+            sql.append(" AND EXISTS (SELECT 1 FROM retail_sale_lines l WHERE l.sale_id = retail_sales.id"
+                    + " AND l.product_id = :productId)");
+            params.put("productId", productId);
+        }
+        if (buyer != null) {
+            sql.append(" AND (buyer_name ILIKE :buyer OR EXISTS (SELECT 1 FROM retail_customers c"
+                    + " WHERE c.id = retail_sales.customer_id AND c.name ILIKE :buyer))");
+            params.put(
+                    "buyer",
+                    "%" + buyer.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+        }
+        if (status != null) {
+            sql.append(" AND status = :status");
+            params.put("status", status);
+        }
+        if (owing != null) {
+            sql.append(" AND payment_method = 'credit' AND status = 'completed'");
+            switch (owing) {
+                case "owing" -> sql.append(" AND total_minor > paid_minor");
+                case "overdue" -> {
+                    sql.append(" AND total_minor > paid_minor AND due_date < :today");
+                    params.put("today", Date.valueOf(today));
+                }
+                default -> sql.append(" AND total_minor <= paid_minor");
+            }
+        }
         if (afterCreated != null) {
-            sql.append(" AND (created_at, id) > (:afterCreated, :afterId)");
+            sql.append(newestFirst ? " AND (created_at, id) < " : " AND (created_at, id) > ")
+                    .append("(:afterCreated, :afterId)");
             params.put("afterCreated", Timestamp.from(afterCreated));
             params.put("afterId", afterId);
         }
-        sql.append(" ORDER BY created_at, id LIMIT :limit");
+        sql.append(newestFirst ? " ORDER BY created_at DESC, id DESC" : " ORDER BY created_at, id")
+                .append(" LIMIT :limit");
         params.put("limit", limit);
-        return jdbc.sql(sql.toString()).params(params).query((rs, n) -> header(rs)).list().stream()
-                .map(this::withLines)
-                .toList();
+        return withLines(jdbc.sql(sql.toString())
+                .params(params)
+                .query((rs, n) -> header(rs))
+                .list());
     }
 
     void insert(Sale s) {
@@ -165,25 +211,40 @@ class SalesRepository {
     }
 
     private Sale withLines(Sale s) {
-        List<SaleLine> lines = jdbc.sql("""
-                        SELECT l.id, l.line_no, l.product_id, p.code, p.description, l.qty, l.unit_price_minor,
+        return withLines(List.of(s)).getFirst();
+    }
+
+    /** The lines of every sale of a page in one statement, not one per sale (issue #107). */
+    private List<Sale> withLines(List<Sale> sales) {
+        if (sales.isEmpty()) {
+            return sales;
+        }
+        Map<UUID, List<SaleLine>> bySale = new HashMap<>();
+        jdbc.sql("""
+                        SELECT l.sale_id, l.id, l.line_no, l.product_id, p.code, p.description, l.qty, l.unit_price_minor,
                                l.line_total_minor, l.unit_cost_minor, l.line_cost_minor
                           FROM retail_sale_lines l JOIN retail_products p ON p.id = l.product_id
-                         WHERE l.sale_id = ? ORDER BY l.line_no
-                        """)
-                .param(s.id())
-                .query((rs, n) -> new SaleLine(
-                        rs.getObject("id", UUID.class),
-                        rs.getInt("line_no"),
-                        rs.getObject("product_id", UUID.class),
-                        rs.getString("code"),
-                        rs.getString("description"),
-                        Quantities.format(rs.getBigDecimal("qty")),
-                        rs.getLong("unit_price_minor"),
-                        rs.getLong("line_total_minor"),
-                        rs.getLong("unit_cost_minor"),
-                        rs.getLong("line_cost_minor")))
-                .list();
+                         WHERE l.sale_id IN (:ids) ORDER BY l.sale_id, l.line_no
+                        """).param("ids", sales.stream().map(Sale::id).toList()).query(rs -> {
+            bySale.computeIfAbsent(rs.getObject("sale_id", UUID.class), k -> new ArrayList<>())
+                    .add(new SaleLine(
+                            rs.getObject("id", UUID.class),
+                            rs.getInt("line_no"),
+                            rs.getObject("product_id", UUID.class),
+                            rs.getString("code"),
+                            rs.getString("description"),
+                            Quantities.format(rs.getBigDecimal("qty")),
+                            rs.getLong("unit_price_minor"),
+                            rs.getLong("line_total_minor"),
+                            rs.getLong("unit_cost_minor"),
+                            rs.getLong("line_cost_minor")));
+        });
+        return sales.stream()
+                .map(s -> withLines(s, bySale.getOrDefault(s.id(), new ArrayList<>())))
+                .toList();
+    }
+
+    private static Sale withLines(Sale s, List<SaleLine> lines) {
         return new Sale(
                 s.id(),
                 s.saleNo(),
@@ -300,26 +361,60 @@ class SalesRepository {
     }
 
     Optional<Customer> customer(UUID id) {
-        return jdbc.sql("SELECT id, name, contact, created_at FROM retail_customers WHERE id = ?")
+        return jdbc.sql("SELECT id, name, contact, created_at, version FROM retail_customers WHERE id = ?")
                 .param(id)
                 .query(SalesRepository::customer)
                 .optional();
     }
 
-    List<Customer> customers(String query, int limit) {
-        if (query == null) {
-            return jdbc.sql(
-                            "SELECT id, name, contact, created_at FROM retail_customers ORDER BY lower(name), id LIMIT ?")
-                    .param(limit)
-                    .query(SalesRepository::customer)
-                    .list();
+    /** Rows changed: 0 when the version moved since it was read (the predicate is the optimistic lock). */
+    int updateCustomer(UUID id, String name, String contact, int expectedVersion) {
+        return jdbc.sql(
+                        "UPDATE retail_customers SET name = ?, contact = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
+                .params(name, contact, id, expectedVersion)
+                .update();
+    }
+
+    /** The list, each buyer with what they owe on credit sales in the given branches (null: every branch). */
+    List<CustomerRow> customers(
+            String query, int limit, List<UUID> branchIds, com.rincoltech.bms.kernel.Cursor.Key after) {
+        if (branchIds != null && branchIds.isEmpty()) {
+            return customers(query, limit, List.of(new UUID(0, 0)), after);
         }
-        return jdbc.sql("""
-                        SELECT id, name, contact, created_at FROM retail_customers
-                         WHERE name ILIKE ? ORDER BY lower(name), id LIMIT ?
-                        """)
-                .params("%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%", limit)
-                .query(SalesRepository::customer)
+        Map<String, Object> params = new LinkedHashMap<>();
+        StringBuilder sql = new StringBuilder("""
+                SELECT c.id, c.name, c.contact, c.created_at, c.version, lower(c.name) AS sort_key,
+                       (SELECT coalesce(sum(s.total_minor - s.paid_minor), 0) FROM retail_sales s
+                         WHERE s.customer_id = c.id AND s.payment_method = 'credit' AND s.status = 'completed'
+                           AND s.paid_minor < s.total_minor""");
+        if (branchIds != null) {
+            sql.append(" AND s.branch_id IN (:branchIds)");
+            params.put("branchIds", branchIds);
+        }
+        sql.append(") AS owed FROM retail_customers c WHERE true");
+        if (query != null) {
+            sql.append(" AND c.name ILIKE :q");
+            params.put(
+                    "q", "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+        }
+        if (after != null) {
+            sql.append(" AND (lower(c.name), c.id) > (:afterName, :afterId)");
+            params.put("afterName", after.sortKey());
+            params.put("afterId", after.id());
+        }
+        sql.append(" ORDER BY lower(c.name), c.id LIMIT :limit");
+        params.put("limit", limit);
+        return jdbc.sql(sql.toString())
+                .params(params)
+                .query((rs, n) -> new CustomerRow(
+                        new Customer(
+                                rs.getObject("id", UUID.class),
+                                rs.getString("name"),
+                                rs.getString("contact"),
+                                instant(rs, "created_at"),
+                                rs.getLong("owed"),
+                                rs.getInt("version")),
+                        rs.getString("sort_key")))
                 .list();
     }
 
@@ -360,7 +455,9 @@ class SalesRepository {
                 rs.getObject("id", UUID.class),
                 rs.getString("name"),
                 rs.getString("contact"),
-                instant(rs, "created_at"));
+                instant(rs, "created_at"),
+                null,
+                rs.getInt("version"));
     }
 
     static Instant instant(ResultSet rs, String column) throws SQLException {

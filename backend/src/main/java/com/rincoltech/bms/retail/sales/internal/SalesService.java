@@ -10,6 +10,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Customer;
@@ -26,6 +27,7 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleLine;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleLineRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SalePage;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.UpdateCustomerRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.VoidRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.Header;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.NewLine;
@@ -267,8 +269,37 @@ class SalesService {
         return visible(repo.find(id, false).orElseThrow().sale());
     }
 
+    private static final java.util.Set<String> OWING_FILTERS = java.util.Set.of("owing", "overdue", "paid");
+
+    private static final java.util.Set<String> PAYMENT_METHODS =
+            java.util.Set.of("cash", "mobile_money", "bank", "credit");
+
     @Transactional(readOnly = true)
-    SalePage list(List<UUID> branchIds, LocalDate from, LocalDate to, UUID customerId, Integer limit, String cursor) {
+    SalePage list(
+            List<UUID> branchIds,
+            LocalDate from,
+            LocalDate to,
+            UUID customerId,
+            String paymentMethod,
+            UUID productId,
+            String buyer,
+            String status,
+            String owing,
+            boolean newestFirst,
+            Integer limit,
+            String cursor) {
+        if (owing != null && !OWING_FILTERS.contains(owing)) {
+            throw ApiException.validation(
+                    List.of(new FieldProblem("owing", "invalid", "owing is owing, overdue or paid.")));
+        }
+        if (paymentMethod != null && !PAYMENT_METHODS.contains(paymentMethod)) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "payment_method", "invalid", "payment_method is cash, mobile_money, bank or credit.")));
+        }
+        if (status != null && !status.equals("completed") && !status.equals("voided")) {
+            throw ApiException.validation(
+                    List.of(new FieldProblem("status", "invalid", "status is completed or voided.")));
+        }
         Principal principal = CurrentPrincipal.require();
         List<UUID> filter = principal.branchFilter("retail.sale.read", branchIds);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
@@ -276,15 +307,39 @@ class SalesService {
         UUID afterId = null;
         Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
         if (after != null) {
-            afterCreated = after.at();
+            String direction = newestFirst ? "desc:" : "asc:";
+            if (!after.sortKey().startsWith("desc:") && !after.sortKey().startsWith("asc:")) {
+                throw new ApiException(
+                        HttpStatus.BAD_REQUEST, "malformed_request", "Malformed request", "Invalid cursor.");
+            }
+            if (!after.sortKey().startsWith(direction)) {
+                throw ApiException.validation(List.of(new FieldProblem(
+                        "cursor", "invalid", "The cursor was issued for the other newest_first direction.")));
+            }
+            afterCreated = new Cursor.Key(after.sortKey().substring(direction.length()), after.id()).at();
             afterId = after.id();
         }
-        List<Sale> rows = repo.page(filter, from, to, customerId, afterCreated, afterId, size + 1);
+        LocalDate today = owing == null ? null : clock.today(tenant.profile().timezone());
+        List<Sale> rows = repo.page(
+                filter,
+                from,
+                to,
+                customerId,
+                paymentMethod,
+                productId,
+                buyer == null || buyer.isBlank() ? null : buyer.trim(),
+                status,
+                owing,
+                today,
+                newestFirst,
+                afterCreated,
+                afterId,
+                size + 1);
         boolean more = rows.size() > size;
         List<Sale> items = more ? rows.subList(0, size) : rows;
         String next = more
-                ? Cursor.encode(
-                        items.getLast().createdAt() + "|" + items.getLast().id())
+                ? Cursor.encode((newestFirst ? "desc:" : "asc:")
+                        + items.getLast().createdAt() + "|" + items.getLast().id())
                 : null;
         return new SalePage(items.stream().map(SalesService::visible).toList(), next);
     }
@@ -441,17 +496,62 @@ class SalesService {
 
     @Transactional
     Customer createCustomer(CustomerRequest r) {
-        Customer c = new Customer(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), null);
+        Customer c = new Customer(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), null, null, 1);
         repo.insertCustomer(c, CurrentPrincipal.require().userId());
         audit.record(AuditLog.Entry.created(
                 "retail.customer.created", "retail.customer", c.id(), null, Map.of("name", c.name())));
         return repo.customer(c.id()).orElseThrow();
     }
 
+    /** #146: edit a credit buyer's name or contact. Nothing else about a buyer changes, and none is deleted. */
+    @Transactional
+    Customer updateCustomer(UUID id, String ifMatch, UpdateCustomerRequest r) {
+        int expected = Versions.fromIfMatch(ifMatch);
+        Customer before = repo.customer(id).orElseThrow(ApiException::notFound);
+        if (before.version() != expected) {
+            throw Versions.conflict(before.version());
+        }
+        String name = r.name() == null ? before.name() : r.name().trim();
+        String contact = r.contact() == null ? before.contact() : blankToNull(r.contact());
+        if (name.isEmpty()) {
+            throw ApiException.validation(
+                    List.of(new ApiException.FieldProblem("name", "invalid", "The name must not be blank.")));
+        }
+        Map<String, Object> was = new java.util.LinkedHashMap<>();
+        Map<String, Object> now = new java.util.LinkedHashMap<>();
+        if (!name.equals(before.name())) {
+            was.put("name", before.name());
+            now.put("name", name);
+        }
+        if (!java.util.Objects.equals(contact, before.contact())) {
+            now.put("contact_changed", true);
+        }
+        if (now.isEmpty()) {
+            return before;
+        }
+        if (repo.updateCustomer(id, name, contact, expected) == 0) {
+            throw repo.customer(id).map(c -> Versions.conflict(c.version())).orElseGet(ApiException::notFound);
+        }
+        audit.record(new AuditLog.Entry("retail.customer.updated", "retail.customer", id, null, was, now));
+        return repo.customer(id).orElseThrow();
+    }
+
     @Transactional(readOnly = true)
-    CustomerList customers(String query, Integer limit) {
+    CustomerList customers(String query, Integer limit, String cursor) {
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
-        return new CustomerList(repo.customers(blankToNull(query), size));
+        com.rincoltech.bms.kernel.Cursor.Key after =
+                com.rincoltech.bms.kernel.Cursor.decodeKey(cursor).orElse(null);
+        List<SalesRepository.CustomerRow> rows = repo.customers(
+                blankToNull(query), size + 1, CurrentPrincipal.require().branchFilter("retail.sale.read", null), after);
+        boolean more = rows.size() > size;
+        List<SalesRepository.CustomerRow> page = more ? rows.subList(0, size) : rows;
+        // The key is the database's own lower(name), so the cursor agrees with the ORDER BY.
+        String next = more
+                ? com.rincoltech.bms.kernel.Cursor.encode(page.getLast().sortKey() + "|"
+                        + page.getLast().customer().id())
+                : null;
+        return new CustomerList(
+                page.stream().map(SalesRepository.CustomerRow::customer).toList(), next);
     }
 
     /** FR-RET-05: what the customer owes on credit sales in the caller's branch scope. */

@@ -1,6 +1,6 @@
 # Retail UI notes
 
-**Status:** Draft · **Tasks:** #56 (R6), #65 (R6b) under story #50, #84 (stock transfers), #103, #105, #112 (walk-through fixes) · **Requirements:** FR-RET-15, FR-RET-16 · **Scope:** `docs/specs/retail-mvp-scope.md`
+**Status:** Draft · **Tasks:** #56 (R6), #65 (R6b) under story #50, #84 (stock transfers), #103, #105, #112 (walk-through fixes), #145 and #144 (parity), #121 and #146 (catalogue management) · **Requirements:** FR-RET-15, FR-RET-16 · **Scope:** `docs/specs/retail-mvp-scope.md`
 
 Phone-first staff screens for the retail vertical, in `frontend/src/areas/staff/retail/`. Since #65 they run on the
 real retail API (`docs/sdd/07-api-design.md` section 7.11.20, `docs/api/openapi.json`), which replaced the contract
@@ -14,12 +14,20 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 | `/staff/retail/sale` | Record a sale, then the receipt summary | `retail.sale.create` |
 | `/staff/retail/restock` | Restock: supplier, lines, per-branch quantities | `retail.purchase.create` |
 | `/staff/retail/usage` | Usage and damage | `retail.usage.report` |
-| `/staff/retail/stock` | Stock per branch, search, negative flag | `retail.stock.read` |
+| `/staff/retail/credit-sales` | Credit sales: buyer, date, amount, due date, state; open a sale | `retail.sale.read` |
+| `/staff/retail/sales` | All sales: filters by dates, buyer, paid by and item; open a sale | `retail.sale.read` |
+| `/staff/retail/stock` | Stock per branch or All branches, search, category filter, Out of stock and Low stock tabs, negative flag | `retail.stock.read` |
 | `/staff/retail/stocktake` | Count, review variance, commit | `retail.stocktake.commit` and `retail.stock.read` |
 | `/staff/retail/transfer` | Move stock: to which branch, items with the source's stock, date and note | `retail.stock.transfer` and `retail.stock.read` |
 | `/staff/retail/transfers` | Stock moves from or to the branch; open one; cancel it | `retail.stock.read` (cancel: `retail.stock.transfer`) |
 | `/staff/retail/valuation` | Stock at price; at cost too with `retail.profit.read` | `retail.stock.read` (cost columns: `retail.profit.read`) |
-| `/staff/retail/profit` | Daily profit per branch | `retail.profit.read` |
+| `/staff/retail/profit` | Daily profit per branch, with the stock-take difference as its own column (#121) | `retail.profit.read` |
+| `/staff/retail/catalogue` | Catalogue home: links to the screens below the session may use | any one of the catalogue screens' permissions |
+| `/staff/retail/catalogue/products` | Items: list with search, category and on sale filters; add, edit, change price, price history (#146) | `retail.catalogue.manage` and `retail.stock.read` (Change price: `retail.price.edit`; cost: `retail.profit.read`) |
+| `/staff/retail/catalogue/categories`, `/units` | Add, rename, switch off or on, with the number of items using each | `retail.catalogue.manage` and `retail.stock.read` |
+| `/staff/retail/catalogue/suppliers` | Add, edit, switch off or on | `retail.catalogue.manage` and `retail.purchase.create` |
+| `/staff/retail/catalogue/buyers` | Credit buyers with what each owes; add, edit name and contact | `retail.customer.manage` and `retail.sale.read` |
+| `/staff/retail/catalogue/import` | Import items from a CSV file or pasted rows: check first, then add (#146) | `retail.catalogue.manage`, `retail.stock.read` and `core.settings.manage` (administrators) |
 
 Sale, usage, stock, stock-take, Move stock, valuation and profit work on the branch chosen in the staff header;
 with "All branches" they ask for one branch. Restock takes a quantity per branch the user can see. Stock moves
@@ -74,10 +82,10 @@ totals shown while typing are a preview; the server's response is the receipt.
 - **Restock saved (#112 items 10 and 11).** The confirmation names the supplier, the restock number
   (`purchase_no`) and date, and lists each line whose sell price changed ("sell price changed from X to Y")
   and, for a user with `retail.profit.read`, whose cost changed.
-- **Daily profit and stock-takes (#112 item 8).** The report counts sales, their cost and usage and damage
-  reports. A committed stock-take posts its variance to the `stock_shrinkage` account in the ledger, but the
-  report does not read it, so a stock-take loss is in the books and not in daily profit. The screen now says
-  so under the table; whether shrinkage belongs in the report is left for a decision (ADR-020).
+- **Daily profit and stock-takes (#112 item 8, decided in #121).** The report counts sales, their cost, usage and
+  damage reports, and the net stock-take difference as its own column "Stock-take difference" (negative for a
+  loss, positive for a gain, at cost, on the day the stock-take was committed), included in the profit. It is the
+  same figure the ledger holds in `stock_shrinkage`.
 
 ## Look and navigation (#95)
 
@@ -224,10 +232,93 @@ from Town to Second Shop. A Playwright script drove Chromium at 360px and 390px;
   branch "Only 12 piece in stock at this branch.";
 - no page overflowed sideways.
 
+## The parity pass (#145, #144)
+
+`docs/specs/retail-ui-parity.md` lists every AppSheet view against its screen. What this pass added:
+
+- **Categories.** Stock has a Category column and a category select ("All categories"); search matches the
+  category text; the sale, restock, usage, Move stock and stock-take pickers show the category as a small grey
+  label (`CategoryLabel` in `ui.tsx`) and search it. The API: `category_id` and the category on stock rows,
+  `query` matches the category name on stock and products.
+- **Expected profit.** Stock value shows Expected profit and Profit % (over cost, from `expected_profit_bp`) in
+  the total, per item and per branch, and a By category table; all of it only with `retail.profit.read`, since the
+  server sends none of it otherwise (the same rule as cost, PR #78). Without that permission the screen shows the
+  prices and the By category table at selling price only.
+- **All branches (#144).** With "All branches" in the Branch box, Stock calls `GET /retail/stock/all-branches`:
+  a column per branch, a Total, the Negative flag on each cell; below 720px (`useIsPhone`) each item is a card
+  with the total and a Show branches button. Stock value adds a By branch table (the server's branch totals) and
+  names the branch on each item row; Daily profit adds a By branch table and sums the days across branches. The
+  write screens (sale, usage, stock-take, Move stock; Restock already chose its branches per line) still need one
+  branch, and now say "Choose a branch to continue:" with a button for each of the user's branches.
+- **Out of stock and Low stock.** Tabs on Stock (`stock_level=out|low`): out is zero or less, low is 5 or fewer
+  and so includes out of stock. The threshold is a constant in the API (`StockService.LOW_STOCK_MILLI`) because
+  the settings catalogue has no retail group (ADR-029); in All branches the level is judged on the total.
+- **Credit sales and All sales.** Two screens on the sales list API (new filters `payment_method`, `product_id`,
+  `buyer`, `status`, `newest_first`), linked from the retail home. A card shows the buyer, date and amount; a
+  credit sale adds the due date, what is still owed and a state badge (Paid, Part paid, Unpaid, Overdue; the
+  words carry the meaning). Tapping a sale shows its lines. Profit shows only when the server sent it.
+
+### Verification of the parity pass
+
+The same shape of stack as the walkthrough fixes (real API on the dev profile, the built PWA, headless Chromium, a
+real sign-in with TOTP) on a fabricated tenant with three branches, five categories and twelve products
+(`docs/ui/design-system/parity/`, with a README). Stock, Stock value, Daily profit, Credit sales, All sales and the
+write-screen branch message were opened at 360px and 1280px with "All branches" and with one branch: no screen
+overflowed sideways, and the first pass led to these changes: on a phone the category sits under the item name and the
+cost and usage of a day under its name (so quantity, price, sales and profit stay in view), Stock value's headline
+is a two column table instead of large wrapping text, branch and category totals are one card each on a phone, and a
+sale in a list is a card with an Open button instead of a blue link-like row. The backend suite (`mvn verify`: 119
+unit and 330 integration tests, including `RetailParityIT`) is green.
+
+## Catalogue management (#146)
+
+A shop keeps its own lists without an operator. The retail home has a **Catalogue** tile when the session may use any
+of the screens under it; the Catalogue home lists only those it may use (a sales user, who holds
+`retail.customer.manage`, sees Credit buyers alone). `retail/permissions.ts` holds the permissions of each
+(`CATALOGUE_LINKS`); the API stays the authority.
+
+- **Items** (`catalogue-products.tsx`): the list takes search (code, description, category), a category and a
+  "Items on sale, switched off, all" choice, 50 at a time with "Show more items". A card shows the code, category,
+  unit and selling price, and the cost only with `retail.profit.read`. Add and Edit change code, description,
+  category, unit and whether the item is on sale (`PATCH` under `If-Match` with the version just read, so a change
+  by someone else is refused with a plain message). Prices are never edited there: **Change price** (with
+  `retail.price.edit`) takes a new selling price, a cost price only with `retail.profit.read`, and a required
+  reason; it warns, without blocking, when the selling price is not above the cost the user can see, and the server
+  accepts a price at or below cost (the price floor is enforced when a sale is made, `price_below_cost`, unless the
+  seller holds `retail.price.below_cost`), so the form only warns, and only when the user can see cost. Under the form, the **price
+  history** of the item lists each change with the date and time in the business's time zone (`showWhen`,
+  Africa/Kampala like `businessToday`), what changed, why, and the cost only when the server sent it. A new item
+  asks for a selling price; its cost is asked only with `retail.profit.read` (else 0, and a restock sets it).
+- **Categories and Units** (`catalogue-lists.tsx`, one component twice): Add, Rename, Switch off or Switch on,
+  with "Used by N items". Nothing is deleted. A switched-off row stays on the items that use it and is not offered
+  for a new item (the server refuses it with 422 `inactive_category`, `inactive_unit`).
+- **Suppliers and Credit buyers** (`catalogue-people.tsx`): Add and Edit name and contact; a supplier can also be
+  switched off (it is then refused on a new restock). Credit buyers show what each owes on credit sales in the
+  branches the user may read (`balance_minor`). The contact is shown as typed and is not written to the audit log.
+- **Import items** (`catalogue-import.tsx`): choose a CSV file or paste rows (comma, semicolon or tab separated; a
+  spreadsheet paste works). **Check the file** runs a dry run and lists each row as Add, Skip (the code exists, or
+  repeats in the file) or Problem with a plain message; **Add N items** appears only after a clean check of the text
+  as it stands now. A file with a problem row adds nothing. Adding again skips everything already there. The cost
+  price column is accepted only with `retail.profit.read`.
+- **Messages.** Every save shows a green on-screen message (`Success`, `role="status"`) and a toast above the
+  bottom bar (`useToast` in `ui.tsx`, four seconds, hidden from assistive technology since the on-screen message
+  carries the same words). There was no toast helper in the app before this (only the `.toast` style), so
+  `useToast` is the first and the other retail screens do not use it yet. Refusals use the existing `Problem` alert
+  with the server's plain message.
+
+### Verification of the catalogue screens (#146, #121)
+
+The real stack as in `docs/ui/design-system/catalogue/README.md` (API jar from `mvn verify`, V28, the built PWA, headless
+Chromium at 360px and 1280px, a real sign-in with TOTP, a fabricated tenant with three branches): the walk added, edited,
+switched off and re-priced items, renamed and switched off categories, added and edited a supplier and a credit buyer, checked
+and applied an item import and opened Daily profit. No screen overflowed sideways. It found one defect, fixed with a test: the
+price history crashed on the `null` the server sends for a first price. The price edit accepts a price below cost (the floor is
+enforced on a sale), so the form warns instead of refusing. A shop that counts in its opening stock with a stock-take will see
+that stock as a stock-take difference, and so as profit, at cost, on that day: bring opening stock in with a restock instead.
+
 ## Left to do
 
-- Void a sale, pay a credit sale, price edit and price history screens (not in R6).
+- Void a sale and pay a credit sale screens; see `docs/specs/retail-ui-parity.md`.
 - The component tests render static markup (no DOM in the test setup); the browser run above covers behaviour.
 - Offline use, barcode scanning and receipts to SMS are out of the first release.
 - The tenant's timezone and a transfer number are not in the API; when they are, use them (#112).
-- Whether stock-take shrinkage belongs in daily profit (#112 item 8).

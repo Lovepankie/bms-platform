@@ -49,7 +49,7 @@ describe('the shared shell (FR-TEN-08)', () => {
 
   it('is the root of every area, so each inherits the footer and the theme', () => {
     const areas = ((router.routeTree.children ?? []) as unknown as { path?: string }[]).map((route) => route.path);
-    for (const path of ['/', 'sign-in', 'accept-invitation', 'staff', 'member']) {
+    for (const path of ['/', 'sign-in', 'accept-invitation', 'staff', 'member', 'style']) {
       expect(areas).toContain(path);
     }
   });

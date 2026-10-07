@@ -4,7 +4,7 @@
 
 Proposed (issue #108, MVP increment 5). Builds on ADR-004 (ledger), ADR-015 (approval actions) and
 ADR-002 (module boundaries). Implements FR-DIS-01 to FR-DIS-04, FR-REP-01 to FR-REP-06 and
-FR-LCL-01 to FR-LCL-03 with migration `V25`.
+FR-LCL-01 to FR-LCL-03 with migration `V29`.
 
 ## Context
 

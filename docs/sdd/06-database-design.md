@@ -124,6 +124,14 @@ transaction set it raises `invalid input syntax for type uuid: ""` (the transact
 has reverted to empty). Both are errors, never rows (NFR-ISO-03). A table with no rows returns
 none either way, because the policy is only evaluated against rows.
 
+The policy compares `tenant_id` with `current_setting(...)` directly. Wrapping the setting in a
+sub-select, so it is evaluated once per statement instead of once per row read, was measured and
+rejected (ADR-028): with the indexes of section 6.12 it saved about a quarter on a few reports, but
+it hides the tenant from the planner's statistics, and a valuation report became 13 times slower on
+a large tenant. Under the policy only *leakproof* predicates (equality and range on uuid, dates,
+timestamps and text) can be index conditions: `lower(col) = ...`, `ILIKE` and trigram `%` run as
+filters after the tenant's rows are found (section 6.12).
+
 Two `SECURITY DEFINER` functions, owned by `bms_owner`, with
 `SET search_path = public, pg_temp`, are the only sanctioned way around the policy:
 
@@ -644,7 +652,8 @@ Index `(tenant_id, branch_id, entry_date)`, `(tenant_id, source_type, source_id)
 | `memo` | `text` | |
 
 `CHECK (debit >= 0 AND credit >= 0)`, `CHECK ((debit > 0) <> (credit > 0))`.
-Index `(tenant_id, account_id)`, `(tenant_id, subledger_type, subledger_id)`.
+Index `(tenant_id, account_id) INCLUDE (entry_id, debit, credit)` (V26, section 6.12),
+`(tenant_id, subledger_type, subledger_id)`.
 
 Balance enforcement: a constraint trigger
 `CREATE CONSTRAINT TRIGGER journal_entry_balance_check AFTER INSERT ON journal_lines
@@ -908,7 +917,8 @@ creation and replaced by the approved terms at approval.
 
 Indexes: `(tenant_id, member_id)`, `(tenant_id, branch_id, status)`,
 `(tenant_id, officer_user_id, status)`, `(tenant_id, status, next_due_date)`,
-`(tenant_id, status, days_past_due) WHERE status = 'active'`. The approver CHECK is named
+`(tenant_id, status, days_past_due) WHERE status = 'active'`, and `(tenant_id, created_at, id)` for
+the list's order (V26). The approver CHECK is named
 `lending_loans_approver_is_not_submitter_or_appraiser`. Guarantor and pledge rows of a draft are
 replaced as a whole, so `bms_app` holds DELETE on those two tables only, and triggers
 (`lending_loan_collateral_guard`, `lending_loan_guarantors_guard`) refuse any insert, delete or
@@ -1013,7 +1023,7 @@ item's value (`pledge_exceeds_value`).
 
 `CHECK` for each component: `paid + waived <= due`. Index `(tenant_id, due_date, status)`,
 `(tenant_id, loan_id, item_no)`.
-Built in `V25` (#108). The trigger `lending_schedule_items_guard` refuses any change of `loan_id`,
+Built in `V29` (#108). The trigger `lending_schedule_items_guard` refuses any change of `loan_id`,
 `item_no`, `due_date` or the principal, interest and fee due once written; only the paid, waived,
 written-off, penalty and status columns move.
 
@@ -1050,7 +1060,7 @@ Partial unique `(tenant_id, schedule_item_id, period_no) WHERE charge_type = 'pe
 | `recorded_by` | `uuid` | |
 
 Index `(tenant_id, loan_id, value_date)`, `(tenant_id, branch_id, value_date, txn_type)`.
-Built in `V25` (#108): `payment_method_key` is one of `cash`, `bank`, `mtn_momo`, `airtel_money`
+Built in `V29` (#108): `payment_method_key` is one of `cash`, `bank`, `mtn_momo`, `airtel_money`
 (ADR-026 maps each to a seeded account until FR-GL-08); `CHECK (is_historic OR journal_entry_id IS NOT
 NULL)`; `CHECK ((txn_type = 'reversal') = (reverses_txn_id IS NOT NULL))`; partial unique
 `(tenant_id, loan_id) WHERE txn_type = 'disbursement'` (FR-DIS-03).
@@ -1065,7 +1075,7 @@ row), `applies_to_txn_id uuid NOT NULL` (the repayment whose money the row moves
 `reversal` transaction, which writes the reversed repayment's rows negated and the differences of
 every later repayment it re-allocates, ADR-026). `interest_rebate` is the early settlement rebate of
 R-PAYOFF: interest waived, not cash. Indexes `(tenant_id, transaction_id)`,
-`(tenant_id, applies_to_txn_id)`. Built in `V25` (#108).
+`(tenant_id, applies_to_txn_id)`. Built in `V29` (#108).
 
 ### `lending_loan_daily_snapshots`
 
@@ -1217,7 +1227,7 @@ erDiagram
   the application containers switch (ADR-006; `docs/sdd/10-cicd-pipeline.md`). The integration
   tests apply the same files with the same code. An applied migration is never edited.
 - Migrations are **expand and contract**: a release only adds (tables, nullable columns,
-  new CHECK values, indexes built `CONCURRENTLY`); removing or renaming happens in a
+  new CHECK values, indexes); removing or renaming happens in a
   later release after no deployed code uses the old shape. The previous release's code
   must run against the new schema, because rollback swaps containers without reversing
   migrations.
@@ -1226,6 +1236,13 @@ erDiagram
   chapter 15 fails otherwise, and the isolation test asks for a factory row for the new table.
 - Seed data (currencies, plans, roles, permissions, role permissions) is applied by
   migrations and is idempotent.
+- Indexes are built with plain `CREATE INDEX` inside the migration's transaction, which blocks
+  writes to that table until the migration commits (ADR-028). The lock time of every build is
+  measured with `scripts/db-bench` at 25 times the data and written in the migration; a migration
+  that touches existing tables starts with `SET LOCAL lock_timeout = '5s'`, so it fails fast behind
+  a long report instead of queueing every request. When a build would block writes for longer than
+  about 30 seconds on production, it goes in its own non-transactional migration with
+  `CREATE INDEX CONCURRENTLY` (Flyway `executeInTransaction=false` for that file only).
 
 ### 6.9.1 Tables that exist so far
 
@@ -1273,6 +1290,10 @@ adds the `retail.price.below_cost` permission to the catalogue and grants it to 
 `V14__retail_review_fixes.sql` (#68) adds `business_date` to stock movements, the product code and
 amount CHECKs and the sale header and stock-take line guards (sections 6.11.2 and 6.11.3). The
 retired setting `retail_allow_negative_stock` needs no migration: a stored key is ignored on read.
+`V28__retail_catalogue_management.sql` (#146) adds `active` and `updated_at` to `retail_categories` and
+`retail_units`, `updated_at` to `retail_suppliers` and `retail_customers`, and grants `bms_app` UPDATE on
+the four so a shop can rename them and switch a category, unit or supplier off, and a `version` integer
+(default 1) on the four for optimistic locking (expand only).
 `V20__retail_import_refs.sql` (#55) creates `retail_import_refs` (append-only) for the
 `import-retail` command (section 6.11.4). It took V20 while the retail fixes were still open;
 Flyway applies the gap in order after V14. `outOfOrder` stays off, so V15 to V19 are never used:
@@ -1284,8 +1305,12 @@ account in `bms_seed_retail_chart` and for every tenant that switched retail on 
 movement kinds and the movements' `transfer_id` link (sections 6.11.1 and 6.11.2). It takes the next
 number free on `main` when it merges, so it may be renumbered then. `V23__onboarding_applications_and_outbox.sql` (#89, ADR-024) creates
 `onboarding_applications` and `notification_outbox` (section 6.4) with `onboarding_normalise_name`,
-`onboarding_email_key` and their definer functions. The next migration is V24 (`MigrationOrderIT`,
-chapter 15 section 15.4.3).
+`onboarding_email_key` and their definer functions. `V26__database_optimisation.sql` (#107, ADR-028) changes indexes
+and a storage setting only (section 6.12). `V28__retail_catalogue_management.sql` is the retail
+catalogue management (#146). `V29__lending_disbursement_repayments.sql` (#108, ADR-026) is lending
+increment 5: schedule items, loan transactions and repayment allocations (section 6.7). V24, V25
+and V27 stay unused: with `outOfOrder` off a number below an applied one can never run. The next
+migration is V30 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items
 
@@ -1328,12 +1353,14 @@ module on again adds nothing. `S` marks `is_system_controlled`.
 | 5100 | Cost of goods sold | expense | `cost_of_goods_sold` | |
 | 5110 | Stock shrinkage | expense | `stock_shrinkage` | |
 
-### `retail_categories`, `retail_units` (RLS; `bms_app` SELECT, INSERT)
+### `retail_categories`, `retail_units` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
 | Column | Type | Notes |
 |---|---|---|
 | `id`, `tenant_id`, `created_at`, `created_by` | standard | |
 | `name` | varchar(100) for categories, varchar(30) for units | Unique per tenant ignoring case (FR-RET-01) |
+| `active`, `updated_at` | boolean default true, timestamptz | V28: a row in use is switched off, never deleted |
+| `version` | integer default 1 | V28: bumped by every update; the `If-Match` value. `retail_suppliers` and `retail_customers` carry it too |
 
 ### `retail_products` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
@@ -1410,6 +1437,12 @@ Imported history (sales, purchases, adjustments, returns, usage, legacy balances
 | `historical` | boolean | Imported history (FR-RET-12); default false |
 | `note`, `recorded_by` | | |
 
+Indexes: `(tenant_id, branch_id, product_id, business_date) INCLUDE (qty, kind, historical)`, which
+serves reconciliation, valuation as of a date and the import's positions from the index alone
+(V26, replacing the V11 balance index and the V14 business date index); `(tenant_id, source_type,
+source_id)`; `(tenant_id, occurred_at, id)` for the movements list, whose local-date filter adds an
+instant range so this index applies (section 6.12); `(tenant_id, transfer_id)` partial.
+
 ### `retail_stock_balances` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
 Primary key `(tenant_id, branch_id, product_id)`, `qty numeric(14,3)`, `updated_at`. Written only by
@@ -1417,7 +1450,10 @@ Primary key `(tenant_id, branch_id, product_id)`, `qty numeric(14,3)`, `updated_
 taken in branch and product order). Product rows are locked only by restocks and price edits, with
 `FOR NO KEY UPDATE` (see purchases below). The nightly job `retail.stock-reconciliation` compares each row
 with the sum of its movements and records any difference as a system audit row
-(`retail.stock.reconciliation_mismatch`); it never corrects a balance.
+(`retail.stock.reconciliation_mismatch`); it never corrects a balance. Every movement updates a
+row here, so the table keeps free space on each page (`fillfactor = 80`) and has no index on `qty`
+(V26 dropped the partial `qty < 0` index, which no query used and which made every update non-HOT):
+balance updates are HOT and do not grow the indexes (section 6.12).
 
 ### `retail_transfers` (RLS; `bms_app` SELECT, INSERT, UPDATE of the void only)
 
@@ -1453,9 +1489,9 @@ commit that would leave a balance negative is refused with `stock_moved_since_co
 `unit_cost_minor` it was valued at. One line per product. Once committed, the stock-take and its
 lines are refused any UPDATE (trigger `retail_stocktake_guard_update`, V14, review F10).
 
-### `retail_customers` (RLS; `bms_app` SELECT, INSERT)
+### `retail_customers` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
-Credit buyers: `name varchar(200)`, `contact varchar(100)` kept as entered, `created_by`.
+Credit buyers: `name varchar(200)`, `contact varchar(100)` kept as entered, `created_by`, `updated_at` (V28).
 
 ### `retail_sales` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
@@ -1478,15 +1514,21 @@ The trigger `retail_sales_guard_update` (V14, review F10) lets an UPDATE change 
 entry ids (once, from null); any other change is refused, for `bms_app` and the owner alike (the
 owner's `bms.allow_mutation` maintenance switch of `reject_mutation` applies).
 
+Indexes: `(tenant_id, branch_id, sale_date, created_at, id)` for a branch's list,
+`(tenant_id, created_at, id)` for the list's order across branches, `(tenant_id, sale_date) INCLUDE
+(id, branch_id, status)` for the daily profit (both V26), `(tenant_id, customer_id)` partial.
+
 ### `retail_sale_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
 
 `line_no`, `product_id`, `qty numeric(14,3) > 0`, and the snapshots `unit_price_minor` and
 `unit_cost_minor` with `line_total_minor` and `line_cost_minor` (each rounded half up once). Profit
-is computed from these, never from the product's current prices (ADR-020 decision 5).
+is computed from these, never from the product's current prices (ADR-020 decision 5). Index
+`(tenant_id, sale_id) INCLUDE (line_total_minor, line_cost_minor)` (V26): a list page loads the lines
+of all its sales in one statement, and the daily profit sums them without reading the heap.
 
-### `retail_suppliers` (RLS; `bms_app` SELECT, INSERT)
+### `retail_suppliers` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
-`name varchar(200)` unique per tenant ignoring case, `contact`, `active`, `created_by`.
+`name varchar(200)` unique per tenant ignoring case, `contact`, `active`, `created_by`, `updated_at` (V28).
 
 ### `retail_purchases`, `retail_purchase_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
 
@@ -1577,3 +1619,52 @@ as `bms_app` under the tenant's row-level security:
 
 Primary key `(tenant_id, source_file, source_ref)`: a row already present is skipped, so a re-run
 of the same export adds nothing.
+
+## 6.12 Performance and indexing (issue #107, ADR-028)
+
+Measured with `scripts/db-bench`: a throwaway PostgreSQL 17 container holding 25 times the staging
+data (50 tenants of mixed size, one large retail tenant with 40 percent of the retail rows; 500,000
+sales, 1.5 million sale lines, 1.6 million stock movements, 2.1 million audit rows; 3.6 GB), every
+hot query of the code taken as `bms_app` with row-level security on, under the staging settings
+(176 MB, one CPU, 48 MB `shared_buffers`) and the production ones. ADR-028 has the before and after
+table.
+
+**Index rules.**
+
+- Every index of a tenant-owned table leads with `tenant_id`: the policy's
+  `tenant_id = current_setting(...)` is then an index condition, evaluated once per scan.
+- Then the equality columns, then the range or sort column, matching the query's `ORDER BY` for a
+  keyset list, so a page reads its rows and stops (`(tenant_id, created_at, id)` for the sales and
+  loans lists).
+- Only leakproof predicates become index conditions under the policy (section 6.3.2). A search by
+  `ILIKE` or trigram similarity runs as a filter over the tenant's rows; that is fine at the sizes
+  measured (product search 4 to 6 ms, member search 19 ms, duplicate check 121 ms on the staging
+  settings at 25 times the data) and is the first thing to revisit if a tenant grows far beyond.
+- Reports that aggregate many rows read a covering index (`INCLUDE`) instead of the heap: stock
+  movements per branch and product, sale line totals per sale, journal line amounts per account.
+  Append-only tables are vacuumed by insert-driven autovacuum, which keeps the visibility map set
+  so these stay index-only scans.
+- No index on a column that every hot update changes; free space (`fillfactor`) on the one table
+  updated on every sale (`retail_stock_balances`). `retail_sales`, `idempotency_keys` and
+  `tenant_sequences` were measured at 100 percent HOT updates already and keep the default.
+- An index no query uses is dropped (V26 dropped five), and a new one is added only with a plan
+  that shows it used.
+
+**Query rules.** A list loads the children of a page in one statement (`IN (...)` over the page's
+ids), never one statement per row (sales, transfers and purchases, V26 release). A date filter on a
+timestamp keeps an instant range next to any local-date expression so the index applies. Lists are
+keyset paginated and never count; reports are bounded by their date range and branch filter.
+
+**Not done, with the reason.** No pre-aggregated profit or valuation table: the year profit report
+takes 472 ms at 25 times the data on the staging settings, well inside a report's budget. No JSON
+indexes: no query filters on a JSON column. No extended statistics: measured without effect once
+the covering index exists. JIT and parallel query keep their defaults: no measurable difference on
+the staging settings. `notification_outbox` (V23, #89) merged after these measurements and was not
+measured; its claim reads the partial index on pending rows. `notifications` and
+`lending_schedule_items` do not exist yet; their indexes follow the same rules and are measured when
+they arrive.
+
+**Connections.** Every pool connection starts with `statement_timeout` and
+`idle_in_transaction_session_timeout` of 60 s (`BMS_DB_STATEMENT_TIMEOUT`,
+`BMS_DB_IDLE_IN_TRANSACTION_TIMEOUT`). Pool sizes and server settings: chapter 9 and
+`docs/runbooks/database-tuning.md`; health checks: `docs/runbooks/database-health-check.md`.

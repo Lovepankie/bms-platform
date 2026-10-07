@@ -29,11 +29,35 @@ final class CatalogueApi {
     @Schema(name = "RetailUnitRequest")
     record UnitRequest(@NotBlank @Size(max = 30) String name) {}
 
+    @Schema(name = "RetailCategoryUpdate", description = "Omitted fields are unchanged; a category is never deleted")
+    record UpdateCategoryRequest(@Size(min = 1, max = 100) String name, Boolean active) {}
+
+    @Schema(name = "RetailUnitUpdate", description = "Omitted fields are unchanged; a unit is never deleted")
+    record UpdateUnitRequest(@Size(min = 1, max = 30) String name, Boolean active) {}
+
     @Schema(name = "RetailCategory")
-    record Category(UUID id, String name) {}
+    record Category(
+            UUID id,
+            String name,
+            boolean active,
+
+            @Schema(description = "Products (active or not) that use this category")
+            int productCount,
+
+            @Schema(description = "Send as If-Match when updating")
+            int version) {}
 
     @Schema(name = "RetailUnit")
-    record Unit(UUID id, String name) {}
+    record Unit(
+            UUID id,
+            String name,
+            boolean active,
+
+            @Schema(description = "Products (active or not) that use this unit")
+            int productCount,
+
+            @Schema(description = "Send as If-Match when updating")
+            int version) {}
 
     @Schema(name = "RetailCategoryList")
     record CategoryList(List<Category> items) {}
@@ -158,4 +182,39 @@ final class CatalogueApi {
 
     @Schema(name = "RetailPriceHistory")
     record PriceHistory(List<PriceChange> items) {}
+
+    @Schema(name = "RetailProductImportRequest")
+    record ImportRequest(
+            @NotBlank
+            @Size(max = ProductImportService.MAX_CHARS)
+            @Schema(
+                    description =
+                            "The CSV text: a header row, then one item per row. Columns code, description, category, unit,"
+                                    + " sell_price and optionally cost_price (only with retail.profit.read). Comma, semicolon or tab separated.")
+            String csv) {}
+
+    @Schema(name = "RetailProductImportRow")
+    record ImportRow(
+            int line,
+            String code,
+            String description,
+
+            @Schema(description = "added, skipped (the code exists already or repeats in the file) or error")
+            String outcome,
+
+            String message) {}
+
+    @Schema(name = "RetailProductImportResult")
+    record ImportResult(
+            boolean dryRun,
+            int rowsRead,
+            int added,
+            int skipped,
+            int errors,
+
+            @Schema(description = "Categories that are new (would be created on a dry run, were created on an apply)")
+            List<String> categoriesCreated,
+
+            List<String> unitsCreated,
+            List<ImportRow> rows) {}
 }

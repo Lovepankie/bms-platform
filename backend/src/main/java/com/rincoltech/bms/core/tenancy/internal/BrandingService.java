@@ -3,10 +3,12 @@ package com.rincoltech.bms.core.tenancy.internal;
 import com.rincoltech.bms.core.documents.Documents;
 import com.rincoltech.bms.core.documents.Documents.AssetMeta;
 import com.rincoltech.bms.core.documents.Documents.ImagePolicy;
+import com.rincoltech.bms.core.tenancy.TenantModules;
 import com.rincoltech.bms.core.tenancy.internal.SettingsController.SettingsResponse;
 import com.rincoltech.bms.kernel.ApiException;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -45,14 +47,21 @@ class BrandingService {
             String themeText,
 
             @Schema(description = "Same-origin URL of the logo image, or null")
-            String logoUrl) {}
+            String logoUrl,
+
+            @Schema(
+                    description =
+                            "Keys of the modules the tenant has switched on, sorted (#99): what the landing and sign-in copy may promise")
+            List<String> modules) {}
 
     private final SettingsService settings;
     private final Documents documents;
+    private final TenantModules modules;
 
-    BrandingService(SettingsService settings, Documents documents) {
+    BrandingService(SettingsService settings, Documents documents, TenantModules modules) {
         this.settings = settings;
         this.documents = documents;
+        this.modules = modules;
     }
 
     /** The file is checked and re-encoded before a transaction opens, so no connection waits on it. */
@@ -68,7 +77,8 @@ class BrandingService {
                 s.displayName(),
                 text.isPresent() ? s.themePrimary() : null,
                 text.orElse(null),
-                s.logoDocumentId() == null ? null : "/api/v1/branding/logo?v=" + s.logoDocumentId());
+                s.logoDocumentId() == null ? null : "/api/v1/branding/logo?v=" + s.logoDocumentId(),
+                modules.enabledKeys());
     }
 
     /** The current logo's id and checksum, from the database only: a conditional request reads no storage. */

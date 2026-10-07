@@ -208,6 +208,7 @@ Notes:
   document list shows ID images only to those who may open them, and a document with no known
   kind is denied (fail closed). If auditors need the
   images later, a read-only audit permission is added then (#29, decided by the dev lead).
+- The retail CSV product import (#146) is for administrators only: the route declares `retail.catalogue.manage` and the service also requires `core.settings.manage`, which only the tenant admin holds, so a custom role granted the catalogue permission alone cannot run it; its cost column needs `retail.profit.read`.
 - Retail (ADR-020): the admin role is the tenant admin, who holds every `retail.*` permission
   except `retail.price.below_cost`; the sales role (`retail_sales`) holds sale create and read,
   stock read, usage report and customer manage, scoped to its assigned branches. Lending roles hold no retail permission. Cost, cost
@@ -449,6 +450,8 @@ GitHub Actions deploy secrets live in the `staging` and `production` environment
   must rate limit them per client address (a Cloudflare rule on `/api/v1/branding*`, for example 60
   requests a minute), and the edge must never apply "Cache Everything" or ignore the query string
   or host for `/api/v1/branding*`. That a tenant exists is not a secret: sign-in pages already show it.
+  `GET /branding` also lists the tenant's enabled module keys (#99): the landing page already shows
+  which modules a tenant runs, so the keys add nothing secret; no counts, plan or limits are exposed.
 - PDFs are stored as uploaded: only images are re-encoded, so a PDF's embedded JavaScript,
   launch actions or links are not removed. The control is how files are served: every signed
   download URL (R2 presign and the test fake alike) carries `Content-Disposition: attachment` with
