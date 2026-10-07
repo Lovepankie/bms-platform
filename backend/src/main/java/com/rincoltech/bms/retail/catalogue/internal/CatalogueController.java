@@ -66,8 +66,12 @@ class CatalogueController {
     @PatchMapping("/categories/{category_id}")
     @RequiresPermission("retail.catalogue.manage")
     @Operation(summary = "Rename or deactivate a category (#146); never deleted", operationId = "updateRetailCategory")
-    Category updateCategory(@PathVariable("category_id") UUID id, @Valid @RequestBody UpdateCategoryRequest request) {
-        return service.updateCategory(id, request);
+    ResponseEntity<Category> updateCategory(
+            @PathVariable("category_id") UUID id,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody UpdateCategoryRequest request) {
+        Category c = service.updateCategory(id, ifMatch, request);
+        return ResponseEntity.ok().eTag(String.valueOf(c.version())).body(c);
     }
 
     @PatchMapping("/units/{unit_id}")
@@ -75,8 +79,12 @@ class CatalogueController {
     @Operation(
             summary = "Rename or deactivate a unit of measure (#146); never deleted",
             operationId = "updateRetailUnit")
-    Unit updateUnit(@PathVariable("unit_id") UUID id, @Valid @RequestBody UpdateUnitRequest request) {
-        return service.updateUnit(id, request);
+    ResponseEntity<Unit> updateUnit(
+            @PathVariable("unit_id") UUID id,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody UpdateUnitRequest request) {
+        Unit u = service.updateUnit(id, ifMatch, request);
+        return ResponseEntity.ok().eTag(String.valueOf(u.version())).body(u);
     }
 
     @GetMapping("/units")

@@ -18,3 +18,9 @@ SELECT bms_grant_app('retail_suppliers', 'UPDATE');
 
 ALTER TABLE retail_customers ADD COLUMN updated_at timestamptz;
 SELECT bms_grant_app('retail_customers', 'UPDATE');
+
+-- Optimistic locking for the new PATCH endpoints (ETag and If-Match, as products have since V10).
+ALTER TABLE retail_categories ADD COLUMN version integer NOT NULL DEFAULT 1;
+ALTER TABLE retail_units ADD COLUMN version integer NOT NULL DEFAULT 1;
+ALTER TABLE retail_suppliers ADD COLUMN version integer NOT NULL DEFAULT 1;
+ALTER TABLE retail_customers ADD COLUMN version integer NOT NULL DEFAULT 1;

@@ -49,20 +49,22 @@ class PurchasingRepository {
     }
 
     void updateSupplier(UUID id, String name, String contact, boolean active) {
-        jdbc.sql("UPDATE retail_suppliers SET name = ?, contact = ?, active = ?, updated_at = now() WHERE id = ?")
+        jdbc.sql(
+                        "UPDATE retail_suppliers SET name = ?, contact = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ?")
                 .params(name, contact, active, id)
                 .update();
     }
 
     Optional<Supplier> supplier(UUID id) {
-        return jdbc.sql("SELECT id, name, contact, active, created_at FROM retail_suppliers WHERE id = ?")
+        return jdbc.sql("SELECT id, name, contact, active, created_at, version FROM retail_suppliers WHERE id = ?")
                 .param(id)
                 .query(PurchasingRepository::supplier)
                 .optional();
     }
 
     List<Supplier> suppliers() {
-        return jdbc.sql("SELECT id, name, contact, active, created_at FROM retail_suppliers ORDER BY lower(name), id")
+        return jdbc.sql(
+                        "SELECT id, name, contact, active, created_at, version FROM retail_suppliers ORDER BY lower(name), id")
                 .query(PurchasingRepository::supplier)
                 .list();
     }
@@ -73,7 +75,8 @@ class PurchasingRepository {
                 rs.getString("name"),
                 rs.getString("contact"),
                 rs.getBoolean("active"),
-                rs.getTimestamp("created_at").toInstant());
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getInt("version"));
     }
 
     // ---- Purchases -----------------------------------------------------------------------

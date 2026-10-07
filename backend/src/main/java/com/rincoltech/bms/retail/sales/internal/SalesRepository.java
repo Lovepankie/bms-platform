@@ -340,26 +340,28 @@ class SalesRepository {
     }
 
     Optional<Customer> customer(UUID id) {
-        return jdbc.sql("SELECT id, name, contact, created_at FROM retail_customers WHERE id = ?")
+        return jdbc.sql("SELECT id, name, contact, created_at, version FROM retail_customers WHERE id = ?")
                 .param(id)
                 .query(SalesRepository::customer)
                 .optional();
     }
 
     void updateCustomer(UUID id, String name, String contact) {
-        jdbc.sql("UPDATE retail_customers SET name = ?, contact = ?, updated_at = now() WHERE id = ?")
+        jdbc.sql(
+                        "UPDATE retail_customers SET name = ?, contact = ?, updated_at = now(), version = version + 1 WHERE id = ?")
                 .params(name, contact, id)
                 .update();
     }
 
     /** The list, each buyer with what they owe on credit sales in the given branches (null: every branch). */
-    List<Customer> customers(String query, int limit, List<UUID> branchIds) {
+    List<Customer> customers(
+            String query, int limit, List<UUID> branchIds, com.rincoltech.bms.kernel.Cursor.Key after) {
         if (branchIds != null && branchIds.isEmpty()) {
-            return customers(query, limit, List.of(new UUID(0, 0)));
+            return customers(query, limit, List.of(new UUID(0, 0)), after);
         }
         Map<String, Object> params = new LinkedHashMap<>();
         StringBuilder sql = new StringBuilder("""
-                SELECT c.id, c.name, c.contact, c.created_at,
+                SELECT c.id, c.name, c.contact, c.created_at, c.version,
                        (SELECT coalesce(sum(s.total_minor - s.paid_minor), 0) FROM retail_sales s
                          WHERE s.customer_id = c.id AND s.payment_method = 'credit' AND s.status = 'completed'
                            AND s.paid_minor < s.total_minor""");
@@ -373,6 +375,11 @@ class SalesRepository {
             params.put(
                     "q", "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
         }
+        if (after != null) {
+            sql.append(" AND (lower(c.name), c.id) > (:afterName, :afterId)");
+            params.put("afterName", after.sortKey());
+            params.put("afterId", after.id());
+        }
         sql.append(" ORDER BY lower(c.name), c.id LIMIT :limit");
         params.put("limit", limit);
         return jdbc.sql(sql.toString())
@@ -382,7 +389,8 @@ class SalesRepository {
                         rs.getString("name"),
                         rs.getString("contact"),
                         instant(rs, "created_at"),
-                        rs.getLong("owed")))
+                        rs.getLong("owed"),
+                        rs.getInt("version")))
                 .list();
     }
 
@@ -424,7 +432,8 @@ class SalesRepository {
                 rs.getString("name"),
                 rs.getString("contact"),
                 instant(rs, "created_at"),
-                null);
+                null,
+                rs.getInt("version"));
     }
 
     static Instant instant(ResultSet rs, String column) throws SQLException {

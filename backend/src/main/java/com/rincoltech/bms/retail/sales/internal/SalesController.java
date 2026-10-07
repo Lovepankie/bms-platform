@@ -137,8 +137,9 @@ class SalesController {
     @Operation(summary = "Credit buyers", operationId = "listRetailCustomers")
     CustomerList customers(
             @RequestParam(name = "query", required = false) String query,
-            @RequestParam(name = "limit", required = false) Integer limit) {
-        return service.customers(query, limit);
+            @RequestParam(name = "limit", required = false) Integer limit,
+            @RequestParam(name = "cursor", required = false) String cursor) {
+        return service.customers(query, limit, cursor);
     }
 
     @PostMapping("/customers")
@@ -151,8 +152,12 @@ class SalesController {
     @PatchMapping("/customers/{customer_id}")
     @RequiresPermission("retail.customer.manage")
     @Operation(summary = "Edit a credit buyer's name or contact (#146)", operationId = "updateRetailCustomer")
-    Customer updateCustomer(@PathVariable("customer_id") UUID id, @Valid @RequestBody UpdateCustomerRequest request) {
-        return service.updateCustomer(id, request);
+    ResponseEntity<Customer> updateCustomer(
+            @PathVariable("customer_id") UUID id,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody UpdateCustomerRequest request) {
+        Customer c = service.updateCustomer(id, ifMatch, request);
+        return ResponseEntity.ok().eTag(String.valueOf(c.version())).body(c);
     }
 
     @GetMapping("/customers/{customer_id}/balance")

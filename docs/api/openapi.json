@@ -2999,6 +2999,11 @@
             "description" : "Products (active or not) that use this category",
             "format" : "int32",
             "type" : "integer"
+          },
+          "version" : {
+            "description" : "Send as If-Match when updating",
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -3055,6 +3060,11 @@
           },
           "name" : {
             "type" : "string"
+          },
+          "version" : {
+            "description" : "Send as If-Match when updating",
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -3087,6 +3097,9 @@
               "$ref" : "#/components/schemas/RetailCustomer"
             },
             "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
           }
         }
       },
@@ -4222,6 +4235,11 @@
           },
           "name" : {
             "type" : "string"
+          },
+          "version" : {
+            "description" : "Send as If-Match when updating",
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -4442,6 +4460,11 @@
           },
           "product_count" : {
             "description" : "Products (active or not) that use this unit",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "description" : "Send as If-Match when updating",
             "format" : "int32",
             "type" : "integer"
           }
@@ -8992,6 +9015,13 @@
             "format" : "uuid",
             "type" : "string"
           }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
         } ],
         "requestBody" : {
           "content" : {
@@ -9036,6 +9066,13 @@
           "schema" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -9090,6 +9127,13 @@
           "required" : true,
           "schema" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
             "type" : "string"
           }
         } ],
@@ -10237,6 +10281,13 @@
             "format" : "uuid",
             "type" : "string"
           }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
         } ],
         "requestBody" : {
           "content" : {
@@ -10490,6 +10541,13 @@
           "required" : true,
           "schema" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
             "type" : "string"
           }
         } ],

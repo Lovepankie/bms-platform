@@ -42,7 +42,10 @@ final class CatalogueApi {
             boolean active,
 
             @Schema(description = "Products (active or not) that use this category")
-            int productCount) {}
+            int productCount,
+
+            @Schema(description = "Send as If-Match when updating")
+            int version) {}
 
     @Schema(name = "RetailUnit")
     record Unit(
@@ -51,7 +54,10 @@ final class CatalogueApi {
             boolean active,
 
             @Schema(description = "Products (active or not) that use this unit")
-            int productCount) {}
+            int productCount,
+
+            @Schema(description = "Send as If-Match when updating")
+            int version) {}
 
     @Schema(name = "RetailCategoryList")
     record CategoryList(List<Category> items) {}

@@ -35,7 +35,15 @@ final class PurchasingApi {
             Boolean active) {}
 
     @Schema(name = "RetailSupplier")
-    record Supplier(UUID id, String name, String contact, boolean active, Instant createdAt) {}
+    record Supplier(
+            UUID id,
+            String name,
+            String contact,
+            boolean active,
+            Instant createdAt,
+
+            @Schema(description = "Send as If-Match when updating")
+            int version) {}
 
     @Schema(name = "RetailSupplierList")
     record SupplierList(List<Supplier> items) {}

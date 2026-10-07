@@ -40,8 +40,31 @@ class RetailCatalogueManagementIT extends IntegrationTest {
         api = new RetailTestSupport(http, t);
     }
 
+    /** A PATCH that sends the row's current version, as the screens do. */
     ResponseEntity<JsonNode> patch(String path, Object body, String permissions) {
-        return api.call(HttpMethod.PATCH, path, body, permissions, "*", Map.of());
+        String table = path.startsWith("/categories/")
+                ? "retail_categories"
+                : path.startsWith("/units/")
+                        ? "retail_units"
+                        : path.startsWith("/suppliers/") ? "retail_suppliers" : "retail_customers";
+        UUID id = UUID.fromString(path.substring(path.lastIndexOf('/') + 1));
+        int version = TestDatabase.owner()
+                .sql("SELECT version FROM " + table + " WHERE id = ?")
+                .param(id)
+                .query(Integer.class)
+                .optional()
+                .orElse(1);
+        return patchIfMatch(path, body, permissions, String.valueOf(version));
+    }
+
+    ResponseEntity<JsonNode> patchIfMatch(String path, Object body, String permissions, String ifMatch) {
+        return api.call(
+                HttpMethod.PATCH,
+                path,
+                body,
+                permissions,
+                "*",
+                ifMatch == null ? Map.of() : Map.of("If-Match", ifMatch));
     }
 
     List<String> actions() {
@@ -265,5 +288,57 @@ class RetailCatalogueManagementIT extends IntegrationTest {
                 .query(String.class)
                 .single();
         assertThat(audited).doesNotContain("7777").doesNotContain("cost");
+    }
+
+    @Test
+    void aStaleOrMissingIfMatchIsRefusedOnEveryNewPatchEndpoint() {
+        UUID category = api.category("Test Stale Category");
+        UUID unit = api.unit("test-stale-unit");
+        UUID supplier = id(api.post("/suppliers", Map.of("name", "Test Stale Supplier"), ADMIN));
+        UUID buyer = id(api.post("/customers", Map.of("name", "Test Stale Buyer"), ADMIN));
+        for (String path :
+                List.of("/categories/" + category, "/units/" + unit, "/suppliers/" + supplier, "/customers/" + buyer)) {
+            Map<String, Object> first = Map.of("name", "Test Renamed " + path.substring(1, 4));
+            ResponseEntity<JsonNode> ok = patchIfMatch(path, first, ADMIN, "1");
+            assertThat(ok.getStatusCode()).as(path).isEqualTo(HttpStatus.OK);
+            assertThat(ok.getHeaders().getETag()).as(path).isEqualTo("\"2\"");
+            assertThat(ok.getBody().get("version").asInt()).isEqualTo(2);
+
+            ResponseEntity<JsonNode> stale =
+                    patchIfMatch(path, Map.of("name", "Test Other " + path.substring(1, 4)), ADMIN, "1");
+            assertThat(stale.getStatusCode()).as(path).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(stale.getBody().get("code").asString()).isEqualTo("version_conflict");
+            assertThat(patchIfMatch(path, first, ADMIN, null).getStatusCode())
+                    .as(path)
+                    .isEqualTo(HttpStatus.PRECONDITION_REQUIRED);
+            assertThat(patchIfMatch(path, Map.of("name", "Test Other " + path.substring(1, 4)), ADMIN, "2")
+                            .getStatusCode())
+                    .as(path)
+                    .isEqualTo(HttpStatus.OK);
+        }
+    }
+
+    private static UUID id(ResponseEntity<JsonNode> r) {
+        return RetailTestSupport.id(r);
+    }
+
+    @Test
+    void creditBuyersPageByCursorAndSearchOnTheServer() {
+        for (String name : List.of("Test Buyer C", "Test Buyer A", "Test Other", "Test Buyer B")) {
+            api.post("/customers", Map.of("name", name), ADMIN);
+        }
+        JsonNode first = api.get("/customers?limit=3", ADMIN).getBody();
+        assertThat(first.get("items")).hasSize(3);
+        assertThat(first.get("items").get(0).get("name").asString()).isEqualTo("Test Buyer A");
+        String cursor = first.get("next_cursor").asString();
+        JsonNode second = api.get("/customers?limit=3&cursor=" + cursor, ADMIN).getBody();
+        assertThat(second.get("items")).hasSize(1);
+        assertThat(second.get("items").get(0).get("name").asString()).isEqualTo("Test Other");
+        assertThat(second.get("next_cursor") == null
+                        || second.get("next_cursor").isNull())
+                .isTrue();
+        JsonNode found = api.get("/customers?query=buyer b", ADMIN).getBody();
+        assertThat(found.get("items")).hasSize(1);
+        assertThat(api.get("/customers?cursor=!!", ADMIN).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 }

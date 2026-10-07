@@ -40,27 +40,29 @@ class CatalogueRepository {
 
     List<Category> categories() {
         return jdbc.sql("""
-                        SELECT c.id, c.name, c.active, (SELECT count(*) FROM retail_products p WHERE p.category_id = c.id) AS used
+                        SELECT c.id, c.name, c.active, c.version, (SELECT count(*) FROM retail_products p WHERE p.category_id = c.id) AS used
                           FROM retail_categories c ORDER BY lower(c.name), c.id
                         """)
                 .query((rs, n) -> new Category(
                         rs.getObject("id", UUID.class),
                         rs.getString("name"),
                         rs.getBoolean("active"),
-                        rs.getInt("used")))
+                        rs.getInt("used"),
+                        rs.getInt("version")))
                 .list();
     }
 
     List<Unit> units() {
         return jdbc.sql("""
-                        SELECT u.id, u.name, u.active, (SELECT count(*) FROM retail_products p WHERE p.unit_id = u.id) AS used
+                        SELECT u.id, u.name, u.active, u.version, (SELECT count(*) FROM retail_products p WHERE p.unit_id = u.id) AS used
                           FROM retail_units u ORDER BY lower(u.name), u.id
                         """)
                 .query((rs, n) -> new Unit(
                         rs.getObject("id", UUID.class),
                         rs.getString("name"),
                         rs.getBoolean("active"),
-                        rs.getInt("used")))
+                        rs.getInt("used"),
+                        rs.getInt("version")))
                 .list();
     }
 
@@ -73,13 +75,14 @@ class CatalogueRepository {
     }
 
     void updateCategory(UUID id, String name, boolean active) {
-        jdbc.sql("UPDATE retail_categories SET name = ?, active = ?, updated_at = now() WHERE id = ?")
+        jdbc.sql(
+                        "UPDATE retail_categories SET name = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ?")
                 .params(name, active, id)
                 .update();
     }
 
     void updateUnit(UUID id, String name, boolean active) {
-        jdbc.sql("UPDATE retail_units SET name = ?, active = ?, updated_at = now() WHERE id = ?")
+        jdbc.sql("UPDATE retail_units SET name = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ?")
                 .params(name, active, id)
                 .update();
     }

@@ -3305,6 +3305,11 @@ export interface components {
              * @description Products (active or not) that use this category
              */
             product_count?: number;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
         };
         RetailCategoryList: {
             items?: components["schemas"]["RetailCategory"][];
@@ -3329,6 +3334,11 @@ export interface components {
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
         };
         /** @description Credit sales in the caller's branch scope */
         RetailCustomerBalance: {
@@ -3341,6 +3351,7 @@ export interface components {
         };
         RetailCustomerList: {
             items?: components["schemas"]["RetailCustomer"][];
+            next_cursor?: string;
         };
         RetailCustomerRequest: {
             contact?: string;
@@ -3863,6 +3874,11 @@ export interface components {
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
         };
         RetailSupplierList: {
             items?: components["schemas"]["RetailSupplier"][];
@@ -3967,6 +3983,11 @@ export interface components {
              * @description Products (active or not) that use this unit
              */
             product_count?: number;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
         };
         RetailUnitList: {
             items?: components["schemas"]["RetailUnit"][];
@@ -6892,7 +6913,9 @@ export interface operations {
     updateRetailCategory: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string;
+            };
             path: {
                 category_id: string;
             };
@@ -6920,6 +6943,7 @@ export interface operations {
             query?: {
                 query?: string;
                 limit?: number;
+                cursor?: string;
             };
             header?: never;
             path?: never;
@@ -6965,7 +6989,9 @@ export interface operations {
     updateRetailCustomer: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string;
+            };
             path: {
                 customer_id: string;
             };
@@ -7640,7 +7666,9 @@ export interface operations {
     updateRetailSupplier: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string;
+            };
             path: {
                 supplier_id: string;
             };
@@ -7811,7 +7839,9 @@ export interface operations {
     updateRetailUnit: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string;
+            };
             path: {
                 unit_id: string;
             };

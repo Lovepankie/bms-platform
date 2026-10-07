@@ -57,8 +57,12 @@ class PurchasingController {
     @PatchMapping("/suppliers/{supplier_id}")
     @RequiresPermission("retail.catalogue.manage")
     @Operation(summary = "Edit or deactivate a supplier (#146); never deleted", operationId = "updateRetailSupplier")
-    Supplier updateSupplier(@PathVariable("supplier_id") UUID id, @Valid @RequestBody UpdateSupplierRequest request) {
-        return service.updateSupplier(id, request);
+    ResponseEntity<Supplier> updateSupplier(
+            @PathVariable("supplier_id") UUID id,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody UpdateSupplierRequest request) {
+        Supplier s = service.updateSupplier(id, ifMatch, request);
+        return ResponseEntity.ok().eTag(String.valueOf(s.version())).body(s);
     }
 
     @PostMapping("/purchases")

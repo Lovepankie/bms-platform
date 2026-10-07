@@ -134,10 +134,13 @@ final class SalesApi {
 
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "In the list only: owed on credit sales in the caller's branch scope")
-            Long balanceMinor) {}
+            Long balanceMinor,
+
+            @Schema(description = "Send as If-Match when updating")
+            int version) {}
 
     @Schema(name = "RetailCustomerList")
-    record CustomerList(List<Customer> items) {}
+    record CustomerList(List<Customer> items, String nextCursor) {}
 
     @Schema(name = "RetailOpenSale")
     record OpenSale(

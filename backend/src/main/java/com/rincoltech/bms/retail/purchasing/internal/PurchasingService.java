@@ -8,6 +8,7 @@ import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
+import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.BranchQty;
@@ -106,7 +107,7 @@ class PurchasingService {
 
     @Transactional
     Supplier createSupplier(SupplierRequest r) {
-        Supplier s = new Supplier(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), true, null);
+        Supplier s = new Supplier(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), true, null, 1);
         try {
             repo.insertSupplier(s, CurrentPrincipal.require().userId());
         } catch (DuplicateKeyException e) {
@@ -120,8 +121,12 @@ class PurchasingService {
 
     /** #146: edit the name or contact, or switch a supplier off; never deleted. Audited without anything but the changes. */
     @Transactional
-    Supplier updateSupplier(UUID id, UpdateSupplierRequest r) {
+    Supplier updateSupplier(UUID id, String ifMatch, UpdateSupplierRequest r) {
+        int expected = Versions.fromIfMatch(ifMatch);
         Supplier before = repo.supplier(id).orElseThrow(ApiException::notFound);
+        if (before.version() != expected) {
+            throw Versions.conflict(before.version());
+        }
         String name = r.name() == null ? before.name() : r.name().trim();
         String contact = r.contact() == null ? before.contact() : blankToNull(r.contact());
         boolean active = r.active() == null ? before.active() : r.active();

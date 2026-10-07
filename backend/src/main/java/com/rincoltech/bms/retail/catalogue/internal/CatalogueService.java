@@ -72,7 +72,7 @@ class CatalogueService {
 
     @Transactional
     Category createCategory(CategoryRequest r) {
-        Category c = new Category(UUID.randomUUID(), r.name().trim(), true, 0);
+        Category c = new Category(UUID.randomUUID(), r.name().trim(), true, 0, 1);
         try {
             repo.insertCategory(c.id(), c.name(), CurrentPrincipal.require().userId());
         } catch (DuplicateKeyException e) {
@@ -85,7 +85,7 @@ class CatalogueService {
 
     @Transactional
     Unit createUnit(UnitRequest r) {
-        Unit u = new Unit(UUID.randomUUID(), r.name().trim(), true, 0);
+        Unit u = new Unit(UUID.randomUUID(), r.name().trim(), true, 0, 1);
         try {
             repo.insertUnit(u.id(), u.name(), CurrentPrincipal.require().userId());
         } catch (DuplicateKeyException e) {
@@ -98,8 +98,12 @@ class CatalogueService {
 
     /** Rename or (de)activate; the row stays, so products and history keep their meaning (#146). */
     @Transactional
-    Category updateCategory(UUID id, UpdateCategoryRequest r) {
+    Category updateCategory(UUID id, String ifMatch, UpdateCategoryRequest r) {
+        int expected = Versions.fromIfMatch(ifMatch);
         Category before = repo.category(id).orElseThrow(ApiException::notFound);
+        if (before.version() != expected) {
+            throw Versions.conflict(before.version());
+        }
         String name = r.name() == null ? before.name() : r.name().trim();
         boolean active = r.active() == null ? before.active() : r.active();
         if (name.isEmpty()) {
@@ -122,8 +126,12 @@ class CatalogueService {
     }
 
     @Transactional
-    Unit updateUnit(UUID id, UpdateUnitRequest r) {
+    Unit updateUnit(UUID id, String ifMatch, UpdateUnitRequest r) {
+        int expected = Versions.fromIfMatch(ifMatch);
         Unit before = repo.unit(id).orElseThrow(ApiException::notFound);
+        if (before.version() != expected) {
+            throw Versions.conflict(before.version());
+        }
         String name = r.name() == null ? before.name() : r.name().trim();
         boolean active = r.active() == null ? before.active() : r.active();
         if (name.isEmpty()) {

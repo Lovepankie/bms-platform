@@ -10,6 +10,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Customer;
@@ -495,7 +496,7 @@ class SalesService {
 
     @Transactional
     Customer createCustomer(CustomerRequest r) {
-        Customer c = new Customer(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), null, null);
+        Customer c = new Customer(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), null, null, 1);
         repo.insertCustomer(c, CurrentPrincipal.require().userId());
         audit.record(AuditLog.Entry.created(
                 "retail.customer.created", "retail.customer", c.id(), null, Map.of("name", c.name())));
@@ -504,8 +505,12 @@ class SalesService {
 
     /** #146: edit a credit buyer's name or contact. Nothing else about a buyer changes, and none is deleted. */
     @Transactional
-    Customer updateCustomer(UUID id, UpdateCustomerRequest r) {
+    Customer updateCustomer(UUID id, String ifMatch, UpdateCustomerRequest r) {
+        int expected = Versions.fromIfMatch(ifMatch);
         Customer before = repo.customer(id).orElseThrow(ApiException::notFound);
+        if (before.version() != expected) {
+            throw Versions.conflict(before.version());
+        }
         String name = r.name() == null ? before.name() : r.name().trim();
         String contact = r.contact() == null ? before.contact() : blankToNull(r.contact());
         if (name.isEmpty()) {
@@ -530,10 +535,19 @@ class SalesService {
     }
 
     @Transactional(readOnly = true)
-    CustomerList customers(String query, Integer limit) {
+    CustomerList customers(String query, Integer limit, String cursor) {
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
-        return new CustomerList(repo.customers(
-                blankToNull(query), size, CurrentPrincipal.require().branchFilter("retail.sale.read", null)));
+        com.rincoltech.bms.kernel.Cursor.Key after =
+                com.rincoltech.bms.kernel.Cursor.decodeKey(cursor).orElse(null);
+        List<Customer> rows = repo.customers(
+                blankToNull(query), size + 1, CurrentPrincipal.require().branchFilter("retail.sale.read", null), after);
+        boolean more = rows.size() > size;
+        List<Customer> items = more ? rows.subList(0, size) : rows;
+        String next = more
+                ? com.rincoltech.bms.kernel.Cursor.encode(items.getLast().name().toLowerCase(java.util.Locale.ROOT)
+                        + "|" + items.getLast().id())
+                : null;
+        return new CustomerList(items, next);
     }
 
     /** FR-RET-05: what the customer owes on credit sales in the caller's branch scope. */
