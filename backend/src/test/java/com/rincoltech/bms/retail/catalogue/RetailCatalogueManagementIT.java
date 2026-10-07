@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
@@ -316,6 +317,87 @@ class RetailCatalogueManagementIT extends IntegrationTest {
                     .as(path)
                     .isEqualTo(HttpStatus.OK);
         }
+    }
+
+    /** The first update's value survives a later update that carries the version it read before. */
+    @Test
+    void aStaleUpdateAfterACommittedOneIsRefusedAndTheFirstValueSurvives() {
+        for (Target target : targets()) {
+            ResponseEntity<JsonNode> first =
+                    patchIfMatch(target.path(), Map.of("name", "Test First " + target.table()), ADMIN, "1");
+            assertThat(first.getStatusCode()).as(target.table()).isEqualTo(HttpStatus.OK);
+            ResponseEntity<JsonNode> stale =
+                    patchIfMatch(target.path(), Map.of("name", "Test Second " + target.table()), ADMIN, "1");
+            assertThat(stale.getStatusCode()).as(target.table()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(stale.getBody().get("code").asString()).isEqualTo("version_conflict");
+            assertThat(target.row())
+                    .as(target.table())
+                    .containsEntry("name", "Test First " + target.table())
+                    .containsEntry("version", 2);
+        }
+    }
+
+    /** Two admins read version 1 and write at once: exactly one wins and nothing is overwritten. */
+    @Test
+    void twoConcurrentUpdatesFromTheSameVersionLetExactlyOneWin() throws Exception {
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            for (Target target : targets()) {
+                java.util.concurrent.CyclicBarrier gate = new java.util.concurrent.CyclicBarrier(2);
+                List<java.util.concurrent.Future<HttpStatusCode>> calls = new java.util.ArrayList<>();
+                for (String who : List.of("A", "B")) {
+                    calls.add(pool.submit(() -> {
+                        gate.await();
+                        return patchIfMatch(
+                                        target.path(),
+                                        Map.of("name", "Test Racer " + who + " " + target.table()),
+                                        ADMIN,
+                                        "1")
+                                .getStatusCode();
+                    }));
+                }
+                List<HttpStatusCode> codes = new java.util.ArrayList<>();
+                for (var call : calls) {
+                    codes.add(call.get());
+                }
+                assertThat(codes).as(target.table()).containsExactlyInAnyOrder(HttpStatus.OK, HttpStatus.CONFLICT);
+                assertThat(target.row()).as(target.table()).containsEntry("version", 2);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** A table, one fresh row of it at version 1, and a way to read the stored row. */
+    record Target(String table, String path, java.util.function.Supplier<Map<String, Object>> reader) {
+        Map<String, Object> row() {
+            return reader.get();
+        }
+    }
+
+    private List<Target> targets() {
+        List<Target> out = new java.util.ArrayList<>();
+        Map<String, UUID> rows = new java.util.LinkedHashMap<>();
+        rows.put("retail_categories", api.category("Test Race Category"));
+        rows.put("retail_units", api.unit("test-race-unit"));
+        rows.put("retail_suppliers", id(api.post("/suppliers", Map.of("name", "Test Race Supplier"), ADMIN)));
+        rows.put("retail_customers", id(api.post("/customers", Map.of("name", "Test Race Buyer"), ADMIN)));
+        String[] prefix = {"/categories/", "/units/", "/suppliers/", "/customers/"};
+        int i = 0;
+        for (var e : rows.entrySet()) {
+            String table = e.getKey();
+            UUID rowId = e.getValue();
+            out.add(new Target(
+                    table,
+                    prefix[i++] + rowId,
+                    () -> TestDatabase.owner()
+                            .sql("SELECT name, version FROM " + table + " WHERE id = ?")
+                            .param(rowId)
+                            .query((rs, n) -> Map.<String, Object>of(
+                                    "name", rs.getString("name"), "version", rs.getInt("version")))
+                            .single()));
+        }
+        return out;
     }
 
     private static UUID id(ResponseEntity<JsonNode> r) {

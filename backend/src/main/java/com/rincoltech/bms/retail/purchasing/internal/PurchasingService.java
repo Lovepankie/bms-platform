@@ -142,7 +142,9 @@ class PurchasingService {
             return before;
         }
         try {
-            repo.updateSupplier(id, name, contact, active);
+            if (repo.updateSupplier(id, name, contact, active, expected) == 0) {
+                throw repo.supplier(id).map(s -> Versions.conflict(s.version())).orElseGet(ApiException::notFound);
+            }
         } catch (DuplicateKeyException e) {
             throw new ApiException(
                     HttpStatus.CONFLICT, "duplicate_supplier", "Duplicate", "A supplier with this name exists.");

@@ -529,7 +529,9 @@ class SalesService {
         if (now.isEmpty()) {
             return before;
         }
-        repo.updateCustomer(id, name, contact);
+        if (repo.updateCustomer(id, name, contact, expected) == 0) {
+            throw repo.customer(id).map(c -> Versions.conflict(c.version())).orElseGet(ApiException::notFound);
+        }
         audit.record(new AuditLog.Entry("retail.customer.updated", "retail.customer", id, null, was, now));
         return repo.customer(id).orElseThrow();
     }

@@ -48,10 +48,11 @@ class PurchasingRepository {
                         """).params(s.id(), s.name(), s.contact(), by).update();
     }
 
-    void updateSupplier(UUID id, String name, String contact, boolean active) {
-        jdbc.sql(
-                        "UPDATE retail_suppliers SET name = ?, contact = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ?")
-                .params(name, contact, active, id)
+    /** Rows changed: 0 when the version moved since it was read (the predicate is the optimistic lock). */
+    int updateSupplier(UUID id, String name, String contact, boolean active, int expectedVersion) {
+        return jdbc.sql(
+                        "UPDATE retail_suppliers SET name = ?, contact = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
+                .params(name, contact, active, id, expectedVersion)
                 .update();
     }
 

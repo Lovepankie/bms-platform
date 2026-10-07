@@ -346,10 +346,11 @@ class SalesRepository {
                 .optional();
     }
 
-    void updateCustomer(UUID id, String name, String contact) {
-        jdbc.sql(
-                        "UPDATE retail_customers SET name = ?, contact = ?, updated_at = now(), version = version + 1 WHERE id = ?")
-                .params(name, contact, id)
+    /** Rows changed: 0 when the version moved since it was read (the predicate is the optimistic lock). */
+    int updateCustomer(UUID id, String name, String contact, int expectedVersion) {
+        return jdbc.sql(
+                        "UPDATE retail_customers SET name = ?, contact = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
+                .params(name, contact, id, expectedVersion)
                 .update();
     }
 

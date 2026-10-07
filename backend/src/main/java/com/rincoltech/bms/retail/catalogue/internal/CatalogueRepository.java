@@ -74,16 +74,18 @@ class CatalogueRepository {
         return units().stream().filter(u -> u.id().equals(id)).findFirst();
     }
 
-    void updateCategory(UUID id, String name, boolean active) {
-        jdbc.sql(
-                        "UPDATE retail_categories SET name = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ?")
-                .params(name, active, id)
+    /** Rows changed: 0 when the version moved since it was read (the predicate is the optimistic lock). */
+    int updateCategory(UUID id, String name, boolean active, int expectedVersion) {
+        return jdbc.sql(
+                        "UPDATE retail_categories SET name = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
+                .params(name, active, id, expectedVersion)
                 .update();
     }
 
-    void updateUnit(UUID id, String name, boolean active) {
-        jdbc.sql("UPDATE retail_units SET name = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ?")
-                .params(name, active, id)
+    int updateUnit(UUID id, String name, boolean active, int expectedVersion) {
+        return jdbc.sql(
+                        "UPDATE retail_units SET name = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
+                .params(name, active, id, expectedVersion)
                 .update();
     }
 

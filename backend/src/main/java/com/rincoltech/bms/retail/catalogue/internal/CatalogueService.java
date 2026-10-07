@@ -117,7 +117,9 @@ class CatalogueService {
             return before;
         }
         try {
-            repo.updateCategory(id, name, active);
+            if (repo.updateCategory(id, name, active, expected) == 0) {
+                throw staleCategory(id);
+            }
         } catch (DuplicateKeyException e) {
             throw duplicate("duplicate_category", "A category with this name exists.");
         }
@@ -145,12 +147,22 @@ class CatalogueService {
             return before;
         }
         try {
-            repo.updateUnit(id, name, active);
+            if (repo.updateUnit(id, name, active, expected) == 0) {
+                throw staleUnit(id);
+            }
         } catch (DuplicateKeyException e) {
             throw duplicate("duplicate_unit", "A unit with this name exists.");
         }
         audit.record(new AuditLog.Entry("retail.unit.updated", "retail.unit", id, null, was, now));
         return repo.unit(id).orElseThrow();
+    }
+
+    private ApiException staleCategory(UUID id) {
+        return repo.category(id).map(c -> Versions.conflict(c.version())).orElseGet(ApiException::notFound);
+    }
+
+    private ApiException staleUnit(UUID id) {
+        return repo.unit(id).map(u -> Versions.conflict(u.version())).orElseGet(ApiException::notFound);
     }
 
     // ---- Products ------------------------------------------------------------------------
