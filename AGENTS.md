@@ -323,6 +323,8 @@ Accepted (this list is the ADR index):
   (spec `docs/specs/self-onboarding-and-subscriptions.md`; build step 1 is #89)
 - ADR-026 Loan servicing: allocation rows by repayment, replay on reversal, default payment method
   accounts and a servicing port for commands (proposed, #108)
+- ADR-027 One onboarding pipeline for customer data: quarantined staging, canonical templates with
+  versioned mappings, resumable maker-checker commit (proposed, #125)
 - ADR-028 Database performance: measured on 25 times the data, covering indexes, the plain tenant
   policy kept, connection timeouts (proposed, #107)
 - ADR-029 One fixed low stock threshold for retail, a per-tenant settings group later (#145)
