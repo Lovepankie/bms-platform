@@ -50,6 +50,31 @@ export function useToast(): { show: (message: string) => void; toast: ReactNode 
   return { show, toast: text ? <p className="toast" aria-hidden="true">{text}</p> : null };
 }
 
+/** Passes the latest pushed value on once no newer one has arrived for `ms`. */
+export function createDebouncer<T>(ms: number, onValue: (value: T) => void) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return {
+    push(value: T) {
+      clearTimeout(timer);
+      timer = setTimeout(() => onValue(value), ms);
+    },
+    cancel() {
+      clearTimeout(timer);
+    },
+  };
+}
+
+/** The value after it has stopped changing for `ms`; the input that feeds it stays responsive. */
+export function useDebounced<T>(value: T, ms = 300): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const debouncer = createDebouncer(ms, setSettled);
+    debouncer.push(value);
+    return debouncer.cancel;
+  }, [value, ms]);
+  return settled;
+}
+
 export const STALE_TEXT = 'This was changed by someone else. The list has been reloaded; please try again.';
 
 /** A row with no version cannot be changed safely: that is a bug in the screen, so say so rather than guess. */

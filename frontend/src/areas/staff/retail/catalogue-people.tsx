@@ -5,7 +5,7 @@ import { retail, type Customer, type Supplier } from '../../../api/retail';
 import { useStaff } from '../context';
 import { AddPanel, BackToCatalogue } from './catalogue';
 import { canUse } from './permissions';
-import { Gate, Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
+import { Gate, Problem, Success, changeFailureText, money, requireVersion, useDebounced, useToast } from './ui';
 
 // Suppliers and Credit buyers (#146): a name and a contact, added and edited by the shop. A supplier
 // can be switched off (it stays on its past restocks); a credit buyer is never removed. The contact
@@ -91,9 +91,10 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   const [contact, setContact] = useState('');
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState('');
+  const query = useDebounced(search);
   const rows = useInfiniteQuery({
-    queryKey: ['retail', 'catalogue', queryKey, search],
-    queryFn: ({ pageParam }) => list({ query: search, ...(pageParam ? { cursor: pageParam } : {}) }),
+    queryKey: ['retail', 'catalogue', queryKey, query],
+    queryFn: ({ pageParam }) => list({ query, ...(pageParam ? { cursor: pageParam } : {}) }),
     initialPageParam: '',
     getNextPageParam: (last) => last.next_cursor || undefined,
   });
@@ -140,7 +141,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
           <input id={`search-${queryKey}`} type="search" value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
         </>
       )}
-      {rows.data && people.length === 0 && <p className="empty-state">{search ? `No ${plural} match that name.` : `No ${plural} yet.`}</p>}
+      {rows.data && people.length === 0 && <p className="empty-state">{query ? `No ${plural} match that name.` : `No ${plural} yet.`}</p>}
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {people.map((r) => (
           <PersonRow

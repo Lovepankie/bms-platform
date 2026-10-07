@@ -1,8 +1,8 @@
 import { MutationObserver, QueryClient, QueryObserver } from '@tanstack/react-query';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { RetailError } from '../../../api/retail';
 import { createMockRetail } from '../../../api/retail-mock';
-import { STALE_TEXT, changeFailureText, requireVersion } from './ui';
+import { STALE_TEXT, changeFailureText, createDebouncer, requireVersion } from './ui';
 
 // The change mutation of the four lists (#146): a stale version reloads the list and the retry
 // carries the new version. The screens run this same mutation shape with these helpers.
@@ -69,5 +69,30 @@ describe('changeFailureText and requireVersion', () => {
     expect(() => requireVersion(undefined)).toThrow(/no version/);
     expect(requireVersion(3)).toBe(3);
     expect(changeFailureText(new Error('This row has no version.'), new QueryClient())).toBe('This row has no version.');
+  });
+});
+
+describe('the search debounce', () => {
+  it('passes on only the last value once typing pauses for 300 ms', () => {
+    vi.useFakeTimers();
+    try {
+      const seen: string[] = [];
+      const debouncer = createDebouncer<string>(300, (v) => seen.push(v));
+      for (const typed of ['b', 'bu', 'buy']) {
+        debouncer.push(typed);
+        vi.advanceTimersByTime(100);
+      }
+      expect(seen).toEqual([]);
+      vi.advanceTimersByTime(199);
+      expect(seen).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(seen).toEqual(['buy']);
+      debouncer.push('buyer');
+      debouncer.cancel();
+      vi.advanceTimersByTime(1000);
+      expect(seen).toEqual(['buy']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
