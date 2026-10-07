@@ -1640,8 +1640,10 @@ Several rows per branch and date are allowed. Index `(tenant_id, branch_id, busi
 
 `branch_id`, `business_date`, `amount_minor > 0`, `currency`, `withdrawn_at`, `purpose varchar(300)`,
 `recorded_by`, `journal_entry_id`, `historical`, void columns. Index `(tenant_id, branch_id,
-business_date)`. The pilot form has no shop; `branch_id` defaults to the head office of the
-caller's scope (open question 7).
+business_date)`. The pilot form has no shop; `branch_id` defaults to the caller's one branch, else the head office
+branch when it is in the caller's scope, else the request must name one (422 `branch_required`);
+an imported row with no shop takes the tenant's single head office branch whatever any scope is
+(open question 7).
 
 #### `retail_expenses`
 
@@ -1662,13 +1664,15 @@ expenses report.
 #### `retail_advances`, `retail_advance_repayments`
 
 An advance: `branch_id` (the source shop), `advance_no` from the tenant sequence
-`retail_advance_no` (`RA00000001`, sequential like the pilot's ids), `party_id` (owner or company),
+`retail_advance_no` (`RA00000001`, sequential like the pilot's ids; an imported advance takes the
+next value too, in business date then source id order, and the pilot's id lives only in
+`retail_import_refs` and the note, so an imported number can never collide with a live one), `party_id` (owner or company),
 `taken_by_party_id` (optional, the pilot's "who took the money"), `principal_minor > 0`, `currency`,
 `purpose varchar(300)`, `business_date`, `repaid_minor` (CHECK `0 <= repaid_minor <= principal_minor`,
 raised only under the advance's row lock, like `retail_sales.paid_minor`), `note`, `journal_entry_id`,
 `historical`, void columns. The balance is `principal_minor - repaid_minor`; the pilot's "loans with
 balance above zero" is `repaid_minor < principal_minor` and not voided. Unique `(tenant_id,
-advance_no)`. A repayment: `advance_id`, `amount_minor > 0`, `method` (`cash`, `mobile_money`,
+advance_no)`. A repayment: `advance_id`, `branch_id` (the branch that receives the money, within the caller's scope, defaulting to the advance's branch; the posting is made in this branch, so its `cash_on_hand`, `mobile_money` or `bank` is debited and `owner_advances` credited there), `amount_minor > 0`, `method` (`cash`, `mobile_money`,
 `bank`), `paid_on`, `recorded_by`, `journal_entry_id`, `historical`, void columns; index
 `(tenant_id, advance_id)`. An advance with a non-voided repayment cannot be voided; voiding a
 repayment lowers `repaid_minor` under the lock.
@@ -1677,7 +1681,7 @@ repayment lowers `repaid_minor` under the lock.
 
 Every rule posts through `post_entry` in the transaction of its event, one entry, in the record's
 `branch_id`, `source_module = 'retail'`. A zero amount posts nothing. A void posts the reversal
-(`reverses_entry_id` set) with the key `<key>:void`. Historical rows post nothing.
+(`reverses_entry_id` set) with the key `<key>:void`. Historical rows post nothing. The opening entry is dated the day **before** the first live day (the day before the importer's first live date, default the import day), so the first live day's `opening_minor` equals the carried balance and the opening is not an `other_movements_minor` of that day.
 
 | Event | Debit | Credit | Idempotency key |
 |---|---|---|---|
@@ -1687,7 +1691,7 @@ Every rule posts through `post_entry` in the transaction of its event, one entry
 | Expense | the category's expense account (`operating_expenses` when unmapped) | `cash_on_hand` | `retail.expense:<id>` |
 | Advance paid out | `owner_advances`, advance as subledger | `cash_on_hand` | `retail.advance:<id>` |
 | Repayment of an advance | `cash_on_hand`, `mobile_money` or `bank` by method | `owner_advances`, advance as subledger | `retail.advance_repayment:<id>` |
-| Opening, per branch, at import | `cash_on_hand`, `bank`, `savings_reserve` and `owner_advances` balances | `opening_balance_equity` | `retail.cash_opening:<branch>` |
+| Opening, per branch, at import | `cash_on_hand`, `bank`, `savings_reserve` balances, and one `owner_advances` line **per outstanding advance** with that advance as subledger | `opening_balance_equity` | `retail.cash_opening:<branch>` |
 
 #### Derived figures (read model, no table)
 
@@ -1713,7 +1717,11 @@ For a branch and a business date, in the tenant's zone:
   serves the form, the snapshot `expected_minor` and the reports.
 - **Difference** = sum of non-voided `amount_minor` banked for the date less expected, and the flag
   from the tenant tolerance. **Running unbanked** = cumulative sum of (expected less banked) over the
-  branch's days from its first cash book day (imported days included).
+  branch's **live** days, starting at the first live day (the day after the cash opening journal)
+  with nothing carried in. Imported (historical) days are listed separately in the banking report,
+  with their own expected, banked and difference, and are excluded from `unbanked_running_minor`:
+  the pilot's expected figure was virtual and often wrong, and its drift must not follow the shop
+  forever.
 - **Daily cash summary closing** = opening plus every listed movement; it is compared with the
   ledger's `cash_on_hand` for the branch on that date (`LedgerAccounts.balanceByBranch`), and the
   remainder is reported as `other_movements_minor`. Imported days have no journals, so they carry

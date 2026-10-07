@@ -31,7 +31,7 @@ in the tenant's time zone; every record shows who entered it.
 
 | The pilot app has | We build | We leave out, and why |
 |---|---|---|
-| user, amount withdrawn, date; no shop; admin only | The same, admin or owner only, plus the shop that receives the cash (default the head office) so the ledger can balance | A shop-less withdrawal: every ledger entry needs a branch (question 7) |
+| user, amount withdrawn, date; no shop; admin only | The same, admin or owner only, plus the shop that receives the cash (default your one shop, else the head office) so the ledger can balance | A shop-less withdrawal: every ledger entry needs a branch (question 7) |
 | Not on a ledger | A transfer from bank to cash. A withdrawal above the bank balance is accepted with a warning | An approval step: not in version one (question 3) |
 
 ## 4. Company expenses (the "expenses" tab)
@@ -66,7 +66,7 @@ in the tenant's time zone; every record shows who entered it.
 
 Savings, expenses, banking, withdrawals, advances and their payments, and the expense lists move across
 as history: no ledger entries for old rows, and one opening entry per shop for the cash, bank, savings
-reserve and outstanding advances at the cutover date, the same way the sales history moved. A row that
+reserve and each outstanding advance, dated the day before the first live day, the same way the sales history moved. The old days are listed apart in the banking report and do not feed its running unbanked total, which starts on the first live day. A row that
 cannot be read is listed, never guessed or dropped.
 
 ## 8. For the Owner to sign off

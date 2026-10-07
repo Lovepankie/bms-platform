@@ -56,7 +56,11 @@ only retail has this need.
 4. **Banked cash is a transfer from till cash to bank** (debit `bank`, credit `cash_on_hand`);
    **a withdrawal from the bank is the reverse** (debit `cash_on_hand`, credit `bank`). Neither
    touches profit. A withdrawal carries a branch in the platform (the pilot form has no shop; the
-   ledger needs one), defaulting to the head office branch of the caller's scope.
+   ledger needs one). The default is the caller's one branch when the scope has exactly one, else
+   the tenant's head office branch when it is within the caller's scope; otherwise the request must
+   name a branch (422 `branch_required`). **Opening and settings records** (the cash opening journal
+   and an imported row with no shop) use the tenant's single head office branch (exactly one exists,
+   chapter 6 `branches`), regardless of any caller's scope, because an importer has no branch scope.
 5. **An expense debits an expense account chosen by its category and credits cash.** Each expense
    category maps to a ledger expense account (default code 5900 `operating_expenses`, **Operating
    expenses**, the lending chart's code and key, reused exactly as decision 4 reuses 1190 for
@@ -69,7 +73,11 @@ only retail has this need.
    `owner_advances`, with the advance as subledger. It is a receivable, not drawings: the pilot
    records payments back, so it is expected to clear. If the Owner treats unreturned advances as
    drawings, that is a later write-off by manual journal (FR-GL), not a different design. A
-   repayment may arrive by `cash`, `mobile_money` or `bank` and debits that account.
+   repayment may arrive by `cash`, `mobile_money` or `bank` and debits that account **in the
+   repayment's own `branch_id`**: the branch that receives the money, defaulting to the advance's
+   branch and within the caller's scope. The credit to `owner_advances` posts in the same branch, so
+   each entry balances per branch; the advance's source branch keeps its debit and the receiving
+   branch carries a credit, which nets to zero in consolidation and needs no clearing account.
 7. **Chart additions** (seeded by the idempotent `bms_seed_retail_chart` like ADR-020's chart, and
    for tenants that switched retail on earlier): 1015 `savings_reserve`, 1250 `owner_advances`,
    and 5900 `operating_expenses` (added to the retail chart only where the tenant has not got it
@@ -93,9 +101,11 @@ only retail has this need.
    day nets to zero. The cost of this rule is that a late void shows as a lower expected amount
    on the void day, and the unbanked running total nets the two days out. Closing must equal the ledger's `cash_on_hand` balance at the end of the day;
    any difference is shown as `other_movements_minor` (a manual journal or an unlisted source),
-   never hidden. The **unbanked running total** is the cumulative sum, from the shop's first cash
-   book day, of expected less banked per day. For days imported from the pilot (no journals) the
-   position is built from the rows alone and marked `ledger_basis: false`.
+   never hidden. The **unbanked running total** is the cumulative sum, from the shop's first live
+   cash book day, of expected less banked per day. For days imported from the pilot (no journals) the
+   position is built from the rows alone and marked `ledger_basis: false`. The unbanked running
+   total starts at the first live day and excludes imported days, so the pilot era's drift is never
+   carried forward.
 10. **Expected amount to bank is computed on the server** for a branch and date, as the day's cash
     takings, less cash sale voids dated the day, less cash purchases (restocks paid in cash from the
     till), less the day's savings, less cash expenses and advances paid out of the till, plus cash
@@ -183,7 +193,15 @@ only retail has this need.
     `cash_balances` file. Historical rows follow ADR-020 decision 9: rows marked `historical`,
     **no journals**, keyed by tab, source reference in `retail_import_refs` so a re-run adds
     nothing, and one opening journal per branch that records the cash, bank, savings reserve and
-    outstanding advances at the cutover date against `opening_balance_equity`. A category or item in
+    outstanding advances against `opening_balance_equity`, **dated the day before the first live
+    day** so the first live day's `opening_minor` shows the carried balance and not
+    `other_movements_minor`. The advances part has **one line per outstanding advance, with the
+    advance as its subledger**, like the lending opening import, never one figure per branch. An
+    imported advance takes the next value of the live `retail_advance_no` sequence (in business date
+    then source id order); the pilot's id is kept in the import reference and the advance's note and
+    is never reused as `advance_no`, so no imported number can collide with a live one. Imported
+    days are shown apart in the banking report and are excluded from the unbanked running total,
+    which starts at the first live day with nothing carried. A category or item in
     a row that is not in the lists is created as written and reported, never guessed. The pilot's
     hidden processing fee on an advance is not modelled; a non-zero value is reported and kept in
     the advance's note.
