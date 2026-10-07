@@ -26,6 +26,7 @@ export type PriceEdit = S['RetailPriceEditRequest'];
 export type ImportResult = S['RetailProductImportResult'];
 export type ImportRow = S['RetailProductImportRow'];
 export type Customer = S['RetailCustomer'];
+export type CustomerPage = S['RetailCustomerList'];
 export type Supplier = S['RetailSupplier'];
 export type SaleRequest = S['RetailSaleRequest'];
 export type Sale = S['RetailSale'];
@@ -111,20 +112,22 @@ export interface RetailApi {
   /** The CSV item import: a dry run reports, an apply adds the rows that are fine (administrators only). */
   importProducts(csv: string, dryRun: boolean): Promise<ImportResult>;
   createCategory(name: string): Promise<Category>;
-  updateCategory(id: string, body: { name?: string; active?: boolean }): Promise<Category>;
+  updateCategory(id: string, version: number, body: { name?: string; active?: boolean }): Promise<Category>;
   listUnits(): Promise<Unit[]>;
   createUnit(name: string): Promise<Unit>;
-  updateUnit(id: string, body: { name?: string; active?: boolean }): Promise<Unit>;
+  updateUnit(id: string, version: number, body: { name?: string; active?: boolean }): Promise<Unit>;
   listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel }): Promise<StockRow[]>;
   /** One page of sales, newest first, narrowed by the filters (#145). */
   listSales(q: SalesQuery): Promise<SalePage>;
   getSale(id: string): Promise<Sale>;
   listCustomers(): Promise<Customer[]>;
+  /** The credit buyers screen: server-side search and cursor paging. */
+  listCustomerPage(q: { query?: string; cursor?: string }): Promise<CustomerPage>;
   listSuppliers(): Promise<Supplier[]>;
   createSupplier(body: { name: string; contact?: string }): Promise<Supplier>;
-  updateSupplier(id: string, body: { name?: string; contact?: string; active?: boolean }): Promise<Supplier>;
+  updateSupplier(id: string, version: number, body: { name?: string; contact?: string; active?: boolean }): Promise<Supplier>;
   createCustomer(body: { name: string; contact?: string }): Promise<Customer>;
-  updateCustomer(id: string, body: { name?: string; contact?: string }): Promise<Customer>;
+  updateCustomer(id: string, version: number, body: { name?: string; contact?: string }): Promise<Customer>;
   createSale(body: SaleRequest, idempotencyKey: string): Promise<Sale>;
   createPurchase(body: PurchaseRequest, idempotencyKey: string): Promise<Purchase>;
   createUsage(body: UsageRequest, idempotencyKey: string): Promise<Usage>;
@@ -219,8 +222,8 @@ const realRetail: RetailApi = {
     return unwrap(await api.POST('/api/v1/retail/categories', { body: { name } }));
   },
 
-  async updateCategory(id, body) {
-    return unwrap(await api.PATCH('/api/v1/retail/categories/{category_id}', { params: { path: { category_id: id } }, body }));
+  async updateCategory(id, version, body) {
+    return unwrap(await api.PATCH('/api/v1/retail/categories/{category_id}', { params: { path: { category_id: id }, header: { 'If-Match': `"${version}"` } }, body }));
   },
 
   async listUnits() {
@@ -231,8 +234,8 @@ const realRetail: RetailApi = {
     return unwrap(await api.POST('/api/v1/retail/units', { body: { name } }));
   },
 
-  async updateUnit(id, body) {
-    return unwrap(await api.PATCH('/api/v1/retail/units/{unit_id}', { params: { path: { unit_id: id } }, body }));
+  async updateUnit(id, version, body) {
+    return unwrap(await api.PATCH('/api/v1/retail/units/{unit_id}', { params: { path: { unit_id: id }, header: { 'If-Match': `"${version}"` } }, body }));
   },
 
   async listStock({ branchId, query, categoryId, negativeOnly, level }) {
@@ -279,6 +282,10 @@ const realRetail: RetailApi = {
     return unwrap(await api.GET('/api/v1/retail/customers', { params: { query: {} } })).items ?? [];
   },
 
+  async listCustomerPage({ query, cursor }) {
+    return unwrap(await api.GET('/api/v1/retail/customers', { params: { query: { query: query || undefined, limit: 50, cursor } } }));
+  },
+
   async listSuppliers() {
     return unwrap(await api.GET('/api/v1/retail/suppliers')).items ?? [];
   },
@@ -287,16 +294,16 @@ const realRetail: RetailApi = {
     return unwrap(await api.POST('/api/v1/retail/suppliers', { body }));
   },
 
-  async updateSupplier(id, body) {
-    return unwrap(await api.PATCH('/api/v1/retail/suppliers/{supplier_id}', { params: { path: { supplier_id: id } }, body }));
+  async updateSupplier(id, version, body) {
+    return unwrap(await api.PATCH('/api/v1/retail/suppliers/{supplier_id}', { params: { path: { supplier_id: id }, header: { 'If-Match': `"${version}"` } }, body }));
   },
 
   async createCustomer(body) {
     return unwrap(await api.POST('/api/v1/retail/customers', { body }));
   },
 
-  async updateCustomer(id, body) {
-    return unwrap(await api.PATCH('/api/v1/retail/customers/{customer_id}', { params: { path: { customer_id: id } }, body }));
+  async updateCustomer(id, version, body) {
+    return unwrap(await api.PATCH('/api/v1/retail/customers/{customer_id}', { params: { path: { customer_id: id }, header: { 'If-Match': `"${version}"` } }, body }));
   },
 
   async createSale(body, key) {

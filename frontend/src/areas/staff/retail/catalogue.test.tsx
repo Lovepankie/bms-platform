@@ -76,6 +76,7 @@ describe('suppliers and credit buyers', () => {
     const html = renderToString(<ul><PersonRow row={buyer} onSave={() => undefined} /></ul>);
     expect(html).toContain('Test Buyer 01');
     expect(html).toContain('UGX 12,000');
+    expect(html).toContain('all your branches');
     expect(html).not.toContain('Switch');
   });
 });
@@ -155,13 +156,13 @@ describe('the mock catalogue (the server rules the screens rely on)', () => {
     const api = createMockRetail();
     const before = (await api.listCategories()).find((c) => c.name === 'Lighting');
     expect(before?.product_count).toBe(2);
-    const renamed = await api.updateCategory(before?.id ?? '', { name: 'Lights' });
+    const renamed = await api.updateCategory(before?.id ?? '', before?.version ?? 1, { name: 'Lights' });
     expect(renamed.name).toBe('Lights');
     expect((await api.listCatalogue({ query: 'Lights' })).items).toHaveLength(2);
-    const off = await api.updateCategory(before?.id ?? '', { active: false });
+    const off = await api.updateCategory(before?.id ?? '', renamed.version ?? 1, { active: false });
     expect(off.active).toBe(false);
     expect(off.product_count).toBe(2);
-    await expect(api.updateCategory(before?.id ?? '', { name: 'cables' })).rejects.toMatchObject({ code: 'duplicate_category' });
+    await expect(api.updateCategory(before?.id ?? '', off.version ?? 1, { name: 'cables' })).rejects.toMatchObject({ code: 'duplicate_category' });
   });
 
   it('records price history, and hides cost without the permission', async () => {
@@ -195,10 +196,40 @@ describe('the mock catalogue (the server rules the screens rely on)', () => {
     const api = createMockRetail();
     const [buyer] = await api.listCustomers();
     expect(buyer?.balance_minor).toBeGreaterThanOrEqual(0);
-    const edited = await api.updateCustomer(buyer?.id ?? '', { contact: '+256700000009' });
+    const edited = await api.updateCustomer(buyer?.id ?? '', buyer?.version ?? 1, { contact: '+256700000009' });
     expect(edited.contact).toBe('+256700000009');
     const [supplier] = await api.listSuppliers();
-    expect((await api.updateSupplier(supplier?.id ?? '', { active: false })).active).toBe(false);
+    expect((await api.updateSupplier(supplier?.id ?? '', supplier?.version ?? 1, { active: false })).active).toBe(false);
+  });
+
+  it('refuses an edit made from a stale version, for each of the four lists', async () => {
+    const api = createMockRetail();
+    const [category] = await api.listCategories();
+    const [unit] = await api.listUnits();
+    const [buyer] = await api.listCustomers();
+    const [supplier] = await api.listSuppliers();
+    await api.updateCategory(category?.id ?? '', 1, { active: false });
+    await api.updateUnit(unit?.id ?? '', 1, { active: false });
+    await api.updateCustomer(buyer?.id ?? '', 1, { contact: '+256700000009' });
+    await api.updateSupplier(supplier?.id ?? '', 1, { active: false });
+    const stale = { code: 'version_conflict' };
+    await expect(api.updateCategory(category?.id ?? '', 1, { active: true })).rejects.toMatchObject(stale);
+    await expect(api.updateUnit(unit?.id ?? '', 1, { active: true })).rejects.toMatchObject(stale);
+    await expect(api.updateCustomer(buyer?.id ?? '', 1, { contact: '' })).rejects.toMatchObject(stale);
+    await expect(api.updateSupplier(supplier?.id ?? '', 1, { active: true })).rejects.toMatchObject(stale);
+  });
+
+  it('searches credit buyers on the server and pages them with a cursor', async () => {
+    const api = createMockRetail();
+    await Promise.all(Array.from({ length: 59 }, (_, n) => api.createCustomer({ name: `Test Buyer ${String(n + 2).padStart(2, '0')}` })));
+    const first = await api.listCustomerPage({});
+    expect(first.items).toHaveLength(50);
+    expect(first.next_cursor).toBeTruthy();
+    const second = await api.listCustomerPage({ cursor: first.next_cursor ?? '' });
+    expect(second.items).toHaveLength(10);
+    expect(second.next_cursor).toBeFalsy();
+    const found = await api.listCustomerPage({ query: 'buyer 60' });
+    expect(found.items?.map((c) => c.name)).toEqual(['Test Buyer 60']);
   });
 });
 

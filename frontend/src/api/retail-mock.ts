@@ -55,9 +55,13 @@ export function setMockProfitAccess(allowed: boolean): void {
 
 interface MockProduct { id: string; code: string; description: string; category: string; unit: string; costMinor: number; sellMinor: number; active?: boolean; version?: number }
 
+/** The mock's page size for credit buyers, as the API's default limit is 50. */
+const CUSTOMER_PAGE = 50;
+
 const CATEGORIES: Category[] = ['Cables', 'Lighting', 'Fittings', 'Solar'].map((name, i) => ({
   id: `00000000-0000-4000-8000-0000000c${String(i + 1).padStart(4, '0')}`,
   name,
+  version: 1,
 }));
 
 const PRODUCTS: MockProduct[] = [
@@ -108,9 +112,9 @@ export function createMockRetail(): RetailApi {
   });
   const products = new Map<string, MockProduct>(PRODUCTS.map((p) => [p.id, { ...p, active: true, version: 1 }]));
   // Categories and units of this mock instance: renamed and switched off by the management screens (#146).
-  const cats: { id: string; name: string; active: boolean }[] = CATEGORIES.map((c) => ({ id: c.id ?? '', name: c.name ?? '', active: true }));
+  const cats: { id: string; name: string; active: boolean; version: number }[] = CATEGORIES.map((c) => ({ id: c.id ?? '', name: c.name ?? '', active: true, version: 1 }));
   const unitNames = [...new Set(PRODUCTS.map((p) => p.unit))];
-  const unitRows: { id: string; name: string; active: boolean }[] = unitNames.map((name, i) => ({ id: `00000000-0000-4000-8000-0000000d${String(i + 1).padStart(4, '0')}`, name, active: true }));
+  const unitRows: { id: string; name: string; active: boolean; version: number }[] = unitNames.map((name, i) => ({ id: `00000000-0000-4000-8000-0000000d${String(i + 1).padStart(4, '0')}`, name, active: true, version: 1 }));
   const categoryId = (name: string): string => cats.find((c) => c.name === name)?.id ?? '';
   const history = new Map<string, PriceChange[]>();
   const used = <K extends 'category' | 'unit'>(key: K, name: string) => [...products.values()].filter((p) => p[key] === name).length;
@@ -120,11 +124,14 @@ export function createMockRetail(): RetailApi {
   const clash = (list: { id: string; name: string }[], id: string, name: string, code: string, what: string) => {
     if (list.some((x) => x.id !== id && x.name.toLowerCase() === name.trim().toLowerCase())) refuse(409, code, `A ${what} with this name exists.`);
   };
+  const staleRow = (row: { version?: number }, version: number) => {
+    if ((row.version ?? 1) !== version) refuse(409, 'version_conflict', 'This was changed by someone else. Reload and try again.');
+  };
   const stale = (p: MockProduct, version: number) => {
     if ((p.version ?? 1) !== version) refuse(412, 'version_conflict', 'This item was changed by someone else. Reload and try again.');
   };
-  const customers: Customer[] = [{ id: 'c0000000-0000-4000-8000-000000000001', name: 'Test Buyer 01', contact: '+256700000001' }];
-  const suppliers: Supplier[] = [{ id: 's0000000-0000-4000-8000-000000000001', name: 'Test Supplier 01', active: true }];
+  const customers: Customer[] = [{ id: 'c0000000-0000-4000-8000-000000000001', name: 'Test Buyer 01', contact: '+256700000001', version: 1 }];
+  const suppliers: Supplier[] = [{ id: 's0000000-0000-4000-8000-000000000001', name: 'Test Supplier 01', active: true, version: 1 }];
   const stocktakes = new Map<string, Stocktake>();
   const sales: (Sale & { costTotal: number })[] = [];
   const usageCostByDay = new Map<string, number>();
@@ -273,21 +280,23 @@ export function createMockRetail(): RetailApi {
     createCategory: (name) =>
       run(() => {
         clash(cats, '', name, 'duplicate_category', 'category');
-        const c = { id: nextId('c'), name: name.trim(), active: true };
+        const c = { id: nextId('c'), name: name.trim(), active: true, version: 1 };
         cats.push(c);
         return refreshed(c, 'category') as Category;
       }),
 
-    updateCategory: (id, body) =>
+    updateCategory: (id, version, body) =>
       run(() => {
         const c = cats.find((x) => x.id === id);
         if (!c) return refuse(404, 'not_found', 'That could not be found.');
+        staleRow(c, version);
         if (body.name !== undefined) {
           clash(cats, id, body.name, 'duplicate_category', 'category');
           for (const p of products.values()) if (p.category === c.name) p.category = body.name.trim();
           c.name = body.name.trim();
         }
         c.active = body.active ?? c.active;
+        c.version += 1;
         return refreshed(c, 'category') as Category;
       }),
 
@@ -296,21 +305,23 @@ export function createMockRetail(): RetailApi {
     createUnit: (name) =>
       run(() => {
         clash(unitRows, '', name, 'duplicate_unit', 'unit');
-        const u = { id: nextId('d'), name: name.trim(), active: true };
+        const u = { id: nextId('d'), name: name.trim(), active: true, version: 1 };
         unitRows.push(u);
         return refreshed(u, 'unit') as Unit;
       }),
 
-    updateUnit: (id, body) =>
+    updateUnit: (id, version, body) =>
       run(() => {
         const u = unitRows.find((x) => x.id === id);
         if (!u) return refuse(404, 'not_found', 'That could not be found.');
+        staleRow(u, version);
         if (body.name !== undefined) {
           clash(unitRows, id, body.name, 'duplicate_unit', 'unit');
           for (const p of products.values()) if (p.unit === u.name) p.unit = body.name.trim();
           u.name = body.name.trim();
         }
         u.active = body.active ?? u.active;
+        u.version += 1;
         return refreshed(u, 'unit') as Unit;
       }),
 
@@ -353,41 +364,54 @@ export function createMockRetail(): RetailApi {
 
     listCustomers: () =>
       delay(customers.map((c) => ({ ...c, balance_minor: sales.filter((x) => x.payment_method === 'credit' && x.status === 'completed' && x.buyer_name === c.name).reduce((sum, x) => sum + (x.balance_minor ?? 0), 0) }))),
+    listCustomerPage: ({ query, cursor }) => {
+      const q = (query ?? '').trim().toLowerCase();
+      const all = customers
+        .filter((c) => !q || (c.name ?? '').toLowerCase().includes(q))
+        .sort((a, b) => (a.name ?? '').toLowerCase().localeCompare((b.name ?? '').toLowerCase()));
+      const start = cursor ? Number(cursor) : 0;
+      const items = all.slice(start, start + CUSTOMER_PAGE);
+      return delay({ items, ...(start + CUSTOMER_PAGE < all.length ? { next_cursor: String(start + CUSTOMER_PAGE) } : {}) });
+    },
     listSuppliers: () => delay([...suppliers]),
     createSupplier: (body) =>
       run(() => {
         clash(suppliers as { id: string; name: string }[], '', body.name, 'duplicate_supplier', 'supplier');
-        const s: Supplier = { id: nextId('s'), name: body.name.trim(), active: true, ...(body.contact?.trim() ? { contact: body.contact.trim() } : {}) };
+        const s: Supplier = { id: nextId('s'), name: body.name.trim(), active: true, version: 1, ...(body.contact?.trim() ? { contact: body.contact.trim() } : {}) };
         suppliers.push(s);
         return s;
       }),
 
-    updateSupplier: (id, body) =>
+    updateSupplier: (id, version, body) =>
       run(() => {
         const s = suppliers.find((x) => x.id === id);
         if (!s) return refuse(404, 'not_found', 'That could not be found.');
+        staleRow(s, version);
         if (body.name !== undefined) {
           clash(suppliers as { id: string; name: string }[], id, body.name, 'duplicate_supplier', 'supplier');
           s.name = body.name.trim();
         }
         if (body.contact !== undefined) s.contact = body.contact.trim() || undefined;
         s.active = body.active ?? s.active;
+        s.version = (s.version ?? 1) + 1;
         return { ...s };
       }),
 
     createCustomer: (body) =>
       run(() => {
-        const c: Customer = { id: nextId('c'), name: body.name.trim(), ...(body.contact?.trim() ? { contact: body.contact.trim() } : {}) };
+        const c: Customer = { id: nextId('c'), name: body.name.trim(), version: 1, ...(body.contact?.trim() ? { contact: body.contact.trim() } : {}) };
         customers.push(c);
         return c;
       }),
 
-    updateCustomer: (id, body) =>
+    updateCustomer: (id, version, body) =>
       run(() => {
         const c = customers.find((x) => x.id === id);
         if (!c) return refuse(404, 'not_found', 'That could not be found.');
+        staleRow(c, version);
         if (body.name !== undefined) c.name = body.name.trim();
         if (body.contact !== undefined) c.contact = body.contact.trim() || undefined;
+        c.version = (c.version ?? 1) + 1;
         return { ...c };
       }),
 

@@ -63,7 +63,7 @@ function NamedList({ noun, plural, list, create, update }: {
   plural: string;
   list: () => Promise<Named[]>;
   create: (name: string) => Promise<Named>;
-  update: (id: string, body: { name?: string; active?: boolean }) => Promise<Named>;
+  update: (id: string, version: number, body: { name?: string; active?: boolean }) => Promise<Named>;
 }) {
   const queryClient = useQueryClient();
   const { show, toast } = useToast();
@@ -82,7 +82,7 @@ function NamedList({ noun, plural, list, create, update }: {
     onSuccess: (row) => { setName(''); setAdding(false); done(`Added the ${noun} "${row.name}".`); },
   });
   const change = useMutation({
-    mutationFn: (v: { id: string; body: { name?: string; active?: boolean }; text: (row: Named) => string }) => update(v.id, v.body).then((row) => ({ row, text: v.text })),
+    mutationFn: (v: { id: string; version: number; body: { name?: string; active?: boolean }; text: (row: Named) => string }) => update(v.id, v.version, v.body).then((row) => ({ row, text: v.text })),
     onMutate: () => setMessage(null),
     onSuccess: ({ row, text }) => done(text(row)),
   });
@@ -109,10 +109,11 @@ function NamedList({ noun, plural, list, create, update }: {
             row={r}
             noun={noun}
             busy={change.isPending}
-            onRename={(n) => change.mutate({ id: r.id ?? '', body: { name: n }, text: (x) => `Renamed to "${x.name}".` })}
+            onRename={(n) => change.mutate({ id: r.id ?? '', version: r.version ?? 1, body: { name: n }, text: (x) => `Renamed to "${x.name}".` })}
             onToggle={() =>
               change.mutate({
                 id: r.id ?? '',
+                version: r.version ?? 1,
                 body: { active: r.active === false },
                 text: (x) => (x.active === false
                   ? `"${x.name}" is switched off. Items that use it keep it; new items cannot choose it.`
@@ -129,7 +130,7 @@ function NamedList({ noun, plural, list, create, update }: {
 function CategoriesPage() {
   return (
     <Gate screen="categories" title="Categories">
-      <NamedList noun="category" plural="categories" list={() => retail.listCategories()} create={(n) => retail.createCategory(n)} update={(id, b) => retail.updateCategory(id, b)} />
+      <NamedList noun="category" plural="categories" list={() => retail.listCategories()} create={(n) => retail.createCategory(n)} update={(id, v, b) => retail.updateCategory(id, v, b)} />
     </Gate>
   );
 }
@@ -137,7 +138,7 @@ function CategoriesPage() {
 function UnitsPage() {
   return (
     <Gate screen="units" title="Units">
-      <NamedList noun="unit" plural="units" list={() => retail.listUnits()} create={(n) => retail.createUnit(n)} update={(id, b) => retail.updateUnit(id, b)} />
+      <NamedList noun="unit" plural="units" list={() => retail.listUnits()} create={(n) => retail.createUnit(n)} update={(id, v, b) => retail.updateUnit(id, v, b)} />
     </Gate>
   );
 }

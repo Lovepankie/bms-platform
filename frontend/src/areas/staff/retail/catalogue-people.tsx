@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type Customer, type Supplier } from '../../../api/retail';
@@ -33,7 +33,7 @@ export function PersonRow({ row, busy, onSave, onToggle }: {
       </p>
       <p className="hint">{row.contact ? row.contact : 'No contact saved.'}</p>
       {owed !== undefined && (
-        <p>{owed > 0 ? <>Owes <strong>{money(owed)}</strong> on credit sales.</> : 'Owes nothing.'}</p>
+        <p>{owed > 0 ? <>Owes <strong>{money(owed)}</strong> on credit sales, all your branches.</> : 'Owes nothing, all your branches.'}</p>
       )}
       {editing ? (
         <div className="stack">
@@ -69,16 +69,19 @@ export function PersonRow({ row, busy, onSave, onToggle }: {
   );
 }
 
-function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canSwitch, note }: {
+interface PersonPage { items?: Person[]; next_cursor?: string | null }
+
+function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canSwitch, note, searchable }: {
   noun: string;
   note?: string;
   plural: string;
   queryKey: string;
-  list: () => Promise<Person[]>;
+  list: (q: { query: string; cursor?: string }) => Promise<PersonPage>;
   create: (b: { name: string; contact?: string }) => Promise<Person>;
-  update: (id: string, b: PersonEdit & { active?: boolean }) => Promise<Person>;
+  update: (id: string, version: number, b: PersonEdit & { active?: boolean }) => Promise<Person>;
   canAdd: boolean;
   canSwitch: boolean;
+  searchable?: boolean;
 }) {
   const queryClient = useQueryClient();
   const { show, toast } = useToast();
@@ -86,7 +89,14 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [adding, setAdding] = useState(false);
-  const rows = useQuery({ queryKey: ['retail', 'catalogue', queryKey], queryFn: list });
+  const [search, setSearch] = useState('');
+  const rows = useInfiniteQuery({
+    queryKey: ['retail', 'catalogue', queryKey, search],
+    queryFn: ({ pageParam }) => list({ query: search, ...(pageParam ? { cursor: pageParam } : {}) }),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.next_cursor || undefined,
+  });
+  const people = (rows.data?.pages ?? []).flatMap((p) => p.items ?? []);
   const done = (text: string) => {
     setMessage(text);
     show(text);
@@ -98,7 +108,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
     onSuccess: (row) => { setName(''); setContact(''); setAdding(false); done(`Added the ${noun} "${row.name}".`); },
   });
   const change = useMutation({
-    mutationFn: (v: { id: string; body: PersonEdit & { active?: boolean }; text: (row: Person) => string }) => update(v.id, v.body).then((row) => ({ row, text: v.text })),
+    mutationFn: (v: { id: string; version: number; body: PersonEdit & { active?: boolean }; text: (row: Person) => string }) => update(v.id, v.version, v.body).then((row) => ({ row, text: v.text })),
     onMutate: () => setMessage(null),
     onSuccess: ({ row, text }) => done(text(row)),
   });
@@ -122,19 +132,26 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
       <Problem error={change.error} />
       {rows.isPending && <p className="loading">Loading</p>}
       <Problem error={rows.error} />
-      {rows.data && rows.data.length === 0 && <p className="empty-state">No {plural} yet.</p>}
+      {searchable && (
+        <>
+          <label htmlFor={`search-${queryKey}`}>Search by name</label>
+          <input id={`search-${queryKey}`} type="search" value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
+        </>
+      )}
+      {rows.data && people.length === 0 && <p className="empty-state">{search ? `No ${plural} match that name.` : `No ${plural} yet.`}</p>}
       <ul style={{ listStyle: 'none', padding: 0 }}>
-        {(rows.data ?? []).map((r) => (
+        {people.map((r) => (
           <PersonRow
             key={r.id}
             row={r}
             busy={change.isPending}
-            onSave={(edit) => change.mutate({ id: r.id ?? '', body: edit, text: (x) => `Saved the changes to "${x.name}".` })}
+            onSave={(edit) => change.mutate({ id: r.id ?? '', version: r.version ?? 1, body: edit, text: (x) => `Saved the changes to "${x.name}".` })}
             {...(canSwitch
               ? {
                   onToggle: () =>
                     change.mutate({
                       id: r.id ?? '',
+                      version: r.version ?? 1,
                       body: { active: 'active' in r && r.active === false },
                       text: (x) => ('active' in x && x.active === false
                         ? `"${x.name}" is switched off. It stays on past restocks; new restocks cannot choose it.`
@@ -145,6 +162,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
           />
         ))}
       </ul>
+      {rows.hasNextPage && <button type="button" onClick={() => void rows.fetchNextPage()} disabled={rows.isFetchingNextPage}>{rows.isFetchingNextPage ? 'Loading' : `Show more ${plural}`}</button>}
       {toast}
     </>
   );
@@ -156,8 +174,8 @@ function SuppliersPage() {
     <Gate screen="suppliers" title="Suppliers">
       <PeopleList
         noun="supplier" plural="suppliers" queryKey="suppliers"
-        list={() => retail.listSuppliers()} create={(b) => retail.createSupplier(b)}
-        update={(id, b) => retail.updateSupplier(id, b)}
+        list={() => retail.listSuppliers().then((items) => ({ items }))} create={(b) => retail.createSupplier(b)}
+        update={(id, v, b) => retail.updateSupplier(id, v, b)}
         canAdd={canUse(me, 'suppliers')} canSwitch
       />
     </Gate>
@@ -168,11 +186,11 @@ function BuyersPage() {
   return (
     <Gate screen="buyers" title="Credit buyers">
       <PeopleList
-        note="What each buyer owes is counted over the branches you may read."
+        note="What each buyer owes is counted over all the branches you may read, whichever branch is chosen."
         noun="credit buyer" plural="credit buyers" queryKey="buyers"
-        list={() => retail.listCustomers()} create={(b) => retail.createCustomer(b)}
-        update={(id, b) => retail.updateCustomer(id, b)}
-        canAdd canSwitch={false}
+        list={(q) => retail.listCustomerPage(q)} create={(b) => retail.createCustomer(b)}
+        update={(id, v, b) => retail.updateCustomer(id, v, b)}
+        canAdd canSwitch={false} searchable
       />
     </Gate>
   );
