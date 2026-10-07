@@ -94,6 +94,13 @@ export const icons = {
       <path d="M6 9v.01M18 15v.01" />
     </Svg>
   ),
+  catalogue: (
+    <Svg>
+      <path d="M4 5h16v4H4z" />
+      <path d="M5 9v10h14V9" />
+      <path d="M9 13h6" />
+    </Svg>
+  ),
   profit: (
     <Svg>
       <path d="M3 17l6-6 4 4 8-8" />

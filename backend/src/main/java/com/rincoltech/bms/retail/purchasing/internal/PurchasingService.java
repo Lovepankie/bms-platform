@@ -8,6 +8,7 @@ import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
+import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.BranchQty;
@@ -18,6 +19,7 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.PurchaseReque
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.Supplier;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierList;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierRequest;
+import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.UpdateSupplierRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingRepository.NewLine;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
@@ -105,7 +107,7 @@ class PurchasingService {
 
     @Transactional
     Supplier createSupplier(SupplierRequest r) {
-        Supplier s = new Supplier(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), true, null);
+        Supplier s = new Supplier(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), true, null, 1);
         try {
             repo.insertSupplier(s, CurrentPrincipal.require().userId());
         } catch (DuplicateKeyException e) {
@@ -115,6 +117,47 @@ class PurchasingService {
         audit.record(AuditLog.Entry.created(
                 "retail.supplier.created", "retail.supplier", s.id(), null, Map.of("name", s.name())));
         return repo.supplier(s.id()).orElseThrow();
+    }
+
+    /** #146: edit the name or contact, or switch a supplier off; never deleted. Audited without anything but the changes. */
+    @Transactional
+    Supplier updateSupplier(UUID id, String ifMatch, UpdateSupplierRequest r) {
+        int expected = Versions.fromIfMatch(ifMatch);
+        Supplier before = repo.supplier(id).orElseThrow(ApiException::notFound);
+        if (before.version() != expected) {
+            throw Versions.conflict(before.version());
+        }
+        String name = r.name() == null ? before.name() : r.name().trim();
+        String contact = r.contact() == null ? before.contact() : blankToNull(r.contact());
+        boolean active = r.active() == null ? before.active() : r.active();
+        if (name.isEmpty()) {
+            throw ApiException.validation(List.of(new FieldProblem("name", "invalid", "The name must not be blank.")));
+        }
+        Map<String, Object> was = new LinkedHashMap<>();
+        Map<String, Object> now = new LinkedHashMap<>();
+        change(was, now, "name", before.name(), name);
+        change(was, now, "contact_changed", false, !java.util.Objects.equals(before.contact(), contact));
+        change(was, now, "active", before.active(), active);
+        if (now.isEmpty()) {
+            return before;
+        }
+        try {
+            if (repo.updateSupplier(id, name, contact, active, expected) == 0) {
+                throw repo.supplier(id).map(s -> Versions.conflict(s.version())).orElseGet(ApiException::notFound);
+            }
+        } catch (DuplicateKeyException e) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT, "duplicate_supplier", "Duplicate", "A supplier with this name exists.");
+        }
+        audit.record(new AuditLog.Entry("retail.supplier.updated", "retail.supplier", id, null, was, now));
+        return repo.supplier(id).orElseThrow();
+    }
+
+    private static void change(Map<String, Object> was, Map<String, Object> now, String key, Object x, Object y) {
+        if (!java.util.Objects.equals(x, y)) {
+            was.put(key, x);
+            now.put(key, y);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -142,6 +185,10 @@ class PurchasingService {
         }
         if (r.supplierId() != null && repo.supplier(r.supplierId()).isEmpty()) {
             problems.add(new FieldProblem("supplier_id", "unknown_supplier", "No such supplier."));
+        } else if (r.supplierId() != null
+                && !repo.supplier(r.supplierId()).orElseThrow().active()) {
+            problems.add(new FieldProblem(
+                    "supplier_id", "inactive_supplier", "This supplier is switched off. Choose another one."));
         }
         if (r.paymentMethod().equals("credit") && r.supplierId() == null) {
             problems.add(new FieldProblem("supplier_id", "required", "A credit purchase names its supplier."));

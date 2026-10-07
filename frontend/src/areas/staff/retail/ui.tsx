@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { useState, useSyncExternalStore, type ReactNode } from 'react';
-import { RETAIL_CURRENCY, retail, type Product } from '../../../api/retail';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { RETAIL_CURRENCY, RetailError, retail, type Product } from '../../../api/retail';
 import { ALL_BRANCHES, branchLabel } from '../../../auth/branch';
 import { formatMinor } from '../../../components/money';
 import { useStockedBranches } from '../branch-picker';
@@ -28,13 +28,79 @@ export function Note({ children }: { children: ReactNode }) {
   );
 }
 
+/** A success message on the screen (read by assistive technology); the toast of {@link useToast} repeats it for a few seconds. */
+export function Success({ children }: { children: ReactNode }) {
+  return <p role="status" className="alert alert-success">{children}</p>;
+}
+
+/**
+ * A short toast above the bottom bar (`.toast`), gone after four seconds. It repeats the on-screen
+ * success message and is hidden from assistive technology, which already has that message (#146).
+ * Render `toast` anywhere in the screen and call `show` when a save succeeds.
+ */
+export function useToast(): { show: (message: string) => void; toast: ReactNode } {
+  const [text, setText] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const show = (message: string) => {
+    setText(message);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setText(null), 4000);
+  };
+  return { show, toast: text ? <p className="toast" aria-hidden="true">{text}</p> : null };
+}
+
+/** Passes the latest pushed value on once no newer one has arrived for `ms`. */
+export function createDebouncer<T>(ms: number, onValue: (value: T) => void) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return {
+    push(value: T) {
+      clearTimeout(timer);
+      timer = setTimeout(() => onValue(value), ms);
+    },
+    cancel() {
+      clearTimeout(timer);
+    },
+  };
+}
+
+/** The value after it has stopped changing for `ms`; the input that feeds it stays responsive. */
+export function useDebounced<T>(value: T, ms = 300): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const debouncer = createDebouncer(ms, setSettled);
+    debouncer.push(value);
+    return debouncer.cancel;
+  }, [value, ms]);
+  return settled;
+}
+
+export const STALE_TEXT = 'This was changed by someone else. The list has been reloaded; please try again.';
+
+/** A row with no version cannot be changed safely: that is a bug in the screen, so say so rather than guess. */
+export function requireVersion(version: number | undefined): number {
+  if (version === undefined) {
+    throw new Error('This row has no version, so it cannot be changed safely. Reload the page and try again.');
+  }
+  return version;
+}
+
+/** Words for a failed change. A stale version also reloads the lists, so the retry carries the new version. */
+export function changeFailureText(error: unknown, queryClient: QueryClient): string {
+  if (error instanceof RetailError && error.code === 'version_conflict') {
+    void queryClient.invalidateQueries({ queryKey: ['retail'] });
+    return STALE_TEXT;
+  }
+  return error instanceof Error ? error.message : 'Something went wrong.';
+}
+
 export function Problem({ error }: { error: unknown }) {
   if (!error) return null;
   return <p role="alert" className="alert alert-danger">{error instanceof Error ? error.message : 'Something went wrong.'}</p>;
 }
 
 /** Shows its children only when the session may use the screen; otherwise nothing of the screen. */
-export function Gate({ screen, title, children }: { screen: RetailScreen; title: string; children: ReactNode }) {
+export function Gate({ screen, title, children, wide }: { screen: RetailScreen; title: string; children: ReactNode; wide?: boolean }) {
   const { me } = useStaff();
   if (!canUse(me, screen)) {
     return (
@@ -45,7 +111,7 @@ export function Gate({ screen, title, children }: { screen: RetailScreen; title:
     );
   }
   return (
-    <main className="rt">
+    <main className={wide ? 'rt rt-wide' : 'rt'}>
       <h1>{title}</h1>
       {children}
     </main>

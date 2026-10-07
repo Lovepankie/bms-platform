@@ -52,8 +52,9 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   screens on the real API (`docs/specs/retail-ui-notes.md`). Stock transfers between branches
   (issue #84, ADR-020 amendment) add `V22`. The database optimisation (issue #107, ADR-028) adds
   `V26` (indexes and a fillfactor only; `V24` and `V25` are held by the open guided tour and loan
-  servicing branches). Flyway runs with `outOfOrder` off, so a new migration takes a number above
-  the highest one on any open branch (`V27` next).
+  servicing branches). The retail catalogue management (issue #146) takes `V28`. Flyway runs with
+  `outOfOrder` off, so a new migration takes a number above the highest one on any open branch
+  (`V29` next).
 - **Self-onboarding, build step 1 (issue #89, ADR-024):** migration `V23` with
   `onboarding_applications` and `notification_outbox`, reached only through definer functions;
   the public sign-up and applicant page; the operator portal on the platform host (operator

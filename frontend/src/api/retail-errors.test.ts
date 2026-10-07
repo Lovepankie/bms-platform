@@ -12,6 +12,9 @@ describe('retail problem details in plain words', () => {
     ['module_not_enabled', 404, /not switched on/i],
     ['branch_required', 422, /choose one branch/i],
     ['sale_voided', 409, /cancelled/i],
+    ['version_conflict', 409, /changed by someone else/i],
+    ['duplicate_product_code', 409, /code already exists/i],
+    ['inactive_category', 422, /switched off/i],
     ['stocktake_committed', 409, /already been committed/i],
     ['token_expired', 401, /sign in/i],
   ])('maps %s', (code, status, text) => {

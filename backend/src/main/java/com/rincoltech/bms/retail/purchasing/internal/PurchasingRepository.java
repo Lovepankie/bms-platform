@@ -50,15 +50,24 @@ class PurchasingRepository {
                         """).params(s.id(), s.name(), s.contact(), by).update();
     }
 
+    /** Rows changed: 0 when the version moved since it was read (the predicate is the optimistic lock). */
+    int updateSupplier(UUID id, String name, String contact, boolean active, int expectedVersion) {
+        return jdbc.sql(
+                        "UPDATE retail_suppliers SET name = ?, contact = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
+                .params(name, contact, active, id, expectedVersion)
+                .update();
+    }
+
     Optional<Supplier> supplier(UUID id) {
-        return jdbc.sql("SELECT id, name, contact, active, created_at FROM retail_suppliers WHERE id = ?")
+        return jdbc.sql("SELECT id, name, contact, active, created_at, version FROM retail_suppliers WHERE id = ?")
                 .param(id)
                 .query(PurchasingRepository::supplier)
                 .optional();
     }
 
     List<Supplier> suppliers() {
-        return jdbc.sql("SELECT id, name, contact, active, created_at FROM retail_suppliers ORDER BY lower(name), id")
+        return jdbc.sql(
+                        "SELECT id, name, contact, active, created_at, version FROM retail_suppliers ORDER BY lower(name), id")
                 .query(PurchasingRepository::supplier)
                 .list();
     }
@@ -69,7 +78,8 @@ class PurchasingRepository {
                 rs.getString("name"),
                 rs.getString("contact"),
                 rs.getBoolean("active"),
-                rs.getTimestamp("created_at").toInstant());
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getInt("version"));
     }
 
     // ---- Purchases -----------------------------------------------------------------------
