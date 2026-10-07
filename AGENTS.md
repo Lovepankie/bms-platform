@@ -50,8 +50,10 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   `V12`), the oversell refusal and price floor (`V13`), the review fixes (`V14`), the
   `import-retail` command (`V20`, `docs/runbooks/import-retail.md`) and the phone-first retail
   screens on the real API (`docs/specs/retail-ui-notes.md`). Stock transfers between branches
-  (issue #84, ADR-020 amendment) add `V22`. Flyway runs with `outOfOrder` off, so a new migration
-  takes a number above the highest one on any open branch (`V24` next).
+  (issue #84, ADR-020 amendment) add `V22`. The database optimisation (issue #107, ADR-028) adds
+  `V26` (indexes and a fillfactor only; `V24` and `V25` are held by the open guided tour and loan
+  servicing branches). Flyway runs with `outOfOrder` off, so a new migration takes a number above
+  the highest one on any open branch (`V27` next).
 - **Self-onboarding, build step 1 (issue #89, ADR-024):** migration `V23` with
   `onboarding_applications` and `notification_outbox`, reached only through definer functions;
   the public sign-up and applicant page; the operator portal on the platform host (operator
@@ -90,6 +92,7 @@ bms-platform/
 ├── backend/             Spring Boot API, modules by package (ADR-010), Flyway migrations
 ├── frontend/            the React PWA: staff area, member area, platform console (ADR-009)
 ├── deploy/              host-side files: compose.yml, deploy.sh, backup.sh, Caddy, SQL (SDD ch. 9)
+├── scripts/db-bench/    throwaway PostgreSQL benchmark at 25 times the data (ADR-028); never production
 ├── fixtures/            fabricated test data only (pilot register sample)
 ├── docs/
 │   ├── workspace.dsl    Structurizr C4 model; wires in sdd/ and adr/ as one site
@@ -292,6 +295,8 @@ Accepted (this list is the ADR index):
   ledger (proposed, #50)
 - ADR-024 Self-onboarding with operator verification, per-module subscriptions and manual payments
   (spec `docs/specs/self-onboarding-and-subscriptions.md`; build step 1 is #89)
+- ADR-028 Database performance: measured on 25 times the data, covering indexes, the plain tenant
+  policy kept, connection timeouts (proposed, #107)
 - ADR-029 One fixed low stock threshold for retail, a per-tenant settings group later (#145)
 
 Pending (cite only as "pending ADR-NNN"):

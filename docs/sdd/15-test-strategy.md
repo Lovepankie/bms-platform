@@ -136,11 +136,23 @@ write and unbound-session tests cover it without a separate suite.
 `MigrationOrderIT` runs `DatabaseMigrator` with Flyway's `outOfOrder` off, as every environment
 does, on a fresh PostgreSQL 16 container per case: every migration (V1 to V9 lending, V10 to V14
 retail, V20 the retail import references, V21 the lending follow-ups, V22 the retail stock
-transfers, V23 the onboarding applications and outbox of #89) applies in order on an empty
-database; on a database already migrated to V9 with a lending tenant, exactly V10 to V14, V20,
-V21, V22 and V23 apply and that tenant can then switch retail on; a tenant that switched retail on
-at V21 gets the inter-branch clearing account (code 1190, system controlled) from V22 (#84); and
-no two migration files share a version (issue #71, review F6).
+transfers, V23 the onboarding applications and outbox of #89, V26 the indexes of #107) applies in
+order on an empty database; on a database already migrated to V9 with a lending tenant, exactly V10
+to V14, V20, V21, V22, V23 and V26 apply and that tenant can then switch retail on; a tenant that
+switched retail on at V21 gets the inter-branch clearing account (code 1190, system controlled)
+from V22 (#84); a database at V22 holding retail rows (a negative balance among them) keeps every
+row through V23 and V26, whose new indexes replace the old ones and whose balance table gets its
+fillfactor (#107); and no two migration files share a version (issue #71, review F6). V24 and V25
+are held by open branches (#123, #126), so V26 is applied after V23 here until they merge, and
+each adds its version to the list.
+
+## 15.4.4 Query plans at scale
+
+Not part of `mvn verify`: `scripts/db-bench` (ADR-028) loads 25 times the staging data into a
+throwaway PostgreSQL container and records `EXPLAIN (ANALYZE, BUFFERS)` for every hot query as
+`bms_app` with row-level security on, under the staging and the production settings. A change to
+an index, a hot query or a server setting is measured with it before and after, and the numbers go
+in the pull request.
 
 ## 15.5 Module boundary test
 

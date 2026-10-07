@@ -13,6 +13,8 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -141,9 +143,10 @@ class SalesRepository {
         sql.append(newestFirst ? " ORDER BY created_at DESC, id DESC" : " ORDER BY created_at, id")
                 .append(" LIMIT :limit");
         params.put("limit", limit);
-        return jdbc.sql(sql.toString()).params(params).query((rs, n) -> header(rs)).list().stream()
-                .map(this::withLines)
-                .toList();
+        return withLines(jdbc.sql(sql.toString())
+                .params(params)
+                .query((rs, n) -> header(rs))
+                .list());
     }
 
     void insert(Sale s) {
@@ -205,25 +208,40 @@ class SalesRepository {
     }
 
     private Sale withLines(Sale s) {
-        List<SaleLine> lines = jdbc.sql("""
-                        SELECT l.id, l.line_no, l.product_id, p.code, p.description, l.qty, l.unit_price_minor,
+        return withLines(List.of(s)).getFirst();
+    }
+
+    /** The lines of every sale of a page in one statement, not one per sale (issue #107). */
+    private List<Sale> withLines(List<Sale> sales) {
+        if (sales.isEmpty()) {
+            return sales;
+        }
+        Map<UUID, List<SaleLine>> bySale = new HashMap<>();
+        jdbc.sql("""
+                        SELECT l.sale_id, l.id, l.line_no, l.product_id, p.code, p.description, l.qty, l.unit_price_minor,
                                l.line_total_minor, l.unit_cost_minor, l.line_cost_minor
                           FROM retail_sale_lines l JOIN retail_products p ON p.id = l.product_id
-                         WHERE l.sale_id = ? ORDER BY l.line_no
-                        """)
-                .param(s.id())
-                .query((rs, n) -> new SaleLine(
-                        rs.getObject("id", UUID.class),
-                        rs.getInt("line_no"),
-                        rs.getObject("product_id", UUID.class),
-                        rs.getString("code"),
-                        rs.getString("description"),
-                        Quantities.format(rs.getBigDecimal("qty")),
-                        rs.getLong("unit_price_minor"),
-                        rs.getLong("line_total_minor"),
-                        rs.getLong("unit_cost_minor"),
-                        rs.getLong("line_cost_minor")))
-                .list();
+                         WHERE l.sale_id IN (:ids) ORDER BY l.sale_id, l.line_no
+                        """).param("ids", sales.stream().map(Sale::id).toList()).query(rs -> {
+            bySale.computeIfAbsent(rs.getObject("sale_id", UUID.class), k -> new ArrayList<>())
+                    .add(new SaleLine(
+                            rs.getObject("id", UUID.class),
+                            rs.getInt("line_no"),
+                            rs.getObject("product_id", UUID.class),
+                            rs.getString("code"),
+                            rs.getString("description"),
+                            Quantities.format(rs.getBigDecimal("qty")),
+                            rs.getLong("unit_price_minor"),
+                            rs.getLong("line_total_minor"),
+                            rs.getLong("unit_cost_minor"),
+                            rs.getLong("line_cost_minor")));
+        });
+        return sales.stream()
+                .map(s -> withLines(s, bySale.getOrDefault(s.id(), new ArrayList<>())))
+                .toList();
+    }
+
+    private static Sale withLines(Sale s, List<SaleLine> lines) {
         return new Sale(
                 s.id(),
                 s.saleNo(),
