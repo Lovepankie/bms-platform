@@ -75,9 +75,12 @@ jobs:
           echo "Built $(find docs/build/site -type f | wc -l) files into docs/build/site."
 
       - name: Upload the static SDD site
+        # Only for main and manual runs, and kept 7 days: every pull request run used to store a 3 MB
+        # copy for 90 days and filled the repository's artifact quota (138 copies, 414 MB).
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
           name: sdd-static-site
           path: docs/build/site
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
