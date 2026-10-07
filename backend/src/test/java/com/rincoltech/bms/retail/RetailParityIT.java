@@ -317,7 +317,9 @@ class RetailParityIT extends IntegrationTest {
         JsonNode profit = ok(api.get("/reports/profit/daily", ADMIN));
         assertThat(profit.get("rows")).hasSize(2);
         assertThat(profit.get("sales_minor").asLong()).isEqualTo(4_500);
-        assertThat(profit.get("profit_minor").asLong()).isEqualTo(1_500);
+        // The stock the setUp counted in is a stock-take surplus at cost (#121): its own line, in the profit.
+        assertThat(profit.get("profit_minor").asLong())
+                .isEqualTo(1_500 + profit.get("stocktake_difference_minor").asLong());
     }
 
     // ---- D. Low stock and out of stock ------------------------------------------------------

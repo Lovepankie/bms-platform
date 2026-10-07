@@ -29,11 +29,29 @@ final class CatalogueApi {
     @Schema(name = "RetailUnitRequest")
     record UnitRequest(@NotBlank @Size(max = 30) String name) {}
 
+    @Schema(name = "RetailCategoryUpdate", description = "Omitted fields are unchanged; a category is never deleted")
+    record UpdateCategoryRequest(@Size(min = 1, max = 100) String name, Boolean active) {}
+
+    @Schema(name = "RetailUnitUpdate", description = "Omitted fields are unchanged; a unit is never deleted")
+    record UpdateUnitRequest(@Size(min = 1, max = 30) String name, Boolean active) {}
+
     @Schema(name = "RetailCategory")
-    record Category(UUID id, String name) {}
+    record Category(
+            UUID id,
+            String name,
+            boolean active,
+
+            @Schema(description = "Products (active or not) that use this category")
+            int productCount) {}
 
     @Schema(name = "RetailUnit")
-    record Unit(UUID id, String name) {}
+    record Unit(
+            UUID id,
+            String name,
+            boolean active,
+
+            @Schema(description = "Products (active or not) that use this unit")
+            int productCount) {}
 
     @Schema(name = "RetailCategoryList")
     record CategoryList(List<Category> items) {}

@@ -11,6 +11,7 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.PaymentResult;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Sale;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SalePage;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.UpdateCustomerRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.VoidRequest;
 import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +25,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -144,6 +146,13 @@ class SalesController {
     @Operation(summary = "Add a credit buyer (FR-RET-05)", operationId = "createRetailCustomer")
     ResponseEntity<Customer> createCustomer(@Valid @RequestBody CustomerRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.createCustomer(request));
+    }
+
+    @PatchMapping("/customers/{customer_id}")
+    @RequiresPermission("retail.customer.manage")
+    @Operation(summary = "Edit a credit buyer's name or contact (#146)", operationId = "updateRetailCustomer")
+    Customer updateCustomer(@PathVariable("customer_id") UUID id, @Valid @RequestBody UpdateCustomerRequest request) {
+        return service.updateCustomer(id, request);
     }
 
     @GetMapping("/customers/{customer_id}/balance")

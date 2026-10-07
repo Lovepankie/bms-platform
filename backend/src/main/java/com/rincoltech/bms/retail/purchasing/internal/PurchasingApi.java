@@ -28,6 +28,12 @@ final class PurchasingApi {
             @NotBlank @Size(max = 200) String name,
             @Size(max = 100) String contact) {}
 
+    @Schema(name = "RetailSupplierUpdate", description = "Omitted fields are unchanged; an empty contact clears it")
+    record UpdateSupplierRequest(
+            @Size(min = 1, max = 200) String name,
+            @Size(max = 100) String contact,
+            Boolean active) {}
+
     @Schema(name = "RetailSupplier")
     record Supplier(UUID id, String name, String contact, boolean active, Instant createdAt) {}
 

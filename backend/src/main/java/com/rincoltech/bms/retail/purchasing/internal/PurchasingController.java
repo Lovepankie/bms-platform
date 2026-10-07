@@ -7,6 +7,7 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.PurchaseReque
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.Supplier;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierList;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierRequest;
+import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.UpdateSupplierRequest;
 import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,6 +19,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -49,6 +52,13 @@ class PurchasingController {
     @Operation(summary = "Add a supplier (FR-RET-06)", operationId = "createRetailSupplier")
     ResponseEntity<Supplier> createSupplier(@Valid @RequestBody SupplierRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.createSupplier(request));
+    }
+
+    @PatchMapping("/suppliers/{supplier_id}")
+    @RequiresPermission("retail.catalogue.manage")
+    @Operation(summary = "Edit or deactivate a supplier (#146); never deleted", operationId = "updateRetailSupplier")
+    Supplier updateSupplier(@PathVariable("supplier_id") UUID id, @Valid @RequestBody UpdateSupplierRequest request) {
+        return service.updateSupplier(id, request);
     }
 
     @PostMapping("/purchases")

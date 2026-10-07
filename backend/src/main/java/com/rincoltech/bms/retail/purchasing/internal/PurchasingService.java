@@ -18,6 +18,7 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.PurchaseReque
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.Supplier;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierList;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierRequest;
+import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.UpdateSupplierRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingRepository.NewLine;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
@@ -117,6 +118,41 @@ class PurchasingService {
         return repo.supplier(s.id()).orElseThrow();
     }
 
+    /** #146: edit the name or contact, or switch a supplier off; never deleted. Audited without anything but the changes. */
+    @Transactional
+    Supplier updateSupplier(UUID id, UpdateSupplierRequest r) {
+        Supplier before = repo.supplier(id).orElseThrow(ApiException::notFound);
+        String name = r.name() == null ? before.name() : r.name().trim();
+        String contact = r.contact() == null ? before.contact() : blankToNull(r.contact());
+        boolean active = r.active() == null ? before.active() : r.active();
+        if (name.isEmpty()) {
+            throw ApiException.validation(List.of(new FieldProblem("name", "invalid", "The name must not be blank.")));
+        }
+        Map<String, Object> was = new LinkedHashMap<>();
+        Map<String, Object> now = new LinkedHashMap<>();
+        change(was, now, "name", before.name(), name);
+        change(was, now, "contact_changed", false, !java.util.Objects.equals(before.contact(), contact));
+        change(was, now, "active", before.active(), active);
+        if (now.isEmpty()) {
+            return before;
+        }
+        try {
+            repo.updateSupplier(id, name, contact, active);
+        } catch (DuplicateKeyException e) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT, "duplicate_supplier", "Duplicate", "A supplier with this name exists.");
+        }
+        audit.record(new AuditLog.Entry("retail.supplier.updated", "retail.supplier", id, null, was, now));
+        return repo.supplier(id).orElseThrow();
+    }
+
+    private static void change(Map<String, Object> was, Map<String, Object> now, String key, Object x, Object y) {
+        if (!java.util.Objects.equals(x, y)) {
+            was.put(key, x);
+            now.put(key, y);
+        }
+    }
+
     @Transactional(readOnly = true)
     SupplierList suppliers() {
         return new SupplierList(repo.suppliers());
@@ -142,6 +178,10 @@ class PurchasingService {
         }
         if (r.supplierId() != null && repo.supplier(r.supplierId()).isEmpty()) {
             problems.add(new FieldProblem("supplier_id", "unknown_supplier", "No such supplier."));
+        } else if (r.supplierId() != null
+                && !repo.supplier(r.supplierId()).orElseThrow().active()) {
+            problems.add(new FieldProblem(
+                    "supplier_id", "inactive_supplier", "This supplier is switched off. Choose another one."));
         }
         if (r.paymentMethod().equals("credit") && r.supplierId() == null) {
             problems.add(new FieldProblem("supplier_id", "required", "A credit purchase names its supplier."));

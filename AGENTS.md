@@ -51,7 +51,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   `import-retail` command (`V20`, `docs/runbooks/import-retail.md`) and the phone-first retail
   screens on the real API (`docs/specs/retail-ui-notes.md`). Stock transfers between branches
   (issue #84, ADR-020 amendment) add `V22`. Flyway runs with `outOfOrder` off, so a new migration
-  takes a number above the highest one on any open branch (`V24` next).
+  takes a number above the highest one on any open branch (`V29` next; `V24` to `V27` are held by open branches and `V28` is the retail catalogue management of #146).
 - **Self-onboarding, build step 1 (issue #89, ADR-024):** migration `V23` with
   `onboarding_applications` and `notification_outbox`, reached only through definer functions;
   the public sign-up and applicant page; the operator portal on the platform host (operator

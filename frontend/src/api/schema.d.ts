@@ -1431,6 +1431,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/categories/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename or deactivate a category (#146); never deleted */
+        patch: operations["updateRetailCategory"];
+        trace?: never;
+    };
     "/api/v1/retail/customers": {
         parameters: {
             query?: never;
@@ -1447,6 +1464,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/customers/{customer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a credit buyer's name or contact (#146) */
+        patch: operations["updateRetailCustomer"];
         trace?: never;
     };
     "/api/v1/retail/customers/{customer_id}/balance": {
@@ -1778,6 +1812,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/suppliers/{supplier_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit or deactivate a supplier (#146); never deleted */
+        patch: operations["updateRetailSupplier"];
+        trace?: never;
+    };
     "/api/v1/retail/transfers": {
         parameters: {
             query?: never;
@@ -1846,6 +1897,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/units/{unit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename or deactivate a unit of measure (#146); never deleted */
+        patch: operations["updateRetailUnit"];
         trace?: never;
     };
     "/api/v1/retail/usage": {
@@ -3211,9 +3279,15 @@ export interface components {
             qty: string;
         };
         RetailCategory: {
+            active?: boolean;
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: int32
+             * @description Products (active or not) that use this category
+             */
+            product_count?: number;
         };
         RetailCategoryList: {
             items?: components["schemas"]["RetailCategory"][];
@@ -3221,7 +3295,17 @@ export interface components {
         RetailCategoryRequest: {
             name: string;
         };
+        /** @description Omitted fields are unchanged; a category is never deleted */
+        RetailCategoryUpdate: {
+            active?: boolean;
+            name?: string;
+        };
         RetailCustomer: {
+            /**
+             * Format: int64
+             * @description In the list only: owed on credit sales in the caller's branch scope
+             */
+            balance_minor?: number;
             contact?: string;
             /** Format: date-time */
             created_at?: string;
@@ -3244,6 +3328,11 @@ export interface components {
         RetailCustomerRequest: {
             contact?: string;
             name: string;
+        };
+        /** @description Omitted fields are unchanged; an empty contact clears it */
+        RetailCustomerUpdate: {
+            contact?: string;
+            name?: string;
         };
         RetailDailyProfit: {
             /** Format: int64 */
@@ -3737,6 +3826,12 @@ export interface components {
             contact?: string;
             name: string;
         };
+        /** @description Omitted fields are unchanged; an empty contact clears it */
+        RetailSupplierUpdate: {
+            active?: boolean;
+            contact?: string;
+            name?: string;
+        };
         RetailTransfer: {
             /**
              * Format: int64
@@ -3818,15 +3913,26 @@ export interface components {
             reason: string;
         };
         RetailUnit: {
+            active?: boolean;
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: int32
+             * @description Products (active or not) that use this unit
+             */
+            product_count?: number;
         };
         RetailUnitList: {
             items?: components["schemas"]["RetailUnit"][];
         };
         RetailUnitRequest: {
             name: string;
+        };
+        /** @description Omitted fields are unchanged; a unit is never deleted */
+        RetailUnitUpdate: {
+            active?: boolean;
+            name?: string;
         };
         RetailUsageLine: {
             code?: string;
@@ -6738,6 +6844,32 @@ export interface operations {
             };
         };
     };
+    updateRetailCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCategoryUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCategory"];
+                };
+            };
+        };
+    };
     listRetailCustomers: {
         parameters: {
             query?: {
@@ -6771,6 +6903,32 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RetailCustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomer"];
+                };
+            };
+        };
+    };
+    updateRetailCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCustomerUpdate"];
             };
         };
         responses: {
@@ -7408,6 +7566,32 @@ export interface operations {
             };
         };
     };
+    updateRetailSupplier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                supplier_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSupplierUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplier"];
+                };
+            };
+        };
+    };
     listRetailTransfers: {
         parameters: {
             query?: {
@@ -7539,6 +7723,32 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RetailUnitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailUnit"];
+                };
+            };
+        };
+    };
+    updateRetailUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailUnitUpdate"];
             };
         };
         responses: {

@@ -346,20 +346,43 @@ class SalesRepository {
                 .optional();
     }
 
-    List<Customer> customers(String query, int limit) {
-        if (query == null) {
-            return jdbc.sql(
-                            "SELECT id, name, contact, created_at FROM retail_customers ORDER BY lower(name), id LIMIT ?")
-                    .param(limit)
-                    .query(SalesRepository::customer)
-                    .list();
+    void updateCustomer(UUID id, String name, String contact) {
+        jdbc.sql("UPDATE retail_customers SET name = ?, contact = ?, updated_at = now() WHERE id = ?")
+                .params(name, contact, id)
+                .update();
+    }
+
+    /** The list, each buyer with what they owe on credit sales in the given branches (null: every branch). */
+    List<Customer> customers(String query, int limit, List<UUID> branchIds) {
+        if (branchIds != null && branchIds.isEmpty()) {
+            return customers(query, limit, List.of(new UUID(0, 0)));
         }
-        return jdbc.sql("""
-                        SELECT id, name, contact, created_at FROM retail_customers
-                         WHERE name ILIKE ? ORDER BY lower(name), id LIMIT ?
-                        """)
-                .params("%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%", limit)
-                .query(SalesRepository::customer)
+        Map<String, Object> params = new LinkedHashMap<>();
+        StringBuilder sql = new StringBuilder("""
+                SELECT c.id, c.name, c.contact, c.created_at,
+                       (SELECT coalesce(sum(s.total_minor - s.paid_minor), 0) FROM retail_sales s
+                         WHERE s.customer_id = c.id AND s.payment_method = 'credit' AND s.status = 'completed'
+                           AND s.paid_minor < s.total_minor""");
+        if (branchIds != null) {
+            sql.append(" AND s.branch_id IN (:branchIds)");
+            params.put("branchIds", branchIds);
+        }
+        sql.append(") AS owed FROM retail_customers c WHERE true");
+        if (query != null) {
+            sql.append(" AND c.name ILIKE :q");
+            params.put(
+                    "q", "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+        }
+        sql.append(" ORDER BY lower(c.name), c.id LIMIT :limit");
+        params.put("limit", limit);
+        return jdbc.sql(sql.toString())
+                .params(params)
+                .query((rs, n) -> new Customer(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("name"),
+                        rs.getString("contact"),
+                        instant(rs, "created_at"),
+                        rs.getLong("owed")))
                 .list();
     }
 
@@ -400,7 +423,8 @@ class SalesRepository {
                 rs.getObject("id", UUID.class),
                 rs.getString("name"),
                 rs.getString("contact"),
-                instant(rs, "created_at"));
+                instant(rs, "created_at"),
+                null);
     }
 
     static Instant instant(ResultSet rs, String column) throws SQLException {

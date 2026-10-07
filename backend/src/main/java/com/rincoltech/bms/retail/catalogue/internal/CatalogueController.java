@@ -12,7 +12,9 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ProductPage;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Unit;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitList;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateCategoryRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateProductRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateUnitRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -55,6 +57,22 @@ class CatalogueController {
     @Operation(summary = "Create a product category (FR-RET-01)", operationId = "createRetailCategory")
     ResponseEntity<Category> createCategory(@Valid @RequestBody CategoryRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.createCategory(request));
+    }
+
+    @PatchMapping("/categories/{category_id}")
+    @RequiresPermission("retail.catalogue.manage")
+    @Operation(summary = "Rename or deactivate a category (#146); never deleted", operationId = "updateRetailCategory")
+    Category updateCategory(@PathVariable("category_id") UUID id, @Valid @RequestBody UpdateCategoryRequest request) {
+        return service.updateCategory(id, request);
+    }
+
+    @PatchMapping("/units/{unit_id}")
+    @RequiresPermission("retail.catalogue.manage")
+    @Operation(
+            summary = "Rename or deactivate a unit of measure (#146); never deleted",
+            operationId = "updateRetailUnit")
+    Unit updateUnit(@PathVariable("unit_id") UUID id, @Valid @RequestBody UpdateUnitRequest request) {
+        return service.updateUnit(id, request);
     }
 
     @GetMapping("/units")

@@ -38,15 +38,49 @@ class CatalogueRepository {
     // ---- Categories and units ------------------------------------------------------------
 
     List<Category> categories() {
-        return jdbc.sql("SELECT id, name FROM retail_categories ORDER BY lower(name), id")
-                .query((rs, n) -> new Category(rs.getObject("id", UUID.class), rs.getString("name")))
+        return jdbc.sql("""
+                        SELECT c.id, c.name, c.active, (SELECT count(*) FROM retail_products p WHERE p.category_id = c.id) AS used
+                          FROM retail_categories c ORDER BY lower(c.name), c.id
+                        """)
+                .query((rs, n) -> new Category(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("name"),
+                        rs.getBoolean("active"),
+                        rs.getInt("used")))
                 .list();
     }
 
     List<Unit> units() {
-        return jdbc.sql("SELECT id, name FROM retail_units ORDER BY lower(name), id")
-                .query((rs, n) -> new Unit(rs.getObject("id", UUID.class), rs.getString("name")))
+        return jdbc.sql("""
+                        SELECT u.id, u.name, u.active, (SELECT count(*) FROM retail_products p WHERE p.unit_id = u.id) AS used
+                          FROM retail_units u ORDER BY lower(u.name), u.id
+                        """)
+                .query((rs, n) -> new Unit(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("name"),
+                        rs.getBoolean("active"),
+                        rs.getInt("used")))
                 .list();
+    }
+
+    Optional<Category> category(UUID id) {
+        return categories().stream().filter(c -> c.id().equals(id)).findFirst();
+    }
+
+    Optional<Unit> unit(UUID id) {
+        return units().stream().filter(u -> u.id().equals(id)).findFirst();
+    }
+
+    void updateCategory(UUID id, String name, boolean active) {
+        jdbc.sql("UPDATE retail_categories SET name = ?, active = ?, updated_at = now() WHERE id = ?")
+                .params(name, active, id)
+                .update();
+    }
+
+    void updateUnit(UUID id, String name, boolean active) {
+        jdbc.sql("UPDATE retail_units SET name = ?, active = ?, updated_at = now() WHERE id = ?")
+                .params(name, active, id)
+                .update();
     }
 
     boolean categoryExists(UUID id) {

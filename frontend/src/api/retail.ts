@@ -17,6 +17,12 @@ export type AllBranchesRow = S['RetailAllBranchesRow'];
 export type StockBranch = S['RetailStockBranch'];
 export type AllBranchesStock = { branches: StockBranch[]; items: AllBranchesRow[] };
 export type Category = S['RetailCategory'];
+export type Unit = S['RetailUnit'];
+export type ProductPage = S['RetailProductPage'];
+export type PriceChange = S['RetailPriceChange'];
+export type NewProduct = S['CreateRetailProductRequest'];
+export type ProductChange = S['UpdateRetailProductRequest'];
+export type PriceEdit = S['RetailPriceEditRequest'];
 export type Customer = S['RetailCustomer'];
 export type Supplier = S['RetailSupplier'];
 export type SaleRequest = S['RetailSaleRequest'];
@@ -91,13 +97,30 @@ export type PurchasePayment = 'cash' | 'bank' | 'credit';
 export interface RetailApi {
   listProducts(q: { query?: string; branchId?: string }): Promise<Product[]>;
   listCategories(): Promise<Category[]>;
+  /** Catalogue management (#146): one page of products, with the filters of the Products screen. */
+  listCatalogue(q: { query?: string; categoryId?: string; active?: boolean; cursor?: string }): Promise<ProductPage>;
+  getProduct(id: string): Promise<Product>;
+  createProduct(body: NewProduct): Promise<Product>;
+  /** Non-price fields, under If-Match with the version read. */
+  updateProduct(id: string, version: number, body: ProductChange): Promise<Product>;
+  /** A price change under If-Match; the server writes the history row. */
+  editPrices(id: string, version: number, body: PriceEdit): Promise<Product>;
+  priceHistory(id: string): Promise<PriceChange[]>;
+  createCategory(name: string): Promise<Category>;
+  updateCategory(id: string, body: { name?: string; active?: boolean }): Promise<Category>;
+  listUnits(): Promise<Unit[]>;
+  createUnit(name: string): Promise<Unit>;
+  updateUnit(id: string, body: { name?: string; active?: boolean }): Promise<Unit>;
   listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel }): Promise<StockRow[]>;
   /** One page of sales, newest first, narrowed by the filters (#145). */
   listSales(q: SalesQuery): Promise<SalePage>;
   getSale(id: string): Promise<Sale>;
   listCustomers(): Promise<Customer[]>;
   listSuppliers(): Promise<Supplier[]>;
-  createSupplier(body: { name: string }): Promise<Supplier>;
+  createSupplier(body: { name: string; contact?: string }): Promise<Supplier>;
+  updateSupplier(id: string, body: { name?: string; contact?: string; active?: boolean }): Promise<Supplier>;
+  createCustomer(body: { name: string; contact?: string }): Promise<Customer>;
+  updateCustomer(id: string, body: { name?: string; contact?: string }): Promise<Customer>;
   createSale(body: SaleRequest, idempotencyKey: string): Promise<Sale>;
   createPurchase(body: PurchaseRequest, idempotencyKey: string): Promise<Purchase>;
   createUsage(body: UsageRequest, idempotencyKey: string): Promise<Usage>;
@@ -152,6 +175,58 @@ const realRetail: RetailApi = {
     return unwrap(await api.GET('/api/v1/retail/categories')).items ?? [];
   },
 
+  async listCatalogue({ query, categoryId, active, cursor }) {
+    return unwrap(
+      await api.GET('/api/v1/retail/products', {
+        params: { query: { query: query || undefined, category_id: categoryId || undefined, active, limit: 50, cursor } },
+      }),
+    );
+  },
+
+  async getProduct(id) {
+    return unwrap(await api.GET('/api/v1/retail/products/{product_id}', { params: { path: { product_id: id } } }));
+  },
+
+  async createProduct(body) {
+    return unwrap(await api.POST('/api/v1/retail/products', { body }));
+  },
+
+  async updateProduct(id, version, body) {
+    return unwrap(
+      await api.PATCH('/api/v1/retail/products/{product_id}', { params: { path: { product_id: id }, header: { 'If-Match': `"${version}"` } }, body }),
+    );
+  },
+
+  async editPrices(id, version, body) {
+    return unwrap(
+      await api.POST('/api/v1/retail/products/{product_id}/prices', { params: { path: { product_id: id }, header: { 'If-Match': `"${version}"` } }, body }),
+    );
+  },
+
+  async priceHistory(id) {
+    return unwrap(await api.GET('/api/v1/retail/products/{product_id}/price-history', { params: { path: { product_id: id } } })).items ?? [];
+  },
+
+  async createCategory(name) {
+    return unwrap(await api.POST('/api/v1/retail/categories', { body: { name } }));
+  },
+
+  async updateCategory(id, body) {
+    return unwrap(await api.PATCH('/api/v1/retail/categories/{category_id}', { params: { path: { category_id: id } }, body }));
+  },
+
+  async listUnits() {
+    return unwrap(await api.GET('/api/v1/retail/units')).items ?? [];
+  },
+
+  async createUnit(name) {
+    return unwrap(await api.POST('/api/v1/retail/units', { body: { name } }));
+  },
+
+  async updateUnit(id, body) {
+    return unwrap(await api.PATCH('/api/v1/retail/units/{unit_id}', { params: { path: { unit_id: id } }, body }));
+  },
+
   async listStock({ branchId, query, categoryId, negativeOnly, level }) {
     const rows: StockRow[] = [];
     let cursor: string | undefined;
@@ -202,6 +277,18 @@ const realRetail: RetailApi = {
 
   async createSupplier(body) {
     return unwrap(await api.POST('/api/v1/retail/suppliers', { body }));
+  },
+
+  async updateSupplier(id, body) {
+    return unwrap(await api.PATCH('/api/v1/retail/suppliers/{supplier_id}', { params: { path: { supplier_id: id } }, body }));
+  },
+
+  async createCustomer(body) {
+    return unwrap(await api.POST('/api/v1/retail/customers', { body }));
+  },
+
+  async updateCustomer(id, body) {
+    return unwrap(await api.PATCH('/api/v1/retail/customers/{customer_id}', { params: { path: { customer_id: id } }, body }));
   },
 
   async createSale(body, key) {

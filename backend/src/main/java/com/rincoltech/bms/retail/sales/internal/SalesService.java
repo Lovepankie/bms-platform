@@ -26,6 +26,7 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleLine;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleLineRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SalePage;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.UpdateCustomerRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.VoidRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.Header;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.NewLine;
@@ -494,17 +495,45 @@ class SalesService {
 
     @Transactional
     Customer createCustomer(CustomerRequest r) {
-        Customer c = new Customer(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), null);
+        Customer c = new Customer(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), null, null);
         repo.insertCustomer(c, CurrentPrincipal.require().userId());
         audit.record(AuditLog.Entry.created(
                 "retail.customer.created", "retail.customer", c.id(), null, Map.of("name", c.name())));
         return repo.customer(c.id()).orElseThrow();
     }
 
+    /** #146: edit a credit buyer's name or contact. Nothing else about a buyer changes, and none is deleted. */
+    @Transactional
+    Customer updateCustomer(UUID id, UpdateCustomerRequest r) {
+        Customer before = repo.customer(id).orElseThrow(ApiException::notFound);
+        String name = r.name() == null ? before.name() : r.name().trim();
+        String contact = r.contact() == null ? before.contact() : blankToNull(r.contact());
+        if (name.isEmpty()) {
+            throw ApiException.validation(
+                    List.of(new ApiException.FieldProblem("name", "invalid", "The name must not be blank.")));
+        }
+        Map<String, Object> was = new java.util.LinkedHashMap<>();
+        Map<String, Object> now = new java.util.LinkedHashMap<>();
+        if (!name.equals(before.name())) {
+            was.put("name", before.name());
+            now.put("name", name);
+        }
+        if (!java.util.Objects.equals(contact, before.contact())) {
+            now.put("contact_changed", true);
+        }
+        if (now.isEmpty()) {
+            return before;
+        }
+        repo.updateCustomer(id, name, contact);
+        audit.record(new AuditLog.Entry("retail.customer.updated", "retail.customer", id, null, was, now));
+        return repo.customer(id).orElseThrow();
+    }
+
     @Transactional(readOnly = true)
     CustomerList customers(String query, Integer limit) {
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
-        return new CustomerList(repo.customers(blankToNull(query), size));
+        return new CustomerList(repo.customers(
+                blankToNull(query), size, CurrentPrincipal.require().branchFilter("retail.sale.read", null)));
     }
 
     /** FR-RET-05: what the customer owes on credit sales in the caller's branch scope. */

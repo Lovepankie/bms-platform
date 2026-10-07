@@ -48,6 +48,12 @@ class PurchasingRepository {
                         """).params(s.id(), s.name(), s.contact(), by).update();
     }
 
+    void updateSupplier(UUID id, String name, String contact, boolean active) {
+        jdbc.sql("UPDATE retail_suppliers SET name = ?, contact = ?, active = ?, updated_at = now() WHERE id = ?")
+                .params(name, contact, active, id)
+                .update();
+    }
+
     Optional<Supplier> supplier(UUID id) {
         return jdbc.sql("SELECT id, name, contact, active, created_at FROM retail_suppliers WHERE id = ?")
                 .param(id)
