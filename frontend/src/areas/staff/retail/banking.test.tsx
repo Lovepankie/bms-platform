@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { businessToday, daysBefore, type Banking, type BankingDay, type BankingExpected } from '../../../api/retail';
 import { createMockRetail, setMockProfitAccess } from '../../../api/retail-mock';
 import { bankingPrefill } from './banking-state';
-import { BankingForm, BankingReportView, BankingResult, ExpectedFigures } from './banking';
+import { BankingForm, BankingReportView, BankingResult, ExpectedFigures, bankingWarnings } from './banking';
 import { branch, html, page } from './cashbook-test-utils';
 
 const today = businessToday();
@@ -58,13 +58,17 @@ describe('banking result', () => {
     const out = html(<BankingResult saved={saved} />);
     expect(out).toContain('UGX 90,000');
     expect(out).not.toMatch(/Shortfall|Surplus|Expected to bank|bank balance|more than the cash/);
+    expect(bankingWarnings(saved)).toEqual([]);
   });
 
   it('shows a shortfall, a surplus and the warning in words when present', () => {
     const short = html(<BankingResult saved={{ ...saved, expected_minor: 100000, difference_minor: -10000, flag: 'shortfall' }} />);
     expect(short).toContain('Shortfall: UGX 10,000 less than expected');
     expect(short).toContain('Expected to bank: UGX 100,000');
-    expect(html(<BankingResult saved={{ ...saved, difference_minor: 5000, flag: 'surplus', warnings: ['cash_below_banked'] }} />)).toMatch(/Surplus: UGX 5,000 more than expected.*more than the cash on record/);
+    const surplus: Banking = { ...saved, difference_minor: 5000, flag: 'surplus', warnings: ['cash_below_banked'] };
+    expect(html(<BankingResult saved={surplus} />)).toContain('Surplus: UGX 5,000 more than expected');
+    expect(bankingWarnings(surplus).join(' ')).toMatch(/more than the cash on record/);
+    expect(bankingWarnings(saved)).toEqual([]);
     expect(html(<BankingResult saved={{ ...saved, flag: 'ok', difference_minor: 0 }} />)).toContain('Matches what was expected');
     expect(html(<BankingResult saved={{ ...saved, flag: 'not_banked' }} />)).toContain('Not banked yet');
   });

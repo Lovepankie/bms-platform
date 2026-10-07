@@ -30,7 +30,7 @@ type Keys = 'savingsSuggestion' | 'createSavings' | 'listSavings' | 'voidSavings
   | 'expensesReport' | 'advancesReport';
 
 const refuse = (status: number, code: string, detail: string, extra: Record<string, unknown> = {}): never => {
-  throw new RetailError(retailMessage({ code, detail }, status), status, code, { code, detail, ...extra });
+  throw new RetailError(retailMessage({ code, detail, ...extra }, status), status, code, { code, detail, ...extra });
 };
 
 const USER = { by: '00000000-0000-4000-8000-0000000000f1', by_name: 'Test User 01' };

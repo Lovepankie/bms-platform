@@ -53,7 +53,7 @@ export function ImportedBadge() {
 }
 
 /** The on-screen success message that replaces a form once it is saved (a toast is raised on top of it). */
-export function Saved({ title, children, again, onAgain }: { title: string; children?: ReactNode; again: string; onAgain: () => void }) {
+export function Saved({ title, children, notes, again, onAgain }: { title: string; children?: ReactNode; notes?: ReactNode; again: string; onAgain: () => void }) {
   return (
     <section aria-label={title}>
       <div role="status" className="alert alert-success">
@@ -62,6 +62,7 @@ export function Saved({ title, children, again, onAgain }: { title: string; chil
           {children}
         </div>
       </div>
+      {notes}
       <button type="button" className="rt-primary" onClick={onAgain}>
         {again}
       </button>

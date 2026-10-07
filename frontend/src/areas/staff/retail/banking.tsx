@@ -78,10 +78,12 @@ export function BankingResult({ saved }: { saved: Banking }) {
       <p>Banked <strong>{money(saved.amount_minor ?? 0)}</strong> on {showDate(saved.business_date)}.</p>
       {saved.expected_minor !== undefined && <p>Expected to bank: {money(saved.expected_minor)}.</p>}
       {flag && <p className={saved.flag === 'ok' ? '' : 'rt-flag'}>{flag}</p>}
-      <Warnings words={(saved.warnings ?? []).map(warningWords).filter((w): w is string => w !== null)} />
     </>
   );
 }
+
+/** The warnings of a banking save in words (none unless the server sent some). */
+export const bankingWarnings = (saved: Banking): string[] => (saved.warnings ?? []).map(warningWords).filter((w): w is string => w !== null);
 
 export function BankingRecords({ onVoided }: { onVoided?: (message: string) => void }) {
   const scope = useReadScope();
@@ -129,7 +131,7 @@ function BankingScreen() {
       {branchId === null ? (
         <BranchRequired permissions={needsOf('banking')} />
       ) : saved ? (
-        <Saved title="Banking recorded" again="Record another deposit" onAgain={() => { setSaved(null); setRound((n) => n + 1); }}>
+        <Saved title="Banking recorded" notes={<Warnings words={bankingWarnings(saved)} />} again="Record another deposit" onAgain={() => { setSaved(null); setRound((n) => n + 1); }}>
           <p>{branchName}</p>
           <BankingResult saved={saved} />
         </Saved>
