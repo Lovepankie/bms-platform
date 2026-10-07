@@ -124,7 +124,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         # COMPONENT LEVEL (inside the API)
         # ==================================================================
         bms.web -> bms.api.identity "Signs in; loads permissions and branch scope"
-        bms.web -> bms.api.tenancy "Tenant settings and branches; public branding (logo, theme colour) for the shell"
+        bms.web -> bms.api.tenancy "Tenant settings and branches; public branding (logo, theme colour, enabled modules) for the shell and the landing page"
         bms.web -> bms.api.platform "Platform console: tenants, modules, subscriptions"
         bms.web -> bms.api.audit "Searches and exports the audit log"
         bms.web -> bms.api.members "Registers, searches and verifies members"

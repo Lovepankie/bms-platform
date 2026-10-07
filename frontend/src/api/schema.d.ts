@@ -319,7 +319,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The tenant's display name, theme colour and logo URL (public) */
+        /** The tenant's display name, theme colour, logo URL and enabled modules (public) */
         get: operations["getBranding"];
         put?: never;
         post?: never;
@@ -2344,6 +2344,8 @@ export interface components {
             display_name?: string;
             /** @description Same-origin URL of the logo image, or null */
             logo_url?: string;
+            /** @description Keys of the modules the tenant has switched on, sorted (#99): what the landing and sign-in copy may promise */
+            modules?: string[];
             /** @description #RRGGBB or null: the platform look */
             theme_primary?: string;
             /** @description #FFFFFF or #111111, the readable text colour on themePrimary; null with it */

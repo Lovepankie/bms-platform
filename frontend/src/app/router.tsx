@@ -1,7 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { Link, Outlet, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
+import { Outlet, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
 import { useShellBrand } from './branding';
-import { classifyHost, loadHostConfig } from './hosts';
+import { Landing } from './landing';
 import { Shell } from './shell';
 
 // Route-level split (ADR-009): /staff and /member are separate lazily loaded route trees, so a
@@ -19,107 +18,9 @@ function RootLayout() {
   );
 }
 
-function AreaChooser() {
-  // The host decides the area (ADR-018). The Vite dev server's X-Tenant slug counts as a tenant host.
-  const hosts = useQuery({ queryKey: ['app-config'], queryFn: loadHostConfig, staleTime: Infinity });
-  if (!hosts.data) return null;
-  const area = import.meta.env.DEV && import.meta.env.VITE_DEV_TENANT
-    ? { kind: 'tenant' as const }
-    : classifyHost(window.location.hostname, hosts.data);
-  if (area.kind === 'platform') {
-    return (
-      <main className="landing">
-        <section className="card landing-hero">
-          <BrandMark />
-          <h1>BMS by Rincoltech</h1>
-          <p className="lead">Run your shop or lending business from your phone: sales, stock, members and loans.</p>
-          <ul className="landing-actions">
-            <li>
-              <Link to="/sign-up" className="btn btn-primary btn-lg btn-block">
-                Apply to start
-              </Link>
-            </li>
-            <li>
-              <Link to="/platform/sign-in" className="btn btn-lg btn-block">
-                Operator sign-in
-              </Link>
-            </li>
-          </ul>
-        </section>
-        <div className="landing-help">
-          <div className="card card-muted">
-            <h2>New business</h2>
-            <p>Apply in a few minutes. We check every application and email you a link to sign in.</p>
-          </div>
-          <div className="card card-muted">
-            <h2>Already a customer</h2>
-            <p>Sign in at the address in your activation email.</p>
-          </div>
-        </div>
-      </main>
-    );
-  }
-  if (area.kind === 'unknown') {
-    return (
-      <main className="landing">
-        <section className="card landing-hero">
-          <BrandMark />
-          <h1>BMS Platform</h1>
-          <p className="lead">No BMS tenant is served at this address. Check the address you were given.</p>
-        </section>
-      </main>
-    );
-  }
-  return (
-    <main className="landing">
-      <section className="card landing-hero">
-        <BrandMark />
-        <h1>Welcome</h1>
-        <p className="lead">Sales, stock, members and loans for your business, in one place.</p>
-        <ul className="landing-actions">
-          <li>
-            <Link to="/sign-in" className="btn btn-primary btn-lg btn-block">
-              Staff sign-in
-            </Link>
-          </li>
-          <li>
-            <Link to="/member" className="btn btn-lg btn-block">
-              Member portal
-            </Link>
-          </li>
-        </ul>
-      </section>
-      <div className="landing-help">
-        <div className="card card-muted">
-          <h2>Staff</h2>
-          <p>Use the email or phone and password from your invitation.</p>
-        </div>
-        <div className="card card-muted">
-          <h2>Members</h2>
-          <p>See your balances, loan schedule and payments.</p>
-        </div>
-      </div>
-    </main>
-  );
-}
-
-// The brand on the landing page: the host's logo when it has one, else a wordmark of its name.
-function BrandMark() {
-  const brand = useShellBrand();
-  if (brand.logoSrc) return <img className="brand-logo" src={brand.logoSrc} alt={brand.name} />;
-  return (
-    <div className="wordmark">
-      <span className="wordmark-mark" aria-hidden="true">
-        {brand.name.charAt(0)}
-      </span>
-      <span>{brand.name}</span>
-    </div>
-  );
-}
-
 const rootRoute = createRootRoute({ component: RootLayout });
 
-const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: AreaChooser });
+const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: Landing });
 
 const signInRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sign-in' }).lazy(() =>
   import('../areas/auth/sign-in').then((m) => m.Route),
@@ -167,6 +68,12 @@ const retailUnitsRoute = retailScreen('/catalogue/units').lazy(() => import('../
 const retailSuppliersRoute = retailScreen('/catalogue/suppliers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.SuppliersRoute));
 const retailImportRoute = retailScreen('/catalogue/import').lazy(() => import('../areas/staff/retail/catalogue-import').then((m) => m.ImportRoute));
 const retailBuyersRoute = retailScreen('/catalogue/buyers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.BuyersRoute));
+
+// The living style page (#106): every component and illustration, for development builds and the
+// platform host only (the page itself checks); a chunk of its own, so no tenant downloads it.
+const styleRoute = createRoute({ getParentRoute: () => rootRoute, path: '/style' }).lazy(() =>
+  import('../areas/style/route').then((m) => m.Route),
+);
 
 const signUpRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sign-up' }).lazy(() =>
   import('../areas/onboarding/sign-up').then((m) => m.Route),
@@ -229,6 +136,7 @@ export const router = createRouter({
         retailImportRoute,
       ])]),
     memberRoute,
+    styleRoute,
     signUpRoute,
     signUpVerifyRoute,
     applicationStatusRoute,

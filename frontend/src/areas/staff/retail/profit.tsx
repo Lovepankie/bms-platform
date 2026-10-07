@@ -3,6 +3,7 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { businessToday, daysBefore, retail, type DailyProfit, type DailyProfitRow, type Valuation } from '../../../api/retail';
 import { showPercent, showQty } from './maths';
+import { SkeletonList } from '../../../components/states';
 import { BranchRequired, CategoryLabel, Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 import { needsOf } from './permissions';
 
@@ -161,7 +162,7 @@ function ValuationPage() {
       {!all && branchId === null ? <BranchRequired permissions={needsOf('valuation')} /> : (
         <>
           <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
-          {valuation.isPending && <p className="loading">Loading</p>}
+          {valuation.isPending && <SkeletonList label="Loading stock value" />}
           <Problem error={valuation.error} />
           {valuation.data && (
             <>
@@ -262,7 +263,7 @@ function ProfitPage() {
             <div><label htmlFor="to">To</label><input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
           </div>
           {from > to && <p role="alert" className="rt-flag">The start date must not be after the end date.</p>}
-          {profit.isPending && from <= to && <p className="loading">Loading</p>}
+          {profit.isPending && from <= to && <SkeletonList label="Loading profit" />}
           <Problem error={profit.error} />
           {profit.data && <ProfitTable report={profit.data} nameOf={all ? nameOf : undefined} />}
         </>

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { fetchHealth, listMembers } from '../../api/client';
 import { branchFilter } from '../../auth/branch';
+import { EmptyState, SkeletonList } from '../../components/states';
 import { useStaff } from './context';
 
 // Staff home: the member list of the active branch (FR-BR-04), where the user may read members.
@@ -27,10 +28,13 @@ function StaffHome() {
       {canReadMembers && (
         <>
           <h2>Members</h2>
-          {members.isPending && <p className="loading">Loading members</p>}
+          {members.isPending && <SkeletonList label="Loading members" />}
           {members.isError && <p role="alert" className="alert alert-danger">Could not load members.</p>}
-          {members.data && (
-            <div className="table-wrap" tabIndex={0}>
+          {members.data && (members.data.items ?? []).length === 0 && (
+            <EmptyState art="noApplications" title="No members yet.">Members of this branch appear here.</EmptyState>
+          )}
+          {members.data && (members.data.items ?? []).length > 0 && (
+            <div className="table-wrap table-cards" tabIndex={0}>
               <table>
                 <thead>
                   <tr>
@@ -43,10 +47,10 @@ function StaffHome() {
                 <tbody>
                   {(members.data.items ?? []).map((m) => (
                     <tr key={m.id}>
-                      <td>{m.member_no}</td>
-                      <td>{m.full_name}</td>
-                      <td>{m.phone_e164_masked}</td>
-                      <td>{m.kyc_status}</td>
+                      <td data-label="Member no">{m.member_no}</td>
+                      <td data-label="Name">{m.full_name}</td>
+                      <td data-label="Phone">{m.phone_e164_masked}</td>
+                      <td data-label="KYC">{m.kyc_status}</td>
                     </tr>
                   ))}
                 </tbody>

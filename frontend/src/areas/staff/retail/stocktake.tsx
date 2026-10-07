@@ -3,6 +3,7 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type Stocktake, type StocktakeLine } from '../../../api/retail';
 import { milliOf, parseCount, showQty } from './maths';
+import { SkeletonList } from '../../../components/states';
 import { BranchRequired, CategoryLabel, Gate, Note, Problem, useSingleBranch } from './ui';
 import { needsOf } from './permissions';
 
@@ -92,7 +93,7 @@ function CountSheet({ branchId }: { branchId: string }) {
       <Note>Type the counted quantity for each item you counted. Leave an item blank to skip it.</Note>
       <label htmlFor="count-search">Search by name, code or category</label>
       <input id="count-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
-      {stock.isPending && <p className="loading">Loading</p>}
+      {stock.isPending && <SkeletonList label="Loading stock" />}
       <Problem error={stock.error} />
       {rows.map((r) => {
         const id = r.product_id ?? '';

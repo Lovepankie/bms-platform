@@ -98,6 +98,14 @@ class JdbcTenancy implements Branches, CurrentTenant, TenantModules, TenantSeque
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<String> enabledKeys() {
+        return jdbc.sql("SELECT module_key FROM tenant_modules ORDER BY module_key")
+                .query(String.class)
+                .list();
+    }
+
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public long next(String sequenceKey) {
         // One statement, row-locked by the upsert: concurrent callers queue on the row, and a

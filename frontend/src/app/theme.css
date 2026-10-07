@@ -98,6 +98,8 @@ body {
   --rt-grey-500: #868e96;
   --rt-grey-600: #5c6370;
   --rt-grey-900: #1d2939;
+  --rt-white: #ffffff;
+  --rt-black: #000000;
 
   /* The Rincol default of the shell's brand pair; a tenant colour replaces both inline. */
   --brand: var(--rt-blue-strong);
@@ -171,7 +173,14 @@ body {
   --tap: 44px;
   --focus-ring: 0 0 0 4px color-mix(in srgb, var(--color-accent) 30%, transparent);
   --content-width: 1120px;
-  --transition: 120ms ease;
+  --transition: var(--motion-fast) var(--ease-out);
+
+  /* Motion (#106): short and calm, 150 to 250 ms; base.css stops it under prefers-reduced-motion. */
+  --motion-fast: 150ms;
+  --motion: 200ms;
+  --motion-slow: 250ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --press-scale: 0.98;
 }
 
 /*

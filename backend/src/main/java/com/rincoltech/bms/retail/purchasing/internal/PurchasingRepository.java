@@ -12,6 +12,8 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -169,9 +171,12 @@ class PurchasingRepository {
         }
         sql.append(" ORDER BY p.created_at, p.id LIMIT :limit");
         params.put("limit", limit);
-        return jdbc.sql(sql.toString()).params(params).query((rs, n) -> header(rs)).list().stream()
-                .map(p -> withLines(p, branchIds))
-                .toList();
+        return withLines(
+                jdbc.sql(sql.toString())
+                        .params(params)
+                        .query((rs, n) -> header(rs))
+                        .list(),
+                branchIds);
     }
 
     /**
@@ -181,47 +186,59 @@ class PurchasingRepository {
      * with no quantity in scope is left out.
      */
     private Purchase withLines(Purchase p, List<UUID> branchIds) {
-        List<PurchaseLine> lines = jdbc
-                .sql("""
-                        SELECT l.id, l.line_no, l.product_id, pr.code, pr.description, l.cost_minor, l.sell_minor,
-                               l.qty_total, l.line_total_minor
+        return withLines(List.of(p), branchIds).getFirst();
+    }
+
+    /**
+     * As above for a page: two statements in all, the lines of every purchase and their branch
+     * movements, instead of one per purchase and one per line (issue #107). A purchase line's
+     * movements carry the purchase as their source (PurchasingService and JdbcPurchaseHistory write
+     * both), so they are read through the source index and grouped by line here.
+     */
+    private List<Purchase> withLines(List<Purchase> purchases, List<UUID> branchIds) {
+        if (purchases.isEmpty()) {
+            return purchases;
+        }
+        List<UUID> ids = purchases.stream().map(Purchase::id).toList();
+        Map<UUID, List<LineBranch>> byLine = new HashMap<>();
+        jdbc.sql("""
+                        SELECT source_line_id, branch_id, qty FROM retail_stock_movements
+                         WHERE source_type = 'retail.purchase' AND source_id IN (:ids)
+                         ORDER BY created_at, id
+                        """).param("ids", ids).query(rs -> {
+            byLine.computeIfAbsent(rs.getObject("source_line_id", UUID.class), k -> new ArrayList<>())
+                    .add(new LineBranch(
+                            rs.getObject("branch_id", UUID.class), Quantities.format(rs.getBigDecimal("qty"))));
+        });
+        Map<UUID, List<PurchaseLine>> byPurchase = new HashMap<>();
+        jdbc.sql("""
+                        SELECT l.purchase_id, l.id, l.line_no, l.product_id, pr.code, pr.description, l.cost_minor,
+                               l.sell_minor, l.qty_total, l.line_total_minor
                           FROM retail_purchase_lines l JOIN retail_products pr ON pr.id = l.product_id
-                         WHERE l.purchase_id = ? ORDER BY l.line_no
-                        """)
-                .param(p.id())
-                .query((rs, n) -> new PurchaseLine(
-                        rs.getObject("id", UUID.class),
-                        rs.getInt("line_no"),
-                        rs.getObject("product_id", UUID.class),
-                        rs.getString("code"),
-                        rs.getString("description"),
-                        rs.getLong("cost_minor"),
-                        rs.getObject("sell_minor", Long.class),
-                        Quantities.format(rs.getBigDecimal("qty_total")),
-                        rs.getLong("line_total_minor"),
-                        List.of()))
-                .list()
-                .stream()
-                .map(l -> new PurchaseLine(
-                        l.id(),
-                        l.lineNo(),
-                        l.productId(),
-                        l.code(),
-                        l.description(),
-                        l.costMinor(),
-                        l.sellMinor(),
-                        l.qtyTotal(),
-                        l.lineTotalMinor(),
-                        jdbc.sql("""
-                                        SELECT branch_id, qty FROM retail_stock_movements
-                                         WHERE source_type = 'retail.purchase' AND source_line_id = ?
-                                         ORDER BY created_at, id
-                                        """)
-                                .param(l.id())
-                                .query((rs, n) -> new LineBranch(
-                                        rs.getObject("branch_id", UUID.class),
-                                        Quantities.format(rs.getBigDecimal("qty"))))
-                                .list()))
+                         WHERE l.purchase_id IN (:ids) ORDER BY l.purchase_id, l.line_no
+                        """).param("ids", ids).query(rs -> {
+            UUID lineId = rs.getObject("id", UUID.class);
+            byPurchase
+                    .computeIfAbsent(rs.getObject("purchase_id", UUID.class), k -> new ArrayList<>())
+                    .add(new PurchaseLine(
+                            lineId,
+                            rs.getInt("line_no"),
+                            rs.getObject("product_id", UUID.class),
+                            rs.getString("code"),
+                            rs.getString("description"),
+                            rs.getLong("cost_minor"),
+                            rs.getObject("sell_minor", Long.class),
+                            Quantities.format(rs.getBigDecimal("qty_total")),
+                            rs.getLong("line_total_minor"),
+                            byLine.getOrDefault(lineId, new ArrayList<>())));
+        });
+        return purchases.stream()
+                .map(p -> withLines(p, byPurchase.getOrDefault(p.id(), List.of()), branchIds))
+                .toList();
+    }
+
+    private static Purchase withLines(Purchase p, List<PurchaseLine> all, List<UUID> branchIds) {
+        List<PurchaseLine> lines = all.stream()
                 .map(l -> branchIds == null ? l : scoped(l, branchIds))
                 .filter(l -> !l.qtyByBranch().isEmpty())
                 .toList();

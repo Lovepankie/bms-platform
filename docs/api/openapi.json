@@ -558,6 +558,14 @@
             "description" : "Same-origin URL of the logo image, or null",
             "type" : "string"
           },
+          "modules" : {
+            "description" : "Keys of the modules the tenant has switched on, sorted (#99): what the landing and sign-in copy may promise",
+            "items" : {
+              "description" : "Keys of the modules the tenant has switched on, sorted (#99): what the landing and sign-in copy may promise",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "theme_primary" : {
             "description" : "#RRGGBB or null: the platform look",
             "type" : "string"
@@ -6359,7 +6367,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "The tenant's display name, theme colour and logo URL (public)",
+        "summary" : "The tenant's display name, theme colour, logo URL and enabled modules (public)",
         "tags" : [ "branding" ]
       }
     },
