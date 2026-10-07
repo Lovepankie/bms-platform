@@ -282,7 +282,9 @@ is dismissed (`setup_dismissed`, tenant wide).
   accessible link name, on every screen of every host (sign-in, accept-invitation, staff, member
   portal, platform console). A tenant cannot remove it in this release.
 - **Public by design.** `GET /api/v1/branding` and `GET /api/v1/branding/logo` need no sign-in so
-  the sign-in page can show the brand (chapter 7 section 7.11.4).
+  the sign-in page can show the brand (chapter 7 section 7.11.4). The branding also lists the
+  enabled module keys, and the landing page's copy, module cards and buttons follow them: a retail
+  only tenant shows sales and stock, no members or loans copy and no Member portal button (#99).
 - Out of scope: receipts and PDFs with the logo (FR-DOC-01), removing the footer (white label),
   dark mode, per-branch branding.
 

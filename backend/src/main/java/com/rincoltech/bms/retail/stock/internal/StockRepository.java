@@ -233,12 +233,16 @@ class StockRepository {
             sql.append(" AND product_id = :productId");
             params.put("productId", productId);
         }
+        // The local-date test decides; the instant range around it, a day wider than any zone offset,
+        // only lets the (tenant_id, occurred_at, id) index narrow the scan (issue #107).
         if (from != null) {
-            sql.append(" AND (occurred_at AT TIME ZONE :zone)::date >= :from");
+            sql.append(" AND (occurred_at AT TIME ZONE :zone)::date >= :from"
+                    + " AND occurred_at >= CAST(CAST(:from AS date) - 1 AS timestamp) AT TIME ZONE :zone");
             params.put("from", from);
         }
         if (to != null) {
-            sql.append(" AND (occurred_at AT TIME ZONE :zone)::date <= :to");
+            sql.append(" AND (occurred_at AT TIME ZONE :zone)::date <= :to"
+                    + " AND occurred_at < CAST(CAST(:to AS date) + 2 AS timestamp) AT TIME ZONE :zone");
             params.put("to", to);
         }
         if (from != null || to != null) {

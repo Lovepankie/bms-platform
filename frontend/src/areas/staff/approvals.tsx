@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { type Approval, api, listPendingApprovals, problemOf } from '../../api/client';
 import { branchFilter } from '../../auth/branch';
 import { formatMinor } from '../../components/money';
+import { EmptyState, SkeletonList } from '../../components/states';
 import { useStaff } from './context';
 
 // The approvals inbox (FR-APR-05, FR-APR-06): pending requests the user may decide or made, in
@@ -36,11 +37,11 @@ function Row({ item, id }: { item: Approval; id: string }) {
 
   return (
     <tr>
-      <td>{item.action_type}</td>
-      <td className="num">{item.amount_minor != null && item.currency ? formatMinor(item.amount_minor, item.currency) : ''}</td>
-      <td>{item.requested_by_name ?? item.requested_by}</td>
-      <td>{item.requested_at ? new Date(item.requested_at).toLocaleString() : ''}</td>
-      <td>
+      <td data-label="Action">{item.action_type}</td>
+      <td data-label="Amount" className="num">{item.amount_minor != null && item.currency ? formatMinor(item.amount_minor, item.currency) : ''}</td>
+      <td data-label="Requested by">{item.requested_by_name ?? item.requested_by}</td>
+      <td data-label="Requested at">{item.requested_at ? new Date(item.requested_at).toLocaleString() : ''}</td>
+      <td data-label="Decision" className="cell-stack">
         <div className="decision">
           {item.can_decide && (
             <>
@@ -78,11 +79,11 @@ function Approvals() {
   return (
     <main>
       <h1>Approvals</h1>
-      {pending.isPending && <p className="loading">Loading</p>}
+      {pending.isPending && <SkeletonList label="Loading approvals" />}
       {pending.isError && <p role="alert" className="alert alert-danger">Could not load approvals.</p>}
-      {pending.data && items.length === 0 && <p className="empty-state">Nothing waiting.</p>}
+      {pending.data && items.length === 0 && <EmptyState art="nothingWaiting" title="Nothing waiting.">Requests for your approval appear here.</EmptyState>}
       {items.length > 0 && (
-        <div className="table-wrap" tabIndex={0}>
+        <div className="table-wrap table-cards" tabIndex={0}>
           <table>
             <thead>
               <tr>

@@ -9,6 +9,8 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -118,9 +120,10 @@ class TransferRepository {
         }
         sql.append(" ORDER BY created_at DESC, id DESC LIMIT :limit");
         params.put("limit", limit);
-        return jdbc.sql(sql.toString()).params(params).query((rs, n) -> header(rs)).list().stream()
-                .map(this::withLines)
-                .toList();
+        return withLines(jdbc.sql(sql.toString())
+                .params(params)
+                .query((rs, n) -> header(rs))
+                .list());
     }
 
     void markVoided(UUID id, UUID by, String reason) {
@@ -131,21 +134,40 @@ class TransferRepository {
     }
 
     private Transfer withLines(Transfer t) {
-        List<TransferLine> lines = jdbc.sql("""
-                        SELECT l.line_no, l.product_id, p.code, p.description, l.qty, l.unit_cost_minor, l.line_cost_minor
+        return withLines(List.of(t)).getFirst();
+    }
+
+    /** The lines of every transfer of a page in one statement, not one per transfer (issue #107). */
+    private List<Transfer> withLines(List<Transfer> transfers) {
+        if (transfers.isEmpty()) {
+            return transfers;
+        }
+        Map<UUID, List<TransferLine>> byTransfer = new HashMap<>();
+        jdbc.sql("""
+                        SELECT l.transfer_id, l.line_no, l.product_id, p.code, p.description, l.qty, l.unit_cost_minor,
+                               l.line_cost_minor
                           FROM retail_transfer_lines l JOIN retail_products p ON p.id = l.product_id
-                         WHERE l.transfer_id = ? ORDER BY l.line_no
+                         WHERE l.transfer_id IN (:ids) ORDER BY l.transfer_id, l.line_no
                         """)
-                .param(t.id())
-                .query((rs, n) -> new TransferLine(
-                        rs.getInt("line_no"),
-                        rs.getObject("product_id", UUID.class),
-                        rs.getString("code"),
-                        rs.getString("description"),
-                        rs.getBigDecimal("qty").toPlainString(),
-                        rs.getLong("unit_cost_minor"),
-                        rs.getLong("line_cost_minor")))
-                .list();
+                .param("ids", transfers.stream().map(Transfer::id).toList())
+                .query(rs -> {
+                    byTransfer
+                            .computeIfAbsent(rs.getObject("transfer_id", UUID.class), k -> new ArrayList<>())
+                            .add(new TransferLine(
+                                    rs.getInt("line_no"),
+                                    rs.getObject("product_id", UUID.class),
+                                    rs.getString("code"),
+                                    rs.getString("description"),
+                                    rs.getBigDecimal("qty").toPlainString(),
+                                    rs.getLong("unit_cost_minor"),
+                                    rs.getLong("line_cost_minor")));
+                });
+        return transfers.stream()
+                .map(t -> withLines(t, byTransfer.getOrDefault(t.id(), new ArrayList<>())))
+                .toList();
+    }
+
+    private static Transfer withLines(Transfer t, List<TransferLine> lines) {
         return new Transfer(
                 t.id(),
                 t.fromBranchId(),

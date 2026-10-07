@@ -61,8 +61,8 @@ the tenant logo.
 
 The brand bar, the theme colour and the footer belong to the shared shell, the root layout of the
 PWA, so every area inherits them (sign-in, accept-invitation, staff, member, platform console).
-A tenant host reads the public `GET /api/v1/branding` (display name, theme colour, logo URL; no
-sign-in) and shows the logo with the display name as its alt text, or the name as text when there
+A tenant host reads the public `GET /api/v1/branding` (display name, theme colour, logo URL and
+enabled module keys; no sign-in) and shows the logo with the display name as its alt text, or the name as text when there
 is no logo. The platform host and any unknown host show the Rincoltech brand. Every screen ends
 with the footer "Powered by" and the Rincoltech logo (`/brand/rincoltech-logo.png`), a link to the
 Rincoltech site with an accessible name; a tenant cannot remove it.
@@ -112,6 +112,18 @@ hints and errors, cards, tables in a `.table-wrap` that scrolls sideways inside 
 with right-aligned tabular numbers, tabs, the staff bar, the retail bottom bar, badges, alerts, empty
 states, a spinner and skeleton, the `<dialog>` sheet and a toast. Screens carry no inline `<style>`
 element, which the production CSP (`style-src 'self'`) refuses.
+
+The visual polish (#106) adds original inline SVG illustrations (`src/components/illustrations.tsx`:
+empty lists, success, error, the landing and sign-up heroes, the sign-in drawing) painted only by
+token classes, so a tenant colour tints the accent family and status colours stay; shared state
+components (`src/components/states.tsx`: `EmptyState`, `StatusPanel`, `BrandLoader`, `SkeletonList`);
+pressed and disabled buttons; focus on fields however it came; card elevation; tables that become
+cards below 560px (`.table-cards`); and motion of 150 to 250 ms that stops under
+`prefers-reduced-motion`. The public landing page follows the tenant's enabled modules (#99). A
+living style page at `/style` (development builds and the platform host only, a chunk of its own)
+shows every component and illustration, and `src/app/ui/design-guard.test.ts` fails a component
+that renders a `<style>` element or writes a hex colour outside `theme.css`. Dark mode is still
+left out: the tenant colour rule and the AA checks are written for light surfaces.
 
 ## 11.3 SMS
 

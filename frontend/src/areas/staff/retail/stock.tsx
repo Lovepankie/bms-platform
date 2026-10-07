@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { retail, type AllBranchesStock, type StockLevel, type StockRow } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
 import { showQty } from './maths';
+import { EmptyState, SkeletonList } from '../../../components/states';
 import { BranchRequired, CategoryLabel, Gate, NoStockHere, Problem, money, useBranchView, useIsPhone, useProfitAccess } from './ui';
 import { needsOf } from './permissions';
 
@@ -14,7 +15,7 @@ import { needsOf } from './permissions';
 export function StockTable({ rows, showCost }: { rows: StockRow[]; showCost: boolean }) {
   // On a phone the category sits under the item's name, so the table keeps room for the quantity and price.
   const phone = useIsPhone();
-  if (rows.length === 0) return <p className="empty-state">No items found.</p>;
+  if (rows.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
   return (
     <div className="table-wrap" tabIndex={0}><table>
       <thead>
@@ -59,7 +60,7 @@ const branchName = (b: { code?: string; name?: string }) => branchLabel(b);
 /** All branches on a wide screen: a column per branch and a total, the negative flag on each cell. */
 export function AllBranchesTable({ data, showCost: mayCost }: { data: AllBranchesStock; showCost: boolean }) {
   const showCost = mayCost && data.items.some((r) => r.cost_minor !== undefined);
-  if (data.items.length === 0) return <p className="empty-state">No items found.</p>;
+  if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
   return (
     <div className="table-wrap" tabIndex={0}><table className="stock-matrix">
       <thead>
@@ -91,7 +92,7 @@ export function AllBranchesTable({ data, showCost: mayCost }: { data: AllBranche
 /** All branches on a phone: one card per product with the total, and a button that opens its branches. */
 export function AllBranchesList({ data, showCost }: { data: AllBranchesStock; showCost: boolean }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  if (data.items.length === 0) return <p className="empty-state">No items found.</p>;
+  if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
   const names = Object.fromEntries(data.branches.map((b) => [b.id ?? '', branchName(b)]));
   return (
     <ul style={{ listStyle: 'none', padding: 0 }}>
@@ -191,7 +192,7 @@ export function StockPage() {
         Show only negative stock
       </label>
       {!all && branchId === null && <BranchRequired permissions={needsOf('stock')} />}
-      {result.isPending && (all || branchId !== null) && <p className="loading">Loading</p>}
+      {result.isPending && (all || branchId !== null) && <SkeletonList label="Loading stock" />}
       <Problem error={result.error} />
       {!all && one.data && <StockTable rows={one.data} showCost={canProfit} />}
       {all && many.data && (phone ? <AllBranchesList data={many.data} showCost={canProfit} /> : <AllBranchesTable data={many.data} showCost={canProfit} />)}
