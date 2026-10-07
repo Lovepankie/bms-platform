@@ -1,0 +1,231 @@
+/*
+ * Illustrations and state components (#106): src/components/illustrations.tsx and states.tsx. The
+ * drawings carry no colour of their own; these classes paint them from the tokens, so a tenant colour
+ * tints the accent family (accent, tint, primary) and success and danger stay status colours.
+ */
+
+.ill {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.ill-tint {
+  fill: var(--color-accent-tint);
+}
+
+.ill-tint-strong {
+  fill: color-mix(in srgb, var(--color-accent) 28%, var(--color-surface));
+}
+
+.ill-accent {
+  fill: var(--color-accent);
+}
+
+.ill-faint {
+  opacity: 0.5;
+}
+
+.ill-primary {
+  fill: var(--color-primary);
+}
+
+.ill-surface {
+  fill: var(--color-surface);
+  stroke: var(--color-border-strong);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.ill-raised {
+  filter: drop-shadow(0 4px 6px rgba(16, 24, 40, 0.12));
+}
+
+.ill-success-tint {
+  fill: var(--color-success-tint);
+}
+
+.ill-danger-tint {
+  fill: var(--color-danger-tint);
+}
+
+.ill-line,
+.ill-accent-line,
+.ill-on-primary-line,
+.ill-success-line,
+.ill-danger-line {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ill-line {
+  stroke: var(--rt-grey-200);
+}
+
+.ill-accent-line {
+  stroke: var(--color-accent);
+}
+
+.ill-on-primary-line {
+  stroke: var(--color-on-primary);
+  stroke-width: 3;
+}
+
+.ill-success-line {
+  stroke: var(--color-success);
+}
+
+.ill-danger-line {
+  stroke: var(--color-danger);
+}
+
+.ill-thick {
+  stroke-width: 6;
+}
+
+/* Empty, success and error states: the drawing, a title, a line of help and an optional action. */
+.state-art {
+  display: block;
+  width: 100%;
+  max-width: 160px;
+  margin: 0 auto var(--space-3);
+}
+
+.empty-state-art,
+.status-panel {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  animation: rt-rise var(--motion-slow) var(--ease-out);
+}
+
+.empty-state-art {
+  border-style: dashed;
+}
+
+.status-panel {
+  margin: 0 0 var(--space-4);
+}
+
+.state-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}
+
+.state-text {
+  max-width: 36ch;
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.state-action {
+  margin-top: var(--space-3);
+}
+
+.status-panel-success .state-title {
+  color: var(--color-success);
+}
+
+.status-panel-error .state-title {
+  color: var(--color-danger);
+}
+
+/* The branded loader: an accent arc running round a tinted ring with the primary mark inside. */
+.brand-loader {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5) 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.brand-loader-art {
+  width: 48px;
+  height: 48px;
+}
+
+.brand-loader-track,
+.brand-loader-arc {
+  fill: none;
+  stroke-width: 4;
+}
+
+.brand-loader-track {
+  stroke: var(--color-border);
+}
+
+.brand-loader-arc {
+  stroke: var(--color-accent);
+  stroke-linecap: round;
+  stroke-dasharray: 32 126;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: rt-spin 0.9s linear infinite;
+}
+
+.brand-loader-core {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: rt-pulse 1.2s ease-in-out infinite;
+}
+
+/* Skeleton rows: cards of the same size as the content that replaces them, so nothing jumps. */
+.skeleton-list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+}
+
+.skeleton-card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.skeleton-title {
+  width: 60%;
+  height: 1.1em;
+}
+
+.skeleton-line {
+  width: 40%;
+  height: 0.85em;
+}
+
+@keyframes rt-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes rt-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rt-pulse {
+  50% {
+    transform: scale(0.82);
+  }
+}

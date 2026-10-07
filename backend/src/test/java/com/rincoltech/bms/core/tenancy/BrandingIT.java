@@ -10,7 +10,9 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import javax.imageio.ImageIO;
@@ -135,6 +137,23 @@ class BrandingIT extends IntegrationTest {
         ResponseEntity<JsonNode> none = publicGet("/api/v1/branding/logo", t.slug(), null, JsonNode.class);
         assertThat(none.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(none.getBody().get("code").asString()).isEqualTo("not_found");
+    }
+
+    /** #99: the public branding lists the enabled module keys, sorted, so the landing copy follows them. */
+    @Test
+    void theBrandingListsOnlyTheModulesTheTenantHasSwitchedOn() {
+        assertThat(modules(t)).containsExactly("lending");
+        assertThat(modules(TestDatabase.tenant("brand-r", false, true))).containsExactly("retail");
+        assertThat(modules(TestDatabase.tenant("brand-b", true, true))).containsExactly("lending", "retail");
+        assertThat(modules(TestDatabase.tenant("brand-n", false, false))).isEmpty();
+    }
+
+    List<String> modules(TestDatabase.Fixture tenant) {
+        ResponseEntity<JsonNode> r = branding(tenant);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
+        List<String> keys = new ArrayList<>();
+        r.getBody().get("modules").forEach(n -> keys.add(n.asString()));
+        return keys;
     }
 
     /** FR-TEN-08: the logo is re-encoded, stored as a tenant document and served publicly with the safe headers. */

@@ -48,3 +48,25 @@ Not shown: the stock transfer screens (#84, branch `feat/84-retail-stock-transfe
 branch's base; a set-password screen and the platform console, which do not exist yet.
 
 The walk scripts are not committed.
+
+## Visual polish (#106)
+
+Taken on 2026-10-06 with the Vite dev server (`VITE_DEV_TENANT=demo VITE_RETAIL_MOCK=1`), headless Chromium at
+390x844, and the public branding and approvals answers stubbed in the browser with fabricated values (tenant
+"Sample Shop (fabricated)", officers "Test Officer 01" and "02"). Compare with the `01`, `02b`, `03` and `08`
+captures above, taken before.
+
+| File | Screen |
+|---|---|
+| `20-landing-retail-only-phone` | The landing on a retail only tenant (#99): sales and stock copy, no Member portal |
+| `20b-landing-lending-and-retail-phone` | Both modules: both module cards, the Members card and the Member portal |
+| `20c-landing-tenant-colour-phone` | A tenant colour: the accent family (stripe, tints, bars, primary) follows it |
+| `21-sign-in-polish-phone`, `21b-accept-invitation-incomplete-link-polish-phone` | The sign-in drawing, raised card; the error state panel |
+| `22-approvals-cards-phone`, `22b-approvals-empty-state-phone` | Approvals as cards below 560px; the empty state with its drawing |
+| `23-style-page-states-phone`, `23b-style-page-icons-phone` | Two screens of the living style page (`/style`) |
+
+Checks: no horizontal overflow and no control under 44px on the landing (each module combination), sign-in,
+accept-invitation, style, approvals, retail home, stock, sale and profit routes at 390px and 1280px; axe-core
+4 (WCAG 2.0 and 2.1 A and AA) with no violations on those routes, with the Rincol default and with a tenant
+colour.
+

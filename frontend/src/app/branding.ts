@@ -52,22 +52,27 @@ async function loadLogo(url: string): Promise<string> {
   return URL.createObjectURL(await response.blob());
 }
 
-export function useShellBrand(): ShellBrand {
+/** The public branding of the host's tenant; one cached query shared by the shell and the landing page. */
+export const BRANDING_QUERY = {
+  queryKey: ['branding'],
+  staleTime: 60_000,
+  queryFn: async (): Promise<Branding> => {
+    const { data, error } = await api.GET('/api/v1/branding');
+    if (error || !data) throw new Error('Could not load the branding');
+    return data;
+  },
+};
+
+/** Whether this host serves a tenant (the Vite dev server's X-Tenant slug counts as one), or null while unknown. */
+export function useTenantHost(): boolean | null {
   const hosts = useQuery({ queryKey: ['app-config'], queryFn: loadHostConfig, staleTime: Infinity });
-  const tenantHost =
-    hosts.data !== undefined &&
-    (Boolean(import.meta.env.DEV && import.meta.env.VITE_DEV_TENANT) ||
-      classifyHost(window.location.hostname, hosts.data).kind === 'tenant');
-  const branding = useQuery({
-    queryKey: ['branding'],
-    enabled: tenantHost,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data, error } = await api.GET('/api/v1/branding');
-      if (error || !data) throw new Error('Could not load the branding');
-      return data;
-    },
-  });
+  if (hosts.data === undefined) return null;
+  return Boolean(import.meta.env.DEV && import.meta.env.VITE_DEV_TENANT) || classifyHost(window.location.hostname, hosts.data).kind === 'tenant';
+}
+
+export function useShellBrand(): ShellBrand {
+  const tenantHost = useTenantHost() === true;
+  const branding = useQuery({ ...BRANDING_QUERY, enabled: tenantHost });
   const logoUrl = branding.data?.logo_url ?? null;
   const logo = useQuery({
     queryKey: ['branding-logo', logoUrl],

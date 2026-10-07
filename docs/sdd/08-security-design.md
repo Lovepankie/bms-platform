@@ -441,6 +441,8 @@ GitHub Actions deploy secrets live in the `staging` and `production` environment
   must rate limit them per client address (a Cloudflare rule on `/api/v1/branding*`, for example 60
   requests a minute), and the edge must never apply "Cache Everything" or ignore the query string
   or host for `/api/v1/branding*`. That a tenant exists is not a secret: sign-in pages already show it.
+  `GET /branding` also lists the tenant's enabled module keys (#99): the landing page already shows
+  which modules a tenant runs, so the keys add nothing secret; no counts, plan or limits are exposed.
 - PDFs are stored as uploaded: only images are re-encoded, so a PDF's embedded JavaScript,
   launch actions or links are not removed. The control is how files are served: every signed
   download URL (R2 presign and the test fake alike) carries `Content-Disposition: attachment` with

@@ -2,6 +2,8 @@ import { Link, createLazyRoute } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { api, problemOf } from '../../api/client';
 import { invitationToken, passwordProblem } from '../../auth/codes';
+import { illustrations } from '../../components/illustrations';
+import { StatusPanel } from '../../components/states';
 
 // Invitation acceptance (FR-IAM-01): the one-time token arrives in the link's fragment, so it is
 // never sent to a server log; the invitee chooses a password and then signs in.
@@ -37,7 +39,9 @@ function AcceptInvitation() {
     return (
       <main className="card auth-card">
         <h1>Invitation</h1>
-        <p role="alert" className="alert alert-warning">This invitation link is not complete. Ask your administrator for a new one.</p>
+        <StatusPanel tone="error" title="This invitation link is not complete.">
+          Ask your administrator for a new one.
+        </StatusPanel>
       </main>
     );
   }
@@ -45,7 +49,9 @@ function AcceptInvitation() {
     return (
       <main className="card auth-card">
         <h1>Welcome</h1>
-        <p className="alert alert-success">Your password is set. You can sign in now.</p>
+        <StatusPanel tone="success" title="Your password is set.">
+          You can sign in now.
+        </StatusPanel>
         <Link to="/sign-in" className="btn btn-primary btn-block">
           Sign in
         </Link>
@@ -54,6 +60,7 @@ function AcceptInvitation() {
   }
   return (
     <main className="card auth-card">
+      <span className="auth-art">{illustrations.secure}</span>
       <h1>Accept your invitation</h1>
       <p className="lead">Choose a password for your staff account. You will use it with your email or phone to sign in.</p>
       {message && <p role="alert" className="alert alert-danger">{message}</p>}

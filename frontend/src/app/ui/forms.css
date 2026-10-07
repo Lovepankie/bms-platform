@@ -55,6 +55,19 @@ textarea:focus-visible {
   box-shadow: var(--focus-ring);
 }
 
+/* Focus however it came (tap, click or key, #106): the edge and the halo show, and the label follows. */
+input:not([type='radio'], [type='checkbox']):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-focus);
+  box-shadow: var(--focus-ring);
+  outline: 2px solid transparent;
+}
+
+label:focus-within:not(:has(> input[type='radio'], > input[type='checkbox'])) {
+  color: var(--color-link);
+}
+
 input:disabled,
 select:disabled,
 textarea:disabled {
