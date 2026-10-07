@@ -1,6 +1,6 @@
 # Developer entry points. Backend needs JDK 25 and Maven 3.9; frontend needs Node 20.19 or later;
 # both need Docker (the backend integration tests start PostgreSQL 16 with Testcontainers).
-.PHONY: dev down seed test test-backend test-frontend lint fmt migrate build openapi clean psql
+.PHONY: dev down seed seed-lending test test-backend test-frontend lint fmt migrate build openapi clean psql
 
 -include .env
 export
@@ -28,6 +28,11 @@ seed:
 		-v origin=http://$(SEED_SLUG).localhost:8000 -f - < deploy/sql/invite-tenant-admin.sql
 	$(COMPOSE) exec -T postgres psql -v ON_ERROR_STOP=1 -U bms_owner -d bms \
 		-v email=operator@example.test -v name='Test Operator (fabricated)' -f - < deploy/sql/create-platform-user.sql
+
+## Fabricated loan book for the demo tenant (docs/runbooks/seed-lending.md): members, products,
+## applications and serviced loans. Refused on a tenant holding data, a second time, and in production.
+seed-lending:
+	$(COMPOSE) run --rm --no-deps api seed-lending --tenant $(SEED_SLUG)
 
 ## Apply migrations to the local database (the same one-shot command the servers run).
 migrate:

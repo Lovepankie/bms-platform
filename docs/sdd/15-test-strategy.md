@@ -146,15 +146,17 @@ write and unbound-session tests cover it without a separate suite.
 `MigrationOrderIT` runs `DatabaseMigrator` with Flyway's `outOfOrder` off, as every environment
 does, on a fresh PostgreSQL 16 container per case: every migration (V1 to V9 lending, V10 to V14
 retail, V20 the retail import references, V21 the lending follow-ups, V22 the retail stock
-transfers, V23 the onboarding applications and outbox of #89, V26 the indexes of #107) applies in
+transfers, V23 the onboarding applications and outbox of #89, V26 the indexes of #107, V28 the
+retail catalogue management of #146, V29 lending disbursement and repayments of #108) applies in
 order on an empty database; on a database already migrated to V9 with a lending tenant, exactly V10
-to V14, V20, V21, V22, V23 and V26 apply and that tenant can then switch retail on; a tenant that
-switched retail on at V21 gets the inter-branch clearing account (code 1190, system controlled)
-from V22 (#84); a database at V22 holding retail rows (a negative balance among them) keeps every
-row through V23 and V26, whose new indexes replace the old ones and whose balance table gets its
-fillfactor (#107); and no two migration files share a version (issue #71, review F6). V24 and V25
-are held by open branches (#123, #126), so V26 is applied after V23 here until they merge, and
-each adds its version to the list.
+to V14, V20, V21, V22, V23, V26, V28 and V29 apply and that tenant can then switch retail on; a
+tenant that switched retail on at V21 gets the inter-branch clearing account (code 1190, system
+controlled) from V22 (#84); a database at V22 holding retail rows (a negative balance among them)
+keeps every row through V23 and V26, whose new indexes replace the old ones and whose balance table
+gets its fillfactor (#107); a database at V28 holding loans in draft, approved and cancelled takes
+exactly V29 and keeps them (#108); and no two migration files share a version (issue #71, review
+F6). V24, V25 and V27 stay unused; a new migration takes a number above the highest applied one and
+adds its version to the list.
 
 ## 15.4.4 Query plans at scale
 
@@ -217,6 +219,13 @@ Coverage gate for the lending calculation code: 95 percent lines (NFR-MNT-02).
   normalised exactly as the catalogue normalises them (review F9).
 - **Normalisation tables.** Every table of examples in chapter 13 section 13.6 is a
   parametrised unit test.
+- **Loan servicing golden tests** (`ServicingTest`, #108). Fabricated schedules from worked
+  examples B and C (built by `ScheduleCalculator`) run through R-ALLOC, R-PAYOFF (flat with and
+  without the rebate, declining), R-DPD and the FR-REP-05 replay; every allocation row, quote and
+  balance is asserted to the minor unit. `LoanServicingIT` then checks every journal line of each
+  event type of chapter 6 section 6.6.3 on PostgreSQL, idempotent retries, and after each test that
+  the trial balance balances and loans receivable equals each loan's principal outstanding.
+  `LendingSeedIT` checks the same for the fabricated seed.
 - **Report golden tests.** Each report in chapter 14 runs over its fabricated dataset and
   is compared with a committed expected output (JSON), including the PAR worked example.
 - **Document golden tests.** Each PDF template renders fabricated data; the test compares

@@ -75,6 +75,14 @@ const styleRoute = createRoute({ getParentRoute: () => rootRoute, path: '/style'
   import('../areas/style/route').then((m) => m.Route),
 );
 
+const staffLendingRoute = createRoute({ getParentRoute: () => staffRoute, path: '/lending', component: Outlet });
+const lendingLoansRoute = createRoute({ getParentRoute: () => staffLendingRoute, path: '/' }).lazy(() =>
+  import('../areas/staff/lending/loans').then((m) => m.Route),
+);
+const lendingLoanRoute = createRoute({ getParentRoute: () => staffLendingRoute, path: '/loans/$loanId' }).lazy(() =>
+  import('../areas/staff/lending/loan').then((m) => m.Route),
+);
+
 const signUpRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sign-up' }).lazy(() =>
   import('../areas/onboarding/sign-up').then((m) => m.Route),
 );
@@ -134,7 +142,7 @@ export const router = createRouter({
         retailSuppliersRoute,
         retailBuyersRoute,
         retailImportRoute,
-      ])]),
+      ]), staffLendingRoute.addChildren([lendingLoansRoute, lendingLoanRoute])]),
     memberRoute,
     styleRoute,
     signUpRoute,

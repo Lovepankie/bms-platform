@@ -351,6 +351,14 @@ CHECK constraint as well as the service.
 | `import_commit` | `core.imports.manage` | `core.imports.approve_commit` | No |
 | `member_credit_refund` | `lending.repayments.create` | `lending.credits.refund_approve` | Yes |
 
+Registered so far: `collateral_release` (#13); `loan_disbursement`, `repayment_reversal` and
+`loan_write_off` (#108, `lending.loans`, ADR-026). Increment 5 needed no new permission: every route
+it adds declares a permission already in the matrix above (`lending.disbursements.request`,
+`lending.repayments.create`, `lending.repayments.reverse_request`, `lending.loans.write_off_request`,
+and `lending.loans.read` for the schedule, transactions and payoff quote), and the route permission
+test covers them. The `seed-lending` command has no route and no permission: it is refused in
+production and on any tenant holding data (`docs/runbooks/seed-lending.md`).
+
 Action types are contributed by the modules that own them (ADR-015): each is a registered
 `ApprovalAction` whose maker and checker permissions must equal its row above. Every
 `/approvals` route declares `core.approvals.read`; approving and rejecting then need the action's

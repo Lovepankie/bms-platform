@@ -1218,6 +1218,25 @@
           }
         }
       },
+      "DisbursementRequest" : {
+        "properties" : {
+          "disbursement_date" : {
+            "description" : "Today or earlier, in an open period",
+            "format" : "date",
+            "type" : "string"
+          },
+          "external_reference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "pattern" : "cash|bank|mtn_momo|airtel_money",
+            "type" : "string"
+          }
+        },
+        "required" : [ "disbursement_date", "payment_method_key" ]
+      },
       "DownloadUrl" : {
         "properties" : {
           "expires_at" : {
@@ -1431,6 +1450,9 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "balances" : {
+            "$ref" : "#/components/schemas/LoanBalances"
+          },
           "branch_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -1561,6 +1583,47 @@
           }
         }
       },
+      "LoanActionOutcome" : {
+        "description" : "executed: the action took effect now (below the tenant's threshold); otherwise it waits for a checker as approval_request_id",
+        "properties" : {
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "executed" : {
+            "type" : "boolean"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "loan_status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "LoanAllocation" : {
+        "properties" : {
+          "amount_minor" : {
+            "description" : "Negative on a reversal's rows",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "applies_to_txn_id" : {
+            "description" : "The repayment whose money the row moves",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "component" : {
+            "type" : "string"
+          },
+          "item_no" : {
+            "description" : "Null for an overpayment",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
       "LoanAppraisal" : {
         "properties" : {
           "appraised_by" : {
@@ -1658,6 +1721,76 @@
           }
         }
       },
+      "LoanBalances" : {
+        "description" : "FR-DIS-04, R-DPD: the loan's position as of its last money event",
+        "properties" : {
+          "arrears_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "closed_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "credit_balance_minor" : {
+            "description" : "Overpayment held for the member (R-ALLOC step 4)",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "days_past_due" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "disbursed_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "fees_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "last_repayment_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "maturity_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "next_due_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "penalties_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_disbursed_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "written_off_on" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
       "LoanDecisionRequest" : {
         "properties" : {
           "approved_principal_minor" : {
@@ -1729,6 +1862,10 @@
       },
       "LoanListItem" : {
         "properties" : {
+          "approved_principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "branch_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -1740,6 +1877,14 @@
           "currency" : {
             "type" : "string"
           },
+          "days_past_due" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "disbursed_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"
@@ -1749,6 +1894,16 @@
           },
           "member_id" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "member_name" : {
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "next_due_date" : {
+            "format" : "date",
             "type" : "string"
           },
           "officer_user_id" : {
@@ -1768,6 +1923,10 @@
           },
           "status" : {
             "type" : "string"
+          },
+          "total_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         }
       },
@@ -2143,6 +2302,37 @@
           }
         }
       },
+      "LoanReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "LoanSchedule" : {
+        "description" : "FR-DIS-04: the items and a totals row that equals the loan totals",
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanScheduleRow"
+            },
+            "type" : "array"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/LoanScheduleRow"
+          }
+        }
+      },
       "LoanScheduleItem" : {
         "description" : "FR-ORG-03, FR-ORG-06: from the requested (once approved, the approved) terms and the proposed (else today's) date; display only",
         "properties" : {
@@ -2167,6 +2357,78 @@
             "type" : "integer"
           },
           "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "LoanScheduleRow" : {
+        "properties" : {
+          "due_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "fees_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fees_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "paid_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "penalties_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "penalties_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "description" : "pending, due, overdue, partially_paid, paid, waived or written_off; null on totals",
+            "type" : "string"
+          },
+          "total_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "waived_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "written_off_minor" : {
             "format" : "int64",
             "type" : "integer"
           }
@@ -2198,6 +2460,81 @@
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/LoanStatusChange"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "LoanTransaction" : {
+        "properties" : {
+          "allocations" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanAllocation"
+            },
+            "type" : "array"
+          },
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "external_reference" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "journal_entry_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "receipt_no" : {
+            "description" : "RC- receipt of a repayment or recovery, VC- voucher of a disbursement",
+            "type" : "string"
+          },
+          "recorded_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reversed_by_txn_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reverses_txn_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "txn_type" : {
+            "type" : "string"
+          },
+          "value_date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "LoanTransactionList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanTransaction"
             },
             "type" : "array"
           }
@@ -2700,6 +3037,46 @@
           }
         }
       },
+      "PayoffQuote" : {
+        "description" : "R-PAYOFF as at value_date; rebate is interest not charged",
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "fees_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "penalties_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rebate_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value_date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
       "Plan" : {
         "description" : "Limits only; prices are not stored in this repository",
         "properties" : {
@@ -2887,6 +3264,44 @@
           },
           "relationship" : {
             "type" : "string"
+          }
+        }
+      },
+      "RepaymentRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 1000000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "external_reference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "pattern" : "cash|bank|mtn_momo|airtel_money",
+            "type" : "string"
+          },
+          "value_date" : {
+            "description" : "Today or earlier, not before the disbursement or the loan's latest repayment, in an open period",
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor", "payment_method_key", "value_date" ]
+      },
+      "RepaymentResult" : {
+        "properties" : {
+          "balances" : {
+            "$ref" : "#/components/schemas/LoanBalances"
+          },
+          "loan_status" : {
+            "type" : "string"
+          },
+          "transaction" : {
+            "$ref" : "#/components/schemas/LoanTransaction"
           }
         }
       },
@@ -7088,6 +7503,13 @@
           }
         }, {
           "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
           "name" : "limit",
           "required" : false,
           "schema" : {
@@ -7114,7 +7536,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "List loans in the caller's branch scope",
+        "summary" : "List loans in the caller's branch scope; q searches loan number, member number or name",
         "tags" : [ "lending-loans" ]
       },
       "post" : {
@@ -7422,6 +7844,51 @@
         "tags" : [ "lending-loans" ]
       }
     },
+    "/api/v1/lending/loans/{loan_id}/disbursements" : {
+      "post" : {
+        "operationId" : "requestLoanDisbursement",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DisbursementRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request disbursement of an approved loan (FR-DIS-01); 201 when executed below the threshold, 202 when it waits for a checker",
+        "tags" : [ "lending-loans" ]
+      }
+    },
     "/api/v1/lending/loans/{loan_id}/guarantors" : {
       "put" : {
         "operationId" : "setLoanGuarantors",
@@ -7467,6 +7934,87 @@
         "tags" : [ "lending-loans" ]
       }
     },
+    "/api/v1/lending/loans/{loan_id}/payoff-quote" : {
+      "get" : {
+        "operationId" : "getLoanPayoffQuote",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "value_date",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PayoffQuote"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The payoff amount as at a value date, today by default (FR-REP-06)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/repayments" : {
+      "post" : {
+        "operationId" : "recordLoanRepayment",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RepaymentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RepaymentResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record a repayment, allocated per R-ALLOC; a recovery on a written-off loan (FR-REP-01 to FR-REP-04, FR-LCL-03)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
     "/api/v1/lending/loans/{loan_id}/return" : {
       "post" : {
         "operationId" : "returnLoan",
@@ -7509,6 +8057,34 @@
           }
         },
         "summary" : "Return an application to draft with a note",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/schedule" : {
+      "get" : {
+        "operationId" : "getLoanSchedule",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanSchedule"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The repayment schedule with a totals row (FR-DIS-04)",
         "tags" : [ "lending-loans" ]
       }
     },
@@ -7572,6 +8148,132 @@
           }
         },
         "summary" : "Submit a draft, freezing its terms (FR-ORG-03)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/transactions" : {
+      "get" : {
+        "operationId" : "listLoanTransactions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanTransactionList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The loan's money events with their allocations, newest first",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/transactions/{txn_id}/reverse" : {
+      "post" : {
+        "operationId" : "requestLoanTransactionReversal",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "txn_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoanReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request the reversal of a repayment or recovery, with a reason (FR-REP-05)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/write-off" : {
+      "post" : {
+        "operationId" : "requestLoanWriteOff",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoanReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request write-off of an active loan, with a reason (FR-LCL-02)",
         "tags" : [ "lending-loans" ]
       }
     },

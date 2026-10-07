@@ -1023,6 +1023,9 @@ item's value (`pledge_exceeds_value`).
 
 `CHECK` for each component: `paid + waived <= due`. Index `(tenant_id, due_date, status)`,
 `(tenant_id, loan_id, item_no)`.
+Built in `V29` (#108). The trigger `lending_schedule_items_guard` refuses any change of `loan_id`,
+`item_no`, `due_date` or the principal, interest and fee due once written; only the paid, waived,
+written-off, penalty and status columns move.
 
 ### `lending_loan_charges`
 
@@ -1046,7 +1049,8 @@ Partial unique `(tenant_id, schedule_item_id, period_no) WHERE charge_type = 'pe
 | `value_date` | `date NOT NULL` | |
 | `payment_method_key` | `text` | |
 | `external_reference` | `varchar(100)` | Mobile money or bank reference. |
-| `receipt_no` | `varchar(30)` | For repayments. |
+| `receipt_no` | `varchar(30)` | `RC-<branch>-NNNNNN` for a repayment, recovery or upfront fee; `VC-<branch>-NNNNNN` for a disbursement (FR-DOC-04). Partial unique `(tenant_id, receipt_no)`. |
+| `reason` | `text` | Reversal and write-off reason. |
 | `reverses_txn_id` | `uuid` | `UNIQUE (tenant_id, reverses_txn_id)` |
 | `journal_entry_id` | `uuid` | NULL only when `is_historic`. |
 | `approval_request_id` | `uuid` | |
@@ -1056,13 +1060,22 @@ Partial unique `(tenant_id, schedule_item_id, period_no) WHERE charge_type = 'pe
 | `recorded_by` | `uuid` | |
 
 Index `(tenant_id, loan_id, value_date)`, `(tenant_id, branch_id, value_date, txn_type)`.
+Built in `V29` (#108): `payment_method_key` is one of `cash`, `bank`, `mtn_momo`, `airtel_money`
+(ADR-026 maps each to a seeded account until FR-GL-08); `CHECK (is_historic OR journal_entry_id IS NOT
+NULL)`; `CHECK ((txn_type = 'reversal') = (reverses_txn_id IS NOT NULL))`; partial unique
+`(tenant_id, loan_id) WHERE txn_type = 'disbursement'` (FR-DIS-03).
 
 ### `lending_repayment_allocations` (append-only)
 
-`id`, `tenant_id`, `created_at`, `transaction_id uuid NOT NULL`,
-`schedule_item_id uuid` (NULL for `overpayment`), `component text NOT NULL`
-[`penalty`, `fee`, `interest`, `principal`, `overpayment`], `amount_minor bigint NOT NULL`
-(negative only on rows belonging to a `reversal` transaction).
+`id`, `tenant_id`, `created_at`, `transaction_id uuid NOT NULL` (the transaction that wrote the
+row), `applies_to_txn_id uuid NOT NULL` (the repayment whose money the row moves; equal to
+`transaction_id` on a repayment's own rows), `schedule_item_id uuid` (NULL exactly for
+`overpayment`), `component text NOT NULL` [`penalty`, `fee`, `interest`, `principal`, `overpayment`,
+`interest_rebate`], `amount_minor bigint NOT NULL` (`<> 0`; negative only on rows belonging to a
+`reversal` transaction, which writes the reversed repayment's rows negated and the differences of
+every later repayment it re-allocates, ADR-026). `interest_rebate` is the early settlement rebate of
+R-PAYOFF: interest waived, not cash. Indexes `(tenant_id, transaction_id)`,
+`(tenant_id, applies_to_txn_id)`. Built in `V29` (#108).
 
 ### `lending_loan_daily_snapshots`
 
@@ -1292,10 +1305,12 @@ account in `bms_seed_retail_chart` and for every tenant that switched retail on 
 movement kinds and the movements' `transfer_id` link (sections 6.11.1 and 6.11.2). It takes the next
 number free on `main` when it merges, so it may be renumbered then. `V23__onboarding_applications_and_outbox.sql` (#89, ADR-024) creates
 `onboarding_applications` and `notification_outbox` (section 6.4) with `onboarding_normalise_name`,
-`onboarding_email_key` and their definer functions. V24 and V25 are held by the open guided tour (#123)
-and loan servicing (#126) branches. `V26__database_optimisation.sql` (#107, ADR-028) changes indexes
-and a storage setting only (section 6.12); with `outOfOrder` off it merges after those two, or they
-take numbers above it. The next migration is V27 (`MigrationOrderIT`, chapter 15 section 15.4.3).
+`onboarding_email_key` and their definer functions. `V26__database_optimisation.sql` (#107, ADR-028) changes indexes
+and a storage setting only (section 6.12). `V28__retail_catalogue_management.sql` is the retail
+catalogue management (#146). `V29__lending_disbursement_repayments.sql` (#108, ADR-026) is lending
+increment 5: schedule items, loan transactions and repayment allocations (section 6.7). V24, V25
+and V27 stay unused: with `outOfOrder` off a number below an applied one can never run. The next
+migration is V30 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items
 

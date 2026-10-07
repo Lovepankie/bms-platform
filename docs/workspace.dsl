@@ -64,6 +64,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 collateral    = component "Lending: Collateral" "Collateral register, valuations, custody events, photos and scans; release as a maker-checker action (ADR-019)." "lending" "lending"
                 savings       = component "Lending: Savings" "Savings products, accounts, deposits, withdrawals, interest." "lending" "lending"
                 investments   = component "Lending: Investments" "Fixed-term investments, returns, maturity, payout and rollover." "lending" "lending"
+                lendingSeed   = component "Lending: Fabricated Seed" "The seed-lending command: fills one empty staging tenant with fabricated members, products, applications and serviced loans; refused in production and on a tenant holding data (ADR-026)." "lending" "lending"
                 collections   = component "Lending: Collections" "Due and arrears lists, officer assignment, collection actions, promises to pay." "lending" "lending"
 
                 # ---------------- retail vertical (ADR-020) ----------------
@@ -150,9 +151,14 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.loans       -> bms.api.documents "Queues receipts, vouchers and schedules"
         bms.api.loans       -> bms.api.audit "Writes audit rows"
         bms.api.loans       -> bms.db "Reads and writes loans, schedule items, transactions and allocations"
-        bms.api.approvals   -> bms.api.loans "Executes approved loan actions through the executor registry"
+        bms.api.approvals   -> bms.api.loans "Executes approved loan_disbursement, repayment_reversal and loan_write_off through the action registry (ADR-015, ADR-026)"
         bms.api.approvals   -> bms.api.audit "Writes decisions to the audit log"
         bms.api.collections -> bms.api.loans "Reads due and overdue schedule items"
+        platformOperator -> bms.api.lendingSeed "Runs seed-lending on the staging host for a pilot tenant"
+        bms.api.lendingSeed -> bms.api.jobs "Binds the tenant by slug for the command"
+        bms.api.lendingSeed -> bms.api.loans "Disburses and repays through LoanServicing, so postings match staff postings"
+        bms.api.lendingSeed -> bms.api.audit "Records the lending.seed.fabricated marker"
+        bms.api.lendingSeed -> bms.db "Fabricated members, products and applications"
         bms.api.collateral  -> bms.api.members "Links items to the pledging member"
         bms.api.collateral  -> bms.api.approvals "Requests collateral_release, maker-checker with no threshold (ADR-015, ADR-019)"
         bms.api.approvals   -> bms.api.collateral "Executes an approved release through CollateralReleaseAction (ADR-019)"

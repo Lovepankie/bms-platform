@@ -563,6 +563,13 @@ loan, so every closed loan counts as closed on time in the repayment history rul
 | FR-DIS-04 | The schedule view shall show each item's due date, principal, interest, fees, penalties, amounts paid, waived, outstanding, and status (`pending`, `due`, `overdue`, `paid`, `partially_paid`, `waived`). | Totals row equals loan totals. | MVP |
 | FR-DIS-05 | A disbursement shall be reversible only by a maker-checker reversal within the same open period and only while no repayment exists; reversal posts a reversing journal and returns the loan to `approved`. | Reversal after a repayment fails with `has_repayments`. | P2 |
 
+Built in increment 5 (#108, ADR-026): FR-DIS-01 to FR-DIS-04. The disbursement date is today or
+earlier and its period must be open (`value_date_in_future`, `period_closed`); the payment method
+must have an active account (`payment_method_unmapped`). Deducted fees that would leave nothing to
+disburse are refused (`fees_exceed_principal`). An upfront fee posts its own entry and receipt in the
+disbursement's transaction. The voucher number is `VC-<branch code>-NNNNNN` (FR-DOC-04). The
+disbursement SMS and the voucher PDF are deferred (increment 6 and a documents follow-up).
+
 ## 3.20 Repayments (REP)
 
 | ID | Requirement | Acceptance criteria | Phase |
@@ -576,6 +583,16 @@ loan, so every closed loan counts as closed on time in the repayment history rul
 | FR-REP-06 | The payoff quote shall be available for any active loan and value date (R-PAYOFF). | Worked examples in tests for both methods. | MVP |
 | FR-REP-07 | Repayments may be recorded against a loan from any branch the cashier is scoped to; if the cashier's branch differs from the loan's branch, the journal follows ADR-004 (two entries through inter-branch clearing). | Both branch trial balances balance after a cross-branch repayment. | P2 |
 | FR-REP-08 | A member may repay from their savings balance by a transfer, recorded as a repayment with method `savings_transfer` and a matching savings withdrawal in one transaction. | Both ledgers move together. | P2 |
+
+Built in increment 5 (#108, ADR-026): FR-REP-01 to FR-REP-06. A value date after today
+(`value_date_in_future`), before the disbursement (`before_disbursement`) or before the loan's latest
+repayment (`before_last_repayment`, so allocation always follows value date order) is refused. The
+receipt number is `RC-<branch code>-NNNNNN`. A reversal is requested with a reason and always needs
+a checker; it replays the surviving repayments on the contracted schedule and writes the
+differences as allocation rows of the reversal; the journal is the mirror of the original when no
+other repayment moves, else one entry with the net difference. DPD, arrears and item statuses are
+recomputed at every money event; the nightly recomputation is increment 6 (FR-ARR-01). The receipt
+SMS and PDF are deferred.
 
 ## 3.21 Arrears and penalties (ARR)
 
@@ -595,6 +612,14 @@ loan, so every closed loan counts as closed on time in the repayment history rul
 | FR-LCL-03 | Repayments on a written-off loan shall be recorded as recoveries and posted to bad debt recovered income. | Tested. | MVP |
 | FR-LCL-04 | A branch manager shall request a restructure of an active loan: a new loan is created for the member with principal equal to the old loan's outstanding principal, with new terms; the old loan's unpaid interest, fees and penalties are carried to the new loan's first schedule item as memorandum `carried_arrears` (never capitalised into principal); on approval the old loan becomes `restructured` and links to the new loan. | Journal: principal moves between the two loans within loans receivable (no cash). Restructured loans are flagged in portfolio reports for 12 months. | P2 |
 | FR-LCL-05 | A top-up (new loan that repays an existing loan from its proceeds) shall be supported as a disbursement whose proceeds are partly applied to the old loan's payoff. | Both loans' journals post in one transaction. | Later |
+
+Built in increment 5 (#108, ADR-026): FR-LCL-01 to FR-LCL-03. Closure is automatic when a
+repayment settles every item; a reversal that leaves something unpaid reopens the loan (its released
+pledges stay released). Write-off is requested by an accountant with a reason (`loan_write_off`, no
+threshold), posts the outstanding principal, records every unpaid component in the items'
+`written_off_minor`, and zeroes the loan's outstanding columns; with no principal outstanding it is
+refused (`nothing_to_write_off`). A repayment on a written-off loan is recorded as a `recovery`
+with no allocation rows. The closure SMS is deferred to increment 6.
 
 ## 3.23 Collateral register (COL)
 

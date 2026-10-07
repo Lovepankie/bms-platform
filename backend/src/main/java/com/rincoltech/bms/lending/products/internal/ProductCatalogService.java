@@ -4,6 +4,7 @@ import com.rincoltech.bms.lending.products.ProductCatalog;
 import com.rincoltech.bms.lending.products.ScheduleCalculator;
 import com.rincoltech.bms.lending.products.internal.ProductApi.Version;
 import com.rincoltech.bms.lending.products.internal.ProductRepository.Row;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -50,6 +51,19 @@ class ProductCatalogService implements ProductCatalog {
                 .reduce(0, Math::addExact);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<FeeCharge> fees(UUID productVersionId, long principalMinor) {
+        return repo.fees(productVersionId).stream()
+                .map(f -> new FeeCharge(
+                        f.name(),
+                        f.timing(),
+                        f.calcMethod().equals("flat")
+                                ? f.amountMinor()
+                                : ScheduleCalculator.percentOf(principalMinor, f.rateBp())))
+                .toList();
+    }
+
     private Optional<ProductTerms> terms(Row row, UUID versionId) {
         return repo.versions(row.id()).stream()
                 .filter(v -> v.id().equals(versionId))
@@ -79,6 +93,8 @@ class ProductCatalogService implements ProductCatalog {
                 v.maxPrincipalMinor(),
                 v.requiresCollateral(),
                 v.minCollateralCoverBp(),
-                v.requiresGuarantor());
+                v.requiresGuarantor(),
+                v.allocationOrder(),
+                v.flatEarlySettlementRebate());
     }
 }
