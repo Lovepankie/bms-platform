@@ -40,7 +40,13 @@ only retail has this need.
 
 1. **The cash book is a sub-domain of the retail module**: the package `retail.cashbook`, tables
    prefixed `retail_`, copying the shape of `lending.members` and of `retail.sales`. It uses core
-   modules only (ledger, audit, approvals, tenancy, documents) and never touches lending packages.
+   modules only and never touches lending packages. Its declared `allowedDependencies` (Spring
+   Modulith, `ModularityTest`) are exactly: `kernel`, `core.tenancy`, `core.audit`, `core.ledger`,
+   `core.documents`, `retail.sales` (the day's cash sales and payments), `retail.purchasing` (cash
+   restocks), `retail.reports` (the daily profit, read only for callers with `retail.profit.read`) and
+   `retail.stock` (the posting and idempotency helpers); it must not depend on `lending.*`, and
+   `retail.imports` adds `retail.cashbook` to its own allowed list for the cash book import. No
+   retail module depends on `retail.cashbook` except `retail.imports`, so no cycle forms.
    When lending needs the same concepts, the shared part is extracted to core by a new ADR. This
    keeps `retailNeverDependsOnLending` true and answers ADR-020's "likely partly core".
 2. **Advances are not lending.** Money advanced to the owner or the company is a retail cash book
