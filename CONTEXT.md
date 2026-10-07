@@ -21,18 +21,19 @@ switches on. Lending is the first vertical; retail was brought forward (ADR-020)
 ## Layout
 
 - `backend/src/main/java/com/rincoltech/bms/`: `kernel`, `core/*`, `lending/{members,collateral,products,loans}`, `retail/{catalogue,stock,sales,purchasing,reports,imports}`.
-- `backend/src/main/resources/db/migration/`: V1 to V14, V20, V21. V15 to V19 stay unused.
+- `backend/src/main/resources/db/migration/`: V1 to V14, V20 to V23, V26, V28 and V29. The numbers in between stay unused; Flyway only needs them to increase.
 - `docs/sdd/` chapters 1 to 15, `docs/adr/`, `docs/runbooks/`, `docs/workspace.dsl`.
 
-## Current status (2026-10-07)
+## Current status (2026-10-08)
 
-- Lending increments 1 to 4 are on `main`: members, KYC documents, collateral, loan products,
-  applications with guarantors and pledges, appraisal with the rules-based credit score,
-  approval with its checks and the approval expiry job. The review follow-ups landed with #76
-  (V21).
-- Retail R1 to R5 and its review fixes are on `main`, with the import command.
-- Next lending work: increment 5, disbursement and repayments (#108), then arrears (#109),
-  the pilot import (#110) and reports (#111).
+- Lending increments 1 to 5 are on `main`: members, KYC documents, collateral, loan products,
+  applications, appraisal and approval, then disbursement, repayments, reversals, closure and
+  write-off with their ledger postings (#126, V29). Savings, investments and the live insights
+  dashboard are in open PRs.
+- Retail R1 to R5, the stock transfers, the catalogue management screens and the parity pass are on
+  `main`; the cash book and analytics are in open PRs.
+- Self-onboarding: the public sign-up, the operator queue and activation are live (ADR-024, V23).
+- Next lending work: arrears and collections (#109), the pilot import (#110) and reports (#111).
 
 ## Working rules that are easy to miss
 
