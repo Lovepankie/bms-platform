@@ -81,5 +81,6 @@ Tick or correct each line. The build does not start on lines 1 to 4 until they a
 6. [ ] Only owner or admin record advances and repayments. The hidden processing fee is dropped.
 7. [ ] A withdrawal is recorded against a shop (default the head office).
 8. [ ] Savings amounts count as profit, so only people who may see profit see them (shop staff see the cash expected figure, not the net amount to bank). Or may shop staff see them?
+9. [ ] Who is "the company" in the advances? A separate legal entity (a related party that owes the money back), or your own business (then it is not an advance at all)?
 
 Questions are listed with their reasons at the end of ADR-022.

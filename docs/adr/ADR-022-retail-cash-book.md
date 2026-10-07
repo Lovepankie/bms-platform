@@ -69,8 +69,8 @@ only retail has this need.
    their category. The credit is `cash_on_hand` in version one: the pilot form has no payment
    channel, so an expense is a till payment.
 6. **An advance debits `owner_advances` and credits the source shop's cash; a repayment is the
-   reverse.** New asset account **Advances to owner and company**, code 1250, `system_key`
-   `owner_advances`, with the advance as subledger. It is a receivable, not drawings: the pilot
+   reverse.** New asset account **Advances to owner and related parties**, code 1250, `system_key`
+   `owner_advances`, with the advance as subledger. The party of an advance is an `owner`, `staff` or `related_entity` cash party; there is no `company` kind, because an advance to the tenant's own business is not a receivable from anyone (open question 9). It is a receivable, not drawings: the pilot
    records payments back, so it is expected to clear. If the Owner treats unreturned advances as
    drawings, that is a later write-off by manual journal (FR-GL), not a different design. A
    repayment may arrive by `cash`, `mobile_money` or `bank` and debits that account **in the
@@ -275,3 +275,9 @@ Do not guess these; nothing in the build starts until 1, 2 and 4 are answered.
    net amount to bank or the difference. If the Owner would rather let shop staff see the amounts,
    the leak of half the day's profit is accepted knowingly and the gate on those fields is removed.
    Recommended: keep the gate.
+9. **Who is "the company" in the pilot's advances?** The pilot records money advanced to the owner or
+   to the company. If the company is the tenant's own business, the advance is a transfer inside one
+   entity, not a receivable, and should not sit in an asset account. If it is a separate legal
+   entity (a sister company), it is a receivable from a related entity. Until the Owner answers,
+   the design offers the party kinds `owner`, `staff` and `related_entity` and no `company` kind,
+   and an imported party marked company is reported, not mapped. Do not decide this for the Owner.

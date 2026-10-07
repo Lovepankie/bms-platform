@@ -1586,7 +1586,7 @@ the way 1190 is shared; a tenant that has it from lending gets no second account
 | Code | Name | Type | `system_key` |
 |---|---|---|---|
 | 1015 | Savings reserve (restricted cash) | asset | `savings_reserve` |
-| 1250 | Advances to owner and company | asset | `owner_advances` |
+| 1250 | Advances to owner and related parties | asset | `owner_advances` |
 | 5900 | Operating expenses | expense | `operating_expenses` |
 
 #### Tables
@@ -1595,7 +1595,7 @@ the way 1190 is shared; a tenant that has it from lending gets no second account
 |---|---|---|
 | `retail_expense_categories` | SELECT, INSERT, UPDATE | Category lists: `name varchar(100)`, `expense_account_id` (nullable, composite FK to ledger accounts; null means `operating_expenses`), `active`, `sort_order`. Unique `(tenant_id, lower(name))` |
 | `retail_expense_items` | SELECT, INSERT, UPDATE | `category_id` (composite FK), `name varchar(100)`, `requires_explanation boolean` (the pilot's "others"), `active`. Unique `(tenant_id, category_id, lower(name))` |
-| `retail_cash_parties` | SELECT, INSERT, UPDATE | Beneficiaries and advance parties: `name varchar(200)`, `contact varchar(100)` kept as entered, `kind` (`owner`, `company`, `staff`, `supplier`, `other`), `active`. Unique `(tenant_id, kind, lower(name))` |
+| `retail_cash_parties` | SELECT, INSERT, UPDATE | Beneficiaries and advance parties: `name varchar(200)`, `contact varchar(100)` kept as entered, `kind` (`owner`, `staff`, `related_entity`, `supplier`, `other`; there is deliberately no `company` kind: an advance to the tenant's own business is not a receivable, ADR-022 open question 9). The party of an advance must be `owner`, `staff` or `related_entity` (service rule), `active`. Unique `(tenant_id, kind, lower(name))` |
 | `retail_daily_savings` | SELECT, INSERT, UPDATE (void only) | One record per branch and date, below |
 | `retail_cash_bankings` | SELECT, INSERT, UPDATE (void only) | Cash banked, below |
 | `retail_cash_withdrawals` | SELECT, INSERT, UPDATE (void only) | Withdrawals from bank, below |
@@ -1666,7 +1666,7 @@ expenses report.
 An advance: `branch_id` (the source shop), `advance_no` from the tenant sequence
 `retail_advance_no` (`RA00000001`, sequential like the pilot's ids; an imported advance takes the
 next value too, in business date then source id order, and the pilot's id lives only in
-`retail_import_refs` and the note, so an imported number can never collide with a live one), `party_id` (owner or company),
+`retail_import_refs` and the note, so an imported number can never collide with a live one), `party_id` (kind `owner`, `staff` or `related_entity`),
 `taken_by_party_id` (optional, the pilot's "who took the money"), `principal_minor > 0`, `currency`,
 `purpose varchar(300)`, `business_date`, `repaid_minor` (CHECK `0 <= repaid_minor <= principal_minor`,
 raised only under the advance's row lock, like `retail_sales.paid_minor`), `note`, `journal_entry_id`,
