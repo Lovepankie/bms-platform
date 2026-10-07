@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.purchasing.internal;
 
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.Purchase;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.PurchasePage;
@@ -8,7 +9,6 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.Supplier;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierList;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.UpdateSupplierRequest;
-import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

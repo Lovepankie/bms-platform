@@ -2,6 +2,8 @@ package com.rincoltech.bms.retail.stock.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.ledger.LedgerPosting.PostedEntry;
+import com.rincoltech.bms.core.operations.Idempotency;
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.ApiException;
@@ -17,8 +19,6 @@ import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
 import com.rincoltech.bms.retail.stock.RetailBooks.Posting;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
-import com.rincoltech.bms.retail.stock.RetailIdempotency;
-import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.Movement;
 import com.rincoltech.bms.retail.stock.StockLedger.Recorded;
@@ -66,7 +66,7 @@ class TransferService {
     private final RetailCatalogue catalogue;
     private final StockLedger stock;
     private final RetailBooks books;
-    private final RetailIdempotency idempotency;
+    private final Idempotency idempotency;
     private final RetailBranchContext branchContext;
     private final Branches branches;
     private final CurrentTenant tenant;
@@ -78,7 +78,7 @@ class TransferService {
             RetailCatalogue catalogue,
             StockLedger stock,
             RetailBooks books,
-            RetailIdempotency idempotency,
+            Idempotency idempotency,
             RetailBranchContext branchContext,
             Branches branches,
             CurrentTenant tenant,

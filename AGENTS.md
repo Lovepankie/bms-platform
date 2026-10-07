@@ -140,7 +140,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `core.imports` | Import batches, review queue, commit | IMP; chapter 13 | 13.4 | 7.11.9 |
 | `core.payments` | Payment intents, gateway, callbacks | PAY; chapter 12 | 6.5 | 7.11.10 |
 | `core.jobs` | db-scheduler tasks, per-tenant job runner (ADR-008) | 5.4.4 | `scheduled_tasks` | none |
-| `core.operations` | `/version`, readiness, database role guard | NFR-SEC-03 | none | 7.11.1 |
+| `core.operations` | `/version`, readiness, database role guard, the `Idempotency-Key` protocol | NFR-SEC-03 | none | 7.8, 7.11.1 |
 | `lending.manifest` | The vertical's registration with the core | 5.4.3 | none | none |
 | `lending` members | Members, KYC, next of kin, relationships | MEM | 6.7 | 7.11.11 |
 | `lending` products | Loan products and versions | PRD | 6.7 | 7.11.12 |
@@ -153,7 +153,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | Member area | Member self-service | MSS; chapter 11 | none | 7.11.18 |
 | `retail.manifest` | The retail vertical's registration with the core (ADR-020) | 3.28 | 6.11.1 chart | none |
 | `retail.catalogue` | Categories, units, products, append-only price history | RET-01, RET-02 | 6.11 | 7.11.20 |
-| `retail.stock` | Stock movements and balances, stock-takes, usage and damage, transfers between branches, reconciliation; retail posting and idempotency helpers | RET-03, RET-07, RET-08, RET-11, RET-16 | 6.11 | 7.11.20 |
+| `retail.stock` | Stock movements and balances, stock-takes, usage and damage, transfers between branches, reconciliation; retail posting helpers | RET-03, RET-07, RET-08, RET-11, RET-16 | 6.11 | 7.11.20 |
 | `retail.sales` | Sales with snapshots, voids, credit buyers, payments | RET-04, RET-05, RET-11 | 6.11 | 7.11.20 |
 | `retail.purchasing` | Suppliers, restocks that set prices atomically | RET-06, RET-11 | 6.11 | 7.11.20 |
 | `retail.reports` | Valuation, revaluation difference, daily profit | RET-09, RET-10 | 6.11.3 | 7.11.20 |

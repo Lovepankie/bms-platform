@@ -1,5 +1,6 @@
-package com.rincoltech.bms.lending.loans.internal;
+package com.rincoltech.bms.core.operations.internal;
 
+import com.rincoltech.bms.core.operations.Idempotency;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
@@ -19,32 +20,25 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * The {@code Idempotency-Key} protocol of chapter 7 section 7.8 for lending's money-moving routes,
- * on {@code idempotency_keys}, inside the caller's transaction, so the key row and the business
- * write commit or roll back together: a missing key is 422 {@code idempotency_key_missing}; a key
- * still held by a concurrent request after the 5 second lock timeout is 409
- * {@code idempotency_in_progress}; a key reused with a different request is 422
- * {@code idempotency_key_reused}; a completed key replays its stored response without doing the
- * work again. The same protocol as retail's {@code RetailIdempotency}, which lending may not
- * depend on (ADR-002); lifting both into a core module is noted in ADR-026.
+ * Chapter 7 section 7.8 on {@code idempotency_keys}. The insert of the key row waits on a
+ * concurrent request holding the same key; {@code lock_timeout} bounds that wait at 5 seconds.
  */
 @Service
-class LoanIdempotency {
+class JdbcIdempotency implements Idempotency {
 
     private final JdbcClient jdbc;
     private final ObjectMapper mapper;
 
-    LoanIdempotency(JdbcClient jdbc, ObjectMapper mapper) {
+    JdbcIdempotency(JdbcClient jdbc, ObjectMapper mapper) {
         this.jdbc = jdbc;
         this.mapper = mapper;
     }
 
     private record Stored(String requestHash, String status, String body) {}
 
-    record Outcome<T>(T body, boolean replayed) {}
-
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    <T> Outcome<T> once(
+    public <T> Outcome<T> once(
             String key, String method, String path, Object request, Class<T> responseType, Supplier<T> work) {
         if (key == null || key.isBlank()) {
             throw ApiException.rule(

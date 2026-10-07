@@ -2,6 +2,8 @@ package com.rincoltech.bms.retail.stock.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.ledger.LedgerPosting.PostedEntry;
+import com.rincoltech.bms.core.operations.Idempotency;
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
@@ -14,8 +16,6 @@ import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
 import com.rincoltech.bms.retail.stock.RetailBooks.Posting;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
-import com.rincoltech.bms.retail.stock.RetailIdempotency;
-import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.Movement;
 import com.rincoltech.bms.retail.stock.internal.UsageApi.UsageLine;
@@ -48,7 +48,7 @@ class UsageService {
     private final RetailCatalogue catalogue;
     private final StockLedger stock;
     private final RetailBooks books;
-    private final RetailIdempotency idempotency;
+    private final Idempotency idempotency;
     private final RetailBranchContext branches;
     private final CurrentTenant tenant;
     private final BusinessClock clock;
@@ -59,7 +59,7 @@ class UsageService {
             RetailCatalogue catalogue,
             StockLedger stock,
             RetailBooks books,
-            RetailIdempotency idempotency,
+            Idempotency idempotency,
             RetailBranchContext branches,
             CurrentTenant tenant,
             BusinessClock clock,

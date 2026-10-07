@@ -1,7 +1,7 @@
 package com.rincoltech.bms.lending.loans.internal;
 
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.RequiresPermission;
-import com.rincoltech.bms.lending.loans.internal.LoanIdempotency.Outcome;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.ActionOutcome;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.DisbursementRequest;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.PayoffQuote;

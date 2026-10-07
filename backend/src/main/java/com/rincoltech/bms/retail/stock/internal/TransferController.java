@@ -1,7 +1,7 @@
 package com.rincoltech.bms.retail.stock.internal;
 
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.RequiresPermission;
-import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
 import com.rincoltech.bms.retail.stock.internal.TransferApi.Transfer;
 import com.rincoltech.bms.retail.stock.internal.TransferApi.TransferPage;
 import com.rincoltech.bms.retail.stock.internal.TransferApi.TransferRequest;

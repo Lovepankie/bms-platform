@@ -90,7 +90,8 @@ Also decided here, within the rules of chapter 3:
 
 - A replay reads every repayment of the loan; cost grows with the number of repayments (tens per
   loan in practice).
-- Two copies of the idempotency protocol until the follow-up refactor.
+- Two copies of the idempotency protocol until the follow-up refactor. (Done in #160: retail and
+  lending now use the one `Idempotency` in `core.operations`, and both copies are gone.)
 - Receipts taken out of order must be keyed in order; a late keyed older receipt cannot be
   recorded with its true value date once a newer one is in.
 - `LoanServicing` lets code without a principal disburse without an approval request. Only
