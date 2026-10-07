@@ -1262,7 +1262,8 @@ amount CHECKs and the sale header and stock-take line guards (sections 6.11.2 an
 retired setting `retail_allow_negative_stock` needs no migration: a stored key is ignored on read.
 `V28__retail_catalogue_management.sql` (#146) adds `active` and `updated_at` to `retail_categories` and
 `retail_units`, `updated_at` to `retail_suppliers` and `retail_customers`, and grants `bms_app` UPDATE on
-the four so a shop can rename them and switch a category, unit or supplier off (expand only).
+the four so a shop can rename them and switch a category, unit or supplier off, and a `version` integer
+(default 1) on the four for optimistic locking (expand only).
 `V20__retail_import_refs.sql` (#55) creates `retail_import_refs` (append-only) for the
 `import-retail` command (section 6.11.4). It took V20 while the retail fixes were still open;
 Flyway applies the gap in order after V14. `outOfOrder` stays off, so V15 to V19 are never used:
@@ -1325,6 +1326,7 @@ module on again adds nothing. `S` marks `is_system_controlled`.
 | `id`, `tenant_id`, `created_at`, `created_by` | standard | |
 | `name` | varchar(100) for categories, varchar(30) for units | Unique per tenant ignoring case (FR-RET-01) |
 | `active`, `updated_at` | boolean default true, timestamptz | V28: a row in use is switched off, never deleted |
+| `version` | integer default 1 | V28: bumped by every update; the `If-Match` value. `retail_suppliers` and `retail_customers` carry it too |
 
 ### `retail_products` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
