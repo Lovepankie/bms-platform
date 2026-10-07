@@ -30,7 +30,8 @@ import org.testcontainers.utility.MountableFile;
 class MigrationOrderIT {
 
     static final List<String> VERSIONS = List.of(
-            "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26", "28");
+            "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26",
+            "28");
 
     @Test
     void everyMigrationAppliesInOrderOnAnEmptyDatabase() {
