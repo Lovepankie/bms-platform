@@ -1605,6 +1605,195 @@ as `bms_app` under the tenant's row-level security:
 Primary key `(tenant_id, source_file, source_ref)`: a row already present is skipped, so a re-run
 of the same export adds nothing.
 
+### 6.11.5 Cash book (proposed, ADR-022; FR-RET-17 to FR-RET-32)
+
+**Design only: no migration exists.** The migration takes the next free Flyway version at merge
+time, above the highest on any open branch (`outOfOrder` is off), announced on issue #50; this
+section is its specification. Every table below is tenant-owned with forced row-level security
+(`bms_apply_tenant_rls`), a `tenant_id` first in every key, composite foreign keys on
+`(tenant_id, id)`, and the standard columns `id`, `tenant_id`, `created_at`, `created_by`. Money is
+`bigint` minor units with a `currency`, CHECK `0 < amount_minor <= 10^13` (savings: `>= 0`).
+Business dates are `date` in the tenant's zone (`tenants.timezone`), never in the future (checked by
+the service with the kernel clock); the instant is a separate `timestamptz`. Rows are append-only
+except the void columns (changed once) and, on `retail_advances` only, `repaid_minor` (changed on every
+repayment, see its guard below), by a guard trigger on each table (the pattern of
+`retail_sales_guard_update`, and the owner's `bms.allow_mutation` switch of `reject_mutation`).
+
+**Chart additions** (seeded by `bms_seed_retail_chart`, also for tenants that switched retail on
+earlier; a code or key the tenant already has is kept). Code 5900 and key `operating_expenses` are
+the lending chart's (section 6.6.2), reused so a tenant with both verticals keeps one such account,
+the way 1190 is shared; a tenant that has it from lending gets no second account:
+
+| Code | Name | Type | `system_key` |
+|---|---|---|---|
+| 1015 | Savings reserve (restricted cash) | asset | `savings_reserve` |
+| 1250 | Advances to owner and related parties | asset | `owner_advances` |
+| 5900 | Operating expenses | expense | `operating_expenses` |
+
+#### Tables
+
+| Table | Grants (`bms_app`) | Purpose |
+|---|---|---|
+| `retail_expense_categories` | SELECT, INSERT, UPDATE | Category lists: `name varchar(100)`, `expense_account_id` (nullable, composite FK to ledger accounts; null means `operating_expenses`; a trigger checks on insert and update that the account has `account_type = 'expense'`, `is_postable` and `is_active`, so a header, asset or inactive account is refused, 422 `account_not_expense`), `active`, `sort_order`. Unique `(tenant_id, lower(name))` |
+| `retail_expense_items` | SELECT, INSERT, UPDATE | `category_id` (composite FK), `name varchar(100)`, `requires_explanation boolean` (the pilot's "others"), `active`. Unique `(tenant_id, category_id, lower(name))` |
+| `retail_cash_parties` | SELECT, INSERT, UPDATE | Beneficiaries and advance parties: `name varchar(200)`, `contact varchar(100)` kept as entered, `kind` (`owner`, `staff`, `related_entity`, `supplier`, `other`; there is deliberately no `company` kind: an advance to the tenant's own business is not a receivable, ADR-022 open question 9). The party of an advance must be `owner`, `staff` or `related_entity` (service rule), `active`. Unique `(tenant_id, kind, lower(name))` |
+| `retail_daily_savings` | SELECT, INSERT, UPDATE (void only) | One record per branch and date, below |
+| `retail_cash_bankings` | SELECT, INSERT, UPDATE (void only) | Cash banked, below |
+| `retail_cash_withdrawals` | SELECT, INSERT, UPDATE (void only) | Withdrawals from bank, below |
+| `retail_expenses` | SELECT, INSERT, UPDATE (void only) | Company expenses, below |
+| `retail_advances` | SELECT, INSERT, UPDATE (`repaid_minor`, void) | Advances to owner or company, below |
+| `retail_advance_repayments` | SELECT, INSERT, UPDATE (void only) | Repayments, below |
+
+Categories, items and parties are never deleted (`active` is cleared). No UPDATE of a name once a
+record refers to it is blocked, because records snapshot the names they were written with.
+
+#### `retail_daily_savings`
+
+| Column | Type | Notes |
+|---|---|---|
+| `branch_id`, `business_date` | uuid, date | The shop and the trading day |
+| `amount_minor`, `currency` | bigint, text | The amount set aside, `>= 0` |
+| `suggested_minor` | bigint | The server's suggestion when written (day's profit times `savings_rate_bp`, half up, zero for a loss). Readable only with `retail.profit.read` (as is `amount_minor`, a savings amount being half the profit, ADR-022 decision 13; the API omits both without it) |
+| `overwritten` | boolean | CHECK `(suggested_minor IS NULL AND NOT overwritten) OR (suggested_minor IS NOT NULL AND overwritten = (amount_minor <> suggested_minor))`: a historical row has no suggestion (the pilot never stored one) so it is never `overwritten`, and the reason rule below does not apply to it |
+| `overwrite_reason` | text | CHECK: not null and at least 5 characters when `overwritten` |
+| `total_sold_minor` | bigint | Snapshot of the day's completed sales total, shown on the screen (a read-only column in the pilot) |
+| `occurred_at`, `recorded_by` | | Kernel clock instant, user |
+| `journal_entry_id` | uuid | Null when the amount is zero or the row is historical |
+| `historical`, `voided_at`, `voided_by`, `void_reason` | | |
+
+Index `UNIQUE (tenant_id, branch_id, business_date) WHERE voided_at IS NULL` (one active record per
+shop per day). Index `(tenant_id, branch_id, business_date)` for the lists and reports.
+
+#### `retail_cash_bankings`
+
+| Column | Type | Notes |
+|---|---|---|
+| `branch_id`, `business_date` | | The trading day banked for |
+| `amount_minor`, `currency` | | The amount banked, `> 0` |
+| `expected_minor` | bigint | Snapshot of the expected amount to bank when entered (never supplied by the client). May be negative when the till paid out more than it took. Net of savings, so profit-derived: readable only with `retail.profit.read` |
+| `banked_at` | timestamptz | The pilot's datetime |
+| `reference` | varchar(100) | Optional deposit slip number |
+| `recorded_by`, `journal_entry_id`, `historical`, void columns | | |
+
+Several rows per branch and date are allowed. Index `(tenant_id, branch_id, business_date)`.
+
+#### `retail_cash_withdrawals`
+
+`branch_id`, `business_date`, `amount_minor > 0`, `currency`, `withdrawn_at`, `purpose varchar(300)`,
+`recorded_by`, `journal_entry_id`, `historical`, void columns. Index `(tenant_id, branch_id,
+business_date)`. The pilot form has no shop; `branch_id` defaults to the caller's one branch, else the head office
+branch when it is in the caller's scope, else the request must name one (422 `branch_required`);
+an imported row with no shop takes the tenant's single head office branch whatever any scope is
+(open question 7).
+
+#### `retail_expenses`
+
+| Column | Type | Notes |
+|---|---|---|
+| `branch_id`, `business_date` | | |
+| `category_id`, `item_id` | uuid | Composite FKs; the service refuses an item of another category |
+| `category_name`, `item_name` | varchar(100) | Snapshots, so a rename never changes an old record, and so an imported row whose list entry is missing keeps what was written |
+| `party_id` | uuid | Optional beneficiary |
+| `amount_minor`, `currency` | | The pilot's Total Cost, `> 0` |
+| `explanation` | varchar(500) | Required when the item `requires_explanation` (service rule, FR-RET-24) |
+| `receipt_document_id` | uuid | Optional, `core.documents` |
+| `occurred_at`, `recorded_by`, `journal_entry_id`, `historical`, void columns | | |
+
+Indexes `(tenant_id, branch_id, business_date)` and `(tenant_id, category_id, business_date)` for the
+expenses report.
+
+#### `retail_advances`, `retail_advance_repayments`
+
+An advance: `branch_id` (the source shop), `advance_no` from the tenant sequence
+`retail_advance_no` (`RA00000001`, sequential like the pilot's ids; an imported advance takes the
+next value too, in business date then source id order, and the pilot's id lives only in
+`retail_import_refs` and the note, so an imported number can never collide with a live one), `party_id` (kind `owner`, `staff` or `related_entity`),
+`taken_by_party_id` (optional, the pilot's "who took the money"), `principal_minor > 0`, `currency`,
+`purpose varchar(300)`, `business_date`, `repaid_minor` (CHECK `0 <= repaid_minor <= principal_minor`; a stored running total, **not** an independent balance: it is changed only by the repayment insert and the repayment void, in the same transaction and under the advance's row lock, like `retail_sales.paid_minor`), `note`, `journal_entry_id`,
+`historical`, void columns. The balance is `principal_minor - repaid_minor`; the pilot's "loans with
+balance above zero" is `repaid_minor < principal_minor` and not voided. Unique `(tenant_id,
+advance_no)`. A repayment: `advance_id`, `branch_id` (the branch that receives the money, within the caller's scope, defaulting to the advance's branch; the posting is made in this branch, so its `cash_on_hand`, `mobile_money` or `bank` is debited and `owner_advances` credited there), `amount_minor > 0`, `method` (`cash`, `mobile_money`,
+`bank`), `paid_on`, `recorded_by`, `journal_entry_id`, `historical`, void columns; index
+`(tenant_id, advance_id)`. An advance with a non-voided repayment cannot be voided; voiding a
+repayment lowers `repaid_minor` under the lock. **Guard on `retail_advances`:** the guard trigger
+refuses every UPDATE except the void columns (once) and `repaid_minor`, and it refuses a
+`repaid_minor` change that is not equal to the sum of the advance's non-voided repayments after
+the change (a deferred constraint trigger on `retail_advance_repayments` compares the two), so no
+session, `bms_app` included, can set an arbitrary figure; a repayment row itself is append-only
+except its void columns. A reconciliation test asserts, after concurrent repayments and voids,
+that `repaid_minor` equals the sum of non-voided repayments for every advance, and that a direct
+UPDATE of `repaid_minor` to another value is refused.
+
+#### Cash book posting rules (FR-RET-20 to FR-RET-26)
+
+Every rule posts through `post_entry` in the transaction of its event, one entry, in the record's
+`branch_id`, `source_module = 'retail'`. A zero amount posts nothing. A void posts the reversal
+(`reverses_entry_id` set) with the key `<key>:void`. Historical rows post nothing. The opening entry is dated the day **before** the first live day (the day before the importer's first live date, default the import day), so the first live day's `opening_minor` equals the carried balance and the opening is not an `other_movements_minor` of that day.
+
+| Event | Debit | Credit | Idempotency key |
+|---|---|---|---|
+| Daily savings | `savings_reserve` | `cash_on_hand` | `retail.savings:<id>` |
+| Cash banked | `bank` | `cash_on_hand` | `retail.banking:<id>` |
+| Withdrawal from bank | `cash_on_hand` | `bank` | `retail.withdrawal:<id>` |
+| Expense | the category's expense account (`operating_expenses` when unmapped) | `cash_on_hand` | `retail.expense:<id>` |
+| Advance paid out | `owner_advances`, advance as subledger | `cash_on_hand` | `retail.advance:<id>` |
+| Repayment of an advance | `cash_on_hand`, `mobile_money` or `bank` by method | `owner_advances`, advance as subledger | `retail.advance_repayment:<id>` |
+| Opening, per branch, at import | `cash_on_hand`, `bank`, `savings_reserve` balances, and one `owner_advances` line **per outstanding advance** with that advance as subledger | `opening_balance_equity` | `retail.cash_opening:<branch>` |
+
+#### Derived figures (read model, no table)
+
+For a branch and a business date, in the tenant's zone:
+
+- **Cash takings** = sum of `retail_sales.total_minor` where `payment_method = 'cash'` and
+  `sale_date` is the date (a sale voided later is counted here too, on its own day), plus
+  `retail_sale_payments.amount_minor` where `method = 'cash'` and `paid_on` is the date. Credit,
+  mobile money and bank sales are not cash takings (open question 2). A credit sale with payments
+  cannot be voided (`sale_has_payments`), so payments never need a void line.
+- **One void rule.** Every cash book record posts on its own `business_date` (which may be earlier
+  than `created_at` for a back-dated record) and counts there whether or not it is voided later;
+  its reversal posts on the **void date**, the business date of `voided_at` in the tenant's zone,
+  and shows as a separate voids line on that day. A void is never back-dated onto the record's day:
+  the ledger holds the record on its day and the reversal on the void day, and closing must equal
+  the ledger at the end of each day. A record voided the day it is dated nets to zero. The lines
+  are `cash_sale_voids_minor` (sum of `total_minor` of cash sales whose void falls on the date),
+  `savings_voids_minor`, `expense_voids_minor`, `advance_voids_minor`, `banking_voids_minor`,
+  `repayment_voids_minor` and `withdrawal_voids_minor` (each the sum of the amounts of records of
+  that kind voided on the date; a repayment void counts only for a cash repayment in the cash
+  movement).
+- **Cash purchases** = per branch, the amount of the entry `retail.purchase:<id>:<branch>` (the
+  branch's quantities times the line costs, rounded per branch) of each purchase whose
+  `payment_method = 'cash'` and `purchased_on` is the date; for a historical purchase the same
+  amount worked from its movements. Bank and credit purchases are not cash. Cash restocks credit
+  `cash_on_hand` (ADR-020 decision 7), so they leave the till.
+- **Cash expected** (`cash_expected_minor`, what a caller without `retail.profit.read` sees) = cash takings, less cash sale voids, less cash expenses and advances paid out, plus cash repayments received, plus `expense_voids_minor` and `advance_voids_minor`, less `repayment_voids_minor`: it **excludes cash purchases and savings**, so it carries no cost and no profit.
+- **Expected to bank** = cash takings, less cash sale voids, less cash purchases, less savings,
+  less cash expenses, less advances paid out, plus cash repayments received (each by its own
+  `business_date`, voided or not), plus `savings_voids_minor`, `expense_voids_minor` and
+  `advance_voids_minor`, less `repayment_voids_minor` (all of the void date). A banking or
+  withdrawal void moves the banked or withdrawn line, not the expected amount. It is computed from
+  the rows and the same query serves the form, the snapshot `expected_minor` and the reports.
+- **Difference** = sum of `amount_minor` banked for the date, less `banking_voids_minor` of the date, less expected, and the flag
+  from the tenant tolerance. **Running unbanked** = cumulative sum of (expected less banked) over the
+  branch's **live** days, starting at the first live day (the day after the cash opening journal)
+  with nothing carried in. Imported (historical) days are listed separately in the banking report,
+  with their own expected, banked and difference, and are excluded from `unbanked_running_minor`:
+  the pilot's expected figure was virtual and often wrong, and its drift must not follow the shop
+  forever.
+- **Daily cash summary closing** = opening plus every listed movement; it is compared with the
+  ledger's `cash_on_hand` for the branch on that date (`LedgerAccounts.balanceByBranch`), and the
+  remainder is reported as `other_movements_minor`. Imported days have no journals, so they carry
+  `ledger_basis: false` and no opening or closing.
+- **Savings suggestion** = daily profit (section 6.11.3) times `retail.cashbook.savings_rate_bp`
+  (tenant setting, default 5000), rounded half up per branch and day.
+
+Tenant settings added (chapter 6 `tenant_settings`, default if unset): `retail.cashbook.savings_rate_bp`
+(5000) and `retail.cashbook.tolerance_minor` (0).
+
+**Import references.** `retail_import_refs.source_file` gains the values `savings`, `expenses`,
+`banking`, `withdrawals`, `advances`, `advance_payments` and `cash_opening` (the CHECK is widened in
+the cash book migration); the key `(tenant_id, source_file, source_ref)` is unchanged.
+
+
 ## 6.12 Performance and indexing (issue #107, ADR-028)
 
 Measured with `scripts/db-bench`: a throwaway PostgreSQL 17 container holding 25 times the staging

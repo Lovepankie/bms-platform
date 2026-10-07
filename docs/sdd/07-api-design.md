@@ -190,7 +190,7 @@ published under the platform host.
 | 404 | Not found or outside branch scope; `unknown_tenant`; `module_not_enabled`; `link_invalid` (an applicant link that is malformed, unknown, replaced or expired, one answer for all, ADR-024) |
 | 413 | `file_too_large`: an upload over 5 MB, or a logo over 1 MB (chapter 8 section 8.8) |
 | 415 | `unsupported_file_type`: an upload that is not JPEG, PNG or PDF by content (a logo: not PNG, JPEG or WebP, or an image that cannot be decoded) |
-| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, `approval_already_pending`, `mfa_already_enrolled`, `mfa_not_enrolled`, `mfa_enrolment_not_started`, duplicates (`duplicate_nin`, `duplicate_import`, `collateral_already_pledged`, `duplicate_email`, `duplicate_phone`, `duplicate_branch_code`, `duplicate_slug`, `duplicate_product_code`); `transaction_conflict` (the database aborted the transaction as a deadlock victim or serialisation loser; nothing was saved, `Retry-After` is set and the same request may be retried with the same `Idempotency-Key`); `stock_moved_since_count` (a retail stock-take whose lines moved after the count so far that the adjustment would leave a negative balance; recount them); `application_state` (an onboarding decision or reply the application's status does not allow), `application_not_verified` (Activate before Verify), `outbox_not_failed` (send again on a row that has not failed), `outbox_too_old` (send again on a row older than its link's 7 day lifetime); `conflict` for any other unique or foreign key violation |
+| 409 | `version_conflict`, `idempotency_in_progress`, `invalid_status_transition`, `approval_already_pending`, `mfa_already_enrolled`, `mfa_not_enrolled`, `mfa_enrolment_not_started`, duplicates (`duplicate_nin`, the cash book's `duplicate_category`, `duplicate_item`, `duplicate_party`, `duplicate_import`, `collateral_already_pledged`, `duplicate_email`, `duplicate_phone`, `duplicate_branch_code`, `duplicate_slug`, `duplicate_product_code`); the cash book's `cash_record_voided` (any cash book record voided twice), `savings_exists` (a second active savings record for a branch and date), `suggestion_changed` (the savings suggestion changed since the form was shown; the body carries the new `suggestion_token`, ADR-022 decision 11) and `advance_has_repayments`; `transaction_conflict` (the database aborted the transaction as a deadlock victim or serialisation loser; nothing was saved, `Retry-After` is set and the same request may be retried with the same `Idempotency-Key`); `stock_moved_since_count` (a retail stock-take whose lines moved after the count so far that the adjustment would leave a negative balance; recount them); `application_state` (an onboarding decision or reply the application's status does not allow), `application_not_verified` (Activate before Verify), `outbox_not_failed` (send again on a row that has not failed), `outbox_too_old` (send again on a row older than its link's 7 day lifetime); `conflict` for any other unique or foreign key violation |
 | 422 | Validation and business rule failures (codes below) |
 | 423 | `tenant_suspended`, `account_locked` |
 | 428 | `precondition_required`: a `PATCH`, or a state transition or retail price edit, without `If-Match` (section 7.9) |
@@ -216,12 +216,12 @@ from identity, tenancy and approvals (increment 1): `weak_password`, `invitation
 `invitation_expired`, `invalid_mfa_code` (enrolment and recovery code replacement),
 `cannot_deactivate_self`, `cannot_reset_own_mfa`, `last_tenant_admin`, `not_a_tenant_admin`,
 `head_office_required`, `invalid_tenant`, `module_not_allowed`, `unknown_action_type`,
-`approval_execution_failed`; and from retail (ADR-020): `insufficient_stock`, `price_below_cost`; and from any money route: `amount_out_of_range` (exact arithmetic on minor units overflowed; every retail `*_minor` input is also bounded at 10^13 by validation and a database CHECK, review F7).
+`approval_execution_failed`; and from retail (ADR-020): `insufficient_stock`, `price_below_cost`; and from the retail cash book (ADR-022): `reason_required`, `explanation_required`, `item_not_in_category`, `category_inactive`, `account_not_expense`, `party_kind_not_allowed`, `suggestion_token_required`, `amount_requires_profit_access`, `repayment_exceeds_balance`, `advance_settled` and `branch_required`; and from any money route: `amount_out_of_range` (exact arithmetic on minor units overflowed; every retail `*_minor` input is also bounded at 10^13 by validation and a database CHECK, review F7).
 
 Entries of the `errors` array carry their own `code`: `invalid` (a Bean Validation failure;
 the message says which), `required`, `unknown_branch` (a branch that does not exist, is inactive
 or is outside the caller's scope, deliberately indistinguishable), `invalid_phone`,
-`invalid_nin`, `unknown_role`, `invalid_slug`, `weak_password`. Every response, success or error,
+`invalid_nin`, `unknown_role`, `invalid_slug`, `weak_password`, `future_date` (a business date after today in the tenant's time zone). Every response, success or error,
 carries the `X-Request-Id` header.
 
 ## 7.8 Idempotency (money-moving endpoints)
@@ -763,6 +763,88 @@ destination branch: the same cost is posted to both branches' inventory accounts
 `/retail/stock/movements` show the lines as `transfer_out` and `transfer_in` with `source_type`
 `retail.transfer` and `source_id` the transfer; a void adds the opposite kinds with `source_type`
 `retail.transfer_void` and `reverses_movement_id` set.
+
+### 7.11.21 Retail cash book (`/retail`, proposed, ADR-022)
+
+**Proposed, not built:** the contract the build must meet, and the source of `openapi.json` after it.
+Refused with 404 `module_not_enabled` unless retail is switched on. Conventions are those of section
+7.11.20: snake_case, branch scope on every row (ADR-017, 404 outside scope), `*` fields absent (not
+null) without `retail.profit.read` (for the cash book that includes every savings amount, the cash restock total `cash_purchases_minor` and every figure net of them, ADR-022 decision 13), **M** requires `Idempotency-Key` (section 7.8). A request for one
+branch takes `branch_id`, or the caller's one branch when the permission's scope has exactly one;
+otherwise 422 `branch_required`. Dates are business dates in the tenant's zone, default today, never in
+the future (a record posts on its own `business_date`, which may be earlier than its `created_at`, and a void posts on the day it is made, shown as a `*_voids_minor` line on the void day and never rewriting the record's day, ADR-022 decision 9): a future date is a field problem, as in a transfer's `transfer_date`: 422 `validation_failed` with an `errors` entry `{field: business_date, code: future_date}` (the field is `paid_on`, `banked_at` or `withdrawn_at` on those routes). Every record in a response carries `by`, `at`, `voided`, `historical`.
+Every void takes `{reason}`, is **M**, needs `retail.cashbook.void`, and is 409 `cash_record_voided` the
+second time (the `<thing>_voided` style of `sale_voided` and `transfer_voided`).
+
+Lists and the expense setup (FR-RET-17):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/expense-categories` | `retail.cashbook.read` | `{items: [{id, name, expense_account_id, active, items: [{id, name, requires_explanation, active}]}]}`; `active` filter |
+| POST | `/retail/expense-categories` | `retail.expense.manage` | `{name, expense_account_id?}`; 409 `duplicate_category`; `expense_account_id` must be a postable expense account (422 `account_not_expense`) |
+| PATCH | `/retail/expense-categories/{category_id}` | `retail.expense.manage` | `{name?, expense_account_id?, active?, sort_order?}`; requires `If-Match` (428 without, 409 `version_conflict` on a stale version); 409 `duplicate_category` |
+| POST | `/retail/expense-categories/{category_id}/items` | `retail.expense.manage` | `{name, requires_explanation?}`; 409 `duplicate_item` |
+| PATCH | `/retail/expense-categories/{category_id}/items/{item_id}` | `retail.expense.manage` | `{name?, requires_explanation?, active?}`; requires `If-Match` (428 without, 409 `version_conflict` on a stale version); 409 `duplicate_item` |
+| GET | `/retail/cash-parties` | `retail.cashbook.read` | `query`, `kind`, `limit` (default 50, at most 200), `cursor` |
+| POST | `/retail/cash-parties` | `retail.expense.record` or `retail.advance.create` | `{name, contact?, kind}`; `kind` one of `owner`, `staff`, `related_entity`, `supplier`, `other`; 409 `duplicate_party`; 422 `party_kind_not_allowed` when an advance names a `supplier` or `other` party |
+
+Daily savings (FR-RET-18 to FR-RET-20):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/savings/suggestion` | `retail.savings.record` | `branch_id?`, `date?`. `{branch_id, business_date, total_sold_minor, suggestion_token, suggested_minor*, daily_profit_minor*, existing_id}`; `suggestion_token` is an opaque keyed hash of the suggestion (it reveals nothing, so every caller gets it); `suggested_minor` and the profit are `*`, absent without `retail.profit.read`; `existing_id` is the active record for the day, if any |
+| POST | `/retail/savings` | `retail.savings.record` | **M**. `{branch_id?, business_date?, suggestion_token, amount_minor?, overwrite_reason?}`; `suggestion_token` is the one the form was shown (422 `suggestion_token_required` when missing); an omitted amount takes the suggestion; a caller without `retail.profit.read` may not send `amount_minor` or `overwrite_reason` at all (422 `amount_requires_profit_access`, "only the default can be recorded without profit access"; the default is applied server-side, so no accepted-or-refused answer reveals the suggestion); a caller with `retail.profit.read` sending an amount differing from the suggestion the token stands for needs `retail.savings.overwrite` (403) and a reason (422 `reason_required`); if the suggestion has changed since the token was issued the answer is 409 `suggestion_changed` with the new `suggestion_token` (and `suggested_minor*`) and nothing is written, never a false overwrite; 409 `savings_exists`. The response echoes `amount_minor` to the writer only when the writer typed it; a default taken by a caller without `retail.profit.read` is not echoed (`amount_minor*`) |
+| GET | `/retail/savings` | `retail.cashbook.read` | `branch_id` (repeatable), `from`, `to`, `include_voided`, `limit` (default 50, at most 200), `cursor`; row `{id, branch_id, business_date, amount_minor*, total_sold_minor, overwritten*, suggested_minor*, by, at}` (a savings amount is profit-derived, ADR-022 decision 13, so without `retail.profit.read` the row shows that savings were recorded but not how much); grouped client-side by shop, year and month |
+| POST | `/retail/savings/{savings_id}/void` | `retail.cashbook.void` | Reverses the entry and frees the day |
+
+Cash banked (FR-RET-21 to FR-RET-23):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/bankings/expected` | `retail.banking.record` | `branch_id?`, `date?`. `{branch_id, business_date, cash_takings_minor, cash_sale_voids_minor, expense_voids_minor, advance_voids_minor, repayment_voids_minor, cash_purchases_minor*, savings_minor*, savings_voids_minor*, expenses_minor, advances_out_minor, repayments_in_minor, cash_expected_minor, expected_minor*, banked_so_far_minor}`; `cash_expected_minor` is takings, less cash sale voids, less expenses and advances paid out, plus repayments (with the expense, advance and repayment voids of the day), **before cash purchases and before savings**, and is what a caller without `retail.profit.read` is shown; `cash_purchases_minor` (a total at cost), `savings_minor` and `expected_minor` (net of both) are `*`; the form shows it and prefills with `expected_minor` (or `cash_expected_minor` when that is all the caller may see, which for a cashier is the takings figure less their own till payments) |
+| POST | `/retail/bankings` | `retail.banking.record` | **M**. `{branch_id?, business_date?, amount_minor, banked_at?, reference?}`; stores `expected_minor`; response adds `difference_minor*`, `flag*` and `warnings*: [cash_below_banked?]` (gated like the other balance figures: cash on hand is net of savings and cash purchases, so the warning is absent without `retail.profit.read`; `bank_balance_negative` on withdrawals is not affected); stored `expected_minor*` is profit-gated too; never refused for exceeding cash |
+| GET | `/retail/bankings` | `retail.cashbook.read` | `branch_id`, `from`, `to`, `include_voided`, `limit` (default 50, at most 200), `cursor` |
+| POST | `/retail/bankings/{banking_id}/void` | `retail.cashbook.void` | |
+| POST | `/retail/withdrawals` | `retail.withdrawal.record` | **M**. `{branch_id?, business_date?, amount_minor, withdrawn_at?, purpose?}`; response may carry `warnings: [bank_balance_negative]` |
+| GET | `/retail/withdrawals` | `retail.cashbook.read` | Same filters, with `limit` (default 50, at most 200) and `cursor` |
+| POST | `/retail/withdrawals/{withdrawal_id}/void` | `retail.cashbook.void` | |
+
+Expenses (FR-RET-24):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/retail/expenses` | `retail.expense.record` | **M**. `{branch_id?, business_date?, category_id, item_id, party_id?, amount_minor, explanation?, receipt_document_id?}`; 422 `item_not_in_category`, `explanation_required`, `category_inactive` |
+| GET | `/retail/expenses` | `retail.cashbook.read` | `branch_id`, `from`, `to`, `category_id`, `item_id`, `include_voided`, `limit`, `cursor` |
+| POST | `/retail/expenses/{expense_id}/void` | `retail.cashbook.void` | |
+
+Advances and repayments (FR-RET-26):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/retail/advances` | `retail.advance.create` | **M**. `{branch_id?, business_date?, party_id, taken_by_party_id?, principal_minor, purpose?}`; response has `advance_no` |
+| GET | `/retail/advances` | `retail.cashbook.read` | `branch_id`, `party_id`, `open_only` (balance above zero, what the repayment form lists), `from`, `to`, `limit` (default 50, at most 200), `cursor`; row adds `repaid_minor`, `balance_minor` |
+| GET | `/retail/advances/{advance_id}` | `retail.cashbook.read` | With its repayments |
+| POST | `/retail/advances/{advance_id}/repayments` | `retail.advance.repay` | **M**. `{branch_id?, amount_minor, method: cash, mobile_money or bank, paid_on?}` (`branch_id` is the branch that receives the money, scoped, default the advance's branch); 422 `repayment_exceeds_balance`, `advance_settled`; returns the new balance |
+| POST | `/retail/advances/{advance_id}/void` | `retail.cashbook.void` | 409 `advance_has_repayments` |
+| POST | `/retail/advances/{advance_id}/repayments/{repayment_id}/void` | `retail.cashbook.void` | |
+
+Reports (FR-RET-23, FR-RET-27, FR-RET-29), all `branch_id` (repeatable, scoped), `from`, `to` (default
+the last 30 days, at most 366), also `format=csv` through the report runs of section 7.11.8:
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/reports/cash/daily` | `retail.cashbook.read` | Per branch and day: `cash_takings_minor`, `cash_sale_voids_minor`, `expense_voids_minor`, `advance_voids_minor`, `repayment_voids_minor`, `banking_voids_minor`, `withdrawal_voids_minor`, `cash_purchases_minor*`, `expenses_minor`, `advances_out_minor`, `repayments_in_minor`, `withdrawals_in_minor`, `banked_minor`, `cash_expected_minor`, `ledger_basis`, `historical` (an imported day: no running total, see below), and the savings-embedding figures `opening_minor*`, `savings_minor*`, `savings_voids_minor*`, `closing_minor*`, `other_movements_minor*`, `expected_to_bank_minor*`, `unbanked_running_minor*`; `daily_profit_minor*` |
+| GET | `/retail/reports/cash/banking` | `retail.cashbook.read` | Per branch and day: `cash_expected_minor`, `banked_minor`, and `expected_minor*`, `difference_minor*`, `flag*` (`ok`, `shortfall`, `surplus`, `not_banked`), `unbanked_running_minor*` (all net of savings, so profit-gated), `entries: [{id, amount_minor, banked_at, by}]`; filter `flag`; an imported (historical) day has `historical: true` and no `unbanked_running_minor`, and does not count in the running total of the live days, which starts at the first live day |
+| GET | `/retail/reports/cash/expenses` | `retail.cashbook.read` | `group_by` (`category`, `item`, `branch`, `month`), totals, count; no voided rows |
+| GET | `/retail/reports/cash/savings` | `retail.cashbook.read` | Per branch and day `total_sold_minor`; `overwritten*`, `amount_minor*`, `suggested_minor*`, `daily_profit_minor*` |
+| GET | `/retail/reports/cash/advances` | `retail.cashbook.read` | Outstanding by party: principal, repaid, balance, oldest advance date |
+
+Error codes: the cash book's codes are listed in section 7.7 (409 `cash_record_voided`, `savings_exists`,
+`suggestion_changed`, `advance_has_repayments`, `duplicate_category`, `duplicate_item`,
+`duplicate_party`; 422 `reason_required`, `explanation_required`, `item_not_in_category`,
+`category_inactive`, `account_not_expense`, `party_kind_not_allowed`, `suggestion_token_required`, `amount_requires_profit_access`,
+`repayment_exceeds_balance`, `advance_settled`, `branch_required`; the field code `future_date`). The cash book has no import endpoint; its history comes through the
+`import-retail` command (chapter 13 section 13.13).
 
 ## 7.12 Example: record a repayment
 
