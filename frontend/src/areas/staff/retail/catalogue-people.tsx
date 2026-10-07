@@ -5,7 +5,7 @@ import { retail, type Customer, type Supplier } from '../../../api/retail';
 import { useStaff } from '../context';
 import { AddPanel, BackToCatalogue } from './catalogue';
 import { canUse } from './permissions';
-import { Gate, Problem, Success, money, useToast } from './ui';
+import { Gate, Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
 
 // Suppliers and Credit buyers (#146): a name and a contact, added and edited by the shop. A supplier
 // can be switched off (it stays on its past restocks); a credit buyer is never removed. The contact
@@ -86,6 +86,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   const queryClient = useQueryClient();
   const { show, toast } = useToast();
   const [message, setMessage] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [adding, setAdding] = useState(false);
@@ -108,9 +109,10 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
     onSuccess: (row) => { setName(''); setContact(''); setAdding(false); done(`Added the ${noun} "${row.name}".`); },
   });
   const change = useMutation({
-    mutationFn: (v: { id: string; version: number; body: PersonEdit & { active?: boolean }; text: (row: Person) => string }) => update(v.id, v.version, v.body).then((row) => ({ row, text: v.text })),
-    onMutate: () => setMessage(null),
+    mutationFn: (v: { id: string; version: number | undefined; body: PersonEdit & { active?: boolean }; text: (row: Person) => string }) => update(v.id, requireVersion(v.version), v.body).then((row) => ({ row, text: v.text })),
+    onMutate: () => { setMessage(null); setFailure(null); },
     onSuccess: ({ row, text }) => done(text(row)),
+    onError: (error) => setFailure(changeFailureText(error, queryClient)),
   });
   return (
     <>
@@ -129,7 +131,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
         </AddPanel>
       )}
       {message && <Success>{message}</Success>}
-      <Problem error={change.error} />
+      <Problem error={failure && new Error(failure)} />
       {rows.isPending && <p className="loading">Loading</p>}
       <Problem error={rows.error} />
       {searchable && (
@@ -145,13 +147,13 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
             key={r.id}
             row={r}
             busy={change.isPending}
-            onSave={(edit) => change.mutate({ id: r.id ?? '', version: r.version ?? 1, body: edit, text: (x) => `Saved the changes to "${x.name}".` })}
+            onSave={(edit) => change.mutate({ id: r.id ?? '', version: r.version, body: edit, text: (x) => `Saved the changes to "${x.name}".` })}
             {...(canSwitch
               ? {
                   onToggle: () =>
                     change.mutate({
                       id: r.id ?? '',
-                      version: r.version ?? 1,
+                      version: r.version,
                       body: { active: 'active' in r && r.active === false },
                       text: (x) => ('active' in x && x.active === false
                         ? `"${x.name}" is switched off. It stays on past restocks; new restocks cannot choose it.`

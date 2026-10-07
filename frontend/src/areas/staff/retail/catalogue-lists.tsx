@@ -3,7 +3,7 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type Category, type Unit } from '../../../api/retail';
 import { AddPanel, BackToCatalogue } from './catalogue';
-import { Gate, Problem, Success, useToast } from './ui';
+import { Gate, Problem, Success, changeFailureText, requireVersion, useToast } from './ui';
 
 // Categories and Units (#146): the same screen twice. A row can be renamed or switched off, never
 // deleted: items and their history keep pointing at it. A switched-off row stays on the items that
@@ -68,6 +68,7 @@ function NamedList({ noun, plural, list, create, update }: {
   const queryClient = useQueryClient();
   const { show, toast } = useToast();
   const [message, setMessage] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [adding, setAdding] = useState(false);
   const rows = useQuery({ queryKey: ['retail', 'catalogue', plural], queryFn: list });
@@ -82,9 +83,10 @@ function NamedList({ noun, plural, list, create, update }: {
     onSuccess: (row) => { setName(''); setAdding(false); done(`Added the ${noun} "${row.name}".`); },
   });
   const change = useMutation({
-    mutationFn: (v: { id: string; version: number; body: { name?: string; active?: boolean }; text: (row: Named) => string }) => update(v.id, v.version, v.body).then((row) => ({ row, text: v.text })),
-    onMutate: () => setMessage(null),
+    mutationFn: (v: { id: string; version: number | undefined; body: { name?: string; active?: boolean }; text: (row: Named) => string }) => update(v.id, requireVersion(v.version), v.body).then((row) => ({ row, text: v.text })),
+    onMutate: () => { setMessage(null); setFailure(null); },
     onSuccess: ({ row, text }) => done(text(row)),
+    onError: (error) => setFailure(changeFailureText(error, queryClient)),
   });
   return (
     <>
@@ -98,7 +100,7 @@ function NamedList({ noun, plural, list, create, update }: {
         <Problem error={add.error} />
       </AddPanel>
       {message && <Success>{message}</Success>}
-      <Problem error={change.error} />
+      <Problem error={failure && new Error(failure)} />
       {rows.isPending && <p className="loading">Loading</p>}
       <Problem error={rows.error} />
       {rows.data && rows.data.length === 0 && <p className="empty-state">No {plural} yet. Add the first one above.</p>}
@@ -109,11 +111,11 @@ function NamedList({ noun, plural, list, create, update }: {
             row={r}
             noun={noun}
             busy={change.isPending}
-            onRename={(n) => change.mutate({ id: r.id ?? '', version: r.version ?? 1, body: { name: n }, text: (x) => `Renamed to "${x.name}".` })}
+            onRename={(n) => change.mutate({ id: r.id ?? '', version: r.version, body: { name: n }, text: (x) => `Renamed to "${x.name}".` })}
             onToggle={() =>
               change.mutate({
                 id: r.id ?? '',
-                version: r.version ?? 1,
+                version: r.version,
                 body: { active: r.active === false },
                 text: (x) => (x.active === false
                   ? `"${x.name}" is switched off. Items that use it keep it; new items cannot choose it.`

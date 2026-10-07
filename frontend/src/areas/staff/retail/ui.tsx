@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { RETAIL_CURRENCY, retail, type Product } from '../../../api/retail';
+import { RETAIL_CURRENCY, RetailError, retail, type Product } from '../../../api/retail';
 import { ALL_BRANCHES, branchLabel } from '../../../auth/branch';
 import { formatMinor } from '../../../components/money';
 import { useStockedBranches } from '../branch-picker';
@@ -48,6 +48,25 @@ export function useToast(): { show: (message: string) => void; toast: ReactNode 
     timer.current = setTimeout(() => setText(null), 4000);
   };
   return { show, toast: text ? <p className="toast" aria-hidden="true">{text}</p> : null };
+}
+
+export const STALE_TEXT = 'This was changed by someone else. The list has been reloaded; please try again.';
+
+/** A row with no version cannot be changed safely: that is a bug in the screen, so say so rather than guess. */
+export function requireVersion(version: number | undefined): number {
+  if (version === undefined) {
+    throw new Error('This row has no version, so it cannot be changed safely. Reload the page and try again.');
+  }
+  return version;
+}
+
+/** Words for a failed change. A stale version also reloads the lists, so the retry carries the new version. */
+export function changeFailureText(error: unknown, queryClient: QueryClient): string {
+  if (error instanceof RetailError && error.code === 'version_conflict') {
+    void queryClient.invalidateQueries({ queryKey: ['retail'] });
+    return STALE_TEXT;
+  }
+  return error instanceof Error ? error.message : 'Something went wrong.';
 }
 
 export function Problem({ error }: { error: unknown }) {
