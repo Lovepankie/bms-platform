@@ -6,7 +6,7 @@ import type { Category, Customer, PriceChange, Product } from '../../../api/reta
 import { createMockRetail, mockMe, setMockProfitAccess } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { catalogueLinksFor } from './catalogue';
-import { ImportReport } from './catalogue-import';
+import { ImportReport, NOT_UTF8, readCsvText } from './catalogue-import';
 import { NamedRow, usedText } from './catalogue-lists';
 import { PersonRow } from './catalogue-people';
 import { PriceForm, PriceHistory, ProductCard, ProductForm, belowCostHint, showWhen } from './catalogue-products';
@@ -270,6 +270,19 @@ describe('importing items from a file', () => {
     expect([again.added, again.skipped]).toEqual([0, 3]);
     expect((await api.listCatalogue({ query: 'IMP-' })).items).toHaveLength(2);
     expect(renderToString(<ImportReport result={first} />)).toContain('What was done');
+  });
+
+  it('strips a byte order mark, accepts CRLF and warns when the file is not UTF-8', async () => {
+    const withBom = '\uFEFF' + csv.replace(/\n/g, '\r\n');
+    const read = readCsvText(withBom);
+    expect(read.text.startsWith('code,')).toBe(true);
+    expect(read.text).not.toContain('\r');
+    expect(read.notUtf8).toBe(false);
+    const dry = await createMockRetail().importProducts(read.text, true);
+    expect([dry.added, dry.skipped, dry.errors]).toEqual([1, 1, 1]);
+    const bad = readCsvText('code,description\nIMP-1,Caf\uFFFD\n');
+    expect(bad.notUtf8).toBe(true);
+    expect(NOT_UTF8).toContain('does not look like UTF-8');
   });
 
   it('refuses the cost column to a session that may not see costs', async () => {

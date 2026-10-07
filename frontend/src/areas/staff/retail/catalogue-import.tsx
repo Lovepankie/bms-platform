@@ -15,6 +15,18 @@ const WORDS: Record<string, { label: string; tone: string }> = {
   error: { label: 'Problem', tone: 'danger' },
 };
 
+export const NOT_UTF8 = 'This file does not look like UTF-8 (save the CSV as UTF-8).';
+
+/**
+ * What a chosen file's decoded text becomes: a leading byte order mark is dropped, CRLF and lone CR
+ * line ends become LF, and a replacement character (U+FFFD, what a decoder writes for bytes that are
+ * not UTF-8) is reported so the person can save the file as UTF-8 before the check.
+ */
+export function readCsvText(raw: string): { text: string; notUtf8: boolean } {
+  const text = raw.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+  return { text, notUtf8: text.includes('\uFFFD') };
+}
+
 export function ImportReport({ result }: { result: ImportResult }) {
   const rows = result.rows ?? [];
   const names = (list: string[] | undefined, noun: string) => (list && list.length > 0 ? <p>New {noun}: {list.join(', ')}.</p> : null);
@@ -49,6 +61,7 @@ function ImportPage() {
   const [text, setText] = useState('');
   const [checked, setChecked] = useState<{ text: string; result: ImportResult } | null>(null);
   const [done, setDone] = useState<ImportResult | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const check = useMutation({
     mutationFn: () => retail.importProducts(text, true),
     onMutate: () => setDone(null),
@@ -68,7 +81,13 @@ function ImportPage() {
   const ready = current !== null && current.errors === 0 && (current.added ?? 0) > 0;
   const choose = (file: File | undefined) => {
     if (!file) return;
-    void file.text().then((t) => { setText(t); setChecked(null); setDone(null); });
+    void file.text().then((raw) => {
+      const read = readCsvText(raw);
+      setText(read.text);
+      setWarning(read.notUtf8 ? NOT_UTF8 : null);
+      setChecked(null);
+      setDone(null);
+    });
   };
   return (
     <Gate screen="importer" title="Import items">
@@ -80,7 +99,8 @@ function ImportPage() {
       <label htmlFor="import-file">Choose a CSV file</label>
       <input id="import-file" type="file" accept=".csv,.txt,text/csv,text/plain" onChange={(e) => choose(e.target.files?.[0])} />
       <label htmlFor="import-text">Or paste the rows here</label>
-      <textarea id="import-text" rows={8} value={text} onChange={(e) => { setText(e.target.value); setDone(null); }} spellCheck={false} />
+      <textarea id="import-text" rows={8} value={text} onChange={(e) => { setText(e.target.value); setDone(null); setWarning(null); }} spellCheck={false} />
+      {warning && <p role="alert" className="alert alert-warning">{warning}</p>}
       <Problem error={check.error} />
       <button type="button" className="rt-primary" disabled={text.trim() === '' || check.isPending} onClick={() => check.mutate()}>
         {check.isPending ? 'Checking' : 'Check the file'}
