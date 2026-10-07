@@ -760,16 +760,16 @@ destination branch: the same cost is posted to both branches' inventory accounts
 `retail.transfer` and `source_id` the transfer; a void adds the opposite kinds with `source_type`
 `retail.transfer_void` and `reverses_movement_id` set.
 
-### 7.11.21 Retail cash book (`/retail`, proposed, ADR-022)
+### 7.11.21 Retail cash book (`/retail`, ADR-022, issue #147)
 
-**Proposed, not built:** the contract the build must meet, and the source of `openapi.json` after it.
+**Built** (issue #147; `docs/api/openapi.json` is generated from it). Not built: `format=csv` on the reports, because the report runs of section 7.11.8 do not exist yet.
 Refused with 404 `module_not_enabled` unless retail is switched on. Conventions are those of section
 7.11.20: snake_case, branch scope on every row (ADR-017, 404 outside scope), `*` fields absent (not
 null) without `retail.profit.read` (for the cash book that includes every savings amount, the cash restock total `cash_purchases_minor` and every figure net of them, ADR-022 decision 13), **M** requires `Idempotency-Key` (section 7.8). A request for one
 branch takes `branch_id`, or the caller's one branch when the permission's scope has exactly one;
 otherwise 422 `branch_required`. Dates are business dates in the tenant's zone, default today, never in
 the future (a record posts on its own `business_date`, which may be earlier than its `created_at`, and a void posts on the day it is made, shown as a `*_voids_minor` line on the void day and never rewriting the record's day, ADR-022 decision 9): a future date is a field problem, as in a transfer's `transfer_date`: 422 `validation_failed` with an `errors` entry `{field: business_date, code: future_date}` (the field is `paid_on`, `banked_at` or `withdrawn_at` on those routes). Every record in a response carries `by`, `at`, `voided`, `historical`.
-Every void takes `{reason}`, is **M**, needs `retail.cashbook.void`, and is 409 `cash_record_voided` the
+Every void takes `{reason}` (at most 300 characters), is **M**, needs `retail.cashbook.void` in the record's branch (404 outside scope), and is 409 `cash_record_voided` the
 second time (the `<thing>_voided` style of `sale_voided` and `transfer_voided`).
 
 Lists and the expense setup (FR-RET-17):
@@ -782,7 +782,7 @@ Lists and the expense setup (FR-RET-17):
 | POST | `/retail/expense-categories/{category_id}/items` | `retail.expense.manage` | `{name, requires_explanation?}`; 409 `duplicate_item` |
 | PATCH | `/retail/expense-categories/{category_id}/items/{item_id}` | `retail.expense.manage` | `{name?, requires_explanation?, active?}`; requires `If-Match` (428 without, 409 `version_conflict` on a stale version); 409 `duplicate_item` |
 | GET | `/retail/cash-parties` | `retail.cashbook.read` | `query`, `kind`, `limit` (default 50, at most 200), `cursor` |
-| POST | `/retail/cash-parties` | `retail.expense.record` or `retail.advance.create` | `{name, contact?, kind}`; `kind` one of `owner`, `staff`, `related_entity`, `supplier`, `other`; 409 `duplicate_party`; 422 `party_kind_not_allowed` when an advance names a `supplier` or `other` party |
+| POST | `/retail/cash-parties` | `retail.expense.record` (the route declares one permission; the owner or admin who records advances holds it too) | `{name, contact?, kind}`; `kind` one of `owner`, `staff`, `related_entity`, `supplier`, `other`; 409 `duplicate_party`; 422 `party_kind_not_allowed` when an advance names a `supplier` or `other` party |
 
 Daily savings (FR-RET-18 to FR-RET-20):
 
