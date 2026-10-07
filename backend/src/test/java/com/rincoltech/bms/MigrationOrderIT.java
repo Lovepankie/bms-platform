@@ -172,7 +172,7 @@ class MigrationOrderIT {
             MigrateResult result =
                     DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
 
-            assertThat(result.migrations.stream().map(m -> m.version).toList()).containsExactly("23", "26");
+            assertThat(result.migrations.stream().map(m -> m.version).toList()).containsExactly("23", "26", "28");
             assertThat(owner.sql("SELECT qty::text FROM retail_stock_balances WHERE tenant_id = ?")
                             .param(tenant)
                             .query(String.class)
