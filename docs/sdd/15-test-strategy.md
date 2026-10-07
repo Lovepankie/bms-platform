@@ -226,6 +226,21 @@ Coverage gate for the lending calculation code: 95 percent lines (NFR-MNT-02).
   event type of chapter 6 section 6.6.3 on PostgreSQL, idempotent retries, and after each test that
   the trial balance balances and loans receivable equals each loan's principal outstanding.
   `LendingSeedIT` checks the same for the fabricated seed.
+- **Savings interest golden tests** (`InterestTest`, #151, ADR-032). FR-SAV-05 worked by hand with
+  fabricated balances: daily balance over a month with three balances, the minimum balance for
+  interest, a half minor unit rounding up once (and thirty days that each round to zero summing to
+  15), minimum monthly balance over a quarter with a one-day dip, a part month at opening and at
+  closure, and the period ends. `SavingsEndOfDayIT` runs the end of day over fixed past dates on
+  PostgreSQL: the posted amounts to the unit, one end-of-day row per day, a rerun that posts
+  nothing, a movement dated into a closed day refused, and interest for a closed accounting month
+  booked on the run date. `SavingsIT` checks every savings journal line of chapter 6 section 6.6.3,
+  limits, fees, the checker above the threshold, reversal with the fee, freeze, dormancy,
+  reactivation, closure with interest to date, the statement and reports against the ledger, the
+  queued SMS, idempotent replays and branch scope, and after each test that `member_savings` equals
+  each account's balance and the last running balance. `SavingsConcurrencyIT` races two withdrawals
+  for one balance (exactly one succeeds) and 50 deposits (exact balance, unique gap-free `seq` and
+  receipts). `RlsIsolationIT` has a factory row in each savings table and checks the three savings
+  ledgers are append-only.
 - **Report golden tests.** Each report in chapter 14 runs over its fabricated dataset and
   is compared with a committed expected output (JSON), including the PAR worked example.
 - **Document golden tests.** Each PDF template renders fabricated data; the test compares

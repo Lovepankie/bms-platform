@@ -8,6 +8,7 @@ import { DisburseForm, PayoffQuotePanel, RepaymentForm, RepaymentReceipt, Revers
 import { LendingGate } from './loans';
 import { methodWords, money, statusBadge, txnWords, words } from './loan-state';
 import { actionsFor, canReverse, type LoanAction } from './permissions';
+import { showSavings } from './savings-permissions';
 
 // One loan (FR-DIS-04, FR-REP): its status and balances, the schedule with its totals row, and
 // its money events. The actions the session may take on a loan in this status sit under the
@@ -24,6 +25,7 @@ const ACTION_LABELS: Record<LoanAction, string> = {
 const MEMBERS_READ = 'lending.members.read';
 
 export function LoanHeader({ loan, memberName }: { loan: Loan; memberName?: string }) {
+  const { me } = useStaff();
   return (
     <section aria-label="Loan" className="rt-card ln-head">
       <p className="ln-item-head">
@@ -33,6 +35,13 @@ export function LoanHeader({ loan, memberName }: { loan: Loan; memberName?: stri
       <p>
         {memberName ? `${memberName} (${loan.member_no ?? ''})` : `Member ${loan.member_no ?? ''}`}
       </p>
+      {showSavings(me) && loan.member_id && (
+        <p>
+          <Link to="/staff/lending/members/$memberId/savings" params={{ memberId: loan.member_id }}>
+            The member's savings
+          </Link>
+        </p>
+      )}
       <p className="ln-muted">
         Product {loan.product_code}, principal {money(loan.approved_principal_minor ?? loan.requested_principal_minor, loan.currency)}
       </p>

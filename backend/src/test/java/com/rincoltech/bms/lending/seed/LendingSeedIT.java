@@ -78,6 +78,47 @@ class LendingSeedIT extends IntegrationTest {
                                 "SELECT count(*) FROM lending_members WHERE tenant_id = ? AND full_name NOT LIKE 'Test Borrower %'"))
                 .isZero();
 
+        // Savings (#151): eleven accounts on three products, one member holding two, a year of movements.
+        assertThat(report.render()).contains("11 savings accounts");
+        assertThat(count(t.tenantId(), "SELECT count(*) FROM lending_savings_accounts WHERE tenant_id = ?"))
+                .isEqualTo(11);
+        assertThat(count(
+                        t.tenantId(),
+                        "SELECT count(*) FROM lending_savings_transactions WHERE tenant_id = ? AND txn_type IN"
+                                + " ('deposit', 'withdrawal')"))
+                .isEqualTo(report.savingsMovements());
+        assertThat(count(
+                        t.tenantId(),
+                        "SELECT max(n) FROM (SELECT count(*) AS n FROM lending_savings_accounts WHERE tenant_id = ?"
+                                + " GROUP BY member_id) x"))
+                .isEqualTo(2);
+        assertThat(
+                        count(
+                                t.tenantId(),
+                                "SELECT count(*) FROM lending_savings_interest_postings WHERE tenant_id = ? AND interest_minor > 0"))
+                .isGreaterThan(20);
+        assertThat(count(
+                        t.tenantId(),
+                        "SELECT count(*) FROM lending_savings_accounts WHERE tenant_id = ? AND status = 'dormant'"))
+                .isEqualTo(1);
+        assertThat(count(t.tenantId(), """
+                        SELECT count(*) FROM lending_savings_accounts s WHERE s.tenant_id = ? AND s.balance_minor <>
+                            (SELECT coalesce(sum(j.credit - j.debit), 0) FROM journal_lines j
+                               JOIN gl_accounts a ON a.id = j.account_id AND a.system_key = 'member_savings'
+                              WHERE j.subledger_id = s.id)
+                        """)).isZero();
+        // The end of day ran through yesterday for every account, and the seed sent no SMS.
+        assertThat(count(t.tenantId(), """
+                        SELECT count(*) FROM lending_savings_accounts WHERE tenant_id = ?
+                           AND balances_through <> (now() AT TIME ZONE 'Africa/Kampala')::date - 1
+                        """)).isZero();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM notification_outbox WHERE idempotency_key LIKE ?")
+                        .param("lending.savings.sms:" + t.tenantId() + "%")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+
         assertThatThrownBy(() -> seeder.seed(t.slug()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("seeded before");

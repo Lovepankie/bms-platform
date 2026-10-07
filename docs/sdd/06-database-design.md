@@ -66,6 +66,7 @@ tenant's timezone (`tenants.timezone`, default `Africa/Kampala`). Event instants
 `lending_loan_status_history`, `lending_loan_transactions`,
 `lending_repayment_allocations`, `lending_collateral_events`,
 `lending_collection_actions` (except `promise_status`), `lending_savings_transactions`,
+`lending_savings_daily_balances`, `lending_savings_interest_postings`,
 `lending_investment_transactions`, `import_issue_resolutions`.
 
 For these the application role is granted `SELECT, INSERT` only, and a trigger
@@ -261,8 +262,9 @@ expired rows are deleted 90 days after `closed_at` (FR-ONB-09).
 ### `notification_outbox` (platform; no privilege for `bms_app`, definer functions only, ADR-024)
 
 One row per message to send (spec section 11, FR-NTF-09): `id uuid PK`, `channel` [`email`,
-`telegram`], `recipient varchar(320)` (an address, or `operator` for the Telegram operator chat,
-whose id stays in the environment), `template_key varchar(100)`, `params jsonb` (template values;
+`telegram`, `sms`] (`sms` from `V30` for the savings receipts; no sender exists yet, so those rows
+expire unsent after two days, ADR-032), `recipient varchar(320)` (an address, `operator` for the
+Telegram operator chat, whose id stays in the environment, or an E.164 phone for SMS), `template_key varchar(100)`, `params jsonb` (template values;
 cleared to `{}` once sent, because they can hold a one-time link), `status` [`pending`, `sent`,
 `failed`], `attempts integer`, `idempotency_key varchar(200) UNIQUE`, `throttle_key varchar(400)`
 (groups rows for a volume bound, for example `onboarding.verify:<mailbox>`), `expires_at` (when the
@@ -724,7 +726,8 @@ on lines touching `S` accounts carry the loan, savings account or investment id.
 | Savings deposit | PM | `member_savings` | FR-SAV-03 |
 | Savings withdrawal | `member_savings` | PM | FR-SAV-03 |
 | Savings withdrawal fee | `member_savings` | `savings_fee_income` | FR-SAV-01 |
-| Savings interest posting | `savings_interest_expense` | `member_savings` | FR-SAV-05 |
+| Savings interest posting | `savings_interest_expense` | `member_savings` | FR-SAV-05; dated the period end, or the run date when that month is closed (ADR-032) |
+| Savings reversal (deposit, withdrawal, fee) | Mirror of the original entry (a reversing entry) | | ADR-032 |
 | Investment funding | PM | `investments_payable` | FR-INV-03 |
 | Investment return due (monthly or at maturity) | `investment_return_expense` | `investment_returns_payable` | FR-INV-04, FR-INV-05 |
 | Monthly return credited to savings | `investment_returns_payable` | `member_savings` | FR-INV-04 |
@@ -1093,45 +1096,59 @@ bigint`, `arrears_minor bigint`, `days_past_due integer`, `par_bucket text` [`cu
 
 ### `lending_savings_products`
 
-(std) `code varchar(20) NOT NULL` (`UNIQUE (tenant_id, code)`), `name`, `currency`,
-`interest_rate_bp integer NOT NULL DEFAULT 0` (per year), `interest_calc text NOT NULL`
-[`none`, `daily_balance`, `minimum_monthly_balance`], `interest_posting text NOT NULL`
-[`monthly`, `quarterly`, `yearly`], `min_opening_balance_minor bigint NOT NULL DEFAULT 0`,
-`min_balance_minor bigint NOT NULL DEFAULT 0`, `withdrawal_fee_minor bigint NOT NULL
-DEFAULT 0`, `dormancy_days integer`, `status text NOT NULL` [`active`, `archived`].
-Fields that affect interest cannot change once an account uses the product; a change is
-a new product.
+(std) `code varchar(20) NOT NULL` (`UNIQUE (tenant_id, code)`, upper case letters, digits and
+hyphens), `name`, `currency`, `interest_rate_bp integer NOT NULL DEFAULT 0` (per year, 0 to
+10 000), `interest_calc text NOT NULL` [`none`, `daily_balance`, `minimum_monthly_balance`],
+`interest_posting text NOT NULL` [`monthly`, `quarterly`, `yearly`],
+`min_balance_for_interest_minor bigint NOT NULL DEFAULT 0` (a day or month below it earns nothing),
+`min_opening_balance_minor bigint NOT NULL DEFAULT 0`, `min_balance_minor bigint NOT NULL DEFAULT 0`,
+`withdrawal_fee_minor bigint NOT NULL DEFAULT 0`, `max_withdrawal_minor bigint` (per withdrawal),
+`max_withdrawals_per_month integer`, `dormancy_days integer`, `status text NOT NULL` [`active`,
+`archived`], `created_by`. CHECK: the rate is 0 exactly when `interest_calc` is `none`. Fields that
+affect interest (currency, rate, calculation, posting, minimum for interest) cannot change once an
+account uses the product; a change is a new product. The trigger `lending_savings_products_guard`
+enforces it (`V30`, ADR-032).
 
 ### `lending_savings_accounts`
 
-(std) `branch_id`, `account_no varchar(20) NOT NULL` (`SV` plus 6 digits, unique per
-tenant), `member_id uuid NOT NULL`, `product_id uuid NOT NULL`, `currency`,
-`status text NOT NULL` [`active`, `dormant`, `closed`], `balance_minor bigint NOT NULL
-DEFAULT 0` (`CHECK (balance_minor >= 0)`), `hold_minor bigint NOT NULL DEFAULT 0`,
-`opened_on date NOT NULL`, `closed_on date`, `last_member_txn_on date`,
-`last_interest_posted_to date`.
+(std) `branch_id`, `account_no varchar(20) NOT NULL` (`SV` plus 6 digits from the `savings_no`
+sequence, unique per tenant), `member_id uuid NOT NULL` (a member may hold any number of
+accounts), `product_id uuid NOT NULL`, `currency`, `status text NOT NULL` [`active`, `dormant`,
+`frozen`, `closed`], `status_reason text`, `balance_minor bigint NOT NULL DEFAULT 0`
+(`CHECK (balance_minor >= 0)`), `hold_minor bigint NOT NULL DEFAULT 0`, `opened_on date NOT NULL`,
+`closed_on date` (set exactly when closed; a closed account holds 0), `last_member_txn_on date`,
+`last_interest_posted_to date`, `balances_through date` (the last day the end of day has written;
+no movement is dated on or before it), `txn_count integer NOT NULL DEFAULT 0` (the last `seq`),
+`created_by`. Every movement updates the row under its lock (FR-SAV-04).
 
 ### `lending_savings_transactions` (append-only)
 
-`id`, `tenant_id`, `created_at`, `branch_id`, `account_id uuid NOT NULL`,
+`id`, `tenant_id`, `created_at`, `branch_id`, `account_id uuid NOT NULL`, `seq integer NOT NULL`
+(`UNIQUE (tenant_id, account_id, seq)`: recording order, so the running balance is exact),
 `txn_type text NOT NULL` [`deposit`, `withdrawal`, `interest`, `fee`, `transfer_in`,
-`transfer_out`, `reversal`], `amount_minor bigint NOT NULL` (`> 0`),
-`balance_after_minor bigint NOT NULL`, `value_date date NOT NULL`, `payment_method_key
-text`, `external_reference varchar(100)`, `receipt_no varchar(30)`, `reverses_txn_id
-uuid`, `journal_entry_id uuid NOT NULL`, `approval_request_id uuid`, `idempotency_key
-varchar(100)`, `recorded_by uuid`.
+`transfer_out`, `reversal`], `amount_minor bigint NOT NULL` (`> 0`), `is_credit boolean NOT NULL`
+(money into the account; a reversal goes the other way to the row it reverses), `currency`,
+`balance_after_minor bigint NOT NULL` (`>= 0`), `value_date date NOT NULL`,
+`payment_method_key text`, `external_reference varchar(100)`, `receipt_no varchar(30)` (`RC-` for a
+deposit, `VC-` for a withdrawal, unique per tenant, from the per-branch sequences shared with loans),
+`reason text`, `related_txn_id uuid` (a fee's withdrawal), `reverses_txn_id uuid` (unique: a row
+is reversed at most once), `journal_entry_id uuid NOT NULL`, `approval_request_id uuid`,
+`idempotency_key varchar(100)`, `source text NOT NULL` [`staff`, `portal`, `gateway`, `import`,
+`system`], `recorded_by uuid`.
 
-### `lending_savings_daily_balances`
+### `lending_savings_daily_balances` (append-only)
 
-`tenant_id`, `account_id`, `business_date`, `closing_balance_minor bigint NOT NULL`.
-PK `(tenant_id, account_id, business_date)`. Written by the nightly job for interest
-calculation (FR-SAV-05).
+`tenant_id`, `account_id`, `business_date`, `closing_balance_minor bigint NOT NULL` (`>= 0`).
+PK `(tenant_id, account_id, business_date)`. Written once per account and day by the nightly end of
+day (`lending.savings-end-of-day`, 00:20) for interest calculation (FR-SAV-05); a period end's row
+includes the interest credited that day.
 
-### `lending_savings_interest_postings`
+### `lending_savings_interest_postings` (append-only)
 
 (std, no `version`) `account_id uuid NOT NULL`, `period_start date NOT NULL`,
-`period_end date NOT NULL`, `interest_minor bigint NOT NULL`, `transaction_id uuid`.
-`UNIQUE (tenant_id, account_id, period_end)` (idempotent posting).
+`period_end date NOT NULL`, `interest_minor bigint NOT NULL` (`>= 0`), `transaction_id uuid` (null
+exactly when the period earned nothing). `UNIQUE (tenant_id, account_id, period_end)` (idempotent
+posting).
 
 ### `lending_investment_products`
 

@@ -345,6 +345,7 @@ CHECK constraint as well as the service.
 | `manual_journal` | `core.journals.create` | `core.journals.approve` | No |
 | `period_close` | `core.periods.close` | `core.periods.approve_close` | No |
 | `savings_withdrawal` | `lending.savings.withdraw` | `lending.savings.withdraw_approve` | Yes |
+| `savings_reversal` | `lending.savings.withdraw` | `lending.savings.withdraw_approve` | No (always checked) |
 | `investment_early_withdrawal` | `lending.investments.payout` | `lending.investments.early_withdraw_approve` | No |
 | `collateral_release` | `lending.collateral.release_request` | `lending.collateral.release_approve` | No |
 | `member_branch_transfer` | `lending.members.update` | `lending.members.transfer_approve` | No |
@@ -358,6 +359,13 @@ it adds declares a permission already in the matrix above (`lending.disbursement
 and `lending.loans.read` for the schedule, transactions and payoff quote), and the route permission
 test covers them. The `seed-lending` command has no route and no permission: it is refused in
 production and on any tenant holding data (`docs/runbooks/seed-lending.md`).
+
+Savings (#151, `lending.savings`, ADR-032) registers `savings_withdrawal` (a closure is the same
+action with `close` set, the threshold applying to the balance) and `savings_reversal`, added to the
+table above. It needed no new permission: freeze, unfreeze and reactivation of an account are direct
+actions with a reason that need `lending.savings.withdraw_approve`, the checker permission of
+`savings_withdrawal`; the two savings reports need `lending.reports.members`. A withdrawal's checks
+run again when the checker approves, on the account as it is then.
 
 Action types are contributed by the modules that own them (ADR-015): each is a registered
 `ApprovalAction` whose maker and checker permissions must equal its row above. Every

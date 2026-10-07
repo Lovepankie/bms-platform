@@ -508,8 +508,14 @@ class OutboxIT extends IntegrationTest {
                 Map.entry("portal_url", "https://localhost/platform/applications/x"),
                 Map.entry("hour", "2026-10-06 08:00"),
                 Map.entry("applications", "30"),
-                Map.entry("emails", "60"));
-        for (String channel : List.of("email", "telegram")) {
+                Map.entry("emails", "60"),
+                Map.entry("tenant_name", "Test Lender"),
+                Map.entry("currency", "UGX"),
+                Map.entry("amount", "50,000"),
+                Map.entry("account_no", "SV000001"),
+                Map.entry("receipt_no", "RC-HQ-000001"),
+                Map.entry("balance", "75,000"));
+        for (String channel : List.of("email", "telegram", "sms")) {
             for (String key : OutboxTemplates.keys(channel)) {
                 OutboxTemplates.Rendered rendered = templates.render(channel, key, params);
                 assertThat(rendered.text()).as("%s %s", channel, key).doesNotContain("{");

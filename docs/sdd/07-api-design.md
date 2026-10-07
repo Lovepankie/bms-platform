@@ -643,18 +643,31 @@ with the item's `ETag`; PATCH, events and release require `If-Match`. Release an
 
 ### 7.11.15 Lending: savings
 
+Built in increment 9 (issue #151, ADR-032). A withdrawal, a closure and a reversal answer 201 when
+executed and 202 when they wait for a checker (`SavingsActionOutcome`: `executed`,
+`approval_request_id`, the withdrawal `transaction` when executed, and the `account`). Every money
+route needs an `Idempotency-Key`; a replay answers `Idempotent-Replayed: true`. An account outside
+the caller's branch scope is a 404.
+
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET, POST | `/lending/savings-products` | `lending.savings.read` / `lending.savings_products.manage` | FR-SAV-01 |
-| GET | `/lending/savings-accounts` | `lending.savings.read` | |
-| POST | `/lending/savings-accounts` | `lending.savings.open` | FR-SAV-02 |
-| GET | `/lending/savings-accounts/{account_id}` | `lending.savings.read` | |
-| GET | `/lending/savings-accounts/{account_id}/transactions` | `lending.savings.read` | |
-| POST | `/lending/savings-accounts/{account_id}/deposits` | `lending.savings.deposit` | **M**. FR-SAV-03 |
-| POST | `/lending/savings-accounts/{account_id}/withdrawals` | `lending.savings.withdraw` | **M A** |
-| POST | `/lending/savings-accounts/{account_id}/transactions/{txn_id}/reverse` | `lending.savings.withdraw` | **M A** |
-| POST | `/lending/savings-accounts/{account_id}/reactivate` | `lending.savings.withdraw_approve` | FR-SAV-06 |
-| POST | `/lending/savings-accounts/{account_id}/close` | `lending.savings.withdraw` | **M A**. FR-SAV-07 |
+| GET, POST | `/lending/savings-products` | `lending.savings.read` / `lending.savings_products.manage` | FR-SAV-01. Body `{code, currency?, terms}`; 409 `duplicate_code` |
+| GET | `/lending/savings-products/{product_id}` | `lending.savings.read` | `ETag` is the version |
+| PUT | `/lending/savings-products/{product_id}` | `lending.savings_products.manage` | `If-Match`. `{terms, status}` (`active` or `archived`); 422 `product_in_use` for an interest change once an account uses it |
+| GET | `/lending/savings-accounts` | `lending.savings.read` | `branch_id` (repeatable), `member_id`, `status` (repeatable), `product_id`, `q` (account or member number by prefix, member name by part), `limit` (default 25, at most 100), `cursor`; by account number |
+| POST | `/lending/savings-accounts` | `lending.savings.open` | FR-SAV-02. `{member_id, product_id, branch_id?}`; the member's home branch by default (FR-BR-05). 422 `member_not_active`, `product_not_active` |
+| GET | `/lending/savings-accounts/{account_id}` | `lending.savings.read` | Balance, `available_minor` (what a withdrawal may take now), `accrued_interest_minor` (since the last posting, an estimate) |
+| GET | `/lending/savings-accounts/{account_id}/transactions` | `lending.savings.read` | Newest first with running balances; `limit` (default 50, at most 200), `cursor` |
+| GET | `/lending/savings-accounts/{account_id}/statement` | `lending.savings.read` | `from`, `to` (value dates; three months to today by default): opening, lines with running balance, totals, closing. 422 `invalid_range` |
+| POST | `/lending/savings-accounts/{account_id}/deposits` | `lending.savings.deposit` | **M**. FR-SAV-03. `{amount_minor, value_date?, payment_method_key, external_reference?}`; 201 `{transaction, account}`. 422 `below_minimum_opening`, `value_date_in_future`, `value_date_closed`, `before_opening`, `account_closed`, `payment_method_unmapped` |
+| POST | `/lending/savings-accounts/{account_id}/withdrawals` | `lending.savings.withdraw` | **M A** (`savings_withdrawal`). `{amount_minor, payment_method_key, external_reference?}`, dated the day it executes. 422 `insufficient_balance`, `withdrawal_limit_exceeded`, `withdrawal_count_exceeded`, `account_dormant`, `account_frozen`, `account_closed`; 409 `approval_already_pending` |
+| POST | `/lending/savings-accounts/{account_id}/transactions/{txn_id}/reverse` | `lending.savings.withdraw` | **M A** (`savings_reversal`, always checked). `{reason}`. A deposit or a withdrawal with its fee. 422 `not_reversible`, `insufficient_balance`; 409 `already_reversed` |
+| POST | `/lending/savings-accounts/{account_id}/reactivate` | `lending.savings.withdraw_approve` | FR-SAV-06. `{reason}`; dormant to active. 409 `invalid_status_transition` |
+| POST | `/lending/savings-accounts/{account_id}/freeze` | `lending.savings.withdraw_approve` | `{reason}`; active or dormant to frozen (ADR-032) |
+| POST | `/lending/savings-accounts/{account_id}/unfreeze` | `lending.savings.withdraw_approve` | `{reason}`; frozen to active |
+| POST | `/lending/savings-accounts/{account_id}/close` | `lending.savings.withdraw` | **M A** (`savings_withdrawal` with `close`). FR-SAV-07. `{payment_method_key, external_reference?, reason?}`: interest to date, then the whole balance paid out. 422 `account_on_hold` |
+| GET | `/lending/savings-reports/balances` | `lending.reports.members` | `lending.savings_balances` (chapter 14 section 14.5): `as_at` (today by default), `branch_id`, `product_id` |
+| GET | `/lending/savings-reports/movements` | `lending.reports.members` | `lending.savings_movements`: `from` (the first of the month by default), `to`, `branch_id`, `product_id` |
 
 ### 7.11.16 Lending: investments
 

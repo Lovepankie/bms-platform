@@ -53,8 +53,9 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   (issue #84, ADR-020 amendment) add `V22`. The database optimisation (issue #107, ADR-028) adds
   `V26` (indexes and a fillfactor only; `V24`, `V25` and `V27` stay unused, since a number below
   an applied one can never run). The retail catalogue management (issue #146) takes `V28`. Lending increment 5,
-  disbursement and repayments (issue #108, ADR-026), takes `V29`. Flyway runs with `outOfOrder`
-  off, so a new migration takes a number above the highest one on any open branch (`V30` next).
+  disbursement and repayments (issue #108, ADR-026), takes `V29`, and lending savings (issue #151,
+  ADR-032) `V30`. Flyway runs with `outOfOrder` off, so a new migration takes a number above the
+  highest one on any open branch (`V31` next).
 - **Self-onboarding, build step 1 (issue #89, ADR-024):** migration `V23` with
   `onboarding_applications` and `notification_outbox`, reached only through definer functions;
   the public sign-up and applicant page; the operator portal on the platform host (operator
@@ -70,6 +71,17 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   `seed-lending` command for a fabricated staging loan book (`docs/runbooks/seed-lending.md`).
   Deferred: arrears job, penalties, waivers and SMS (increment 6), import (7), reports and the
   receipt, voucher and statement PDFs (8 and a documents follow-up).
+- **Built (increment 9, savings, issue #151, ADR-032):** migration `V30` (savings products,
+  accounts, transactions, end-of-day balances, interest postings; the outbox accepts `sms`);
+  products with interest rules, minimum and opening balances, withdrawal fee and limits, dormancy;
+  any number of accounts per member; deposits; withdrawals with the `savings_withdrawal` checker
+  above the threshold (a closure is the same action); reversals through `savings_reversal`; freeze,
+  dormancy and reactivation; the nightly end of day (`lending.savings-end-of-day`: end-of-day
+  balances, interest per product period rounded once, dormancy); statements and the two savings
+  reports; receipt SMS queued in the outbox (not sent until an SMS sender exists, pending ADR-013);
+  `SavingsMetrics` for the insights page; the staff savings screens; savings in the fabricated seed.
+  Deferred: member self-service (increment 11), USSD and online payments (phase 2), transfers
+  between accounts and from loan credit (FR-REP-04a), savings-secured loans (open question 2).
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
   Cloudflare Tunnel and pulls every green build of `main` from a `staging` pointer tag; hosts are
@@ -146,8 +158,8 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `lending` products | Loan products and versions | PRD | 6.7 | 7.11.12 |
 | `lending` loans | Origination, schedules, disbursement, repayments, arrears, closure | ORG, DIS, REP, ARR, LCL; 3.4 | 6.7 | 7.11.13 |
 | `lending` collateral | Collateral register | COL | 6.7 | 7.11.14 |
-| `lending.seed` | The `seed-lending` command: fabricated loan book for one empty staging tenant (ADR-026) | none | none (writes 6.7 tables) | none (a command, `docs/runbooks/seed-lending.md`) |
-| `lending` savings | Savings | SAV | 6.7 | 7.11.15 |
+| `lending.seed` | The `seed-lending` command: fabricated loan book and savings for one empty staging tenant (ADR-026, ADR-032) | none | none (writes 6.7 tables) | none (a command, `docs/runbooks/seed-lending.md`) |
+| `lending.savings` | Savings products, accounts, movements, end of day and interest, statements, savings reports (ADR-032) | SAV | 6.7 | 7.11.15 |
 | `lending` investments | Investments | INV | 6.7 | 7.11.16 |
 | `lending` collections | Due lists, arrears, actions | CLN | 6.7 | 7.11.17 |
 | Member area | Member self-service | MSS; chapter 11 | none | 7.11.18 |
@@ -314,6 +326,9 @@ Accepted (this list is the ADR index):
 - ADR-028 Database performance: measured on 25 times the data, covering indexes, the plain tenant
   policy kept, connection timeouts (proposed, #107)
 - ADR-029 One fixed low stock threshold for retail, a per-tenant settings group later (#145)
+- ADR-032 Savings: end-of-day balances with interest rounded once per posting, movements only after
+  the closed day, withdrawals checked again at execution, receipts queued as SMS that expire unsent
+  (proposed, #151)
 
 Pending (cite only as "pending ADR-NNN"):
 

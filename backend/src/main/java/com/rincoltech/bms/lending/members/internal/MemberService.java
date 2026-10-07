@@ -402,6 +402,12 @@ class MemberService implements MemberLookup {
         return members.lockById(memberId).map(MemberService::summary);
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<String> smsPhone(UUID memberId) {
+        return members.findById(memberId).map(MemberResponse::phoneE164);
+    }
+
     private static MemberSummary summary(MemberResponse m) {
         return new MemberSummary(
                 m.id(),

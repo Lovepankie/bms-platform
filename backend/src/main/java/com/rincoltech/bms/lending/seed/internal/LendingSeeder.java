@@ -7,6 +7,7 @@ import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.TenantSequences;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.lending.loans.LoanServicing;
+import com.rincoltech.bms.lending.savings.SavingsServicing;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -50,6 +52,7 @@ public class LendingSeeder {
     private final BusinessClock clock;
     private final AuditLog audit;
     private final LoanServicing servicing;
+    private final SavingsServicing savings;
 
     LendingSeeder(
             TenantJobs tenants,
@@ -60,7 +63,8 @@ public class LendingSeeder {
             TenantSequences sequences,
             BusinessClock clock,
             AuditLog audit,
-            LoanServicing servicing) {
+            LoanServicing servicing,
+            SavingsServicing savings) {
         this.tenants = tenants;
         this.transactions = new TransactionTemplate(transactionManager);
         this.jdbc = jdbc;
@@ -70,15 +74,25 @@ public class LendingSeeder {
         this.clock = clock;
         this.audit = audit;
         this.servicing = servicing;
+        this.savings = savings;
     }
 
     /** What the seed wrote. */
-    public record Report(String tenant, int members, int products, int applications, int disbursed, int repayments) {
+    public record Report(
+            String tenant,
+            int members,
+            int products,
+            int applications,
+            int disbursed,
+            int repayments,
+            int savingsAccounts,
+            int savingsMovements) {
 
         public String render() {
             return "seed-lending: tenant " + tenant + ": " + members + " members, " + products + " products, "
                     + applications + " applications, " + disbursed + " disbursed loans, " + repayments
-                    + " repayments (all fabricated)";
+                    + " repayments, " + savingsAccounts + " savings accounts, " + savingsMovements
+                    + " savings movements (all fabricated)";
         }
     }
 
@@ -102,7 +116,8 @@ public class LendingSeeder {
             throw new IllegalStateException("the tenant was seeded before (audit action " + MARKER + ")");
         }
         long data = count("SELECT (SELECT count(*) FROM lending_members) + (SELECT count(*) FROM lending_loan_products)"
-                + " + (SELECT count(*) FROM lending_loans) + (SELECT count(*) FROM journal_entries)");
+                + " + (SELECT count(*) FROM lending_loans) + (SELECT count(*) FROM journal_entries)"
+                + " + (SELECT count(*) FROM lending_savings_products)");
         if (data > 0) {
             throw new IllegalStateException(
                     "the tenant already holds members, loan products, loans or journals; the seed only fills an"
@@ -276,9 +291,145 @@ public class LendingSeeder {
         after.put("applications", applications);
         after.put("disbursed", loans.size());
         after.put("repayments", repayments);
+        int[] saved = savings(currency, members, today);
+        after.put("savings_accounts", saved[0]);
+        after.put("savings_movements", saved[1]);
         audit.record(AuditLog.Entry.created(
                 MARKER, "core.tenant", currentTenant.profile().id(), branch, after));
-        return new Report(slug, members.size(), 4, applications, loans.size(), repayments);
+        return new Report(slug, members.size(), 4, applications, loans.size(), repayments, saved[0], saved[1]);
+    }
+
+    // ---- Savings (increment 9, #151; ADR-032) ---------------------------------------------
+
+    /** One fabricated movement: a deposit, or a withdrawal when the amount is negative. */
+    private record Movement(int account, long amountMinor, String method) {}
+
+    /**
+     * Three fabricated savings products and eleven accounts (one member holds two), with twelve
+     * months of deposits and withdrawals. The days run in order: before each day with movements the
+     * end of day runs through the day before, so end-of-day balances, monthly and quarterly interest
+     * and dormancy happen exactly as the nightly job would have done them. Returns the accounts and
+     * the movements written.
+     */
+    private int[] savings(String currency, List<UUID> members, LocalDate today) {
+        UUID passbook = savingsProduct(
+                "FAB-SAVE",
+                "Fabricated passbook savings",
+                currency,
+                500,
+                "daily_balance",
+                "monthly",
+                0,
+                5_000,
+                1_000,
+                null,
+                null,
+                180);
+        UUID target = savingsProduct(
+                "FAB-TARGET",
+                "Fabricated target savings",
+                currency,
+                800,
+                "minimum_monthly_balance",
+                "quarterly",
+                50_000,
+                0,
+                0,
+                300_000L,
+                1,
+                90);
+        UUID plain = savingsProduct(
+                "FAB-PLAIN", "Fabricated plain savings", currency, 0, "none", "monthly", 0, 0, 0, null, null, null);
+        LocalDate start = today.minusMonths(12);
+        UUID[] products = {passbook, passbook, target, plain, passbook, target, passbook, plain, passbook, target, plain
+        };
+        int[] holders = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0};
+        List<UUID> accounts = new ArrayList<>();
+        Map<LocalDate, List<Movement>> days = new TreeMap<>();
+        for (int k = 0; k < products.length; k++) {
+            LocalDate opened = start.plusDays(3L * k);
+            accounts.add(null);
+            days.computeIfAbsent(opened, d -> new ArrayList<>()).add(new Movement(k, 0, "open"));
+            // Account 5 stops after three months, so its 90 dormancy days pass and it turns dormant.
+            int months = k == 5 ? 3 : 12;
+            for (int m = 0; m < months; m++) {
+                LocalDate day = opened.plusMonths(m).plusDays(m == 0 ? 0 : 2);
+                if (day.isAfter(today)) {
+                    break;
+                }
+                long deposit = 60_000L + 10_000L * ((k + m) % 5);
+                days.computeIfAbsent(day, d -> new ArrayList<>())
+                        .add(new Movement(k, deposit, k % 2 == 0 ? "cash" : "mtn_momo"));
+                // Every third month most accounts take some out, two weeks after the deposit.
+                if (m % 3 == 2 && k != 5) {
+                    LocalDate out = day.plusDays(14);
+                    if (!out.isAfter(today)) {
+                        days.computeIfAbsent(out, d -> new ArrayList<>()).add(new Movement(k, -40_000, "cash"));
+                    }
+                }
+            }
+        }
+        int movements = 0;
+        for (Map.Entry<LocalDate, List<Movement>> day : days.entrySet()) {
+            LocalDate d = day.getKey();
+            savings.endOfDay(d.minusDays(1));
+            for (Movement mv : day.getValue()) {
+                if (mv.method().equals("open")) {
+                    accounts.set(
+                            mv.account(),
+                            savings.openAccount(
+                                    members.get(holders[mv.account()]), products[mv.account()], d, OFFICER));
+                } else if (mv.amountMinor() > 0) {
+                    savings.deposit(accounts.get(mv.account()), mv.amountMinor(), d, mv.method(), CASHIER);
+                    movements++;
+                } else {
+                    savings.withdraw(accounts.get(mv.account()), -mv.amountMinor(), d, mv.method(), CASHIER, MANAGER);
+                    movements++;
+                }
+            }
+        }
+        savings.endOfDay(today.minusDays(1));
+        return new int[] {accounts.size(), movements};
+    }
+
+    private UUID savingsProduct(
+            String code,
+            String name,
+            String currency,
+            int rateBp,
+            String calc,
+            String posting,
+            long minOpening,
+            long minBalance,
+            long fee,
+            Long maxWithdrawal,
+            Integer maxPerMonth,
+            Integer dormancyDays) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                        INSERT INTO lending_savings_products (id, tenant_id, code, name, currency, interest_rate_bp,
+                            interest_calc, interest_posting, min_opening_balance_minor, min_balance_minor,
+                            withdrawal_fee_minor, max_withdrawal_minor, max_withdrawals_per_month, dormancy_days, status,
+                            created_by)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
+                        """)
+                .params(
+                        id,
+                        code,
+                        name,
+                        currency,
+                        rateBp,
+                        calc,
+                        posting,
+                        minOpening,
+                        minBalance,
+                        fee,
+                        maxWithdrawal,
+                        maxPerMonth,
+                        dormancyDays,
+                        OFFICER)
+                .update();
+        return id;
     }
 
     private int repay(UUID loan, LocalDate today, int daysAgo, long amount, String method) {

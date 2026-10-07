@@ -13,11 +13,18 @@ pilot tenant's staff can try the loan screens with fake data before their own re
 - 12 applications in every state before the money: draft, submitted, appraised, approved, rejected
   and cancelled;
 - 6 loans disbursed 10 to 100 days back with 11 repayments between them: one paid off with a
-  credit, some partly paid, some overdue, one untouched.
+  credit, some partly paid, some overdue, one untouched;
+- 3 savings products (`FAB-SAVE` on daily balance, posted monthly, with a minimum balance and a
+  withdrawal fee; `FAB-TARGET` on the lowest monthly balance, posted quarterly, with a minimum
+  opening balance and one withdrawal a month; `FAB-PLAIN` with no interest) and 11 savings accounts
+  (one member holds two) with twelve months of monthly deposits and quarterly withdrawals. The
+  nightly end of day runs day by day as the movements go in, so the accounts carry their end-of-day
+  balances, monthly and quarterly interest, and one account has gone dormant (#151, ADR-032).
 
-Every disbursement and repayment goes through the same code as staff (`LoanServicing`), so each
-posts its journal, receipt or voucher number and audit row; the trial balance balances and loans
-receivable equals the loans' principal outstanding.
+Every disbursement, repayment, deposit and withdrawal goes through the same code as staff
+(`LoanServicing`, `SavingsServicing`), so each posts its journal, receipt or voucher number and
+audit row; the trial balance balances, loans receivable equals the loans' principal outstanding and
+member savings equals the savings accounts' balances. The seed queues no SMS.
 
 ```
 java -jar bms-api.jar seed-lending --tenant <slug>
@@ -31,8 +38,8 @@ a usage error.
 - **Never production.** The command exits 1 when `BMS_ENVIRONMENT` is `production`. It is a named
   command of the API image and never runs at startup; the image's default command is the web
   application.
-- **Empty tenants only.** It refuses a tenant that holds any member, loan product, loan or journal
-  entry, so it can never mix fabricated rows with real ones.
+- **Empty tenants only.** It refuses a tenant that holds any member, loan product, savings product,
+  loan or journal entry, so it can never mix fabricated rows with real ones.
 - **Once.** It records the audit action `lending.seed.fabricated` (the marker) and refuses any
   tenant that carries it.
 - **One transaction.** A failure part way leaves the tenant exactly as it was.
@@ -52,7 +59,7 @@ docker compose --project-name bms -f compose.yml run --rm --no-deps \
 
 The stack is capped at 900 MB (ADR-018): run it when nothing else heavy is running. The command
 prints one line, for example
-`seed-lending: tenant <slug>: 15 members, 4 products, 12 applications, 6 disbursed loans, 11 repayments (all fabricated)`.
+`seed-lending: tenant <slug>: 15 members, 4 products, 12 applications, 6 disbursed loans, 11 repayments, 11 savings accounts, <n> savings movements (all fabricated)`.
 
 ## Run locally
 

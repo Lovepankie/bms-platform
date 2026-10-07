@@ -371,6 +371,41 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), repayment, repayment, item)
                 .update();
+        // Savings (increment 9, #151): a product, an account, a deposit on the fixture journal, an
+        // end-of-day balance and an interest posting.
+        UUID savingsProduct = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO lending_savings_products (id, tenant_id, code, name, currency, interest_rate_bp,
+                                                              interest_calc, interest_posting)
+                        VALUES (?, ?, 'SAVE', 'Test savings', 'UGX', 500, 'daily_balance', 'monthly')
+                        """).params(savingsProduct, t.tenantId()).update();
+        UUID savingsAccount = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO lending_savings_accounts (id, tenant_id, branch_id, account_no, member_id, product_id,
+                                                              currency, status, balance_minor, opened_on, txn_count)
+                        VALUES (?, ?, ?, 'SV999999', ?, ?, 'UGX', 'active', 1000, DATE '2026-01-15', 1)
+                        """)
+                .params(savingsAccount, t.tenantId(), t.headOffice(), kinMember, savingsProduct)
+                .update();
+        owner.sql("""
+                        INSERT INTO lending_savings_transactions (id, tenant_id, branch_id, account_id, seq, txn_type,
+                            amount_minor, is_credit, currency, balance_after_minor, value_date, payment_method_key,
+                            receipt_no, journal_entry_id, source)
+                        VALUES (?, ?, ?, ?, 1, 'deposit', 1000, true, 'UGX', 1000, DATE '2026-01-15', 'cash',
+                                'RC-HQ-999998', ?, 'staff')
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), t.headOffice(), savingsAccount, entry)
+                .update();
+        owner.sql("""
+                        INSERT INTO lending_savings_daily_balances (tenant_id, account_id, business_date,
+                                                                    closing_balance_minor)
+                        VALUES (?, ?, DATE '2026-01-15', 1000)
+                        """).params(t.tenantId(), savingsAccount).update();
+        owner.sql("""
+                        INSERT INTO lending_savings_interest_postings (id, tenant_id, account_id, period_start, period_end,
+                                                                       interest_minor)
+                        VALUES (?, ?, ?, DATE '2026-01-15', DATE '2026-01-31', 0)
+                        """).params(UUID.randomUUID(), t.tenantId(), savingsAccount).update();
     }
 
     static String randomHash() {
@@ -640,7 +675,13 @@ class RlsIsolationIT {
                 .params(UUID.randomUUID(), a.tenantId())
                 .update();
         // The loan servicing ledgers are append-only too (#108).
-        for (String table : List.of("lending_loan_transactions", "lending_repayment_allocations")) {
+        // The savings ledgers too (#151).
+        for (String table : List.of(
+                "lending_loan_transactions",
+                "lending_repayment_allocations",
+                "lending_savings_transactions",
+                "lending_savings_daily_balances",
+                "lending_savings_interest_postings")) {
             assertThatThrownBy(() -> asApp(
                             a.tenantId(),
                             c -> count(c, "WITH d AS (DELETE FROM " + table + " RETURNING 1) SELECT count(*) FROM d")))

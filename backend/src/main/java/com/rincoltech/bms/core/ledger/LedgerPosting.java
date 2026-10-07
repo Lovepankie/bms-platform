@@ -23,6 +23,13 @@ public interface LedgerPosting {
     PostedEntry post(EntryRequest request);
 
     /**
+     * Whether an entry dated {@code date} would be accepted by its period: true for an open period
+     * and for a month with no period yet (it is created open on demand). Lets a job choose another
+     * date before posting, since a refused post marks the caller's transaction for rollback.
+     */
+    boolean periodOpen(LocalDate date);
+
+    /**
      * Posts the reversal of a posted entry (ADR-004: corrections are reversals): the same branch,
      * accounts, amounts and source, each debit turned into a credit and the reverse, with
      * {@code reverses_entry_id} set. An entry is reversed at most once, and a reversal is not
