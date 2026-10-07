@@ -160,6 +160,7 @@ const retailTransferRoute = retailScreen('/transfer').lazy(() => import('../area
 const retailTransfersRoute = retailScreen('/transfers').lazy(() => import('../areas/staff/retail/transfers').then((m) => m.Route));
 const retailValuationRoute = retailScreen('/valuation').lazy(() => import('../areas/staff/retail/profit').then((m) => m.ValuationRoute));
 const retailProfitRoute = retailScreen('/profit').lazy(() => import('../areas/staff/retail/profit').then((m) => m.Route));
+const retailSavingsRoute = retailScreen('/savings').lazy(() => import('../areas/staff/retail/savings').then((m) => m.Route));
 
 const signUpRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sign-up' }).lazy(() =>
   import('../areas/onboarding/sign-up').then((m) => m.Route),
@@ -213,6 +214,7 @@ export const router = createRouter({
         retailTransfersRoute,
         retailValuationRoute,
         retailProfitRoute,
+        retailSavingsRoute,
       ])]),
     memberRoute,
     signUpRoute,

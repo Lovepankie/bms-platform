@@ -38,6 +38,33 @@ export type TransferRequest = S['RetailTransferRequest'];
 export type Transfer = S['RetailTransfer'];
 export type TransferLine = S['RetailTransferLine'];
 export type TransferPage = S['RetailTransferPage'];
+export type Savings = S['RetailSavings'];
+export type SavingsRequest = S['RetailSavingsRequest'];
+export type SavingsSuggestion = S['RetailSavingsSuggestion'];
+export type Banking = S['RetailBanking'];
+export type BankingRequest = S['RetailBankingRequest'];
+export type BankingExpected = S['RetailBankingExpected'];
+export type BankingDay = S['RetailBankingDay'];
+export type BankingReport = S['RetailBankingReport'];
+export type Withdrawal = S['RetailWithdrawal'];
+export type WithdrawalRequest = S['RetailWithdrawalRequest'];
+export type Expense = S['RetailExpense'];
+export type ExpenseRequest = S['RetailExpenseRequest'];
+export type ExpenseReport = S['RetailExpenseReport'];
+export type ExpenseGroup = S['RetailExpenseGroup'];
+export type ExpenseCategory = S['RetailCashExpenseCategory'];
+export type ExpenseItem = S['RetailCashExpenseItem'];
+export type CashParty = S['RetailCashParty'];
+export type CashPartyRequest = S['RetailCashPartyRequest'];
+export type CashPartyKind = CashPartyRequest['kind'];
+export type Advance = S['RetailAdvance'];
+export type AdvanceRequest = S['RetailAdvanceRequest'];
+export type Repayment = S['RetailRepayment'];
+export type RepaymentRequest = S['RetailRepaymentRequest'];
+export type AdvanceReport = S['RetailAdvanceReport'];
+export type AdvanceParty = S['RetailAdvanceParty'];
+export type CashDailyReport = S['RetailCashDailyReport'];
+export type CashDailyRow = S['RetailCashDailyRow'];
 
 /** The tenant currency is not on /me yet; the retail pilot trades in shillings. */
 export const RETAIL_CURRENCY = 'UGX';
@@ -85,6 +112,19 @@ export function salesParams({ branchId, from, to, buyer, paymentMethod, productI
   };
 }
 
+/** A cash book list or report window: branches (empty means every branch in scope), dates, voided rows. */
+export interface CashQuery {
+  branchIds?: string[];
+  from?: string;
+  to?: string;
+  includeVoided?: boolean;
+}
+
+/** The query string of a cash book list: empty filters left out. */
+export function cashParams({ branchIds, from, to, includeVoided }: CashQuery) {
+  return { branch_id: branchIds && branchIds.length > 0 ? branchIds : undefined, from: from || undefined, to: to || undefined, include_voided: includeVoided || undefined };
+}
+
 export type SalePayment = 'cash' | 'mobile_money' | 'bank' | 'credit';
 export type PurchasePayment = 'cash' | 'bank' | 'credit';
 
@@ -114,6 +154,42 @@ export interface RetailApi {
   listTransfers(q: { branchId?: string; cursor?: string }): Promise<TransferPage>;
   getTransfer(id: string): Promise<Transfer>;
   voidTransfer(id: string, reason: string): Promise<Transfer>;
+
+  // The cash book (FR-RET-17 to FR-RET-29, ADR-022). Every write takes the Idempotency-Key of its draft;
+  // a void takes one too. Figures the schema marks "present only with retail.profit.read" are absent
+  // from a body for any other caller, and the screens never infer them.
+  savingsSuggestion(q: { branchId: string; date: string }): Promise<SavingsSuggestion>;
+  createSavings(body: SavingsRequest, idempotencyKey: string): Promise<Savings>;
+  listSavings(q: CashQuery): Promise<Savings[]>;
+  voidSavings(id: string, reason: string, idempotencyKey: string): Promise<Savings>;
+  bankingExpected(q: { branchId: string; date: string }): Promise<BankingExpected>;
+  createBanking(body: BankingRequest, idempotencyKey: string): Promise<Banking>;
+  listBankings(q: CashQuery): Promise<Banking[]>;
+  voidBanking(id: string, reason: string, idempotencyKey: string): Promise<Banking>;
+  createWithdrawal(body: WithdrawalRequest, idempotencyKey: string): Promise<Withdrawal>;
+  listWithdrawals(q: CashQuery): Promise<Withdrawal[]>;
+  voidWithdrawal(id: string, reason: string, idempotencyKey: string): Promise<Withdrawal>;
+  listExpenseCategories(q?: { activeOnly?: boolean }): Promise<ExpenseCategory[]>;
+  createExpenseCategory(body: { name: string }): Promise<ExpenseCategory>;
+  /** `version` is the one the list showed; the server answers 409 version_conflict when it is stale. */
+  updateExpenseCategory(id: string, body: { name?: string; active?: boolean }, version: number): Promise<ExpenseCategory>;
+  createExpenseItem(categoryId: string, body: { name: string; requires_explanation?: boolean }): Promise<ExpenseItem>;
+  updateExpenseItem(categoryId: string, itemId: string, body: { name?: string; active?: boolean; requires_explanation?: boolean }, version: number): Promise<ExpenseItem>;
+  listCashParties(q?: { kind?: CashPartyKind }): Promise<CashParty[]>;
+  createCashParty(body: CashPartyRequest): Promise<CashParty>;
+  createExpense(body: ExpenseRequest, idempotencyKey: string): Promise<Expense>;
+  listExpenses(q: CashQuery & { categoryId?: string; itemId?: string }): Promise<Expense[]>;
+  voidExpense(id: string, reason: string, idempotencyKey: string): Promise<Expense>;
+  createAdvance(body: AdvanceRequest, idempotencyKey: string): Promise<Advance>;
+  listAdvances(q: CashQuery & { partyId?: string; openOnly?: boolean }): Promise<Advance[]>;
+  getAdvance(id: string): Promise<Advance>;
+  voidAdvance(id: string, reason: string, idempotencyKey: string): Promise<Advance>;
+  createRepayment(advanceId: string, body: RepaymentRequest, idempotencyKey: string): Promise<Repayment>;
+  voidRepayment(advanceId: string, repaymentId: string, reason: string, idempotencyKey: string): Promise<Repayment>;
+  cashDaily(q: CashQuery): Promise<CashDailyReport>;
+  bankingReport(q: CashQuery & { flag?: string }): Promise<BankingReport>;
+  expensesReport(q: CashQuery & { groupBy: 'category' | 'item' | 'branch' | 'month' }): Promise<ExpenseReport>;
+  advancesReport(q: { branchIds?: string[] }): Promise<AdvanceReport>;
 }
 
 /** A failed retail call: `message` is plain words for people, `code` is the server's identifier. */
@@ -122,6 +198,8 @@ export class RetailError extends Error {
     message: string,
     readonly status: number,
     readonly code?: string,
+    /** The whole problem body, for the few refusals that carry data (a 409 suggestion_changed brings the new token). */
+    readonly problem?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -131,12 +209,26 @@ export class RetailError extends Error {
 function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T {
   if (result.data === undefined || result.error !== undefined || !result.response.ok) {
     const problem = problemOf(result.error);
-    throw new RetailError(retailMessage(problem, result.response.status), result.response.status, problem.code);
+    throw new RetailError(retailMessage(problem, result.response.status), result.response.status, problem.code, problem as Record<string, unknown>);
   }
   return result.data;
 }
 
 const PAGE = 500;
+
+/** Every page of a cursor-paged list, in the server's order. */
+async function allPages<T>(
+  fetchPage: (cursor?: string) => Promise<{ data?: { items?: T[]; next_cursor?: string }; error?: unknown; response: Response }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = unwrap(await fetchPage(cursor));
+    rows.push(...(page.items ?? []));
+    cursor = page.next_cursor;
+  } while (cursor);
+  return rows;
+}
 
 const realRetail: RetailApi = {
   async listProducts({ query, branchId }) {
@@ -253,6 +345,146 @@ const realRetail: RetailApi = {
 
   async voidTransfer(id, reason) {
     return unwrap(await api.POST('/api/v1/retail/transfers/{transfer_id}/void', { params: { path: { transfer_id: id } }, body: { reason } }));
+  },
+
+  // The cash book. Lists read every page of the window asked for (200 a page, the most the server allows).
+  async savingsSuggestion({ branchId, date }) {
+    return unwrap(await api.GET('/api/v1/retail/savings/suggestion', { params: { query: { branch_id: branchId, date } } }));
+  },
+
+  async createSavings(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/savings', { body, params: { header: { 'Idempotency-Key': key } } }));
+  },
+
+  async listSavings(q) {
+    return allPages((cursor) => api.GET('/api/v1/retail/savings', { params: { query: { ...cashParams(q), limit: 200, cursor } } }));
+  },
+
+  async voidSavings(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/savings/{savings_id}/void', { params: { path: { savings_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  async bankingExpected({ branchId, date }) {
+    return unwrap(await api.GET('/api/v1/retail/bankings/expected', { params: { query: { branch_id: branchId, date } } }));
+  },
+
+  async createBanking(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/bankings', { body, params: { header: { 'Idempotency-Key': key } } }));
+  },
+
+  async listBankings(q) {
+    return allPages((cursor) => api.GET('/api/v1/retail/bankings', { params: { query: { ...cashParams(q), limit: 200, cursor } } }));
+  },
+
+  async voidBanking(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/bankings/{banking_id}/void', { params: { path: { banking_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  async createWithdrawal(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/withdrawals', { body, params: { header: { 'Idempotency-Key': key } } }));
+  },
+
+  async listWithdrawals(q) {
+    return allPages((cursor) => api.GET('/api/v1/retail/withdrawals', { params: { query: { ...cashParams(q), limit: 200, cursor } } }));
+  },
+
+  async voidWithdrawal(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/withdrawals/{withdrawal_id}/void', { params: { path: { withdrawal_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  async listExpenseCategories(q) {
+    return unwrap(await api.GET('/api/v1/retail/expense-categories', { params: { query: { active: q?.activeOnly ? true : undefined } } })).items ?? [];
+  },
+
+  async createExpenseCategory(body) {
+    return unwrap(await api.POST('/api/v1/retail/expense-categories', { body }));
+  },
+
+  async updateExpenseCategory(id, body, version) {
+    return unwrap(await api.PATCH('/api/v1/retail/expense-categories/{category_id}', { params: { path: { category_id: id }, header: { 'If-Match': String(version) } }, body }));
+  },
+
+  async createExpenseItem(categoryId, body) {
+    return unwrap(await api.POST('/api/v1/retail/expense-categories/{category_id}/items', { params: { path: { category_id: categoryId } }, body }));
+  },
+
+  async updateExpenseItem(categoryId, itemId, body, version) {
+    return unwrap(
+      await api.PATCH('/api/v1/retail/expense-categories/{category_id}/items/{item_id}', {
+        params: { path: { category_id: categoryId, item_id: itemId }, header: { 'If-Match': String(version) } }, body,
+      }),
+    );
+  },
+
+  async listCashParties(q) {
+    return allPages((cursor) => api.GET('/api/v1/retail/cash-parties', { params: { query: { kind: q?.kind, limit: 200, cursor } } }));
+  },
+
+  async createCashParty(body) {
+    return unwrap(await api.POST('/api/v1/retail/cash-parties', { body }));
+  },
+
+  async createExpense(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/expenses', { body, params: { header: { 'Idempotency-Key': key } } }));
+  },
+
+  async listExpenses(q) {
+    return allPages((cursor) =>
+      api.GET('/api/v1/retail/expenses', { params: { query: { ...cashParams(q), category_id: q.categoryId || undefined, item_id: q.itemId || undefined, limit: 200, cursor } } }),
+    );
+  },
+
+  async voidExpense(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/expenses/{expense_id}/void', { params: { path: { expense_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  async createAdvance(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/advances', { body, params: { header: { 'Idempotency-Key': key } } }));
+  },
+
+  async listAdvances(q) {
+    const { branch_id, from, to } = cashParams(q);
+    return allPages((cursor) =>
+      api.GET('/api/v1/retail/advances', { params: { query: { branch_id, from, to, party_id: q.partyId || undefined, open_only: q.openOnly || undefined, limit: 200, cursor } } }),
+    );
+  },
+
+  async getAdvance(id) {
+    return unwrap(await api.GET('/api/v1/retail/advances/{advance_id}', { params: { path: { advance_id: id } } }));
+  },
+
+  async voidAdvance(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/advances/{advance_id}/void', { params: { path: { advance_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  async createRepayment(advanceId, body, key) {
+    return unwrap(await api.POST('/api/v1/retail/advances/{advance_id}/repayments', { params: { path: { advance_id: advanceId }, header: { 'Idempotency-Key': key } }, body }));
+  },
+
+  async voidRepayment(advanceId, repaymentId, reason, key) {
+    return unwrap(
+      await api.POST('/api/v1/retail/advances/{advance_id}/repayments/{repayment_id}/void', {
+        params: { path: { advance_id: advanceId, repayment_id: repaymentId }, header: { 'Idempotency-Key': key } }, body: { reason },
+      }),
+    );
+  },
+
+  async cashDaily(q) {
+    const { branch_id, from, to } = cashParams(q);
+    return unwrap(await api.GET('/api/v1/retail/reports/cash/daily', { params: { query: { branch_id, from, to } } }));
+  },
+
+  async bankingReport(q) {
+    const { branch_id, from, to } = cashParams(q);
+    return unwrap(await api.GET('/api/v1/retail/reports/cash/banking', { params: { query: { branch_id, from, to, flag: q.flag || undefined } } }));
+  },
+
+  async expensesReport(q) {
+    return unwrap(await api.GET('/api/v1/retail/reports/cash/expenses', { params: { query: { ...cashParams(q), group_by: q.groupBy } } }));
+  },
+
+  async advancesReport({ branchIds }) {
+    return unwrap(await api.GET('/api/v1/retail/reports/cash/advances', { params: { query: { branch_id: branchIds && branchIds.length > 0 ? branchIds : undefined } } }));
   },
 };
 

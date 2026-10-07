@@ -29,8 +29,37 @@ describe('retail permission gating', () => {
   it('offers everything to an admin', () => {
     expect(canSeeProfit(admin)).toBe(true);
     expect(screensFor(admin).map((s) => s.screen)).toEqual(
-      ['sale', 'creditSales', 'salesHistory', 'restock', 'usage', 'stock', 'stocktake', 'transfer', 'transfers', 'valuation', 'profit'],
+      [
+        'sale', 'creditSales', 'salesHistory', 'restock', 'usage', 'stock', 'stocktake', 'transfer', 'transfers', 'valuation', 'profit',
+        'banking', 'savings', 'expenses', 'withdrawals', 'advances', 'cashSummary', 'bankingReport', 'expensesReport', 'expenseSetup',
+      ],
     );
+  });
+
+  it('shows each cash book tile only with its permission', () => {
+    const only = (...p: string[]) => screensFor({ permissions: p }).map((s) => s.screen);
+    expect(only('retail.savings.record')).toEqual(['savings']);
+    expect(only('retail.banking.record')).toEqual(['banking']);
+    expect(only('retail.expense.record')).toEqual(['expenses']);
+    expect(only('retail.withdrawal.record')).toEqual(['withdrawals']);
+    expect(only('retail.advance.create')).toEqual(['advances']);
+    expect(only('retail.advance.repay')).toEqual(['advances']);
+    // The lists and reports need the cash book read; setting up the lists needs expense.manage as well.
+    expect(only('retail.cashbook.read')).toEqual(['cashSummary', 'bankingReport', 'expensesReport']);
+    expect(only('retail.expense.manage')).toEqual([]);
+    expect(only('retail.expense.manage', 'retail.cashbook.read')).toEqual(['cashSummary', 'bankingReport', 'expensesReport', 'expenseSetup']);
+    expect(only('retail.cashbook.void', 'retail.savings.overwrite', 'retail.profit.read')).toEqual(['profit']);
+  });
+
+  it('gives the cashier the cash book screens that record, and none that need profit or setup', () => {
+    const cashier = mockMe('cashier');
+    expect(canSeeProfit(cashier)).toBe(false);
+    expect(canUse(cashier, 'savings')).toBe(true);
+    expect(canUse(cashier, 'banking')).toBe(true);
+    expect(canUse(cashier, 'expenses')).toBe(true);
+    expect(canUse(cashier, 'withdrawals')).toBe(false);
+    expect(canUse(cashier, 'advances')).toBe(false);
+    expect(canUse(cashier, 'expenseSetup')).toBe(false);
   });
 
   it('needs stock read as well as commit for a stock-take', () => {

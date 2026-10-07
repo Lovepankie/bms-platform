@@ -100,6 +100,68 @@ export const icons = {
       <path d="M15 7h6v6" />
     </Svg>
   ),
+  savings: (
+    <Svg>
+      <ellipse cx="12" cy="6" rx="7" ry="3" />
+      <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+      <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
+    </Svg>
+  ),
+  banking: (
+    <Svg>
+      <path d="M3 9l9-5 9 5" />
+      <path d="M5 9v9M9.7 9v9M14.3 9v9M19 9v9" />
+      <path d="M3 21h18" />
+    </Svg>
+  ),
+  expenses: (
+    <Svg>
+      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+      <path d="M9 9h6" />
+      <path d="M12 12v4M10 14l2 2 2-2" />
+    </Svg>
+  ),
+  withdrawals: (
+    <Svg>
+      <rect x="3" y="7" width="18" height="12" rx="2" />
+      <path d="M12 3v8M9 8l3 3 3-3" />
+      <circle cx="12" cy="15" r="1.5" />
+    </Svg>
+  ),
+  advances: (
+    <Svg>
+      <path d="M4 9h14" />
+      <path d="M14 5l4 4-4 4" />
+      <path d="M20 16H6" />
+      <path d="M10 12l-4 4 4 4" />
+      <circle cx="12" cy="12.5" r="0.8" />
+    </Svg>
+  ),
+  cashSummary: (
+    <Svg>
+      <path d="M9 4h6v3H9z" />
+      <path d="M15 5h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3" />
+      <path d="M8 17v-3M12 17v-6M16 17v-4" />
+    </Svg>
+  ),
+  bankingReport: (
+    <Svg>
+      <path d="M4 20V10M10 20V4M16 20v-8M22 20H2" />
+    </Svg>
+  ),
+  expensesReport: (
+    <Svg>
+      <path d="M12 3a9 9 0 1 0 9 9h-9z" />
+      <path d="M15 3.5A9 9 0 0 1 20.5 9H15z" />
+    </Svg>
+  ),
+  expenseSetup: (
+    <Svg>
+      <path d="M8 6h12M8 12h12M8 18h12" />
+      <path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+      <path d="M4 3v6M4 15v6" />
+    </Svg>
+  ),
   user: (
     <Svg>
       <circle cx="12" cy="8" r="4" />
