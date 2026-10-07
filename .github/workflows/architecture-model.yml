@@ -38,6 +38,10 @@ env:
   # ghcr.io/avisi-cloud/structurizr-site-generatr:latest` and take the index digest.
   SITE_GENERATR: ghcr.io/avisi-cloud/structurizr-site-generatr@sha256:dc91858de351d430e92fb0f72c1580e7827f52c37f67d1dcd8a3b4d23b34c472
 
+concurrency:
+  group: model-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   model:
     runs-on: [self-hosted, hillary-pi]
