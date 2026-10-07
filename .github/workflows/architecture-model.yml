@@ -40,7 +40,7 @@ env:
 
 jobs:
   model:
-    runs-on: [self-hosted, hillary-pi]
+    runs-on: ubuntu-latest
     # A stalled image pull once held the only runner for over two hours; the job normally takes
     # about five minutes.
     timeout-minutes: 15
@@ -48,6 +48,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Assert the Docker daemon is rootless
+        if: runner.environment == 'self-hosted'
         # ADR-018 finding L9: see ci.yml's delivery job for why this must be checked before any
         # --user 0:0 step on this self-hosted runner.
         run: |

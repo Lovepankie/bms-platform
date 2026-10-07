@@ -40,6 +40,13 @@ branch --PR--> ci.yml (self-hosted hillary-pi): backend mvn verify | frontend co
 
 ## 10.3 Continuous integration (`.github/workflows/ci.yml`)
 
+**Hosted overflow for the two heavy jobs.** `Backend (mvn verify)` and the architecture model job run on the
+GitHub-hosted `ubuntu-latest` runner, in parallel with whatever is queued on the single Pi runner. A
+full CI run costs about 17 hosted minutes at the Linux rate, so the organisation needs a monthly Actions
+budget (the default free allowance is 2,000 minutes and the budget stops further use when it is spent,
+which would also stop the deploy). If the budget is exhausted, set the two `runs-on` lines back to
+`[self-hosted, hillary-pi]`.
+
 **Where jobs run (ADR-018, finding H1).** The three small text guards (`dash-guard`,
 `adr-citation-guard`, `linked-issue-guard`) run on the GitHub-hosted `ubuntu-latest` runner: they
 only read the checked-out diff, hold no secret and cost seconds, and moving them keeps them from

@@ -20,7 +20,9 @@ concurrency:
 jobs:
   backend:
     name: Backend (mvn verify)
-    runs-on: [self-hosted, hillary-pi]
+    # GitHub-hosted: the heavy job runs in parallel with the Pi runner's queue instead of behind it.
+    # Needs a monthly Actions budget on the organisation (docs/sdd/10-cicd-pipeline.md).
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
       run:
