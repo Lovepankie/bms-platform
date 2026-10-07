@@ -1,0 +1,173 @@
+/*
+ * The guided tour (issue #19): a click shield over the page, a hole around the lit target whose
+ * spread shadow dims everything else, and a card docked to the top or bottom edge, away from the
+ * target, so it fits a 390px phone without covering what it explains. The host sets the hole's
+ * box as --tour-top, --tour-left, --tour-width and --tour-height through the CSSOM. Help in the
+ * staff bar opens a sheet with "Take the tour" and "Show me this page".
+ */
+
+.tour-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+}
+
+.tour-backdrop {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+}
+
+.tour-backdrop.is-dim {
+  background: var(--color-scrim);
+}
+
+.tour-hole {
+  position: fixed;
+  top: var(--tour-top, 0);
+  left: var(--tour-left, 0);
+  width: var(--tour-width, 0);
+  height: var(--tour-height, 0);
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 3px var(--color-surface), 0 0 0 6px var(--color-accent), 0 0 0 100vmax var(--color-scrim);
+  pointer-events: none;
+}
+
+.tour-card {
+  position: fixed;
+  left: var(--space-4);
+  right: var(--space-4);
+  max-width: 440px;
+  margin: 0 auto;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border-top: 4px solid var(--color-accent);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+  max-height: calc(100vh - 2 * var(--space-4));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tour-card-bottom {
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+}
+
+.tour-card-top {
+  top: calc(var(--space-4) + env(safe-area-inset-top));
+}
+
+.tour-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.tour-count {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.tour-close {
+  flex: none;
+  width: var(--tap);
+  padding: 0;
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0 0;
+  font-size: var(--text-lg);
+  color: var(--color-text-muted);
+}
+
+.tour-card h2 {
+  margin: var(--space-2) 0 var(--space-2);
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+}
+
+/* The title takes focus only so a screen reader reads it; it is not a control, so no ring. */
+.tour-card h2:focus,
+.tour-card h2:focus-visible {
+  outline: none;
+}
+
+/* A lit target scrolls to just below the top edge. */
+[data-tour] {
+  scroll-margin-top: var(--space-5);
+  scroll-margin-bottom: var(--space-5);
+}
+
+.tour-card p {
+  margin: 0 0 var(--space-3);
+  line-height: var(--leading);
+}
+
+.tour-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.tour-dots li {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-border-strong);
+}
+
+.tour-dots li.is-done {
+  background: var(--color-accent);
+}
+
+.tour-dots li.is-current {
+  width: 24px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+}
+
+.tour-remember {
+  margin-bottom: var(--space-3) !important;
+}
+
+.tour-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tour-hole {
+    transition: top 180ms ease, left 180ms ease, width 180ms ease, height 180ms ease;
+  }
+
+  .tour-card {
+    animation: tour-in 160ms ease-out;
+  }
+}
+
+@keyframes tour-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Help in the staff bar opens a native dialog sheet (surfaces.css); here only its heading. */
+.help-menu {
+  flex: none;
+}
+
+.help-sheet h2 {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+
+.help-sheet .form-actions {
+  margin-top: var(--space-4);
+}

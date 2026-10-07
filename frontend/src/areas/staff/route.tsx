@@ -4,6 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { api, fetchMe, fetchSettings, type Me } from '../../api/client';
 import { loadRetailMock, retailMockEnabled } from '../../api/retail';
 import { getAccessToken, refreshSession, setAccessToken, subscribe } from '../../auth/session';
+import { HelpMenu, TourProvider } from '../../tour/host';
 import { icons } from '../../components/icons';
 import { BrandLoader } from '../../components/states';
 import { BranchPicker, useActiveBranch } from './branch-picker';
@@ -68,37 +69,50 @@ function StaffLayout() {
     await navigate({ to: '/sign-in' });
   }
 
-  const canSeeApprovals = (profile.permissions ?? []).includes('core.approvals.read');
   const recoveryCodesLeft = profile.unused_recovery_codes ?? 0;
 
   return (
     <StaffContext.Provider value={{ me: profile, branch, chooseBranch: choose }}>
-      <header className="staff-bar">
-        <div className="staff-bar-top">
-          <span className="staff-user">
-            <span className="avatar">{icons.user}</span>
-            <span className="staff-user-name">{profile.full_name}</span>
-          </span>
-          <BranchPicker me={profile} branch={branch} onChoose={choose} />
-          <button className="btn-ghost btn-sm" onClick={() => void signOut()}>Sign out</button>
-        </div>
-        <nav className="tabs" aria-label="Staff areas">
-          <Link to="/staff" activeOptions={{ exact: true }}>Home</Link>
-          {canSeeApprovals && <Link to="/staff/approvals">Approvals</Link>}
-          {showLending(profile) && <Link to="/staff/lending" activeOptions={{ exact: true }}>Loans</Link>}
-          {showSavings(profile) && <Link to="/staff/lending/savings">Savings</Link>}
-          {showRetail(profile) && <Link to="/staff/retail">Retail</Link>}
-          {managesSettings && <Link to="/staff/setup">Business set-up</Link>}
-        </nav>
-      </header>
-      {profile.mfa_enabled && recoveryCodesLeft <= 2 && (
-        <p role="status" className="alert alert-warning">
-          You have {recoveryCodesLeft} recovery codes left. Ask an admin to reset your MFA if you run out.
-        </p>
-      )}
-      {pathname.startsWith('/staff/retail') && showRetail(profile) && <RetailNav me={profile} />}
-      <Outlet />
+      <TourProvider me={profile} saveProgress={!mock}>
+        <StaffBar me={profile} branch={branch} onBranch={choose} onSignOut={() => void signOut()} />
+        {profile.mfa_enabled && recoveryCodesLeft <= 2 && (
+          <p role="status" className="alert alert-warning">
+            You have {recoveryCodesLeft} recovery codes left. Ask an admin to reset your MFA if you run out.
+          </p>
+        )}
+        {pathname.startsWith('/staff/retail') && showRetail(profile) && <RetailNav me={profile} />}
+        <Outlet />
+      </TourProvider>
     </StaffContext.Provider>
+  );
+}
+
+/**
+ * Who is signed in, Help, the branch switcher, sign out and the area tabs. Carries the data-tour
+ * anchors the first-run tours light up (tour/tours.ts).
+ */
+export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: string | null; onBranch: (selection: string) => void; onSignOut: () => void }) {
+  const permissions = me.permissions ?? [];
+  return (
+    <header className="staff-bar">
+      <div className="staff-bar-top">
+        <span className="staff-user">
+          <span className="avatar">{icons.user}</span>
+          <span className="staff-user-name">{me.full_name}</span>
+        </span>
+        <HelpMenu />
+        <BranchPicker me={me} branch={branch} onChoose={onBranch} />
+        <button className="btn-ghost btn-sm" onClick={onSignOut}>Sign out</button>
+      </div>
+      <nav className="tabs" aria-label="Staff areas" data-tour="nav-areas">
+        <Link to="/staff" activeOptions={{ exact: true }}>Home</Link>
+        {permissions.includes('core.approvals.read') && <Link to="/staff/approvals" data-tour="nav-approvals">Approvals</Link>}
+        {showLending(me) && <Link to="/staff/lending" activeOptions={{ exact: true }} data-tour="nav-lending">Loans</Link>}
+        {showSavings(me) && <Link to="/staff/lending/savings">Savings</Link>}
+        {showRetail(me) && <Link to="/staff/retail" data-tour="nav-retail">Retail</Link>}
+        {permissions.includes('core.settings.manage') && <Link to="/staff/setup">Business set-up</Link>}
+      </nav>
+    </header>
   );
 }
 

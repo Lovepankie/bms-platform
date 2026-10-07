@@ -21,7 +21,7 @@ switches on. Lending is the first vertical; retail was brought forward (ADR-020)
 ## Layout
 
 - `backend/src/main/java/com/rincoltech/bms/`: `kernel`, `core/*`, `lending/{members,collateral,products,loans}`, `retail/{catalogue,stock,sales,purchasing,reports,imports}`.
-- `backend/src/main/resources/db/migration/`: V1 to V14, V20 to V23, V26, V28 and V29. The numbers in between stay unused; Flyway only needs them to increase.
+- `backend/src/main/resources/db/migration/`: V1 to V14, V20 to V23, V26, V28, V29 and V31 (the first-run preferences, #19). The numbers in between stay unused; Flyway only needs them to increase.
 - `docs/sdd/` chapters 1 to 15, `docs/adr/`, `docs/runbooks/`, `docs/workspace.dsl`.
 
 ## Current status (2026-10-08)

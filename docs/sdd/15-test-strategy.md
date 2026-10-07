@@ -147,16 +147,17 @@ write and unbound-session tests cover it without a separate suite.
 does, on a fresh PostgreSQL 16 container per case: every migration (V1 to V9 lending, V10 to V14
 retail, V20 the retail import references, V21 the lending follow-ups, V22 the retail stock
 transfers, V23 the onboarding applications and outbox of #89, V26 the indexes of #107, V28 the
-retail catalogue management of #146, V29 lending disbursement and repayments of #108) applies in
-order on an empty database; on a database already migrated to V9 with a lending tenant, exactly V10
-to V14, V20, V21, V22, V23, V26, V28 and V29 apply and that tenant can then switch retail on; a
-tenant that switched retail on at V21 gets the inter-branch clearing account (code 1190, system
-controlled) from V22 (#84); a database at V22 holding retail rows (a negative balance among them)
-keeps every row through V23 and V26, whose new indexes replace the old ones and whose balance table
-gets its fillfactor (#107); a database at V28 holding loans in draft, approved and cancelled takes
-exactly V29 and keeps them (#108); and no two migration files share a version (issue #71, review
-F6). V24, V25 and V27 stay unused; a new migration takes a number above the highest applied one and
-adds its version to the list.
+retail catalogue management of #146, V29 lending disbursement and repayments of #108, V31 the
+per-user preferences of #19) applies in order on an empty database; on a database already migrated
+to V9 with a lending tenant, exactly V10 to V14, V20, V21, V22, V23, V26, V28, V29 and V31 apply
+and that tenant can then switch retail on; a tenant that switched retail on at V21 gets the
+inter-branch clearing account (code 1190, system controlled) from V22 (#84); a database at V22
+holding retail rows (a negative balance among them) keeps every row through V23, V26, V28, V29 and
+V31, whose new indexes replace the old ones and whose balance table gets its fillfactor (#107); a
+database at V28 holding loans in draft, approved and cancelled takes exactly V29 and V31 and keeps
+them (#108); and no two migration files share a version (issue #71, review F6). V24, V25 and V27
+stay unused and V30 is held by the open savings branch (#179); a new migration takes a number above
+the highest applied one and adds its version to the list.
 
 ## 15.4.4 Query plans at scale
 
@@ -280,6 +281,16 @@ output changed.
   possible-repeat warning; decisions allowed per status and notes required; the Activate form
   labelled and not sent twice; the result and the repeat; failed messages masked with a retry and
   a warning for an unconfigured sender; the new routes on the shared shell).
+- First run and guided tours (FR-IAM-13, FR-IAM-14): `areas/auth/first-run.test.tsx` renders each
+  first-run step and error state; `tour/model.test.ts` covers step filtering by permission, module
+  and feature flag, the first-run and replay rules, the skip of a missing anchor, the focus trap,
+  keys and swipes, and the copy rules; `tour/tours.test.tsx` renders the screen of every step of
+  every tour as the user it is written for (a tenant admin, a seller, a shop manager, a cashier
+  and a loan officer, all fabricated; the loan page as an approved and an active loan, so both the
+  payout and the payment buttons are checked) and fails when a `data-tour` anchor is missing;
+  `tour/spotlight.test.tsx` checks the dialog semantics, the live region and that no style
+  attribute is written. `FirstRunIT` proves that accepting signs the user in only under the
+  sign-in rules and that tour progress is per user.
 - Bundle budget check for the member area (NFR-PERF-06).
 - Accessibility checks on key screens (NFR-ACC-01).
 

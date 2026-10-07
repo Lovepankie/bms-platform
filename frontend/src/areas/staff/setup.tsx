@@ -29,7 +29,7 @@ async function suggestFrom(file: File): Promise<string | null> {
   }
 }
 
-function Setup() {
+export function Setup() {
   const { me } = useStaff();
   const queryClient = useQueryClient();
   const brand = useShellBrand();
@@ -167,7 +167,7 @@ function Setup() {
     <main>
       <h1>Business set-up</h1>
       {!current.setup_dismissed && (
-        <section aria-labelledby="checklist">
+        <section aria-labelledby="checklist" data-tour="setup-checklist">
           <h2 id="checklist">Checklist</h2>
           <ul>
             {items
@@ -186,7 +186,7 @@ function Setup() {
 
       <h2>Business</h2>
       <div style={{ display: 'grid', gap: 12, maxWidth: 480 }}>
-        <label>
+        <label data-tour="setup-name">
           Business name
           <input value={name} maxLength={100} onChange={(e) => setName(e.target.value)} style={{ display: 'block', width: '100%' }} />
         </label>
@@ -195,7 +195,7 @@ function Setup() {
           <textarea value={footer} maxLength={500} onChange={(e) => setFooter(e.target.value)} style={{ display: 'block', width: '100%' }} />
         </label>
 
-        <fieldset>
+        <fieldset data-tour="setup-logo">
           <legend>Logo</legend>
           {current.logo_document_id && brand.logoSrc ? (
             <p>
@@ -215,7 +215,7 @@ function Setup() {
           )}
         </fieldset>
 
-        <fieldset>
+        <fieldset data-tour="setup-colour">
           <legend>Theme colour</legend>
           <label>
             Colour
@@ -247,7 +247,7 @@ function Setup() {
           )}
         </fieldset>
 
-        <button disabled={busy || (colour !== '' && !check.ok)} onClick={save}>
+        <button disabled={busy || (colour !== '' && !check.ok)} onClick={save} data-tour="setup-save">
           Save
         </button>
         {message && <p role="status">{message}</p>}

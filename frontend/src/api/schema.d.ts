@@ -166,7 +166,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Set a password with the one-time invitation token (FR-IAM-01) */
+        /** Set a password with the one-time invitation token, then sign in (FR-IAM-01, issue #86) */
         post: operations["acceptInvitation"];
         delete?: never;
         options?: never;
@@ -1306,6 +1306,23 @@ export interface paths {
         /** The signed-in user, permissions and branches (FR-BR-03) */
         get: operations["getMe"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/tours/{tour_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Record how the user left a guided tour (issue #19) */
+        put: operations["recordTourState"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3552,6 +3569,10 @@ export interface components {
             permissions?: string[];
             phone_e164?: string;
             roles?: components["schemas"]["RoleAssignment"][];
+            /** @description Guided tours the user finished or dismissed, by tour id (issue #19) */
+            tours?: {
+                [key: string]: components["schemas"]["TourState"];
+            };
             /** Format: int32 */
             unused_recovery_codes?: number;
             /** Format: uuid */
@@ -5292,6 +5313,27 @@ export interface components {
             /** Format: int32 */
             version?: number;
         };
+        /** @description How the user left a guided tour, and its version then */
+        TourState: {
+            /** Format: date-time */
+            at?: string;
+            /** @enum {string} */
+            status?: "completed" | "dismissed";
+            /** Format: int32 */
+            version?: number;
+        };
+        TourStateRequest: {
+            /**
+             * @description completed: finished; dismissed: chose not to see it again
+             * @enum {string}
+             */
+            status: "completed" | "dismissed";
+            /**
+             * Format: int32
+             * @description The tour version the user saw; a higher one shows again
+             */
+            version?: number;
+        };
         /** @description Omitted fields are unchanged. The code never changes. */
         UpdateBranchRequest: {
             location?: string;
@@ -5666,7 +5708,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SignInResponse"];
+                };
             };
         };
     };
@@ -7764,6 +7808,30 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Me"];
                 };
+            };
+        };
+    };
+    recordTourState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tour_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TourStateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

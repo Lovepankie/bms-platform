@@ -1,13 +1,15 @@
 import { createLazyRoute, useNavigate } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { api, type MfaEnrolment, problemOf, type SignInResponse } from '../../api/client';
-import { normaliseSecondFactor, recoveryCodesText } from '../../auth/codes';
+import { normaliseSecondFactor, plainProblem } from '../../auth/codes';
 import { setAccessToken } from '../../auth/session';
 import { illustrations } from '../../components/illustrations';
+import { ErrorLine, RecoveryCodes, StepHeader, TwoStepSetup } from './steps';
 
 // Staff sign-in (FR-IAM-04 to FR-IAM-06, FR-IAM-11): password, then the second factor when the
 // account has one, or TOTP enrolment when the role requires it. Recovery codes are shown once,
-// right after enrolment, and never again.
+// right after enrolment, and never again. The screens share their pieces with the first run of
+// accept-invitation.tsx (issue #86).
 
 type Step =
   | { kind: 'password' }
@@ -23,11 +25,7 @@ function SignIn() {
   const [code, setCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  function copySecret(secret: string) {
-    void navigator.clipboard?.writeText(secret).then(() => setCopied(true));
-  }
+  const [shown, setShown] = useState(false);
 
   async function afterSignIn(body: SignInResponse) {
     if (body.status === 'signed_in' && body.access_token) {
@@ -50,12 +48,13 @@ function SignIn() {
   }
 
   async function run(action: () => Promise<void>) {
+    if (busy) return;
     setBusy(true);
     setMessage(null);
     try {
       await action();
     } catch (error) {
-      setMessage(problemOf(error).detail ?? 'Something went wrong. Try again.');
+      setMessage(plainProblem(problemOf(error), 'Something went wrong. Try again.'));
     } finally {
       setBusy(false);
     }
@@ -102,78 +101,65 @@ function SignIn() {
 
   return (
     <main className="card auth-card">
-      {step.kind === 'password' && <span className="auth-art">{illustrations.secure}</span>}
-      <h1>Staff sign-in</h1>
-      {step.kind === 'password' && <p className="lead">Use the email or phone and the password you set from your invitation.</p>}
-      {message && <p role="alert" className="alert alert-danger">{message}</p>}
-
       {step.kind === 'password' && (
-        <form onSubmit={submitPassword} className="form-stack">
-          <label>
-            Email or phone
-            <input value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" required />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </label>
-          <button className="btn-primary" disabled={busy}>{busy ? 'Signing in' : 'Sign in'}</button>
-        </form>
+        <>
+          <span className="auth-art">{illustrations.secure}</span>
+          <StepHeader title="Staff sign-in" lead="Use the email or phone and the password you set from your invitation." />
+          <ErrorLine message={message} />
+          <form onSubmit={submitPassword} className="form-stack">
+            <div>
+              <label htmlFor="login">Email or phone</label>
+              <input id="login" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" required />
+            </div>
+            <div>
+              <label htmlFor="password">Password</label>
+              <div className="password-row">
+                <input
+                  id="password"
+                  type={shown ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+                <button type="button" className="btn-sm" aria-pressed={shown} onClick={() => setShown(!shown)}>
+                  {shown ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </div>
+            <button className="btn-primary btn-lg" disabled={busy}>{busy ? 'Signing in' : 'Sign in'}</button>
+          </form>
+        </>
       )}
 
       {step.kind === 'challenge' && (
-        <form onSubmit={(e) => submitChallenge(e, step.mfaToken)} className="form-stack">
-          <p className="muted">Enter the code from your authenticator app. Lost your phone? Enter one of your recovery codes.</p>
-          <label>
-            Code
-            <input className="input-code" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" required />
-          </label>
-          <button className="btn-primary" disabled={busy}>Verify</button>
-        </form>
+        <>
+          <StepHeader title="Enter your code" lead="Open your authenticator app and type the 6 digit code it shows." />
+          <ErrorLine message={message} />
+          <form onSubmit={(e) => submitChallenge(e, step.mfaToken)} className="form-stack">
+            <div>
+              <label htmlFor="challenge-code">Code</label>
+              <input id="challenge-code" className="input-code" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" required />
+              <span className="field-hint">Lost your phone? Type one of your recovery codes instead.</span>
+            </div>
+            <button className="btn-primary btn-lg" disabled={busy}>{busy ? 'Checking' : 'Continue'}</button>
+          </form>
+        </>
       )}
 
       {step.kind === 'enrol' && (
-        <form onSubmit={(e) => submitEnrolment(e, step.mfaToken)} className="form-stack">
-          <h2>Set up your authenticator app</h2>
-          <p className="muted">Your role needs a second step at sign-in. It keeps your account safe even if someone learns your password.</p>
-          <ol className="steps">
-            <li>Open an authenticator app on your phone, for example Google Authenticator or Microsoft Authenticator.</li>
-            <li>Add an account and type in this setup key, or open the link on this phone.</li>
-            <li>Enter the 6 digit code the app shows.</li>
-          </ol>
-          <div className="secret-box">
-            <code aria-label="Setup key">{step.enrolment.secret}</code>
-            <button type="button" className="btn-sm" onClick={() => copySecret(step.enrolment.secret ?? '')}>
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-          <p className="hint">
-            <a href={step.enrolment.otpauth_uri}>Open in my authenticator app</a>
-          </p>
-          <label>
-            Code from the app
-            <input className="input-code" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" required />
-          </label>
-          <button className="btn-primary" disabled={busy}>Turn on</button>
-        </form>
+        <>
+          <StepHeader step={1} of={2} title="Set up two-step sign-in" lead="Your role needs a code from your phone as well as your password." />
+          <ErrorLine message={message} />
+          <TwoStepSetup enrolment={step.enrolment} code={code} onCode={setCode} busy={busy} onSubmit={(e) => submitEnrolment(e, step.mfaToken)} />
+        </>
       )}
 
       {step.kind === 'codes' && (
-        <section className="form-stack">
-          <h2>Save your recovery codes</h2>
-          <p>
-            Each code signs you in once if you lose your phone. Save them somewhere safe now: they are shown only this
-            once.
-          </p>
-          <pre className="codes-box">{recoveryCodesText(step.codes)}</pre>
-          <button className="btn-primary" onClick={() => void navigate({ to: '/staff' })}>I have saved them</button>
-        </section>
+        <>
+          <StepHeader step={2} of={2} title="Save your recovery codes" />
+          <RecoveryCodes codes={step.codes} onDone={() => void navigate({ to: '/staff' })} />
+        </>
       )}
     </main>
   );

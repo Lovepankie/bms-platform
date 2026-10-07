@@ -132,9 +132,12 @@ class UserService implements TenantAdmins {
         return issueInvitation(userId, admin.userId(), user.email(), user.phoneE164());
     }
 
-    /** FR-IAM-01: the invitee sets a password with the one-time token and becomes active. */
+    /**
+     * FR-IAM-01: the invitee sets a password with the one-time token and becomes active. Returns
+     * the user, whom the caller then signs in through {@link AuthFlow#afterInvitation}.
+     */
     @Transactional(noRollbackFor = ApiException.class)
-    void acceptInvitation(String token, String password) {
+    UUID acceptInvitation(String token, String password) {
         Instant now = clock.now();
         record Pending(UUID id, UUID userId, Instant expiresAt, Instant acceptedAt, Instant revokedAt) {}
         Pending invitation = jdbc.sql("""
@@ -182,6 +185,7 @@ class UserService implements TenantAdmins {
                         Map.of("status", "active")),
                 user.id(),
                 "staff");
+        return user.id();
     }
 
     @Override

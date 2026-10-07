@@ -25,6 +25,7 @@ packages.
 | One React PWA with staff and member areas | ADR-009 |
 | Backend: Java 25, Spring Boot 4.1, Spring Modulith 2.1, Flyway | ADR-010 |
 | Retail vertical brought forward; stock as append-only movements; retail events post to the ledger | ADR-020 |
+| First run signs the invitee in; guided tours are data with per-user progress on the server | ADR-025 (proposed) |
 | Payment gateway | pending ADR-011 |
 | Credit scoring model beyond the rules-based default | pending ADR-012 |
 | SMS and USSD aggregator | pending ADR-013 |
@@ -227,7 +228,20 @@ frontend/src/
 ```
 
 Each area is a lazily loaded route tree. The staff area reads the principal's permissions
-from `/me` and hides actions the user cannot take. Money is formatted only in
+from `/me` and hides actions the user cannot take.
+
+Guided tours (FR-IAM-14, ADR-025) live in `frontend/src/tour/`: `model.ts` (the step type, who sees
+a step by permission, module and feature flag, when a tour starts, the focus trap and key rules),
+`tours.ts` (the tours as data), `spotlight.tsx` (the card and the dimmed layer) and `host.tsx` (the
+runtime in the staff layout and the Help entry in the staff bar). A step anchors to a
+`data-tour="<id>"` attribute on a screen, never a CSS class; `tours.test.tsx` renders each step's
+screen and fails when the anchor is gone. A new module adds its steps to `tours.ts`; a feature not
+built yet keeps its steps behind a flag in `FEATURES` until its slice switches it on (billing,
+payments, trial, agents, the staff screen and the insights pages are all off today). The first-run
+tours cover set-up, retail selling, stock-take and the catalogue, and the loan list with its
+applications filter; page tours, started from Help, cover the sale, stock, stock-take, catalogue,
+set-up, loans and loan pages. A page tour's `page` may hold a `$name` segment that matches any one
+path segment, so one tour serves every loan. Money is formatted only in
 `components/`, from integer minor units and the currency exponent.
 
 ## 5.7 Where the retail vertical will fit

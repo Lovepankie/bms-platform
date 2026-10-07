@@ -51,7 +51,7 @@ export function LoanRows({ items }: { items: LoanListItem[] }) {
   );
 }
 
-function Loans() {
+export function Loans() {
   const { branch } = useStaff();
   const [typed, setTyped] = useState('');
   const [q, setQ] = useState('');
@@ -67,14 +67,14 @@ function Loans() {
 
   return (
     <LendingGate title="Loans">
-      <form role="search" className="ln-search" onSubmit={(e) => { e.preventDefault(); setQ(typed.trim()); }}>
+      <form role="search" className="ln-search" data-tour="loan-search" onSubmit={(e) => { e.preventDefault(); setQ(typed.trim()); }}>
         <label htmlFor="loan-q">Loan number, member number or name</label>
         <div className="rt-row">
           <input id="loan-q" type="search" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
           <button type="submit">Search</button>
         </div>
         <label htmlFor="loan-status">Status</label>
-        <select id="loan-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select id="loan-status" data-tour="loan-status" value={status} onChange={(e) => setStatus(e.target.value)}>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
               {s === '' ? 'All' : words(s)}

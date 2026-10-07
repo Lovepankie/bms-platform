@@ -94,6 +94,13 @@ The platform host and a tenant without a colour show the Rincol blue.
 | Dialog | `<dialog>`, `<dialog className="sheet">`, `.dialog-actions` | Rises in over 200ms with a fading backdrop; a bottom sheet that slides up below 560px, actions full width |
 | Toast | `.toast`, `.toast-success`, `.toast-danger` with `role="status"` | Above the bottom bar, rises in; no screen raises one yet |
 | Illustration | `illustrations.hero`, `.shopfront`, `.secure`, `.success`, `.error`, and the four empty ones | Decorative (`aria-hidden`), under 2 KB each, no colour attribute: `.ill-tint`, `.ill-tint-strong`, `.ill-accent`, `.ill-primary` follow the tenant colour; `.ill-surface`, `.ill-line` are neutral; `.ill-success-*`, `.ill-danger-*` stay status colours. `shopfront` is the sign-up hero for the onboarding pages of #97 to adopt |
+| Step progress | `StepHeader` (`areas/auth/steps.tsx`), `.step-progress` | "Step N of M" in words and bars, the step heading takes focus and sets the page title |
+| Password pair | `PasswordFields`, `.password-row`, `.checklist` | Show or hide, the server's rules ticked off as the user types |
+| Two-step set-up | `TwoStepSetup`, `QrCode`, `.qr-box`, `.manual-key` | QR code drawn in the browser (uqr), Open in authenticator, the key in groups of four behind "Cannot scan?" |
+| Recovery codes | `RecoveryCodes`, `.codes-grid`, `.button-pair` | Two columns, Copy all, Download as text, a required tick |
+| Guided tour | `tour/` (`.tour-card`, `.tour-hole`, `.tour-backdrop`, `.tour-dots`) | A card docked top or bottom, away from the lit target; the hole is placed with CSS custom properties, never a style attribute (ADR-025) |
+| Tour anchor | `data-tour="<id>"` on the element a tour step lights up | Stable ids, never a CSS class; `tour/tours.test.tsx` fails when one disappears |
+| Help | `HelpMenu` in the staff bar | A `dialog.sheet` with Take the tour and Show me this page |
 
 ## Rules for a new screen
 
@@ -106,6 +113,8 @@ The platform host and a tenant without a colour show the Rincol blue.
 3. State in words as well as colour; errors in `role="alert"` with `.alert-danger`.
 4. Money through `formatMinor` (`src/components/money.ts`), in `.num` cells.
 5. A tenant colour is applied for you; never write a brand colour.
+6. Give the main controls of a new screen `data-tour` ids and add the screen's steps to
+   `frontend/src/tour/tours.ts` (a page tour at least), with plain, short sentences.
 
 ## Checks
 

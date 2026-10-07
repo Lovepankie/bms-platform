@@ -96,7 +96,10 @@ final class UserApi {
             UUID defaultBranchId,
             boolean mfaEnabled,
             boolean mfaRequired,
-            int unusedRecoveryCodes) {}
+            int unusedRecoveryCodes,
+
+            @Schema(description = "Guided tours the user finished or dismissed, by tour id (issue #19)")
+            Map<String, TourProgress.TourState> tours) {}
 
     @Schema(name = "PlatformMe")
     record PlatformMeResponse(UUID userId, String kind, String fullName, String email, List<String> permissions) {}

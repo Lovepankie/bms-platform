@@ -834,12 +834,14 @@ class OnboardingIT extends IntegrationTest {
                 .startsWith("https://" + slug + "-bms-staging.rincoltech.test/accept-invitation#token=");
         assertThat(params.get("sign_in_url")).isEqualTo("https://" + slug + "-bms-staging.rincoltech.test/sign-in");
         Api tenant = Api.tenant(http, slug);
-        assertThat(tenant.post(
-                                "/api/v1/auth/staff/invitations/accept",
-                                Map.of("token", tokenOf(params.get("link")), "password", Api.PASSWORD),
-                                null)
-                        .getStatusCode())
-                .isEqualTo(HttpStatus.NO_CONTENT);
+        // Accepting signs the new admin in through the sign-in rules (ADR-025): the role still
+        // requires a second factor, so the answer is enrolment, not a session.
+        ResponseEntity<JsonNode> accepted = tenant.post(
+                "/api/v1/auth/staff/invitations/accept",
+                Map.of("token", tokenOf(params.get("link")), "password", Api.PASSWORD),
+                null);
+        assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(accepted.getBody().get("status").asString()).isEqualTo("mfa_enrolment_required");
         assertThat(tenant.login(email, Api.PASSWORD).getBody().get("status").asString())
                 .isEqualTo("mfa_enrolment_required");
 

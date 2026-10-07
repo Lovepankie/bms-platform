@@ -322,7 +322,7 @@ port (8081), which is never published outside the container network.
 | POST | `/auth/staff/mfa/enrol` | public (mfa_token), or signed in | Returns the TOTP secret and `otpauth` URI once |
 | POST | `/auth/staff/mfa/confirm` | public (mfa_token), or signed in | `{mfa_token?, code}` activates TOTP and returns ten recovery codes once; with the MFA token it also signs in. FR-IAM-11 |
 | POST | `/auth/staff/mfa/recovery-codes` | authenticated staff | `{code}` (a current TOTP code) replaces every recovery code; returns the new ones once. FR-IAM-11 |
-| POST | `/auth/staff/invitations/accept` | public (token) | `{token, password}`; 204. FR-IAM-01 |
+| POST | `/auth/staff/invitations/accept` | public (token) | `{token, password}`; sets the password and signs in: the same body as `/auth/staff/login` (`signed_in` with tokens, or `mfa_enrolment_required` with an MFA token when the role requires a second factor). FR-IAM-01, FR-IAM-13, ADR-025 |
 | POST | `/auth/staff/password/forgot` | public | Always 202. Not built yet |
 | POST | `/auth/staff/password/reset` | public (token) | Not built yet |
 | POST | `/auth/member/otp/request` | public | `{phone, purpose}`; always 202. FR-IAM-09 (P2) |
@@ -331,7 +331,8 @@ port (8081), which is never published outside the container network.
 | POST | `/auth/member/login` | public | `{phone, pin}` (P2) |
 | POST | `/auth/refresh` | refresh cookie | Rotates refresh token. FR-IAM-07 |
 | POST | `/auth/logout` | authenticated staff | Revokes the session family; clears the cookie |
-| GET | `/me` | authenticated staff | User, roles, permissions, `permission_scopes` (per permission key `{all_branches, branch_ids}`, so a screen offers only the branches where its permission is held, ADR-017), `all_branches`, the branches to switch between, the default branch, MFA state and unused recovery codes. FR-BR-03 |
+| GET | `/me` | authenticated staff | User, roles, permissions, `permission_scopes` (per permission key `{all_branches, branch_ids}`, so a screen offers only the branches where its permission is held, ADR-017), `all_branches`, the branches to switch between, the default branch, MFA state and unused recovery codes. Also `tours`: the guided tours the user finished or dismissed, by tour id (FR-IAM-14). FR-BR-03 |
+| PUT | `/me/tours/{tour_id}` | authenticated staff | `{status: completed \| dismissed, version}`; records how the caller left a guided tour; 204. Only the caller's own row; tour id is lower case words joined by hyphens, at most 64 tours per user (`tour_id_invalid`, `too_many_tours`). FR-IAM-14, ADR-025 |
 
 The refresh token never appears in a response body: it is the `__Host-bms_rt` cookie of section 7.4.1.
 

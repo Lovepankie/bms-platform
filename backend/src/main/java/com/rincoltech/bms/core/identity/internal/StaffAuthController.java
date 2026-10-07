@@ -93,11 +93,12 @@ class StaffAuthController {
     @PostMapping("/staff/invitations/accept")
     @PublicEndpoint
     @Operation(
-            summary = "Set a password with the one-time invitation token (FR-IAM-01)",
+            summary = "Set a password with the one-time invitation token, then sign in (FR-IAM-01, issue #86)",
             operationId = "acceptInvitation")
-    ResponseEntity<Void> accept(@Valid @RequestBody AcceptInvitationRequest request) {
-        users.acceptInvitation(request.token(), request.password());
-        return ResponseEntity.noContent().build();
+    ResponseEntity<SignInResponse> accept(
+            @Valid @RequestBody AcceptInvitationRequest request, HttpServletRequest http) {
+        UUID userId = users.acceptInvitation(request.token(), request.password());
+        return respond(flow.afterInvitation(accounts, userId, http.getServerName(), agent(http)));
     }
 
     @PostMapping("/refresh")

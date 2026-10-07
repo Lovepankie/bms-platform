@@ -107,7 +107,14 @@ class StaffAuthIT extends IntegrationTest {
                 "/api/v1/auth/staff/invitations/accept",
                 Map.of("token", tokenOf(invited.getBody()), "password", Api.PASSWORD),
                 null);
-        assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        // Issue #86: accepting signs the invitee in, through the same sign-in rules as a login.
+        assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(accepted.getBody().get("status").asString()).isEqualTo("signed_in");
+        assertThat(accepted.getHeaders().getFirst("Set-Cookie")).startsWith("__Host-bms_rt=");
+        String firstToken = accepted.getBody().get("access_token").asString();
+        assertThat(api.get("/api/v1/me", firstToken).getBody().get("user_id").asString())
+                .isEqualTo(userId.toString());
+        assertThat(audits("core.auth.signed_in", userId)).isEqualTo(1);
         Session cashier = api.signIn(userId, email, Api.PASSWORD, null);
         JsonNode me = api.get("/api/v1/me", cashier.accessToken()).getBody();
         assertThat(me.get("permissions").toString()).contains("lending.repayments.create");
@@ -160,7 +167,7 @@ class StaffAuthIT extends IntegrationTest {
                                 Map.of("token", newToken, "password", Api.PASSWORD),
                                 null)
                         .getStatusCode())
-                .isEqualTo(HttpStatus.NO_CONTENT);
+                .isEqualTo(HttpStatus.OK);
     }
 
     /** FR-IAM-04: the same generic error whether or not the account exists; FR-AUD-03. */

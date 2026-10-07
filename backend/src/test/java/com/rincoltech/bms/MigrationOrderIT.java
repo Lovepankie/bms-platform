@@ -2,10 +2,13 @@ package com.rincoltech.bms;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.MigrationState;
@@ -22,16 +25,43 @@ import org.testcontainers.utility.MountableFile;
  * fixes), V20 (the retail import references), V21 (the lending review follow-ups), V22 (the retail
  * stock transfers of #84), V23 (the onboarding applications and the outbox of #89), V26 (the
  * indexes of #107), V28 (the retail catalogue management of #146), V29 (lending disbursement and
- * repayments, #108) and V30 (lending savings, #151) apply in order on an empty database, and on a
+ * repayments, #108), V30 (lending savings, #151) and V31 (the per-user preferences of #19) apply in order on an
+ * empty database, and on a
  * database a server already migrated to V9 before the retail work reached it, with
  * {@code outOfOrder} off exactly as {@link DatabaseMigrator} runs it. Each case gets its own
  * PostgreSQL 16 container initialised by {@code deploy/postgres/initdb/01-roles.sh}.
  */
 class MigrationOrderIT {
 
-    static final List<String> VERSIONS = List.of(
+    /** The migrations already merged and deployed: their numbers never change and none is removed. */
+    static final List<String> MERGED = List.of(
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26",
-            "28", "29", "30");
+            "28", "29", "30", "31");
+
+    /** Every migration file on the classpath in numeric order: a new migration only adds its file. */
+    static final List<String> VERSIONS = discoveredVersions();
+
+    static List<String> discoveredVersions() {
+        try {
+            Path dir =
+                    Path.of(MigrationOrderIT.class.getResource("/db/migration").toURI());
+            try (Stream<Path> files = Files.list(dir)) {
+                return files.map(f -> f.getFileName().toString())
+                        .filter(n -> n.matches("V\\d+__.*\\.sql"))
+                        .map(n -> n.substring(1, n.indexOf("__")))
+                        .sorted(Comparator.comparingInt(Integer::parseInt))
+                        .toList();
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("cannot list the migrations", e);
+        }
+    }
+
+    @Test
+    void mergedMigrationsAreNeverRemovedOrRenumbered() {
+        assertThat(VERSIONS).startsWith(MERGED.toArray(String[]::new));
+        assertThat(VERSIONS).doesNotHaveDuplicates();
+    }
 
     @Test
     void everyMigrationAppliesInOrderOnAnEmptyDatabase() {
@@ -42,7 +72,7 @@ class MigrationOrderIT {
                     DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
 
             assertThat(result.success).isTrue();
-            assertThat(result.targetSchemaVersion).isEqualTo("30");
+            assertThat(result.targetSchemaVersion).isEqualTo(VERSIONS.get(VERSIONS.size() - 1));
             assertThat(applied(postgres)).containsExactlyElementsOf(VERSIONS);
             assertThat(flyway(postgres, null).info().pending()).isEmpty();
         }
@@ -54,7 +84,7 @@ class MigrationOrderIT {
             postgres.start();
             // A server that took the loan pull requests first: schema at V9, with a lending tenant.
             MigrateResult first = flyway(postgres, "9").migrate();
-            assertThat(first.targetSchemaVersion).isEqualTo("9");
+            assertThat(first.targetSchemaVersion).isEqualTo(VERSIONS.get(VERSIONS.size() - 1));
             JdbcClient owner = JdbcClient.create(
                     new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
             UUID tenant = UUID.randomUUID();
@@ -80,7 +110,7 @@ class MigrationOrderIT {
 
             assertThat(second.success).isTrue();
             assertThat(second.migrations.stream().map(m -> m.version).toList())
-                    .containsExactly("10", "11", "12", "13", "14", "20", "21", "22", "23", "26", "28", "29", "30");
+                    .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("10"), VERSIONS.size()));
             assertThat(applied(postgres)).containsExactlyElementsOf(VERSIONS);
             assertThat(flyway(postgres, null).info().pending()).isEmpty();
             // The tenant from V9 can switch retail on: its chart is seeded next to the lending one.
@@ -101,7 +131,8 @@ class MigrationOrderIT {
     void transfersMigrationGivesAnExistingRetailTenantTheClearingAccount() {
         try (PostgreSQLContainer postgres = database()) {
             postgres.start();
-            assertThat(flyway(postgres, "21").migrate().targetSchemaVersion).isEqualTo("21");
+            assertThat(flyway(postgres, "21").migrate().targetSchemaVersion)
+                    .isEqualTo(VERSIONS.get(VERSIONS.size() - 1));
             JdbcClient owner = JdbcClient.create(
                     new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
             UUID tenant = UUID.randomUUID();
@@ -130,7 +161,8 @@ class MigrationOrderIT {
     void servicingMigrationAppliesOnADatabaseThatAlreadyHoldsLoans() {
         try (PostgreSQLContainer postgres = database()) {
             postgres.start();
-            assertThat(flyway(postgres, "28").migrate().targetSchemaVersion).isEqualTo("28");
+            assertThat(flyway(postgres, "28").migrate().targetSchemaVersion)
+                    .isEqualTo(VERSIONS.get(VERSIONS.size() - 1));
             JdbcClient owner = JdbcClient.create(
                     new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
             UUID tenant = UUID.randomUUID();
@@ -188,7 +220,8 @@ class MigrationOrderIT {
                     DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
 
             assertThat(result.success).isTrue();
-            assertThat(result.migrations.stream().map(m -> m.version).toList()).containsExactly("29", "30");
+            assertThat(result.migrations.stream().map(m -> m.version).toList())
+                    .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("29"), VERSIONS.size()));
             assertThat(owner.sql("SELECT count(*) FROM lending_loans WHERE tenant_id = ?")
                             .param(tenant)
                             .query(Long.class)
@@ -210,7 +243,8 @@ class MigrationOrderIT {
     void savingsMigrationKeepsTheOutboxRowsOfADatabaseAtV29() {
         try (PostgreSQLContainer postgres = database()) {
             postgres.start();
-            assertThat(flyway(postgres, "29").migrate().targetSchemaVersion).isEqualTo("29");
+            assertThat(flyway(postgres, "29").migrate().targetSchemaVersion)
+                    .isEqualTo(VERSIONS.get(VERSIONS.size() - 1));
             JdbcClient owner = JdbcClient.create(
                     new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
             String enqueue =
@@ -223,7 +257,8 @@ class MigrationOrderIT {
             MigrateResult result =
                     DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
 
-            assertThat(result.migrations.stream().map(m -> m.version).toList()).containsExactly("30");
+            assertThat(result.migrations.stream().map(m -> m.version).toList())
+                    .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("30"), VERSIONS.size()));
             assertThat(owner.sql(enqueue)
                             .params(UUID.randomUUID(), "sms", "+256700000001", "test:v30")
                             .query(Boolean.class)
@@ -253,7 +288,8 @@ class MigrationOrderIT {
     void optimisationMigrationKeepsTheRowsOfADatabaseAtV22() {
         try (PostgreSQLContainer postgres = database()) {
             postgres.start();
-            assertThat(flyway(postgres, "22").migrate().targetSchemaVersion).isEqualTo("22");
+            assertThat(flyway(postgres, "22").migrate().targetSchemaVersion)
+                    .isEqualTo(VERSIONS.get(VERSIONS.size() - 1));
             JdbcClient owner = JdbcClient.create(
                     new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
             UUID tenant = UUID.randomUUID();
@@ -289,7 +325,7 @@ class MigrationOrderIT {
                     DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
 
             assertThat(result.migrations.stream().map(m -> m.version).toList())
-                    .containsExactly("23", "26", "28", "29", "30");
+                    .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("23"), VERSIONS.size()));
             assertThat(owner.sql("SELECT qty::text FROM retail_stock_balances WHERE tenant_id = ?")
                             .param(tenant)
                             .query(String.class)

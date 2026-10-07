@@ -127,6 +127,7 @@ body {
   --color-warning: #b54708;
   --color-warning-tint: #fffaeb;
   --color-info-tint: var(--rt-blue-tint);
+  --color-scrim: rgba(16, 24, 40, 0.62); /* dims the page behind a guided tour step */
 
   /* Type */
   --font-sans: 'Open Sans Variable', 'Open Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;

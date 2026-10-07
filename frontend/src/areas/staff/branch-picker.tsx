@@ -44,7 +44,7 @@ export function useActiveBranch(me: Me | undefined): { branch: string | null; ch
 
 export function BranchPicker({ me, branch, onChoose }: { me: Me; branch: string | null; onChoose: (selection: string) => void }) {
   return (
-    <label className="branch-picker">
+    <label className="branch-picker" data-tour="branch-picker">
       Branch{' '}
       <select value={branch ?? ''} onChange={(e) => onChoose(e.target.value)}>
         {me.all_branches && <option value={ALL_BRANCHES}>All branches</option>}

@@ -39,7 +39,7 @@ class Increment1AcceptanceIT extends IntegrationTest {
                 "/api/v1/auth/staff/invitations/accept",
                 Map.of("token", token(invitation), "password", Api.PASSWORD),
                 null);
-        assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.OK);
         return api.signIn(userId, email, Api.PASSWORD, null);
     }
 

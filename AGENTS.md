@@ -53,6 +53,10 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   (issue #84, ADR-020 amendment) add `V22`. The database optimisation (issue #107, ADR-028) adds
   `V26` (indexes and a fillfactor only; `V24`, `V25` and `V27` stay unused, since a number below
   an applied one can never run). The retail catalogue management (issue #146) takes `V28`. Lending increment 5,
+  disbursement and repayments (issue #108, ADR-026), takes `V29`. Flyway runs with `outOfOrder`
+  off, so a new migration takes a number above the highest one on any open branch. `V30` is held by
+  the open savings branch (#179), and the first-run preferences (issue #19, ADR-025) take `V31`
+  (`V32` next).
   disbursement and repayments (issue #108, ADR-026), takes `V29`, and lending savings (issue #151,
   ADR-032) `V30`. Flyway runs with `outOfOrder` off, so a new migration takes a number above the
   highest one on any open branch (`V31` next).
@@ -71,6 +75,10 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   `seed-lending` command for a fabricated staging loan book (`docs/runbooks/seed-lending.md`).
   Deferred: arrears job, penalties, waivers and SMS (increment 6), import (7), reports and the
   receipt, voucher and statement PDFs (8 and a documents follow-up).
+- **First run and guided tours (issues #19 and #86, ADR-025):** accepting an invitation signs the
+  user in; the PWA walks a new user through password, an optional second factor and recovery codes;
+  role aware spotlight tours (`frontend/src/tour/`) start once and replay from Help, with per-user
+  progress in `users.preferences` (`V31`). A new screen adds `data-tour` anchors and its steps.
 - **Built (increment 9, savings, issue #151, ADR-032):** migration `V30` (savings products,
   accounts, transactions, end-of-day balances, interest postings; the outbox accepts `sms`);
   products with interest rules, minimum and opening balances, withdrawal fee and limits, dormancy;
@@ -140,7 +148,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 |---|---|---|---|---|
 | `core.kernel` | Money, rates, clock, tenant context, principal and route declarations, errors | 3.4 R-ROUND | none | none |
 | `core.tenancy` | Tenants, plans, subscriptions, modules, settings, branches | TEN, BR | 6.4, 6.5 | 7.11.3, 7.11.4 |
-| `core.identity` | Users, credentials, sessions, roles, permissions | IAM | 6.4, 6.5 | 7.11.2, 7.11.4 |
+| `core.identity` | Users, credentials, sessions, roles, permissions, own tour progress | IAM | 6.4, 6.5 | 7.11.2, 7.11.4 |
 | `core.audit` | Audit log | AUD | 6.5 `audit_log` | 7.11.4 |
 | `core.approvals` | Maker-checker | APR | 6.5 `approval_requests` | 7.11.5 |
 | `core.platform` | Platform console: tenant creation, modules, subscriptions | TEN | 6.4, 6.5 | 7.11.3 |
@@ -321,6 +329,8 @@ Accepted (this list is the ADR index):
   (proposed, issue #147, design only; spec `docs/specs/retail-cash-book.md`)
 - ADR-024 Self-onboarding with operator verification, per-module subscriptions and manual payments
   (spec `docs/specs/self-onboarding-and-subscriptions.md`; build step 1 is #89)
+- ADR-025 First run signs the invitee in; guided tours are data with per-user progress on the server
+  (proposed, #19 and #86)
 - ADR-026 Loan servicing: allocation rows by repayment, replay on reversal, default payment method
   accounts and a servicing port for commands (proposed, #108)
 - ADR-027 One onboarding pipeline for customer data: quarantined staging, canonical templates with

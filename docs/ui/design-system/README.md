@@ -33,6 +33,8 @@ scrolled to the bottom when the page is longer than one screen.
 | `17-profit` | Daily profit table |
 | `18-member-portal` | Member portal placeholder |
 | `19-tenant-colour-...` | Retail home, sale and landing with a fabricated tenant colour (`#1E6B3A`) set on the set-up screen: the tenant colour replaces the Rincol blue |
+| `24-first-run-...` (issue #86) | The first run after an invitation at 390px: choose a password, the two-step offer ("Recommended, not required", Skip for now), the set-up with the QR code, a wrong code, the recovery codes |
+| `25-tour-...`, `26-tour-...`, `27-help-sheet` (issue #19) | The guided tours: the tenant admin's welcome, a lit logo field, the retail tiles at 1280px, the seller's payment step, and the Help sheet |
 
 ## Checks run with the walk
 
@@ -70,3 +72,9 @@ accept-invitation, style, approvals, retail home, stock, sale and profit routes 
 4 (WCAG 2.0 and 2.1 A and AA) with no violations on those routes, with the Rincol default and with a tenant
 colour.
 
+
+The `24` to `27` captures (2026-10-06) were taken differently: the production build under `vite preview`,
+the production CSP added to every HTML response, headless Chromium at 390x844 (and 1280x800), and the
+API answered by Playwright with fabricated bodies (no backend). The same walk tabbed through every tour
+step (focus stayed in the card), checked for sideways overflow and targets under 44px, ran axe-core 4
+(WCAG 2.0 and 2.1 A and AA) with the CSP bypassed for the injected script, and saw no violations.

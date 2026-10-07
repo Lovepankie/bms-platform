@@ -39,10 +39,10 @@ export function CatalogueLinks() {
   const { me } = useStaff();
   const links = catalogueLinksFor(me);
   return (
-    <ul className="tile-grid">
+    <ul className="tile-grid" data-tour="catalogue-links">
       {links.map((l) => (
         <li key={l.screen}>
-          <Link className="rt-tile tile" to={l.path as never}>
+          <Link className="rt-tile tile" to={l.path as never} data-tour={`catalogue-${l.screen}`}>
             <span className="icon-chip">{icons[TILE_ICONS[l.screen] ?? 'catalogue']}</span>
             <strong>{l.label}</strong>
             <span className="tile-hint">{l.hint}</span>
@@ -51,7 +51,7 @@ export function CatalogueLinks() {
       ))}
       {canUse(me, 'importer') && (
         <li>
-          <Link className="rt-tile tile" to={'/staff/retail/catalogue/import' as never}>
+          <Link className="rt-tile tile" to={'/staff/retail/catalogue/import' as never} data-tour="catalogue-importer">
             <span className="icon-chip">{icons.stocktake}</span>
             <strong>Import items</strong>
             <span className="tile-hint">Add many items from a spreadsheet file</span>
@@ -62,7 +62,7 @@ export function CatalogueLinks() {
   );
 }
 
-function CataloguePage() {
+export function CataloguePage() {
   return (
     <Gate screen="catalogue" title="Catalogue">
       <p>What would you like to look after?</p>

@@ -91,8 +91,10 @@ function CountSheet({ branchId }: { branchId: string }) {
   return (
     <>
       <Note>Type the counted quantity for each item you counted. Leave an item blank to skip it.</Note>
-      <label htmlFor="count-search">Search by name, code or category</label>
-      <input id="count-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
+      <div data-tour="count-search">
+        <label htmlFor="count-search">Search by name, code or category</label>
+        <input id="count-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
+      </div>
       {stock.isPending && <SkeletonList label="Loading stock" />}
       <Problem error={stock.error} />
       {rows.map((r) => {
@@ -109,14 +111,14 @@ function CountSheet({ branchId }: { branchId: string }) {
       })}
       {bad && <p role="alert" className="rt-flag">Some counts are not valid quantities.</p>}
       <Problem error={review.error} />
-      <button type="button" className="rt-primary" disabled={entered.length === 0 || bad || review.isPending} onClick={() => review.mutate()}>
+      <button type="button" className="rt-primary" disabled={entered.length === 0 || bad || review.isPending} onClick={() => review.mutate()} data-tour="count-review">
         {review.isPending ? 'Working out' : `Review variance (${entered.length} counted)`}
       </button>
     </>
   );
 }
 
-function StocktakePage() {
+export function StocktakePage() {
   const { branchId, branchName } = useSingleBranch();
   return (
     <Gate screen="stocktake" title="Stock-take">

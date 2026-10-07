@@ -15,7 +15,7 @@ export function RetailNav({ me }: { me: Pick<Me, 'permissions'> }) {
     .sort((a, b) => order.indexOf(a.screen) - order.indexOf(b.screen))
     .slice(0, 3);
   return (
-    <nav className="bottom-nav" aria-label="Retail">
+    <nav className="bottom-nav" aria-label="Retail" data-tour="retail-nav">
       <Link to="/staff/retail" activeOptions={{ exact: true }}>
         {icons.home}
         <span>Retail</span>

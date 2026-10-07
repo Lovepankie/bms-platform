@@ -2610,6 +2610,13 @@
             },
             "type" : "array"
           },
+          "tours" : {
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/TourState"
+            },
+            "description" : "Guided tours the user finished or dismissed, by tour id (issue #19)",
+            "type" : "object"
+          },
           "unused_recovery_codes" : {
             "format" : "int32",
             "type" : "integer"
@@ -6456,6 +6463,40 @@
           }
         }
       },
+      "TourState" : {
+        "description" : "How the user left a guided tour, and its version then",
+        "properties" : {
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "completed", "dismissed" ],
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "TourStateRequest" : {
+        "properties" : {
+          "status" : {
+            "description" : "completed: finished; dismissed: chose not to see it again",
+            "enum" : [ "completed", "dismissed" ],
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "The tour version the user saw; a higher one shows again",
+            "format" : "int32",
+            "maximum" : 1000,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "status" ]
+      },
       "UpdateBranchRequest" : {
         "description" : "Omitted fields are unchanged. The code never changes.",
         "properties" : {
@@ -7221,10 +7262,17 @@
         },
         "responses" : {
           "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInResponse"
+                }
+              }
+            },
             "description" : "OK"
           }
         },
-        "summary" : "Set a password with the one-time invitation token (FR-IAM-01)",
+        "summary" : "Set a password with the one-time invitation token, then sign in (FR-IAM-01, issue #86)",
         "tags" : [ "auth" ]
       }
     },
@@ -10350,6 +10398,36 @@
           }
         },
         "summary" : "The signed-in user, permissions and branches (FR-BR-03)",
+        "tags" : [ "users" ]
+      }
+    },
+    "/api/v1/me/tours/{tour_id}" : {
+      "put" : {
+        "operationId" : "recordTourState",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tour_id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TourStateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record how the user left a guided tour (issue #19)",
         "tags" : [ "users" ]
       }
     },

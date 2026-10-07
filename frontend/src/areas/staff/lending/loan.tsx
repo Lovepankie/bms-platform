@@ -57,7 +57,7 @@ export function BalancesCard({ loan }: { loan: Loan }) {
   if (!b) return <p className="empty-state">No balances yet: the loan has not been disbursed.</p>;
   const dpd = b.days_past_due ?? 0;
   return (
-    <section aria-labelledby="ln-balances" className="rt-card">
+    <section aria-labelledby="ln-balances" className="rt-card" data-tour="loan-balances">
       <h2 id="ln-balances">Balances</h2>
       <dl className="ln-facts">
         <dt>Principal outstanding</dt>
@@ -210,9 +210,9 @@ export function LoanView({ loan, memberName }: { loan: Loan; memberName?: string
     <>
       <LoanHeader loan={loan} memberName={memberName} />
       {actions.length > 0 && (
-        <div className="ln-actions" role="group" aria-label="Actions">
+        <div className="ln-actions" role="group" aria-label="Actions" data-tour="loan-actions">
           {actions.map((a) => (
-            <button key={a} type="button" aria-pressed={open === a} onClick={() => choose(a)}>
+            <button key={a} type="button" aria-pressed={open === a} onClick={() => choose(a)} data-tour={`loan-${a}`}>
               {ACTION_LABELS[a]}
             </button>
           ))}
@@ -234,7 +234,7 @@ export function LoanView({ loan, memberName }: { loan: Loan; memberName?: string
       )}
       {!open && receipt && <RepaymentReceipt result={receipt} currency={loan.currency} />}
       <BalancesCard loan={loan} />
-      <h2 id="ln-schedule">Schedule</h2>
+      <h2 id="ln-schedule" data-tour="loan-schedule">Schedule</h2>
       {loan.status === 'approved' ? (
         <p className="empty-state">The schedule is set when the loan is disbursed.</p>
       ) : (
@@ -244,7 +244,7 @@ export function LoanView({ loan, memberName }: { loan: Loan; memberName?: string
           {schedule.data && <ScheduleTable schedule={schedule.data} currency={loan.currency} />}
         </>
       )}
-      <h2>Transactions</h2>
+      <h2 data-tour="loan-transactions">Transactions</h2>
       {txns.isPending && <p className="loading">Loading transactions</p>}
       <Problem error={txns.error} />
       {txns.data && <TransactionList loan={loan} items={txns.data} />}

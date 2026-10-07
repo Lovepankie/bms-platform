@@ -103,7 +103,9 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
         if (!problem && !save.isPending) save.mutate();
       }}
     >
-      <ProductPicker id="sale-search" branchId={branchId} showPrice onAdd={add} />
+      <div data-tour="sale-search">
+        <ProductPicker id="sale-search" branchId={branchId} showPrice onAdd={add} />
+      </div>
 
       <h2>Items</h2>
       {draft.lines.length === 0 && <EmptyState art="noSales" title="No items yet.">Search above and tap Add.</EmptyState>}
@@ -134,7 +136,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
         );
       })}
 
-      <fieldset>
+      <fieldset data-tour="sale-payment">
         <legend>How is it paid?</legend>
         {METHODS.map((m) => (
           <label key={m.value} style={{ fontWeight: 400 }}>
@@ -184,7 +186,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
       </p>
       {problem && draft.lines.length > 0 && <Note>{problem}</Note>}
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending}>
+      <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending} data-tour="sale-save">
         {save.isPending ? 'Saving' : 'Save sale'}
       </button>
       {draft.lines.length > 0 && !save.isPending && (
@@ -196,7 +198,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
   );
 }
 
-function RecordSale() {
+export function RecordSale() {
   const { branchId, branchName } = useSingleBranch();
   const [sale, setSale] = useState<Sale | null>(null);
   const [round, setRound] = useState(0);

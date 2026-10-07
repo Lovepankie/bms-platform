@@ -178,8 +178,10 @@ export function StockPage() {
       <p className="branch-line">Branch: <strong>{all ? 'All branches' : name}</strong></p>
       {!all && branchId !== null && <NoStockHere branchId={branchId} />}
       <StockLevelFilter level={level} onChange={setLevel} />
-      <label htmlFor="stock-search">Search by name, code or category</label>
-      <input id="stock-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
+      <div data-tour="stock-search">
+        <label htmlFor="stock-search">Search by name, code or category</label>
+        <input id="stock-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
+      </div>
       <label htmlFor="stock-category">Category</label>
       <select id="stock-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
         <option value="">All categories</option>

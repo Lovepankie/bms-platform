@@ -97,6 +97,31 @@ class AuthFlow {
         return signIn(accounts, account.id(), now, issuer, userAgent, List.of(), "password");
     }
 
+    /**
+     * The first sign-in, right after the invitee set a password with the one-time token (issue
+     * #86): the token and the new password have just proved who the user is, so the password is
+     * not checked a second time. A role that requires a second factor still goes to enrolment
+     * first, exactly as {@link #login} would send it; nobody skips a required factor this way.
+     */
+    @Transactional(noRollbackFor = ApiException.class)
+    Outcome afterInvitation(Accounts accounts, UUID userId, String issuer, String userAgent) {
+        Instant now = clock.now();
+        Account account = accounts.byIdForUpdate(userId).orElseThrow(AuthFlow::invalidCredentials);
+        if (!account.active() || account.lockedAt(now)) {
+            throw invalidCredentials();
+        }
+        if (account.mfaEnabled()) {
+            return Outcome.mfa(
+                    Step.MFA_REQUIRED, tokens.mfa(account.id(), accounts.tenantId(), accounts.kind(), issuer, now));
+        }
+        if (accounts.mfaRequired(account.id())) {
+            return Outcome.mfa(
+                    Step.MFA_ENROLMENT_REQUIRED,
+                    tokens.mfa(account.id(), accounts.tenantId(), accounts.kind(), issuer, now));
+        }
+        return signIn(accounts, account.id(), now, issuer, userAgent, List.of(), "invitation");
+    }
+
     /** The second factor: a TOTP code or one unused recovery code (FR-IAM-06, FR-IAM-11). */
     @Transactional(noRollbackFor = ApiException.class)
     Outcome verifyMfa(Accounts accounts, String mfaToken, String code, String issuer, String userAgent) {

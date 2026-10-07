@@ -7,7 +7,7 @@ import { useStaff } from './context';
 
 // Staff home: the member list of the active branch (FR-BR-04), where the user may read members.
 
-function StaffHome() {
+export function StaffHome() {
   const { me, branch } = useStaff();
   const health = useQuery({ queryKey: ['health'], queryFn: fetchHealth });
   const canReadMembers = (me.permissions ?? []).includes('lending.members.read');
@@ -26,8 +26,8 @@ function StaffHome() {
         </span>
       </div>
       {canReadMembers && (
-        <>
-          <h2>Members</h2>
+        <section aria-labelledby="members-title" data-tour="lending-members">
+          <h2 id="members-title">Members</h2>
           {members.isPending && <SkeletonList label="Loading members" />}
           {members.isError && <p role="alert" className="alert alert-danger">Could not load members.</p>}
           {members.data && (members.data.items ?? []).length === 0 && (
@@ -57,7 +57,7 @@ function StaffHome() {
               </table>
             </div>
           )}
-        </>
+        </section>
       )}
     </main>
   );

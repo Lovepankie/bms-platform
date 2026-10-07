@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.identity.internal;
 
+import com.rincoltech.bms.core.identity.internal.TourProgress.TourStateRequest;
 import com.rincoltech.bms.core.identity.internal.UserApi.MeBranch;
 import com.rincoltech.bms.core.identity.internal.UserApi.MePermissionScope;
 import com.rincoltech.bms.core.identity.internal.UserApi.MeResponse;
@@ -13,19 +14,27 @@ import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** {@code GET /api/v1/me} and {@code GET /api/v1/roles} (chapter 7 sections 7.11.2 and 7.11.4). */
+/**
+ * {@code GET /api/v1/me}, the user's own tour progress and {@code GET /api/v1/roles} (chapter 7
+ * sections 7.11.2 and 7.11.4).
+ */
 @RestController
 @RequestMapping(path = "/api/v1", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "users")
@@ -35,12 +44,14 @@ class MeController {
     private final StaffAccounts accounts;
     private final Branches branches;
     private final JdbcClient jdbc;
+    private final TourProgress tours;
 
-    MeController(UserService users, StaffAccounts accounts, Branches branches, JdbcClient jdbc) {
+    MeController(UserService users, StaffAccounts accounts, Branches branches, JdbcClient jdbc, TourProgress tours) {
         this.users = users;
         this.accounts = accounts;
         this.branches = branches;
         this.jdbc = jdbc;
+        this.tours = tours;
     }
 
     @GetMapping("/me")
@@ -74,7 +85,22 @@ class MeController {
                 defaultBranch,
                 user.mfaEnabled(),
                 accounts.mfaRequired(user.id()),
-                accounts.unusedRecoveryCodes(user.id()));
+                accounts.unusedRecoveryCodes(user.id()),
+                tours.of(user.id()));
+    }
+
+    /**
+     * Remembers that the signed-in user finished a guided tour or chose not to see it again
+     * (issue #19). Any staff user may write their own progress and nobody else's: the user is the
+     * principal, never a parameter.
+     */
+    @PutMapping(path = "/me/tours/{tour_id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @AuthenticatedEndpoint(kind = "staff")
+    @Operation(summary = "Record how the user left a guided tour (issue #19)", operationId = "recordTourState")
+    public ResponseEntity<Void> recordTour(
+            @PathVariable("tour_id") String tourId, @Valid @RequestBody TourStateRequest request) {
+        tours.record(CurrentPrincipal.require().userId(), tourId, request);
+        return ResponseEntity.noContent().build();
     }
 
     private static Map<String, MePermissionScope> permissionScopes(Principal principal) {

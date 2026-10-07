@@ -39,6 +39,17 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
   Enrolment is forced at first sign-in for roles that require it (`roles.mfa_required`: the
   tenant admin) and for platform operators, and for all staff when the tenant setting
   `require_mfa_all_staff` is on (FR-IAM-06).
+- **First run** (FR-IAM-13, ADR-025): accepting an invitation sets the password and signs the user
+  in through the same rules as a sign-in, so a role that requires the second factor is sent to
+  enrolment, never past it; a refused link signs nobody in. The PWA screens are: 1. Choose a
+  password (live checklist of the server's rules, show or hide). 2. Two-step sign-in: "Recommended,
+  not required" with Turn on and Skip for now, or, when the role requires it, the set-up with no Skip
+  (QR code drawn in the browser, Open in authenticator, the key in groups of four with Copy, a 6 digit
+  field with `inputmode=numeric` and `autocomplete=one-time-code`). 3. The ten recovery codes in a
+  grid with Copy all, Download as text and a required "I have saved these codes". Then the staff
+  home, where a new tenant admin lands on the set-up checklist and the first-run tour starts
+  (FR-IAM-14). The invitation token is removed from the address bar once used; no key or code is
+  logged. Whether tenant admins must enrol stays with issue #93.
 - **Recovery codes** (FR-IAM-11): enrolment issues ten single-use codes, shown once. A code is
   accepted in place of a TOTP code; the user can replace all of them with a current TOTP code.
   Failed codes count toward the lockout.
@@ -305,7 +316,8 @@ body, and compared digest to digest in constant time after the indexed lookup.
 
 - Every route declares exactly one permission (`@RequiresPermission`), or is explicitly marked
   public (`@PublicEndpoint`), or open to any signed-in principal of one kind
-  (`@AuthenticatedEndpoint`, for `/me`, sign-out and the caller's own recovery codes). A route
+  (`@AuthenticatedEndpoint`, for `/me`, the caller's own guided tour progress, sign-out and the
+  caller's own recovery codes). A route
   test enumerates all routes and fails on any undeclared route, and `PermissionMatrixIT` proves
   that for every route a principal holding every permission except the route's own gets 403
   (FR-IAM-03).
