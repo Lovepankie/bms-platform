@@ -132,6 +132,12 @@ export function VoidAction({ what, run, onVoided }: { what: string; run: (reason
   );
 }
 
+/** Whether the session may void a record of `branchId`: it holds retail.cashbook.void there. */
+export function useMayVoid(): (branchId: string | undefined) => boolean {
+  const { me } = useStaff();
+  return (branchId) => holds(me, CASHBOOK_VOID) && branchesWhere(me, CASHBOOK_VOID).some((b) => b.id === branchId);
+}
+
 interface RecordLike { id?: string; branch_id?: string; business_date?: string; voided?: boolean; void_reason?: string; historical?: boolean; by_name?: string; at?: string }
 
 /**
@@ -147,10 +153,10 @@ export function RecordsByShop<T extends RecordLike>({ rows, empty, what, renderR
   voidWith?: (row: T, reason: string, key: string) => Promise<unknown>;
   onVoided?: () => void;
 }) {
-  const { me } = useStaff();
   const shopName = useBranchName();
+  const mayVoidIn = useMayVoid();
   if (rows.length === 0) return <p className="empty-state">{empty}</p>;
-  const mayVoid = (row: T) => holds(me, CASHBOOK_VOID) && branchesWhere(me, CASHBOOK_VOID).some((b) => b.id === row.branch_id);
+  const mayVoid = (row: T) => mayVoidIn(row.branch_id);
   return (
     <>
       {groupByShopMonth(rows, shopName).map((shop) => (

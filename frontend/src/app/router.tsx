@@ -166,6 +166,7 @@ const retailExpensesRoute = retailScreen('/expenses').lazy(() => import('../area
 const retailExpensesReportRoute = retailScreen('/expenses-report').lazy(() => import('../areas/staff/retail/expenses').then((m) => m.ReportRoute));
 const retailExpenseListsRoute = retailScreen('/expense-lists').lazy(() => import('../areas/staff/retail/expense-lists').then((m) => m.Route));
 const retailWithdrawalsRoute = retailScreen('/withdrawals').lazy(() => import('../areas/staff/retail/withdrawals').then((m) => m.Route));
+const retailAdvancesRoute = retailScreen('/advances').lazy(() => import('../areas/staff/retail/advances').then((m) => m.Route));
 const retailSavingsRoute = retailScreen('/savings').lazy(() => import('../areas/staff/retail/savings').then((m) => m.Route));
 
 const signUpRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sign-up' }).lazy(() =>
@@ -221,6 +222,7 @@ export const router = createRouter({
         retailValuationRoute,
         retailProfitRoute,
         retailSavingsRoute,
+        retailAdvancesRoute,
         retailWithdrawalsRoute,
         retailExpensesRoute,
         retailExpensesReportRoute,
