@@ -39,8 +39,8 @@ done by hand as the notes say.
 
 - [ ] Inventory every source: sheets, tabs, form app, paper books. For each: owner, row count, in
       scope or not, and why.
-- [ ] Out of scope items told to the customer in writing (for example the cash book tabs,
-      pending ADR-022).
+- [ ] Out of scope items told to the customer in writing (for example the cash book tabs until
+      the cash book of ADR-022 is built).
 - [ ] The customer shared a **copy** through the encrypted channel (spec section 6.2). No email
       attachments in clear, no chat uploads.
 - [ ] The copy is stored only in the run's quarantine (framework) or, today, in

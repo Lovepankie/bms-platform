@@ -47,7 +47,7 @@ them). The cutover record (runbook section 1) holds the evidence for each exit.
 
 | # | Stage | Owner | Entry criteria | Work | Exit criteria |
 |---|---|---|---|---|---|
-| 1 | **Discovery** | Operator, with customer | Tenant applied or created (ADR-024); modules chosen | Inventory every sheet, tab, form app and paper book that holds data; who edits each; how often; what is out of scope (for example the cash book tabs, pending ADR-022). The customer shares a **copy** of each source through the encrypted channel (section 6.2) | Source inventory in the cutover record: each source, its owner, its tabs, its row count, in scope or not and why. Open questions listed |
+| 1 | **Discovery** | Operator, with customer | Tenant applied or created (ADR-024); modules chosen | Inventory every sheet, tab, form app and paper book that holds data; who edits each; how often; what is out of scope (for example the cash book tabs until the cash book of ADR-022 is built). The customer shares a **copy** of each source through the encrypted channel (section 6.2) | Source inventory in the cutover record: each source, its owner, its tabs, its row count, in scope or not and why. Open questions listed |
 | 2 | **Field mapping** | Operator | Discovery exit | Pick the vertical's canonical template (section 4.1); write the customer's mapping (section 4.2) from their headers; run the mapping validator. Unknown columns are mapped, ignored with a reason, or raised as questions | Mapping version 1 saved and valid; every source column is mapped or explicitly ignored; the data dictionary entries it relies on exist |
 | 3 | **Cleaning and review round** | Customer answers, operator runs | Mapping valid | Upload the copy to the quarantine; validate; work the review queue. Questions only the customer can answer (an unnamed item, a negative stock, a borrower without a phone, a credit sale with no payment record) go to the customer as a numbered question list, with file and line but without copying personal data into chat | Zero blocking issues; every warning resolved or overridden with a note; the **receivable decision** (section 3.8) and any other policy decisions recorded and signed by the customer |
 | 4 | **Rehearsal on a copy** | Operator, platform supports | Review exit | Restore last night's production backup into a throwaway database and run the real commit against it (section 5.5) | Rehearsal report equals the preview; reconciliation ties; timings recorded and inside the cutover window |
@@ -271,7 +271,7 @@ golden fixtures. Planned:
 
 | Template | Vertical | Entity sets | Notes |
 |---|---|---|---|
-| `retail_v1` | retail | branches, categories, units, products, suppliers, customers, purchases, sales, usage, balances | The normalised export of `docs/specs/retail-pilot-data-dictionary.md` section 4 is its exact field list |
+| `retail_v1` | retail | branches, categories, units, products, suppliers, customers, purchases, sales, usage, balances | The normalised export of `docs/specs/retail-pilot-data-dictionary.md` section 4 is its exact field list. The cash book files of chapter 13 section 13.13.1 (ADR-022) become `retail_v2` when the cash book is built |
 | `lending_loans_v1` | lending | members, next of kin, collateral, loans, historic repayments | Chapter 13 rules; the pilot register becomes its first mapping |
 | `lending_savings_v1` | lending | savings accounts, opening balances, historic deposits | With phase 2 savings |
 | `lending_investments_v1` | lending | investment holdings, opening balances | With phase 2 investments |
