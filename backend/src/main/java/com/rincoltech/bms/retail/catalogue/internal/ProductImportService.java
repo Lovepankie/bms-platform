@@ -195,8 +195,10 @@ class ProductImportService {
             try {
                 apply(pending, categories, units, newCategories, newUnits, added, skipped, principal.userId());
             } catch (DuplicateKeyException e) {
-                throw ApiException.rule(
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
                         "import_conflict",
+                        "Import conflict",
                         "Another change added an item code, category or unit with the same name while this file was being applied. Nothing was added. Run the check again and apply the file again.");
             }
         }
