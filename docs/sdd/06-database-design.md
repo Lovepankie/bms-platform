@@ -1725,6 +1725,7 @@ For a branch and a business date, in the tenant's zone:
   `payment_method = 'cash'` and `purchased_on` is the date; for a historical purchase the same
   amount worked from its movements. Bank and credit purchases are not cash. Cash restocks credit
   `cash_on_hand` (ADR-020 decision 7), so they leave the till.
+- **Cash expected** (`cash_expected_minor`, what a caller without `retail.profit.read` sees) = cash takings, less cash sale voids, less cash expenses and advances paid out, plus cash repayments received, plus `expense_voids_minor` and `advance_voids_minor`, less `repayment_voids_minor`: it **excludes cash purchases and savings**, so it carries no cost and no profit.
 - **Expected to bank** = cash takings, less cash sale voids, less cash purchases, less savings,
   less cash expenses, less advances paid out, plus cash repayments received (each by its own
   `business_date`, voided or not), plus `savings_voids_minor`, `expense_voids_minor` and

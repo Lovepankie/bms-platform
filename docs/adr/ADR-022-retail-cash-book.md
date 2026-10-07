@@ -167,17 +167,22 @@ only retail has this need.
     `retail.cashbook.void`. Withdrawals and advances (both ways) are owner or admin only, in line
     with the pilot's admin-only withdrawals and the instruction for advances. **One profit rule
     (chosen here, open question 8 asks the Owner to confirm it):** a savings amount is profit-derived,
-    so every response field that carries a savings amount or the suggestion is profit-gated (marked
+    and a cash restock total is purchase cost (chapter 8 treats a purchase total at cost as cost),
+    so `cash_purchases_minor` and every figure that embeds it are gated like savings, and every response field that carries a savings amount or the suggestion is profit-gated (marked
     `*` in chapter 7) and absent, not null, without `retail.profit.read`. That covers
     `suggested_minor`, `suggestion` and the daily profit, `amount_minor` on savings rows and in the
-    savings report, `savings_minor` and the figures that embed it (`expected_minor`,
+    savings report, `savings_minor`, `savings_voids_minor`, `cash_purchases_minor` and the figures that embed them (`expected_minor`,
     `expected_to_bank_minor`, `difference_minor`, `unbanked_running_minor`, `opening_minor`,
     `closing_minor`, `other_movements_minor`) in the expected-to-bank answer, the banking report,
     stored bankings and the daily summary. The one exception is the writer's own just-entered amount,
     which the create response echoes back to the person who typed it. A caller without
     `retail.profit.read` is shown the cash expected figure only, `cash_expected_minor`: takings less
-    voids, cash purchases, cash expenses and advances paid out, plus cash repayments, before savings.
-    The cost is that a shop user cannot see the net amount to bank or the difference flag; the
+    cash sale voids, less cash expenses and advances paid out, plus cash repayments (and the day's expense, advance and repayment voids), **before
+    cash purchases and before savings**, so the banking form of a cashier shows the takings figure
+    and the day's till payments and no cost. Holders of `retail.profit.read` see the full figure
+    (`expected_minor`) and the components (`cash_purchases_minor`, `savings_minor`). The same gate
+    covers the `cash_below_banked` warning, which compares the amount banked with cash on hand, a balance net of savings
+    and purchases. The cost is that a shop user cannot see the net amount to bank, the difference flag or the warning; the
     tenant admin can, and a savings reserve held apart from the till is the admin's concern.
 14. **Maker-checker is not applied in version one** (open question 3). The design leaves room: the
     actions `retail_cash_withdrawal` and `retail_advance` could be registered through the action
@@ -295,10 +300,13 @@ the part they name. Question 8 and 9 were added in review.
 8. **May roles without `retail.profit.read` see savings amounts?** The design applies one rule:
    a savings amount is half the day's profit, so it is profit-gated like the profit itself
    (decision 13), and the audit log never carries it (decision 12). The cost is that the sales role
-   sees that savings were recorded but not how much, and sees only the cash expected figure, not the
-   net amount to bank or the difference. If the Owner would rather let shop staff see the amounts,
+   sees that savings were recorded but not how much, and sees only the cash expected figure (before cash restock cost and savings), not the
+   net amount to bank, the difference or the cash restock total. The same gate now covers cash restock cost,
+   because the restock total is purchase cost and the unrestricted figure would let a cashier read the day's
+   cost from the difference of two figures. If the Owner would rather let shop staff see the amounts,
    the leak of half the day's profit is accepted knowingly and the gate on those fields is removed.
-   Recommended: keep the gate.
+   The owner may likewise relax the gate on the cash restock total (`cash_purchases_minor`) and let the cash expected figure include it, accepting
+   that shop staff then see the day's restock cost. Recommended: keep the gate on both.
 9. **Who is "the company" in the pilot's advances?** The pilot records money advanced to the owner or
    to the company. If the company is the tenant's own business, the advance is a transfer inside one
    entity, not a receivable, and should not sit in an asset account. If it is a separate legal

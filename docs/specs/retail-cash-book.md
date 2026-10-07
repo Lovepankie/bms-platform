@@ -15,7 +15,7 @@ in the tenant's time zone; every record shows who entered it.
 | Per shop per day: user (auto), shop, amount saved, date | The same, plus the instant it was entered; one active record per shop per day; a wrong one is voided and re-entered | Duplicate records for one day: the pilot allows them, which double counts |
 | Amount saved defaults to 0.5 x the shop's profit for the day (changed Sep 2026 from a tiered percentage of sales), user can overwrite | The default is a suggestion computed by the server from the day's profit times a rate kept as a setting (50% today), so the next change is a setting, not a rebuild. An overwrite needs a reason and is audited (the audit note never carries the amount); the form sends back the suggestion it was shown, and if sales changed it in the meantime the save is refused with the new figure rather than counted as an overwrite | The tiered percentage of sales: replaced by the rule above |
 | Read-only: TotalAmountSold (the shop's sales that day) | Shown on the screen, stored with the record | |
-| Daily Profit, shown only to the owner and admins | Shown only with the profit permission. A savings amount is half the profit, so the amounts, the suggestion and every figure net of savings are shown only with the profit permission too (question 8); shop staff see that savings were recorded and the cash expected figure before savings | |
+| Daily Profit, shown only to the owner and admins | Shown only with the profit permission. A savings amount is half the profit, so the amounts, the suggestion and every figure net of savings are shown only with the profit permission too (question 8); shop staff see that savings were recorded and the cash expected figure before savings and before cash restock cost (a restock total is cost) | |
 | The money is not on any ledger | A transfer from cash to a **savings reserve** account: not an expense, so profit is unchanged | Treating savings as an expense: it would understate profit (question 4) |
 
 ## 2. Cash banked (the "Banked" tab)
@@ -80,7 +80,7 @@ Tick or correct each line. The build does not start until lines 1, 2 and 4 are a
 5. [ ] Shop staff may record savings; only the owner or admin overwrite the amount, with a reason, until you say otherwise. Should shop staff be allowed to overwrite? (See line 8 for what they see.)
 6. [ ] Only owner or admin record advances and repayments. The hidden processing fee is dropped.
 7. [ ] A withdrawal is recorded against a shop (default the head office).
-8. [ ] Savings amounts count as profit, so only people who may see profit see them (shop staff see the cash expected figure, not the net amount to bank). Or may shop staff see them?
+8. [ ] Savings amounts count as profit, so only people who may see profit see them (shop staff see the cash expected figure before restock cost and savings, not the net amount to bank; the owner may relax this for restock cost). Or may shop staff see them?
 9. [ ] Who is "the company" in the advances? A separate legal entity (a related party that owes the money back), or your own business (then it is not an advance at all)?
 
 Questions are listed with their reasons at the end of ADR-022.
