@@ -22,7 +22,7 @@ in the tenant's time zone; every record shows who entered it.
 
 | The pilot app has | We build | We leave out, and why |
 |---|---|---|
-| user (auto), shop, ExpectedAmountToBank (virtual: the shop's total sold that day less that day's savings), amount banked (defaults to the expected amount), datetime, date | The same fields. The expected amount is computed by the server from the day's **cash** takings (cash sales and cash paid on credit sales), less savings, less cash expenses and advances paid from the till; the amount banked is prefilled with it. The expected figure is stored with the record | Counting credit sales as cash: credit is not cash until paid (question 2). Mobile money and bank sales: they never enter the till |
+| user (auto), shop, ExpectedAmountToBank (virtual: the shop's total sold that day less that day's savings), amount banked (defaults to the expected amount), datetime, date | The same fields. The expected amount is computed by the server from the day's **cash** takings (cash sales and cash paid on credit sales), less cash sales voided that day (a void counts on the day it is made, not the sale's day), less restocks paid in cash from the till, less savings, less cash expenses and advances paid from the till; the amount banked is prefilled with it. The expected figure is stored with the record | Counting credit sales as cash: credit is not cash until paid (question 2). Mobile money and bank sales: they never enter the till |
 | No check against what was taken | The difference is flagged: shortfall, surplus, ok (within a tolerance, default none), or not banked. Part deposits on one day are allowed | Refusing a deposit larger than the cash on record: it is flagged instead, because the opening cash may be wrong |
 | Menu view "Banked cash records", grouped by shop, year and month | The same grouping, and a **banking report** per shop per day: expected, banked, difference, running total of unbanked cash, who entered | |
 | Not on a ledger | A transfer from cash to bank | |
@@ -60,7 +60,7 @@ in the tenant's time zone; every record shows who entered it.
 
 | The pilot app has | We build |
 |---|---|
-| Bottom bar: Sales, Banked, savings, expenses, loan; menu views grouped by shop, year and month | Same order on the phone: Sales, Banked, Savings, Expenses, Advances; the same records lists grouped by shop, year and month, shown by permission. A **daily cash summary** per shop per day (opening, takings, savings, expenses, advances, banked, closing, unbanked running total) that agrees with the books |
+| Bottom bar: Sales, Banked, savings, expenses, loan; menu views grouped by shop, year and month | Same order on the phone: Sales, Banked, Savings, Expenses, Advances; the same records lists grouped by shop, year and month, shown by permission. A **daily cash summary** per shop per day (opening, takings, voids, cash restocks, savings, expenses, advances, banked, closing, unbanked running total) that agrees with the books |
 
 ## 7. Moving the history
 

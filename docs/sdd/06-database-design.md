@@ -1694,11 +1694,22 @@ Every rule posts through `post_entry` in the transaction of its event, one entry
 For a branch and a business date, in the tenant's zone:
 
 - **Cash takings** = sum of `retail_sales.total_minor` where `payment_method = 'cash'` and
-  `status = 'completed'` and `sale_date` is the date, plus `retail_sale_payments.amount_minor` where
-  `method = 'cash'` and `paid_on` is the date and the sale is not voided. Credit, mobile money and
-  bank sales are not cash takings (open question 2).
-- **Expected to bank** = cash takings, less non-voided savings, less non-voided cash expenses, less
-  advances paid out, plus cash repayments received. It is computed from the rows and the same query
+  `sale_date` is the date (a sale voided later is counted here too, on its own day), plus
+  `retail_sale_payments.amount_minor` where `method = 'cash'` and `paid_on` is the date. Credit,
+  mobile money and bank sales are not cash takings (open question 2). A credit sale with payments
+  cannot be voided (`sale_has_payments`), so payments never need a void line.
+- **Cash sale voids** = sum of `total_minor` of cash sales whose void falls on the date, the void's
+  business date in the tenant's zone (`voided_at`), which is the date of the reversing entry. A
+  void is **not** back-dated onto the sale's day: the ledger holds the sale on its day and the
+  reversal on the void day, and closing must equal the ledger at the end of each day. A sale voided
+  the day it was made nets to zero.
+- **Cash purchases** = per branch, the amount of the entry `retail.purchase:<id>:<branch>` (the
+  branch's quantities times the line costs, rounded per branch) of each purchase whose
+  `payment_method = 'cash'` and `purchased_on` is the date; for a historical purchase the same
+  amount worked from its movements. Bank and credit purchases are not cash. Cash restocks credit
+  `cash_on_hand` (ADR-020 decision 7), so they leave the till.
+- **Expected to bank** = cash takings, less cash sale voids, less cash purchases, less non-voided
+  savings, less non-voided cash expenses, less advances paid out, plus cash repayments received. It is computed from the rows and the same query
   serves the form, the snapshot `expected_minor` and the reports.
 - **Difference** = sum of non-voided `amount_minor` banked for the date less expected, and the flag
   from the tenant tolerance. **Running unbanked** = cumulative sum of (expected less banked) over the

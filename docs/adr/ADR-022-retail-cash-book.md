@@ -81,17 +81,27 @@ only retail has this need.
    each entry. Entries of amount zero are not posted (a savings amount of zero is a valid record).
 9. **Cash position per shop and day is derived, never stored.** For a branch and business date:
    opening (the `cash_on_hand` balance on the previous day), plus cash takings (cash sales and cash
-   payments on credit sales), less savings set aside, less cash expenses, less advances paid out,
-   plus advance repayments received in cash, plus withdrawals from the bank, less cash banked,
-   equals closing. Closing must equal the ledger's `cash_on_hand` balance at the end of the day;
+   payments on credit sales), less cash sale voids dated that day, less cash purchases (restocks
+   paid from the till, which credit `cash_on_hand`, ADR-020 decision 7), less savings set aside,
+   less cash expenses, less advances paid out, plus advance repayments received in cash, plus
+   withdrawals from the bank, less cash banked, equals closing. **A sale void is dated the day it
+   is made, not the sale's day** (the reversal posts on the void's business date, as ADR-020
+   requires): the original day's takings are not restated, and the void shows as its own line,
+   `cash_sale_voids_minor`, on the void date. Justification: closing must equal the ledger at the
+   end of every day, and the ledger holds the sale on its day and the reversal on the void day; a
+   restated past day would stop agreeing with the ledger as of that day. A sale voided the same
+   day nets to zero. The cost of this rule is that a late void shows as a lower expected amount
+   on the void day, and the unbanked running total nets the two days out. Closing must equal the ledger's `cash_on_hand` balance at the end of the day;
    any difference is shown as `other_movements_minor` (a manual journal or an unlisted source),
    never hidden. The **unbanked running total** is the cumulative sum, from the shop's first cash
    book day, of expected less banked per day. For days imported from the pilot (no journals) the
    position is built from the rows alone and marked `ledger_basis: false`.
 10. **Expected amount to bank is computed on the server** for a branch and date, as the day's cash
-    takings less the day's savings, less cash expenses and advances paid out of the till, plus cash
-    advance repayments received. Cash takings are completed (not voided) sales of method `cash` by
-    `sale_date`, plus payments on credit sales of method `cash` by `paid_on`. Credit sales are not
+    takings, less cash sale voids dated the day, less cash purchases (restocks paid in cash from the
+    till), less the day's savings, less cash expenses and advances paid out of the till, plus cash
+    advance repayments received. Cash takings are sales of method `cash` by
+    `sale_date` (a sale voided later is still counted on its own day and reversed on the void day,
+    decision 9), plus payments on credit sales of method `cash` by `paid_on`. Credit sales are not
     cash and are excluded until paid (recommended, open question 2). Mobile money and bank sales are
     excluded too: they do not enter the till. The client may display the figure but never supplies
     it; the form prefills the amount banked with it, as the pilot does, and the record stores the

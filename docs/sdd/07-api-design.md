@@ -792,7 +792,7 @@ Cash banked (FR-RET-21 to FR-RET-23):
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/retail/bankings/expected` | `retail.banking.record` | `branch_id?`, `date?`. `{branch_id, business_date, cash_takings_minor, savings_minor, expenses_minor, advances_out_minor, repayments_in_minor, expected_minor, banked_so_far_minor}`; the form shows it and prefills |
+| GET | `/retail/bankings/expected` | `retail.banking.record` | `branch_id?`, `date?`. `{branch_id, business_date, cash_takings_minor, cash_sale_voids_minor, cash_purchases_minor, savings_minor, expenses_minor, advances_out_minor, repayments_in_minor, expected_minor, banked_so_far_minor}`; the form shows it and prefills |
 | POST | `/retail/bankings` | `retail.banking.record` | **M**. `{branch_id?, business_date?, amount_minor, banked_at?, reference?}`; stores `expected_minor`; response adds `difference_minor`, `flag` and `warnings: [cash_below_banked?]`; never refused for exceeding cash |
 | GET | `/retail/bankings` | `retail.cashbook.read` | `branch_id`, `from`, `to`, `include_voided`, `limit`, `cursor` |
 | POST | `/retail/bankings/{banking_id}/void` | `retail.cashbook.void` | |
@@ -824,7 +824,7 @@ the last 30 days, at most 366), also `format=csv` through the report runs of sec
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/retail/reports/cash/daily` | `retail.cashbook.read` | Per branch and day: `opening_minor`, `cash_takings_minor`, `savings_minor`, `expenses_minor`, `advances_out_minor`, `repayments_in_minor`, `withdrawals_in_minor`, `banked_minor`, `closing_minor`, `other_movements_minor`, `expected_to_bank_minor`, `unbanked_running_minor`, `ledger_basis`; `daily_profit_minor*` |
+| GET | `/retail/reports/cash/daily` | `retail.cashbook.read` | Per branch and day: `opening_minor`, `cash_takings_minor`, `cash_sale_voids_minor`, `cash_purchases_minor`, `savings_minor`, `expenses_minor`, `advances_out_minor`, `repayments_in_minor`, `withdrawals_in_minor`, `banked_minor`, `closing_minor`, `other_movements_minor`, `expected_to_bank_minor`, `unbanked_running_minor`, `ledger_basis`; `daily_profit_minor*` |
 | GET | `/retail/reports/cash/banking` | `retail.cashbook.read` | Per branch and day: `expected_minor`, `banked_minor`, `difference_minor`, `flag` (`ok`, `shortfall`, `surplus`, `not_banked`), `unbanked_running_minor`, `entries: [{id, amount_minor, banked_at, by}]`; filter `flag` |
 | GET | `/retail/reports/cash/expenses` | `retail.cashbook.read` | `group_by` (`category`, `item`, `branch`, `month`), totals, count; no voided rows |
 | GET | `/retail/reports/cash/savings` | `retail.cashbook.read` | Per branch and day `amount_minor`, `total_sold_minor`, `overwritten`; `suggested_minor*`, `daily_profit_minor*` |
