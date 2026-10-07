@@ -1612,7 +1612,7 @@ record refers to it is blocked, because records snapshot the names they were wri
 |---|---|---|
 | `branch_id`, `business_date` | uuid, date | The shop and the trading day |
 | `amount_minor`, `currency` | bigint, text | The amount set aside, `>= 0` |
-| `suggested_minor` | bigint | The server's suggestion when written (day's profit times `savings_rate_bp`, half up, zero for a loss). Readable only with `retail.profit.read` |
+| `suggested_minor` | bigint | The server's suggestion when written (day's profit times `savings_rate_bp`, half up, zero for a loss). Readable only with `retail.profit.read` (as is `amount_minor`, a savings amount being half the profit, ADR-022 decision 13; the API omits both without it) |
 | `overwritten` | boolean | `amount_minor <> suggested_minor`; CHECK ties the two |
 | `overwrite_reason` | text | CHECK: not null and at least 5 characters when `overwritten` |
 | `total_sold_minor` | bigint | Snapshot of the day's completed sales total, shown on the screen (a read-only column in the pilot) |
@@ -1629,7 +1629,7 @@ shop per day). Index `(tenant_id, branch_id, business_date)` for the lists and r
 |---|---|---|
 | `branch_id`, `business_date` | | The trading day banked for |
 | `amount_minor`, `currency` | | The amount banked, `> 0` |
-| `expected_minor` | bigint | Snapshot of the expected amount to bank when entered (never supplied by the client). May be negative when the till paid out more than it took |
+| `expected_minor` | bigint | Snapshot of the expected amount to bank when entered (never supplied by the client). May be negative when the till paid out more than it took. Net of savings, so profit-derived: readable only with `retail.profit.read` |
 | `banked_at` | timestamptz | The pilot's datetime |
 | `reference` | varchar(100) | Optional deposit slip number |
 | `recorded_by`, `journal_entry_id`, `historical`, void columns | | |

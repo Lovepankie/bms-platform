@@ -762,7 +762,7 @@ destination branch: the same cost is posted to both branches' inventory accounts
 **Proposed, not built:** the contract the build must meet, and the source of `openapi.json` after it.
 Refused with 404 `module_not_enabled` unless retail is switched on. Conventions are those of section
 7.11.20: snake_case, branch scope on every row (ADR-017, 404 outside scope), `*` fields absent (not
-null) without `retail.profit.read`, **M** requires `Idempotency-Key` (section 7.8). A request for one
+null) without `retail.profit.read` (for the cash book that includes every savings amount and every figure net of savings, ADR-022 decision 13), **M** requires `Idempotency-Key` (section 7.8). A request for one
 branch takes `branch_id`, or the caller's one branch when the permission's scope has exactly one;
 otherwise 422 `branch_required`. Dates are business dates in the tenant's zone, default today, never in
 the future (422 `future_date`). Every record in a response carries `by`, `at`, `voided`, `historical`.
@@ -783,17 +783,17 @@ Daily savings (FR-RET-18 to FR-RET-20):
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/retail/savings/suggestion` | `retail.savings.record` | `branch_id?`, `date?`. `{branch_id, business_date, total_sold_minor, suggested_minor, daily_profit_minor*, existing_id}`; `existing_id` is the active record for the day, if any |
-| POST | `/retail/savings` | `retail.savings.record` | **M**. `{branch_id?, business_date?, amount_minor?, overwrite_reason?}`; an omitted amount takes the suggestion; a differing amount needs `retail.savings.overwrite` (403) and a reason (422 `reason_required`); 409 `savings_exists` |
-| GET | `/retail/savings` | `retail.cashbook.read` | `branch_id` (repeatable), `from`, `to`, `include_voided`; row `{id, branch_id, business_date, amount_minor, total_sold_minor, overwritten, suggested_minor*, by, at}`; grouped client-side by shop, year and month |
+| GET | `/retail/savings/suggestion` | `retail.savings.record` | `branch_id?`, `date?`. `{branch_id, business_date, total_sold_minor, suggestion_token, suggested_minor*, daily_profit_minor*, existing_id}`; `suggestion_token` is an opaque keyed hash of the suggestion (it reveals nothing, so every caller gets it); `suggested_minor` and the profit are `*`, absent without `retail.profit.read`; `existing_id` is the active record for the day, if any |
+| POST | `/retail/savings` | `retail.savings.record` | **M**. `{branch_id?, business_date?, suggestion_token, amount_minor?, overwrite_reason?}`; `suggestion_token` is the one the form was shown (422 `suggestion_token_required` when missing); an omitted amount takes the suggestion; an amount differing from the suggestion the token stands for needs `retail.savings.overwrite` (403) and a reason (422 `reason_required`); if the suggestion has changed since the token was issued the answer is 409 `suggestion_changed` with the new `suggestion_token` (and `suggested_minor*`) and nothing is written, never a false overwrite; 409 `savings_exists`. The response echoes `amount_minor` to the writer only when the writer typed it; a default taken by a caller without `retail.profit.read` is not echoed (`amount_minor*`) |
+| GET | `/retail/savings` | `retail.cashbook.read` | `branch_id` (repeatable), `from`, `to`, `include_voided`; row `{id, branch_id, business_date, amount_minor*, total_sold_minor, overwritten, suggested_minor*, by, at}` (a savings amount is profit-derived, ADR-022 decision 13, so without `retail.profit.read` the row shows that savings were recorded but not how much); grouped client-side by shop, year and month |
 | POST | `/retail/savings/{savings_id}/void` | `retail.cashbook.void` | Reverses the entry and frees the day |
 
 Cash banked (FR-RET-21 to FR-RET-23):
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/retail/bankings/expected` | `retail.banking.record` | `branch_id?`, `date?`. `{branch_id, business_date, cash_takings_minor, cash_sale_voids_minor, cash_purchases_minor, savings_minor, expenses_minor, advances_out_minor, repayments_in_minor, expected_minor, banked_so_far_minor}`; the form shows it and prefills |
-| POST | `/retail/bankings` | `retail.banking.record` | **M**. `{branch_id?, business_date?, amount_minor, banked_at?, reference?}`; stores `expected_minor`; response adds `difference_minor`, `flag` and `warnings: [cash_below_banked?]`; never refused for exceeding cash |
+| GET | `/retail/bankings/expected` | `retail.banking.record` | `branch_id?`, `date?`. `{branch_id, business_date, cash_takings_minor, cash_sale_voids_minor, cash_purchases_minor, savings_minor*, expenses_minor, advances_out_minor, repayments_in_minor, cash_expected_minor, expected_minor*, banked_so_far_minor}`; `cash_expected_minor` is the expected figure before savings and is what a caller without `retail.profit.read` is shown; `savings_minor` and `expected_minor` (net of savings) are `*`; the form shows it and prefills with `expected_minor` (or `cash_expected_minor` when that is all the caller may see) |
+| POST | `/retail/bankings` | `retail.banking.record` | **M**. `{branch_id?, business_date?, amount_minor, banked_at?, reference?}`; stores `expected_minor`; response adds `difference_minor*`, `flag*` and `warnings: [cash_below_banked?]` (the warning is the cash, not savings, and is not gated); stored `expected_minor*` is profit-gated too; never refused for exceeding cash |
 | GET | `/retail/bankings` | `retail.cashbook.read` | `branch_id`, `from`, `to`, `include_voided`, `limit`, `cursor` |
 | POST | `/retail/bankings/{banking_id}/void` | `retail.cashbook.void` | |
 | POST | `/retail/withdrawals` | `retail.withdrawal.record` | **M**. `{branch_id?, business_date?, amount_minor, withdrawn_at?, purpose?}`; response may carry `warnings: [bank_balance_negative]` |
@@ -824,10 +824,10 @@ the last 30 days, at most 366), also `format=csv` through the report runs of sec
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/retail/reports/cash/daily` | `retail.cashbook.read` | Per branch and day: `opening_minor`, `cash_takings_minor`, `cash_sale_voids_minor`, `cash_purchases_minor`, `savings_minor`, `expenses_minor`, `advances_out_minor`, `repayments_in_minor`, `withdrawals_in_minor`, `banked_minor`, `closing_minor`, `other_movements_minor`, `expected_to_bank_minor`, `unbanked_running_minor`, `ledger_basis`; `daily_profit_minor*` |
-| GET | `/retail/reports/cash/banking` | `retail.cashbook.read` | Per branch and day: `expected_minor`, `banked_minor`, `difference_minor`, `flag` (`ok`, `shortfall`, `surplus`, `not_banked`), `unbanked_running_minor`, `entries: [{id, amount_minor, banked_at, by}]`; filter `flag` |
+| GET | `/retail/reports/cash/daily` | `retail.cashbook.read` | Per branch and day: `cash_takings_minor`, `cash_sale_voids_minor`, `cash_purchases_minor`, `expenses_minor`, `advances_out_minor`, `repayments_in_minor`, `withdrawals_in_minor`, `banked_minor`, `cash_expected_minor`, `ledger_basis`, and the savings-embedding figures `opening_minor*`, `savings_minor*`, `closing_minor*`, `other_movements_minor*`, `expected_to_bank_minor*`, `unbanked_running_minor*`; `daily_profit_minor*` |
+| GET | `/retail/reports/cash/banking` | `retail.cashbook.read` | Per branch and day: `cash_expected_minor`, `banked_minor`, and `expected_minor*`, `difference_minor*`, `flag*` (`ok`, `shortfall`, `surplus`, `not_banked`), `unbanked_running_minor*` (all net of savings, so profit-gated), `entries: [{id, amount_minor, banked_at, by}]`; filter `flag` |
 | GET | `/retail/reports/cash/expenses` | `retail.cashbook.read` | `group_by` (`category`, `item`, `branch`, `month`), totals, count; no voided rows |
-| GET | `/retail/reports/cash/savings` | `retail.cashbook.read` | Per branch and day `amount_minor`, `total_sold_minor`, `overwritten`; `suggested_minor*`, `daily_profit_minor*` |
+| GET | `/retail/reports/cash/savings` | `retail.cashbook.read` | Per branch and day `total_sold_minor`, `overwritten`; `amount_minor*`, `suggested_minor*`, `daily_profit_minor*` |
 | GET | `/retail/reports/cash/advances` | `retail.cashbook.read` | Outstanding by party: principal, repaid, balance, oldest advance date |
 
 Error codes added to section 7.7: `savings_exists`, `reason_required`, `explanation_required`,

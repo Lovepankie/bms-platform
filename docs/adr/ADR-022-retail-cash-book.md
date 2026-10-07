@@ -116,23 +116,46 @@ only retail has this need.
     day's profit (FR-RET-10) times a tenant rate, `retail.cashbook.savings_rate_bp` (default 5000,
     half), rounded half up, and zero when the profit is not positive. The rate is a setting, not
     code, because it has already changed once. If the request omits the amount, the server uses the
-    suggestion. The record stores `suggested_minor` and `amount_minor`. **One active savings record
+    suggestion. The record stores `suggested_minor` and `amount_minor`. A savings amount is half
+    the day's profit, so it **is** profit-derived and falls under the one rule of decision 13. The
+    suggestion is read in one call that returns an opaque `suggestion_token` (a keyed hash of the
+    tenant, branch, date and suggested amount, so it reveals nothing); the create call echoes the
+    token it was shown, and the server compares it with the suggestion recomputed in the create's
+    transaction. A suggestion that changed since the form was shown (a sale, a void or a cost
+    change in between) is 409 `suggestion_changed` carrying the new token (and the new
+    `suggested_minor` for a caller with `retail.profit.read`), never a silent overwrite. **One active savings record
     per branch per business date**, a partial unique index on rows not voided; a correction is a
     void and a new record.
-12. **Overwriting the savings amount** (amount differs from the suggestion) needs a reason of at
-    least 5 characters and writes an audit row naming the actor, the date and the branch. The
-    audit payload carries the new amount and `overwritten: true`, never `suggested_minor` or the
-    profit, so the audit log does not leak profit to readers without `retail.profit.read`
-    (the class of issue #77). Whether shop staff may overwrite is open question 5.
+12. **Overwriting the savings amount** means the amount differs from the suggestion the caller was
+    shown (judged against the echoed `suggestion_token`, decision 11, not against a suggestion
+    recomputed later, so a changed suggestion is a 409 and never a false overwrite). It needs a
+    reason of at least 5 characters and `retail.savings.overwrite`. **Every** savings create writes
+    an audit row naming the actor, the date and the branch, and its payload carries only flags:
+    `overwritten` (with the reason when true) and `default_applied` (true when the amount was
+    omitted and the suggestion used). It never carries `amount_minor`, `suggested_minor` or the
+    profit, because an amount equal to the default would hand the profit to any reader of the audit
+    log without `retail.profit.read` (the class of issue #77). Whether shop staff may overwrite is
+    open question 5.
 13. **Permissions** (chapter 8 has the matrix). `retail.cashbook.read` reads every cash book list
     and the daily cash summary, scoped by branch (ADR-017). Writes have their own permission:
     `retail.savings.record`, `retail.savings.overwrite`, `retail.banking.record`,
     `retail.expense.record`, `retail.expense.manage` (categories, items, beneficiaries),
     `retail.withdrawal.record`, `retail.advance.create`, `retail.advance.repay`, and
     `retail.cashbook.void`. Withdrawals and advances (both ways) are owner or admin only, in line
-    with the pilot's admin-only withdrawals and the instruction for advances. Profit-gated figures
-    (the day's profit and the unrounded basis of the savings suggestion in reports) show only with
-    `retail.profit.read` and are absent, not null, otherwise.
+    with the pilot's admin-only withdrawals and the instruction for advances. **One profit rule
+    (chosen here, open question 8 asks the Owner to confirm it):** a savings amount is profit-derived,
+    so every response field that carries a savings amount or the suggestion is profit-gated (marked
+    `*` in chapter 7) and absent, not null, without `retail.profit.read`. That covers
+    `suggested_minor`, `suggestion` and the daily profit, `amount_minor` on savings rows and in the
+    savings report, `savings_minor` and the figures that embed it (`expected_minor`,
+    `expected_to_bank_minor`, `difference_minor`, `unbanked_running_minor`, `opening_minor`,
+    `closing_minor`, `other_movements_minor`) in the expected-to-bank answer, the banking report,
+    stored bankings and the daily summary. The one exception is the writer's own just-entered amount,
+    which the create response echoes back to the person who typed it. A caller without
+    `retail.profit.read` is shown the cash expected figure only, `cash_expected_minor`: takings less
+    voids, cash purchases, cash expenses and advances paid out, plus cash repayments, before savings.
+    The cost is that a shop user cannot see the net amount to bank or the difference flag; the
+    tenant admin can, and a savings reserve held apart from the till is the admin's concern.
 14. **Maker-checker is not applied in version one** (open question 3). The design leaves room: the
     actions `retail_cash_withdrawal` and `retail_advance` could be registered through the action
     registry (ADR-015) with a threshold (FR-APR-04), with no change to the tables. A registered
@@ -166,8 +189,9 @@ only retail has this need.
     the advance's note.
 19. **Reports** (chapter 7 section 7.11.21): the daily cash summary per shop, the banking report
     (expected, banked, difference, flag, running unbanked total, who entered), the expenses report
-    by category and item, the savings report, and the outstanding advances report. Savings, daily
-    profit and any figure derived from profit are profit-gated.
+    by category and item, the savings report, and the outstanding advances report. Savings amounts,
+    the suggestion, daily profit and every figure derived from them are profit-gated by the rule in
+    decision 13.
 20. **Migration numbering.** No migration is written or numbered by this record. The cash book
     migration takes the next free Flyway version at merge time, above the highest on any open
     branch (Flyway runs with `outOfOrder` off), announced on issue #50 as the other retail
@@ -187,8 +211,9 @@ lending. The pilot's history imports without journals and an opening balance, li
 Expected amount to bank depends on cash expenses and advances being entered the same day, so a
 shop that records them late sees a surplus flag that later clears (the stored snapshot keeps what
 the user saw, the report recomputes). Advances in the receivable account never clear if the Owner
-never repays; that is information, not an error. Staff who see the default savings amount can
-infer the day's profit (open question 5); the design states the leak rather than hiding it.
+never repays; that is information, not an error. A savings amount reveals half the day's
+profit, so shop staff see no savings amounts and only the cash expected figure (open question 8),
+which costs them the net amount to bank; the design chooses the gate over the leak.
 
 **Watch for:** the cash position must reconcile with the ledger's `cash_on_hand`; a manual journal
 to cash shows as `other_movements_minor` and should be rare. Tenant time zone matters at midnight:
@@ -225,3 +250,10 @@ Do not guess these; nothing in the build starts until 1, 2 and 4 are answered.
 6. **Are advances recorded by admins only, and who may record repayments?** The pilot lets any
    signed-in user do both; this design makes both owner or admin only.
 7. **Should the withdrawal form have a shop?** The pilot form has none; the ledger needs a branch.
+8. **May roles without `retail.profit.read` see savings amounts?** The design applies one rule:
+   a savings amount is half the day's profit, so it is profit-gated like the profit itself
+   (decision 13), and the audit log never carries it (decision 12). The cost is that the sales role
+   sees that savings were recorded but not how much, and sees only the cash expected figure, not the
+   net amount to bank or the difference. If the Owner would rather let shop staff see the amounts,
+   the leak of half the day's profit is accepted knowingly and the gate on those fields is removed.
+   Recommended: keep the gate.
