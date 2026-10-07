@@ -40,11 +40,7 @@ class JdbcCashBookHistory implements CashBookHistory {
     private final CurrentTenant tenant;
 
     JdbcCashBookHistory(
-            JdbcClient jdbc,
-            CashFigures figures,
-            RetailBooks books,
-            TenantSequences sequences,
-            CurrentTenant tenant) {
+            JdbcClient jdbc, CashFigures figures, RetailBooks books, TenantSequences sequences, CurrentTenant tenant) {
         this.jdbc = jdbc;
         this.figures = figures;
         this.books = books;
@@ -107,7 +103,8 @@ class JdbcCashBookHistory implements CashBookHistory {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Ensured ensureParty(String kind, String name, String contact) {
-        Optional<UUID> existing = jdbc.sql("SELECT id FROM retail_cash_parties WHERE kind = ? AND lower(name) = lower(?)")
+        Optional<UUID> existing = jdbc.sql(
+                        "SELECT id FROM retail_cash_parties WHERE kind = ? AND lower(name) = lower(?)")
                 .params(kind, name)
                 .query(UUID.class)
                 .optional();
@@ -276,7 +273,8 @@ class JdbcCashBookHistory implements CashBookHistory {
     public Optional<UUID> importRepayment(
             UUID advanceId, long amountMinor, String method, LocalDate paidOn, java.time.Instant at) {
         record Row(UUID branch, long principal, long repaid) {}
-        Row advance = jdbc.sql("SELECT branch_id, principal_minor, repaid_minor FROM retail_advances WHERE id = ? FOR UPDATE")
+        Row advance = jdbc.sql(
+                        "SELECT branch_id, principal_minor, repaid_minor FROM retail_advances WHERE id = ? FOR UPDATE")
                 .param(advanceId)
                 .query((rs, n) -> new Row(rs.getObject(1, UUID.class), rs.getLong(2), rs.getLong(3)))
                 .single();

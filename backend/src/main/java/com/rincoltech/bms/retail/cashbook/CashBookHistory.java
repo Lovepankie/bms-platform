@@ -72,7 +72,8 @@ public interface CashBookHistory {
      * historical advance of the branch (the advance as subledger), credit opening balance equity.
      * Empty when every amount is zero and no advance is outstanding.
      */
-    Optional<OpeningPosted> postOpening(UUID branchId, LocalDate day, long cashMinor, long bankMinor, long savingsMinor);
+    Optional<OpeningPosted> postOpening(
+            UUID branchId, LocalDate day, long cashMinor, long bankMinor, long savingsMinor);
 
     record Ensured(UUID id, boolean created) {}
 

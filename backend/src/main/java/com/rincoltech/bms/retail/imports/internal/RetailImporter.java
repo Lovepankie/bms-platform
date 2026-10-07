@@ -6,6 +6,8 @@ import com.rincoltech.bms.core.tenancy.BranchProvisioning;
 import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.BusinessClock;
+import com.rincoltech.bms.retail.cashbook.CashBookHistory;
+import com.rincoltech.bms.retail.cashbook.CashBookHistory.ExpenseItem;
 import com.rincoltech.bms.retail.catalogue.CatalogueHistory;
 import com.rincoltech.bms.retail.catalogue.CatalogueHistory.Ensured;
 import com.rincoltech.bms.retail.catalogue.CatalogueHistory.Product;
@@ -39,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -75,15 +78,90 @@ public class RetailImporter {
             "usage.jsonl",
             "balances.jsonl");
 
-    static final Map<String, Set<String>> FIELDS = Map.of(
-            "branches.jsonl", Set.of("code", "name"),
-            "categories.jsonl", Set.of("name"),
-            "units.jsonl", Set.of("name"),
-            "products.jsonl", Set.of("code", "description", "category", "unit", "cost_minor", "sell_minor", "active"),
-            "suppliers.jsonl", Set.of("name"),
-            "customers.jsonl", Set.of("name", "contact"),
-            "balances.jsonl", Set.of("branch", "product_code", "qty"),
-            "sales.jsonl",
+    /**
+     * The optional cash book files (ADR-022 decision 18; data dictionary section 5), in the order the
+     * report lists them. An export without them imports exactly as before.
+     */
+    static final List<String> CASH_FILES = List.of(
+            "cash_parties.jsonl",
+            "expense_categories.jsonl",
+            "savings.jsonl",
+            "expenses.jsonl",
+            "banking.jsonl",
+            "withdrawals.jsonl",
+            "advances.jsonl",
+            "advance_payments.jsonl",
+            "cash_balances.jsonl");
+
+    /**
+     * The order the cash book files are written in: banking after everything its expected amount is
+     * computed from (savings, expenses, advances and their payments of the same day), and the
+     * opening journal last, when every outstanding advance is known.
+     */
+    static final List<String> CASH_ORDER = List.of(
+            "cash_parties.jsonl",
+            "expense_categories.jsonl",
+            "savings.jsonl",
+            "expenses.jsonl",
+            "withdrawals.jsonl",
+            "advances.jsonl",
+            "advance_payments.jsonl",
+            "banking.jsonl",
+            "cash_balances.jsonl");
+
+    static final Map<String, Set<String>> FIELDS = Map.ofEntries(
+            Map.entry("branches.jsonl", Set.of("code", "name")),
+            Map.entry("categories.jsonl", Set.of("name")),
+            Map.entry("units.jsonl", Set.of("name")),
+            Map.entry(
+                    "products.jsonl",
+                    Set.of("code", "description", "category", "unit", "cost_minor", "sell_minor", "active")),
+            Map.entry("suppliers.jsonl", Set.of("name")),
+            Map.entry("customers.jsonl", Set.of("name", "contact")),
+            Map.entry("balances.jsonl", Set.of("branch", "product_code", "qty")),
+            Map.entry("cash_parties.jsonl", Set.of("name", "contact", "kind")),
+            Map.entry("expense_categories.jsonl", Set.of("category", "item", "requires_explanation")),
+            Map.entry(
+                    "savings.jsonl",
+                    Set.of("source_ref", "branch", "business_date", "amount_minor", "total_sold_minor", "source_user")),
+            Map.entry(
+                    "expenses.jsonl",
+                    Set.of(
+                            "source_ref",
+                            "branch",
+                            "business_date",
+                            "category",
+                            "item",
+                            "beneficiary",
+                            "amount_minor",
+                            "explanation",
+                            "source_user")),
+            Map.entry(
+                    "banking.jsonl",
+                    Set.of("source_ref", "branch", "business_date", "amount_minor", "banked_at", "source_user")),
+            Map.entry(
+                    "withdrawals.jsonl",
+                    Set.of("source_ref", "branch", "business_date", "amount_minor", "source_user")),
+            Map.entry(
+                    "advances.jsonl",
+                    Set.of(
+                            "source_ref",
+                            "branch",
+                            "party",
+                            "taken_by",
+                            "principal_minor",
+                            "purpose",
+                            "business_date",
+                            "processing_fee_minor",
+                            "source_user")),
+            Map.entry(
+                    "advance_payments.jsonl",
+                    Set.of("source_ref", "advance_ref", "amount_minor", "method", "paid_on", "source_user")),
+            Map.entry(
+                    "cash_balances.jsonl",
+                    Set.of("branch", "cash_on_hand_minor", "bank_minor", "savings_reserve_minor")),
+            Map.entry(
+                    "sales.jsonl",
                     Set.of(
                             "source_ref",
                             "branch",
@@ -96,8 +174,9 @@ public class RetailImporter {
                             "buyer_contact",
                             "due_date",
                             "sold_at",
-                            "source_user"),
-            "purchases.jsonl",
+                            "source_user")),
+            Map.entry(
+                    "purchases.jsonl",
                     Set.of(
                             "source_ref",
                             "product_code",
@@ -107,8 +186,9 @@ public class RetailImporter {
                             "unit_sell_minor",
                             "qty_by_branch",
                             "purchased_on",
-                            "source_user"),
-            "usage.jsonl",
+                            "source_user")),
+            Map.entry(
+                    "usage.jsonl",
                     Set.of(
                             "source_ref",
                             "branch",
@@ -118,7 +198,7 @@ public class RetailImporter {
                             "qty",
                             "unit_cost_minor",
                             "reported_at",
-                            "source_user"));
+                            "source_user")));
 
     private final TenantJobs tenants;
     private final TransactionTemplate transactions;
@@ -134,6 +214,7 @@ public class RetailImporter {
     private final RetailHistory history;
     private final StockLedger stock;
     private final RetailBooks books;
+    private final CashBookHistory cashBook;
 
     RetailImporter(
             TenantJobs tenants,
@@ -149,7 +230,8 @@ public class RetailImporter {
             SaleHistory sales,
             RetailHistory history,
             StockLedger stock,
-            RetailBooks books) {
+            RetailBooks books,
+            CashBookHistory cashBook) {
         this.tenants = tenants;
         this.transactions = new TransactionTemplate(transactionManager);
         this.jdbc = jdbc;
@@ -164,6 +246,7 @@ public class RetailImporter {
         this.history = history;
         this.stock = stock;
         this.books = books;
+        this.cashBook = cashBook;
     }
 
     /**
@@ -173,6 +256,14 @@ public class RetailImporter {
      *     directory; nothing is written
      */
     public ImportReport run(String tenantSlug, Path dir, boolean dryRun) {
+        return run(tenantSlug, dir, dryRun, null);
+    }
+
+    /**
+     * As {@link #run(String, Path, boolean)}, with the first live day of the cash book: its opening
+     * journals are dated the day before it. {@code null} means the import day in the tenant's zone.
+     */
+    public ImportReport run(String tenantSlug, Path dir, boolean dryRun, LocalDate firstLiveDate) {
         if (!dir.toFile().isDirectory()) {
             throw new IllegalArgumentException("Not a directory: " + dir);
         }
@@ -180,24 +271,41 @@ public class RetailImporter {
         for (String name : FILES) {
             export.put(name, ExportFile.read(dir, name, FIELDS.get(name)));
         }
+        for (String name : CASH_FILES) {
+            export.put(name, ExportFile.read(dir, name, FIELDS.get(name)));
+        }
         ImportReport report = new ImportReport(tenantSlug, dir.toString(), dryRun);
         return tenants.callAsTenant(tenantSlug, "retail", () -> {
             if (dryRun) {
                 transactions.executeWithoutResult(status -> {
-                    importAll(export, report);
+                    importAll(export, report, firstLiveDate);
                     status.setRollbackOnly();
                 });
             } else {
-                importAll(export, report);
+                importAll(export, report, firstLiveDate);
             }
             return report;
         });
     }
 
-    private void importAll(Map<String, ExportFile> export, ImportReport report) {
-        Run run = new Run(export, report, UUID.randomUUID());
+    private void importAll(Map<String, ExportFile> export, ImportReport report, LocalDate firstLiveDate) {
+        Run run = new Run(export, report, UUID.randomUUID(), firstLiveDate);
+        List<String> order = new ArrayList<>(FILES);
+        order.addAll(CASH_ORDER);
+        // The report lists the files in the export's order; an absent cash book file is not listed.
         for (String name : FILES) {
+            report.file(name);
+        }
+        for (String name : CASH_FILES) {
+            if (export.get(name).present) {
+                report.file(name);
+            }
+        }
+        for (String name : order) {
             ExportFile file = export.get(name);
+            if (!file.present && CASH_FILES.contains(name)) {
+                continue;
+            }
             ImportReport.Counts counts = report.file(name);
             counts.read = file.rows.size() + file.unreadable.size();
             if (!file.present) {
@@ -224,6 +332,15 @@ public class RetailImporter {
                         case "sales.jsonl" -> run.sales(file);
                         case "usage.jsonl" -> run.usage(file);
                         case "balances.jsonl" -> run.balances(file);
+                        case "cash_parties.jsonl" -> run.cashParties(file);
+                        case "expense_categories.jsonl" -> run.expenseCategories(file);
+                        case "savings.jsonl" -> run.savings(file);
+                        case "expenses.jsonl" -> run.expenses(file);
+                        case "banking.jsonl" -> run.banking(file);
+                        case "withdrawals.jsonl" -> run.withdrawals(file);
+                        case "advances.jsonl" -> run.advances(file);
+                        case "advance_payments.jsonl" -> run.advancePayments(file);
+                        case "cash_balances.jsonl" -> run.cashBalances(file);
                         default -> throw new IllegalStateException(name);
                     }
                     Map<String, Object> after = new LinkedHashMap<>();
@@ -245,6 +362,7 @@ public class RetailImporter {
             run.begin();
             run.checksum(export.get("balances.jsonl"));
         });
+        run.cashBookNotes();
     }
 
     /** The state of one run: lookups refreshed at the start of each file's transaction. */
@@ -262,10 +380,21 @@ public class RetailImporter {
         long creditSales;
         long creditSalesMinor;
 
-        Run(Map<String, ExportFile> export, ImportReport report, UUID id) {
+        final LocalDate firstLiveDate;
+        UUID headOffice;
+        LocalDate today;
+        int createdCategories;
+        int createdItems;
+        int createdParties;
+        int feeAdvances;
+        long feeMinor;
+        final Set<String> companyNames = new HashSet<>();
+
+        Run(Map<String, ExportFile> export, ImportReport report, UUID id, LocalDate firstLiveDate) {
             this.export = export;
             this.report = report;
             this.id = id;
+            this.firstLiveDate = firstLiveDate;
         }
 
         void begin() {
@@ -273,6 +402,10 @@ public class RetailImporter {
             branchByCode = new HashMap<>();
             branches.all().forEach(b -> branchByCode.put(b.code().toUpperCase(Locale.ROOT), b.id()));
             productByCode = catalogue.productsByCode();
+            today = clock.today(zone);
+            List<Branches.Branch> heads =
+                    branches.all().stream().filter(Branches.Branch::headOffice).toList();
+            headOffice = heads.size() == 1 ? heads.getFirst().id() : null;
         }
 
         UUID branch(Row row, String field, String code) {
@@ -677,6 +810,422 @@ public class RetailImporter {
             });
         }
 
+        // ---- Cash book files (ADR-022 decision 18) ---------------------------------------
+
+        final Set<String> listedItems = new HashSet<>();
+
+        /** A required business date: ISO 8601, never in the future. */
+        LocalDate date(Row row, String field) {
+            LocalDate d = LocalDate.ofInstant(row.instant(field, zone), zone);
+            if (d.isAfter(today)) {
+                throw row.problem(field + " " + d + " is in the future");
+            }
+            return d;
+        }
+
+        Instant dayStart(LocalDate date) {
+            return date.atStartOfDay(zone).toInstant();
+        }
+
+        /** Money above zero, as the cash book tables require. */
+        long positive(Row row, String field) {
+            long v = row.money(field);
+            if (v <= 0) {
+                throw row.problem(field + " must be above zero");
+            }
+            return v;
+        }
+
+        /** The row's branch, or the tenant's single head office when it names none, whatever any scope is. */
+        UUID branchOrHead(Row row, String field) {
+            String code = row.text(field);
+            if (code != null) {
+                return branch(row, field, code);
+            }
+            if (headOffice == null) {
+                throw row.problem(field + " is missing and the tenant has no single head office branch");
+            }
+            return headOffice;
+        }
+
+        void cashParties(ExportFile file) {
+            ImportReport.Counts c = report.file(file.name);
+            Set<String> seen = new HashSet<>();
+            each(file, row -> {
+                String name = row.requiredText("name", 200);
+                String contact = row.optionalText("contact", 100);
+                String kind =
+                        row.oneOf("kind", List.of("owner", "staff", "related_entity", "supplier", "other", "company"));
+                if (!seen.add(kind + "|" + name.toLowerCase(Locale.ROOT))) {
+                    throw row.problem("duplicate party " + name + " of kind " + kind);
+                }
+                if (kind.equals("company")) {
+                    companyNames.add(name.toLowerCase(Locale.ROOT));
+                    throw row.problem("party " + name
+                            + " is marked as the company, which is not a party (ADR-022 open question 9); not mapped");
+                }
+                if (cashBook.ensureParty(kind, name, contact).created()) {
+                    c.written++;
+                } else {
+                    c.existing++;
+                }
+            });
+        }
+
+        void expenseCategories(ExportFile file) {
+            ImportReport.Counts c = report.file(file.name);
+            Set<String> seen = new HashSet<>();
+            each(file, row -> {
+                String category = row.requiredText("category", 100);
+                String item = row.requiredText("item", 100);
+                boolean requires = row.flag("requires_explanation", false);
+                String key = category.toLowerCase(Locale.ROOT) + "|" + item.toLowerCase(Locale.ROOT);
+                if (!seen.add(key)) {
+                    throw row.problem("duplicate item " + item + " of category " + category);
+                }
+                ExpenseItem e = cashBook.ensureExpenseItem(category, item, requires);
+                listedItems.add(key);
+                if (e.itemCreated() || e.categoryCreated()) {
+                    c.written++;
+                } else {
+                    c.existing++;
+                }
+            });
+        }
+
+        void savings(ExportFile file) {
+            ImportReport.Counts c = report.file(file.name);
+            Set<String> refs = new HashSet<>();
+            each(file, row -> {
+                String ref = row.requiredText("source_ref", 100);
+                if (seen("savings", row, ref, refs)) {
+                    c.existing++;
+                    return;
+                }
+                UUID branch = branch(row, "branch", row.text("branch"));
+                LocalDate date = date(row, "business_date");
+                long amount = row.money("amount_minor");
+                Long sold = row.optionalMoney("total_sold_minor");
+                UUID id = cashBook.importSavings(branch, date, amount, sold == null ? 0 : sold, dayStart(date))
+                        .orElseThrow(() -> row.problem("branch " + row.text("branch")
+                                + " already has a savings record for " + date + "; a second one is never merged"));
+                remember("savings", ref, "retail.savings", id, row.optionalText("source_user", 200));
+                c.written++;
+            });
+        }
+
+        /** The party a name stands for in an expense or an advance; created as kind other when unknown. */
+        UUID partyByName(ExportFile file, Row row, String field, String name) {
+            if (companyNames.contains(name.toLowerCase(Locale.ROOT))) {
+                report.anomaly(
+                        file.name,
+                        row.line(),
+                        field + " " + name + " is the company, which is not a party; imported without it");
+                return null;
+            }
+            Optional<CashBookHistory.Party> found = cashBook.findParty(name, List.of());
+            if (found.isPresent()) {
+                return found.get().id();
+            }
+            createdParties++;
+            report.anomaly(
+                    file.name, row.line(), field + " " + name + " is not in cash_parties.jsonl; created as kind other");
+            return cashBook.ensureParty("other", name, null).id();
+        }
+
+        void expenses(ExportFile file) {
+            ImportReport.Counts c = report.file(file.name);
+            Set<String> refs = new HashSet<>();
+            each(file, row -> {
+                String ref = row.requiredText("source_ref", 100);
+                if (seen("expenses", row, ref, refs)) {
+                    c.existing++;
+                    return;
+                }
+                UUID branch = branch(row, "branch", row.text("branch"));
+                LocalDate date = date(row, "business_date");
+                String category = row.requiredText("category", 100);
+                String item = row.requiredText("item", 100);
+                String beneficiary = row.optionalText("beneficiary", 200);
+                long amount = positive(row, "amount_minor");
+                String explanation = row.optionalText("explanation", 500);
+                ExpenseItem e = cashBook.ensureExpenseItem(category, item, false);
+                if (e.categoryCreated()) {
+                    createdCategories++;
+                    report.anomaly(
+                            file.name,
+                            row.line(),
+                            "category " + category + " is not in expense_categories.jsonl; created as written");
+                }
+                if (e.itemCreated()) {
+                    createdItems++;
+                    report.anomaly(
+                            file.name,
+                            row.line(),
+                            "item " + item + " of category " + category
+                                    + " is not in expense_categories.jsonl; created as written");
+                }
+                if (e.requiresExplanation() && explanation == null) {
+                    throw row.problem("item " + e.itemName() + " requires an explanation");
+                }
+                UUID party = beneficiary == null ? null : partyByName(file, row, "beneficiary", beneficiary);
+                UUID id = cashBook.importExpense(
+                        new CashBookHistory.Expense(branch, date, e, party, amount, explanation, dayStart(date)));
+                remember("expenses", ref, "retail.expense", id, row.optionalText("source_user", 200));
+                c.written++;
+            });
+        }
+
+        void withdrawals(ExportFile file) {
+            ImportReport.Counts c = report.file(file.name);
+            Set<String> refs = new HashSet<>();
+            each(file, row -> {
+                String ref = row.requiredText("source_ref", 100);
+                if (seen("withdrawals", row, ref, refs)) {
+                    c.existing++;
+                    return;
+                }
+                UUID branch = branchOrHead(row, "branch");
+                LocalDate date = date(row, "business_date");
+                long amount = positive(row, "amount_minor");
+                UUID id = cashBook.importWithdrawal(branch, date, amount, dayStart(date));
+                remember("withdrawals", ref, "retail.withdrawal", id, row.optionalText("source_user", 200));
+                c.written++;
+            });
+        }
+
+        record AdvanceRow(
+                Row row,
+                String ref,
+                UUID branch,
+                LocalDate date,
+                UUID party,
+                String takenBy,
+                long principal,
+                String purpose,
+                long fee) {}
+
+        /**
+         * Advances in business date then source id order, each taking the next live advance number;
+         * the source id stays in the import reference and the note, never in {@code advance_no}.
+         */
+        void advances(ExportFile file) {
+            ImportReport.Counts c = report.file(file.name);
+            List<AdvanceRow> rows = new ArrayList<>();
+            each(file, row -> rows.add(parseAdvance(row)));
+            rows.sort(Comparator.comparing(AdvanceRow::date).thenComparing(AdvanceRow::ref));
+            Set<String> refs = new HashSet<>();
+            for (AdvanceRow a : rows) {
+                try {
+                    if (seen("advances", a.row(), a.ref(), refs)) {
+                        c.existing++;
+                        continue;
+                    }
+                    UUID takenBy = a.takenBy() == null ? null : partyByName(file, a.row(), "taken_by", a.takenBy());
+                    String note = "Imported " + a.ref()
+                            + (a.fee() > 0 ? "; processing fee " + a.fee() + " minor units, not modelled" : "");
+                    CashBookHistory.Advanced advance = cashBook.importAdvance(new CashBookHistory.Advance(
+                            a.branch(),
+                            a.date(),
+                            a.party(),
+                            takenBy,
+                            a.principal(),
+                            a.purpose(),
+                            note,
+                            dayStart(a.date())));
+                    if (a.fee() > 0) {
+                        feeAdvances++;
+                        feeMinor = Math.addExact(feeMinor, a.fee());
+                        report.anomaly(
+                                file.name,
+                                a.row().line(),
+                                "processing fee " + a.fee() + " is not modelled; kept in the note of "
+                                        + advance.advanceNo());
+                    }
+                    remember(
+                            "advances",
+                            a.ref(),
+                            "retail.advance",
+                            advance.id(),
+                            a.row().optionalText("source_user", 200));
+                    c.written++;
+                } catch (RowProblem p) {
+                    report.skip(file.name, p.line, p.getMessage());
+                }
+            }
+        }
+
+        private AdvanceRow parseAdvance(Row row) {
+            String ref = row.requiredText("source_ref", 100);
+            UUID branch = branch(row, "branch", row.text("branch"));
+            String partyName = row.requiredText("party", 200);
+            Optional<CashBookHistory.Party> party = cashBook.findParty(partyName, List.of());
+            if (party.isEmpty()) {
+                throw row.problem(
+                        companyNames.contains(partyName.toLowerCase(Locale.ROOT))
+                                ? "party " + partyName + " is marked as the company, which is not a party; not mapped"
+                                : "unknown party " + partyName + " (not in cash_parties.jsonl)");
+            }
+            if (!List.of("owner", "staff", "related_entity")
+                    .contains(party.get().kind())) {
+                throw row.problem("party " + partyName + " is of kind "
+                        + party.get().kind() + "; an advance goes to the owner, a staff member or a related entity");
+            }
+            long principal = positive(row, "principal_minor");
+            LocalDate date = date(row, "business_date");
+            Long fee = row.optionalMoney("processing_fee_minor");
+            return new AdvanceRow(
+                    row,
+                    ref,
+                    branch,
+                    date,
+                    party.get().id(),
+                    row.optionalText("taken_by", 200),
+                    principal,
+                    row.optionalText("purpose", 300),
+                    fee == null ? 0 : fee);
+        }
+
+        record PaymentRow(Row row, String ref, String advanceRef, long amount, String method, LocalDate paidOn) {}
+
+        void advancePayments(ExportFile file) {
+            ImportReport.Counts c = report.file(file.name);
+            List<PaymentRow> rows = new ArrayList<>();
+            each(
+                    file,
+                    row -> rows.add(new PaymentRow(
+                            row,
+                            row.requiredText("source_ref", 100),
+                            row.requiredText("advance_ref", 100),
+                            positive(row, "amount_minor"),
+                            row.oneOf("method", List.of("cash", "mobile_money", "bank")),
+                            date(row, "paid_on"))));
+            rows.sort(Comparator.comparing(PaymentRow::paidOn)
+                    .thenComparingInt(r -> r.row().line()));
+            Set<String> refs = new HashSet<>();
+            for (PaymentRow p : rows) {
+                try {
+                    if (seen("advance_payments", p.row(), p.ref(), refs)) {
+                        c.existing++;
+                        continue;
+                    }
+                    UUID advance = jdbc.sql("""
+                                    SELECT target_id FROM retail_import_refs
+                                     WHERE source_file = 'advances' AND source_ref = ?
+                                    """)
+                            .param(p.advanceRef())
+                            .query(UUID.class)
+                            .optional()
+                            .orElseThrow(() -> p.row().problem("unknown advance_ref " + p.advanceRef()));
+                    UUID id = cashBook.importRepayment(
+                                    advance, p.amount(), p.method(), p.paidOn(), dayStart(p.paidOn()))
+                            .orElseThrow(() -> p.row()
+                                    .problem("amount " + p.amount() + " is above the remaining principal of advance "
+                                            + p.advanceRef()));
+                    remember(
+                            "advance_payments",
+                            p.ref(),
+                            "retail.advance_repayment",
+                            id,
+                            p.row().optionalText("source_user", 200));
+                    c.written++;
+                } catch (RowProblem problem) {
+                    report.skip(file.name, problem.line, problem.getMessage());
+                }
+            }
+        }
+
+        /** Banking after savings, expenses, advances and payments: its expected amount is computed from them. */
+        void banking(ExportFile file) {
+            ImportReport.Counts c = report.file(file.name);
+            Set<String> refs = new HashSet<>();
+            each(file, row -> {
+                String ref = row.requiredText("source_ref", 100);
+                if (seen("banking", row, ref, refs)) {
+                    c.existing++;
+                    return;
+                }
+                UUID branch = branch(row, "branch", row.text("branch"));
+                LocalDate date = date(row, "business_date");
+                long amount = positive(row, "amount_minor");
+                Instant bankedAt = row.text("banked_at") == null ? dayStart(date) : row.instant("banked_at", zone);
+                if (LocalDate.ofInstant(bankedAt, zone).isAfter(today)) {
+                    throw row.problem("banked_at is in the future");
+                }
+                CashBookHistory.Banked banked = cashBook.importBanking(branch, date, amount, bankedAt);
+                remember("banking", ref, "retail.banking", banked.id(), row.optionalText("source_user", 200));
+                c.written++;
+            });
+        }
+
+        /**
+         * One balanced opening entry per branch with a row, dated the day before the first live day,
+         * recorded in {@code retail_import_refs} under {@code cash_opening} with the branch id: the
+         * cash book's read model finds the first live day from exactly that.
+         */
+        void cashBalances(ExportFile file) {
+            ImportReport.Counts c = report.file(file.name);
+            LocalDate day = (firstLiveDate == null ? today : firstLiveDate).minusDays(1);
+            Set<UUID> branchesDone = new HashSet<>();
+            each(file, row -> {
+                UUID branch = branchOrHead(row, "branch");
+                Long cash = row.optionalMoney("cash_on_hand_minor");
+                Long bank = row.optionalMoney("bank_minor");
+                Long savings = row.optionalMoney("savings_reserve_minor");
+                String code = codeOf(branch);
+                if (!branchesDone.add(branch)) {
+                    throw row.problem("a second cash balance row for branch " + code);
+                }
+                String posted = jdbc.sql("""
+                                SELECT j.entry_no FROM retail_import_refs r JOIN journal_entries j ON j.id = r.target_id
+                                 WHERE r.source_file = 'cash_opening' AND r.source_ref = ?
+                                """)
+                        .param(branch.toString())
+                        .query(String.class)
+                        .optional()
+                        .orElse(null);
+                if (posted != null) {
+                    report.cashOpening(new ImportReport.CashOpening(
+                            code, day, 0, 0, 0, 0, 0, posted, "already posted, not posted again:"));
+                    c.existing++;
+                    return;
+                }
+                Optional<CashBookHistory.OpeningPosted> entry = cashBook.postOpening(
+                        branch, day, cash == null ? 0 : cash, bank == null ? 0 : bank, savings == null ? 0 : savings);
+                if (entry.isEmpty()) {
+                    report.cashOpening(new ImportReport.CashOpening(code, day, 0, 0, 0, 0, 0, null, "nothing to post"));
+                    c.existing++;
+                    return;
+                }
+                CashBookHistory.OpeningPosted e = entry.get();
+                remember("cash_opening", branch.toString(), "journal", e.entryId(), null);
+                report.cashOpening(new ImportReport.CashOpening(
+                        code,
+                        day,
+                        e.cashMinor(),
+                        e.bankMinor(),
+                        e.savingsMinor(),
+                        e.advances(),
+                        e.advancesMinor(),
+                        e.entryNo(),
+                        "posted"));
+                c.written++;
+            });
+        }
+
+        /** What the report says about names the cash book reference files did not list and fees not modelled. */
+        void cashBookNotes() {
+            if (createdCategories + createdItems + createdParties > 0) {
+                report.note("cash book lists extended by rows the reference files did not list: " + createdCategories
+                        + " categories, " + createdItems + " items, " + createdParties
+                        + " parties; created exactly as written, for the owner to review");
+            }
+            if (feeAdvances > 0) {
+                report.note("advance processing fees are not modelled; kept in the advance's note: " + feeAdvances
+                        + " advances, total " + feeMinor + " minor units");
+            }
+        }
+
         // ---- Balances, legacy movements and the opening journals -------------------------
 
         record Balance(Row row, String branchCode, UUID branch, Product product, BigDecimal qty) {}
@@ -865,7 +1414,7 @@ public class RetailImporter {
         void checksum(ExportFile file) {
             List<Balance> rows = new ArrayList<>();
             ImportReport quiet = new ImportReport("", "", true);
-            Run reader = new Run(export, quiet, id);
+            Run reader = new Run(export, quiet, id, null);
             reader.begin();
             reader.each(file, row -> {
                 try {
