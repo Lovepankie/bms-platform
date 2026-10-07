@@ -194,16 +194,6 @@ platform API and holds no tenant permissions.
 | `retail.purchase.create` | Y | | | | | | | |
 | `retail.usage.report` | Y | | | | | | | Y |
 | `retail.profit.read` | Y | | | | | | | |
-| `retail.cashbook.read` | Y | | | | | | | Y |
-| `retail.savings.record` | Y | | | | | | | Y |
-| `retail.savings.overwrite` | Y | | | | | | | Y |
-| `retail.banking.record` | Y | | | | | | | Y |
-| `retail.expense.record` | Y | | | | | | | Y |
-| `retail.expense.manage` | Y | | | | | | |  |
-| `retail.withdrawal.record` | Y | | | | | | |  |
-| `retail.advance.create` | Y | | | | | | |  |
-| `retail.advance.repay` | Y | | | | | | |  |
-| `retail.cashbook.void` | Y | | | | | | |  |
 
 Notes:
 
@@ -227,17 +217,25 @@ Notes:
   user with profit read at branch A only sees no cost on branch B's stock, movements, sales or
   valuation (review F5); tenant-wide products and price history need it in any branch. The sales
   role holds no `core.*` permission; the PWA reads the user's branches from `/me`.
-- Retail cash book (ADR-022, **proposed**, FR-RET-32): the ten `retail.cashbook.*`, `retail.savings.*`,
-  `retail.banking.record`, `retail.expense.*`, `retail.withdrawal.record` and `retail.advance.*`
-  rows above are the proposed catalogue, not yet seeded. The tenant admin holds all of them; the
-  sales role holds read, savings record and overwrite, banking record and expense record for its
-  assigned branches, which is the pilot's behaviour (open question 5 may remove the overwrite).
-  Withdrawals and advances (both ways) are owner or admin only, a deliberate change from the pilot,
-  where every signed-in user could record advances and their payments (open question 6). The day's
-  profit, the savings suggestion and `suggested_minor` need `retail.profit.read` and are absent, not
-  null, without it; the audit payload of a savings overwrite carries neither (FR-RET-19). Voiding
-  needs `retail.cashbook.void`. No cash book approval action is registered (open question 3); if one
-  is, its row joins section 8.4 with a threshold set first.
+- Retail cash book (ADR-022, **proposed**, FR-RET-32): the ten proposed `retail.cashbook.*`,
+  `retail.savings.*`, `retail.banking.record`, `retail.expense.*`, `retail.withdrawal.record` and
+  `retail.advance.*` permissions are listed in the separate table "Proposed cash book permissions"
+  below this list, **not** in the matrix above, because they are not seeded: `PermissionMatrixIT`
+  parses every row of the matrix above that has a backticked three-part key and eight cells and
+  compares it with `role_permissions`, so a proposed row there would fail the build on `main`. The
+  cash book migration moves the ten rows into the matrix in the same pull request that seeds them.
+  The tenant admin holds all ten. The sales role holds read, savings record, banking record and
+  expense record for its assigned branches, as the pilot does; it does **not** hold
+  `retail.savings.overwrite` by default, which is a default pending the Owner's answer to open
+  question 5, not a decision. Withdrawals and advances (both ways) are owner or admin only, a
+  deliberate change from the pilot, where every signed-in user could record advances and their
+  payments (open question 6). One rule covers every profit-derived figure: the day's profit, the
+  savings suggestion, `suggested_minor` and **every response field that carries a savings amount**
+  need `retail.profit.read` and are absent, not null, without it (a savings amount is half the
+  profit, so it leaks it); the audit payload of a savings record carries neither the amount nor
+  the suggestion (FR-RET-19, ADR-022 decision 12). Voiding needs `retail.cashbook.void`. No cash
+  book approval action is registered (open question 3); if one is, its row joins section 8.4 with a
+  threshold set first.
 - `retail.stock.transfer` (issue #84, migration V22, FR-RET-16) moves stock from one branch to
   another. It is money-moving (it posts an inventory entry at each branch) and goes to the roles
   that restock, which in the default roles is the tenant admin only. Its branch scope is checked
@@ -255,6 +253,22 @@ Notes:
 - The matrix is seeded by migration V2 and `PermissionMatrixIT` asserts the seeded
   `role_permissions` equal this table, read from this file (FR-IAM-02). Changing a cell is a
   pull request that changes this chapter and a new migration together.
+
+Proposed cash book permissions (ADR-022, not yet seeded, so deliberately outside the matrix
+above and not read by `PermissionMatrixIT`; this table has four columns, not eight):
+
+| Permission (proposed) | Tenant admin | Sales role, default | Note |
+|---|---|---|---|
+| `retail.cashbook.read` | Y | Y | Cash book lists and the daily cash summary, branch scoped |
+| `retail.savings.record` | Y | Y | Record the day's savings |
+| `retail.savings.overwrite` | Y | no | Pending open question 5; the sales role does not hold it until the Owner answers |
+| `retail.banking.record` | Y | Y | Record cash banked |
+| `retail.expense.record` | Y | Y | Record an expense |
+| `retail.expense.manage` | Y | no | Categories, items and parties |
+| `retail.withdrawal.record` | Y | no | Owner or admin only |
+| `retail.advance.create` | Y | no | Owner or admin only (open question 6) |
+| `retail.advance.repay` | Y | no | Owner or admin only (open question 6) |
+| `retail.cashbook.void` | Y | no | Void any cash book record |
 
 Platform permissions, held only by platform operators (super admins) on the platform host,
 never by a tenant role:
