@@ -1,0 +1,6 @@
+{"source_ref": "ADV-009", "branch": "KLA", "party": "Test Owner 01", "taken_by": "Test Staff 01", "principal_minor": 200000, "purpose": "Test purpose", "business_date": "2026-09-01", "processing_fee_minor": 5000, "source_user": "test.admin01"}
+{"source_ref": "ADV-002", "branch": "KLA", "party": "Test Related 01", "principal_minor": 100000, "business_date": "2026-09-01"}
+{"source_ref": "ADV-003", "branch": "ENT", "party": "Test Staff 01", "principal_minor": 50000, "business_date": "2026-09-05"}
+{"source_ref": "ADV-004", "branch": "KLA", "party": "Test Company 01", "principal_minor": 70000, "business_date": "2026-09-06"}
+{"source_ref": "ADV-005", "branch": "KLA", "party": "Test Supplier 01", "principal_minor": 70000, "business_date": "2026-09-06"}
+{"source_ref": "ADV-006", "branch": "KLA", "party": "Test Nobody 01", "principal_minor": 70000, "business_date": "2026-09-06"}

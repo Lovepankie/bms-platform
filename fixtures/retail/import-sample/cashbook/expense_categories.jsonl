@@ -1,0 +1,3 @@
+{"category": "Test Category A", "item": "Test Item 1", "requires_explanation": false}
+{"category": "Test Category A", "item": "others", "requires_explanation": true}
+{"category": "Test Category B", "item": "Test Item 2", "requires_explanation": false}

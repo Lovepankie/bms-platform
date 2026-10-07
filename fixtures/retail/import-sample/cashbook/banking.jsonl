@@ -1,0 +1,4 @@
+{"source_ref": "BNK-001", "branch": "KLA", "business_date": "2026-09-15", "amount_minor": 200000, "banked_at": "2026-09-15T17:40:00", "source_user": "test.sales01"}
+{"source_ref": "BNK-002", "branch": "KLA", "business_date": "2026-09-17", "amount_minor": 20000}
+{"source_ref": "BNK-003", "branch": "ENT", "business_date": "2026-09-10", "amount_minor": 100000, "banked_at": "2026-09-10"}
+{"source_ref": "BNK-004", "branch": "KLA", "business_date": "2026-09-15", "amount_minor": "12.5"}
