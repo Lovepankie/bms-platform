@@ -56,7 +56,7 @@ export function Problem({ error }: { error: unknown }) {
 }
 
 /** Shows its children only when the session may use the screen; otherwise nothing of the screen. */
-export function Gate({ screen, title, children }: { screen: RetailScreen; title: string; children: ReactNode }) {
+export function Gate({ screen, title, children, wide }: { screen: RetailScreen; title: string; children: ReactNode; wide?: boolean }) {
   const { me } = useStaff();
   if (!canUse(me, screen)) {
     return (
@@ -67,7 +67,7 @@ export function Gate({ screen, title, children }: { screen: RetailScreen; title:
     );
   }
   return (
-    <main className="rt">
+    <main className={wide ? 'rt rt-wide' : 'rt'}>
       <h1>{title}</h1>
       {children}
     </main>

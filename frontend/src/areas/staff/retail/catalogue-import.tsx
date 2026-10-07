@@ -26,25 +26,18 @@ export function ImportReport({ result }: { result: ImportResult }) {
       </p>
       {names(result.categories_created, result.dry_run ? 'categories that would be created' : 'categories created')}
       {names(result.units_created, result.dry_run ? 'units that would be created' : 'units created')}
-      <div className="table-wrap" tabIndex={0}>
-        <table>
-          <thead>
-            <tr><th className="num">Row</th><th>Item</th><th>What happens</th></tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const w = WORDS[r.outcome ?? ''] ?? { label: r.outcome ?? '', tone: 'info' };
-              return (
-                <tr key={r.line}>
-                  <td className="num">{r.line}</td>
-                  <td>{r.code}<br /><span className="hint">{r.description}</span></td>
-                  <td><span className={`badge badge-${w.tone}`}>{w.label}</span><br /><span className="hint">{r.message}</span></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <ul style={{ listStyle: 'none', padding: 0 }}>
+        {rows.map((r) => {
+          const w = WORDS[r.outcome ?? ''] ?? { label: r.outcome ?? '', tone: 'info' };
+          return (
+            <li key={r.line} className="rt-card">
+              <p><strong>{r.code || 'No code'}</strong> <span className={`badge badge-${w.tone}`}>{w.label}</span></p>
+              <p className="hint">Row {r.line}{r.description ? `, ${r.description}` : ''}</p>
+              <p>{r.message}</p>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

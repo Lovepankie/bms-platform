@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type Category, type Unit } from '../../../api/retail';
-import { BackToCatalogue } from './catalogue';
+import { AddPanel, BackToCatalogue } from './catalogue';
 import { Gate, Problem, Success, useToast } from './ui';
 
 // Categories and Units (#146): the same screen twice. A row can be renamed or switched off, never
@@ -69,6 +69,7 @@ function NamedList({ noun, plural, list, create, update }: {
   const { show, toast } = useToast();
   const [message, setMessage] = useState<string | null>(null);
   const [name, setName] = useState('');
+  const [adding, setAdding] = useState(false);
   const rows = useQuery({ queryKey: ['retail', 'catalogue', plural], queryFn: list });
   const done = (text: string) => {
     setMessage(text);
@@ -78,7 +79,7 @@ function NamedList({ noun, plural, list, create, update }: {
   const add = useMutation({
     mutationFn: () => create(name.trim()),
     onMutate: () => setMessage(null),
-    onSuccess: (row) => { setName(''); done(`Added the ${noun} "${row.name}".`); },
+    onSuccess: (row) => { setName(''); setAdding(false); done(`Added the ${noun} "${row.name}".`); },
   });
   const change = useMutation({
     mutationFn: (v: { id: string; body: { name?: string; active?: boolean }; text: (row: Named) => string }) => update(v.id, v.body).then((row) => ({ row, text: v.text })),
@@ -88,12 +89,14 @@ function NamedList({ noun, plural, list, create, update }: {
   return (
     <>
       <BackToCatalogue />
-      <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) add.mutate(); }}>
-        <label htmlFor={`new-${plural}`}>Add a {noun}</label>
-        <input id={`new-${plural}`} value={name} maxLength={noun === 'unit' ? 30 : 100} onChange={(e) => setName(e.target.value)} autoComplete="off" />
-        <button type="submit" className="rt-primary" disabled={add.isPending || name.trim() === ''}>{add.isPending ? 'Adding' : `Add ${noun}`}</button>
-      </form>
-      <Problem error={add.error} />
+      <AddPanel label={`Add a ${noun}`} open={adding} onOpen={() => setAdding(true)} onClose={() => { setAdding(false); setName(''); }}>
+        <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) add.mutate(); }}>
+          <label htmlFor={`new-${plural}`}>Name of the new {noun}</label>
+          <input id={`new-${plural}`} value={name} maxLength={noun === 'unit' ? 30 : 100} onChange={(e) => setName(e.target.value)} autoComplete="off" />
+          <button type="submit" className="rt-primary" disabled={add.isPending || name.trim() === ''}>{add.isPending ? 'Adding' : `Add ${noun}`}</button>
+        </form>
+        <Problem error={add.error} />
+      </AddPanel>
       {message && <Success>{message}</Success>}
       <Problem error={change.error} />
       {rows.isPending && <p className="loading">Loading</p>}

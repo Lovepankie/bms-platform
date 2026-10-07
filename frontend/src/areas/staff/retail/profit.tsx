@@ -192,14 +192,14 @@ function FiguresTable({ label, rows }: { label: string; rows: { key: string; nam
           <th className="num">Sales</th>
           {!phone && <th className="num">Cost</th>}
           {!phone && <th className="num">Usage</th>}
-          {!phone && <th className="num">Stock-take difference</th>}
+          {!phone && <th className="num">Stock-take<br />difference</th>}
           <th className="num">Profit</th>
         </tr>
       </thead>
       <tbody>
         {rows.map(({ key, name, f }) => (
           <tr key={key}>
-            <td>{name}{phone && <><br /><span className="hint">Cost {money(f.cost)}, usage {money(f.usage)}, stock-take difference {money(f.difference)}</span></>}</td>
+            <td>{name}{phone && <><br /><span className="hint">Cost {money(f.cost)}<br />Usage {money(f.usage)}<br />Stock-take difference {money(f.difference)}</span></>}</td>
             <td className="num">{money(f.sales)}</td>
             {!phone && <td className="num">{money(f.cost)}</td>}
             {!phone && <td className="num">{money(f.usage)}</td>}
@@ -253,7 +253,7 @@ function ProfitPage() {
     enabled: (all || branchId !== null) && from <= to,
   });
   return (
-    <Gate screen="profit" title="Daily profit">
+    <Gate screen="profit" title="Daily profit" wide>
       {!all && branchId === null ? <BranchRequired permissions={needsOf('profit')} /> : (
         <>
           <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>

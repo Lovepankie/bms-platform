@@ -1,6 +1,6 @@
 # Retail UI notes
 
-**Status:** Draft · **Tasks:** #56 (R6), #65 (R6b) under story #50, #84 (stock transfers), #103, #105, #112 (walk-through fixes) · **Requirements:** FR-RET-15, FR-RET-16 · **Scope:** `docs/specs/retail-mvp-scope.md`
+**Status:** Draft · **Tasks:** #56 (R6), #65 (R6b) under story #50, #84 (stock transfers), #103, #105, #112 (walk-through fixes), #145 and #144 (parity), #121 and #146 (catalogue management) · **Requirements:** FR-RET-15, FR-RET-16 · **Scope:** `docs/specs/retail-mvp-scope.md`
 
 Phone-first staff screens for the retail vertical, in `frontend/src/areas/staff/retail/`. Since #65 they run on the
 real retail API (`docs/sdd/07-api-design.md` section 7.11.20, `docs/api/openapi.json`), which replaced the contract
@@ -21,7 +21,13 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 | `/staff/retail/transfer` | Move stock: to which branch, items with the source's stock, date and note | `retail.stock.transfer` and `retail.stock.read` |
 | `/staff/retail/transfers` | Stock moves from or to the branch; open one; cancel it | `retail.stock.read` (cancel: `retail.stock.transfer`) |
 | `/staff/retail/valuation` | Stock at price; at cost too with `retail.profit.read` | `retail.stock.read` (cost columns: `retail.profit.read`) |
-| `/staff/retail/profit` | Daily profit per branch | `retail.profit.read` |
+| `/staff/retail/profit` | Daily profit per branch, with the stock-take difference as its own column (#121) | `retail.profit.read` |
+| `/staff/retail/catalogue` | Catalogue home: links to the screens below the session may use | any one of the catalogue screens' permissions |
+| `/staff/retail/catalogue/products` | Items: list with search, category and on sale filters; add, edit, change price, price history (#146) | `retail.catalogue.manage` and `retail.stock.read` (Change price: `retail.price.edit`; cost: `retail.profit.read`) |
+| `/staff/retail/catalogue/categories`, `/units` | Add, rename, switch off or on, with the number of items using each | `retail.catalogue.manage` and `retail.stock.read` |
+| `/staff/retail/catalogue/suppliers` | Add, edit, switch off or on | `retail.catalogue.manage` and `retail.purchase.create` |
+| `/staff/retail/catalogue/buyers` | Credit buyers with what each owes; add, edit name and contact | `retail.customer.manage` and `retail.sale.read` |
+| `/staff/retail/catalogue/import` | Import items from a CSV file or pasted rows: check first, then add (#146) | `retail.catalogue.manage`, `retail.stock.read` and `core.settings.manage` (administrators) |
 
 Sale, usage, stock, stock-take, Move stock, valuation and profit work on the branch chosen in the staff header;
 with "All branches" they ask for one branch. Restock takes a quantity per branch the user can see. Stock moves
@@ -264,10 +270,55 @@ is a two column table instead of large wrapping text, branch and category totals
 sale in a list is a card with an Open button instead of a blue link-like row. The backend suite (`mvn verify`: 119
 unit and 330 integration tests, including `RetailParityIT`) is green.
 
+## Catalogue management (#146)
+
+A shop keeps its own lists without an operator. The retail home has a **Catalogue** tile when the session may use any
+of the screens under it; the Catalogue home lists only those it may use (a sales user, who holds
+`retail.customer.manage`, sees Credit buyers alone). `retail/permissions.ts` holds the permissions of each
+(`CATALOGUE_LINKS`); the API stays the authority.
+
+- **Items** (`catalogue-products.tsx`): the list takes search (code, description, category), a category and a
+  "Items on sale, switched off, all" choice, 50 at a time with "Show more items". A card shows the code, category,
+  unit and selling price, and the cost only with `retail.profit.read`. Add and Edit change code, description,
+  category, unit and whether the item is on sale (`PATCH` under `If-Match` with the version just read, so a change
+  by someone else is refused with a plain message). Prices are never edited there: **Change price** (with
+  `retail.price.edit`) takes a new selling price, a cost price only with `retail.profit.read`, and a required
+  reason; it warns, without blocking, when the selling price is not above the cost the user can see, and the server
+  accepts a price at or below cost (the price floor is enforced when a sale is made, `price_below_cost`, unless the
+  seller holds `retail.price.below_cost`), so the form only warns, and only when the user can see cost. Under the form, the **price
+  history** of the item lists each change with the date and time in the business's time zone (`showWhen`,
+  Africa/Kampala like `businessToday`), what changed, why, and the cost only when the server sent it. A new item
+  asks for a selling price; its cost is asked only with `retail.profit.read` (else 0, and a restock sets it).
+- **Categories and Units** (`catalogue-lists.tsx`, one component twice): Add, Rename, Switch off or Switch on,
+  with "Used by N items". Nothing is deleted. A switched-off row stays on the items that use it and is not offered
+  for a new item (the server refuses it with 422 `inactive_category`, `inactive_unit`).
+- **Suppliers and Credit buyers** (`catalogue-people.tsx`): Add and Edit name and contact; a supplier can also be
+  switched off (it is then refused on a new restock). Credit buyers show what each owes on credit sales in the
+  branches the user may read (`balance_minor`). The contact is shown as typed and is not written to the audit log.
+- **Import items** (`catalogue-import.tsx`): choose a CSV file or paste rows (comma, semicolon or tab separated; a
+  spreadsheet paste works). **Check the file** runs a dry run and lists each row as Add, Skip (the code exists, or
+  repeats in the file) or Problem with a plain message; **Add N items** appears only after a clean check of the text
+  as it stands now. A file with a problem row adds nothing. Adding again skips everything already there. The cost
+  price column is accepted only with `retail.profit.read`.
+- **Messages.** Every save shows a green on-screen message (`Success`, `role="status"`) and a toast above the
+  bottom bar (`useToast` in `ui.tsx`, four seconds, hidden from assistive technology since the on-screen message
+  carries the same words). There was no toast helper in the app before this (only the `.toast` style), so
+  `useToast` is the first and the other retail screens do not use it yet. Refusals use the existing `Problem` alert
+  with the server's plain message.
+
+### Verification of the catalogue screens (#146, #121)
+
+The real stack as in `docs/ui/design-system/catalogue/README.md` (API jar from `mvn verify`, V28, the built PWA, headless
+Chromium at 360px and 1280px, a real sign-in with TOTP, a fabricated tenant with three branches): the walk added, edited,
+switched off and re-priced items, renamed and switched off categories, added and edited a supplier and a credit buyer, checked
+and applied an item import and opened Daily profit. No screen overflowed sideways. It found one defect, fixed with a test: the
+price history crashed on the `null` the server sends for a first price. The price edit accepts a price below cost (the floor is
+enforced on a sale), so the form warns instead of refusing. A shop that counts in its opening stock with a stock-take will see
+that stock as a stock-take difference, and so as profit, at cost, on that day: bring opening stock in with a restock instead.
+
 ## Left to do
 
-- Void a sale, pay a credit sale, price edit and price history screens (not in R6), and the catalogue management
-  screens; see `docs/specs/retail-ui-parity.md`.
+- Void a sale and pay a credit sale screens; see `docs/specs/retail-ui-parity.md`.
 - The component tests render static markup (no DOM in the test setup); the browser run above covers behaviour.
 - Offline use, barcode scanning and receipts to SMS are out of the first release.
 - The tenant's timezone and a transfer number are not in the API; when they are, use them (#112).

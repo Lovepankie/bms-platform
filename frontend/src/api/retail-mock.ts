@@ -225,7 +225,6 @@ export function createMockRetail(): RetailApi {
         const nextCost = body.cost_minor ?? p.costMinor;
         const nextSell = body.sell_minor ?? p.sellMinor;
         if (nextCost === p.costMinor && nextSell === p.sellMinor) refuse(422, 'price_unchanged', 'The new prices equal the current ones.');
-        if (nextSell <= nextCost && !body.reason?.includes('allow')) refuse(422, 'price_below_cost', 'The price is not above what the item cost.');
         history.set(id, [...(history.get(id) ?? []), {
           id: nextId('h'), at: new Date().toISOString(), source: 'manual', old_sell_minor: p.sellMinor, new_sell_minor: nextSell, currency: 'UGX', reason: body.reason,
           ...(profitAccess ? { old_cost_minor: p.costMinor, new_cost_minor: nextCost } : {}),

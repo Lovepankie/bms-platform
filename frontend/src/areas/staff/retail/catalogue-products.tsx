@@ -10,7 +10,8 @@ import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
 // Items (#146): list with search, category and active filters; add and edit an item's code,
 // description, category, unit and whether it is on sale; and change prices only through the price
 // form, which keeps the history. Cost shows only with retail.profit.read (the server never sends it
-// otherwise), and a price at or below cost is refused by the server with the plain message.
+// otherwise). A price at or below cost is saved with a warning: the price floor is enforced when a sale
+// is made (price_below_cost, unless the seller holds retail.price.below_cost).
 
 const PRICE = 'retail.price.edit';
 
@@ -28,9 +29,15 @@ const SOURCES: Record<string, string> = { initial: 'First price', manual: 'Chang
 
 /** One price change in words: the old and new selling price, and the cost too when the server sent it. */
 export function ChangeLine({ change }: { change: PriceChange }) {
-  const sell = change.old_sell_minor === undefined ? `Selling price ${money(change.new_sell_minor ?? 0)}` : `Selling price ${money(change.old_sell_minor)} to ${money(change.new_sell_minor ?? 0)}`;
-  const costKnown = change.new_cost_minor !== undefined;
-  const cost = !costKnown ? '' : change.old_cost_minor === undefined ? `, cost ${money(change.new_cost_minor ?? 0)}` : `, cost ${money(change.old_cost_minor)} to ${money(change.new_cost_minor ?? 0)}`;
+  // The server sends null for a price the change has no earlier value of, and leaves cost out without retail.profit.read.
+  const sell = change.old_sell_minor == null ? `Selling price ${money(change.new_sell_minor ?? 0)}` : `Selling price ${money(change.old_sell_minor)} to ${money(change.new_sell_minor ?? 0)}`;
+  const cost = change.new_cost_minor == null
+    ? ''
+    : change.old_cost_minor == null
+      ? `, cost ${money(change.new_cost_minor)}`
+      : change.old_cost_minor === change.new_cost_minor
+        ? `, cost stays ${money(change.new_cost_minor)}`
+        : `, cost ${money(change.old_cost_minor)} to ${money(change.new_cost_minor)}`;
   return (
     <li className="rt-card">
       <p><strong>{showWhen(change.at)}</strong> <span className="badge badge-info">{SOURCES[change.source ?? ''] ?? change.source}</span></p>
@@ -144,10 +151,13 @@ export function ProductForm({ product, onSaved, onCancel }: { product?: Product;
   );
 }
 
-/** The early hint of the price form: only when cost is known to the caller. The server refuses a price at or below cost itself. */
+/**
+ * The price form's warning, only when the caller can see cost. The server accepts such a price (the rule is
+ * enforced on a sale, `price_below_cost`, unless the seller holds retail.price.below_cost), so this only warns.
+ */
 export function belowCostHint(sellMinor: number | null, costMinor: number | null): string | null {
   if (sellMinor === null || costMinor === null || costMinor <= 0 || sellMinor > costMinor) return null;
-  return `The selling price should be above the cost, ${formatMinor(costMinor, RETAIL_CURRENCY)}.`;
+  return `This price is not above the cost, ${formatMinor(costMinor, RETAIL_CURRENCY)}. A sale at this price is refused unless the seller may sell below cost.`;
 }
 
 export function PriceForm({ product, onSaved, onCancel }: { product: Product; onSaved: (text: string) => void; onCancel: () => void }) {
@@ -230,20 +240,26 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
   return (
     <>
       <BackToCatalogue />
-      <button type="button" className="rt-primary" onClick={onAdd}>Add an item</button>
+      <p><button type="button" onClick={onAdd}>Add an item</button></p>
       <label htmlFor="items-search">Search by name, code or category</label>
       <input id="items-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
-      <label htmlFor="items-category">Category</label>
-      <select id="items-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-        <option value="">All categories</option>
-        {(categories.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>
-      <label htmlFor="items-active">Show</label>
-      <select id="items-active" value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as 'active' | 'off' | 'all')}>
-        <option value="active">Items on sale</option>
-        <option value="off">Items switched off</option>
-        <option value="all">All items</option>
-      </select>
+      <div className="rt-row">
+        <div>
+          <label htmlFor="items-category">Category</label>
+          <select id="items-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">All categories</option>
+            {(categories.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="items-active">Show</label>
+          <select id="items-active" value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as 'active' | 'off' | 'all')}>
+            <option value="active">On sale</option>
+            <option value="off">Switched off</option>
+            <option value="all">All items</option>
+          </select>
+        </div>
+      </div>
       {page.isPending && <p className="loading">Loading</p>}
       <Problem error={page.error} />
       {page.data && items.length === 0 && <p className="empty-state">No items found.</p>}

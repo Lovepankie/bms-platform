@@ -3,7 +3,7 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type Customer, type Supplier } from '../../../api/retail';
 import { useStaff } from '../context';
-import { BackToCatalogue } from './catalogue';
+import { AddPanel, BackToCatalogue } from './catalogue';
 import { canUse } from './permissions';
 import { Gate, Problem, Success, money, useToast } from './ui';
 
@@ -69,8 +69,9 @@ export function PersonRow({ row, busy, onSave, onToggle }: {
   );
 }
 
-function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canSwitch }: {
+function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canSwitch, note }: {
   noun: string;
+  note?: string;
   plural: string;
   queryKey: string;
   list: () => Promise<Person[]>;
@@ -84,6 +85,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   const [message, setMessage] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
+  const [adding, setAdding] = useState(false);
   const rows = useQuery({ queryKey: ['retail', 'catalogue', queryKey], queryFn: list });
   const done = (text: string) => {
     setMessage(text);
@@ -93,7 +95,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   const add = useMutation({
     mutationFn: () => create({ name: name.trim(), ...(contact.trim() ? { contact: contact.trim() } : {}) }),
     onMutate: () => setMessage(null),
-    onSuccess: (row) => { setName(''); setContact(''); done(`Added the ${noun} "${row.name}".`); },
+    onSuccess: (row) => { setName(''); setContact(''); setAdding(false); done(`Added the ${noun} "${row.name}".`); },
   });
   const change = useMutation({
     mutationFn: (v: { id: string; body: PersonEdit & { active?: boolean }; text: (row: Person) => string }) => update(v.id, v.body).then((row) => ({ row, text: v.text })),
@@ -103,16 +105,19 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   return (
     <>
       <BackToCatalogue />
+      {note && <p className="hint">{note}</p>}
       {canAdd && (
+        <AddPanel label={`Add a ${noun}`} open={adding} onOpen={() => setAdding(true)} onClose={() => { setAdding(false); setName(''); setContact(''); }}>
         <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) add.mutate(); }}>
-          <label htmlFor={`new-${queryKey}-name`}>Add a {noun}: name</label>
+          <label htmlFor={`new-${queryKey}-name`}>Name</label>
           <input id={`new-${queryKey}-name`} value={name} maxLength={200} onChange={(e) => setName(e.target.value)} autoComplete="off" />
           <label htmlFor={`new-${queryKey}-contact`}>Phone or other contact (optional)</label>
           <input id={`new-${queryKey}-contact`} value={contact} maxLength={100} onChange={(e) => setContact(e.target.value)} autoComplete="off" />
           <button type="submit" className="rt-primary" disabled={add.isPending || name.trim() === ''}>{add.isPending ? 'Adding' : `Add ${noun}`}</button>
         </form>
+        <Problem error={add.error} />
+        </AddPanel>
       )}
-      <Problem error={add.error} />
       {message && <Success>{message}</Success>}
       <Problem error={change.error} />
       {rows.isPending && <p className="loading">Loading</p>}
@@ -162,8 +167,8 @@ function SuppliersPage() {
 function BuyersPage() {
   return (
     <Gate screen="buyers" title="Credit buyers">
-      <p className="hint">What each buyer owes is counted over the branches you may read.</p>
       <PeopleList
+        note="What each buyer owes is counted over the branches you may read."
         noun="credit buyer" plural="credit buyers" queryKey="buyers"
         list={() => retail.listCustomers()} create={(b) => retail.createCustomer(b)}
         update={(id, b) => retail.updateCustomer(id, b)}

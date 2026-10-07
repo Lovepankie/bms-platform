@@ -10,6 +10,11 @@
   margin: 0 auto;
 }
 
+/* A report with many columns (Daily profit) gets a wider column on a wide screen (#121). */
+.rt.rt-wide {
+  max-width: 960px;
+}
+
 .rt > h1 {
   margin-bottom: var(--space-4);
 }

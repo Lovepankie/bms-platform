@@ -112,6 +112,9 @@ describe('items and prices', () => {
     expect(html).toContain('New selling price');
     expect(html).not.toContain('New cost price');
     expect(html).not.toMatch(/cost/i);
+    // The real server sends null where there is no earlier price (the first price) and no reason.
+    const first = { id: 'h0', at: '2026-10-01T05:00:00Z', source: 'initial', old_sell_minor: null, new_sell_minor: 5000, old_cost_minor: null, new_cost_minor: 3500, reason: null } as unknown as PriceChange;
+    expect(renderToString(<PriceHistory changes={[first]} />)).toContain('Selling price UGX 5,000, cost UGX 3,500');
     const list = renderToString(<PriceHistory changes={history} />);
     expect(list).toContain('Selling price UGX 5,000 to UGX 6,000');
     expect(list).toContain('Changed by hand');
@@ -121,7 +124,7 @@ describe('items and prices', () => {
   });
 
   it('hints, without blocking, when the price is not above a known cost', () => {
-    expect(belowCostHint(3500, 3500)).toContain('above the cost');
+    expect(belowCostHint(3500, 3500)).toContain('not above the cost, UGX 3,500');
     expect(belowCostHint(3501, 3500)).toBeNull();
     expect(belowCostHint(100, null)).toBeNull();
     expect(belowCostHint(100, 0)).toBeNull();
@@ -161,11 +164,11 @@ describe('the mock catalogue (the server rules the screens rely on)', () => {
     await expect(api.updateCategory(before?.id ?? '', { name: 'cables' })).rejects.toMatchObject({ code: 'duplicate_category' });
   });
 
-  it('refuses a price at or below cost, records history, and hides cost without the permission', async () => {
+  it('records price history, and hides cost without the permission', async () => {
     setMockProfitAccess(true);
     const api = createMockRetail();
     const [first] = (await api.listCatalogue({ query: 'P003' })).items ?? [];
-    await expect(api.editPrices(first?.id ?? '', first?.version ?? 1, { sell_minor: 3500, reason: 'Test' })).rejects.toMatchObject({ code: 'price_below_cost' });
+    await expect(api.editPrices(first?.id ?? '', first?.version ?? 1, { sell_minor: 6000, reason: 'Test' })).rejects.toMatchObject({ code: 'price_unchanged' });
     const changed = await api.editPrices(first?.id ?? '', first?.version ?? 1, { sell_minor: 6500, reason: 'Test increase' });
     expect(changed.sell_minor).toBe(6500);
     const history = await api.priceHistory(first?.id ?? '');
