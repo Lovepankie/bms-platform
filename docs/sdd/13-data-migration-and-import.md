@@ -516,7 +516,7 @@ dry run and its report stand in for the preview, and the review of the source ha
 export. The procedure is `docs/runbooks/import-retail.md`.
 
 ```
-java -jar bms-api.jar import-retail --tenant <slug> --dir <path> [--dry-run]
+java -jar bms-api.jar import-retail --tenant <slug> --dir <path> [--dry-run] [--first-live-date yyyy-mm-dd]
 ```
 
 **How it runs.** The command starts the application without the web server and the job scheduler,
@@ -567,21 +567,28 @@ cases (#73): a price edited through the API between two runs survives the re-run
 history row and the product counted as existing; a zero-difference balance is existing on both
 runs; a code that NFKC makes longer than 40 characters is a skipped row, not a failed file.
 
-### 13.13.1 Cash book tabs (proposed, ADR-022; FR-RET-30)
+### 13.13.1 Cash book tabs (ADR-022; FR-RET-30; issue #147)
 
-**Proposed, not built.** The same command, the same JSON Lines contract and the same rules as above,
-extended with the cash book files (the shapes are in `docs/specs/retail-pilot-data-dictionary.md`
-section 5), imported after `balances` in this order: `cash_parties`, `expense_categories`, `savings`,
-`expenses`, `banking`, `withdrawals`, `advances`, `advance_payments`, `cash_balances`.
+The same command, the same JSON Lines contract and the same rules as above, extended with the cash
+book files (the shapes are in `docs/specs/retail-pilot-data-dictionary.md` section 5). All nine files
+are optional; an export without them imports exactly as before and an absent file is not listed in the
+report. They are imported after `balances`, in the order that keeps the figures consistent: `cash_parties`,
+`expense_categories`, `savings`, `expenses`, `withdrawals`, `advances`, `advance_payments`, `banking`,
+`cash_balances`. Banking comes after the files its expected amount is computed from, although the
+report (and the data dictionary) lists it before advances. The writes go through the port
+`CashBookHistory` of `retail.cashbook` (the pattern of `SaleHistory`), in the caller's transaction; the
+opening journal of `cash_balances` is the one journal of these files. The option
+`--first-live-date yyyy-mm-dd` (default: the import day in the tenant's zone) sets the first day the shop
+records in the application; the opening entries are dated the day before it.
 
 | Export | Becomes |
 |---|---|
 | Expense categories and items, parties | Matched by name ignoring case, else created and reported. Never guessed: the real lists come from the pilot app's expense categories tab |
 | Daily savings, expenses, banked, withdrawals | Historical rows (`historical = true`), `created_by` the import actor, `occurred_at` from the source, `business_date` the source's date in the tenant's zone, **no journals**; keyed by `source_ref` in `retail_import_refs`. A second savings row for one shop and day is reported and skipped (the unique rule), never merged |
-| Advances and their payments | Historical advances with their repayments; every imported advance takes the next value of the live `retail_advance_no` sequence, in business date then source id order, and the source id is kept in `retail_import_refs` and the note, never reused as `advance_no`, so an imported number cannot collide with a live one (test: after the import a live advance gets a number above every imported one and no two advances share a number); a payment against an unknown advance is reported and skipped; `repaid_minor` equals the sum of the payments, and a payment above the principal is reported and skipped |
-| `cash_balances` | One opening journal per branch, dated the day **before** the first live day (importer option `--first-live-date`, default the import day) so the first live day's opening shows the carried balance: debit `cash_on_hand`, `bank`, `savings_reserve` as given, and one `owner_advances` line **per outstanding imported advance** with that advance as subledger (like the lending opening import; never one figure per branch); credit `opening_balance_equity` (ADR-020 decision 9). A branch with no row gets no entry; a row with no shop uses the tenant's single head office branch, whatever any scope is. Imported days are shown separately in the banking report and are excluded from the unbanked running total, which starts at the first live day |
+| Advances and their payments | Historical advances with their repayments; every imported advance takes the next value of the live `retail_advance_no` sequence, in business date then source id order, and the source id is kept in `retail_import_refs` and the note, never reused as `advance_no`, so an imported number cannot collide with a live one (test: after the import a live advance gets a number above every imported one and no two advances share a number); a party must be an owner, staff member or related entity, and one marked as the company is reported and skipped, never mapped; a non-zero `processing_fee_minor` is reported and appended to the note; a payment against an unknown advance is reported and skipped; `repaid_minor` equals the sum of the payments (the deferred check of V29 holds because the advance and each payment are written in the same transaction, `repaid_minor` rising with each), and a payment above the remaining principal is reported and skipped |
+| `cash_balances` | One opening journal per branch, dated the day **before** the first live day (importer option `--first-live-date`, default the import day) so the first live day's opening shows the carried balance: debit `cash_on_hand`, `bank`, `savings_reserve` as given, and one `owner_advances` line **per outstanding imported advance** with that advance as subledger (like the lending opening import; never one figure per branch); credit `opening_balance_equity` (ADR-020 decision 9). A branch with no row gets no entry; a row with no shop uses the tenant's single head office branch, whatever any scope is. Imported days are shown separately in the banking report and are excluded from the unbanked running total, which starts at the first live day. The import records `retail_import_refs` (`source_file = 'cash_opening'`, `source_ref` the branch id, `target_type = 'journal'`, `target_id` the entry): the read model finds the first live day from exactly that |
 
 A row with an unknown branch, a missing field, a future date or a malformed amount is skipped and listed
-with its file and line (13.2). `--dry-run` covers these files too. A wrong committed run is reversed from
+with its file and line (13.2). `--dry-run` covers these files too. The banked row's `expected_minor` is computed from the imported history of its branch and day with the formula of the read model (expected to bank), so it is imported after savings, expenses, advances and payments; the golden test is `RetailCashbookImportIT` (chapter 15). A wrong committed run is reversed from
 the verified pre-import backup, like the others.
 
