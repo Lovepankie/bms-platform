@@ -319,6 +319,17 @@ class RetailCatalogueManagementIT extends IntegrationTest {
         }
     }
 
+    @Test
+    void everyCreateResponseCarriesTheETagOfTheNewRow() {
+        for (String path : List.of("/categories", "/units", "/suppliers", "/customers")) {
+            ResponseEntity<JsonNode> created =
+                    api.post(path, Map.of("name", "Test Etag " + path.substring(1, 4)), ADMIN);
+            assertThat(created.getStatusCode()).as(path).isEqualTo(HttpStatus.CREATED);
+            assertThat(created.getHeaders().getETag()).as(path).isEqualTo("\"1\"");
+            assertThat(created.getBody().get("version").asInt()).isEqualTo(1);
+        }
+    }
+
     /** The first update's value survives a later update that carries the version it read before. */
     @Test
     void aStaleUpdateAfterACommittedOneIsRefusedAndTheFirstValueSurvives() {

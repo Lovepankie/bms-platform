@@ -60,7 +60,10 @@ class CatalogueController {
     @RequiresPermission("retail.catalogue.manage")
     @Operation(summary = "Create a product category (FR-RET-01)", operationId = "createRetailCategory")
     ResponseEntity<Category> createCategory(@Valid @RequestBody CategoryRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createCategory(request));
+        Category created = service.createCategory(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .eTag(String.valueOf(created.version()))
+                .body(created);
     }
 
     @PatchMapping("/categories/{category_id}")
@@ -98,7 +101,10 @@ class CatalogueController {
     @RequiresPermission("retail.catalogue.manage")
     @Operation(summary = "Create a unit of measure (FR-RET-01)", operationId = "createRetailUnit")
     ResponseEntity<Unit> createUnit(@Valid @RequestBody UnitRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createUnit(request));
+        Unit created = service.createUnit(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .eTag(String.valueOf(created.version()))
+                .body(created);
     }
 
     @GetMapping("/products")

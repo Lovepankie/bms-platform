@@ -51,7 +51,10 @@ class PurchasingController {
     @RequiresPermission("retail.purchase.create")
     @Operation(summary = "Add a supplier (FR-RET-06)", operationId = "createRetailSupplier")
     ResponseEntity<Supplier> createSupplier(@Valid @RequestBody SupplierRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createSupplier(request));
+        Supplier created = service.createSupplier(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .eTag(String.valueOf(created.version()))
+                .body(created);
     }
 
     @PatchMapping("/suppliers/{supplier_id}")

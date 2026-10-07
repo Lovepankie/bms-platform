@@ -146,7 +146,10 @@ class SalesController {
     @RequiresPermission("retail.customer.manage")
     @Operation(summary = "Add a credit buyer (FR-RET-05)", operationId = "createRetailCustomer")
     ResponseEntity<Customer> createCustomer(@Valid @RequestBody CustomerRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createCustomer(request));
+        Customer created = service.createCustomer(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .eTag(String.valueOf(created.version()))
+                .body(created);
     }
 
     @PatchMapping("/customers/{customer_id}")
