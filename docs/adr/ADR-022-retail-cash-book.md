@@ -157,8 +157,8 @@ only retail has this need.
     `overwritten` (with the reason when true) and `default_applied` (true when the amount was
     omitted and the suggestion used). It never carries `amount_minor`, `suggested_minor` or the
     profit, because an amount equal to the default would hand the profit to any reader of the audit
-    log without `retail.profit.read` (the class of issue #77). Whether shop staff may overwrite is
-    open question 5.
+    log without `retail.profit.read` (the class of issue #77). **A caller without `retail.profit.read` may not send `amount_minor` (or an overwrite reason) at all:** the field is refused with 422 `amount_requires_profit_access` ("only the default can be recorded without profit access") and the server applies the default, because an accepted-or-refused answer to a typed amount would be an equality oracle for half the day's profit. A caller with `retail.profit.read` but without `retail.savings.overwrite` who sends a different amount gets 403, as designed. `overwritten` is profit-gated on every response, since it says whether the amount differs from half the profit. Whether shop staff may overwrite is
+    open question 5 (an overwrite by anyone needs both `retail.profit.read` and `retail.savings.overwrite`).
 13. **Permissions** (chapter 8 has the matrix). `retail.cashbook.read` reads every cash book list
     and the daily cash summary, scoped by branch (ADR-017). Writes have their own permission:
     `retail.savings.record`, `retail.savings.overwrite`, `retail.banking.record`,
@@ -170,7 +170,7 @@ only retail has this need.
     and a cash restock total is purchase cost (chapter 8 treats a purchase total at cost as cost),
     so `cash_purchases_minor` and every figure that embeds it are gated like savings, and every response field that carries a savings amount or the suggestion is profit-gated (marked
     `*` in chapter 7) and absent, not null, without `retail.profit.read`. That covers
-    `suggested_minor`, `suggestion` and the daily profit, `amount_minor` on savings rows and in the
+    `suggested_minor`, `suggestion`, `overwritten` and the daily profit, `amount_minor` on savings rows and in the
     savings report, `savings_minor`, `savings_voids_minor`, `cash_purchases_minor` and the figures that embed them (`expected_minor`,
     `expected_to_bank_minor`, `difference_minor`, `unbanked_running_minor`, `opening_minor`,
     `closing_minor`, `other_movements_minor`) in the expected-to-bank answer, the banking report,

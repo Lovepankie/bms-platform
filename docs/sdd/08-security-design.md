@@ -232,7 +232,7 @@ Notes:
   payments (open question 6). One rule covers every profit-derived figure: the day's profit, the
   savings suggestion, `suggested_minor` and **every response field that carries a savings amount**
   need `retail.profit.read` and are absent, not null, without it (a savings amount is half the
-  profit, so it leaks it), and so does `cash_purchases_minor` and every figure embedding it, because a restock total is a purchase total at cost (a caller without `retail.profit.read`, the sales role included, is shown `cash_expected_minor` only: takings less voids, expenses and advances paid out, plus repayments, before cash purchases and savings; ADR-022 decision 13, relaxable by the Owner, open question 8); the audit payload of a savings record carries neither the amount nor
+  profit, so it leaks it), and so does `cash_purchases_minor` and every figure embedding it, because a restock total is a purchase total at cost (a caller without `retail.profit.read`, the sales role included, is shown `cash_expected_minor` only: takings less voids, expenses and advances paid out, plus repayments, before cash purchases and savings; ADR-022 decision 13, relaxable by the Owner, open question 8); a caller without `retail.profit.read` cannot send a savings amount at all (422 `amount_requires_profit_access`) and never sees `overwritten`; the audit payload of a savings record carries neither the amount nor
   the suggestion (FR-RET-19, ADR-022 decision 12). Voiding needs `retail.cashbook.void`. No cash
   book approval action is registered (open question 3); if one is, its row joins section 8.4 with a
   threshold set first.
