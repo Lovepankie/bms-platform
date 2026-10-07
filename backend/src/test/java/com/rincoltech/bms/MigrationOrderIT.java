@@ -2,10 +2,13 @@ package com.rincoltech.bms;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.MigrationState;
@@ -28,8 +31,37 @@ import org.testcontainers.utility.MountableFile;
  */
 class MigrationOrderIT {
 
-    static final List<String> VERSIONS = List.of(
+    /** The migrations already merged and deployed: their numbers never change and none is removed. */
+    static final List<String> MERGED = List.of(
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26");
+
+    /**
+     * Every migration file on the classpath, in numeric order. A new migration PR adds its file and
+     * nothing else here, so concurrent migration PRs no longer collide on this test.
+     */
+    static final List<String> VERSIONS = discoveredVersions();
+
+    static List<String> discoveredVersions() {
+        try {
+            Path dir =
+                    Path.of(MigrationOrderIT.class.getResource("/db/migration").toURI());
+            try (Stream<Path> files = Files.list(dir)) {
+                return files.map(f -> f.getFileName().toString())
+                        .filter(n -> n.matches("V\\d+__.*\\.sql"))
+                        .map(n -> n.substring(1, n.indexOf("__")))
+                        .sorted(Comparator.comparingInt(Integer::parseInt))
+                        .toList();
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("cannot list the migrations", e);
+        }
+    }
+
+    @Test
+    void mergedMigrationsAreNeverRemovedOrRenumbered() {
+        assertThat(VERSIONS).startsWith(MERGED.toArray(String[]::new));
+        assertThat(VERSIONS).doesNotHaveDuplicates();
+    }
 
     @Test
     void everyMigrationAppliesInOrderOnAnEmptyDatabase() {
@@ -40,7 +72,7 @@ class MigrationOrderIT {
                     DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
 
             assertThat(result.success).isTrue();
-            assertThat(result.targetSchemaVersion).isEqualTo("26");
+            assertThat(result.targetSchemaVersion).isEqualTo(VERSIONS.get(VERSIONS.size() - 1));
             assertThat(applied(postgres)).containsExactlyElementsOf(VERSIONS);
             assertThat(flyway(postgres, null).info().pending()).isEmpty();
         }
@@ -78,7 +110,7 @@ class MigrationOrderIT {
 
             assertThat(second.success).isTrue();
             assertThat(second.migrations.stream().map(m -> m.version).toList())
-                    .containsExactly("10", "11", "12", "13", "14", "20", "21", "22", "23", "26");
+                    .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("10"), VERSIONS.size()));
             assertThat(applied(postgres)).containsExactlyElementsOf(VERSIONS);
             assertThat(flyway(postgres, null).info().pending()).isEmpty();
             // The tenant from V9 can switch retail on: its chart is seeded next to the lending one.
@@ -171,7 +203,8 @@ class MigrationOrderIT {
             MigrateResult result =
                     DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
 
-            assertThat(result.migrations.stream().map(m -> m.version).toList()).containsExactly("23", "26");
+            assertThat(result.migrations.stream().map(m -> m.version).toList())
+                    .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("22") + 1, VERSIONS.size()));
             assertThat(owner.sql("SELECT qty::text FROM retail_stock_balances WHERE tenant_id = ?")
                             .param(tenant)
                             .query(String.class)
