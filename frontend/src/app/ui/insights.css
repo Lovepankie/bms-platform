@@ -215,11 +215,14 @@
 
 .iv-tip-text {
   display: none;
-  position: absolute;
-  top: 100%;
-  right: 0;
+  /* A note pinned to the bottom of the screen, so it never runs off the edge from a card in the left column. */
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  left: var(--space-4);
   z-index: var(--z-overlay);
-  width: min(280px, 80vw);
+  max-width: 420px;
+  margin-inline: auto;
   padding: var(--space-2) var(--space-3);
   background: var(--rt-grey-900);
   color: var(--rt-white);
