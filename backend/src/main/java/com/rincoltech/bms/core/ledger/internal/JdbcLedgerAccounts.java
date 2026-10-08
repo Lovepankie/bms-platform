@@ -49,4 +49,22 @@ class JdbcLedgerAccounts implements LedgerAccounts {
                 .list();
         return balances;
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<LocalDate, Long> movementByDay(String systemKey, UUID branchId, LocalDate from, LocalDate to) {
+        Map<LocalDate, Long> movement = new LinkedHashMap<>();
+        jdbc.sql("""
+                        SELECT e.entry_date, sum(l.debit - l.credit) AS movement
+                          FROM journal_lines l
+                          JOIN journal_entries e ON e.id = l.entry_id
+                          JOIN gl_accounts a ON a.id = l.account_id
+                         WHERE a.system_key = ? AND e.branch_id = ? AND e.entry_date BETWEEN ? AND ?
+                         GROUP BY e.entry_date ORDER BY e.entry_date
+                        """)
+                .params(systemKey, branchId, Date.valueOf(from), Date.valueOf(to))
+                .query((rs, n) -> movement.put(rs.getDate(1).toLocalDate(), rs.getLong(2)))
+                .list();
+        return movement;
+    }
 }

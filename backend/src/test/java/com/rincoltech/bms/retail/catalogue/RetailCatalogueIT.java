@@ -187,9 +187,13 @@ class RetailCatalogueIT extends IntegrationTest {
                 .toList();
         assertThat(held)
                 .containsExactly(
+                        "retail.banking.record",
+                        "retail.cashbook.read",
                         "retail.customer.manage",
+                        "retail.expense.record",
                         "retail.sale.create",
                         "retail.sale.read",
+                        "retail.savings.record",
                         "retail.stock.read",
                         "retail.usage.report");
 

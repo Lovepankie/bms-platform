@@ -1,0 +1,6 @@
+{"source_ref": "PAY-001", "advance_ref": "ADV-009", "amount_minor": 80000, "method": "cash", "paid_on": "2026-09-10", "source_user": "test.admin01"}
+{"source_ref": "PAY-002", "advance_ref": "ADV-009", "amount_minor": 20000, "method": "bank", "paid_on": "2026-09-12"}
+{"source_ref": "PAY-003", "advance_ref": "ADV-002", "amount_minor": 100000, "method": "cash", "paid_on": "2026-09-16"}
+{"source_ref": "PAY-004", "advance_ref": "ADV-003", "amount_minor": 60000, "method": "mobile_money", "paid_on": "2026-09-20"}
+{"source_ref": "PAY-005", "advance_ref": "ADV-777", "amount_minor": 1000, "method": "cash", "paid_on": "2026-09-20"}
+{"source_ref": "PAY-006", "advance_ref": "ADV-003", "amount_minor": 10000, "method": "cash", "paid_on": "2026-09-20"}

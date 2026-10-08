@@ -20,5 +20,11 @@ public interface LedgerAccounts {
      */
     Map<UUID, Long> balanceByBranch(String systemKey, LocalDate asOf);
 
+    /**
+     * The net movement (debits less credits, in minor units) of the account with this key in one
+     * branch for each entry date from {@code from} to {@code to}. Dates without entries are absent.
+     */
+    Map<LocalDate, Long> movementByDay(String systemKey, UUID branchId, LocalDate from, LocalDate to);
+
     record Account(UUID id, String code, String currency) {}
 }

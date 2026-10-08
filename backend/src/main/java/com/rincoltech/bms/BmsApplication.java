@@ -17,7 +17,7 @@ import org.springframework.modulith.Modulithic;
  * exits, without starting the web application. The deploy script runs it as a one-shot container
  * before the application containers switch (ADR-006). {@code java -jar bms-api.jar keys} prints new
  * sign-in key material for a host env file and exits (chapter 8 section 8.7). {@code java -jar
- * bms-api.jar import-retail --tenant <slug> --dir <path> [--dry-run]} imports a retail export into
+ * bms-api.jar import-retail --tenant <slug> --dir <path> [--dry-run] [--first-live-date yyyy-mm-dd]} imports a retail export into
  * one tenant as {@code bms_app}, prints its report and exits ({@code docs/runbooks/import-retail.md}).
  * {@code java -jar bms-api.jar seed-lending --tenant <slug>} fills one empty lending tenant with
  * fabricated data on staging and exits; it is refused in production ({@code docs/runbooks/seed-lending.md}).

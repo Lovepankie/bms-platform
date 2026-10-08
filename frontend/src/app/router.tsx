@@ -68,6 +68,15 @@ const retailUnitsRoute = retailScreen('/catalogue/units').lazy(() => import('../
 const retailSuppliersRoute = retailScreen('/catalogue/suppliers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.SuppliersRoute));
 const retailImportRoute = retailScreen('/catalogue/import').lazy(() => import('../areas/staff/retail/catalogue-import').then((m) => m.ImportRoute));
 const retailBuyersRoute = retailScreen('/catalogue/buyers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.BuyersRoute));
+const retailBankingRoute = retailScreen('/banking').lazy(() => import('../areas/staff/retail/banking').then((m) => m.Route));
+const retailBankingReportRoute = retailScreen('/banking-report').lazy(() => import('../areas/staff/retail/banking').then((m) => m.ReportRoute));
+const retailExpensesRoute = retailScreen('/expenses').lazy(() => import('../areas/staff/retail/expenses').then((m) => m.Route));
+const retailExpensesReportRoute = retailScreen('/expenses-report').lazy(() => import('../areas/staff/retail/expenses').then((m) => m.ReportRoute));
+const retailExpenseListsRoute = retailScreen('/expense-lists').lazy(() => import('../areas/staff/retail/expense-lists').then((m) => m.Route));
+const retailWithdrawalsRoute = retailScreen('/withdrawals').lazy(() => import('../areas/staff/retail/withdrawals').then((m) => m.Route));
+const retailAdvancesRoute = retailScreen('/advances').lazy(() => import('../areas/staff/retail/advances').then((m) => m.Route));
+const retailCashSummaryRoute = retailScreen('/cash-summary').lazy(() => import('../areas/staff/retail/cash-summary').then((m) => m.Route));
+const retailSavingsRoute = retailScreen('/savings').lazy(() => import('../areas/staff/retail/savings').then((m) => m.Route));
 
 // The living style page (#106): every component and illustration, for development builds and the
 // platform host only (the page itself checks); a chunk of its own, so no tenant downloads it.
@@ -163,6 +172,15 @@ export const router = createRouter({
         retailSuppliersRoute,
         retailBuyersRoute,
         retailImportRoute,
+        retailSavingsRoute,
+        retailCashSummaryRoute,
+        retailAdvancesRoute,
+        retailWithdrawalsRoute,
+        retailExpensesRoute,
+        retailExpensesReportRoute,
+        retailExpenseListsRoute,
+        retailBankingRoute,
+        retailBankingReportRoute,
       ]), staffLendingRoute.addChildren([
         lendingLoansRoute,
         lendingLoanRoute,

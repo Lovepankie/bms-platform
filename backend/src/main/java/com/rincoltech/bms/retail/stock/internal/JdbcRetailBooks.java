@@ -6,6 +6,7 @@ import com.rincoltech.bms.core.ledger.LedgerPosting.EntryRequest;
 import com.rincoltech.bms.core.ledger.LedgerPosting.Line;
 import com.rincoltech.bms.core.ledger.LedgerPosting.PostedEntry;
 import com.rincoltech.bms.core.ledger.LedgerPosting.ReversalRequest;
+import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import java.time.LocalDate;
@@ -23,10 +24,12 @@ class JdbcRetailBooks implements RetailBooks {
 
     private final LedgerPosting ledger;
     private final LedgerAccounts accounts;
+    private final CurrentTenant tenant;
 
-    JdbcRetailBooks(LedgerPosting ledger, LedgerAccounts accounts) {
+    JdbcRetailBooks(LedgerPosting ledger, LedgerAccounts accounts, CurrentTenant tenant) {
         this.ledger = ledger;
         this.accounts = accounts;
+        this.tenant = tenant;
     }
 
     @Override
@@ -56,6 +59,17 @@ class JdbcRetailBooks implements RetailBooks {
     }
 
     private Line resolve(Leg leg) {
+        if (leg.accountId() != null) {
+            // A tenant-chosen account: the ledger refuses it unless it is postable and active, and
+            // an account is in the tenant's one currency.
+            return new Line(
+                    leg.accountId(),
+                    leg.debit() ? leg.amountMinor() : 0,
+                    leg.debit() ? 0 : leg.amountMinor(),
+                    tenant.profile().currency(),
+                    leg.subledgerType(),
+                    leg.subledgerId());
+        }
         LedgerAccounts.Account account = accounts.bySystemKey(leg.systemKey())
                 .orElseThrow(() -> ApiException.rule(
                         "retail_chart_missing",

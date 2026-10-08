@@ -22,6 +22,18 @@ public final class ImportReport {
 
     record Opening(String branch, long debitMinor, String entryNo, String status) {}
 
+    /** One branch's cash book opening entry: the carried balances and the outstanding advances. */
+    record CashOpening(
+            String branch,
+            java.time.LocalDate day,
+            long cashMinor,
+            long bankMinor,
+            long savingsMinor,
+            int advances,
+            long advancesMinor,
+            String entryNo,
+            String status) {}
+
     private final String tenant;
     private final String dir;
     private final boolean dryRun;
@@ -30,6 +42,7 @@ public final class ImportReport {
     private final List<String> negatives = new ArrayList<>();
     private final List<Opening> openings = new ArrayList<>();
     private final List<String> notes = new ArrayList<>();
+    private final List<CashOpening> cashOpenings = new ArrayList<>();
     private String checksum = "not computed";
     private String failure;
 
@@ -58,6 +71,10 @@ public final class ImportReport {
 
     void opening(Opening opening) {
         openings.add(opening);
+    }
+
+    void cashOpening(CashOpening opening) {
+        cashOpenings.add(opening);
     }
 
     void note(String note) {
@@ -125,6 +142,26 @@ public final class ImportReport {
                     o.entryNo() == null ? "" : " " + o.entryNo()));
         }
         out.append(String.format("  %-10s debit %15d  credit %15d%n%n", "total", total, total));
+        if (!cashOpenings.isEmpty()) {
+            out.append("cash book opening journals (debit cash on hand, bank, savings reserve and one owner advances "
+                    + "line per outstanding advance, credit opening balance equity):\n");
+            for (CashOpening o : cashOpenings) {
+                long sum = o.cashMinor() + o.bankMinor() + o.savingsMinor() + o.advancesMinor();
+                out.append(String.format(
+                        "  %-10s dated %s  cash %d  bank %d  savings reserve %d  advances %d (%d)  total %d  %s%s%n",
+                        o.branch(),
+                        o.day(),
+                        o.cashMinor(),
+                        o.bankMinor(),
+                        o.savingsMinor(),
+                        o.advancesMinor(),
+                        o.advances(),
+                        sum,
+                        o.status(),
+                        o.entryNo() == null ? "" : " " + o.entryNo()));
+            }
+            out.append('\n');
+        }
         out.append("negative source balances, excluded from the opening journal, for the first stock-take ("
                 + negatives.size() + "):\n");
         negatives.forEach(n -> out.append("  ").append(n).append('\n'));

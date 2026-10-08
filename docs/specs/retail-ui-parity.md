@@ -64,9 +64,12 @@ The AppSheet app has list and form views for each of these; the screens are unde
 
 | AppSheet view | Equivalent screen | Status | What remains |
 |---|---|---|---|
-| Daily savings, cash banked, withdrawals | None | out of scope | The cash book, pending ADR-022 (behaviour spec section 8) |
-| Expenses and expense records | None | out of scope | The cash book, pending ADR-022 |
-| Advances and their payments | None | out of scope | Internal advances to the owner are not customer lending and are not imported (data dictionary section 3) |
+| Daily savings | Savings (with its records) | done | The suggestion and every savings amount show only with `retail.profit.read` (ADR-022 decision 13). NOT built: the savings report screen (`GET /retail/reports/cash/savings` has no screen; the records list covers it) and CSV export of the reports |
+| Cash banked (Banked) | Banking and Banking report | done | Expected amount computed by the server; imported days listed apart |
+| Cash withdrawn from the bank | Cash withdrawals | done | Needs a shop (the ledger needs a branch) |
+| Expenses and expense records | Expenses, Expenses report and Expense lists | done | NOT built: the optional receipt photo (the frontend has no documents upload client yet; the API accepts a `receipt_document_id` of a document uploaded for an expense) |
+| Loans and loan payments (advances to the owner or company) | Advances (list, repayments, outstanding report) | done | Advances, not lending (ADR-022); imported through `import-retail` |
+| The day's cash position | Cash summary | done | New: closing agrees with the books |
 | Location captured with a distance from the shop | None | out of scope | Later, as an audit signal (behaviour spec section 8) |
 | Users, roles and shops | Business set-up and the staff area (core) | out of scope | Handled by the platform core, not the retail screens (ADR-020: permissions replace admin lists) |
 
@@ -74,12 +77,13 @@ The AppSheet app has list and form views for each of these; the screens are unde
 
 Done: record a sale, credit sales, all sales, stock (single branch and All branches, category filter, low and out
 of stock), stock-take, usage, restock, move stock, stock value with expected profit, daily profit (with the stock-take
-difference), and the catalogue screens for items, prices, categories, units, suppliers and credit buyers, with the
-item import.
+difference), the catalogue screens for items, prices, categories, units, suppliers and credit buyers, with the
+item import, and the cash book screens (savings, banking and its report, withdrawals, expenses and its report and
+lists, advances, cash summary).
 
 Partly: paying a credit sale from the screens, low stock with a per-product level, profit grouped by month or year.
 
 Missing: void and returns, damaged and used records, purchase records.
 
-Out of scope: cash handling (savings, banking, withdrawals, expenses, advances), location capture, user and shop
+Out of scope: location capture, user and shop
 administration.

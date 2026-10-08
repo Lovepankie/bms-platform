@@ -1,4 +1,7 @@
-# 6. Database Design
+**Built in migration `V34__retail_cash_book.sql` (issue #147).** Flyway runs with `outOfOrder` off, so
+the number is the next free one above every open branch (V24 to V28 were held by other open pull
+requests when it was written); the owner session renumbers it at merge time if another lands first.
+This section is its specification. # 6. Database Design
 
 **Status:** Draft · **Owner:** Hillary
 
@@ -1695,13 +1698,14 @@ as `bms_app` under the tenant's row-level security:
 Primary key `(tenant_id, source_file, source_ref)`: a row already present is skipped, so a re-run
 of the same export adds nothing.
 
-### 6.11.5 Cash book (proposed, ADR-022; FR-RET-17 to FR-RET-32)
+### 6.11.5 Cash book (ADR-022; FR-RET-17 to FR-RET-32)
 
-**Design only: no migration exists.** The migration takes the next free Flyway version at merge
-time, above the highest on any open branch (`outOfOrder` is off), announced on issue #50; this
-section is its specification. Every table below is tenant-owned with forced row-level security
+**Built in migration `V34__retail_cash_book.sql` (issue #147).** Flyway runs with `outOfOrder` off, so
+the number is the next free one above every open branch (V24 to V28 were held by other open pull
+requests when it was written); the owner session renumbers it at merge time if another lands first.
+This section is its specification. Every table below is tenant-owned with forced row-level security
 (`bms_apply_tenant_rls`), a `tenant_id` first in every key, composite foreign keys on
-`(tenant_id, id)`, and the standard columns `id`, `tenant_id`, `created_at`, `created_by`. Money is
+`(tenant_id, id)`, and the standard columns `id`, `tenant_id`, `created_at`; the lists carry `created_by` and the record tables `recorded_by`. Money is
 `bigint` minor units with a `currency`, CHECK `0 < amount_minor <= 10^13` (savings: `>= 0`).
 Business dates are `date` in the tenant's zone (`tenants.timezone`), never in the future (checked by
 the service with the kernel clock); the instant is a separate `timestamptz`. Rows are append-only
@@ -1818,7 +1822,7 @@ UPDATE of `repaid_minor` to another value is refused.
 
 Every rule posts through `post_entry` in the transaction of its event, one entry, in the record's
 `branch_id`, `source_module = 'retail'`. A zero amount posts nothing. A void posts the reversal
-(`reverses_entry_id` set) with the key `<key>:void`. Historical rows post nothing. The opening entry is dated the day **before** the first live day (the day before the importer's first live date, default the import day), so the first live day's `opening_minor` equals the carried balance and the opening is not an `other_movements_minor` of that day.
+(`reverses_entry_id` set) with the key `<key>:void`. Historical rows post nothing, except the importer's opening entries in the last three rows below. The opening entry is dated the day **before** the first live day (the day before the importer's first live date, default the import day), so the first live day's `opening_minor` equals the carried balance and the opening is not an `other_movements_minor` of that day.
 
 | Event | Debit | Credit | Idempotency key |
 |---|---|---|---|
@@ -1829,6 +1833,10 @@ Every rule posts through `post_entry` in the transaction of its event, one entry
 | Advance paid out | `owner_advances`, advance as subledger | `cash_on_hand` | `retail.advance:<id>` |
 | Repayment of an advance | `cash_on_hand`, `mobile_money` or `bank` by method | `owner_advances`, advance as subledger | `retail.advance_repayment:<id>` |
 | Opening, per branch, at import | `cash_on_hand`, `bank`, `savings_reserve` balances, and one `owner_advances` line **per outstanding advance** with that advance as subledger | `opening_balance_equity` | `retail.cash_opening:<branch>` |
+| Opening of one advance (importer: a branch with advances but no opening row, or an advance imported on a re-run) | `owner_advances`, advance as subledger | `opening_balance_equity` | `retail.advance_opening:<advance>` |
+| Imported repayment of an advance that is already opened (importer) | `opening_balance_equity` | `owner_advances`, advance as subledger | `retail.advance_repayment_opening:<repayment>` |
+
+An opening posts the principal less the repayments imported with the advance, never less live repayments, which post their own credit, so after any later live repayment the ledger balance of the advance equals the principal less every repayment. The opening entries above are the only ledger postings of imported data.
 
 #### Derived figures (read model, no table)
 

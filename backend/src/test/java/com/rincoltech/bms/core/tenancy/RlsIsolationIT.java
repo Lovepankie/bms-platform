@@ -452,6 +452,69 @@ class RlsIsolationIT {
         owner.sql("INSERT INTO lending_insights_digest_settings (id, tenant_id) VALUES (?, ?)")
                 .params(UUID.randomUUID(), t.tenantId())
                 .update();
+        // The retail cash book (migration V34, #147).
+        UUID category = UUID.randomUUID();
+        UUID expenseItem = UUID.randomUUID();
+        UUID party = UUID.randomUUID();
+        UUID advance = UUID.randomUUID();
+        owner.sql("INSERT INTO retail_expense_categories (id, tenant_id, name) VALUES (?, ?, 'Test Category 01')")
+                .params(category, t.tenantId())
+                .update();
+        owner.sql(
+                        "INSERT INTO retail_expense_items (id, tenant_id, category_id, name) VALUES (?, ?, ?, 'Test Item 01')")
+                .params(expenseItem, t.tenantId(), category)
+                .update();
+        owner.sql("INSERT INTO retail_cash_parties (id, tenant_id, name, kind) VALUES (?, ?, 'Test Owner 01', 'owner')")
+                .params(party, t.tenantId())
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_daily_savings (id, tenant_id, branch_id, business_date, amount_minor, currency,
+                                                          occurred_at, recorded_by)
+                        VALUES (?, ?, ?, DATE '2026-01-15', 100, 'UGX', now(), ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), t.headOffice(), user)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_cash_bankings (id, tenant_id, branch_id, business_date, amount_minor, currency,
+                                                          expected_minor, banked_at, recorded_by)
+                        VALUES (?, ?, ?, DATE '2026-01-15', 100, 'UGX', 100, now(), ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), t.headOffice(), user)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_cash_withdrawals (id, tenant_id, branch_id, business_date, amount_minor, currency,
+                                                             withdrawn_at, recorded_by)
+                        VALUES (?, ?, ?, DATE '2026-01-15', 100, 'UGX', now(), ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), t.headOffice(), user)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_expenses (id, tenant_id, branch_id, business_date, category_id, item_id,
+                                                     category_name, item_name, amount_minor, currency, occurred_at, recorded_by)
+                        VALUES (?, ?, ?, DATE '2026-01-15', ?, ?, 'Test Category 01', 'Test Item 01', 100, 'UGX', now(), ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), t.headOffice(), category, expenseItem, user)
+                .update();
+        // One statement, so the deferred repaid_minor check sees the advance and its repayment together.
+        owner.sql("""
+                        WITH a AS (INSERT INTO retail_advances (id, tenant_id, advance_no, branch_id, party_id, principal_minor,
+                                                                currency, business_date, repaid_minor, occurred_at, recorded_by)
+                                   VALUES (?, ?, 'RA00000001', ?, ?, 100, 'UGX', DATE '2026-01-15', 40, now(), ?) RETURNING id)
+                        INSERT INTO retail_advance_repayments (id, tenant_id, advance_id, branch_id, amount_minor, currency,
+                                                               method, paid_on, recorded_by)
+                        SELECT ?, ?, a.id, ?, 40, 'UGX', 'cash', DATE '2026-01-16', ? FROM a
+                        """)
+                .params(
+                        advance,
+                        t.tenantId(),
+                        t.headOffice(),
+                        party,
+                        user,
+                        UUID.randomUUID(),
+                        t.tenantId(),
+                        t.headOffice(),
+                        user)
+                .update();
     }
 
     static String randomHash() {
