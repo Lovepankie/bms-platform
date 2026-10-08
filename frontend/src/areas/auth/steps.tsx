@@ -137,6 +137,12 @@ export function useCopy(): [string | null, (key: string, text: string) => void] 
   return [copied, copy];
 }
 
+/** The Open in authenticator link only means something on a phone; elsewhere it leads nowhere useful. */
+function onPhone(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
 /**
  * The two-step set-up: what an authenticator app is, the QR code, an Open in authenticator button
  * for a phone that has the app, the key in groups of four with Copy, and the 6 digit code.
@@ -165,9 +171,36 @@ export function TwoStepSetup(props: {
       <div className="qr-box">
         <QrCode value={props.enrolment.otpauth_uri ?? ''} label="QR code to scan with your authenticator app" />
       </div>
-      <a className="btn btn-block" href={props.enrolment.otpauth_uri}>
-        Open in authenticator
-      </a>
+      {onPhone() && (
+        <>
+          <a className="btn btn-block" href={props.enrolment.otpauth_uri}>
+            Open in authenticator
+          </a>
+          <p className="hint">
+            If nothing opens or a store page appears, the app is not installed yet. Install one below, then tap again,
+            or use the key instead.
+          </p>
+        </>
+      )}
+      <p className="hint">
+        Get the app:{' '}
+        <a href="https://apps.apple.com/app/google-authenticator/id388497605" target="_blank" rel="noopener noreferrer">
+          Google Authenticator for iPhone
+        </a>
+        ,{' '}
+        <a
+          href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          for Android
+        </a>
+        , or{' '}
+        <a href="https://www.microsoft.com/security/mobile-authenticator-app" target="_blank" rel="noopener noreferrer">
+          Microsoft Authenticator
+        </a>
+        .
+      </p>
       <details className="manual-key">
         <summary>Cannot scan? Type a key instead</summary>
         <p className="hint">In the app, choose to enter a key, and type this one:</p>
