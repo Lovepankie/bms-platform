@@ -78,6 +78,9 @@ jobs:
         # Only for main and manual runs, and kept 7 days: every pull request run used to store a 3 MB
         # copy for 90 days and filled the repository's artifact quota (138 copies, 414 MB).
         if: github.event_name != 'pull_request'
+        # A full storage quota (GitHub recalculates it only every 6 to 12 hours) must not turn a valid
+        # model red: the validation and the site build above are what the check proves.
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: sdd-static-site
