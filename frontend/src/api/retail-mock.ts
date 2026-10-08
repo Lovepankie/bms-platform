@@ -5,6 +5,7 @@ import type {
 import { RetailError, businessToday, daysBefore } from './retail';
 import { retailMessage } from './retail-errors';
 import type { Me } from './client';
+import { createCashbookMock } from './retail-cashbook-mock';
 
 // Fabricated retail data for VITE_RETAIL_MOCK and for tests: invented products, branches and
 // balances, held in memory, with the REAL snake_case shapes of docs/sdd/07-api-design.md section
@@ -20,25 +21,32 @@ const MOCK_BRANCHES = [
   { id: BRANCH_B, code: 'BR2', name: 'Test Branch B', is_head_office: false },
 ];
 
+// The seeded sales role: its sale permissions and, in the cash book, what a shop user may do without seeing
+// profit: record savings (the standard amount only), banking and expenses, and read the lists and reports
+// (ADR-022 decision 13, chapter 8 matrix).
 const SALES_PERMISSIONS = [
   'retail.sale.create', 'retail.sale.read', 'retail.stock.read', 'retail.usage.report', 'retail.customer.manage',
+  'retail.savings.record', 'retail.banking.record', 'retail.expense.record', 'retail.cashbook.read',
 ];
+const CASHIER_PERMISSIONS = SALES_PERMISSIONS;
 const ADMIN_PERMISSIONS = [
   ...SALES_PERMISSIONS, 'retail.catalogue.manage', 'retail.price.edit', 'retail.sale.void',
   'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage',
+  'retail.savings.record', 'retail.savings.overwrite', 'retail.banking.record', 'retail.expense.record', 'retail.expense.manage',
+  'retail.withdrawal.record', 'retail.advance.create', 'retail.advance.repay', 'retail.cashbook.read', 'retail.cashbook.void',
 ];
 
 /** A fake signed-in user for the mock session, so the app runs without a backend. */
 export function mockMe(role: string | undefined): Me & { modules: string[] } {
-  const permissions = role === 'sales' ? SALES_PERMISSIONS : ADMIN_PERMISSIONS;
-  const scope = role === 'sales' ? { all_branches: false, branch_ids: [BRANCH_A, BRANCH_B] } : { all_branches: true, branch_ids: [] };
+  const permissions = role === 'sales' ? SALES_PERMISSIONS : role === 'cashier' ? CASHIER_PERMISSIONS : ADMIN_PERMISSIONS;
+  const scope = role === 'sales' || role === 'cashier' ? { all_branches: false, branch_ids: [BRANCH_A, BRANCH_B] } : { all_branches: true, branch_ids: [] };
   return {
     user_id: '00000000-0000-4000-8000-0000000000f1',
-    full_name: role === 'sales' ? 'Test Seller 01' : 'Test Admin 01',
+    full_name: role === 'sales' || role === 'cashier' ? 'Test Seller 01' : 'Test Admin 01',
     kind: 'staff',
     permissions,
     permission_scopes: Object.fromEntries(permissions.map((p) => [p, scope])),
-    all_branches: role !== 'sales',
+    all_branches: role !== 'sales' && role !== 'cashier',
     default_branch_id: BRANCH_A,
     branches: MOCK_BRANCHES,
     mfa_enabled: false,
@@ -170,7 +178,19 @@ export function createMockRetail(): RetailApi {
     if (bal(branch, p.id) - milli < 0) refuse(422, 'insufficient_stock', `Product ${p.id} has ${fromMilli(bal(branch, p.id))} in stock at this branch.`);
   };
 
+  // What the day's sales at a branch came to, for the cash book's suggestions and expected cash.
+  const sold = (branchId: string, date: string) => {
+    const day = sales.filter((x) => x.branch_id === branchId && x.sale_date === date && x.status !== 'voided');
+    return {
+      total: day.reduce((s, x) => s + (x.total_minor ?? 0), 0),
+      cash: day.filter((x) => x.payment_method === 'cash').reduce((s, x) => s + (x.total_minor ?? 0), 0),
+      cost: day.reduce((s, x) => s + x.costTotal, 0),
+    };
+  };
+
   return {
+    ...createCashbookMock({ profit: () => profitAccess, today, sold, branchIds: MOCK_BRANCHES.map((b) => b.id), delay, run, once, nextId }),
+
     listProducts: ({ query, branchId }) =>
       delay([...products.values()].filter((p) => p.active !== false && matches(p, query)).map((p): Product => {
         const row: Product = {

@@ -1,0 +1,6 @@
+{"source_ref": "EXP-001", "branch": "KLA", "business_date": "2026-09-15", "category": "Test Category A", "item": "Test Item 1", "beneficiary": "Test Staff 01", "amount_minor": 12000, "source_user": "test.sales01"}
+{"source_ref": "EXP-002", "branch": "KLA", "business_date": "2026-09-15", "category": "test category a", "item": "OTHERS", "amount_minor": 8000, "explanation": "Test explanation", "source_user": "test.sales01"}
+{"source_ref": "EXP-003", "branch": "KLA", "business_date": "2026-09-17", "category": "Test Category C", "item": "Test Item 3", "amount_minor": 5000}
+{"source_ref": "EXP-004", "branch": "ENT", "business_date": "2026-09-10", "category": "Test Category A", "item": "Test Item 9", "beneficiary": "Test Walkin 01", "amount_minor": 4000}
+{"source_ref": "EXP-005", "branch": "KLA", "business_date": "2026-09-15", "category": "Test Category A", "item": "others", "amount_minor": 3000}
+{"source_ref": "EXP-006", "branch": "ZZZ", "business_date": "2026-09-15", "category": "Test Category A", "item": "Test Item 1", "amount_minor": 3000}

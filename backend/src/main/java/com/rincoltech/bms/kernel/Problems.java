@@ -35,7 +35,9 @@ public final class Problems {
     }
 
     public static ProblemDetail of(ApiException e) {
-        return of(e.status(), e.code(), e.title(), e.getMessage(), e.errors());
+        ProblemDetail problem = of(e.status(), e.code(), e.title(), e.getMessage(), e.errors());
+        e.extensions().forEach(problem::setProperty);
+        return problem;
     }
 
     /** For servlet filters, which run before Spring MVC's exception handling. */

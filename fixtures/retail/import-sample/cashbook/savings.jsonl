@@ -1,0 +1,6 @@
+{"source_ref": "SAV-001", "branch": "KLA", "business_date": "2026-09-15", "amount_minor": 50000, "total_sold_minor": 279700, "source_user": "test.sales01"}
+{"source_ref": "SAV-002", "branch": "KLA", "business_date": "2026-09-17", "amount_minor": 10000, "total_sold_minor": 20500, "source_user": "test.sales01"}
+{"source_ref": "SAV-003", "branch": "ENT", "business_date": "2026-09-10", "amount_minor": 20000, "source_user": "test.sales02"}
+{"source_ref": "SAV-004", "branch": "KLA", "business_date": "2026-09-15", "amount_minor": 70000, "source_user": "test.sales01"}
+{"source_ref": "SAV-005", "branch": "JJA", "business_date": "2099-01-01", "amount_minor": 5000}
+{"source_ref": "SAV-006", "branch": "KLA", "business_date": "31/09/2026", "amount_minor": 5000}

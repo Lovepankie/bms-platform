@@ -1,17 +1,26 @@
 # Runbook: import a retail tenant's history (`import-retail`)
 
 **Requirements:** FR-RET-12 · **Decisions:** ADR-003, ADR-004, ADR-020 (decisions 4, 8 and 9) ·
-**Design:** SDD chapter 13 section 13.13, chapter 6 section 6.11.4 · **Format:**
-`docs/specs/retail-pilot-data-dictionary.md` section 4
+**Design:** SDD chapter 13 sections 13.13 and 13.13.1, chapter 6 sections 6.11.4 and 6.11.5 ·
+**Format:** `docs/specs/retail-pilot-data-dictionary.md` sections 4 and 5
 
 The command imports a retail tenant's history once, at cutover: catalogue, suppliers, credit buyers,
 historical sales, restocks, adjustments, returns and usage, a legacy balance per branch and product,
-and one opening journal per branch. It runs as `bms_app` under the tenant's row-level security, like
+and one opening journal per branch; and, when the export carries them, the cash book tabs (expense
+lists, parties, daily savings, expenses, banking, withdrawals, advances and their payments, and the
+cash balances; ADR-022 decision 18). It runs as `bms_app` under the tenant's row-level security, like
 the API, never as the owner role.
 
 ```
-java -jar bms-api.jar import-retail --tenant <slug> --dir <path> [--dry-run]
+java -jar bms-api.jar import-retail --tenant <slug> --dir <path> [--dry-run] [--first-live-date yyyy-mm-dd]
 ```
+
+`--first-live-date` is the first day the shop records in the application; the cash book's opening
+journals are dated the day **before** it, so the first live day opens with the carried balance and
+shows no unexplained movement. It defaults to the day of the import. Agree it with the shop owners
+with the cutover moment, and pass the same date on a dry run and on the real run. The first real
+run that posts an opening entry fixes it: a re-run reads it back from the opening entries already posted (their date plus one day),
+and a different `--first-live-date` is refused with exit status 1, so a re-run never moves it.
 
 Exit status 0 means every file was imported (anomalies are reported, not fatal); 1 means a file
 failed, or the tenant or directory was refused; 2 is a usage error.
@@ -53,8 +62,14 @@ dictionary section 4. For each tab:
    data only.
 6. Write `balances.jsonl` from the product master's per-branch quantity columns: one row per branch
    and product, including zeros and negatives.
-7. Do not export the cash book tabs (expenses, banking, withdrawals, advances, daily savings) or the
-   tabs of internal advances; they are out of the first release (pending ADR-022).
+7. The cash book tabs are optional and are exported only when the owner wants the history in the
+   application (data dictionary section 5): `cash_parties`, `expense_categories` (the pilot's
+   expense categories tab, never typed by hand), `savings`, `expenses`, `banking`, `withdrawals`,
+   `advances`, `advance_payments` and `cash_balances`. The pilot's "loan" tabs are advances to the owner or
+   company, not customer lending. Write `cash_balances.jsonl` at the same cutover moment as
+   `balances.jsonl`: the cash on hand, the bank balance and the savings reserve of each shop. A
+   party the pilot marks as the company is not mapped (the importer skips and lists it, and any
+   advance to it). An export without these files imports exactly as before.
 
 Check the files are UTF-8 and every line is one JSON object:
 
@@ -128,6 +143,56 @@ balances checksum: rows=60 total_qty=2210.500 source_sha256=... derived_sha256=.
 - **Checksum.** `match=yes` means every balance after the import equals the source quantity exactly.
   `match=NO` stops the cutover: investigate before the real run.
 
+### The cash book files
+
+All nine files are optional; an absent one is not listed in the report. Whatever order the
+data dictionary lists them in, the command **writes them in the order that keeps the figures
+consistent**: parties, expense categories, savings, expenses, withdrawals, advances, advance
+payments, **banking**, then cash balances. Banking comes after savings, expenses, advances and
+payments because each banked row stores the expected amount to bank of its shop and day, computed
+from the imported history with the same formula as the cash book's reports (ADR-022 decision 10:
+cash takings, less cash sale voids, less cash restocks paid from the till, less savings, less cash
+expenses, less advances paid out, plus cash advance repayments received, with the day's voids lines
+for savings, expenses, advances and repayments; a banking or withdrawal void moves banked cash, not
+the expected amount; an imported day has no voids and no journal); the report still lists the files
+in the data dictionary's order. Read these lines too:
+
+- **Expense categories, items and parties** missing from their lists are created exactly as written
+  and listed (`expenses.jsonl:3: category ... is not in expense_categories.jsonl; created as
+  written`); a beneficiary not in `cash_parties.jsonl` is created as kind `other`. Give the owner
+  the list to review.
+- **Skipped rows**: a second savings row for one shop and day (never merged, and also when the day
+  already has a live record), a payment on an unknown advance or above the remaining principal, a
+  company party, an advance to a party that is not an owner, staff member or related entity, a
+  future or malformed date, an unknown shop. Each is listed with its file and line.
+- **Advance numbers.** Every imported advance takes the next live advance number in business date
+  then source id order; the pilot's id is kept only in the import reference and the advance's note.
+  A processing fee is not modelled: it is listed and appended to the note.
+- **Cash opening journals.** One per shop with a row in `cash_balances.jsonl` (a row with no shop
+  is the head office), dated the day before the first live day: debit cash on hand, bank and savings
+  reserve, one owner advances line for each advance still outstanding after the imported payments,
+  credit opening balance equity. An overdrawn bank (a negative `bank_minor`) is posted as a credit
+  line to the bank account, so the other lines are kept. A shop with no row gets no carried balance.
+- **No outstanding advance is left off the ledger.** After the files, every outstanding imported
+  advance that has no opening line yet (a shop with no `cash_balances.jsonl` row, or an advance
+  imported by a second run after the shop's opening was posted) gets its own supplementary opening
+  entry, dated like the opening, debit owner advances (the advance as subledger), credit opening
+  balance equity, keyed per advance so an identical rerun adds nothing. A shop that has outstanding
+  advances but no cash balance row is listed as an anomaly. An advance counts as opened only by a
+  debit of owner advances on an opening entry, never by a live repayment that names it. A repayment
+  imported later against an advance whose opening line was already posted is listed as an anomaly and
+  balanced by a supplementary entry (debit opening balance equity, credit owner advances, the advance
+  as subledger, dated like the opening), keyed per repayment so a rerun adds nothing.
+- **History is dated before the first live day.** A cash book row, and its `banked_at`, `paid_on`
+  or `business_date`, on or after the first live day (the import day unless `--first-live-date`
+  names one, and always the day read back from the opening entries once they exist) is skipped and
+  listed as an anomaly: live records are entered in the cash book, not imported. A different
+  `--first-live-date` after the openings were posted is refused.
+- **Advance numbers** follow the source id in natural order within a day (`ADV-9` before `ADV-10`).
+- **An explanation** under 3 characters (the live minimum) skips the expense row with its reason.
+- **Imported records cannot be voided** (409 `historical_record`); correct a wrong imported row with
+  a new live record.
+
 ## 5. Real run
 
 **Take a backup first, and verify it.** The imported tables are append-only and the run commits per
@@ -193,12 +258,17 @@ The import is idempotent for the data it imports:
 - The legacy balance is written once per branch and product. On a re-run, a balance that no longer
   equals the source is reported (`legacy balance already written ... correct it with a stock-take`),
   never silently changed.
-- The opening journal is posted once per branch (`already posted, not posted again`).
+- The opening journal is posted once per branch (`already posted, not posted again`), and so is
+  the cash opening journal of each shop (`retail.cash_opening:<branch>`).
+- Cash book rows are keyed by `source_ref` per file (`savings`, `expenses`, `banking`,
+  `withdrawals`, `advances`, `advance_payments`); a re-run takes no advance number and adds no row.
+  A banked row keeps the expected amount it was computed with; a savings, expense or advance added
+  to an earlier day afterwards does not change it.
 
 A re-run of the same export prints the same report with every count under `existing` and writes no
 data row; a dry run writes no row either (both checked end to end on a throwaway database for issue #71,
 with the fabricated `fixtures/retail/import-sample/`). A committed re-run still writes **one audit
-row per file** (`retail.import.file_imported`, ten per run, with that file's counts), so the audit log
+row per file** (`retail.import.file_imported`, ten per run plus one per cash book file present, with that file's counts), so the audit log
 records every run; a dry run's audit rows are rolled back with the rest.
 
 So after a failure (`result: FAILED: <file>: <reason>`, exit status 1), fix the cause and run the
@@ -260,6 +330,10 @@ Then:
 - Once the import is signed off, delete the pre-import dump too (it holds real data):
   `rm /opt/bms/backups/pre-import-<slug>.*`. The nightly encrypted backup covers the database from
   then on.
+- Cash book: open the daily cash summary of a shop for the first live day. Its opening must equal the
+  `cash_balances` figure for that shop and `other_movements_minor` must be zero for a live day with
+  no manual journal. The imported days are listed apart in the banking report and are not in the
+  unbanked running total, which starts at the first live day with nothing carried.
 - Plan the first stock-take for every branch with negative balances; its adjustments replace the
   legacy balances (ADR-020 decision 9).
 - From the cutover on, move stock between shops with **Move stock** (stock transfers, FR-RET-16), not

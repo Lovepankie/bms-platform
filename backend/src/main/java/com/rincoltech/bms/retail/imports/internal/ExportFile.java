@@ -144,6 +144,15 @@ final class ExportFile {
 
         /** Integer minor units, zero or more (ADR-004). */
         long money(String field) {
+            long minor = signedMoney(field);
+            if (minor < 0) {
+                throw problem(field + " is negative");
+            }
+            return minor;
+        }
+
+        /** Integer minor units, negative allowed (an overdrawn bank balance). */
+        long signedMoney(String field) {
             JsonNode v = node.get(field);
             if (v == null || v.isNull()) {
                 throw problem(field + " is missing");
@@ -153,10 +162,7 @@ final class ExportFile {
                         ? v.decimalValue()
                         : new BigDecimal(v.asString().strip());
                 long minor = d.longValueExact();
-                if (minor < 0) {
-                    throw problem(field + " is negative");
-                }
-                if (minor > RetailCatalogue.MAX_AMOUNT_MINOR) {
+                if (Math.abs(minor) > RetailCatalogue.MAX_AMOUNT_MINOR) {
                     throw problem(field + " is above " + RetailCatalogue.MAX_AMOUNT_MINOR + " minor units");
                 }
                 return minor;
@@ -168,6 +174,11 @@ final class ExportFile {
         Long optionalMoney(String field) {
             JsonNode v = node.get(field);
             return v == null || v.isNull() || (v.isString() && v.asString().isBlank()) ? null : money(field);
+        }
+
+        Long optionalSignedMoney(String field) {
+            JsonNode v = node.get(field);
+            return v == null || v.isNull() || (v.isString() && v.asString().isBlank()) ? null : signedMoney(field);
         }
 
         /** A decimal string (or number) with at most three places; blank is zero (data dictionary rule 2). */

@@ -1,6 +1,7 @@
 package com.rincoltech.bms.kernel;
 
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 
 /**
@@ -13,17 +14,30 @@ public class ApiException extends RuntimeException {
     private final String code;
     private final String title;
     private final List<FieldProblem> errors;
+    private final Map<String, Object> extensions;
 
     public ApiException(HttpStatus status, String code, String title, String detail) {
         this(status, code, title, detail, List.of());
     }
 
     public ApiException(HttpStatus status, String code, String title, String detail, List<FieldProblem> errors) {
+        this(status, code, title, detail, errors, Map.of());
+    }
+
+    /** As above, with extra members for the problem body (for example a fresh token the client must use next). */
+    public ApiException(
+            HttpStatus status,
+            String code,
+            String title,
+            String detail,
+            List<FieldProblem> errors,
+            Map<String, Object> extensions) {
         super(detail);
         this.status = status;
         this.code = code;
         this.title = title;
         this.errors = List.copyOf(errors);
+        this.extensions = Map.copyOf(extensions);
     }
 
     public static ApiException notFound() {
@@ -57,6 +71,10 @@ public class ApiException extends RuntimeException {
 
     public List<FieldProblem> errors() {
         return errors;
+    }
+
+    public Map<String, Object> extensions() {
+        return extensions;
     }
 
     /** One entry of the {@code errors} array. */

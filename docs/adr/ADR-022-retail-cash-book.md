@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-10-06, issue #147). Design only: no code and no migration come with this record.
+Proposed (2026-10-06, issue #147). Built in issue #147 (migration V34) with the defaults below for the questions the Owner has not answered; the record was design only when it was written.
 It becomes Accepted on merge of the pull request that carries it, and the accounting treatment in
 decisions 3 to 7 stays provisional until the Owner confirms it (open questions 1, 2 and 4 at the end are the build gate; the rest have a stated default).
 Decisions 4, 5, 6 and 13 name their open questions where they depend on one.
@@ -162,7 +162,7 @@ only retail has this need.
 13. **Permissions** (chapter 8 has the matrix). `retail.cashbook.read` reads every cash book list
     and the daily cash summary, scoped by branch (ADR-017). Writes have their own permission:
     `retail.savings.record`, `retail.savings.overwrite`, `retail.banking.record`,
-    `retail.expense.record`, `retail.expense.manage` (categories, items, beneficiaries),
+    `retail.expense.record`, `retail.expense.manage` (categories, items, and cash parties of kind `owner`, `staff` or `related_entity`; a beneficiary of kind `supplier` or `other` may be added on the fly with `retail.expense.record`),
     `retail.withdrawal.record`, `retail.advance.create`, `retail.advance.repay`, and
     `retail.cashbook.void`. Withdrawals and advances (both ways) are owner or admin only, in line
     with the pilot's admin-only withdrawals and the instruction for advances. **One profit rule
@@ -192,7 +192,7 @@ only retail has this need.
 15. **Voiding, not deleting.** Every cash book table is append-only except the void columns
     (`voided_at`, `voided_by`, `void_reason`), changed once by a guard trigger like
     `retail_sales_guard_update`. A void reverses the journal entries and frees the savings unique
-    slot. Corrections never edit an amount.
+    slot; the void stamp and the reversal take one reading of the business clock, so they fall on the same day. An imported (historical) record has no journal and is never voided (409 `historical_record`): it is corrected with a new record. Corrections never edit an amount.
 16. **Idempotency, money and dates.** Every cash book POST is money-moving and requires
     `Idempotency-Key` (chapter 7 section 7.8). Amounts are integer minor units with a `currency`
     (ADR-004), at most 10^13. Every record carries a `branch_id`, and every list is filtered by the
@@ -219,7 +219,18 @@ only retail has this need.
     then source id order); the pilot's id is kept in the import reference and the advance's note and
     is never reused as `advance_no`, so no imported number can collide with a live one. Imported
     days are shown apart in the banking report and are excluded from the unbanked running total,
-    which starts at the first live day with nothing carried. A category or item in
+    which starts at the first live day with nothing carried. The rules in force: every outstanding
+    historical advance gets its own supplementary opening entry (at its principal less the repayments imported with it, never less live repayments, which post their own credit) when it has no opening line (an
+    opening debit of owner advances on an opening entry; a live repayment naming it does not count),
+    keyed per advance so a re-run adds nothing, and a branch with advances but no `cash_balances`
+    row is reported as an anomaly; a cash book row dated on or after the first live day, `paid_on`
+    and `banked_at` included, is refused; the first live day is **fixed by the first run that posts an opening entry** (a run with no `cash_balances` row and no outstanding advance posts none, so pass the same `--first-live-date` until one exists) and read
+    back from the existing opening entry (its date plus one day) on a re-run, a different
+    `--first-live-date` being refused; `bank_minor` is signed, an overdrawn bank posting a credit
+    line; advances are numbered in natural source id order; an expense explanation needs at least 3
+    characters; and an imported repayment against an already opened advance is reported as an
+    anomaly and balanced by a supplementary entry keyed per repayment (debit
+    `opening_balance_equity`, credit `owner_advances`, the advance as subledger). A category or item in
     a row that is not in the lists is created as written and reported, never guessed. The pilot's
     hidden processing fee on an advance is not modelled; a non-zero value is reported and kept in
     the advance's note.

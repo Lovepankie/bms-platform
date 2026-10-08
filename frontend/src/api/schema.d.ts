@@ -2287,6 +2287,162 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/advances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Advances with their balances, newest first */
+        get: operations["listRetailAdvances"];
+        put?: never;
+        /** Record an advance to the owner or a related party (FR-RET-26); M */
+        post: operations["createRetailAdvance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/advances/{advance_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An advance with its repayments */
+        get: operations["getRetailAdvance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/advances/{advance_id}/repayments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a repayment of an advance (FR-RET-26); M */
+        post: operations["createRetailAdvanceRepayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/advances/{advance_id}/repayments/{repayment_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a repayment and restore the balance (FR-RET-28); M */
+        post: operations["voidRetailAdvanceRepayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/advances/{advance_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void an advance that has no repayments (FR-RET-28); M */
+        post: operations["voidRetailAdvance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/bankings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Banking records, newest first */
+        get: operations["listRetailBankings"];
+        put?: never;
+        /** Record cash banked (FR-RET-22); M */
+        post: operations["createRetailBanking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/bankings/expected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The amount expected to be banked for a shop and day (FR-RET-21) */
+        get: operations["getRetailBankingExpected"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/bankings/{banking_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a banking record (FR-RET-28); M */
+        post: operations["voidRetailBanking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/cash-parties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Beneficiaries and advance parties */
+        get: operations["listRetailCashParties"];
+        put?: never;
+        /** Add a beneficiary or advance party on the fly */
+        post: operations["createRetailCashParty"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/categories": {
         parameters: {
             query?: never;
@@ -2368,6 +2524,110 @@ export interface paths {
         get: operations["getRetailCustomerBalance"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/expense-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Expense categories with their items */
+        get: operations["listRetailExpenseCategories"];
+        put?: never;
+        /** Add an expense category (FR-RET-17) */
+        post: operations["createRetailExpenseCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/expense-categories/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename, remap, switch off or reorder a category; needs If-Match */
+        patch: operations["updateRetailExpenseCategory"];
+        trace?: never;
+    };
+    "/api/v1/retail/expense-categories/{category_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add an item to a category */
+        post: operations["createRetailExpenseItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/expense-categories/{category_id}/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename, switch off or flag an item as needing an explanation; needs If-Match */
+        patch: operations["updateRetailExpenseItem"];
+        trace?: never;
+    };
+    "/api/v1/retail/expenses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Expenses, newest first */
+        get: operations["listRetailExpenses"];
+        put?: never;
+        /** Record a company expense paid from the till (FR-RET-24); M */
+        post: operations["createRetailExpense"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/expenses/{expense_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void an expense (FR-RET-28); M */
+        post: operations["voidRetailExpense"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2479,6 +2739,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/reports/cash/advances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Outstanding advances by party (FR-RET-29) */
+        get: operations["getRetailCashAdvancesReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/reports/cash/banking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Expected against banked per shop and day, with the running unbanked total (FR-RET-23) */
+        get: operations["getRetailCashBankingReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/reports/cash/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The daily cash summary per shop and day (FR-RET-27) */
+        get: operations["getRetailCashDailyReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/reports/cash/expenses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Expenses by category, item, shop or month (FR-RET-29) */
+        get: operations["getRetailCashExpensesReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/reports/cash/savings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Savings per shop and day (FR-RET-29) */
+        get: operations["getRetailCashSavingsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/reports/profit/daily": {
         parameters: {
             query?: never;
@@ -2577,6 +2922,58 @@ export interface paths {
         put?: never;
         /** Void a sale by reversal (FR-RET-04) */
         post: operations["voidRetailSale"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/savings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Savings records, newest first */
+        get: operations["listRetailSavings"];
+        put?: never;
+        /** Record the day's savings (FR-RET-18 to FR-RET-20); M */
+        post: operations["createRetailSavings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/savings/suggestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The day's savings suggestion token, and the suggestion with profit read (FR-RET-18) */
+        get: operations["getRetailSavingsSuggestion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/savings/{savings_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a savings record and free its day (FR-RET-28); M */
+        post: operations["voidRetailSavings"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2818,6 +3215,41 @@ export interface paths {
         put?: never;
         /** Report stock used or damaged, valued at cost (FR-RET-07); M */
         post: operations["reportRetailUsage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/withdrawals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Withdrawals from the bank, newest first */
+        get: operations["listRetailWithdrawals"];
+        put?: never;
+        /** Record cash withdrawn from the bank (FR-RET-25); M */
+        post: operations["createRetailWithdrawal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/withdrawals/{withdrawal_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a withdrawal (FR-RET-28); M */
+        post: operations["voidRetailWithdrawal"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5059,6 +5491,79 @@ export interface components {
             loan_status?: string;
             transaction?: components["schemas"]["LoanTransaction"];
         };
+        RetailAdvance: {
+            advance_no?: string;
+            /** Format: date-time */
+            at?: string;
+            /** Format: int64 */
+            balance_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            /** Format: uuid */
+            by?: string;
+            by_name?: string;
+            currency?: string;
+            historical?: boolean;
+            /** Format: uuid */
+            id?: string;
+            note?: string;
+            /** Format: uuid */
+            party_id?: string;
+            party_name?: string;
+            /** Format: int64 */
+            principal_minor?: number;
+            purpose?: string;
+            /** Format: int64 */
+            repaid_minor?: number;
+            repayments?: components["schemas"]["RetailRepayment"][];
+            taken_by_name?: string;
+            /** Format: uuid */
+            taken_by_party_id?: string;
+            void_reason?: string;
+            voided?: boolean;
+            /** Format: date-time */
+            voided_at?: string;
+        };
+        RetailAdvancePage: {
+            items?: components["schemas"]["RetailAdvance"][];
+            next_cursor?: string;
+        };
+        RetailAdvanceParty: {
+            /** Format: int64 */
+            balance_minor?: number;
+            /** Format: int64 */
+            count?: number;
+            /** Format: date */
+            oldest_advance_date?: string;
+            /** Format: uuid */
+            party_id?: string;
+            party_name?: string;
+            /** Format: int64 */
+            principal_minor?: number;
+            /** Format: int64 */
+            repaid_minor?: number;
+        };
+        RetailAdvanceReport: {
+            /** Format: int64 */
+            balance_minor?: number;
+            currency?: string;
+            items?: components["schemas"]["RetailAdvanceParty"][];
+        };
+        RetailAdvanceRequest: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            /** Format: uuid */
+            party_id: string;
+            /** Format: int64 */
+            principal_minor: number;
+            purpose?: string;
+            /** Format: uuid */
+            taken_by_party_id?: string;
+        };
         /** @description One product with its balance in every branch of the page */
         RetailAllBranchesRow: {
             /** @description One entry per branch of the page, in the page's branch order */
@@ -5090,6 +5595,163 @@ export interface components {
             low_stock_threshold?: string;
             next_cursor?: string;
         };
+        RetailBanking: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date-time */
+            at?: string;
+            /** Format: date-time */
+            banked_at?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            /** Format: uuid */
+            by?: string;
+            by_name?: string;
+            currency?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            difference_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            expected_minor?: number;
+            /**
+             * @description Present only with retail.profit.read in the record's branch
+             * @enum {string}
+             */
+            flag?: "ok" | "shortfall" | "surplus" | "not_banked";
+            historical?: boolean;
+            /** Format: uuid */
+            id?: string;
+            reference?: string;
+            void_reason?: string;
+            voided?: boolean;
+            /** Format: date-time */
+            voided_at?: string;
+            /** @description Present only with retail.profit.read in the record's branch */
+            warnings?: string[];
+        };
+        RetailBankingDay: {
+            /** Format: int64 */
+            banked_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            /** Format: int64 */
+            cash_expected_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            difference_minor?: number;
+            entries?: components["schemas"]["RetailBankingEntry"][];
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            expected_minor?: number;
+            /**
+             * @description Present only with retail.profit.read in the record's branch
+             * @enum {string}
+             */
+            flag?: "ok" | "shortfall" | "surplus" | "not_banked";
+            historical?: boolean;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch; absent on an imported day
+             */
+            unbanked_running_minor?: number;
+        };
+        RetailBankingEntry: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date-time */
+            banked_at?: string;
+            /** Format: uuid */
+            by?: string;
+            by_name?: string;
+            /** Format: uuid */
+            id?: string;
+            voided?: boolean;
+        };
+        RetailBankingExpected: {
+            /** Format: int64 */
+            advance_voids_minor?: number;
+            /** Format: int64 */
+            advances_out_minor?: number;
+            /** Format: int64 */
+            banked_so_far_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            /**
+             * Format: int64
+             * @description Takings less voids, expenses and advances paid out, plus repayments; before cash purchases and savings, so it carries no cost and no profit
+             */
+            cash_expected_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            cash_purchases_minor?: number;
+            /** Format: int64 */
+            cash_sale_voids_minor?: number;
+            /** Format: int64 */
+            cash_takings_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            expected_minor?: number;
+            /** Format: int64 */
+            expense_voids_minor?: number;
+            /** Format: int64 */
+            expenses_minor?: number;
+            /** Format: int64 */
+            repayment_voids_minor?: number;
+            /** Format: int64 */
+            repayments_in_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            savings_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            savings_voids_minor?: number;
+        };
+        RetailBankingPage: {
+            items?: components["schemas"]["RetailBanking"][];
+            next_cursor?: string;
+        };
+        RetailBankingReport: {
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            items?: components["schemas"]["RetailBankingDay"][];
+            /** Format: date */
+            to?: string;
+        };
+        RetailBankingRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            /** Format: date-time */
+            banked_at?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            reference?: string;
+        };
         /** @description One entry per branch of the page, in the page's branch order */
         RetailBranchBalance: {
             /** Format: uuid */
@@ -5103,6 +5765,164 @@ export interface components {
             branch_id: string;
             /** @example 10 */
             qty: string;
+        };
+        RetailCashCategoryPatch: {
+            active?: boolean;
+            /**
+             * Format: uuid
+             * @description A postable expense account; send the nil UUID to go back to operating expenses
+             */
+            expense_account_id?: string;
+            name?: string;
+            /** Format: int32 */
+            sort_order?: number;
+        };
+        RetailCashCategoryRequest: {
+            /** Format: uuid */
+            expense_account_id?: string;
+            name: string;
+        };
+        RetailCashDailyReport: {
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            items?: components["schemas"]["RetailCashDailyRow"][];
+            /** Format: date */
+            to?: string;
+        };
+        RetailCashDailyRow: {
+            /** Format: int64 */
+            advance_voids_minor?: number;
+            /** Format: int64 */
+            advances_out_minor?: number;
+            /** Format: int64 */
+            banked_minor?: number;
+            /** Format: int64 */
+            banking_voids_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            /** Format: int64 */
+            cash_expected_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            cash_purchases_minor?: number;
+            /** Format: int64 */
+            cash_sale_voids_minor?: number;
+            /** Format: int64 */
+            cash_takings_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            closing_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            daily_profit_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            expected_to_bank_minor?: number;
+            /** Format: int64 */
+            expense_voids_minor?: number;
+            /** Format: int64 */
+            expenses_minor?: number;
+            historical?: boolean;
+            ledger_basis?: boolean;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            opening_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            other_movements_minor?: number;
+            /** Format: int64 */
+            repayment_voids_minor?: number;
+            /** Format: int64 */
+            repayments_in_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            savings_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            savings_voids_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            unbanked_running_minor?: number;
+            /** Format: int64 */
+            withdrawal_voids_minor?: number;
+            /** Format: int64 */
+            withdrawals_in_minor?: number;
+        };
+        RetailCashExpenseCategory: {
+            active?: boolean;
+            /** Format: uuid */
+            expense_account_id?: string;
+            /** Format: uuid */
+            id?: string;
+            items?: components["schemas"]["RetailCashExpenseItem"][];
+            name?: string;
+            /** Format: int32 */
+            sort_order?: number;
+            /** Format: int32 */
+            version?: number;
+        };
+        RetailCashExpenseCategoryList: {
+            items?: components["schemas"]["RetailCashExpenseCategory"][];
+        };
+        RetailCashExpenseItem: {
+            active?: boolean;
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            requires_explanation?: boolean;
+            /** Format: int32 */
+            version?: number;
+        };
+        RetailCashItemPatch: {
+            active?: boolean;
+            name?: string;
+            requires_explanation?: boolean;
+        };
+        RetailCashItemRequest: {
+            name: string;
+            requires_explanation?: boolean;
+        };
+        RetailCashParty: {
+            active?: boolean;
+            contact?: string;
+            /** Format: uuid */
+            id?: string;
+            kind?: string;
+            name?: string;
+        };
+        RetailCashPartyPage: {
+            items?: components["schemas"]["RetailCashParty"][];
+            next_cursor?: string;
+        };
+        RetailCashPartyRequest: {
+            contact?: string;
+            /** @enum {string} */
+            kind: "owner" | "staff" | "related_entity" | "supplier" | "other";
+            name: string;
+        };
+        RetailCashVoidRequest: {
+            reason: string;
         };
         RetailCategory: {
             active?: boolean;
@@ -5212,6 +6032,83 @@ export interface components {
             stocktake_difference_minor?: number;
             /** Format: int64 */
             usage_cost_minor?: number;
+        };
+        RetailExpense: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date-time */
+            at?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            /** Format: uuid */
+            by?: string;
+            by_name?: string;
+            /** Format: uuid */
+            category_id?: string;
+            category_name?: string;
+            currency?: string;
+            explanation?: string;
+            historical?: boolean;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            item_id?: string;
+            item_name?: string;
+            /** Format: uuid */
+            party_id?: string;
+            party_name?: string;
+            /** Format: uuid */
+            receipt_document_id?: string;
+            void_reason?: string;
+            voided?: boolean;
+            /** Format: date-time */
+            voided_at?: string;
+        };
+        RetailExpenseGroup: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: int64 */
+            count?: number;
+            key?: string;
+            label?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailExpensePage: {
+            items?: components["schemas"]["RetailExpense"][];
+            next_cursor?: string;
+        };
+        RetailExpenseReport: {
+            /** Format: int64 */
+            count?: number;
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            group_by?: string;
+            items?: components["schemas"]["RetailExpenseGroup"][];
+            /** Format: date */
+            to?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailExpenseRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            /** Format: uuid */
+            category_id: string;
+            explanation?: string;
+            /** Format: uuid */
+            item_id: string;
+            /** Format: uuid */
+            party_id?: string;
+            /** Format: uuid */
+            receipt_document_id?: string;
         };
         RetailOpenSale: {
             /** Format: int64 */
@@ -5446,6 +6343,48 @@ export interface components {
              */
             supplier_id?: string;
         };
+        RetailRepayment: {
+            /** Format: uuid */
+            advance_id?: string;
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date-time */
+            at?: string;
+            /**
+             * Format: int64
+             * @description The advance's balance after this repayment, on the create call only
+             */
+            balance_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: uuid */
+            by?: string;
+            by_name?: string;
+            currency?: string;
+            historical?: boolean;
+            /** Format: uuid */
+            id?: string;
+            method?: string;
+            /** Format: date */
+            paid_on?: string;
+            void_reason?: string;
+            voided?: boolean;
+            /** Format: date-time */
+            voided_at?: string;
+        };
+        RetailRepaymentRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            /**
+             * Format: uuid
+             * @description The branch that receives the money; defaults to the advance's branch
+             */
+            branch_id?: string;
+            /** @enum {string} */
+            method: "cash" | "mobile_money" | "bank";
+            /** Format: date */
+            paid_on?: string;
+        };
         RetailSale: {
             /** Format: int64 */
             balance_minor?: number;
@@ -5555,6 +6494,111 @@ export interface components {
              * @description Defaults to today; not in the future
              */
             sale_date?: string;
+        };
+        RetailSavings: {
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            amount_minor?: number;
+            /** Format: date-time */
+            at?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            /** Format: uuid */
+            by?: string;
+            by_name?: string;
+            currency?: string;
+            historical?: boolean;
+            /** Format: uuid */
+            id?: string;
+            /** @description Present only with retail.profit.read in the record's branch */
+            overwritten?: boolean;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            suggested_minor?: number;
+            /** Format: int64 */
+            total_sold_minor?: number;
+            void_reason?: string;
+            voided?: boolean;
+            /** Format: date-time */
+            voided_at?: string;
+        };
+        RetailSavingsDay: {
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            amount_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            daily_profit_minor?: number;
+            /** @description Present only with retail.profit.read in the record's branch */
+            overwritten?: boolean;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            suggested_minor?: number;
+            /** Format: int64 */
+            total_sold_minor?: number;
+        };
+        RetailSavingsPage: {
+            items?: components["schemas"]["RetailSavings"][];
+            next_cursor?: string;
+        };
+        RetailSavingsReport: {
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            items?: components["schemas"]["RetailSavingsDay"][];
+            /** Format: date */
+            to?: string;
+        };
+        RetailSavingsRequest: {
+            /**
+             * Format: int64
+             * @description Needs retail.profit.read; omit to take the default
+             */
+            amount_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            overwrite_reason?: string;
+            suggestion_token: string;
+        };
+        RetailSavingsSuggestion: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            daily_profit_minor?: number;
+            /** Format: uuid */
+            existing_id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch
+             */
+            suggested_minor?: number;
+            /** @description Opaque; echo it on the create call */
+            suggestion_token: string;
+            /** Format: int64 */
+            total_sold_minor?: number;
         };
         RetailStockBranch: {
             code?: string;
@@ -5994,6 +7038,46 @@ export interface components {
         };
         RetailVoidRequest: {
             reason: string;
+        };
+        RetailWithdrawal: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date-time */
+            at?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            /** Format: uuid */
+            by?: string;
+            by_name?: string;
+            currency?: string;
+            historical?: boolean;
+            /** Format: uuid */
+            id?: string;
+            purpose?: string;
+            void_reason?: string;
+            voided?: boolean;
+            /** Format: date-time */
+            voided_at?: string;
+            warnings?: string[];
+            /** Format: date-time */
+            withdrawn_at?: string;
+        };
+        RetailWithdrawalPage: {
+            items?: components["schemas"]["RetailWithdrawal"][];
+            next_cursor?: string;
+        };
+        RetailWithdrawalRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            business_date?: string;
+            purpose?: string;
+            /** Format: date-time */
+            withdrawn_at?: string;
         };
         Role: {
             key?: string;
@@ -10499,6 +11583,320 @@ export interface operations {
             };
         };
     };
+    listRetailAdvances: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                party_id?: string;
+                open_only?: boolean;
+                from?: string;
+                to?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAdvancePage"];
+                };
+            };
+        };
+    };
+    createRetailAdvance: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailAdvanceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAdvance"];
+                };
+            };
+        };
+    };
+    getRetailAdvance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAdvance"];
+                };
+            };
+        };
+    };
+    createRetailAdvanceRepayment: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                advance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailRepaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailRepayment"];
+                };
+            };
+        };
+    };
+    voidRetailAdvanceRepayment: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                advance_id: string;
+                repayment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCashVoidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailRepayment"];
+                };
+            };
+        };
+    };
+    voidRetailAdvance: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                advance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCashVoidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAdvance"];
+                };
+            };
+        };
+    };
+    listRetailBankings: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                include_voided?: boolean;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailBankingPage"];
+                };
+            };
+        };
+    };
+    createRetailBanking: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailBankingRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailBanking"];
+                };
+            };
+        };
+    };
+    getRetailBankingExpected: {
+        parameters: {
+            query?: {
+                branch_id?: string;
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailBankingExpected"];
+                };
+            };
+        };
+    };
+    voidRetailBanking: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                banking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCashVoidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailBanking"];
+                };
+            };
+        };
+    };
+    listRetailCashParties: {
+        parameters: {
+            query?: {
+                query?: string;
+                kind?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCashPartyPage"];
+                };
+            };
+        };
+    };
+    createRetailCashParty: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCashPartyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCashParty"];
+                };
+            };
+        };
+    };
     listRetailCategories: {
         parameters: {
             query?: never;
@@ -10665,6 +12063,218 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailCustomerBalance"];
+                };
+            };
+        };
+    };
+    listRetailExpenseCategories: {
+        parameters: {
+            query?: {
+                active?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCashExpenseCategoryList"];
+                };
+            };
+        };
+    };
+    createRetailExpenseCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCashCategoryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCashExpenseCategory"];
+                };
+            };
+        };
+    };
+    updateRetailExpenseCategory: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCashCategoryPatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCashExpenseCategory"];
+                };
+            };
+        };
+    };
+    createRetailExpenseItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCashItemRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCashExpenseItem"];
+                };
+            };
+        };
+    };
+    updateRetailExpenseItem: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                category_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCashItemPatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCashExpenseItem"];
+                };
+            };
+        };
+    };
+    listRetailExpenses: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                category_id?: string;
+                item_id?: string;
+                include_voided?: boolean;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailExpensePage"];
+                };
+            };
+        };
+    };
+    createRetailExpense: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailExpenseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailExpense"];
+                };
+            };
+        };
+    };
+    voidRetailExpense: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                expense_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCashVoidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailExpense"];
                 };
             };
         };
@@ -10898,6 +12508,127 @@ export interface operations {
             };
         };
     };
+    getRetailCashAdvancesReport: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAdvanceReport"];
+                };
+            };
+        };
+    };
+    getRetailCashBankingReport: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                flag?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailBankingReport"];
+                };
+            };
+        };
+    };
+    getRetailCashDailyReport: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCashDailyReport"];
+                };
+            };
+        };
+    };
+    getRetailCashExpensesReport: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                group_by?: string;
+                include_voided?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailExpenseReport"];
+                };
+            };
+        };
+    };
+    getRetailCashSavingsReport: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSavingsReport"];
+                };
+            };
+        };
+    };
     getRetailDailyProfit: {
         parameters: {
             query?: {
@@ -11098,6 +12829,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSale"];
+                };
+            };
+        };
+    };
+    listRetailSavings: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                include_voided?: boolean;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSavingsPage"];
+                };
+            };
+        };
+    };
+    createRetailSavings: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSavingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSavings"];
+                };
+            };
+        };
+    };
+    getRetailSavingsSuggestion: {
+        parameters: {
+            query?: {
+                branch_id?: string;
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSavingsSuggestion"];
+                };
+            };
+        };
+    };
+    voidRetailSavings: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                savings_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCashVoidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSavings"];
                 };
             };
         };
@@ -11519,6 +13354,87 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailUsageReport"];
+                };
+            };
+        };
+    };
+    listRetailWithdrawals: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                include_voided?: boolean;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailWithdrawalPage"];
+                };
+            };
+        };
+    };
+    createRetailWithdrawal: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailWithdrawalRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailWithdrawal"];
+                };
+            };
+        };
+    };
+    voidRetailWithdrawal: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                withdrawal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCashVoidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailWithdrawal"];
                 };
             };
         };

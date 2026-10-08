@@ -5093,6 +5093,183 @@
           }
         }
       },
+      "RetailAdvance" : {
+        "properties" : {
+          "advance_no" : {
+            "type" : "string"
+          },
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "by_name" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "historical" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "party_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "party_name" : {
+            "type" : "string"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "purpose" : {
+            "type" : "string"
+          },
+          "repaid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "repayments" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailRepayment"
+            },
+            "type" : "array"
+          },
+          "taken_by_name" : {
+            "type" : "string"
+          },
+          "taken_by_party_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "void_reason" : {
+            "type" : "string"
+          },
+          "voided" : {
+            "type" : "boolean"
+          },
+          "voided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailAdvancePage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailAdvance"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailAdvanceParty" : {
+        "properties" : {
+          "balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "oldest_advance_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "party_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "party_name" : {
+            "type" : "string"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "repaid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailAdvanceReport" : {
+        "properties" : {
+          "balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailAdvanceParty"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailAdvanceRequest" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "party_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "purpose" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "taken_by_party_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "party_id", "principal_minor" ]
+      },
       "RetailAllBranchesRow" : {
         "description" : "One product with its balance in every branch of the page",
         "properties" : {
@@ -5165,6 +5342,293 @@
           }
         }
       },
+      "RetailBanking" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "banked_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "by_name" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "difference_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "flag" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "enum" : [ "ok", "shortfall", "surplus", "not_banked" ],
+            "type" : "string"
+          },
+          "historical" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "void_reason" : {
+            "type" : "string"
+          },
+          "voided" : {
+            "type" : "boolean"
+          },
+          "voided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "warnings" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "items" : {
+              "description" : "Present only with retail.profit.read in the record's branch",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailBankingDay" : {
+        "properties" : {
+          "banked_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "cash_expected_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "difference_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailBankingEntry"
+            },
+            "type" : "array"
+          },
+          "expected_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "flag" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "enum" : [ "ok", "shortfall", "surplus", "not_banked" ],
+            "type" : "string"
+          },
+          "historical" : {
+            "type" : "boolean"
+          },
+          "unbanked_running_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch; absent on an imported day",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailBankingEntry" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "banked_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "by_name" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "voided" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "RetailBankingExpected" : {
+        "properties" : {
+          "advance_voids_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "advances_out_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "banked_so_far_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "cash_expected_minor" : {
+            "description" : "Takings less voids, expenses and advances paid out, plus repayments; before cash purchases and savings, so it carries no cost and no profit",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cash_purchases_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cash_sale_voids_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cash_takings_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expense_voids_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expenses_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "repayment_voids_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "repayments_in_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "savings_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "savings_voids_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailBankingPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailBanking"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailBankingReport" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailBankingDay"
+            },
+            "type" : "array"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailBankingRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "banked_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "reference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor" ]
+      },
       "RetailBranchBalance" : {
         "description" : "One entry per branch of the page, in the page's branch order",
         "properties" : {
@@ -5193,6 +5657,331 @@
           }
         },
         "required" : [ "branch_id", "qty" ]
+      },
+      "RetailCashCategoryPatch" : {
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "expense_account_id" : {
+            "description" : "A postable expense account; send the nil UUID to go back to operating expenses",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "sort_order" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailCashCategoryRequest" : {
+        "properties" : {
+          "expense_account_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name" ]
+      },
+      "RetailCashDailyReport" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailCashDailyRow"
+            },
+            "type" : "array"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailCashDailyRow" : {
+        "properties" : {
+          "advance_voids_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "advances_out_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "banked_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "banking_voids_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "cash_expected_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cash_purchases_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cash_sale_voids_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cash_takings_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "closing_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "daily_profit_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_to_bank_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expense_voids_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expenses_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "historical" : {
+            "type" : "boolean"
+          },
+          "ledger_basis" : {
+            "type" : "boolean"
+          },
+          "opening_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "other_movements_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "repayment_voids_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "repayments_in_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "savings_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "savings_voids_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unbanked_running_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "withdrawal_voids_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "withdrawals_in_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailCashExpenseCategory" : {
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "expense_account_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailCashExpenseItem"
+            },
+            "type" : "array"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "sort_order" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailCashExpenseCategoryList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailCashExpenseCategory"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailCashExpenseItem" : {
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "requires_explanation" : {
+            "type" : "boolean"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailCashItemPatch" : {
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "requires_explanation" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "RetailCashItemRequest" : {
+        "properties" : {
+          "name" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "requires_explanation" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "name" ]
+      },
+      "RetailCashParty" : {
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "contact" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailCashPartyPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailCashParty"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailCashPartyRequest" : {
+        "properties" : {
+          "contact" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "kind" : {
+            "enum" : [ "owner", "staff", "related_entity", "supplier", "other" ],
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "kind", "name" ]
+      },
+      "RetailCashVoidRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
       },
       "RetailCategory" : {
         "properties" : {
@@ -5422,6 +6211,188 @@
             "type" : "integer"
           }
         }
+      },
+      "RetailExpense" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "by_name" : {
+            "type" : "string"
+          },
+          "category_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "category_name" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "explanation" : {
+            "type" : "string"
+          },
+          "historical" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "item_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "item_name" : {
+            "type" : "string"
+          },
+          "party_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "party_name" : {
+            "type" : "string"
+          },
+          "receipt_document_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "void_reason" : {
+            "type" : "string"
+          },
+          "voided" : {
+            "type" : "boolean"
+          },
+          "voided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailExpenseGroup" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailExpensePage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailExpense"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailExpenseReport" : {
+        "properties" : {
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "group_by" : {
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailExpenseGroup"
+            },
+            "type" : "array"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailExpenseRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "category_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "explanation" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "item_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "party_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "receipt_document_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor", "category_id", "item_id" ]
       },
       "RetailOpenSale" : {
         "properties" : {
@@ -5949,6 +6920,90 @@
         },
         "required" : [ "lines", "payment_method", "purchased_on" ]
       },
+      "RetailRepayment" : {
+        "properties" : {
+          "advance_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "balance_minor" : {
+            "description" : "The advance's balance after this repayment, on the create call only",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "by_name" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "historical" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "method" : {
+            "type" : "string"
+          },
+          "paid_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "void_reason" : {
+            "type" : "string"
+          },
+          "voided" : {
+            "type" : "boolean"
+          },
+          "voided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailRepaymentRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "description" : "The branch that receives the money; defaults to the advance's branch",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "method" : {
+            "enum" : [ "cash", "mobile_money", "bank" ],
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "paid_on" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor", "method" ]
+      },
       "RetailSale" : {
         "properties" : {
           "balance_minor" : {
@@ -6166,6 +7221,199 @@
           }
         },
         "required" : [ "lines", "payment_method" ]
+      },
+      "RetailSavings" : {
+        "properties" : {
+          "amount_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "by_name" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "historical" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "overwritten" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "type" : "boolean"
+          },
+          "suggested_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_sold_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "void_reason" : {
+            "type" : "string"
+          },
+          "voided" : {
+            "type" : "boolean"
+          },
+          "voided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSavingsDay" : {
+        "properties" : {
+          "amount_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "daily_profit_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "overwritten" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "type" : "boolean"
+          },
+          "suggested_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_sold_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailSavingsPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSavings"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSavingsReport" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSavingsDay"
+            },
+            "type" : "array"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSavingsRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "description" : "Needs retail.profit.read; omit to take the default",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "overwrite_reason" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "suggestion_token" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "suggestion_token" ]
+      },
+      "RetailSavingsSuggestion" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "daily_profit_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "existing_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "suggested_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "suggestion_token" : {
+            "description" : "Opaque; echo it on the create call",
+            "type" : "string"
+          },
+          "total_sold_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "suggestion_token" ]
       },
       "RetailStockBranch" : {
         "properties" : {
@@ -7026,6 +8274,107 @@
           }
         },
         "required" : [ "reason" ]
+      },
+      "RetailWithdrawal" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "by_name" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "historical" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "purpose" : {
+            "type" : "string"
+          },
+          "void_reason" : {
+            "type" : "string"
+          },
+          "voided" : {
+            "type" : "boolean"
+          },
+          "voided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "warnings" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "withdrawn_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailWithdrawalPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailWithdrawal"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailWithdrawalRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "purpose" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "withdrawn_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor" ]
       },
       "Role" : {
         "properties" : {
@@ -14381,6 +15730,552 @@
         "tags" : [ "platform" ]
       }
     },
+    "/api/v1/retail/advances" : {
+      "get" : {
+        "operationId" : "listRetailAdvances",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "party_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "open_only",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailAdvancePage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Advances with their balances, newest first",
+        "tags" : [ "retail-cashbook" ]
+      },
+      "post" : {
+        "operationId" : "createRetailAdvance",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailAdvanceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailAdvance"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record an advance to the owner or a related party (FR-RET-26); M",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/advances/{advance_id}" : {
+      "get" : {
+        "operationId" : "getRetailAdvance",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "advance_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailAdvance"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "An advance with its repayments",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/advances/{advance_id}/repayments" : {
+      "post" : {
+        "operationId" : "createRetailAdvanceRepayment",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "advance_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailRepaymentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailRepayment"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record a repayment of an advance (FR-RET-26); M",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/advances/{advance_id}/repayments/{repayment_id}/void" : {
+      "post" : {
+        "operationId" : "voidRetailAdvanceRepayment",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "advance_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "repayment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCashVoidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailRepayment"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Void a repayment and restore the balance (FR-RET-28); M",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/advances/{advance_id}/void" : {
+      "post" : {
+        "operationId" : "voidRetailAdvance",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "advance_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCashVoidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailAdvance"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Void an advance that has no repayments (FR-RET-28); M",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/bankings" : {
+      "get" : {
+        "operationId" : "listRetailBankings",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "include_voided",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailBankingPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Banking records, newest first",
+        "tags" : [ "retail-cashbook" ]
+      },
+      "post" : {
+        "operationId" : "createRetailBanking",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailBankingRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailBanking"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record cash banked (FR-RET-22); M",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/bankings/expected" : {
+      "get" : {
+        "operationId" : "getRetailBankingExpected",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "date",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailBankingExpected"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The amount expected to be banked for a shop and day (FR-RET-21)",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/bankings/{banking_id}/void" : {
+      "post" : {
+        "operationId" : "voidRetailBanking",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "banking_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCashVoidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailBanking"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Void a banking record (FR-RET-28); M",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/cash-parties" : {
+      "get" : {
+        "operationId" : "listRetailCashParties",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "kind",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCashPartyPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Beneficiaries and advance parties",
+        "tags" : [ "retail-cashbook" ]
+      },
+      "post" : {
+        "operationId" : "createRetailCashParty",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCashPartyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCashParty"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add a beneficiary or advance party on the fly",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
     "/api/v1/retail/categories" : {
       "get" : {
         "operationId" : "listRetailCategories",
@@ -14612,6 +16507,362 @@
         },
         "summary" : "What a credit buyer owes (FR-RET-05)",
         "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/expense-categories" : {
+      "get" : {
+        "operationId" : "listRetailExpenseCategories",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "active",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCashExpenseCategoryList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Expense categories with their items",
+        "tags" : [ "retail-cashbook" ]
+      },
+      "post" : {
+        "operationId" : "createRetailExpenseCategory",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCashCategoryRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCashExpenseCategory"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add an expense category (FR-RET-17)",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/expense-categories/{category_id}" : {
+      "patch" : {
+        "operationId" : "updateRetailExpenseCategory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "category_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCashCategoryPatch"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCashExpenseCategory"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rename, remap, switch off or reorder a category; needs If-Match",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/expense-categories/{category_id}/items" : {
+      "post" : {
+        "operationId" : "createRetailExpenseItem",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "category_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCashItemRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCashExpenseItem"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add an item to a category",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/expense-categories/{category_id}/items/{item_id}" : {
+      "patch" : {
+        "operationId" : "updateRetailExpenseItem",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "category_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "item_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCashItemPatch"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCashExpenseItem"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rename, switch off or flag an item as needing an explanation; needs If-Match",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/expenses" : {
+      "get" : {
+        "operationId" : "listRetailExpenses",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "category_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "item_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "include_voided",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailExpensePage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Expenses, newest first",
+        "tags" : [ "retail-cashbook" ]
+      },
+      "post" : {
+        "operationId" : "createRetailExpense",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailExpenseRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailExpense"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record a company expense paid from the till (FR-RET-24); M",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/expenses/{expense_id}/void" : {
+      "post" : {
+        "operationId" : "voidRetailExpense",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "expense_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCashVoidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailExpense"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Void an expense (FR-RET-28); M",
+        "tags" : [ "retail-cashbook" ]
       }
     },
     "/api/v1/retail/products" : {
@@ -14980,6 +17231,247 @@
         },
         "summary" : "Record a restock: prices, history, movements and journals in one transaction (FR-RET-06); M",
         "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/reports/cash/advances" : {
+      "get" : {
+        "operationId" : "getRetailCashAdvancesReport",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailAdvanceReport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Outstanding advances by party (FR-RET-29)",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/reports/cash/banking" : {
+      "get" : {
+        "operationId" : "getRetailCashBankingReport",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "flag",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailBankingReport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Expected against banked per shop and day, with the running unbanked total (FR-RET-23)",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/reports/cash/daily" : {
+      "get" : {
+        "operationId" : "getRetailCashDailyReport",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCashDailyReport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The daily cash summary per shop and day (FR-RET-27)",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/reports/cash/expenses" : {
+      "get" : {
+        "operationId" : "getRetailCashExpensesReport",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "group_by",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "include_voided",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailExpenseReport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Expenses by category, item, shop or month (FR-RET-29)",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/reports/cash/savings" : {
+      "get" : {
+        "operationId" : "getRetailCashSavingsReport",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSavingsReport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Savings per shop and day (FR-RET-29)",
+        "tags" : [ "retail-cashbook" ]
       }
     },
     "/api/v1/retail/reports/profit/daily" : {
@@ -15352,6 +17844,192 @@
         },
         "summary" : "Void a sale by reversal (FR-RET-04)",
         "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/savings" : {
+      "get" : {
+        "operationId" : "listRetailSavings",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "include_voided",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSavingsPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Savings records, newest first",
+        "tags" : [ "retail-cashbook" ]
+      },
+      "post" : {
+        "operationId" : "createRetailSavings",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailSavingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSavings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record the day's savings (FR-RET-18 to FR-RET-20); M",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/savings/suggestion" : {
+      "get" : {
+        "operationId" : "getRetailSavingsSuggestion",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "date",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSavingsSuggestion"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The day's savings suggestion token, and the suggestion with profit read (FR-RET-18)",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/savings/{savings_id}/void" : {
+      "post" : {
+        "operationId" : "voidRetailSavings",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "savings_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCashVoidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSavings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Void a savings record and free its day (FR-RET-28); M",
+        "tags" : [ "retail-cashbook" ]
       }
     },
     "/api/v1/retail/stock" : {
@@ -16035,6 +18713,156 @@
         },
         "summary" : "Report stock used or damaged, valued at cost (FR-RET-07); M",
         "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/withdrawals" : {
+      "get" : {
+        "operationId" : "listRetailWithdrawals",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "include_voided",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailWithdrawalPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Withdrawals from the bank, newest first",
+        "tags" : [ "retail-cashbook" ]
+      },
+      "post" : {
+        "operationId" : "createRetailWithdrawal",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailWithdrawalRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailWithdrawal"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record cash withdrawn from the bank (FR-RET-25); M",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
+    "/api/v1/retail/withdrawals/{withdrawal_id}/void" : {
+      "post" : {
+        "operationId" : "voidRetailWithdrawal",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "withdrawal_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailCashVoidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailWithdrawal"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Void a withdrawal (FR-RET-28); M",
+        "tags" : [ "retail-cashbook" ]
       }
     },
     "/api/v1/roles" : {

@@ -1,0 +1,5 @@
+{"name": "Test Owner 01", "contact": "+256700000001", "kind": "owner"}
+{"name": "Test Staff 01", "kind": "staff"}
+{"name": "Test Related 01", "kind": "related_entity"}
+{"name": "Test Supplier 01", "kind": "supplier"}
+{"name": "Test Company 01", "kind": "company"}

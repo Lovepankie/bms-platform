@@ -9,12 +9,27 @@ export const PROFIT = 'retail.profit.read';
 
 export type RetailScreen =
   | 'sale' | 'creditSales' | 'salesHistory' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit'
-  | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer';
+  | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer'
+  // The cash book (ADR-022, FR-RET-31).
+  | 'savings' | 'banking' | 'expenses' | 'withdrawals' | 'advances' | 'cashSummary' | 'bankingReport' | 'expensesReport' | 'expenseSetup';
 
 /** The catalogue management screens (#146); the Catalogue tile opens when any of them may be used. */
 export const CATALOGUE_SCREENS: RetailScreen[] = ['products', 'categories', 'units', 'suppliers', 'buyers'];
 
 export const TRANSFER = 'retail.stock.transfer';
+export const SAVINGS_RECORD = 'retail.savings.record';
+export const SAVINGS_OVERWRITE = 'retail.savings.overwrite';
+export const CASHBOOK_READ = 'retail.cashbook.read';
+export const CASHBOOK_VOID = 'retail.cashbook.void';
+export const EXPENSE_MANAGE = 'retail.expense.manage';
+
+/** Party kinds anyone who records expenses may add on the fly; the others need retail.expense.manage (ADR-022 decision 13). */
+const BENEFICIARY_KINDS: readonly string[] = ['supplier', 'other'];
+
+/** Of these party kinds, the ones the session may add: beneficiaries with the record permission, the rest with manage. */
+export function addableKinds<K extends string>(me: Pick<Me, 'permissions'>, kinds: readonly K[]): K[] {
+  return kinds.filter((k) => BENEFICIARY_KINDS.includes(k) || permissionsOf(me).includes(EXPENSE_MANAGE));
+}
 
 const NEEDS: Record<RetailScreen, string[]> = {
   sale: ['retail.sale.create'],
@@ -41,7 +56,22 @@ const NEEDS: Record<RetailScreen, string[]> = {
   buyers: ['retail.customer.manage', 'retail.sale.read'],
   // Importing items needs the catalogue permission; core.settings.manage is the administrator's (#146).
   importer: ['retail.catalogue.manage', 'retail.stock.read', 'core.settings.manage'],
+  // The cash book screens each need the permission that records on them; the lists and reports on
+  // them need retail.cashbook.read, and a void needs retail.cashbook.void (checked where it is offered).
+  savings: [SAVINGS_RECORD],
+  banking: ['retail.banking.record'],
+  expenses: ['retail.expense.record'],
+  withdrawals: ['retail.withdrawal.record'],
+  // Advances open to whoever may record an advance or a repayment (see ANY_OF).
+  advances: [],
+  cashSummary: [CASHBOOK_READ],
+  bankingReport: [CASHBOOK_READ],
+  expensesReport: [CASHBOOK_READ],
+  expenseSetup: ['retail.expense.manage', CASHBOOK_READ],
 };
+
+/** Screens that open with any one of these permissions, on top of the ones NEEDS lists. */
+const ANY_OF: Partial<Record<RetailScreen, string[]>> = { advances: ['retail.advance.create', 'retail.advance.repay'] };
 
 /** Every permission a screen needs. */
 export function needsOf(screen: RetailScreen): string[] {
@@ -77,7 +107,13 @@ export function canSeeProfit(me: Pick<Me, 'permissions'>): boolean {
 export function canUse(me: Pick<Me, 'permissions'>, screen: RetailScreen): boolean {
   if (screen === 'catalogue') return CATALOGUE_SCREENS.some((s) => canUse(me, s));
   const held = permissionsOf(me);
-  return NEEDS[screen].every((p) => held.includes(p));
+  const any = ANY_OF[screen];
+  return NEEDS[screen].every((p) => held.includes(p)) && (!any || any.some((p) => held.includes(p)));
+}
+
+/** True when the session holds `permission`. */
+export function holds(me: Pick<Me, 'permissions'>, permission: string): boolean {
+  return permissionsOf(me).includes(permission);
 }
 
 export function hasAnyRetailPermission(me: Pick<Me, 'permissions'>): boolean {
@@ -107,6 +143,15 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'valuation', path: '/staff/retail/valuation', label: 'Stock value', hint: 'Stock at cost and at price' },
   { screen: 'profit', path: '/staff/retail/profit', label: 'Daily profit', hint: 'Profit per day' },
   { screen: 'catalogue', path: '/staff/retail/catalogue', label: 'Catalogue', hint: 'Items, categories, units, suppliers and credit buyers' },
+  { screen: 'banking', path: '/staff/retail/banking', label: 'Banking', hint: 'Cash banked, and what to expect' },
+  { screen: 'savings', path: '/staff/retail/savings', label: 'Savings', hint: 'Set money aside for the day' },
+  { screen: 'expenses', path: '/staff/retail/expenses', label: 'Expenses', hint: 'Money spent, by category' },
+  { screen: 'withdrawals', path: '/staff/retail/withdrawals', label: 'Cash withdrawals', hint: 'Cash taken out of the bank' },
+  { screen: 'advances', path: '/staff/retail/advances', label: 'Advances', hint: 'Money advanced, and repaid' },
+  { screen: 'cashSummary', path: '/staff/retail/cash-summary', label: 'Cash summary', hint: 'Each shop, each day' },
+  { screen: 'bankingReport', path: '/staff/retail/banking-report', label: 'Banking report', hint: 'Expected, banked and unbanked' },
+  { screen: 'expensesReport', path: '/staff/retail/expenses-report', label: 'Expenses report', hint: 'Spending by category and item' },
+  { screen: 'expenseSetup', path: '/staff/retail/expense-lists', label: 'Expense lists', hint: 'Categories and items' },
 ];
 
 /** The screens under Catalogue, in the order the Catalogue home lists them. */

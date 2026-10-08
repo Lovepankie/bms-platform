@@ -113,24 +113,27 @@ Example lines (fabricated):
 {"branch": "JJA", "product_code": "TP-007", "qty": "-3.000"}
 ```
 
-## 5. Cash book export (proposed, ADR-022, FR-RET-30)
+## 5. Cash book export (ADR-022, FR-RET-30)
 
-Not built. The same encoding, types and never-guess rules as section 4, in the order
-`cash_parties`, `expense_categories`, `savings`, `expenses`, `banking`, `withdrawals`, `advances`,
-`advance_payments`, `cash_balances`. The pilot's "loan" tabs are advances to the owner or the company,
+The same encoding, types and never-guess rules as section 4, all nine files optional, listed here and
+in the report in the order `cash_parties`, `expense_categories`, `savings`, `expenses`, `banking`,
+`withdrawals`, `advances`, `advance_payments`, `cash_balances`. The command writes them in a different
+order: `banking` after `advance_payments`, because its expected amount is computed from the imported
+savings, expenses, advances and payments of the same shop and day (chapter 13 section 13.13.1; the
+runbook `docs/runbooks/import-retail.md`). A date is ISO 8601 and never in the future. The pilot's "loan" tabs are advances to the owner or the company,
 not customer lending (section 3, "Internal advances"). All of it is fabricated below.
 
 | File | Fields (required in bold) | Becomes |
 |---|---|---|
-| `cash_parties.jsonl` | **`name`** (200), `contact` (100), **`kind`** (`owner`, `staff`, `related_entity`, `supplier`, `other`; a pilot party marked as the company is reported and mapped only on the Owner's answer to ADR-022 open question 9) | A cash party (beneficiary or advance party), unless one with that kind and name exists ignoring case. The pilot's loan customers list and its beneficiary list both land here |
+| `cash_parties.jsonl` | **`name`** (200), `contact` (100), **`kind`** (`owner`, `staff`, `related_entity`, `supplier`, `other`; `company` for a pilot party marked as the company: it is reported and skipped, and so is an advance to it, until the Owner answers ADR-022 open question 9) | A cash party (beneficiary or advance party), unless one with that kind and name exists ignoring case. The pilot's loan customers list and its beneficiary list both land here |
 | `expense_categories.jsonl` | **`category`** (100), **`item`** (100), `requires_explanation` (boolean; true for the item "others") | A category and an item under it, matched ignoring case. The real list is the pilot's expense categories tab, never typed in by hand |
 | `savings.jsonl` | **`source_ref`**, **`branch`**, **`business_date`** (date), **`amount_minor`** (money), `total_sold_minor`, `source_user` | A historical savings record. A second row for one branch and date is reported and skipped. The pilot's virtual columns (total sold, daily profit) are not imported as facts; `total_sold_minor` is kept only as the screen snapshot |
 | `expenses.jsonl` | **`source_ref`**, **`branch`**, **`business_date`**, **`category`**, **`item`**, `beneficiary`, **`amount_minor`**, `explanation` (required when the item requires one), `source_user` | A historical expense. A category or item missing from `expense_categories` is created as written and reported |
 | `banking.jsonl` | **`source_ref`**, **`branch`**, **`business_date`**, **`amount_minor`**, `banked_at` (date), `source_user` | A historical banking record. The pilot's expected amount is virtual and not stored, so `expected_minor` is computed from the imported history. Imported days are listed separately and excluded from the unbanked running total, which starts at the first live day |
 | `withdrawals.jsonl` | **`source_ref`**, **`business_date`**, **`amount_minor`**, `branch` (default the tenant's single head office branch whatever any scope is; the pilot has no shop), `source_user` | A historical withdrawal |
-| `advances.jsonl` | **`source_ref`** (the pilot's advance id), **`branch`** (source of money), **`party`**, `taken_by`, **`principal_minor`**, `purpose`, `business_date`, `processing_fee_minor` (not modelled: reported, kept in the note), `source_user` | A historical advance. It takes the next live `advance_no`; the source id is kept in the import reference and the note, never reused as the number |
-| `advance_payments.jsonl` | **`source_ref`**, **`advance_ref`**, **`amount_minor`**, **`method`** (`cash`, `mobile_money`, `bank`; the pilot's payment channel), **`paid_on`**, `source_user` | A historical repayment; unknown `advance_ref` or an amount above the remaining principal is reported and skipped |
-| `cash_balances.jsonl` | **`branch`**, `cash_on_hand_minor`, `bank_minor`, `savings_reserve_minor` | One opening journal per branch, dated the day before the first live day, with one `owner_advances` line per outstanding imported advance (the advance as subledger), against `opening_balance_equity` |
+| `advances.jsonl` | **`source_ref`** (the pilot's advance id), **`branch`** (source of money), **`party`**, `taken_by`, **`principal_minor`**, `purpose`, **`business_date`**, `processing_fee_minor` (not modelled: reported, kept in the note), `source_user` | A historical advance. It takes the next live `advance_no`; the source id is kept in the import reference and the note, never reused as the number |
+| `advance_payments.jsonl` | **`source_ref`**, **`advance_ref`**, **`amount_minor`**, **`method`** (`cash`, `mobile_money`, `bank`; the pilot's payment channel), **`paid_on`**, `source_user` | A historical repayment; unknown `advance_ref`, an amount above the remaining principal or a `paid_on` on or after the first live day is reported and skipped. A repayment against an advance already opened on the ledger is reported as an anomaly and balanced by a supplementary entry keyed per repayment |
+| `cash_balances.jsonl` | **`branch`**, `cash_on_hand_minor`, `bank_minor`, `savings_reserve_minor` | One opening journal per branch, dated the day before the first live day, with one `owner_advances` line per outstanding imported advance (the advance as subledger), against `opening_balance_equity`. `bank_minor` is signed: an overdrawn bank posts a credit line. A branch with outstanding advances but no row is reported, and each of its advances is opened by its own supplementary entry, keyed per advance. The first live day is read back from the existing opening entry on a re-run; a different `--first-live-date` is refused. Rows dated on or after it (`business_date`, `paid_on`, `banked_at`) are skipped. Advances are numbered in natural source id order; an expense explanation needs at least 3 characters |
 
 Fabricated example lines:
 
