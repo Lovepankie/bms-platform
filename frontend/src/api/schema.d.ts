@@ -485,6 +485,160 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/insights/brief": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The morning brief: today's movements with one plain sentence each */
+        get: operations["getInsightsBrief"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/insights/digest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The owner's daily digest settings (off by default) */
+        get: operations["getInsightsDigestSettings"];
+        /** Change the daily digest settings */
+        put: operations["updateInsightsDigestSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/insights/digest/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The digest text as it would be sent now, for the whole tenant */
+        get: operations["previewInsightsDigest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/insights/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Member activity: new members, the applications funnel, KYC, credit scores, dormancy, staff */
+        get: operations["getInsightsMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/insights/panels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Panels registered by other modules (savings, investments), for a tenant with their data */
+        get: operations["getInsightsPanels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/insights/portfolio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Loan portfolio: outstanding, PAR and ageing, flows by period, collection rate, forecast, trend */
+        get: operations["getInsightsPortfolio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/insights/revenue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Revenue from posted journal lines by product, branch and month, with effective yield */
+        get: operations["getInsightsRevenue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/insights/tables/{table}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The rows behind a number (drill-down), at most 200 */
+        get: operations["getInsightsTable"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/insights/tables/{table}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same table as CSV, at most 10,000 rows; names masked without member access; audited */
+        get: operations["exportInsightsTable"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/investment-products": {
         parameters: {
             query?: never;
@@ -3376,6 +3530,287 @@ export interface components {
         HeadOfficeRequest: {
             code: string;
             name: string;
+        };
+        InsightsAgeingBucket: {
+            /** Format: int64 */
+            arrears_minor?: number;
+            key?: string;
+            label?: string;
+            /** Format: int64 */
+            loans?: number;
+            /** Format: int64 */
+            principal_minor?: number;
+            /** Format: int64 */
+            share_bp?: number;
+        };
+        InsightsArrearsRow: {
+            /** Format: int64 */
+            arrears_minor?: number;
+            /** Format: int32 */
+            days_past_due?: number;
+            /** Format: uuid */
+            loan_id?: string;
+            loan_no?: string;
+            /** Format: uuid */
+            member_id?: string;
+            member_name?: string;
+            member_no?: string;
+            officer_name?: string;
+            /** Format: int64 */
+            principal_outstanding_minor?: number;
+        };
+        InsightsBreakdown: {
+            dimension?: string;
+            rows?: components["schemas"]["InsightsGroup"][];
+            title?: string;
+        };
+        InsightsBrief: {
+            /** Format: date */
+            as_of?: string;
+            currency?: string;
+            /** Format: date-time */
+            generated_at?: string;
+            metrics?: components["schemas"]["InsightsMetric"][];
+            /** @description One plain sentence per movement, in the order of the cards */
+            sentences?: string[];
+        };
+        InsightsColumn: {
+            key?: string;
+            /** @description text, money, count, date, days or basis_points */
+            kind?: string;
+            label?: string;
+        };
+        InsightsCountPoint: {
+            /** Format: int64 */
+            count?: number;
+            label?: string;
+            /** Format: date */
+            period_start?: string;
+        };
+        InsightsDayAmount: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date */
+            date?: string;
+        };
+        InsightsDigestPreview: {
+            /** Format: date */
+            as_of?: string;
+            subject?: string;
+            text?: string;
+        };
+        InsightsDigestSettings: {
+            email_recipients?: string[];
+            enabled?: boolean;
+            /** Format: date */
+            last_sent_on?: string;
+            /** Format: int32 */
+            send_hour?: number;
+            telegram_chat_id?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        InsightsDigestSettingsRequest: {
+            email_recipients: string[];
+            enabled: boolean;
+            /** Format: int32 */
+            send_hour: number;
+            telegram_chat_id?: string;
+        };
+        InsightsDrill: {
+            params?: {
+                [key: string]: string;
+            };
+            table?: string;
+        };
+        InsightsFunnelStage: {
+            /** Format: int64 */
+            conversion_bp?: number;
+            /** Format: int64 */
+            count?: number;
+            drill?: components["schemas"]["InsightsDrill"];
+            key?: string;
+            label?: string;
+        };
+        InsightsGroup: {
+            key?: string;
+            label?: string;
+            /** Format: int64 */
+            loans?: number;
+            /** Format: int64 */
+            par30_bp?: number;
+            /** Format: int64 */
+            par30_minor?: number;
+            /** Format: int64 */
+            principal_outstanding_minor?: number;
+        };
+        InsightsMembers: {
+            /** Format: date */
+            from?: string;
+            funnel?: components["schemas"]["InsightsFunnelStage"][];
+            /** Format: date-time */
+            generated_at?: string;
+            grain?: string;
+            kyc?: components["schemas"]["InsightsSlice"][];
+            metrics?: components["schemas"]["InsightsMetric"][];
+            new_members?: components["schemas"]["InsightsCountPoint"][];
+            score_bands?: components["schemas"]["InsightsSlice"][];
+            staff?: components["schemas"]["InsightsStaffRow"][];
+            /** Format: date */
+            to?: string;
+        };
+        InsightsMetric: {
+            currency?: string;
+            definition?: string;
+            drill?: components["schemas"]["InsightsDrill"];
+            key?: string;
+            kind?: string;
+            label?: string;
+            /** Format: int64 */
+            value?: number;
+        };
+        InsightsPanel: {
+            key?: string;
+            metrics?: components["schemas"]["InsightsMetric"][];
+            title?: string;
+        };
+        InsightsPanels: {
+            panels?: components["schemas"]["InsightsPanel"][];
+        };
+        InsightsPeriod: {
+            /** Format: int64 */
+            collected_minor?: number;
+            /** Format: int64 */
+            collected_on_due_minor?: number;
+            /** Format: int64 */
+            collection_rate_bp?: number;
+            /** Format: int64 */
+            disbursed_count?: number;
+            /** Format: int64 */
+            disbursed_minor?: number;
+            /** Format: int64 */
+            expected_minor?: number;
+            label?: string;
+            /** Format: date */
+            period_end?: string;
+            /** Format: date */
+            period_start?: string;
+        };
+        InsightsPortfolio: {
+            ageing?: components["schemas"]["InsightsAgeingBucket"][];
+            breakdowns?: components["schemas"]["InsightsBreakdown"][];
+            currency?: string;
+            forecast?: components["schemas"]["InsightsDayAmount"][];
+            /** Format: date */
+            from?: string;
+            /** Format: date-time */
+            generated_at?: string;
+            grain?: string;
+            metrics?: components["schemas"]["InsightsMetric"][];
+            series?: components["schemas"]["InsightsPeriod"][];
+            /**
+             * Format: date
+             * @description The date the stock figures (outstanding, PAR, ageing, breakdowns) are for
+             */
+            stock_as_of?: string;
+            /** @description live (today), snapshot (a past date) or none (no snapshot for that date yet) */
+            stock_source?: string;
+            /** Format: date */
+            to?: string;
+            top_arrears?: components["schemas"]["InsightsArrearsRow"][];
+            trend?: components["schemas"]["InsightsTrendPoint"][];
+        };
+        InsightsRevenue: {
+            by_branch?: components["schemas"]["InsightsRevenueRow"][];
+            by_product?: components["schemas"]["InsightsRevenueRow"][];
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            /** Format: date-time */
+            generated_at?: string;
+            metrics?: components["schemas"]["InsightsMetric"][];
+            months?: components["schemas"]["InsightsRevenueMonth"][];
+            /** Format: date */
+            to?: string;
+        };
+        InsightsRevenueMonth: {
+            /** Format: int64 */
+            contribution_minor?: number;
+            /** Format: int64 */
+            fees_minor?: number;
+            /** Format: int64 */
+            interest_minor?: number;
+            label?: string;
+            /** Format: date */
+            month?: string;
+            /** Format: int64 */
+            penalties_minor?: number;
+            /** Format: int64 */
+            recovered_minor?: number;
+            /** Format: int64 */
+            write_off_expense_minor?: number;
+        };
+        InsightsRevenueRow: {
+            /** Format: int64 */
+            contribution_minor?: number;
+            /** Format: int64 */
+            effective_yield_bp?: number;
+            /** Format: int64 */
+            fees_minor?: number;
+            /** Format: int64 */
+            interest_minor?: number;
+            key?: string;
+            label?: string;
+            /** Format: int64 */
+            penalties_minor?: number;
+            /** Format: int64 */
+            recovered_minor?: number;
+            /** Format: int64 */
+            write_off_expense_minor?: number;
+        };
+        InsightsSlice: {
+            /** Format: int64 */
+            count?: number;
+            key?: string;
+            label?: string;
+        };
+        InsightsStaffRow: {
+            /** Format: int64 */
+            applications_submitted?: number;
+            /** Format: int64 */
+            appraisals?: number;
+            /** Format: int64 */
+            disbursements?: number;
+            /** Format: int64 */
+            members_registered?: number;
+            name?: string;
+            /** Format: int64 */
+            repayments_recorded?: number;
+            /** Format: uuid */
+            user_id?: string;
+        };
+        InsightsTable: {
+            columns?: components["schemas"]["InsightsColumn"][];
+            currency?: string;
+            key?: string;
+            /** @description Cells as strings in column order; money in integer minor units */
+            rows?: string[][];
+            title?: string;
+            /** @description True when the table stopped at the row limit */
+            truncated?: boolean;
+        };
+        InsightsTrendPoint: {
+            /** Format: int64 */
+            active_loans?: number;
+            /** Format: date */
+            date?: string;
+            label?: string;
+            /** Format: int64 */
+            par30_bp?: number;
+            /** Format: int64 */
+            principal_outstanding_minor?: number;
+            /** @description snapshot for a past month end, live for today, none when no snapshot exists */
+            source?: string;
         };
         Investment: {
             account_no?: string;
@@ -7046,6 +7481,265 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CollateralValuation"];
+                };
+            };
+        };
+    };
+    getInsightsBrief: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                officer_id?: string;
+                product_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsBrief"];
+                };
+            };
+        };
+    };
+    getInsightsDigestSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsDigestSettings"];
+                };
+            };
+        };
+    };
+    updateInsightsDigestSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InsightsDigestSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsDigestSettings"];
+                };
+            };
+        };
+    };
+    previewInsightsDigest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsDigestPreview"];
+                };
+            };
+        };
+    };
+    getInsightsMembers: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                grain?: string;
+                branch_id?: string[];
+                officer_id?: string;
+                product_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsMembers"];
+                };
+            };
+        };
+    };
+    getInsightsPanels: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                branch_id?: string[];
+                officer_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsPanels"];
+                };
+            };
+        };
+    };
+    getInsightsPortfolio: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                /** @description day, week, month or year; chosen from the range when absent */
+                grain?: string;
+                branch_id?: string[];
+                officer_id?: string;
+                product_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsPortfolio"];
+                };
+            };
+        };
+    };
+    getInsightsRevenue: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                branch_id?: string[];
+                officer_id?: string;
+                product_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsRevenue"];
+                };
+            };
+        };
+    };
+    getInsightsTable: {
+        parameters: {
+            query: {
+                from?: string;
+                to?: string;
+                branch_id?: string[];
+                officer_id?: string;
+                product_id?: string;
+                /** @description Table parameters: date, status, stage, account, min_dpd, max_dpd, bucket, days, group, key */
+                all: {
+                    [key: string]: string;
+                };
+            };
+            header?: never;
+            path: {
+                table: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsTable"];
+                };
+            };
+        };
+    };
+    exportInsightsTable: {
+        parameters: {
+            query: {
+                from?: string;
+                to?: string;
+                branch_id?: string[];
+                officer_id?: string;
+                product_id?: string;
+                all: {
+                    [key: string]: string;
+                };
+            };
+            header?: never;
+            path: {
+                table: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
                 };
             };
         };

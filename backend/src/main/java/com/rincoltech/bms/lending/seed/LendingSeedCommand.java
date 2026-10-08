@@ -8,7 +8,9 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.context.ConfigurableApplicationContext;
 
 /**
- * {@code java -jar bms-api.jar seed-lending --tenant <slug>} ({@code docs/runbooks/seed-lending.md}).
+ * {@code java -jar bms-api.jar seed-lending --tenant <slug> [--insights-demo [--scale <n>]]}
+ * ({@code docs/runbooks/seed-lending.md}). With {@code --insights-demo} the tenant also gets twelve
+ * months of fabricated history for the insights page (#153), {@code --scale} times the volume.
  * Starts the application without the web server and the job scheduler, connected as
  * {@code bms_app} like the API, and fills one empty lending tenant with fabricated data. Refused
  * when {@code BMS_ENVIRONMENT} is {@code production}.
@@ -19,16 +21,29 @@ public final class LendingSeedCommand {
 
     public static final String NAME = "seed-lending";
 
-    static final String USAGE = "usage: seed-lending --tenant <slug>";
+    static final String USAGE = "usage: seed-lending --tenant <slug> [--insights-demo [--scale <1-50>]]";
+
+    /** The parsed arguments. */
+    record Arguments(String tenant, LendingSeeder.Options options) {}
 
     private LendingSeedCommand() {}
 
-    /** The tenant slug from the arguments after the command name. */
-    static String parse(String[] args) {
+    /** The tenant slug and options from the arguments after the command name. */
+    static Arguments parse(String[] args) {
         String tenant = null;
+        boolean demo = false;
+        Integer scale = null;
         for (int i = 1; i < args.length; i++) {
             if (args[i].equals("--tenant") && i + 1 < args.length) {
                 tenant = args[++i];
+            } else if (args[i].equals("--insights-demo")) {
+                demo = true;
+            } else if (args[i].equals("--scale") && i + 1 < args.length) {
+                try {
+                    scale = Integer.parseInt(args[++i]);
+                } catch (NumberFormatException e) {
+                    throw new IllegalArgumentException("--scale is a whole number");
+                }
             } else {
                 throw new IllegalArgumentException("unknown argument " + args[i]);
             }
@@ -36,14 +51,17 @@ public final class LendingSeedCommand {
         if (tenant == null || tenant.isBlank()) {
             throw new IllegalArgumentException("--tenant is required");
         }
-        return tenant;
+        if (scale != null && !demo) {
+            throw new IllegalArgumentException("--scale needs --insights-demo");
+        }
+        return new Arguments(tenant, new LendingSeeder.Options(demo, scale == null ? 1 : scale));
     }
 
     /** Runs the command from {@code main}; {@code args[0]} is the command name. */
     public static int run(Class<?> application, String[] args) {
-        String tenant;
+        Arguments arguments;
         try {
-            tenant = parse(args);
+            arguments = parse(args);
         } catch (IllegalArgumentException e) {
             System.err.println(e.getMessage());
             System.err.println(USAGE);
@@ -59,13 +77,13 @@ public final class LendingSeedCommand {
                 "db-scheduler.enabled", "false",
                 "logging.level.root", "WARN"));
         try (ConfigurableApplicationContext context = app.run()) {
-            return run(context.getBean(LendingSeeder.class), tenant, System.out, System.err);
+            return run(context.getBean(LendingSeeder.class), arguments, System.out, System.err);
         }
     }
 
-    static int run(LendingSeeder seeder, String tenant, PrintStream out, PrintStream err) {
+    static int run(LendingSeeder seeder, Arguments arguments, PrintStream out, PrintStream err) {
         try {
-            out.println(seeder.seed(tenant).render());
+            out.println(seeder.seed(arguments.tenant(), arguments.options()).render());
             return 0;
         } catch (IllegalArgumentException | IllegalStateException e) {
             err.println("seed-lending refused: " + e.getMessage());

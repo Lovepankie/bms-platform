@@ -55,8 +55,9 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   an applied one can never run). The retail catalogue management (issue #146) takes `V28`. Lending increment 5,
   disbursement and repayments (issue #108, ADR-026), takes `V29`, lending savings (issue #151,
   ADR-032) `V30`, the first-run preferences (issue #19, ADR-025) `V31`, and lending investments
-  (issue #152, ADR-031) `V32`. Flyway runs with `outOfOrder` off, so a new migration takes a number
-  above the highest one on any open branch (`V33` next).
+  (issue #152, ADR-031) `V32`, and lending insights (issue #153, ADR-030) `V33`. Flyway runs with
+  `outOfOrder` off, so a new migration takes a number above the highest one on any open branch
+  (`V34` next).
 - **Self-onboarding, build step 1 (issue #89, ADR-024):** migration `V23` with
   `onboarding_applications` and `notification_outbox`, reached only through definer functions;
   the public sign-up and applicant page; the operator portal on the platform host (operator
@@ -101,6 +102,13 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   history in `seed-lending`. Deferred: member self-service and portal applications (increment 11),
   online payments (chapter 12), USSD and SMS reminders (pending ADR-013), crediting returns to
   a savings account (a follow-up on the savings module), the certificate PDF (documents follow-up).
+- **In review (issue #153, ADR-030):** `lending.insights`, the staff Insights page
+  (`/staff/insights`): morning brief, portfolio with PAR and ageing, revenue from posted
+  journal lines, member activity, drill-down tables with CSV export, 60-second polling; migration
+  `V33` (permissions, `lending_loan_daily_snapshots` written nightly until increment 6 owns it, the
+  digest settings, indexes); the owner's daily digest through the outbox; `seed-lending
+  --insights-demo [--scale N]` for a fabricated year. Metrics dictionary:
+  `docs/specs/lending-insights-metrics.md`.
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
   Cloudflare Tunnel and pulls every green build of `main` from a `staging` pointer tag; hosts are
@@ -180,6 +188,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `lending.seed` | The `seed-lending` command: fabricated loan book, savings and investments for one empty staging tenant (ADR-026, ADR-031, ADR-032) | none | none (writes 6.7 tables) | none (a command, `docs/runbooks/seed-lending.md`) |
 | `lending.savings` | Savings products, accounts, movements, end of day and interest, statements, savings reports (ADR-032) | SAV | 6.7 | 7.11.15 |
 | `lending.investments` | Investment products, investments, returns job, maturity, rollover, early withdrawal, maturity ladder (ADR-031) | INV; 3.25.1 R-INV | 6.7 | 7.11.16 |
+| `lending.insights` | The insights read model, snapshots, daily digest, panel registry (ADR-030) | INS | 6.7 | 7.11.22 |
 | `lending` collections | Due lists, arrears, actions | CLN | 6.7 | 7.11.17 |
 | Member area | Member self-service | MSS; chapter 11 | none | 7.11.18 |
 | `retail.manifest` | The retail vertical's registration with the core (ADR-020) | 3.28 | 6.11.1 chart | none |
@@ -349,6 +358,8 @@ Accepted (this list is the ADR index):
 - ADR-028 Database performance: measured on 25 times the data, covering indexes, the plain tenant
   policy kept, connection timeouts (proposed, #107)
 - ADR-029 One fixed low stock threshold for retail, a per-tenant settings group later (#145)
+- ADR-030 Lending insights: a read model over the loan tables and the ledger, live today and
+  snapshots for history, polling, and a plain-text digest through the outbox (proposed, #153)
 - ADR-031 Investments: month-based returns accrued monthly, recurring as auto-renewal, early
   withdrawal settled in one entry (proposed, #152)
 - ADR-032 Savings: end-of-day balances with interest rounded once per posting, movements only after

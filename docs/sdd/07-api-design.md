@@ -906,6 +906,30 @@ Error codes: the cash book's codes are listed in section 7.7 (409 `cash_record_v
 `repayment_exceeds_balance`, `advance_settled`, `branch_required`; the field code `future_date`). The cash book has no import endpoint; its history comes through the
 `import-retail` command (chapter 13 section 13.13).
 
+### 7.11.22 Lending: insights (`/lending/insights`, #153, ADR-030)
+
+Read-only. Every route takes the page filter: `from` and `to` (inclusive dates, default the first
+of this month to today; 422 `range_in_future`, `invalid_range`, `range_too_long` over five years),
+`branch_id` (repeatable; narrowed to the caller's scope of `lending.insights.read`), `officer_id`
+(ignored without `lending.insights.all_officers`: such a caller always gets their own loans) and
+`product_id`. Responses carry `Cache-Control: no-store`; the page polls every 60 seconds. Money is
+integer minor units, rates basis points (null over a zero denominator). Every metric is
+`{key, label, kind, value, currency, definition, drill: {table, params}}`; the keys and formulas are
+in `docs/specs/lending-insights-metrics.md`.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/lending/insights/brief` | `lending.insights.read` | Today: metrics and one sentence per movement (FR-INS-02) |
+| GET | `/lending/insights/portfolio` | `lending.insights.read` | `grain` (`day`, `week`, `month`, `year`; chosen from the range when absent; 422 `too_many_periods` over 120 periods). Metrics, the period `series`, `ageing`, `breakdowns` (product, branch, officer, status), `top_arrears`, the 30-day `forecast`, the 12-month `trend`; `stock_as_of` and `stock_source` (`live`, `snapshot`, `none`) (FR-INS-03) |
+| GET | `/lending/insights/revenue` | `lending.insights.read` | Metrics, `by_product`, `by_branch`, 12 `months`, from posted journal lines (FR-INS-04) |
+| GET | `/lending/insights/members` | `lending.insights.read` | `grain`. Metrics, `new_members`, `funnel`, `kyc`, `score_bands`, `staff` (FR-INS-05) |
+| GET | `/lending/insights/panels` | `lending.insights.read` | Panels registered by other modules: `savings` and `investments`, each only for a tenant with savings accounts or investments and never under a one-officer filter (FR-INS-09) |
+| GET | `/lending/insights/tables/{table}` | `lending.insights.read` | The rows behind a number, at most 200, `truncated` when more. Tables and their parameters (`date`, `status`, `stage`, `account`, `min_dpd`, `max_dpd`, `bucket`, `days`, `group`, `key`) in the metrics dictionary; 404 for an unknown table (FR-INS-06) |
+| GET | `/lending/insights/tables/{table}/export` | `lending.insights.export` | The same as `text/csv`, at most 10,000 rows, money in minor units with the currency in the header, names as initials without `lending.members.read`; audited `lending.insights.exported` |
+| GET | `/lending/insights/digest` | `core.settings.manage` | The digest settings with an `ETag` |
+| PUT | `/lending/insights/digest` | `core.settings.manage` | `{enabled, email_recipients (max 5), telegram_chat_id, send_hour}` with `If-Match`; 422 `digest_needs_recipient` when on with no recipient; 412 `version_mismatch`; audited (FR-INS-08) |
+| GET | `/lending/insights/digest/preview` | `core.settings.manage` | `{as_of, subject, text}`: the text the digest would send now |
+
 ## 7.12 Example: record a repayment
 
 ```http

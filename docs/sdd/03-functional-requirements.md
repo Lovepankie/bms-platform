@@ -40,6 +40,7 @@ A letter suffix (`FR-REP-04a`) splits one statement into separately testable par
 | MSS | Member self-service | 3.27 |
 | RET | Retail vertical: catalogue, stock, sales, purchasing, valuation (ADR-020) and the cash book (ADR-022, proposed) | 3.28 |
 | ONB | Self-onboarding: sign-up, applications, operator activation (ADR-024) | 3.29 |
+| INS | Lending insights: brief, portfolio, revenue, members, digest (ADR-030) | 3.30 |
 
 **Phase column.** `MVP` is in the first release for the pilot tenant
 (`docs/specs/lending-mvp-scope.md` orders them). `P2` is planned after the MVP. `Later`
@@ -824,3 +825,20 @@ reminders and agents are later steps. An application is not a tenant.
 | FR-ONB-08 | A newly confirmed application shall write an operator alert to the outbox (FR-NTF-11) in the same transaction. | One alert set per application. | MVP |
 | FR-ONB-09 | A scheduled job shall expire applications whose email is not confirmed within 14 days and delete `rejected` and `expired` applications 90 days after they closed. | `OnboardingIT` with backdated rows. | MVP |
 
+## 3.30 Lending insights (INS)
+
+Live insights for lending tenants (issue #153, expectation 7 of the pilot brief; ADR-030). Every
+formula is in chapter 14 section 14.9 and `docs/specs/lending-insights-metrics.md`; every metric has
+a golden test that recomputes it from raw rows (chapter 15 section 15.7).
+
+| ID | Requirement | Acceptance criteria | Phase |
+|---|---|---|---|
+| FR-INS-01 | Staff with `lending.insights.read` shall see an Insights page whose figures are narrowed to their branch scope and, without `lending.insights.all_officers`, to the loans they are the responsible officer for, whatever the request asks. | `InsightsGoldenIT`: a branch-scoped user asking for another branch gets zeros; an officer asking for another officer gets their own figures. | MVP |
+| FR-INS-02 | A morning brief shall show for today: money out, money in, due today against collected on those dues, loans that fell into arrears today and loans that will pass 30 days late within 7 days, each with one plain sentence; disbursed and collected compare with the same weekday a week earlier. | Golden test against raw rows; sentences have no placeholder left and no dash. | MVP |
+| FR-INS-03 | The loan portfolio shall show principal outstanding, interest receivable, arrears, PAR 1, 30, 60 and 90 with the ageing buckets, disbursed and collected by day, week, month or year, the collection rate by period, loans by status, product, branch and officer, the ten largest arrears linked to the loan, expected collections for the next 7 and 30 days labelled as an estimate, write-offs and recoveries, repeat borrowers, average loan size, tenor and yield, and a 12-month trend of principal outstanding and PAR 30. | Golden tests over a range with partial months, a past month read from snapshots, a branch and an officer filter. | MVP |
+| FR-INS-04 | Revenue shall come from posted journal lines only: interest, fees, penalties, recoveries and write-off expense by product, branch and month, profit contribution and effective yield, with the last 12 months. | Golden test against the journal lines, per product and per month. | MVP |
+| FR-INS-05 | Member activity shall show new members, active borrowers, the applications funnel (applied, appraised, approved, disbursed) with conversions and the median time to decision, KYC completeness, credit score bands, dormant members and staff activity. | Golden test of the funnel against the loans. | MVP |
+| FR-INS-06 | Every number shall show its definition and open the rows that make it up; a user with `lending.insights.export` may download any such table as CSV (at most 10,000 rows), audited, with names reduced to initials for a user without `lending.members.read` and never a phone or ID number. | Drill-down rows sum to their number; the export test checks masking, the audit row and the 403. | MVP |
+| FR-INS-07 | Today's numbers shall be live and refresh every 60 seconds without websockets; a past date shall read `lending_loan_daily_snapshots`, written nightly until increment 6 takes it over; the page shall render in under a second on the staging stack with the fabricated seed scaled 20 times. | Snapshot rows equal an independent replay on past dates; `InsightsPerformanceIT` records the timings. | MVP |
+| FR-INS-08 | A tenant admin shall be able to switch on a daily plain-text digest for the whole tenant to up to five email addresses and one Telegram chat at a chosen hour; it is off by default and goes once a day through the outbox. | Unit and integration tests of the text, the settings and the idempotent queue. | MVP |
+| FR-INS-09 | Savings and investments shall add their panels (balances, inflows, outflows, interest and returns, dormant accounts, maturity ladder) through the `InsightsPanel` registry, computed by those modules from their posted rows, for a tenant that holds their data. | A tenant with savings accounts and investments gets both panels with every key of the metrics dictionary and values equal to `SavingsMetrics` and `InvestmentMetrics`; a tenant with neither gets no panel; an officer-narrowed request gets no panel. | P2 |

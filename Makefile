@@ -7,6 +7,7 @@ export
 
 COMPOSE := docker compose
 SEED_SLUG ?= demo
+SEED_ARGS ?=
 
 ## Start the local stack (PostgreSQL, migrate, API, web, proxy) and seed the demo tenant.
 dev:
@@ -32,7 +33,7 @@ seed:
 ## Fabricated loan book for the demo tenant (docs/runbooks/seed-lending.md): members, products,
 ## applications and serviced loans. Refused on a tenant holding data, a second time, and in production.
 seed-lending:
-	$(COMPOSE) run --rm --no-deps api seed-lending --tenant $(SEED_SLUG)
+	$(COMPOSE) run --rm --no-deps api seed-lending --tenant $(SEED_SLUG) $(SEED_ARGS)
 
 ## Apply migrations to the local database (the same one-shot command the servers run).
 migrate:

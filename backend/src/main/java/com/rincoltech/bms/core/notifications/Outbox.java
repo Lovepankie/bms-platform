@@ -20,6 +20,8 @@ public interface Outbox {
     String SMS = "sms";
     /** The recipient of a Telegram operator alert; the chat id stays in the environment. */
     String OPERATOR_CHAT = "operator";
+    /** The prefix of a Telegram recipient that names a numeric chat (a tenant's digest, ADR-030). */
+    String TELEGRAM_CHAT_PREFIX = "chat:";
 
     /**
      * Writes one row in the caller's transaction, which must exist. Returns false when the
@@ -36,8 +38,8 @@ public interface Outbox {
 
     /**
      * @param channel {@link #EMAIL}, {@link #TELEGRAM} or {@link #SMS}
-     * @param recipient an email address, {@link #OPERATOR_CHAT}, or an E.164 phone number for SMS;
-     *     never logged unmasked
+     * @param recipient an email address, {@link #OPERATOR_CHAT}, {@link #TELEGRAM_CHAT_PREFIX} and a numeric
+     *     chat id, or an E.164 phone number for SMS; never logged unmasked
      * @param templateKey for example {@code onboarding.activation}; rendered when sent
      * @param params template values; cleared from the row once it is sent
      * @param idempotencyKey unique per message, for example {@code onboarding.activation:<id>}

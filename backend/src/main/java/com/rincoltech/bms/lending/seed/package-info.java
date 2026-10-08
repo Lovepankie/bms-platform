@@ -21,7 +21,8 @@
             "core.jobs",
             "lending.loans",
             "lending.savings",
-            "lending.investments"
+            "lending.investments",
+            "lending.insights"
         })
 package com.rincoltech.bms.lending.seed;
 

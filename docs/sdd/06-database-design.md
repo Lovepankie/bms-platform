@@ -1092,6 +1092,25 @@ R-PAYOFF: interest waived, not cash. Indexes `(tenant_id, transaction_id)`,
 uuid`, `product_id uuid`, `principal_outstanding_minor bigint`, `interest_outstanding_minor
 bigint`, `arrears_minor bigint`, `days_past_due integer`, `par_bucket text` [`current`,
 `1_30`, `31_60`, `61_90`, `over_90`]. PK `(tenant_id, business_date, loan_id)`. FR-ARR-02.
+Built in `V33` (#153, ADR-030) with `created_at`, composite foreign keys to the loan, branch and
+product, an index `(tenant_id, branch_id, business_date)` and grants `SELECT, INSERT, DELETE` (a
+rerun of a date deletes and rewrites it). One row per loan active at the end of the date: a past
+position is rebuilt from the allocation rows dated by their own transaction's value date. Written
+by the insights job `lending.insights-snapshot` until the arrears job of increment 6 takes it over.
+
+### `lending_insights_digest_settings` (RLS)
+
+(std) `enabled boolean NOT NULL DEFAULT false`, `email_recipients text[] NOT NULL DEFAULT '{}'`
+(at most 5), `telegram_chat_id varchar(21)` (digits, optional leading minus), `send_hour smallint
+NOT NULL DEFAULT 7` (0 to 23, tenant time zone), `last_sent_on date`, `updated_by uuid`.
+`UNIQUE (tenant_id)`. The owner's daily insights digest (FR-INS-08, ADR-030); no row means off.
+Built in `V33` (#153).
+
+`V33` also adds the insights indexes: `lending_repayment_allocations (tenant_id,
+schedule_item_id)`, `lending_loan_transactions (tenant_id, txn_type, value_date)
+INCLUDE (loan_id, amount_minor)`, `lending_members (tenant_id, created_at)`, `lending_loans
+(tenant_id, submitted_at) WHERE submitted_at IS NOT NULL` and `journal_entries (tenant_id,
+entry_date)`.
 
 ### `lending_collection_actions` (append-only except `promise_status`)
 

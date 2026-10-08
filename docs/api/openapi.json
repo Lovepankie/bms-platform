@@ -1399,6 +1399,727 @@
         },
         "required" : [ "code", "name" ]
       },
+      "InsightsAgeingBucket" : {
+        "properties" : {
+          "arrears_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "loans" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "share_bp" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "InsightsArrearsRow" : {
+        "properties" : {
+          "arrears_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "days_past_due" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "loan_no" : {
+            "type" : "string"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "member_name" : {
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "officer_name" : {
+            "type" : "string"
+          },
+          "principal_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "InsightsBreakdown" : {
+        "properties" : {
+          "dimension" : {
+            "type" : "string"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsGroup"
+            },
+            "type" : "array"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        }
+      },
+      "InsightsBrief" : {
+        "properties" : {
+          "as_of" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "generated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "metrics" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsMetric"
+            },
+            "type" : "array"
+          },
+          "sentences" : {
+            "description" : "One plain sentence per movement, in the order of the cards",
+            "items" : {
+              "description" : "One plain sentence per movement, in the order of the cards",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "InsightsColumn" : {
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "text, money, count, date, days or basis_points",
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          }
+        }
+      },
+      "InsightsCountPoint" : {
+        "properties" : {
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "period_start" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "InsightsDayAmount" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "InsightsDigestPreview" : {
+        "properties" : {
+          "as_of" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "subject" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          }
+        }
+      },
+      "InsightsDigestSettings" : {
+        "properties" : {
+          "email_recipients" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "last_sent_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "send_hour" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "telegram_chat_id" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "InsightsDigestSettingsRequest" : {
+        "properties" : {
+          "email_recipients" : {
+            "items" : {
+              "maxLength" : 320,
+              "minLength" : 0,
+              "pattern" : "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+              "type" : "string"
+            },
+            "maxItems" : 5,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "send_hour" : {
+            "format" : "int32",
+            "maximum" : 23,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "telegram_chat_id" : {
+            "pattern" : "^-?[0-9]{1,20}$",
+            "type" : "string"
+          }
+        },
+        "required" : [ "email_recipients", "enabled", "send_hour" ]
+      },
+      "InsightsDrill" : {
+        "properties" : {
+          "params" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "table" : {
+            "type" : "string"
+          }
+        }
+      },
+      "InsightsFunnelStage" : {
+        "properties" : {
+          "conversion_bp" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "drill" : {
+            "$ref" : "#/components/schemas/InsightsDrill"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          }
+        }
+      },
+      "InsightsGroup" : {
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "loans" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "par30_bp" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "par30_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "InsightsMembers" : {
+        "properties" : {
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "funnel" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsFunnelStage"
+            },
+            "type" : "array"
+          },
+          "generated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "grain" : {
+            "type" : "string"
+          },
+          "kyc" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsSlice"
+            },
+            "type" : "array"
+          },
+          "metrics" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsMetric"
+            },
+            "type" : "array"
+          },
+          "new_members" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsCountPoint"
+            },
+            "type" : "array"
+          },
+          "score_bands" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsSlice"
+            },
+            "type" : "array"
+          },
+          "staff" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsStaffRow"
+            },
+            "type" : "array"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "InsightsMetric" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "definition" : {
+            "type" : "string"
+          },
+          "drill" : {
+            "$ref" : "#/components/schemas/InsightsDrill"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "value" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "InsightsPanel" : {
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "metrics" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsMetric"
+            },
+            "type" : "array"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        }
+      },
+      "InsightsPanels" : {
+        "properties" : {
+          "panels" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsPanel"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "InsightsPeriod" : {
+        "properties" : {
+          "collected_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "collected_on_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "collection_rate_bp" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "disbursed_count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "disbursed_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "period_end" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "period_start" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "InsightsPortfolio" : {
+        "properties" : {
+          "ageing" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsAgeingBucket"
+            },
+            "type" : "array"
+          },
+          "breakdowns" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsBreakdown"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "forecast" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsDayAmount"
+            },
+            "type" : "array"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "generated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "grain" : {
+            "type" : "string"
+          },
+          "metrics" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsMetric"
+            },
+            "type" : "array"
+          },
+          "series" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsPeriod"
+            },
+            "type" : "array"
+          },
+          "stock_as_of" : {
+            "description" : "The date the stock figures (outstanding, PAR, ageing, breakdowns) are for",
+            "format" : "date",
+            "type" : "string"
+          },
+          "stock_source" : {
+            "description" : "live (today), snapshot (a past date) or none (no snapshot for that date yet)",
+            "type" : "string"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "top_arrears" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsArrearsRow"
+            },
+            "type" : "array"
+          },
+          "trend" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsTrendPoint"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "InsightsRevenue" : {
+        "properties" : {
+          "by_branch" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsRevenueRow"
+            },
+            "type" : "array"
+          },
+          "by_product" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsRevenueRow"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "generated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "metrics" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsMetric"
+            },
+            "type" : "array"
+          },
+          "months" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsRevenueMonth"
+            },
+            "type" : "array"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "InsightsRevenueMonth" : {
+        "properties" : {
+          "contribution_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fees_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "month" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "penalties_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "recovered_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "write_off_expense_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "InsightsRevenueRow" : {
+        "properties" : {
+          "contribution_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "effective_yield_bp" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fees_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "penalties_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "recovered_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "write_off_expense_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "InsightsSlice" : {
+        "properties" : {
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          }
+        }
+      },
+      "InsightsStaffRow" : {
+        "properties" : {
+          "applications_submitted" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "appraisals" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "disbursements" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "members_registered" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "repayments_recorded" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "InsightsTable" : {
+        "properties" : {
+          "columns" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InsightsColumn"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "rows" : {
+            "description" : "Cells as strings in column order; money in integer minor units",
+            "items" : {
+              "description" : "Cells as strings in column order; money in integer minor units",
+              "items" : {
+                "description" : "Cells as strings in column order; money in integer minor units",
+                "type" : "string"
+              },
+              "type" : "array"
+            },
+            "type" : "array"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "truncated" : {
+            "description" : "True when the table stopped at the row limit",
+            "type" : "boolean"
+          }
+        }
+      },
+      "InsightsTrendPoint" : {
+        "properties" : {
+          "active_loans" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "par30_bp" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "source" : {
+            "description" : "snapshot for a past month end, live for today, none when no snapshot exists",
+            "type" : "string"
+          }
+        }
+      },
       "Investment" : {
         "properties" : {
           "account_no" : {
@@ -9103,6 +9824,546 @@
         },
         "summary" : "Record a valuation (FR-COL-02)",
         "tags" : [ "lending-collateral" ]
+      }
+    },
+    "/api/v1/lending/insights/brief" : {
+      "get" : {
+        "operationId" : "getInsightsBrief",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "officer_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InsightsBrief"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The morning brief: today's movements with one plain sentence each",
+        "tags" : [ "lending-insights" ]
+      }
+    },
+    "/api/v1/lending/insights/digest" : {
+      "get" : {
+        "operationId" : "getInsightsDigestSettings",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InsightsDigestSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The owner's daily digest settings (off by default)",
+        "tags" : [ "lending-insights" ]
+      },
+      "put" : {
+        "operationId" : "updateInsightsDigestSettings",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InsightsDigestSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InsightsDigestSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change the daily digest settings",
+        "tags" : [ "lending-insights" ]
+      }
+    },
+    "/api/v1/lending/insights/digest/preview" : {
+      "get" : {
+        "operationId" : "previewInsightsDigest",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InsightsDigestPreview"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The digest text as it would be sent now, for the whole tenant",
+        "tags" : [ "lending-insights" ]
+      }
+    },
+    "/api/v1/lending/insights/members" : {
+      "get" : {
+        "operationId" : "getInsightsMembers",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "grain",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "officer_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InsightsMembers"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Member activity: new members, the applications funnel, KYC, credit scores, dormancy, staff",
+        "tags" : [ "lending-insights" ]
+      }
+    },
+    "/api/v1/lending/insights/panels" : {
+      "get" : {
+        "operationId" : "getInsightsPanels",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "officer_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InsightsPanels"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Panels registered by other modules (savings, investments), for a tenant with their data",
+        "tags" : [ "lending-insights" ]
+      }
+    },
+    "/api/v1/lending/insights/portfolio" : {
+      "get" : {
+        "operationId" : "getInsightsPortfolio",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "description" : "day, week, month or year; chosen from the range when absent",
+          "in" : "query",
+          "name" : "grain",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "officer_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InsightsPortfolio"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Loan portfolio: outstanding, PAR and ageing, flows by period, collection rate, forecast, trend",
+        "tags" : [ "lending-insights" ]
+      }
+    },
+    "/api/v1/lending/insights/revenue" : {
+      "get" : {
+        "operationId" : "getInsightsRevenue",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "officer_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InsightsRevenue"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Revenue from posted journal lines by product, branch and month, with effective yield",
+        "tags" : [ "lending-insights" ]
+      }
+    },
+    "/api/v1/lending/insights/tables/{table}" : {
+      "get" : {
+        "operationId" : "getInsightsTable",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "table",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "officer_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "description" : "Table parameters: date, status, stage, account, min_dpd, max_dpd, bucket, days, group, key",
+          "in" : "query",
+          "name" : "all",
+          "required" : true,
+          "schema" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InsightsTable"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The rows behind a number (drill-down), at most 200",
+        "tags" : [ "lending-insights" ]
+      }
+    },
+    "/api/v1/lending/insights/tables/{table}/export" : {
+      "get" : {
+        "operationId" : "exportInsightsTable",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "table",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "officer_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "all",
+          "required" : true,
+          "schema" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/csv" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The same table as CSV, at most 10,000 rows; names masked without member access; audited",
+        "tags" : [ "lending-insights" ]
       }
     },
     "/api/v1/lending/investment-products" : {

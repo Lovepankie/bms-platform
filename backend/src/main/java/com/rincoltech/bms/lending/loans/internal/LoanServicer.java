@@ -514,9 +514,25 @@ class LoanServicer implements LoanServicing {
     }
 
     void writeOff(UUID loanId, String reason, UUID approvalId, UUID makerId, UUID checkerId) {
+        writeOff(loanId, reason, approvalId, makerId, checkerId, today());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void writeOffApproved(UUID loanId, LocalDate date, String reason, UUID makerId, UUID checkerId) {
+        if (makerId.equals(checkerId)) {
+            throw ApiException.rule("self_approval_forbidden", "The checker is never the maker.");
+        }
+        if (date.isAfter(today())) {
+            throw ApiException.rule("value_date_in_future", "The write-off date is today or earlier.");
+        }
+        writeOff(loanId, reason, null, makerId, checkerId, date);
+    }
+
+    /** {@code today} is the write-off date: the business date for staff, an earlier one through the port. */
+    private void writeOff(UUID loanId, String reason, UUID approvalId, UUID makerId, UUID checkerId, LocalDate today) {
         Loan loan = loans.lock(loanId).orElseThrow(ApiException::notFound);
         long principal = writeOffAmount(loan);
-        LocalDate today = today();
         List<Item> items = repo.items(loan.id());
         Position before = Servicing.position(items, today);
         UUID txnId = UUID.randomUUID();

@@ -40,6 +40,24 @@ investments' balances. The seed queues no SMS.
 java -jar bms-api.jar seed-lending --tenant <slug>
 ```
 
+### The insights demo year (`--insights-demo`, #153)
+
+```
+java -jar bms-api.jar seed-lending --tenant <slug> --insights-demo [--scale <1-50>]
+```
+
+After the base seed, in the same transaction, the tenant also gets twelve months of fabricated
+history so the Insights page shows believable trends: two more fabricated branches (`FABN`, `FABE`),
+nine fabricated staff users that cannot sign in (deactivated, no credentials, phones in the
+`+2567000000NN` range), about 90 members joining through the year (`Demo Borrower 0001` and on), and
+about 230 applications growing month by month, a few rejected or cancelled, each disbursed loan
+serviced through `LoanServicing`: most borrowers pay on time, some pay late or in part, some stop and
+are written off about four months later (some then partly recovered), and a few settle early with an
+overpayment credit. Then the year's daily snapshots are written, a month per transaction. `--scale N` multiplies the members
+and applications by N (20 for the performance measurement of `docs/specs/lending-insights-metrics.md`;
+expect several minutes). The history is deterministic for a given scale and date. Every name, number
+and amount is invented.
+
 Exit status 0 means the tenant was seeded; 1 means it was refused and **nothing was written**; 2 is
 a usage error.
 
@@ -52,7 +70,11 @@ a usage error.
   investment product, loan or journal entry, so it can never mix fabricated rows with real ones.
 - **Once.** It records the audit action `lending.seed.fabricated` (the marker) and refuses any
   tenant that carries it.
-- **One transaction.** A failure part way leaves the tenant exactly as it was.
+- **One transaction.** A failure part way leaves the tenant exactly as it was. The insights demo
+  year (`--insights-demo`) is the exception: it runs after the base seed has committed and commits
+  month by month, because one transaction for the whole year slows down as it goes (each numbering
+  sequence row is updated tens of thousands of times and the old row versions cannot be cleaned up
+  until the transaction ends). A failure part way leaves a partial year; seed a fresh tenant.
 - It runs as `bms_app` under the tenant's row-level security, like the API, and needs the lending
   module switched on for the tenant (`docs/runbooks/onboard-tenant.md`).
 
@@ -74,7 +96,7 @@ prints one line, for example
 ## Run locally
 
 `make seed-lending` seeds the fabricated `demo` tenant of `make dev` (override with
-`SEED_SLUG=<slug>`). A second run is refused by the marker; `make clean` and `make dev` start over.
+`SEED_SLUG=<slug>`); add `SEED_ARGS=--insights-demo` for the insights year. A second run is refused by the marker; `make clean` and `make dev` start over.
 
 ## Removing the fabricated data
 

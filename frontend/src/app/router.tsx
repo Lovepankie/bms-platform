@@ -79,6 +79,9 @@ const staffLendingRoute = createRoute({ getParentRoute: () => staffRoute, path: 
 const lendingLoansRoute = createRoute({ getParentRoute: () => staffLendingRoute, path: '/' }).lazy(() =>
   import('../areas/staff/lending/loans').then((m) => m.Route),
 );
+const staffInsightsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/insights' }).lazy(() =>
+  import('../areas/staff/insights/page').then((m) => m.Route),
+);
 const lendingLoanRoute = createRoute({ getParentRoute: () => staffLendingRoute, path: '/loans/$loanId' }).lazy(() =>
   import('../areas/staff/lending/loan').then((m) => m.Route),
 );
@@ -176,7 +179,7 @@ export const router = createRouter({
         memberInvestmentNewRoute,
         investmentRoute,
         investmentCertificateRoute,
-      ])]),
+      ]), staffInsightsRoute]),
     memberRoute,
     styleRoute,
     signUpRoute,

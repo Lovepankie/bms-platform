@@ -170,7 +170,7 @@ class LendingSeedIT extends IntegrationTest {
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         int status = LendingSeedCommand.run(
                 seeder,
-                t.slug(),
+                new LendingSeedCommand.Arguments(t.slug(), LendingSeeder.Options.BASE),
                 new PrintStream(new ByteArrayOutputStream(), true, StandardCharsets.UTF_8),
                 new PrintStream(err, true, StandardCharsets.UTF_8));
 
@@ -187,6 +187,17 @@ class LendingSeedIT extends IntegrationTest {
         assertThatThrownBy(() -> LendingSeedCommand.parse(new String[] {LendingSeedCommand.NAME}))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(LendingSeedCommand.parse(new String[] {LendingSeedCommand.NAME, "--tenant", "pilot"}))
-                .isEqualTo("pilot");
+                .isEqualTo(new LendingSeedCommand.Arguments("pilot", LendingSeeder.Options.BASE));
+        assertThat(LendingSeedCommand.parse(
+                        new String[] {LendingSeedCommand.NAME, "--tenant", "pilot", "--insights-demo", "--scale", "20"
+                        }))
+                .isEqualTo(new LendingSeedCommand.Arguments("pilot", new LendingSeeder.Options(true, 20)));
+        assertThatThrownBy(() -> LendingSeedCommand.parse(
+                        new String[] {LendingSeedCommand.NAME, "--tenant", "pilot", "--scale", "20"}))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> LendingSeedCommand.parse(
+                        new String[] {LendingSeedCommand.NAME, "--tenant", "pilot", "--insights-demo", "--scale", "99"
+                        }))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

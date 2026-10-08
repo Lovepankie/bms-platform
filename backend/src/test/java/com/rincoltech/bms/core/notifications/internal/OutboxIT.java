@@ -514,7 +514,9 @@ class OutboxIT extends IntegrationTest {
                 Map.entry("amount", "50,000"),
                 Map.entry("account_no", "SV000001"),
                 Map.entry("receipt_no", "RC-HQ-000001"),
-                Map.entry("balance", "75,000"));
+                Map.entry("balance", "75,000"),
+                Map.entry("date", "6 Oct 2026"),
+                Map.entry("text", "Test digest line."));
         for (String channel : List.of("email", "telegram", "sms")) {
             for (String key : OutboxTemplates.keys(channel)) {
                 OutboxTemplates.Rendered rendered = templates.render(channel, key, params);
@@ -527,6 +529,11 @@ class OutboxIT extends IntegrationTest {
         // Review B1: the email to an unconfirmed address carries only the server's values.
         assertThat(OutboxTemplates.placeholders("email", "onboarding.verify_email"))
                 .containsExactlyInAnyOrder("link", "reference");
+        // ADR-030: a tenant's digest goes to a numeric chat it named; anything else is refused.
+        assertThat(TelegramChannel.chatOf("operator", "-100123")).isEqualTo("-100123");
+        assertThat(TelegramChannel.chatOf("chat:-100456", "-100123")).isEqualTo("-100456");
+        assertThat(TelegramChannel.chatOf("chat:@somebody", "-100123")).isNull();
+        assertThat(TelegramChannel.chatOf("someone@example.test", "-100123")).isNull();
         assertThatThrownBy(() -> templates.render("email", "no.such.template", params))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(SmtpEmailChannel.messageId("onboarding.activation:1"))

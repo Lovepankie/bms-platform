@@ -25,8 +25,6 @@ export const FEATURES = {
   agents: false,
   /** The staff screen: invite a person, give them roles (no issue yet; the API exists). */
   staffAdmin: false,
-  /** The insights pages: trends from the data already kept (#156, not merged yet). */
-  insights: false,
 } satisfies Record<string, boolean>;
 
 export type Feature = keyof typeof FEATURES;

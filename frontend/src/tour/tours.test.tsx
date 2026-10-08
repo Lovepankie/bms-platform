@@ -120,7 +120,7 @@ const ADMIN: Me = {
   permissions: [
     ...(mockMe('admin').permissions ?? []),
     'core.settings.manage', 'core.settings.read', 'core.users.read', 'core.users.manage', 'core.branches.read',
-    'core.approvals.read', 'lending.members.read', 'lending.members.create', 'lending.loans.read',
+    'core.approvals.read', 'lending.members.read', 'lending.members.create', 'lending.loans.read', 'lending.insights.read',
     'retail.customer.manage',
   ],
 } as Me;

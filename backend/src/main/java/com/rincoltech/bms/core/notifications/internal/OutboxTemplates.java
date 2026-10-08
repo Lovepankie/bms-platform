@@ -86,7 +86,11 @@ class OutboxTemplates {
                     Modules: {modules}
 
                     Open the operator portal: {portal_url}
-                    """));
+                    """),
+            // The insights digest (ADR-030): the text is built by lending.insights as plain text
+            // from the tenant's own figures, ready for a WhatsApp relay later.
+            "insights.daily_digest",
+            new Template("{business_name}: daily brief for {date}", "{text}\n"));
 
     private static final Map<String, Template> TELEGRAM = Map.of(
             "onboarding.operator_alert",
@@ -98,7 +102,9 @@ class OutboxTemplates {
                     null,
                     "BMS sign-up cap reached for the hour starting {hour} UTC: {applications} new applications and"
                             + " {emails} confirmation emails. New sign-ups are answered but nothing is sent until the"
-                            + " hour passes. Check the edge rule and the portal."));
+                            + " hour passes. Check the edge rule and the portal."),
+            "insights.daily_digest",
+            new Template(null, "{text}"));
 
     /**
      * Member receipts (chapter 11 section 11.3.1). Short enough for one SMS; no name, only the

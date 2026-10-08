@@ -29,11 +29,12 @@ const help: TourStep = {
 
 const insights: TourStep = {
   id: 'insights',
-  route: '/staff/insights',
-  target: 'insights-summary',
-  feature: 'insights',
+  target: 'nav-insights',
+  module: 'lending',
+  needs: ['lending.insights.read'],
+  optional: true,
   title: 'How the business is doing',
-  body: 'See your sales and loans over time, and what changed this week.',
+  body: 'See your loans, repayments and members over time, and what changed since yesterday.',
 };
 
 const loans: TourStep = {
@@ -77,7 +78,7 @@ const branch: TourStep = {
 // the set-up checklist after the first run, and this tour starts there.
 export const adminWelcome: Tour = {
   id: 'admin-welcome',
-  version: 2,
+  version: 3,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,

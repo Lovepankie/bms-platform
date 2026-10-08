@@ -316,6 +316,20 @@ PAR90; interest rate range and weighted average per product (in bp, weighted by 
 loans written off in the period; savings held from members (total, number of accounts);
 investments held from members (total principal, number); number of branches and staff.
 
+## 14.9 Live insights (`lending.insights.*`, #153, ADR-030)
+
+The staff Insights page is not a catalogue report: it is computed per request, live for today,
+and refreshed every 60 seconds. It uses the definitions of this chapter: PAR, buckets and DPD of
+section 14.3, expected, collected on due and collection rate of `lending.expected_vs_collected`
+(section 14.4), with the reversal rule of section 14.1, and for a past date the snapshots of
+`lending_loan_daily_snapshots`. Its revenue figures come only from posted journal lines on the
+lending revenue accounts. In a series by period, a period's collection rate counts what was paid by
+the end of that period; the headline for the whole range counts what was paid by its end, as
+`lending.expected_vs_collected` does. Every metric, its formula and its source tables are listed in
+`docs/specs/lending-insights-metrics.md`; each has a golden test (chapter 15 section 15.7). Until
+the report runs of FR-RPT-04 exist, the insights drill-down tables are the CSV exports of these
+figures (FR-INS-06).
+
 ## 14.8 Test datasets
 
 Each report has a fabricated dataset (a handful of loans, repayments and journals) with a

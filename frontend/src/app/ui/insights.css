@@ -1,0 +1,526 @@
+/*
+ * The staff insights page (#153, frontend/src/areas/staff/insights): number cards with their
+ * definition tips, the filter bar, the tabs and the small SVG charts. Phone first (390px, 44px
+ * targets), the shared tokens only, no inline styles (the production CSP, style-src 'self').
+ *
+ * Chart colours: three categorical slots in a fixed order, validated for colour vision deficiency
+ * and normal vision (dataviz palette check: worst adjacent CVD delta E 9.2, normal 27.6). Slot 1 is
+ * the Rincol strong blue, not the tenant colour, so a tenant theme cannot break the check. Slot 3
+ * reads under 3:1 on white, so every chart carries its values in a table and on hover.
+ */
+
+.iv {
+  --viz-1: var(--rt-blue-strong);
+  --viz-2: var(--rt-viz-orange);
+  --viz-3: var(--rt-viz-green);
+  --viz-grid: var(--rt-grey-100);
+  --viz-axis: var(--color-text-muted);
+}
+
+.iv .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.iv-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.iv-head h1 {
+  margin-right: auto;
+}
+
+.iv h2 {
+  margin: var(--space-6) 0 var(--space-3);
+  font-size: var(--text-lg);
+}
+
+/* Filters: one row that wraps; every control is a 44px target. */
+.iv-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.iv-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.iv-filters select,
+.iv-filters input {
+  min-height: var(--tap);
+}
+
+.iv-filters-note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (min-width: 720px) {
+  .iv-filters {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+/* Tabs: a row that scrolls sideways on a phone rather than wrapping into a block. */
+.iv-tabs {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  margin: var(--space-4) 0;
+  padding-bottom: var(--space-1);
+}
+
+.iv-tab {
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  white-space: nowrap;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+.iv-tab-on,
+.iv-tab-on:hover:not(:disabled) {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-color: var(--color-primary);
+}
+
+/* Number cards. */
+.iv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+}
+
+.iv-grid-brief {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+}
+
+.iv-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.iv-card-hero {
+  border-top: 4px solid var(--color-accent);
+}
+
+.iv-card-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.iv-card-value {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.iv-card-hero .iv-card-value {
+  font-size: var(--text-2xl);
+}
+
+.iv-value-btn {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  min-height: var(--tap);
+  padding: 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  font-size: var(--text-xl);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-decoration: underline dotted var(--color-border-strong);
+  text-underline-offset: 6px;
+}
+
+.iv-value-btn:hover,
+.iv-value-btn:hover:not(:disabled) {
+  color: var(--color-link);
+  background: none;
+}
+
+.iv-card-hero .iv-value-btn {
+  font-size: var(--text-2xl);
+}
+
+.iv-card-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+/* The definition tip. */
+.iv-tip {
+  position: relative;
+  display: inline-flex;
+}
+
+.iv-tip-btn {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  margin: calc(var(--space-3) * -1) calc(var(--space-2) * -1);
+  padding: 0;
+  color: var(--color-link);
+  background: none;
+  border: 0;
+  box-shadow: none;
+  font-weight: var(--weight-bold);
+  font-style: italic;
+  font-family: Georgia, serif;
+}
+
+.iv-tip-btn:hover:not(:disabled) {
+  background: none;
+}
+
+.iv-tip-text {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: var(--z-overlay);
+  width: min(280px, 80vw);
+  padding: var(--space-2) var(--space-3);
+  background: var(--rt-grey-900);
+  color: var(--rt-white);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--text-sm);
+  font-style: normal;
+  line-height: var(--leading);
+}
+
+.iv-tip-text.iv-open {
+  display: block;
+}
+
+/* Charts. */
+.iv-chart {
+  margin: var(--space-4) 0;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.iv-chart figcaption {
+  margin-bottom: var(--space-2);
+  font-weight: var(--weight-semibold);
+}
+
+.iv-canvas {
+  width: 100%;
+  overflow: hidden;
+}
+
+.iv-canvas svg {
+  display: block;
+  touch-action: pan-y;
+}
+
+.iv-canvas svg:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.iv-grid line,
+line.iv-grid {
+  stroke: var(--viz-grid);
+  stroke-width: 1;
+}
+
+.iv-axis {
+  fill: var(--viz-axis);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.iv-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.iv-c1 {
+  stroke: var(--viz-1);
+}
+
+.iv-c2 {
+  stroke: var(--viz-2);
+}
+
+.iv-c3 {
+  stroke: var(--viz-3);
+}
+
+.iv-c1-fill,
+.iv-bar {
+  fill: var(--viz-1);
+}
+
+.iv-c2-fill {
+  fill: var(--viz-2);
+}
+
+.iv-c3-fill {
+  fill: var(--viz-3);
+}
+
+.iv-dot {
+  stroke: var(--color-surface);
+  stroke-width: 2;
+}
+
+.iv-bar-active {
+  fill: color-mix(in srgb, var(--viz-1) 75%, var(--rt-black));
+}
+
+.iv-hit {
+  fill: transparent;
+  cursor: crosshair;
+}
+
+.iv-crosshair {
+  stroke: var(--color-border-strong);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.iv-readout-box {
+  fill: var(--color-surface);
+  stroke: var(--color-border);
+  filter: drop-shadow(0 2px 4px rgba(16, 24, 40, 0.12));
+}
+
+.iv-readout-title {
+  fill: var(--color-text);
+  font-size: 12px;
+  font-weight: var(--weight-bold);
+}
+
+.iv-readout-text {
+  fill: var(--color-text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.iv-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.iv-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: var(--space-1);
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+.iv-swatch.iv-c1 {
+  background: var(--viz-1);
+}
+
+.iv-swatch.iv-c2 {
+  background: var(--viz-2);
+}
+
+.iv-swatch.iv-c3 {
+  background: var(--viz-3);
+}
+
+.iv-table summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  color: var(--color-link);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+/* Horizontal bar rows. */
+.iv-bars {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.iv-bars li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'label value'
+    'bar bar';
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--rt-grey-100);
+}
+
+.iv-bars li:last-child {
+  border-bottom: 0;
+}
+
+.iv-bars-label {
+  grid-area: label;
+  display: flex;
+  flex-direction: column;
+}
+
+.iv-bars-note {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.iv-bars-track {
+  grid-area: bar;
+  width: 100%;
+  height: 10px;
+}
+
+.iv-bars-bg {
+  fill: var(--rt-grey-100);
+}
+
+.iv-bars-value {
+  grid-area: value;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+}
+
+.iv-drill-btn {
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+  background: var(--color-surface);
+  color: var(--color-link);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+/* The rows behind a number: one line per row, the table scrolls sideways inside its card. */
+.iv-drill {
+  margin: var(--space-5) 0;
+  scroll-margin-top: var(--space-4);
+}
+
+.iv-drill td,
+.iv-drill th {
+  white-space: nowrap;
+}
+
+.iv-drill-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.iv-drill-head h2 {
+  margin: 0;
+}
+
+/* The digest form. */
+.iv-digest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.iv-digest label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.iv-digest .iv-check {
+  flex-direction: row;
+  align-items: center;
+  min-height: var(--tap);
+}
+
+.iv-digest-preview {
+  padding: var(--space-3);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  white-space: pre-wrap;
+}
+
+/* Print: the report without the controls, the chart tables open, cards kept whole. */
+@media print {
+  .staff-bar,
+  .iv-noprint,
+  .iv-tip-btn,
+  .iv-table summary {
+    display: none;
+  }
+
+  .iv-table > .table-wrap {
+    display: block;
+  }
+
+  .iv-card,
+  .iv-chart,
+  .iv-drill {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+
+  .iv-value-btn {
+    text-decoration: none;
+  }
+}

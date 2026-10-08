@@ -253,6 +253,21 @@ Coverage gate for the lending calculation code: 95 percent lines (NFR-MNT-02).
   the maturity ladder and the metrics, and after each test that the trial balance balances and both
   investment liabilities equal each investment's balances. `LendingSeedIT` checks the seed's twelve
   months of investment history the same way, and `RlsIsolationIT` covers the four new tables.
+- **Insights golden tests** (#153, FR-INS-01 to FR-INS-07). `InsightsGoldenIT` seeds a fabricated
+  year (`seed-lending --insights-demo`) and reverses a repayment that has a later one, then
+  `GoldenModel` recomputes every portfolio, brief and revenue metric from the raw rows (read as the
+  owner, summed in Java, no production code) and the API must match to the minor unit: over a
+  range with partial months, a past month read from the snapshots, a branch filter and a branch
+  scope, an officer without `lending.insights.all_officers`, and a second tenant that must never show
+  through. The snapshot rows of three past dates must equal an independent replay of the
+  allocations, and today's replay must equal the live reading. Drill-down rows must sum to their
+  number; the export must mask names without member access, be audited and refuse without the
+  permission. `InsightsRulesTest` holds hand-computed values: rounding, partial periods, the PAR
+  worked example of chapter 14, the per-period collection rate, the annualised yield, the revenue
+  components, the sentences, the CSV escaping, and that `docs/specs/lending-insights-metrics.md`
+  lists exactly the metric keys and tables the code defines. `InsightsDemoSeedIT` checks the demo
+  year's books and snapshots; `InsightsPerformanceIT` (opt in, `-Dinsights.perf=true`) times every
+  route on the seed scaled 20 times.
 - **Report golden tests.** Each report in chapter 14 runs over its fabricated dataset and
   is compared with a committed expected output (JSON), including the PAR worked example.
 - **Document golden tests.** Each PDF template renders fabricated data; the test compares

@@ -9,6 +9,7 @@ import { icons } from '../../components/icons';
 import { BrandLoader } from '../../components/states';
 import { BranchPicker, useActiveBranch } from './branch-picker';
 import { StaffContext } from './context';
+import { showInsights } from './insights/permissions';
 import { showInvestments } from './lending/investment-state';
 import { showLending } from './lending/permissions';
 import { showSavings } from './lending/savings-permissions';
@@ -111,6 +112,7 @@ export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: 
         {showLending(me) && <Link to="/staff/lending" activeOptions={{ exact: true }} data-tour="nav-lending">Loans</Link>}
         {showSavings(me) && <Link to="/staff/lending/savings">Savings</Link>}
         {showInvestments(me) && <Link to="/staff/lending/investments">Investments</Link>}
+        {showInsights(me) && <Link to="/staff/insights" data-tour="nav-insights">Insights</Link>}
         {showRetail(me) && <Link to="/staff/retail" data-tour="nav-retail">Retail</Link>}
         {permissions.includes('core.settings.manage') && <Link to="/staff/setup">Business set-up</Link>}
       </nav>

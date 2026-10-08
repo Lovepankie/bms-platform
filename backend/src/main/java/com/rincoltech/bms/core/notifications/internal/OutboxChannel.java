@@ -27,7 +27,8 @@ interface OutboxChannel {
     }
 
     /**
-     * @param recipient an email address, or {@code operator} for the Telegram operator chat
+     * @param recipient an email address, {@code operator} for the Telegram operator chat, or
+     *     {@code chat:<id>} for a numeric Telegram chat
      * @param idempotencyKey the row's key, carried to the provider where it supports one
      */
     record Delivery(String recipient, String subject, String text, String idempotencyKey) {

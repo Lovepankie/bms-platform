@@ -14,9 +14,11 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Operator alerts through the Telegram Bot API {@code sendMessage} over HTTPS, with the JDK HTTP
- * client (spec section 11). The only recipient is the operator chat of
- * {@code BMS_TELEGRAM_OPERATOR_CHAT_ID}. The bot token is part of the URL, so it is checked
+ * Operator alerts and tenant digests through the Telegram Bot API {@code sendMessage} over HTTPS,
+ * with the JDK HTTP client (spec section 11). The recipient is the operator chat of
+ * {@code BMS_TELEGRAM_OPERATOR_CHAT_ID} ({@code operator}) or a numeric chat a tenant named for its
+ * daily insights digest ({@code chat:<id>}, ADR-030): the bot can only write to a chat that has
+ * started it, so a tenant cannot make it message a stranger. The bot token is part of the URL, so it is checked
  * against the bot token shape once at startup (a token with a stray character, for example from a
  * CRLF {@code .env}, switches the sender off instead of reaching an error message), the URI is
  * built once, and no JDK exception text, which can quote the URL, is ever kept (review N2).
@@ -50,6 +52,17 @@ class TelegramChannel implements OutboxChannel {
                 && CHAT.matcher(telegram.operatorChatId()).matches();
     }
 
+    /** The chat id a recipient names: the operator chat, a {@code chat:<digits>} recipient, or null. */
+    static String chatOf(String recipient, String operatorChatId) {
+        if ("operator".equals(recipient)) {
+            return operatorChatId;
+        }
+        if (recipient != null && recipient.matches("^chat:-?\\d{1,20}$")) {
+            return recipient.substring("chat:".length());
+        }
+        return null;
+    }
+
     @Override
     public String channel() {
         return "telegram";
@@ -62,11 +75,12 @@ class TelegramChannel implements OutboxChannel {
 
     @Override
     public void send(Delivery delivery) throws Exception {
-        if (!"operator".equals(delivery.recipient())) {
-            throw new SendFailure("Telegram sends to the operator chat only");
+        String chat = chatOf(delivery.recipient(), telegram.operatorChatId());
+        if (chat == null) {
+            throw new SendFailure("Telegram sends to the operator chat or a numeric chat only");
         }
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("chat_id", telegram.operatorChatId());
+        body.put("chat_id", chat);
         body.put("text", delivery.text());
         body.put("disable_web_page_preview", true);
         HttpRequest request = HttpRequest.newBuilder(sendMessage)

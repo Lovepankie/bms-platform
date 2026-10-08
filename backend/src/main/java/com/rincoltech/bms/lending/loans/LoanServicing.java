@@ -21,4 +21,11 @@ public interface LoanServicing {
 
     /** Records a repayment (or, on a written-off loan, a recovery) as FR-REP-03 does; returns the transaction id. */
     UUID recordRepayment(UUID loanId, long amountMinor, LocalDate valueDate, String paymentMethodKey, UUID recordedBy);
+
+    /**
+     * Writes off an active loan's principal outstanding on {@code date} (today or earlier) exactly as
+     * a checker's approval of {@code loan_write_off} would (FR-LCL-02). The maker and checker must
+     * differ. Used by the fabricated insights history (#153) and later by the import.
+     */
+    void writeOffApproved(UUID loanId, LocalDate date, String reason, UUID makerId, UUID checkerId);
 }

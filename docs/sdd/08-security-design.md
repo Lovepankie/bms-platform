@@ -191,6 +191,9 @@ platform API and holds no tenant permissions.
 | `lending.reports.collections` | Y | Y | Y | Y | Y | Y | | |
 | `lending.reports.members` | Y | Y | | | | Y | | |
 | `lending.reports.compliance` | Y | | | | Y | Y | | |
+| `lending.insights.read` | Y | Y | Y | | Y | Y | | |
+| `lending.insights.all_officers` | Y | Y | | | Y | Y | | |
+| `lending.insights.export` | Y | Y | Y | | Y | Y | | |
 | `member.self.read` | | | | | | | Y | |
 | `member.self.apply` | | | | | | | Y | |
 | `member.self.pay` | | | | | | | Y | |
@@ -212,6 +215,13 @@ Notes:
 
 - A loan officer running `lending.reports.collections` sees only loans where they are
   the responsible officer; branch managers and above see their branch scope.
+- Insights (#153, ADR-030): `lending.insights.read` opens the page in the user's branch scope.
+  Without `lending.insights.all_officers` (the loan officer) every figure, chart and table covers
+  only loans the user is the responsible officer for, and members they are the officer of; the
+  server enforces it whatever the request asks. `lending.insights.export` downloads a drill-down
+  table as CSV, audited as `lending.insights.exported`; a member name in an export is reduced to
+  initials unless the user holds `lending.members.read`, and no insights table carries a phone or
+  an ID number. The daily digest settings need `core.settings.manage`.
 - Branch managers approve loans, but never one they submitted or appraised (FR-APR-03).
 - Member ID images (`id_front`, `id_back`) need `lending.members.verify_kyc` in the member's
   branch, so tenant admins and branch managers, the people who verify KYC; photos and other member

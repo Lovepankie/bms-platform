@@ -442,6 +442,16 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), investment, accrual)
                 .update();
+        // Lending insights (#153): a daily snapshot row and the digest settings.
+        owner.sql("""
+                        INSERT INTO lending_loan_daily_snapshots (tenant_id, business_date, loan_id, branch_id,
+                            officer_user_id, product_id, principal_outstanding_minor, interest_outstanding_minor,
+                            arrears_minor, days_past_due, par_bucket)
+                        VALUES (?, DATE '2026-01-15', ?, ?, ?, ?, 100000, 10000, 0, 0, 'current')
+                        """).params(t.tenantId(), loan, t.headOffice(), user, product).update();
+        owner.sql("INSERT INTO lending_insights_digest_settings (id, tenant_id) VALUES (?, ?)")
+                .params(UUID.randomUUID(), t.tenantId())
+                .update();
     }
 
     static String randomHash() {

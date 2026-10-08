@@ -55,6 +55,7 @@ public class LendingSeeder {
     private final LoanServicing servicing;
     private final SavingsServicing savings;
     private final InvestmentServicing investing;
+    private final InsightsDemoSeeder demo;
 
     LendingSeeder(
             TenantJobs tenants,
@@ -67,7 +68,8 @@ public class LendingSeeder {
             AuditLog audit,
             LoanServicing servicing,
             SavingsServicing savings,
-            InvestmentServicing investing) {
+            InvestmentServicing investing,
+            InsightsDemoSeeder demo) {
         this.tenants = tenants;
         this.transactions = new TransactionTemplate(transactionManager);
         this.jdbc = jdbc;
@@ -79,9 +81,10 @@ public class LendingSeeder {
         this.servicing = servicing;
         this.savings = savings;
         this.investing = investing;
+        this.demo = demo;
     }
 
-    /** What the seed wrote. */
+    /** What the seed wrote; {@code demo} is null without {@code --insights-demo}. */
     public record Report(
             String tenant,
             int members,
@@ -92,14 +95,31 @@ public class LendingSeeder {
             int savingsAccounts,
             int savingsMovements,
             int investmentProducts,
-            int investments) {
+            int investments,
+            InsightsDemoSeeder.Report demo) {
 
         public String render() {
             return "seed-lending: tenant " + tenant + ": " + members + " members, " + products + " products, "
                     + applications + " applications, " + disbursed + " disbursed loans, " + repayments
                     + " repayments, " + savingsAccounts + " savings accounts, " + savingsMovements
                     + " savings movements, " + investmentProducts + " investment products, " + investments
-                    + " investments (all fabricated)";
+                    + " investments (all fabricated)"
+                    + (demo == null ? "" : "; " + demo.render());
+        }
+    }
+
+    /**
+     * What to write: the base seed only, or with the insights demo history at a volume scale (1 for a
+     * demo tenant, 20 for the performance measurement of {@code docs/specs/lending-insights-metrics.md}).
+     */
+    public record Options(boolean insightsDemo, int scale) {
+
+        public static final Options BASE = new Options(false, 1);
+
+        public Options {
+            if (scale < 1 || scale > 50) {
+                throw new IllegalArgumentException("--scale is 1 to 50");
+            }
         }
     }
 
@@ -108,13 +128,48 @@ public class LendingSeeder {
      * @throws IllegalStateException when the tenant holds data or was seeded before; nothing is written
      */
     public Report seed(String tenantSlug) {
-        return tenants.callAsTenant(
-                tenantSlug,
-                "lending",
-                () -> transactions.execute(status -> {
-                    refuseUnlessEmpty();
-                    return write(tenantSlug);
-                }));
+        return seed(tenantSlug, Options.BASE);
+    }
+
+    public Report seed(String tenantSlug, Options options) {
+        return tenants.callAsTenant(tenantSlug, "lending", () -> {
+            Report base = transactions.execute(status -> {
+                refuseUnlessEmpty();
+                return write(tenantSlug, options);
+            });
+            if (!options.insightsDemo()) {
+                return base;
+            }
+            // The base seed has committed with its marker; the year of history commits month by month.
+            UUID headOffice = transactions.execute(status -> headOffice());
+            InsightsDemoSeeder.Report history = demo.write(
+                    headOffice,
+                    currentTenant.profile().currency(),
+                    clock.today(currentTenant.profile().timezone()),
+                    currentTenant.profile().timezone(),
+                    options.scale(),
+                    transactions);
+            return new Report(
+                    base.tenant(),
+                    base.members(),
+                    base.products(),
+                    base.applications(),
+                    base.disbursed(),
+                    base.repayments(),
+                    base.savingsAccounts(),
+                    base.savingsMovements(),
+                    base.investmentProducts(),
+                    base.investments(),
+                    history);
+        });
+    }
+
+    private UUID headOffice() {
+        return branches.all().stream()
+                .filter(b -> b.headOffice() && b.active())
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("the tenant has no active head office branch"))
+                .id();
     }
 
     private void refuseUnlessEmpty() {
@@ -157,7 +212,7 @@ public class LendingSeeder {
 
     private record Fee(String name, String type, Long amount, Integer rateBp, String timing) {}
 
-    private Report write(String slug) {
+    private Report write(String slug, Options options) {
         UUID branch = branches.all().stream()
                 .filter(b -> b.headOffice() && b.active())
                 .findFirst()
@@ -306,6 +361,9 @@ public class LendingSeeder {
         after.put("savings_movements", saved[1]);
         after.put("investment_products", investments[0]);
         after.put("investments", investments[1]);
+        if (options.insightsDemo()) {
+            after.put("insights_demo_scale", options.scale());
+        }
         audit.record(AuditLog.Entry.created(
                 MARKER, "core.tenant", currentTenant.profile().id(), branch, after));
         return new Report(
@@ -318,7 +376,8 @@ public class LendingSeeder {
                 saved[0],
                 saved[1],
                 investments[0],
-                investments[1]);
+                investments[1],
+                null);
     }
 
     // ---- Savings (increment 9, #151; ADR-032) ---------------------------------------------
