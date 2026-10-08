@@ -84,7 +84,7 @@ class MigrationOrderIT {
             postgres.start();
             // A server that took the loan pull requests first: schema at V9, with a lending tenant.
             MigrateResult first = flyway(postgres, "9").migrate();
-            assertThat(first.targetSchemaVersion).isEqualTo(VERSIONS.get(VERSIONS.size() - 1));
+            assertThat(first.targetSchemaVersion).isEqualTo("9");
             JdbcClient owner = JdbcClient.create(
                     new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
             UUID tenant = UUID.randomUUID();
@@ -131,8 +131,7 @@ class MigrationOrderIT {
     void transfersMigrationGivesAnExistingRetailTenantTheClearingAccount() {
         try (PostgreSQLContainer postgres = database()) {
             postgres.start();
-            assertThat(flyway(postgres, "21").migrate().targetSchemaVersion)
-                    .isEqualTo(VERSIONS.get(VERSIONS.size() - 1));
+            assertThat(flyway(postgres, "21").migrate().targetSchemaVersion).isEqualTo("21");
             JdbcClient owner = JdbcClient.create(
                     new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
             UUID tenant = UUID.randomUUID();
@@ -161,8 +160,7 @@ class MigrationOrderIT {
     void servicingMigrationAppliesOnADatabaseThatAlreadyHoldsLoans() {
         try (PostgreSQLContainer postgres = database()) {
             postgres.start();
-            assertThat(flyway(postgres, "28").migrate().targetSchemaVersion)
-                    .isEqualTo(VERSIONS.get(VERSIONS.size() - 1));
+            assertThat(flyway(postgres, "28").migrate().targetSchemaVersion).isEqualTo("28");
             JdbcClient owner = JdbcClient.create(
                     new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
             UUID tenant = UUID.randomUUID();
@@ -243,8 +241,7 @@ class MigrationOrderIT {
     void savingsMigrationKeepsTheOutboxRowsOfADatabaseAtV29() {
         try (PostgreSQLContainer postgres = database()) {
             postgres.start();
-            assertThat(flyway(postgres, "29").migrate().targetSchemaVersion)
-                    .isEqualTo(VERSIONS.get(VERSIONS.size() - 1));
+            assertThat(flyway(postgres, "29").migrate().targetSchemaVersion).isEqualTo("29");
             JdbcClient owner = JdbcClient.create(
                     new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
             String enqueue =
@@ -288,8 +285,7 @@ class MigrationOrderIT {
     void optimisationMigrationKeepsTheRowsOfADatabaseAtV22() {
         try (PostgreSQLContainer postgres = database()) {
             postgres.start();
-            assertThat(flyway(postgres, "22").migrate().targetSchemaVersion)
-                    .isEqualTo(VERSIONS.get(VERSIONS.size() - 1));
+            assertThat(flyway(postgres, "22").migrate().targetSchemaVersion).isEqualTo("22");
             JdbcClient owner = JdbcClient.create(
                     new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
             UUID tenant = UUID.randomUUID();

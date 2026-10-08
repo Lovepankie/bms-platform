@@ -83,3 +83,42 @@ The loan page links to the member's savings for a session holding `lending.savin
   `approval_already_pending`.
 - Printing or sending a receipt, a member statement, and a mock switch like `VITE_RETAIL_MOCK`.
 - The tests render static markup (no DOM); a browser walk against the real API is still to do.
+
+## Investments (increment 10, issue #152)
+
+**Requirements:** FR-INV-01 to FR-INV-12 · **API:** `docs/sdd/07-api-design.md` section 7.11.16 · **Decision:** ADR-031
+
+Phone-first staff screens in the same folder, on the generated client (`src/api/investments.ts`), styled in
+`src/app/ui/lending.css` (the `iv-` classes) with the tokens and no inline styles. The staff header shows
+**Investments** to a session with `lending.investments.read`; every investment screen carries a sub-menu (All,
+Maturities, New investment, Products) as 44px links.
+
+| Route | Screen | Permissions needed |
+|---|---|---|
+| `/staff/lending/investments` | Investments: search by account number, member number or name, status filter, "Load more"; each row shows the amount, product, rate, term, maturity and any return due | `lending.investments.read` |
+| `/staff/lending/investments/member/$memberId` | The member investments tab: one member's investments, what they hold now, and "New investment for this member" | `lending.investments.read` (new: `lending.investments.open`) |
+| `/staff/lending/investments/new`, `/staff/lending/investments/member/$memberId/new` | Subscribe: find the member (unless given), product, amount, term (the product's terms as radio buttons), the maturity choice, and the server's return preview before opening | `lending.investments.open` |
+| `/staff/lending/investments/$investmentId` | One investment: terms, balances (return due now in bold), the actions, the schedule table and the statement with the balances after each line | `lending.investments.read` |
+| `/staff/lending/investments/$investmentId/certificate` | Certificate and statement laid out to print (Print button; printing hides the staff header and menus) | `lending.investments.read` |
+| `/staff/lending/investments/maturities` | Cash needed for payouts: matured and unpaid, within 7 days, 8 to 30 and 31 to 90 days (one column on a phone, four from 720px), the list of investments maturing, then the month's figures and the largest investors and products | `lending.investments.read` |
+| `/staff/lending/investments/products` | Products setup: the list for every reader; New, Edit (investments already opened keep their terms) and Archive for an admin. Rates are typed as a percentage a year and sent as basis points | `lending.investments.read` (manage: `lending.investment_products.manage`) |
+
+The actions on the investment page, offered only for the statuses the server accepts:
+
+| Action | Permission | Status | Result shown |
+|---|---|---|---|
+| Record funding (date, method, reference) | `lending.investments.fund` | pending funding, no request waiting | 201: funded, schedule shown; 202: waiting for a checker above the threshold |
+| Pay return due (method, reference) | `lending.investments.payout` | active, matured or rolled over, with a return due | the voucher number and amount |
+| Pay out (method, reference) | `lending.investments.payout` | matured | principal plus unpaid return, the voucher number |
+| Roll over (principal and return, or principal only) | `lending.investments.payout` | matured | opens the new investment |
+| Early withdrawal (the day's quote, method, reason) | `lending.investments.payout` | active, product allows it, no request waiting | always waits for a checker; worked out again on the approval day |
+| Maturity choice | `lending.investments.open` | pending funding, active, matured | saved |
+| Reverse (reason), on a statement line | `lending.investments.payout` | a funding, return payout or maturity payout not yet reversed | waits for a checker |
+
+Money is parsed with `parseAmount` into integer minor units and every figure is the server's; each money form keeps
+its draft and Idempotency-Key in the tab (`retail/idempotency.ts`). Investment refusal codes get plain words in
+`src/api/investments.ts` and fall back to the lending and retail lists.
+
+Deferred: member self-service (the member portal's Invest screen, increment 11), online payments, USSD, SMS reminders,
+the certificate PDF in document storage, and a member page with tabs (the member tab is the filtered list above until
+member screens exist).

@@ -485,6 +485,332 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/investment-products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List investment products */
+        get: operations["listInvestmentProducts"];
+        put?: never;
+        /** Create an investment product (FR-INV-01) */
+        post: operations["createInvestmentProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investment-products/return-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The return schedule an amount and term would get on a product (R-INV-1 to R-INV-4) */
+        post: operations["previewInvestmentReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investment-products/{product_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An investment product */
+        get: operations["getInvestmentProduct"];
+        /** Edit an investment product; investments already opened keep their terms */
+        put: operations["updateInvestmentProduct"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investment-products/{product_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive an investment product */
+        post: operations["archiveInvestmentProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List investments in the caller's branch scope; q searches account number, member number or name (chapter 14 investments register) */
+        get: operations["listInvestments"];
+        put?: never;
+        /** Open an investment for a member, pending funding (FR-INV-02) */
+        post: operations["openInvestment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/maturities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The maturity ladder (overdue, 7, 30, 90 days) and the investments maturing (FR-INV-12) */
+        get: operations["listInvestmentMaturities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Balances, flows, returns accrued and paid, the ladder and concentration (FR-INV-12) */
+        get: operations["getInvestmentMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/{investment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An investment with its balances */
+        get: operations["getInvestment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/{investment_id}/certificate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The investment certificate's data (FR-INV-10) */
+        get: operations["getInvestmentCertificate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/{investment_id}/early-withdrawal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an early withdrawal; always waits for a checker (FR-INV-06) */
+        post: operations["requestInvestmentEarlyWithdrawal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/{investment_id}/early-withdrawal-quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What an early withdrawal pays as at a date, today by default (FR-INV-06, R-INV-6) */
+        get: operations["getInvestmentEarlyWithdrawalQuote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/{investment_id}/funding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record funding (FR-INV-03); 201 when executed below the threshold, 202 when it waits for a checker */
+        post: operations["requestInvestmentFunding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/{investment_id}/maturity-instruction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Record the member's choice at maturity: payout or rollover (FR-INV-05) */
+        put: operations["setInvestmentMaturityInstruction"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/{investment_id}/payout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pay a matured investment out: principal and unpaid return (FR-INV-05) */
+        post: operations["payInvestmentOut"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/{investment_id}/return-payouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pay the return that is due (FR-INV-04) */
+        post: operations["payInvestmentReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/{investment_id}/rollover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Roll a matured investment over on the product's current terms (FR-INV-05) */
+        post: operations["rollInvestmentOver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/{investment_id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The accrual and payout schedule (FR-INV-09) */
+        get: operations["getInvestmentSchedule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/{investment_id}/statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every money event with the principal and return payable after it (FR-INV-10) */
+        get: operations["getInvestmentStatement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/investments/{investment_id}/transactions/{txn_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request the reversal of a funding, return payout or maturity payout (FR-INV-11) */
+        post: operations["requestInvestmentTransactionReversal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/loan-products": {
         parameters: {
             query?: never;
@@ -2888,6 +3214,11 @@ export interface components {
             /** @description Required when in_custody */
             storage_location?: string;
         };
+        CreateInvestmentProductRequest: {
+            code: string;
+            name: string;
+            terms: components["schemas"]["InvestmentProductTerms"];
+        };
         CreateLoanProductRequest: {
             code: string;
             name: string;
@@ -3045,6 +3376,420 @@ export interface components {
         HeadOfficeRequest: {
             code: string;
             name: string;
+        };
+        Investment: {
+            account_no?: string;
+            /** Format: int64 */
+            agreed_return_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            certificate_no?: string;
+            channel?: string;
+            /** Format: date */
+            closed_on?: string;
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            early_withdrawal_allowed?: boolean;
+            /** Format: int32 */
+            early_withdrawal_penalty_bp?: number;
+            /** Format: int32 */
+            early_withdrawal_rate_bp?: number;
+            early_withdrawal_rule?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: date */
+            maturity_date?: string;
+            maturity_instruction?: string;
+            /** Format: uuid */
+            member_id?: string;
+            member_name?: string;
+            member_no?: string;
+            payout_frequency?: string;
+            /** Format: uuid */
+            pending_approval_id?: string;
+            /** Format: date */
+            post_maturity_reminded_on?: string;
+            /** Format: date */
+            pre_maturity_reminded_on?: string;
+            /** Format: int64 */
+            principal_held_minor?: number;
+            /** Format: int64 */
+            principal_minor?: number;
+            product_code?: string;
+            /** Format: uuid */
+            product_id?: string;
+            product_name?: string;
+            product_type?: string;
+            /** Format: int64 */
+            return_accrued_minor?: number;
+            /**
+             * Format: int64
+             * @description Return due and not yet paid: what a return payout pays now
+             */
+            return_available_minor?: number;
+            /** Format: int64 */
+            return_due_minor?: number;
+            return_method?: string;
+            /** Format: int64 */
+            return_paid_minor?: number;
+            /** Format: int32 */
+            return_rate_bp?: number;
+            /** Format: uuid */
+            rolled_over_from_id?: string;
+            /** Format: uuid */
+            rolled_over_to_id?: string;
+            /** Format: date */
+            start_date?: string;
+            status?: string;
+            /** Format: int32 */
+            term_months?: number;
+            /** Format: int32 */
+            version?: number;
+        };
+        /** @description executed: the action took effect now (below the tenant's threshold); otherwise it waits for a checker as approval_request_id */
+        InvestmentActionOutcome: {
+            /** Format: uuid */
+            approval_request_id?: string;
+            executed?: boolean;
+            /** Format: uuid */
+            investment_id?: string;
+            investment_status?: string;
+        };
+        /** @description FR-INV-10: the data of the printed certificate */
+        InvestmentCertificate: {
+            account_no?: string;
+            /** Format: int64 */
+            agreed_return_minor?: number;
+            branch_name?: string;
+            certificate_no?: string;
+            currency?: string;
+            early_withdrawal_allowed?: boolean;
+            /** Format: int32 */
+            early_withdrawal_penalty_bp?: number;
+            /** Format: int32 */
+            early_withdrawal_rate_bp?: number;
+            early_withdrawal_rule?: string;
+            /** Format: date */
+            issued_on?: string;
+            /** Format: date */
+            maturity_date?: string;
+            maturity_instruction?: string;
+            /** Format: int64 */
+            maturity_value_minor?: number;
+            member_name?: string;
+            member_no?: string;
+            payout_frequency?: string;
+            /** Format: int64 */
+            principal_minor?: number;
+            product_name?: string;
+            return_method?: string;
+            /** Format: int32 */
+            return_rate_bp?: number;
+            /** Format: date */
+            start_date?: string;
+            tenant_name?: string;
+            /** Format: int32 */
+            term_months?: number;
+        };
+        /** @description R-INV-6 as at the value date */
+        InvestmentEarlyWithdrawalQuote: {
+            /** Format: int64 */
+            cash_minor?: number;
+            currency?: string;
+            /** Format: int64 */
+            earned_return_minor?: number;
+            /** Format: uuid */
+            investment_id?: string;
+            /** Format: int64 */
+            penalty_minor?: number;
+            /** Format: int64 */
+            principal_minor?: number;
+            /** Format: int64 */
+            return_accrued_minor?: number;
+            /** Format: int64 */
+            return_paid_minor?: number;
+            rule?: string;
+            /** Format: date */
+            value_date?: string;
+        };
+        InvestmentEarlyWithdrawalRequest: {
+            external_reference?: string;
+            payment_method_key: string;
+            reason: string;
+        };
+        InvestmentFundingRequest: {
+            external_reference?: string;
+            payment_method_key: string;
+            /**
+             * Format: date
+             * @description Today or earlier, in an open period
+             */
+            value_date: string;
+        };
+        InvestmentLadderBucket: {
+            bucket?: string;
+            /** Format: int32 */
+            count?: number;
+            /** Format: int64 */
+            principal_minor?: number;
+            /** Format: int64 */
+            return_minor?: number;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        InvestmentMaturities: {
+            /** Format: date */
+            as_of?: string;
+            currency?: string;
+            items?: components["schemas"]["InvestmentMaturity"][];
+            ladder?: components["schemas"]["InvestmentLadderBucket"][];
+        };
+        InvestmentMaturity: {
+            account_no?: string;
+            /** Format: int32 */
+            days_to_maturity?: number;
+            /** Format: uuid */
+            investment_id?: string;
+            /** Format: date */
+            maturity_date?: string;
+            maturity_instruction?: string;
+            member_name?: string;
+            /** Format: int64 */
+            principal_minor?: number;
+            product_name?: string;
+            /** Format: int64 */
+            return_minor?: number;
+            status?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        InvestmentMaturityInstructionRequest: {
+            instruction: string;
+        };
+        InvestmentMetric: {
+            currency?: string;
+            definition?: string;
+            key?: string;
+            kind?: string;
+            label?: string;
+            /** Format: int64 */
+            value?: number;
+        };
+        InvestmentMetrics: {
+            /** Format: date */
+            from?: string;
+            ladder?: components["schemas"]["InvestmentLadderBucket"][];
+            metrics?: components["schemas"]["InvestmentMetric"][];
+            products?: components["schemas"]["InvestmentShare"][];
+            /** Format: date */
+            to?: string;
+            top_investors?: components["schemas"]["InvestmentShare"][];
+            /** Format: int64 */
+            total_principal_minor?: number;
+        };
+        InvestmentPage: {
+            items?: components["schemas"]["Investment"][];
+            next_cursor?: string;
+        };
+        InvestmentPaymentRequest: {
+            external_reference?: string;
+            payment_method_key: string;
+        };
+        InvestmentProduct: {
+            allowed_terms_months?: number[];
+            code?: string;
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            early_withdrawal_allowed?: boolean;
+            /** Format: int32 */
+            early_withdrawal_penalty_bp?: number;
+            /** Format: int32 */
+            early_withdrawal_rate_bp?: number;
+            early_withdrawal_rule?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int64 */
+            max_amount_minor?: number;
+            /** Format: int64 */
+            min_amount_minor?: number;
+            name?: string;
+            payout_frequency?: string;
+            product_type?: string;
+            return_method?: string;
+            /** Format: int32 */
+            return_rate_bp?: number;
+            status?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        InvestmentProductList: {
+            items?: components["schemas"]["InvestmentProduct"][];
+        };
+        InvestmentProductTerms: {
+            allowed_terms_months: number[];
+            early_withdrawal_allowed: boolean;
+            /**
+             * Format: int32
+             * @description Penalty on principal withdrawn early, in basis points
+             */
+            early_withdrawal_penalty_bp?: number;
+            /** Format: int32 */
+            early_withdrawal_rate_bp?: number;
+            early_withdrawal_rule?: string;
+            /** Format: int64 */
+            max_amount_minor?: number;
+            /** Format: int64 */
+            min_amount_minor: number;
+            payout_frequency: string;
+            /** @description recurring: renews itself at maturity unless the member asks for a payout (FR-INV-08) */
+            product_type: string;
+            /** @description compound: monthly, only with payout at_maturity (R-INV-3) */
+            return_method: string;
+            /**
+             * Format: int32
+             * @description Per year
+             */
+            return_rate_bp: number;
+        };
+        InvestmentReasonRequest: {
+            reason: string;
+        };
+        InvestmentReturnPreview: {
+            /** Format: int64 */
+            agreed_return_minor?: number;
+            /** Format: int64 */
+            amount_minor?: number;
+            currency?: string;
+            /** Format: date */
+            maturity_date?: string;
+            /** Format: int64 */
+            maturity_value_minor?: number;
+            payout_frequency?: string;
+            periods?: components["schemas"]["InvestmentSchedulePeriod"][];
+            return_method?: string;
+            /** Format: int32 */
+            return_rate_bp?: number;
+            /** Format: date */
+            start_date?: string;
+            /** Format: int32 */
+            term_months?: number;
+        };
+        InvestmentReturnPreviewRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            /** Format: uuid */
+            product_id: string;
+            /**
+             * Format: date
+             * @description Today when omitted
+             */
+            start_date?: string;
+            /** Format: int32 */
+            term_months: number;
+        };
+        InvestmentRolloverRequest: {
+            mode: string;
+        };
+        InvestmentRolloverResult: {
+            next?: components["schemas"]["Investment"];
+            previous?: components["schemas"]["Investment"];
+        };
+        InvestmentSchedule: {
+            currency?: string;
+            /** Format: uuid */
+            investment_id?: string;
+            periods?: components["schemas"]["InvestmentSchedulePeriod"][];
+            /** Format: int64 */
+            total_return_minor?: number;
+        };
+        InvestmentSchedulePeriod: {
+            /** Format: int64 */
+            cumulative_return_minor?: number;
+            /** Format: int64 */
+            opening_balance_minor?: number;
+            payout?: boolean;
+            /** Format: date */
+            period_end?: string;
+            /** Format: int32 */
+            period_no?: number;
+            /** Format: date */
+            period_start?: string;
+            /** Format: int64 */
+            return_minor?: number;
+            status?: string;
+        };
+        InvestmentShare: {
+            /** Format: uuid */
+            id?: string;
+            label?: string;
+            /** Format: int64 */
+            principal_minor?: number;
+            /** Format: int32 */
+            share_bp?: number;
+        };
+        InvestmentStatement: {
+            investment?: components["schemas"]["Investment"];
+            lines?: components["schemas"]["InvestmentStatementLine"][];
+            /** Format: int64 */
+            principal_balance_minor?: number;
+            /** Format: int64 */
+            return_payable_minor?: number;
+        };
+        InvestmentStatementLine: {
+            /**
+             * Format: int64
+             * @description Principal held after this line
+             */
+            principal_balance_minor?: number;
+            /**
+             * Format: int64
+             * @description Return accrued and not paid after this line
+             */
+            return_payable_minor?: number;
+            transaction?: components["schemas"]["InvestmentTransaction"];
+        };
+        InvestmentTransaction: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: uuid */
+            approval_request_id?: string;
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            external_reference?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            investment_id?: string;
+            /** Format: uuid */
+            journal_entry_id?: string;
+            payment_method_key?: string;
+            /** Format: int64 */
+            penalty_minor?: number;
+            /** Format: int32 */
+            period_no?: number;
+            /** Format: int64 */
+            principal_minor?: number;
+            reason?: string;
+            receipt_no?: string;
+            /** Format: uuid */
+            recorded_by?: string;
+            /** Format: int64 */
+            return_minor?: number;
+            /** Format: uuid */
+            reversed_by_txn_id?: string;
+            /** Format: uuid */
+            reverses_txn_id?: string;
+            source?: string;
+            txn_type?: string;
+            /** Format: date */
+            value_date?: string;
+        };
+        InvestmentTransactionResult: {
+            investment?: components["schemas"]["Investment"];
+            transaction?: components["schemas"]["InvestmentTransaction"];
         };
         InvitationLink: {
             /** Format: date-time */
@@ -3723,6 +4468,17 @@ export interface components {
         };
         NextOfKinList: {
             items?: components["schemas"]["NextOfKin"][];
+        };
+        OpenInvestmentRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            maturity_instruction?: string;
+            /** Format: uuid */
+            member_id: string;
+            /** Format: uuid */
+            product_id: string;
+            /** Format: int32 */
+            term_months: number;
         };
         OpenSavingsAccountRequest: {
             /**
@@ -5348,6 +6104,10 @@ export interface components {
             owner_relationship?: string;
             reference_no?: string;
         };
+        UpdateInvestmentProductRequest: {
+            name: string;
+            terms: components["schemas"]["InvestmentProductTerms"];
+        };
         /** @description Draft only; omitted fields are unchanged */
         UpdateLoanRequest: {
             /** Format: date */
@@ -6286,6 +7046,555 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CollateralValuation"];
+                };
+            };
+        };
+    };
+    listInvestmentProducts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentProductList"];
+                };
+            };
+        };
+    };
+    createInvestmentProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvestmentProductRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentProduct"];
+                };
+            };
+        };
+    };
+    previewInvestmentReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvestmentReturnPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentReturnPreview"];
+                };
+            };
+        };
+    };
+    getInvestmentProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentProduct"];
+                };
+            };
+        };
+    };
+    updateInvestmentProduct: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInvestmentProductRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentProduct"];
+                };
+            };
+        };
+    };
+    archiveInvestmentProduct: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentProduct"];
+                };
+            };
+        };
+    };
+    listInvestments: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                status?: string[];
+                member_id?: string;
+                product_id?: string;
+                maturing_within_days?: number;
+                q?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentPage"];
+                };
+            };
+        };
+    };
+    openInvestment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenInvestmentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Investment"];
+                };
+            };
+        };
+    };
+    listInvestmentMaturities: {
+        parameters: {
+            query?: {
+                days?: number;
+                branch_id?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentMaturities"];
+                };
+            };
+        };
+    };
+    getInvestmentMetrics: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                branch_id?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentMetrics"];
+                };
+            };
+        };
+    };
+    getInvestment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                investment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Investment"];
+                };
+            };
+        };
+    };
+    getInvestmentCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                investment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentCertificate"];
+                };
+            };
+        };
+    };
+    requestInvestmentEarlyWithdrawal: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                investment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvestmentEarlyWithdrawalRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentActionOutcome"];
+                };
+            };
+        };
+    };
+    getInvestmentEarlyWithdrawalQuote: {
+        parameters: {
+            query?: {
+                value_date?: string;
+            };
+            header?: never;
+            path: {
+                investment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentEarlyWithdrawalQuote"];
+                };
+            };
+        };
+    };
+    requestInvestmentFunding: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                investment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvestmentFundingRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentActionOutcome"];
+                };
+            };
+        };
+    };
+    setInvestmentMaturityInstruction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                investment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvestmentMaturityInstructionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Investment"];
+                };
+            };
+        };
+    };
+    payInvestmentOut: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                investment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvestmentPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentTransactionResult"];
+                };
+            };
+        };
+    };
+    payInvestmentReturn: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                investment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvestmentPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentTransactionResult"];
+                };
+            };
+        };
+    };
+    rollInvestmentOver: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                investment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvestmentRolloverRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentRolloverResult"];
+                };
+            };
+        };
+    };
+    getInvestmentSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                investment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentSchedule"];
+                };
+            };
+        };
+    };
+    getInvestmentStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                investment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentStatement"];
+                };
+            };
+        };
+    };
+    requestInvestmentTransactionReversal: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                investment_id: string;
+                txn_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvestmentReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentActionOutcome"];
                 };
             };
         };

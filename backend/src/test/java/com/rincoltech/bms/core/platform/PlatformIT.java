@@ -135,7 +135,8 @@ class PlatformIT extends IntegrationTest {
                         .param(tenantId)
                         .query(Long.class)
                         .single())
-                .isEqualTo(30);
+                // The lending chart of chapter 6 section 6.6.2, 4060 investment penalty income included (#152).
+                .isEqualTo(31);
         assertThat(owner.sql("SELECT count(*) FROM branches WHERE tenant_id = ? AND is_head_office")
                         .param(tenantId)
                         .query(Long.class)
@@ -213,7 +214,7 @@ class PlatformIT extends IntegrationTest {
                         .param(tenantId)
                         .query(Long.class)
                         .single())
-                .isEqualTo(30);
+                .isEqualTo(31);
         assertThat(JdbcCheck.moduleTenants("lending")).doesNotContain(UUID.fromString(tenantId));
 
         platform.call(

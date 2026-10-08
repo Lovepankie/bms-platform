@@ -42,6 +42,7 @@ class ModularityTest {
                         "core.platform",
                         "core.onboarding",
                         "lending.collateral",
+                        "lending.investments",
                         "lending.loans",
                         "lending.manifest",
                         "lending.members",

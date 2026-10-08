@@ -187,3 +187,103 @@
   gap: var(--space-2) var(--space-3);
   margin: var(--space-3) 0;
 }
+
+/*
+ * Investments (#152): the investments sub-menu, the maturity ladder, concentration shares and the
+ * printable certificate. Same tokens; the ladder is one column on a phone and four from 720px.
+ */
+
+.iv-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+}
+
+.iv-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.iv-nav a[aria-current='page'],
+.iv-nav a.active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-tint);
+}
+
+.iv-ladder {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.iv-ladder > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.iv-ladder > li.iv-due {
+  border-color: var(--color-danger);
+}
+
+.iv-ladder strong {
+  font-size: var(--text-lg);
+}
+
+@media (min-width: 720px) {
+  .iv-ladder {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.iv-metric {
+  display: contents;
+}
+
+.iv-shares {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-4);
+}
+
+.iv-shares > li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ln-list button.ln-item {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+@media print {
+  .staff-bar,
+  .iv-nav,
+  .iv-no-print {
+    display: none;
+  }
+
+  .iv-print {
+    border: 0;
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}

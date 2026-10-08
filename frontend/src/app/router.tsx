@@ -90,6 +90,16 @@ const savingsStatementRoute = lendingScreen('/savings/accounts/$accountId/statem
   import('../areas/staff/lending/savings-statement').then((m) => m.Route),
 );
 const memberSavingsRoute = lendingScreen('/members/$memberId/savings').lazy(() => import('../areas/staff/lending/member-savings').then((m) => m.Route));
+const investmentsRoute = lendingScreen('/investments').lazy(() => import('../areas/staff/lending/investments').then((m) => m.Route));
+const investmentNewRoute = lendingScreen('/investments/new').lazy(() => import('../areas/staff/lending/investment-new').then((m) => m.Route));
+const investmentMaturitiesRoute = lendingScreen('/investments/maturities').lazy(() => import('../areas/staff/lending/maturities').then((m) => m.Route));
+const investmentProductsRoute = lendingScreen('/investments/products').lazy(() => import('../areas/staff/lending/investment-products').then((m) => m.Route));
+const memberInvestmentsRoute = lendingScreen('/investments/member/$memberId').lazy(() => import('../areas/staff/lending/investments').then((m) => m.MemberRoute));
+const memberInvestmentNewRoute = lendingScreen('/investments/member/$memberId/new').lazy(() => import('../areas/staff/lending/investment-new').then((m) => m.MemberRoute));
+const investmentRoute = lendingScreen('/investments/$investmentId').lazy(() => import('../areas/staff/lending/investment').then((m) => m.Route));
+const investmentCertificateRoute = lendingScreen('/investments/$investmentId/certificate').lazy(() =>
+  import('../areas/staff/lending/investment-certificate').then((m) => m.Route),
+);
 
 const signUpRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sign-up' }).lazy(() =>
   import('../areas/onboarding/sign-up').then((m) => m.Route),
@@ -158,6 +168,14 @@ export const router = createRouter({
         savingsAccountRoute,
         savingsStatementRoute,
         memberSavingsRoute,
+        investmentsRoute,
+        investmentNewRoute,
+        investmentMaturitiesRoute,
+        investmentProductsRoute,
+        memberInvestmentsRoute,
+        memberInvestmentNewRoute,
+        investmentRoute,
+        investmentCertificateRoute,
       ])]),
     memberRoute,
     styleRoute,

@@ -81,7 +81,8 @@ lending           vertical module (ADR-001)
   loans           origination, appraisal, schedule, disbursement, repayment, arrears, closure
   collateral      register, valuations, custody
   savings         products, accounts, transactions, interest
-  investments     products, investments, returns, maturity
+  investments     products, investments, schedule, returns job, maturity, rollover, early
+                  withdrawal, reversal, certificate, statement, maturity ladder (ADR-031)
   collections     due list, arrears list, officer assignment, collection actions
   lending reports, lending import templates, lending posting rules, lending jobs
 retail            vertical module (future)
@@ -108,10 +109,12 @@ core.payments         -> core.ledger, core.notifications (booking is delegated t
 core.reporting        -> core.documents
 lending               -> any core module
 lending.loans         -> lending.members, lending.products, lending.collateral, lending.savings (transfer)
-lending.seed          -> lending.loans (LoanServicing), lending.savings (SavingsServicing)
+lending.seed          -> lending.loans (LoanServicing), lending.savings (SavingsServicing),
+                         lending.investments (InvestmentServicing)
 lending.collections   -> lending.loans, lending.members
 lending.savings       -> lending.members (member lookup, the receipt SMS phone; ADR-032)
-lending.investments   -> lending.members, lending.savings (monthly return credit)
+lending.investments   -> lending.members; lending.savings (monthly return credit) in a follow-up
+                         (increment 10 pays due returns in cash, ADR-031)
 lending.collateral    -> lending.members
 ```
 

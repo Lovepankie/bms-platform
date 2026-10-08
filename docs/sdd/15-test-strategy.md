@@ -242,6 +242,17 @@ Coverage gate for the lending calculation code: 95 percent lines (NFR-MNT-02).
   for one balance (exactly one succeeds) and 50 deposits (exact balance, unique gap-free `seq` and
   receipts). `RlsIsolationIT` has a factory row in each savings table and checks the three savings
   ledgers are append-only.
+- **Investment return golden tests** (`InvestmentReturnsTest`, #152, R-INV-1 to R-INV-6). Flat
+  schedules with their rounding residue, monthly compounding (rounding each month, over two years),
+  month-end clamping in a leap and a common year, quarterly payout periods, part periods counted
+  over 366 days in a leap year and split at 1 January, and both early withdrawal worked examples
+  with a penalty, each asserted to the minor unit. `InvestmentsIT` then checks every journal line of
+  each investment event of chapter 6 section 6.6.3 on PostgreSQL, funding with and without a checker,
+  the daily job run twice and three times at once (each period accrued once), two concurrent
+  payouts of one due return (exactly one pays), reversal rules, branch scope, idempotent retries,
+  the maturity ladder and the metrics, and after each test that the trial balance balances and both
+  investment liabilities equal each investment's balances. `LendingSeedIT` checks the seed's twelve
+  months of investment history the same way, and `RlsIsolationIT` covers the four new tables.
 - **Report golden tests.** Each report in chapter 14 runs over its fabricated dataset and
   is compared with a committed expected output (JSON), including the PAR worked example.
 - **Document golden tests.** Each PDF template renders fabricated data; the test compares

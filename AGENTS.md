@@ -53,13 +53,10 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   (issue #84, ADR-020 amendment) add `V22`. The database optimisation (issue #107, ADR-028) adds
   `V26` (indexes and a fillfactor only; `V24`, `V25` and `V27` stay unused, since a number below
   an applied one can never run). The retail catalogue management (issue #146) takes `V28`. Lending increment 5,
-  disbursement and repayments (issue #108, ADR-026), takes `V29`. Flyway runs with `outOfOrder`
-  off, so a new migration takes a number above the highest one on any open branch. `V30` is held by
-  the open savings branch (#179), and the first-run preferences (issue #19, ADR-025) take `V31`
-  (`V32` next).
-  disbursement and repayments (issue #108, ADR-026), takes `V29`, and lending savings (issue #151,
-  ADR-032) `V30`. Flyway runs with `outOfOrder` off, so a new migration takes a number above the
-  highest one on any open branch (`V31` next).
+  disbursement and repayments (issue #108, ADR-026), takes `V29`, lending savings (issue #151,
+  ADR-032) `V30`, the first-run preferences (issue #19, ADR-025) `V31`, and lending investments
+  (issue #152, ADR-031) `V32`. Flyway runs with `outOfOrder` off, so a new migration takes a number
+  above the highest one on any open branch (`V33` next).
 - **Self-onboarding, build step 1 (issue #89, ADR-024):** migration `V23` with
   `onboarding_applications` and `notification_outbox`, reached only through definer functions;
   the public sign-up and applicant page; the operator portal on the platform host (operator
@@ -90,6 +87,20 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   `SavingsMetrics` for the insights page; the staff savings screens; savings in the fabricated seed.
   Deferred: member self-service (increment 11), USSD and online payments (phase 2), transfers
   between accounts and from loan credit (FR-REP-04a), savings-secured loans (open question 2).
+- **Built (increment 10, issue #152, ADR-031):** migration `V32` (investment products, investments,
+  schedule items, investment transactions; two checker permissions; account 4060 investment
+  penalty income); fixed-term and recurring (auto-renewing) products with flat or monthly
+  compounding returns and payout at maturity, monthly or quarterly; funding with the
+  `investment_funding` approval action above the threshold; the accrual and payout schedule written
+  at funding (R-INV-1 to R-INV-5); the nightly `lending.investment-returns` job that accrues each
+  period on its end date, makes payout periods due, matures, rolls over and records reminders,
+  idempotently; return and maturity payouts; rollover; early withdrawal with a penalty
+  (`investment_early_withdrawal`, R-INV-6); reversals (`investment_reversal`); certificate,
+  statement and the maturity ladder with the investment metrics (`InvestmentMetrics`); the staff
+  screens (`docs/specs/lending-ui-notes.md`); and fabricated investments with twelve months of
+  history in `seed-lending`. Deferred: member self-service and portal applications (increment 11),
+  online payments (chapter 12), USSD and SMS reminders (pending ADR-013), crediting returns to
+  a savings account (a follow-up on the savings module), the certificate PDF (documents follow-up).
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
   Cloudflare Tunnel and pulls every green build of `main` from a `staging` pointer tag; hosts are
@@ -166,9 +177,9 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `lending` products | Loan products and versions | PRD | 6.7 | 7.11.12 |
 | `lending` loans | Origination, schedules, disbursement, repayments, arrears, closure | ORG, DIS, REP, ARR, LCL; 3.4 | 6.7 | 7.11.13 |
 | `lending` collateral | Collateral register | COL | 6.7 | 7.11.14 |
-| `lending.seed` | The `seed-lending` command: fabricated loan book and savings for one empty staging tenant (ADR-026, ADR-032) | none | none (writes 6.7 tables) | none (a command, `docs/runbooks/seed-lending.md`) |
+| `lending.seed` | The `seed-lending` command: fabricated loan book, savings and investments for one empty staging tenant (ADR-026, ADR-031, ADR-032) | none | none (writes 6.7 tables) | none (a command, `docs/runbooks/seed-lending.md`) |
 | `lending.savings` | Savings products, accounts, movements, end of day and interest, statements, savings reports (ADR-032) | SAV | 6.7 | 7.11.15 |
-| `lending` investments | Investments | INV | 6.7 | 7.11.16 |
+| `lending.investments` | Investment products, investments, returns job, maturity, rollover, early withdrawal, maturity ladder (ADR-031) | INV; 3.25.1 R-INV | 6.7 | 7.11.16 |
 | `lending` collections | Due lists, arrears, actions | CLN | 6.7 | 7.11.17 |
 | Member area | Member self-service | MSS; chapter 11 | none | 7.11.18 |
 | `retail.manifest` | The retail vertical's registration with the core (ADR-020) | 3.28 | 6.11.1 chart | none |
@@ -338,6 +349,8 @@ Accepted (this list is the ADR index):
 - ADR-028 Database performance: measured on 25 times the data, covering indexes, the plain tenant
   policy kept, connection timeouts (proposed, #107)
 - ADR-029 One fixed low stock threshold for retail, a per-tenant settings group later (#145)
+- ADR-031 Investments: month-based returns accrued monthly, recurring as auto-renewal, early
+  withdrawal settled in one entry (proposed, #152)
 - ADR-032 Savings: end-of-day balances with interest rounded once per posting, movements only after
   the closed day, withdrawals checked again at execution, receipts queued as SMS that expire unsent
   (proposed, #151)

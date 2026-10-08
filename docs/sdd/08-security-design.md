@@ -181,6 +181,8 @@ platform API and holds no tenant permissions.
 | `lending.investments.fund` | Y | Y | | Y | | | | |
 | `lending.investments.payout` | Y | Y | | Y | | | | |
 | `lending.investments.early_withdraw_approve` | Y | Y | | | Y | | | |
+| `lending.investments.fund_approve` | Y | Y | | | Y | | | |
+| `lending.investments.reverse_approve` | Y | Y | | | Y | | | |
 | `lending.investment_products.manage` | Y | | | | | | | |
 | `lending.collections.read` | Y | Y | Y | Y | Y | Y | | |
 | `lending.collections.log_action` | Y | Y | Y | Y | | | | |
@@ -358,14 +360,20 @@ CHECK constraint as well as the service.
 | `period_close` | `core.periods.close` | `core.periods.approve_close` | No |
 | `savings_withdrawal` | `lending.savings.withdraw` | `lending.savings.withdraw_approve` | Yes |
 | `savings_reversal` | `lending.savings.withdraw` | `lending.savings.withdraw_approve` | No (always checked) |
+| `investment_funding` | `lending.investments.fund` | `lending.investments.fund_approve` | Yes |
 | `investment_early_withdrawal` | `lending.investments.payout` | `lending.investments.early_withdraw_approve` | No |
+| `investment_reversal` | `lending.investments.payout` | `lending.investments.reverse_approve` | No (always checked) |
 | `collateral_release` | `lending.collateral.release_request` | `lending.collateral.release_approve` | No |
 | `member_branch_transfer` | `lending.members.update` | `lending.members.transfer_approve` | No |
 | `import_commit` | `core.imports.manage` | `core.imports.approve_commit` | No |
 | `member_credit_refund` | `lending.repayments.create` | `lending.credits.refund_approve` | Yes |
 
 Registered so far: `collateral_release` (#13); `loan_disbursement`, `repayment_reversal` and
-`loan_write_off` (#108, `lending.loans`, ADR-026). Increment 5 needed no new permission: every route
+`loan_write_off` (#108, `lending.loans`, ADR-026); `investment_funding`, `investment_early_withdrawal`
+and `investment_reversal` (#152, `lending.investments`, ADR-031). Increment 10 adds two checker
+permissions, `lending.investments.fund_approve` and `lending.investments.reverse_approve` (migration
+`V32`), granted like `lending.investments.early_withdraw_approve`; every other investment route
+declares a permission already in the matrix, and the route permission test covers them. Increment 5 needed no new permission: every route
 it adds declares a permission already in the matrix above (`lending.disbursements.request`,
 `lending.repayments.create`, `lending.repayments.reverse_request`, `lending.loans.write_off_request`,
 and `lending.loans.read` for the schedule, transactions and payoff quote), and the route permission

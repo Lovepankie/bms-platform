@@ -406,6 +406,42 @@ class RlsIsolationIT {
                                                                        interest_minor)
                         VALUES (?, ?, ?, DATE '2026-01-15', DATE '2026-01-31', 0)
                         """).params(UUID.randomUUID(), t.tenantId(), savingsAccount).update();
+        // Investments (increment 10, #152): a product, an investment, a schedule period and its accrual.
+        UUID investmentProduct = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO lending_investment_products (id, tenant_id, code, name, currency, product_type,
+                            allowed_terms_months, return_rate_bp, return_method, payout_frequency, min_amount_minor, status)
+                        VALUES (?, ?, 'RLS', 'Test Investment Product', 'UGX', 'fixed_term', '{6}', 1200, 'flat',
+                                'monthly', 100000, 'active')
+                        """).params(investmentProduct, t.tenantId()).update();
+        UUID investment = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO lending_investments (id, tenant_id, branch_id, account_no, member_id, product_id,
+                            currency, status, principal_minor, return_rate_bp, return_method, term_months,
+                            payout_frequency, product_type, early_withdrawal_allowed, start_date, maturity_date,
+                            agreed_return_minor, principal_held_minor, channel)
+                        SELECT ?, ?, ?, 'IV999999', id, ?, 'UGX', 'active', 1000000, 1200, 'flat', 6, 'monthly',
+                               'fixed_term', false, DATE '2026-01-15', DATE '2026-07-15', 60000, 1000000, 'staff'
+                          FROM lending_members WHERE tenant_id = ? LIMIT 1
+                        """)
+                .params(investment, t.tenantId(), t.headOffice(), investmentProduct, t.tenantId())
+                .update();
+        UUID accrual = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO lending_investment_transactions (id, tenant_id, branch_id, investment_id, txn_type,
+                            amount_minor, return_minor, currency, value_date, period_no, journal_entry_id, source)
+                        VALUES (?, ?, ?, ?, 'return_accrual', 10000, 10000, 'UGX', DATE '2026-02-15', 1, ?, 'system')
+                        """)
+                .params(accrual, t.tenantId(), t.headOffice(), investment, entry)
+                .update();
+        owner.sql("""
+                        INSERT INTO lending_investment_schedule_items (id, tenant_id, investment_id, period_no,
+                            period_start, period_end, return_minor, opening_balance_minor, is_payout, status,
+                            accrued_txn_id)
+                        VALUES (?, ?, ?, 1, DATE '2026-01-15', DATE '2026-02-15', 10000, 1000000, true, 'accrued', ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), investment, accrual)
+                .update();
     }
 
     static String randomHash() {
@@ -681,7 +717,8 @@ class RlsIsolationIT {
                 "lending_repayment_allocations",
                 "lending_savings_transactions",
                 "lending_savings_daily_balances",
-                "lending_savings_interest_postings")) {
+                "lending_savings_interest_postings",
+                "lending_investment_transactions")) {
             assertThatThrownBy(() -> asApp(
                             a.tenantId(),
                             c -> count(c, "WITH d AS (DELETE FROM " + table + " RETURNING 1) SELECT count(*) FROM d")))

@@ -473,7 +473,7 @@ action and subject.
 
 `tenant_id uuid`, `sequence_key text` (for example `member_no`, `loan_no`,
 `journal_no`, `receipt:<branch_code>`, `voucher:<branch_code>`, `savings_no`,
-`investment_no`), `next_value bigint NOT NULL DEFAULT 1`. PK `(tenant_id, sequence_key)`.
+`investment_no`, `investment_certificate`), `next_value bigint NOT NULL DEFAULT 1`. PK `(tenant_id, sequence_key)`.
 Numbers are taken with `UPDATE ... SET next_value = next_value + 1 RETURNING next_value - 1`
 in the business transaction, so they are gap-free (FR-DOC-04).
 
@@ -697,6 +697,7 @@ Codes are defaults; the tenant may renumber non-system accounts. `S` marks
 | 4030 | Loan fee income | income | `loan_fee_income` | |
 | 4040 | Bad debt recovered | income | `bad_debt_recovered` | |
 | 4050 | Savings fee income | income | `savings_fee_income` | |
+| 4060 | Investment penalty income | income | `investment_penalty_income` | |
 | 5000 | Expenses | expense (header) | | |
 | 5010 | Savings interest expense | expense | `savings_interest_expense` | |
 | 5020 | Investment return expense | expense | `investment_return_expense` | |
@@ -731,10 +732,13 @@ on lines touching `S` accounts carry the loan, savings account or investment id.
 | Savings interest posting | `savings_interest_expense` | `member_savings` | FR-SAV-05; dated the period end, or the run date when that month is closed (ADR-032) |
 | Savings reversal (deposit, withdrawal, fee) | Mirror of the original entry (a reversing entry) | | ADR-032 |
 | Investment funding | PM | `investments_payable` | FR-INV-03 |
-| Investment return due (monthly or at maturity) | `investment_return_expense` | `investment_returns_payable` | FR-INV-04, FR-INV-05 |
-| Monthly return credited to savings | `investment_returns_payable` | `member_savings` | FR-INV-04 |
-| Investment payout | `investments_payable` principal; `investment_returns_payable` unpaid return | PM total | FR-INV-05 |
-| Investment rollover | `investments_payable` (old); `investment_returns_payable` if rolled | `investments_payable` (new) | FR-INV-05 |
+| Investment return accrual (each period's end date, R-INV-2 and R-INV-3) | `investment_return_expense` | `investment_returns_payable` | FR-INV-04 |
+| Investment return payout (the due return) | `investment_returns_payable` | PM | FR-INV-04 |
+| Monthly return credited to savings (a follow-up, not built in increment 10) | `investment_returns_payable` | `member_savings` | FR-INV-04 |
+| Investment maturity payout | `investments_payable` principal; `investment_returns_payable` unpaid return | PM total | FR-INV-05 |
+| Investment rollover (dated the maturity date) | `investments_payable` (old); `investment_returns_payable` if rolled | `investments_payable` (new) | FR-INV-05, FR-INV-08 |
+| Investment early withdrawal (R-INV-6) | `investments_payable` principal; `investment_returns_payable` accrued less paid; `investment_return_expense` when earned exceeds accrued | PM cash; `investment_return_expense` when accrued exceeds earned; `investment_penalty_income` penalty | FR-INV-06 |
+| Investment reversal (funding, return payout, maturity payout) | Mirror of the original entry (a reversing entry) | | FR-INV-11 |
 | Unallocated receipt | PM | `unallocated_receipts` | FR-PAY-04 |
 | Gateway charge | `gateway_charges` | `gateway_clearing` | FR-PAY-06 |
 | Opening balances (import) | `loans_receivable` outstanding principal per loan | `opening_balance_equity` | FR-GL-09 |
@@ -1154,34 +1158,59 @@ posting).
 
 ### `lending_investment_products`
 
-(std) `code`, `name`, `currency`, `allowed_terms_months integer[] NOT NULL`,
-`return_rate_bp integer NOT NULL` (per year), `payout_method text NOT NULL`
-[`at_maturity`, `monthly`], `min_amount_minor bigint NOT NULL`, `max_amount_minor bigint`,
+(std) `code varchar(20)` (`UNIQUE (tenant_id, code)`), `name`, `currency`, `product_type text NOT
+NULL` [`fixed_term`, `recurring`], `allowed_terms_months integer[] NOT NULL` (1 to 24 terms of 1 to
+120 months), `return_rate_bp integer NOT NULL` (per year), `return_method text NOT NULL` [`flat`,
+`compound`], `payout_frequency text NOT NULL` [`at_maturity`, `monthly`, `quarterly`] (`compound`
+only with `at_maturity`, R-INV-3), `min_amount_minor bigint NOT NULL`, `max_amount_minor bigint`,
 `early_withdrawal_allowed boolean NOT NULL DEFAULT false`, `early_withdrawal_rule text`
-[`forfeit_return`, `reduced_rate`], `early_withdrawal_rate_bp integer`,
-`status text NOT NULL` [`active`, `archived`].
+[`forfeit_return`, `reduced_rate`], `early_withdrawal_rate_bp integer` (required for
+`reduced_rate`, at most the return rate), `early_withdrawal_penalty_bp integer NOT NULL DEFAULT 0`
+(0 to 10000), `status text NOT NULL` [`active`, `archived`], `created_by`. An edit changes only
+investments opened afterwards: each investment copies the terms. Built in `V32` (#152).
 
 ### `lending_investments`
 
-(std) `branch_id`, `account_no varchar(20) NOT NULL` (`IV` plus 6 digits), `member_id`,
-`product_id`, `currency`, `status text NOT NULL` [`pending_funding`, `active`, `matured`,
-`paid_out`, `rolled_over`, `withdrawn_early`, `cancelled`], `principal_minor bigint NOT
-NULL`, `return_rate_bp integer NOT NULL`, `term_months integer NOT NULL`,
-`payout_method text NOT NULL`, `start_date date`, `maturity_date date`,
-`agreed_return_minor bigint`, `return_due_minor bigint NOT NULL DEFAULT 0`,
-`return_paid_minor bigint NOT NULL DEFAULT 0`, `maturity_instruction text`
-[`payout`, `rollover_principal`, `rollover_all`], `rolled_over_from_id uuid`,
-`rolled_over_to_id uuid`, `channel text NOT NULL` [`staff`, `portal`], `created_by uuid`.
+(std) `branch_id` (the member's), `account_no varchar(20) NOT NULL` (`IV` plus 6 digits, unique per
+tenant), `member_id`, `product_id`, `currency`, `status text NOT NULL` [`pending_funding`, `active`,
+`matured`, `paid_out`, `rolled_over`, `withdrawn_early`, `cancelled`], `principal_minor bigint NOT
+NULL` (the amount subscribed), the terms copied from the product (`return_rate_bp`,
+`return_method`, `term_months`, `payout_frequency`, `product_type`, `early_withdrawal_allowed`,
+`early_withdrawal_rule`, `early_withdrawal_rate_bp`, `early_withdrawal_penalty_bp`), `start_date
+date` and `maturity_date date` (set at funding), `agreed_return_minor bigint`, the balances
+`principal_held_minor` (the investment's `investments_payable` subledger), `return_accrued_minor`,
+`return_due_minor` (accrued and past a payout date, R-INV-4) and `return_paid_minor` (CHECK
+`paid <= due <= accrued`; accrued less paid is the `investment_returns_payable` subledger),
+`maturity_instruction text` [`payout`, `rollover_principal`, `rollover_all`],
+`rolled_over_from_id uuid`, `rolled_over_to_id uuid`, `certificate_no varchar(30)` (`IC` plus 6
+digits, unique), `channel text NOT NULL` [`staff`, `portal`, `import`, `system`],
+`pre_maturity_reminded_on date`, `post_maturity_reminded_on date` (FR-INV-07, FR-INV-05),
+`closed_on date`, `created_by`. Built in `V32` (#152).
+
+### `lending_investment_schedule_items`
+
+(std) `investment_id uuid NOT NULL`, `period_no smallint NOT NULL` (`UNIQUE (investment_id,
+period_no)`), `period_start date`, `period_end date`, `opening_balance_minor bigint` (the balance
+the period's return is computed on), `return_minor bigint`, `is_payout boolean`, `status text NOT
+NULL` [`scheduled`, `accrued`, `cancelled`], `accrued_txn_id uuid` (the accrual transaction; null
+only for a period whose return rounds to zero). Written once at funding (FR-INV-09); the trigger
+`lending_investment_schedule_items_guard` refuses a change of the dates or amounts. Built in `V32`
+(#152).
 
 ### `lending_investment_transactions` (append-only)
 
 `id`, `tenant_id`, `created_at`, `branch_id`, `investment_id uuid NOT NULL`,
-`txn_type text NOT NULL` [`funding`, `return_due`, `return_paid`, `principal_payout`,
-`early_withdrawal`, `rollover_out`, `rollover_in`, `reversal`], `amount_minor bigint NOT
-NULL`, `value_date date NOT NULL`, `payment_method_key text`, `external_reference
-varchar(100)`, `period_no integer` (monthly returns; partial unique per investment),
-`reverses_txn_id uuid`, `journal_entry_id uuid NOT NULL`, `approval_request_id uuid`,
-`idempotency_key varchar(100)`, `recorded_by uuid`.
+`txn_type text NOT NULL` [`funding`, `return_accrual`, `return_payout`, `maturity_payout`,
+`early_withdrawal`, `rollover_out`, `rollover_in`, `reversal`], `amount_minor bigint NOT NULL`
+(`> 0`), the breakdown `principal_minor`, `return_minor` (negative on an early withdrawal that takes
+paid returns back) and `penalty_minor`, `currency`, `value_date date NOT NULL`, `period_no smallint`
+(accruals only; `UNIQUE (tenant_id, investment_id, period_no) WHERE txn_type = 'return_accrual'`,
+the job's idempotency), `payment_method_key text`, `external_reference varchar(100)`, `receipt_no
+varchar(30)` (RC for a funding, VC for a payout, gap-free per branch and shared with loans,
+FR-DOC-04), `reason text`, `reverses_txn_id uuid` (unique), `journal_entry_id uuid NOT NULL`
+(a rollover's two rows share one entry), `approval_request_id uuid`, `source text NOT NULL`
+[`staff`, `portal`, `gateway`, `import`, `system`], `recorded_by uuid`. One funding per investment.
+Built in `V32` (#152).
 
 ## 6.8 Entity relationship diagram
 
@@ -1235,6 +1264,9 @@ erDiagram
     LENDING_MEMBERS ||--o{ LENDING_INVESTMENTS : places
     LENDING_INVESTMENT_PRODUCTS ||--o{ LENDING_INVESTMENTS : governs
     LENDING_INVESTMENTS ||--o{ LENDING_INVESTMENT_TRANSACTIONS : records
+    LENDING_INVESTMENTS ||--|{ LENDING_INVESTMENT_SCHEDULE_ITEMS : schedules
+    LENDING_INVESTMENT_TRANSACTIONS |o--o| LENDING_INVESTMENT_SCHEDULE_ITEMS : accrues
+    LENDING_INVESTMENTS |o--o| LENDING_INVESTMENTS : "rolls over into"
     IMPORT_ROWS |o--o| LENDING_MEMBERS : creates
     IMPORT_ROWS |o--o| LENDING_LOANS : creates
 ```
@@ -1327,10 +1359,14 @@ number free on `main` when it merges, so it may be renumbered then. `V23__onboar
 `onboarding_email_key` and their definer functions. `V26__database_optimisation.sql` (#107, ADR-028) changes indexes
 and a storage setting only (section 6.12). `V28__retail_catalogue_management.sql` is the retail
 catalogue management (#146). `V29__lending_disbursement_repayments.sql` (#108, ADR-026) is lending
-increment 5: schedule items, loan transactions and repayment allocations (section 6.7). V24, V25
-and V27 stay unused: with `outOfOrder` off a number below an applied one can never run.
+increment 5: schedule items, loan transactions and repayment allocations (section 6.7).
+`V30__lending_savings.sql` (#151, ADR-032) is lending increment 9, savings.
 `V31__user_preferences.sql` (#19, ADR-025) adds `users.preferences` (section 6.5), additive with a
-default. V30 is held by the open savings branch (#179). The next migration is V32 (`MigrationOrderIT`, chapter 15 section 15.4.3).
+default. `V32__lending_investments.sql` (#152, ADR-031) is lending increment 10: the four investment
+tables of section 6.7, the two checker permissions of chapter 8 and account 4060 of section 6.6.2,
+added to `bms_seed_lending_chart` and to every tenant that already holds the lending chart. V24,
+V25 and V27 stay unused: with `outOfOrder` off a number below an applied one can never run. The
+next migration is V33 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items
 

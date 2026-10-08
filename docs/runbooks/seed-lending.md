@@ -1,7 +1,8 @@
 # Runbook: fill a staging lending tenant with fabricated data (`seed-lending`)
 
-**Requirements:** increment 5 demo (issue #108) · **Decision:** ADR-026 decision 4 ·
-**Design:** SDD chapter 5 section 5.4 (`lending.seed`), chapter 7 section 7.11.13
+**Requirements:** increment 5 demo (issue #108), increment 10 investments (issue #152) ·
+**Decision:** ADR-026 decision 4, ADR-031 · **Design:** SDD chapter 5 section 5.4 (`lending.seed`),
+chapter 7 sections 7.11.13 and 7.11.16
 
 The command gives an empty lending tenant on **staging** a small, fully fabricated loan book, so the
 pilot tenant's staff can try the loan screens with fake data before their own register is imported
@@ -20,11 +21,20 @@ pilot tenant's staff can try the loan screens with fake data before their own re
   (one member holds two) with twelve months of monthly deposits and quarterly withdrawals. The
   nightly end of day runs day by day as the movements go in, so the accounts carry their end-of-day
   balances, monthly and quarterly interest, and one account has gone dormant (#151, ADR-032).
+- 3 investment products (`FAB-FD` fixed deposit paid at maturity with a reduced rate on early
+  withdrawal, `FAB-FD-MONTHLY` paying its return monthly, `FAB-RECURRING` compounding and renewing
+  itself), all rates invented;
+- 10 investments placed over the last twelve months and replayed day by day through the nightly
+  job's own work: one paid out at maturity, one recurring deposit renewed four times, a monthly
+  income deposit whose ten returns were collected, one matured and waiting for the member, one
+  maturing within the week, one that rolls over today, and one opened today and not yet funded.
 
 Every disbursement, repayment, deposit and withdrawal goes through the same code as staff
-(`LoanServicing`, `SavingsServicing`), so each posts its journal, receipt or voucher number and
-audit row; the trial balance balances, loans receivable equals the loans' principal outstanding and
-member savings equals the savings accounts' balances. The seed queues no SMS.
+(`LoanServicing`, `SavingsServicing`), and every investment funding, accrual, maturity, rollover and
+payout through `InvestmentServicing`, so each posts its journal, receipt or voucher number and
+audit row; the trial balance balances, loans receivable equals the loans' principal outstanding,
+member savings equals the savings accounts' balances and both investment liabilities equal the
+investments' balances. The seed queues no SMS.
 
 ```
 java -jar bms-api.jar seed-lending --tenant <slug>
@@ -39,7 +49,7 @@ a usage error.
   command of the API image and never runs at startup; the image's default command is the web
   application.
 - **Empty tenants only.** It refuses a tenant that holds any member, loan product, savings product,
-  loan or journal entry, so it can never mix fabricated rows with real ones.
+  investment product, loan or journal entry, so it can never mix fabricated rows with real ones.
 - **Once.** It records the audit action `lending.seed.fabricated` (the marker) and refuses any
   tenant that carries it.
 - **One transaction.** A failure part way leaves the tenant exactly as it was.
@@ -59,7 +69,7 @@ docker compose --project-name bms -f compose.yml run --rm --no-deps \
 
 The stack is capped at 900 MB (ADR-018): run it when nothing else heavy is running. The command
 prints one line, for example
-`seed-lending: tenant <slug>: 15 members, 4 products, 12 applications, 6 disbursed loans, 11 repayments, 11 savings accounts, <n> savings movements (all fabricated)`.
+`seed-lending: tenant <slug>: 15 members, 4 products, 12 applications, 6 disbursed loans, 11 repayments, 11 savings accounts, <n> savings movements, 3 investment products, 10 investments (all fabricated)`.
 
 ## Run locally
 

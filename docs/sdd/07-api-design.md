@@ -672,17 +672,39 @@ the caller's branch scope is a 404.
 
 ### 7.11.16 Lending: investments
 
+Built in increment 10 (#152, ADR-031). **M** marks a route that requires an `Idempotency-Key`;
+**A** a maker-checker action: 201 when it executed (below the tenant's threshold), 202 when it waits
+for a checker, with `approval_request_id`.
+
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET, POST | `/lending/investment-products` | `lending.investments.read` / `lending.investment_products.manage` | FR-INV-01 |
-| GET | `/lending/investments` | `lending.investments.read` | |
+| GET, POST | `/lending/investment-products` | `lending.investments.read` / `lending.investment_products.manage` | FR-INV-01, FR-INV-08 |
+| GET, PUT | `/lending/investment-products/{product_id}` | `lending.investments.read` / `lending.investment_products.manage` | PUT with `If-Match`; investments opened keep their terms |
+| POST | `/lending/investment-products/{product_id}/archive` | `lending.investment_products.manage` | `If-Match` |
+| POST | `/lending/investment-products/return-preview` | `lending.investments.read` | R-INV-1 to R-INV-4 for an amount and term |
+| GET | `/lending/investments` | `lending.investments.read` | Filters `branch_id`, `status`, `member_id` (the member tab), `product_id`, `maturing_within_days`, `q`; cursor. The investments register of chapter 14 |
 | POST | `/lending/investments` | `lending.investments.open` | FR-INV-02 |
-| GET | `/lending/investments/{investment_id}` | `lending.investments.read` | |
-| POST | `/lending/investments/{investment_id}/funding` | `lending.investments.fund` | **M**. FR-INV-03 |
+| GET | `/lending/investments/maturities` | `lending.investments.read` | FR-INV-12: the ladder (overdue, 0 to 7, 8 to 30, 31 to 90 days) and the investments maturing |
+| GET | `/lending/investments/metrics` | `lending.investments.read` | FR-INV-12: `from`, `to`, `branch_id`; metrics, ladder, concentration |
+| GET | `/lending/investments/{investment_id}` | `lending.investments.read` | Balances, `return_available_minor`, `pending_approval_id` |
 | PUT | `/lending/investments/{investment_id}/maturity-instruction` | `lending.investments.open` | FR-INV-05 |
-| POST | `/lending/investments/{investment_id}/payout` | `lending.investments.payout` | **M** |
-| POST | `/lending/investments/{investment_id}/rollover` | `lending.investments.payout` | **M** |
-| POST | `/lending/investments/{investment_id}/early-withdrawal` | `lending.investments.payout` | **M A**. FR-INV-06 |
+| POST | `/lending/investments/{investment_id}/funding` | `lending.investments.fund` | **M A** (`investment_funding`, threshold applies). FR-INV-03 |
+| GET | `/lending/investments/{investment_id}/schedule` | `lending.investments.read` | FR-INV-09 |
+| GET | `/lending/investments/{investment_id}/statement` | `lending.investments.read` | FR-INV-10 |
+| GET | `/lending/investments/{investment_id}/certificate` | `lending.investments.read` | FR-INV-10 |
+| POST | `/lending/investments/{investment_id}/return-payouts` | `lending.investments.payout` | **M**. FR-INV-04 |
+| POST | `/lending/investments/{investment_id}/payout` | `lending.investments.payout` | **M**. FR-INV-05 |
+| POST | `/lending/investments/{investment_id}/rollover` | `lending.investments.payout` | **M**. FR-INV-05 |
+| GET | `/lending/investments/{investment_id}/early-withdrawal-quote` | `lending.investments.read` | R-INV-6 as at `value_date` |
+| POST | `/lending/investments/{investment_id}/early-withdrawal` | `lending.investments.payout` | **M A** (`investment_early_withdrawal`, no threshold). FR-INV-06 |
+| POST | `/lending/investments/{investment_id}/transactions/{txn_id}/reverse` | `lending.investments.payout` | **M A** (`investment_reversal`, no threshold). FR-INV-11 |
+
+Codes (422 unless stated): `term_not_offered`, `amount_out_of_range`, `product_archived`,
+`member_not_active`, `member_not_found`, `compounding_needs_maturity_payout`, `value_date_in_future`,
+`value_date_out_of_range`, `no_return_due`, `early_withdrawal_not_allowed`, `investment_matured`,
+`before_start`, `nothing_to_pay`, `not_reversible`, `not_funded`, `payment_method_unmapped`,
+`period_closed`, 409 `duplicate_code`, 409 `already_reversed`, 409 `invalid_status_transition`, 409
+`approval_already_pending`, and the idempotency codes of section 7.8.
 
 ### 7.11.17 Lending: collections
 

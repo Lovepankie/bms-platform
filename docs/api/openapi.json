@@ -931,6 +931,25 @@
         },
         "required" : [ "collateral_type", "description", "member_id" ]
       },
+      "CreateInvestmentProductRequest" : {
+        "properties" : {
+          "code" : {
+            "maxLength" : 20,
+            "minLength" : 0,
+            "pattern" : "[A-Z0-9][A-Z0-9_-]*",
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "terms" : {
+            "$ref" : "#/components/schemas/InvestmentProductTerms"
+          }
+        },
+        "required" : [ "code", "name", "terms" ]
+      },
       "CreateLoanProductRequest" : {
         "properties" : {
           "code" : {
@@ -1379,6 +1398,982 @@
           }
         },
         "required" : [ "code", "name" ]
+      },
+      "Investment" : {
+        "properties" : {
+          "account_no" : {
+            "type" : "string"
+          },
+          "agreed_return_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "certificate_no" : {
+            "type" : "string"
+          },
+          "channel" : {
+            "type" : "string"
+          },
+          "closed_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "early_withdrawal_allowed" : {
+            "type" : "boolean"
+          },
+          "early_withdrawal_penalty_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "early_withdrawal_rate_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "early_withdrawal_rule" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maturity_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "maturity_instruction" : {
+            "type" : "string"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "member_name" : {
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "payout_frequency" : {
+            "type" : "string"
+          },
+          "pending_approval_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "post_maturity_reminded_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "pre_maturity_reminded_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "principal_held_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_code" : {
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "product_name" : {
+            "type" : "string"
+          },
+          "product_type" : {
+            "type" : "string"
+          },
+          "return_accrued_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "return_available_minor" : {
+            "description" : "Return due and not yet paid: what a return payout pays now",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "return_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "return_method" : {
+            "type" : "string"
+          },
+          "return_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "return_rate_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rolled_over_from_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "rolled_over_to_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "start_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "term_months" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "InvestmentActionOutcome" : {
+        "description" : "executed: the action took effect now (below the tenant's threshold); otherwise it waits for a checker as approval_request_id",
+        "properties" : {
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "executed" : {
+            "type" : "boolean"
+          },
+          "investment_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "investment_status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "InvestmentCertificate" : {
+        "description" : "FR-INV-10: the data of the printed certificate",
+        "properties" : {
+          "account_no" : {
+            "type" : "string"
+          },
+          "agreed_return_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_name" : {
+            "type" : "string"
+          },
+          "certificate_no" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "early_withdrawal_allowed" : {
+            "type" : "boolean"
+          },
+          "early_withdrawal_penalty_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "early_withdrawal_rate_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "early_withdrawal_rule" : {
+            "type" : "string"
+          },
+          "issued_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "maturity_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "maturity_instruction" : {
+            "type" : "string"
+          },
+          "maturity_value_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "member_name" : {
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "payout_frequency" : {
+            "type" : "string"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_name" : {
+            "type" : "string"
+          },
+          "return_method" : {
+            "type" : "string"
+          },
+          "return_rate_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "start_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "tenant_name" : {
+            "type" : "string"
+          },
+          "term_months" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "InvestmentEarlyWithdrawalQuote" : {
+        "description" : "R-INV-6 as at the value date",
+        "properties" : {
+          "cash_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "earned_return_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "investment_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "penalty_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "return_accrued_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "return_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rule" : {
+            "type" : "string"
+          },
+          "value_date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "InvestmentEarlyWithdrawalRequest" : {
+        "properties" : {
+          "external_reference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "pattern" : "cash|bank|mtn_momo|airtel_money",
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "payment_method_key", "reason" ]
+      },
+      "InvestmentFundingRequest" : {
+        "properties" : {
+          "external_reference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "pattern" : "cash|bank|mtn_momo|airtel_money",
+            "type" : "string"
+          },
+          "value_date" : {
+            "description" : "Today or earlier, in an open period",
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "payment_method_key", "value_date" ]
+      },
+      "InvestmentLadderBucket" : {
+        "properties" : {
+          "bucket" : {
+            "type" : "string"
+          },
+          "count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "return_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "InvestmentMaturities" : {
+        "properties" : {
+          "as_of" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InvestmentMaturity"
+            },
+            "type" : "array"
+          },
+          "ladder" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InvestmentLadderBucket"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "InvestmentMaturity" : {
+        "properties" : {
+          "account_no" : {
+            "type" : "string"
+          },
+          "days_to_maturity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "investment_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maturity_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "maturity_instruction" : {
+            "type" : "string"
+          },
+          "member_name" : {
+            "type" : "string"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_name" : {
+            "type" : "string"
+          },
+          "return_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "InvestmentMaturityInstructionRequest" : {
+        "properties" : {
+          "instruction" : {
+            "pattern" : "payout|rollover_principal|rollover_all",
+            "type" : "string"
+          }
+        },
+        "required" : [ "instruction" ]
+      },
+      "InvestmentMetric" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "definition" : {
+            "type" : "string"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "value" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "InvestmentMetrics" : {
+        "properties" : {
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "ladder" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InvestmentLadderBucket"
+            },
+            "type" : "array"
+          },
+          "metrics" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InvestmentMetric"
+            },
+            "type" : "array"
+          },
+          "products" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InvestmentShare"
+            },
+            "type" : "array"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "top_investors" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InvestmentShare"
+            },
+            "type" : "array"
+          },
+          "total_principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "InvestmentPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Investment"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "InvestmentPaymentRequest" : {
+        "properties" : {
+          "external_reference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "pattern" : "cash|bank|mtn_momo|airtel_money",
+            "type" : "string"
+          }
+        },
+        "required" : [ "payment_method_key" ]
+      },
+      "InvestmentProduct" : {
+        "properties" : {
+          "allowed_terms_months" : {
+            "items" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "array"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "early_withdrawal_allowed" : {
+            "type" : "boolean"
+          },
+          "early_withdrawal_penalty_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "early_withdrawal_rate_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "early_withdrawal_rule" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "max_amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "min_amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "payout_frequency" : {
+            "type" : "string"
+          },
+          "product_type" : {
+            "type" : "string"
+          },
+          "return_method" : {
+            "type" : "string"
+          },
+          "return_rate_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "InvestmentProductList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InvestmentProduct"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "InvestmentProductTerms" : {
+        "properties" : {
+          "allowed_terms_months" : {
+            "items" : {
+              "format" : "int32",
+              "maximum" : 120,
+              "minimum" : 1,
+              "type" : "integer"
+            },
+            "maxItems" : 24,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "early_withdrawal_allowed" : {
+            "type" : "boolean"
+          },
+          "early_withdrawal_penalty_bp" : {
+            "description" : "Penalty on principal withdrawn early, in basis points",
+            "format" : "int32",
+            "maximum" : 5000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "early_withdrawal_rate_bp" : {
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "early_withdrawal_rule" : {
+            "pattern" : "forfeit_return|reduced_rate",
+            "type" : "string"
+          },
+          "max_amount_minor" : {
+            "format" : "int64",
+            "maximum" : 1000000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "min_amount_minor" : {
+            "format" : "int64",
+            "maximum" : 1000000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "payout_frequency" : {
+            "pattern" : "at_maturity|monthly|quarterly",
+            "type" : "string"
+          },
+          "product_type" : {
+            "description" : "recurring: renews itself at maturity unless the member asks for a payout (FR-INV-08)",
+            "pattern" : "fixed_term|recurring",
+            "type" : "string"
+          },
+          "return_method" : {
+            "description" : "compound: monthly, only with payout at_maturity (R-INV-3)",
+            "pattern" : "flat|compound",
+            "type" : "string"
+          },
+          "return_rate_bp" : {
+            "description" : "Per year",
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "allowed_terms_months", "early_withdrawal_allowed", "min_amount_minor", "payout_frequency", "product_type", "return_method", "return_rate_bp" ]
+      },
+      "InvestmentReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "InvestmentReturnPreview" : {
+        "properties" : {
+          "agreed_return_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "maturity_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "maturity_value_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "payout_frequency" : {
+            "type" : "string"
+          },
+          "periods" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InvestmentSchedulePeriod"
+            },
+            "type" : "array"
+          },
+          "return_method" : {
+            "type" : "string"
+          },
+          "return_rate_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "start_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "term_months" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "InvestmentReturnPreviewRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 1000000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "start_date" : {
+            "description" : "Today when omitted",
+            "format" : "date",
+            "type" : "string"
+          },
+          "term_months" : {
+            "format" : "int32",
+            "maximum" : 120,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "amount_minor", "product_id", "term_months" ]
+      },
+      "InvestmentRolloverRequest" : {
+        "properties" : {
+          "mode" : {
+            "pattern" : "rollover_principal|rollover_all",
+            "type" : "string"
+          }
+        },
+        "required" : [ "mode" ]
+      },
+      "InvestmentRolloverResult" : {
+        "properties" : {
+          "next" : {
+            "$ref" : "#/components/schemas/Investment"
+          },
+          "previous" : {
+            "$ref" : "#/components/schemas/Investment"
+          }
+        }
+      },
+      "InvestmentSchedule" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "investment_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "periods" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InvestmentSchedulePeriod"
+            },
+            "type" : "array"
+          },
+          "total_return_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "InvestmentSchedulePeriod" : {
+        "properties" : {
+          "cumulative_return_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "opening_balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "payout" : {
+            "type" : "boolean"
+          },
+          "period_end" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "period_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "period_start" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "return_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "InvestmentShare" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "share_bp" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "InvestmentStatement" : {
+        "properties" : {
+          "investment" : {
+            "$ref" : "#/components/schemas/Investment"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/InvestmentStatementLine"
+            },
+            "type" : "array"
+          },
+          "principal_balance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "return_payable_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "InvestmentStatementLine" : {
+        "properties" : {
+          "principal_balance_minor" : {
+            "description" : "Principal held after this line",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "return_payable_minor" : {
+            "description" : "Return accrued and not paid after this line",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "transaction" : {
+            "$ref" : "#/components/schemas/InvestmentTransaction"
+          }
+        }
+      },
+      "InvestmentTransaction" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "external_reference" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "investment_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "journal_entry_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "type" : "string"
+          },
+          "penalty_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "period_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "receipt_no" : {
+            "type" : "string"
+          },
+          "recorded_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "return_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reversed_by_txn_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reverses_txn_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "txn_type" : {
+            "type" : "string"
+          },
+          "value_date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "InvestmentTransactionResult" : {
+        "properties" : {
+          "investment" : {
+            "$ref" : "#/components/schemas/Investment"
+          },
+          "transaction" : {
+            "$ref" : "#/components/schemas/InvestmentTransaction"
+          }
+        }
       },
       "InvitationLink" : {
         "properties" : {
@@ -3000,6 +3995,35 @@
             "type" : "array"
           }
         }
+      },
+      "OpenInvestmentRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 1000000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "maturity_instruction" : {
+            "pattern" : "payout|rollover_principal|rollover_all",
+            "type" : "string"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "term_months" : {
+            "format" : "int32",
+            "maximum" : 120,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "amount_minor", "member_id", "product_id", "term_months" ]
       },
       "OpenSavingsAccountRequest" : {
         "properties" : {
@@ -6541,6 +7565,19 @@
           }
         }
       },
+      "UpdateInvestmentProductRequest" : {
+        "properties" : {
+          "name" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "terms" : {
+            "$ref" : "#/components/schemas/InvestmentProductTerms"
+          }
+        },
+        "required" : [ "name", "terms" ]
+      },
       "UpdateLoanRequest" : {
         "description" : "Draft only; omitted fields are unchanged",
         "properties" : {
@@ -8066,6 +9103,851 @@
         },
         "summary" : "Record a valuation (FR-COL-02)",
         "tags" : [ "lending-collateral" ]
+      }
+    },
+    "/api/v1/lending/investment-products" : {
+      "get" : {
+        "operationId" : "listInvestmentProducts",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentProductList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List investment products",
+        "tags" : [ "lending-investments" ]
+      },
+      "post" : {
+        "operationId" : "createInvestmentProduct",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateInvestmentProductRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentProduct"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Create an investment product (FR-INV-01)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investment-products/return-preview" : {
+      "post" : {
+        "operationId" : "previewInvestmentReturn",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InvestmentReturnPreviewRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentReturnPreview"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The return schedule an amount and term would get on a product (R-INV-1 to R-INV-4)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investment-products/{product_id}" : {
+      "get" : {
+        "operationId" : "getInvestmentProduct",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentProduct"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "An investment product",
+        "tags" : [ "lending-investments" ]
+      },
+      "put" : {
+        "operationId" : "updateInvestmentProduct",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateInvestmentProductRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentProduct"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit an investment product; investments already opened keep their terms",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investment-products/{product_id}/archive" : {
+      "post" : {
+        "operationId" : "archiveInvestmentProduct",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentProduct"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Archive an investment product",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments" : {
+      "get" : {
+        "operationId" : "listInvestments",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "member_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "maturing_within_days",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List investments in the caller's branch scope; q searches account number, member number or name (chapter 14 investments register)",
+        "tags" : [ "lending-investments" ]
+      },
+      "post" : {
+        "operationId" : "openInvestment",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OpenInvestmentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Investment"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Open an investment for a member, pending funding (FR-INV-02)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/maturities" : {
+      "get" : {
+        "operationId" : "listInvestmentMaturities",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "days",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentMaturities"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The maturity ladder (overdue, 7, 30, 90 days) and the investments maturing (FR-INV-12)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/metrics" : {
+      "get" : {
+        "operationId" : "getInvestmentMetrics",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentMetrics"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Balances, flows, returns accrued and paid, the ladder and concentration (FR-INV-12)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/{investment_id}" : {
+      "get" : {
+        "operationId" : "getInvestment",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "investment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Investment"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "An investment with its balances",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/{investment_id}/certificate" : {
+      "get" : {
+        "operationId" : "getInvestmentCertificate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "investment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentCertificate"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The investment certificate's data (FR-INV-10)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/{investment_id}/early-withdrawal" : {
+      "post" : {
+        "operationId" : "requestInvestmentEarlyWithdrawal",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "investment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InvestmentEarlyWithdrawalRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request an early withdrawal; always waits for a checker (FR-INV-06)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/{investment_id}/early-withdrawal-quote" : {
+      "get" : {
+        "operationId" : "getInvestmentEarlyWithdrawalQuote",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "investment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "value_date",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentEarlyWithdrawalQuote"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What an early withdrawal pays as at a date, today by default (FR-INV-06, R-INV-6)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/{investment_id}/funding" : {
+      "post" : {
+        "operationId" : "requestInvestmentFunding",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "investment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InvestmentFundingRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record funding (FR-INV-03); 201 when executed below the threshold, 202 when it waits for a checker",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/{investment_id}/maturity-instruction" : {
+      "put" : {
+        "operationId" : "setInvestmentMaturityInstruction",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "investment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InvestmentMaturityInstructionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Investment"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record the member's choice at maturity: payout or rollover (FR-INV-05)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/{investment_id}/payout" : {
+      "post" : {
+        "operationId" : "payInvestmentOut",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "investment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InvestmentPaymentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentTransactionResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Pay a matured investment out: principal and unpaid return (FR-INV-05)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/{investment_id}/return-payouts" : {
+      "post" : {
+        "operationId" : "payInvestmentReturn",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "investment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InvestmentPaymentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentTransactionResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Pay the return that is due (FR-INV-04)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/{investment_id}/rollover" : {
+      "post" : {
+        "operationId" : "rollInvestmentOver",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "investment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InvestmentRolloverRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentRolloverResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Roll a matured investment over on the product's current terms (FR-INV-05)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/{investment_id}/schedule" : {
+      "get" : {
+        "operationId" : "getInvestmentSchedule",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "investment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentSchedule"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The accrual and payout schedule (FR-INV-09)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/{investment_id}/statement" : {
+      "get" : {
+        "operationId" : "getInvestmentStatement",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "investment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentStatement"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every money event with the principal and return payable after it (FR-INV-10)",
+        "tags" : [ "lending-investments" ]
+      }
+    },
+    "/api/v1/lending/investments/{investment_id}/transactions/{txn_id}/reverse" : {
+      "post" : {
+        "operationId" : "requestInvestmentTransactionReversal",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "investment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "txn_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/InvestmentReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvestmentActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request the reversal of a funding, return payout or maturity payout (FR-INV-11)",
+        "tags" : [ "lending-investments" ]
       }
     },
     "/api/v1/lending/loan-products" : {

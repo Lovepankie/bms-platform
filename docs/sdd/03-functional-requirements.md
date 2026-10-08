@@ -681,19 +681,60 @@ that covers common voluntary savings.
 
 ## 3.25 Investments (INV)
 
-How the pilot tenant's investment products work is an open question. These requirements
-define a fixed-term investment where the member places money for an agreed term and
-return.
+How the pilot tenant's investment products work is still an open question (MVP scope, open
+question 3). These requirements define fixed-term and recurring investments where the member places
+money for an agreed term and return; the return rules are R-INV-1 to R-INV-6 below, and the
+decisions behind them ADR-031.
 
 | ID | Requirement | Acceptance criteria | Phase |
 |---|---|---|---|
-| FR-INV-01 | A tenant admin shall create an investment product with: code, name, currency, allowed terms (in months), return rate (bp per year), return payout (`at_maturity` or `monthly`), minimum and maximum amount, whether early withdrawal is allowed, and the early withdrawal rule (`forfeit_return`, or `reduced_rate_bp`). | Validation per field. | P2 |
-| FR-INV-02 | A loan officer, or a member from the portal, shall open an investment with product, amount and term; the account number is `IV` plus 6 digits and the status is `pending_funding`. | Portal-opened investments appear in a staff queue. | P2 |
-| FR-INV-03 | A cashier shall record funding (idempotency key required); the investment becomes `active` with a start date and a maturity date (start plus term, R-TERM month rule), and the agreed return is computed as `round(amount x rate x term_months / 12)`. | Posting per 6.6.3; investment certificate PDF queued. | P2 |
-| FR-INV-04 | For `monthly` payout, the nightly job shall pay the monthly return on each monthly anniversary as a payable to the member (credited to the member's savings account if they have one, else to investments payable for cash collection). | Idempotent per investment and month. | P2 |
-| FR-INV-05 | On the maturity date the nightly job shall mark the investment `matured` and post the return due. The member chooses `payout` (cashier pays principal plus unpaid return) or `rollover` (a new investment is created from principal, or principal plus return, on the current product terms). | Default when no choice is recorded within 7 days: stays `matured`, and a reminder is sent. | P2 |
-| FR-INV-06 | Early withdrawal, if the product allows it, shall be maker-checker and apply the product's early withdrawal rule. | Worked example for each rule. | P2 |
-| FR-INV-07 | The system shall send a maturity reminder 7 days before maturity. | Tested with fixed clock. | P2 |
+| FR-INV-01 | A tenant admin shall create an investment product with: code, name, currency, product type (`fixed_term` or `recurring`, FR-INV-08), allowed terms (in months), return rate (bp per year), return method (`flat` or `compound`, R-INV-2 and R-INV-3), payout frequency (`at_maturity`, `monthly` or `quarterly`), minimum and maximum amount, whether early withdrawal is allowed, the early withdrawal rule (`forfeit_return` or `reduced_rate` with its rate) and the early withdrawal penalty in bp of principal. An edit applies to investments opened afterwards; every investment keeps the terms it was opened on. | Validation per field; `compound` with a periodic payout is refused with `compounding_needs_maturity_payout`. | P2 |
+| FR-INV-02 | A loan officer, or a member from the portal, shall open an investment with product, amount and term, and optionally the maturity instruction; the account number is `IV` plus 6 digits and the status is `pending_funding`. A member may hold any number of investments. | The term must be one the product offers (`term_not_offered`) and the amount in its range (`amount_out_of_range`). Portal-opened investments appear in a staff queue (member portal, increment 11). | P2 |
+| FR-INV-03 | A cashier shall record funding (idempotency key required); at or above the tenant's threshold for `investment_funding` a checker approves it first (FR-APR-04). On execution the investment becomes `active` with a start date (the value date), a maturity date (start plus term, R-TERM month rule), the schedule of FR-INV-09, the agreed return (its total; flat: `round(amount x rate x term_months / 12)`) and a certificate number `IC` plus 6 digits. | Posting per 6.6.3. | P2 |
+| FR-INV-04 | The nightly job shall accrue each period's return on the period end date (return expense / returns payable) and, on a payout period (monthly, every third month, and the last), make the return accrued so far due; a cashier pays the due return (idempotency key required). Crediting a member's savings account instead is a follow-up now that savings exists (#151). | Idempotent per investment and period, also under concurrent runs. | P2 |
+| FR-INV-05 | On the maturity date the nightly job shall mark the investment `matured` after accruing its last period, then apply the member's instruction: `rollover_principal` or `rollover_all` creates a new investment from principal, or principal plus unpaid return, on the product's current terms and the same term, starting on the maturity date; `payout` (or no instruction on a fixed-term product) waits for the cashier to pay principal plus unpaid return. Staff may also roll a matured investment over by hand. A rollover the product no longer allows (archived, term or amount outside it) leaves the investment `matured`. | With no instruction recorded within 7 days of maturity the investment stays `matured` and a reminder is recorded. | P2 |
+| FR-INV-06 | Early withdrawal, if the product allows it, shall be maker-checker (no threshold) and settle by R-INV-6 on the business date of the approval. A quote is available before the request. | Worked example for each rule (golden tests). | P2 |
+| FR-INV-07 | The system shall record a maturity reminder 7 days before maturity, once per investment. Sending it by SMS waits for the SMS adapter (pending ADR-013). | Tested with fixed dates. | P2 |
+| FR-INV-08 | A `recurring` product shall renew itself at maturity: with no instruction recorded, principal and return roll over automatically (FR-INV-05). | Tested. | P2 |
+| FR-INV-09 | The accrual and payout schedule shall be generated at funding, one row per month of the term with its dates, the balance its return is computed on, the return, and whether it pays out; its dates and amounts never change afterwards. | A database trigger refuses a change. | P2 |
+| FR-INV-10 | Staff shall see, per investment, a certificate (its terms, agreed return and maturity value) and a statement of every money event with the principal and return payable after it, laid out to print. | The PDF copy in document storage is a documents follow-up. | P2 |
+| FR-INV-11 | A funding (only before anything else moves), a return payout or a maturity payout may be reversed once, with a reason and a checker (`investment_reversal`), by the mirror of its journal; the investment's balances and status return to what they were. Accruals, rollovers and early withdrawals are not reversed. | Tested. | P2 |
+| FR-INV-12 | Staff shall see the maturity ladder (what is matured and unpaid, and what falls due in 7, 30 and 90 days, principal and return) and the investment figures: balances, inflows, outflows, returns accrued, paid and rolled over, penalties, open investments, investors, and concentration by investor and product. | Figures from posted rows only (chapter 14 section 14.5). | P2 |
+
+### 3.25.1 Investment return rules (R-INV)
+
+**R-INV-1: periods.** Period `k` (1 to `n`, `n` the term in months) runs from the start date plus
+`k-1` months to the start date plus `k` months, each computed from the start date by the R-TERM
+month rule (clamped to the month's last day, never drifting): 31 January starts periods ending
+29 February (28 in a common year), 31 March, 30 April.
+
+**R-INV-2: flat.** The cumulative return after `k` months is `C(k) = round(P x rate_bp x k / 120000)`
+(R-ROUND, half up); period `k` earns `C(k) - C(k-1)`. The periods sum to `C(n)`, the agreed return
+of FR-INV-03, with no residue: 1,000,000 at 1000 bp for 3 months earns 8,333, 8,334 and 8,333.
+
+**R-INV-3: compound.** Monthly compounding, only with payout `at_maturity`: `B(0) = P`, period `k`
+earns `round(B(k-1) x rate_bp / 120000)` and `B(k) = B(k-1)` plus that return. The agreed return is
+`B(n) - P`: 1,000,000 at 1200 bp for 3 months earns 10,000, 10,100 and 10,201, total 30,301.
+
+**R-INV-4: payout.** `monthly`: every period pays out; `quarterly`: periods 3, 6, 9 and the last;
+`at_maturity`: the last. When a payout period is accrued, everything accrued so far is due.
+
+**R-INV-5: part periods.** A simple return at rate `r` from a start date to an end date: the whole
+months held by the R-TERM rule earn `r / 12` each; the remaining days earn `r / L` per day, where
+`L` is the length (365 or 366) of the calendar year the day falls in, the days split at 1 January.
+One rounding at the end, half up, on the exact fraction. 1,000,000 at 1200 bp from 15 January to
+1 March 2028 (one month and 15 days of a leap year) earns 10,000 + 120,000 x 15 / 366 = 14,918.
+
+**R-INV-6: early withdrawal.** On the withdrawal date `w` (after the job's accruals up to `w`):
+earned `E` = 0 for `forfeit_return`, or R-INV-5 from the start date to `w` at the reduced rate for
+`reduced_rate`; penalty `N = round(P x penalty_bp / 10000)`, capped so the cash is not negative;
+cash `= P - N + E - R`, where `R` is the return already paid. With `A` the return accrued, one entry
+posts: investments payable `P` and returns payable `A - R` / cash; return expense credited
+`A - E` (or debited `E - A`); penalty income `N`. Worked example 1: 1,000,000 monthly at 1200 bp,
+two months accrued and paid (20,000), forfeit with 200 bp penalty: cash 960,000, return expense
+credited 20,000, penalty income 20,000. Worked example 2: 1,000,000 at maturity at 1200 bp, four
+months accrued (40,000), reduced rate 600 bp after exactly four months: earned 20,000, return
+expense credited 20,000, cash 1,020,000.
 
 ## 3.26 Collections (CLN)
 

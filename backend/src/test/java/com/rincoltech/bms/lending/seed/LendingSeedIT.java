@@ -77,6 +77,36 @@ class LendingSeedIT extends IntegrationTest {
                                 t.tenantId(),
                                 "SELECT count(*) FROM lending_members WHERE tenant_id = ? AND full_name NOT LIKE 'Test Borrower %'"))
                 .isZero();
+        // Investments (#152): three products, ten placed over twelve months and one waiting for funding.
+        assertThat(report.render()).contains("3 investment products", "10 investments");
+        List<String> investmentStatuses = TestDatabase.owner()
+                .sql("SELECT DISTINCT status FROM lending_investments WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .query(String.class)
+                .list();
+        assertThat(investmentStatuses).contains("pending_funding", "active", "matured", "paid_out", "rolled_over");
+        // The monthly income deposit had ten returns collected, one a month.
+        assertThat(
+                        count(
+                                t.tenantId(),
+                                "SELECT count(*) FROM lending_investment_transactions WHERE tenant_id = ? AND txn_type = 'return_payout'"))
+                .isEqualTo(10);
+        // Every accrual was posted on its own period's end date, never twice.
+        assertThat(count(t.tenantId(), """
+                        SELECT count(*) FROM lending_investment_transactions t
+                          JOIN lending_investment_schedule_items s ON s.accrued_txn_id = t.id
+                         WHERE t.tenant_id = ? AND t.value_date <> s.period_end
+                        """)).isZero();
+        assertThat(count(t.tenantId(), """
+                        SELECT count(*) FROM lending_investments i WHERE i.tenant_id = ? AND (i.principal_held_minor <>
+                            (SELECT coalesce(sum(j.credit - j.debit), 0) FROM journal_lines j
+                               JOIN gl_accounts a ON a.id = j.account_id AND a.system_key = 'investments_payable'
+                              WHERE j.subledger_id = i.id)
+                          OR i.return_accrued_minor - i.return_paid_minor <>
+                            (SELECT coalesce(sum(j.credit - j.debit), 0) FROM journal_lines j
+                               JOIN gl_accounts a ON a.id = j.account_id AND a.system_key = 'investment_returns_payable'
+                              WHERE j.subledger_id = i.id))
+                        """)).isZero();
 
         // Savings (#151): eleven accounts on three products, one member holding two, a year of movements.
         assertThat(report.render()).contains("11 savings accounts");

@@ -245,6 +245,35 @@ Parameters: `as_at`, branches, status. Per investment: member, principal, rate, 
 maturity, agreed return, return due, return paid. A "maturing within N days" filter
 drives the payout planning view.
 
+Increment 10 (#152) serves it as the investments list (`GET /lending/investments` with
+`status`, `branch_id` and `maturing_within_days`); the catalogue entry and its CSV arrive with the
+reports increment.
+
+### `lending.investment_maturities` and the investment metrics (FR-INV-12)
+
+The maturity ladder: investments `active` or `matured` with principal held, by when they fall due
+from today: `overdue` (matured, not yet paid out), `0_7`, `8_30` and `31_90` days; per bucket the
+count, principal held, the return still owed at maturity (the agreed return less return paid; once
+matured, accrued less paid) and the total, so the owner can plan cash for payouts. The metrics for a
+date range and branches, each from posted rows only (ADR-031 decision 8):
+
+| Metric | Definition |
+|---|---|
+| `investments.balance` | Balance of `investments_payable` (2020) at the end date |
+| `investments.returns_payable` | Balance of `investment_returns_payable` (2021) at the end date |
+| `investments.inflows` | Fundings by value date in the range, less fundings reversed; rollovers are not new money |
+| `investments.outflows` | Return payouts, maturity payouts and early withdrawals paid in the range, less reversals |
+| `investments.returns_accrued` | Net debits to `investment_return_expense` (5020) in the range |
+| `investments.returns_paid` | The return part of payouts and early withdrawals in the range, less reversals |
+| `investments.returns_reinvested` | Unpaid returns moved into a new investment by a rollover in the range |
+| `investments.penalties` | Net credits to `investment_penalty_income` (4060) in the range |
+| `investments.open_count`, `investments.investor_count` | Open investments and the members holding them, now |
+
+Concentration: the ten largest investors and every product by principal held now, each with its
+share of the total in basis points. Served by `GET /lending/investments/maturities` and
+`GET /lending/investments/metrics`, and to other modules (the insights page of #153) through the
+module's `InvestmentMetrics` interface.
+
 ### `lending.collateral_register` (FR-COL-06)
 
 Parameters: `as_at`, branches, type, custody status. Per item: member, type, reference,
