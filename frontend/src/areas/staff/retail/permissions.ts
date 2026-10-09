@@ -8,7 +8,7 @@ import type { Me } from '../../../api/client';
 export const PROFIT = 'retail.profit.read';
 
 export type RetailScreen =
-  | 'sale' | 'creditSales' | 'salesHistory' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit'
+  | 'sale' | 'creditSales' | 'salesHistory' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit' | 'salesAnalysis' | 'margins' | 'stockHealth' | 'creditControl' | 'evaluation'
   | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer'
   // The cash book (ADR-022, FR-RET-31).
   | 'savings' | 'banking' | 'expenses' | 'withdrawals' | 'advances' | 'cashSummary' | 'bankingReport' | 'expensesReport' | 'expenseSetup';
@@ -46,6 +46,12 @@ const NEEDS: Record<RetailScreen, string[]> = {
   // Stock value is a stock read; its cost columns and the profit report need retail.profit.read.
   valuation: ['retail.stock.read'],
   profit: [PROFIT],
+  // The analytics reports (issue #149); profit columns arrive only with retail.profit.read.
+  salesAnalysis: ['retail.sale.read'],
+  margins: [PROFIT],
+  stockHealth: ['retail.stock.read'],
+  creditControl: ['retail.sale.read'],
+  evaluation: [PROFIT],
   // The Catalogue home needs nothing itself: canUse opens it when any screen under it may be used.
   catalogue: [],
   // The lists these screens read are stock, purchase and sale reads; changing them needs the manage permissions.
@@ -142,6 +148,11 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'transfers', path: '/staff/retail/transfers', label: 'Stock moves', hint: 'Stock sent between branches' },
   { screen: 'valuation', path: '/staff/retail/valuation', label: 'Stock value', hint: 'Stock at cost and at price' },
   { screen: 'profit', path: '/staff/retail/profit', label: 'Daily profit', hint: 'Profit per day' },
+  { screen: 'salesAnalysis', path: '/staff/retail/sales-analysis', label: 'Sales analysis', hint: 'Sales by day, shop, item and seller' },
+  { screen: 'margins', path: '/staff/retail/margins', label: 'Margins', hint: 'Profit by item, low margins, price changes' },
+  { screen: 'stockHealth', path: '/staff/retail/stock-health', label: 'Stock health', hint: 'Days of cover, reorder, dead stock, shrinkage' },
+  { screen: 'creditControl', path: '/staff/retail/credit-control', label: 'Credit control', hint: 'Who owes, how late, payments received' },
+  { screen: 'evaluation', path: '/staff/retail/evaluation', label: 'Business evaluation', hint: 'Profit to date and what the stock is worth' },
   { screen: 'catalogue', path: '/staff/retail/catalogue', label: 'Catalogue', hint: 'Items, categories, units, suppliers and credit buyers' },
   { screen: 'banking', path: '/staff/retail/banking', label: 'Banking', hint: 'Cash banked, and what to expect' },
   { screen: 'savings', path: '/staff/retail/savings', label: 'Savings', hint: 'Set money aside for the day' },

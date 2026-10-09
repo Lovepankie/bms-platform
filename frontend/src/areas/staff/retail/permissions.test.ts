@@ -14,7 +14,7 @@ describe('retail permission gating', () => {
     expect(canUse(sales, 'stocktake')).toBe(false);
     // Stock value is a stock read; only its cost columns need retail.profit.read.
     // The seeded sales role also holds four cash book permissions (chapter 8 matrix).
-    expect(screensFor(sales).map((s) => s.screen)).toEqual(['sale', 'creditSales', 'salesHistory', 'usage', 'stock', 'transfers', 'valuation', 'catalogue', 'banking', 'savings', 'expenses', 'cashSummary', 'bankingReport', 'expensesReport']);
+    expect(screensFor(sales).map((s) => s.screen)).toEqual(['sale', 'creditSales', 'salesHistory', 'usage', 'stock', 'transfers', 'valuation', 'salesAnalysis', 'stockHealth', 'creditControl', 'catalogue', 'banking', 'savings', 'expenses', 'cashSummary', 'bankingReport', 'expensesReport']);
     expect(canUse(sales, 'transfer')).toBe(false);
   });
 
@@ -23,16 +23,17 @@ describe('retail permission gating', () => {
     expect(only('retail.sale.create')).toEqual(['sale']);
     expect(only('retail.purchase.create')).toEqual(['restock']);
     expect(only('retail.usage.report')).toEqual(['usage']);
-    expect(only('retail.stock.read')).toEqual(['stock', 'transfers', 'valuation']);
-    expect(only('retail.profit.read')).toEqual(['profit']);
-    expect(only('retail.sale.read')).toEqual(['creditSales', 'salesHistory']);
+    expect(only('retail.stock.read')).toEqual(['stock', 'transfers', 'valuation', 'stockHealth']);
+    expect(only('retail.profit.read')).toEqual(['profit', 'margins', 'evaluation']);
+    expect(only('retail.sale.read')).toEqual(['creditSales', 'salesHistory', 'salesAnalysis', 'creditControl']);
   });
 
   it('offers everything to an admin', () => {
     expect(canSeeProfit(admin)).toBe(true);
     expect(screensFor(admin).map((s) => s.screen)).toEqual(
       [
-        'sale', 'creditSales', 'salesHistory', 'restock', 'usage', 'stock', 'stocktake', 'transfer', 'transfers', 'valuation', 'profit', 'catalogue',
+        'sale', 'creditSales', 'salesHistory', 'restock', 'usage', 'stock', 'stocktake', 'transfer', 'transfers', 'valuation', 'profit',
+        'salesAnalysis', 'margins', 'stockHealth', 'creditControl', 'evaluation', 'catalogue',
         'banking', 'savings', 'expenses', 'withdrawals', 'advances', 'cashSummary', 'bankingReport', 'expensesReport', 'expenseSetup',
       ],
     );
@@ -50,7 +51,7 @@ describe('retail permission gating', () => {
     expect(only('retail.cashbook.read')).toEqual(['cashSummary', 'bankingReport', 'expensesReport']);
     expect(only('retail.expense.manage')).toEqual([]);
     expect(only('retail.expense.manage', 'retail.cashbook.read')).toEqual(['cashSummary', 'bankingReport', 'expensesReport', 'expenseSetup']);
-    expect(only('retail.cashbook.void', 'retail.savings.overwrite', 'retail.profit.read')).toEqual(['profit']);
+    expect(only('retail.cashbook.void', 'retail.savings.overwrite', 'retail.profit.read')).toEqual(['profit', 'margins', 'evaluation']);
   });
 
   it('gives the cashier the cash book screens that record, and none that need profit or setup', () => {

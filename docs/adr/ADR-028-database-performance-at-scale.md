@@ -127,6 +127,18 @@ recent); if a real tenant's list is slow, measure `(tenant_id, status, created_a
 larger than the largest here, or the first lending schedules and a busy outbox, are the next reasons to
 measure again.
 
+## Follow-up
+
+**Deviation (retail analytics, issue #149).** Decision 1 asks for every new report query to be measured at 25
+times the data on both profiles. The retail analytics queries (k01 to k15, `scripts/db-bench/queries`) were measured at
+10 times the data on one cloud profile only (`docs/runbooks/database-tuning.md` section 6), and the history
+those reports read (price changes, payments, usage and stock-take movements) was not seeded at scale, so k06, k09 and
+k12 are pending: they have not been measured at any size that counts. The runs at 25 times on both profiles
+are still owed, and no index is added for them until a plan shows it is needed. Two statements are known to read more than
+a date range bounds: the stock-take shrinkage in `StockHealthRepository` (stock-take movements by kind and date, which
+grows with every full count) and the payments of `credit-control` (grouped by day and method, so at most 366 days of
+methods).
+
 ## Appendix: timings (ms)
 
 Median execution time of each statement in `scripts/db-bench/queries` (planning time excluded; it

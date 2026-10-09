@@ -236,7 +236,7 @@ export class RetailError extends Error {
 }
 
 /** Unwraps an openapi-fetch result, turning a problem detail into a RetailError. */
-function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T {
+export function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T {
   if (result.data === undefined || result.error !== undefined || !result.response.ok) {
     const problem = problemOf(result.error);
     throw new RetailError(retailMessage(problem, result.response.status), result.response.status, problem.code, problem as Record<string, unknown>);

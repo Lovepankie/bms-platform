@@ -18,7 +18,7 @@ yet), **out of scope** (with the reason). Screens are under `frontend/src/areas/
 | Edit a credit sale | Replaced on purpose by payments against the sale (FR-RET-05, behaviour spec section 8) | partly | The API takes payments (`POST /retail/sales/{id}/payments`); the PWA has no "Record a payment" form yet, so a credit sale can be read (Credit sales) but not paid from the screens |
 | Credit sales (sales where the type is Credit) | Credit sales (`credit-sales`): buyer, date, amount, due date, state (Unpaid, Part paid, Overdue, Paid); filter by buyer and by what is owed; open a sale for its lines | done | Nothing for the list. Payment history on a sale is not shown yet |
 | Sales list and history | All sales (`sales`): filters by date range, branch (the Branch box), buyer, payment method and item; open a sale for its lines | done | Nothing for the list |
-| Sales by cash and by profit margin, grouped by shop, year and month | Daily profit (`profit`): per branch and per day, with All branches | partly | No grouping by month or year, no margin percentage, no "by cash" cut. The report API is per day |
+| Sales by cash and by profit margin, grouped by shop, year and month | Sales analysis (`sales-analysis`): by day, week or month, by shop, category, item and seller; Margins (`margins`): profit and margin percent by item and category; Daily profit (`profit`) per branch and day | done | Nothing for the grouping and the margin. The year is a range of up to 366 days. The cash against credit split of a day is on the retail home dashboard; there is no "by cash" cut of the profit report |
 | Void or return a sale | None | missing | The API voids a sale (`POST /retail/sales/{id}/void`); no screen. Customer returns were recorded as restocks in the AppSheet app and are `return` movements here |
 
 ## Stock
@@ -60,6 +60,22 @@ The AppSheet app has list and form views for each of these; the screens are unde
 | Start a new client from a product list (no AppSheet view) | Import items (`import`): paste or choose a CSV, check, then add; administrators only | done | The file is read as whole amounts in the business's currency; no photos or barcodes |
 | Stock-take losses and gains in the profit report | Daily profit, column "Stock-take difference" (#121) | done | Nothing |
 
+## Analytics (#149)
+
+The pilot owner was promised better analytics than the AppSheet app. These screens are reports on the existing data
+(`docs/specs/retail-ui-notes.md`, "Analytics screens"); they have no AppSheet view to match.
+
+| Owner question | Screen | Status | What remains |
+|---|---|---|---|
+| How are we doing today, this week, this month, by shop? | Retail home dashboard: today's sales, cash against credit, profit, 7 and 30 day sparklines, stock value, out of stock and low stock, a table by shop | done | "Banked against expected" and "Savings" are marked placeholders until the cash book |
+| Sales by day, week, month, shop, category, item, seller; top sellers; slow movers; items with no sale | Sales analysis (`sales-analysis`) | done | Nothing |
+| Profit and margin by item and category; items sold below a target; what a price change did | Margins (`margins`), profit reader only | done | Nothing |
+| Days of cover, what to reorder, dead stock, shrinkage and damage cost by shop | Stock health (`stock-health`) | done | A reorder suggestion is a number of units at the pace of 30 days; no supplier or lead time per item |
+| Who owes, how late, what was paid | Credit control (`credit-control`) | done | The "Record a payment" form is still missing (see Sales) |
+| Expected profit of the stock and a run rate | Business evaluation (`evaluation`), profit reader only; an estimate, not a forecast | done | The exact formula the AppSheet app used is still to be agreed with the owner (issue #149 item 7); these are the stated formulas |
+| Cash view per shop per day (takings, expenses, banked, withdrawn, savings, difference) | None | out of scope | The cash book |
+| Export to PDF and Excel; a daily summary on WhatsApp | None | out of scope | Report runs (SDD 7.11.8) and the notification outbox |
+
 ## Cash handling and administration
 
 | AppSheet view | Equivalent screen | Status | What remains |
@@ -78,10 +94,10 @@ The AppSheet app has list and form views for each of these; the screens are unde
 Done: record a sale, credit sales, all sales, stock (single branch and All branches, category filter, low and out
 of stock), stock-take, usage, restock, move stock, stock value with expected profit, daily profit (with the stock-take
 difference), the catalogue screens for items, prices, categories, units, suppliers and credit buyers, with the
-item import, and the cash book screens (savings, banking and its report, withdrawals, expenses and its report and
+item import, the analytics screens (sales analysis, margins, stock health, credit control, business evaluation and the owner dashboard), and the cash book screens (savings, banking and its report, withdrawals, expenses and its report and
 lists, advances, cash summary).
 
-Partly: paying a credit sale from the screens, low stock with a per-product level, profit grouped by month or year.
+Partly: paying a credit sale from the screens, low stock with a per-product level.
 
 Missing: void and returns, damaged and used records, purchase records.
 

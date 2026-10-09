@@ -21,9 +21,28 @@ import org.springframework.web.bind.annotation.RestController;
 class ReportsController {
 
     private final ReportsService service;
+    private final SalesAnalysisService salesAnalysis;
+    private final MarginService margins;
+    private final StockHealthService stockHealth;
+    private final CreditService credit;
+    private final EvaluationService evaluation;
+    private final DashboardService dashboard;
 
-    ReportsController(ReportsService service) {
+    ReportsController(
+            ReportsService service,
+            SalesAnalysisService salesAnalysis,
+            MarginService margins,
+            StockHealthService stockHealth,
+            CreditService credit,
+            EvaluationService evaluation,
+            DashboardService dashboard) {
         this.service = service;
+        this.salesAnalysis = salesAnalysis;
+        this.margins = margins;
+        this.stockHealth = stockHealth;
+        this.credit = credit;
+        this.evaluation = evaluation;
+        this.dashboard = dashboard;
     }
 
     @GetMapping("/valuation")
@@ -45,5 +64,85 @@ class ReportsController {
             @RequestParam(name = "from", required = false) LocalDate from,
             @RequestParam(name = "to", required = false) LocalDate to) {
         return service.dailyProfit(branchIds, from, to);
+    }
+
+    @GetMapping("/sales-analysis")
+    @RequiresPermission("retail.sale.read")
+    @Operation(
+            summary = "Sales by period, branch, category, product and seller, with slow movers (issue #149)",
+            operationId = "getRetailSalesAnalysis")
+    SalesAnalysisApi.Analysis salesAnalysis(
+            @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
+            @RequestParam(name = "from", required = false) LocalDate from,
+            @RequestParam(name = "to", required = false) LocalDate to,
+            @RequestParam(name = "group", required = false) String group,
+            @RequestParam(name = "top", required = false) Integer top,
+            @RequestParam(name = "slow_days", required = false) Integer slowDays) {
+        return salesAnalysis.analyse(branchIds, from, to, group, top, slowDays);
+    }
+
+    @GetMapping("/margins")
+    @RequiresPermission("retail.profit.read")
+    @Operation(
+            summary = "Profit and margin by item and category, items under a target, price change impact (issue #149)",
+            operationId = "getRetailMargins")
+    MarginApi.Report margins(
+            @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
+            @RequestParam(name = "from", required = false) LocalDate from,
+            @RequestParam(name = "to", required = false) LocalDate to,
+            @RequestParam(name = "top", required = false) Integer top,
+            @RequestParam(name = "target_bp", required = false) Integer targetBp) {
+        return margins.margins(branchIds, from, to, top, targetBp);
+    }
+
+    @GetMapping("/stock-health")
+    @RequiresPermission("retail.stock.read")
+    @Operation(
+            summary = "Days of cover, reorder suggestions, dead stock and shrinkage by branch (issue #149)",
+            operationId = "getRetailStockHealth")
+    StockHealthApi.Report stockHealth(
+            @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
+            @RequestParam(name = "from", required = false) LocalDate from,
+            @RequestParam(name = "to", required = false) LocalDate to,
+            @RequestParam(name = "top", required = false) Integer top,
+            @RequestParam(name = "lead_days", required = false) Integer leadDays,
+            @RequestParam(name = "cover_days", required = false) Integer coverDays) {
+        return stockHealth.report(branchIds, from, to, top, leadDays, coverDays);
+    }
+
+    @GetMapping("/credit-control")
+    @RequiresPermission("retail.sale.read")
+    @Operation(
+            summary = "Outstanding credit by buyer with ageing, the overdue list and payments received (issue #149)",
+            operationId = "getRetailCreditControl")
+    CreditApi.Report creditControl(
+            @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
+            @RequestParam(name = "from", required = false) LocalDate from,
+            @RequestParam(name = "to", required = false) LocalDate to,
+            @RequestParam(name = "top", required = false) Integer top,
+            @RequestParam(name = "sort", required = false) String sort) {
+        return credit.report(branchIds, from, to, top, sort);
+    }
+
+    @GetMapping("/business-evaluation")
+    @RequiresPermission("retail.profit.read")
+    @Operation(
+            summary = "Profit to date, expected profit of the stock on hand and a 30 day run rate (issue #149)",
+            operationId = "getRetailBusinessEvaluation")
+    EvaluationApi.Report businessEvaluation(
+            @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
+            @RequestParam(name = "from", required = false) LocalDate from,
+            @RequestParam(name = "to", required = false) LocalDate to,
+            @RequestParam(name = "top", required = false) Integer top) {
+        return evaluation.evaluate(branchIds, from, to, top);
+    }
+
+    @GetMapping("/dashboard")
+    @RequiresPermission("retail.sale.read")
+    @Operation(
+            summary = "Owner dashboard: today, 7 and 30 days, stock value and counts, by shop (issue #149)",
+            operationId = "getRetailDashboard")
+    DashboardApi.Report dashboard(@RequestParam(name = "branch_id", required = false) List<UUID> branchIds) {
+        return dashboard.dashboard(branchIds);
     }
 }

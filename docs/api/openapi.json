@@ -5270,6 +5270,35 @@
         },
         "required" : [ "party_id", "principal_minor" ]
       },
+      "RetailAgeing" : {
+        "description" : "What is owed on completed credit sales, by days past the due date as of today; a sale with no due date counts as not yet due",
+        "properties" : {
+          "days1_to30_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "days31_to60_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "days61_to90_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "not_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "over90_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "owed_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "RetailAllBranchesRow" : {
         "description" : "One product with its balance in every branch of the page",
         "properties" : {
@@ -5658,6 +5687,42 @@
         },
         "required" : [ "branch_id", "qty" ]
       },
+      "RetailBusinessEvaluation" : {
+        "properties" : {
+          "branches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailEvaluationBranch"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "note" : {
+            "description" : "A plain statement that these are estimates, not forecasts",
+            "type" : "string"
+          },
+          "run_rate_days" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "top" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "total" : {
+            "$ref" : "#/components/schemas/RetailEvaluationTotal"
+          }
+        }
+      },
       "RetailCashCategoryPatch" : {
         "properties" : {
           "active" : {
@@ -6040,6 +6105,160 @@
           }
         }
       },
+      "RetailCoverList" : {
+        "description" : "Items with cover below lead_days, the lowest first, with a suggested quantity",
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailCoverRow"
+            },
+            "type" : "array"
+          },
+          "total" : {
+            "description" : "Rows before the row limit",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailCoverRow" : {
+        "description" : "Stock against the pace of the last 30 days of sales, in one branch",
+        "properties" : {
+          "avg_daily" : {
+            "description" : "Average units sold a day over the last 30 days, three places",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "capped" : {
+            "description" : "True when the cover is above 365 days and days_of_cover shows 365.0",
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "days_of_cover" : {
+            "description" : "Stock divided by the daily average, one place; 0.0 when none is left",
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty_on_hand" : {
+            "type" : "string"
+          },
+          "sold_last30" : {
+            "description" : "Units sold in the last 30 days in this branch",
+            "type" : "string"
+          },
+          "suggested_qty" : {
+            "description" : "Reorder rows only: units to buy to reach cover_days of cover at this pace",
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailCreditBuyer" : {
+        "description" : "Buyers owing the most first",
+        "properties" : {
+          "ageing" : {
+            "$ref" : "#/components/schemas/RetailAgeing"
+          },
+          "customer_id" : {
+            "description" : "The credit buyer's id; absent for a buyer who was typed in by name",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "oldest_overdue_days" : {
+            "description" : "Days past the due date of the oldest overdue sale; absent when none is overdue",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sale_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailCreditControl" : {
+        "properties" : {
+          "as_of" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "buyer_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "buyers" : {
+            "description" : "Buyers owing the most first",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailCreditBuyer"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "overdue" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailOverdueSale"
+            },
+            "type" : "array"
+          },
+          "overdue_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "payments" : {
+            "description" : "Payments on credit sales received in the range, by day and method",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPaymentDay"
+            },
+            "type" : "array"
+          },
+          "payments_by_method" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPaymentMethodTotal"
+            },
+            "type" : "array"
+          },
+          "payments_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sort" : {
+            "description" : "amount or age",
+            "type" : "string"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "top" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/RetailAgeing"
+          }
+        }
+      },
       "RetailCustomer" : {
         "properties" : {
           "balance_minor" : {
@@ -6209,6 +6428,432 @@
           "usage_cost_minor" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        }
+      },
+      "RetailDashboard" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "days" : {
+            "description" : "The last 30 days ending today, one entry a day, oldest first",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDashboardDay"
+            },
+            "type" : "array"
+          },
+          "last30_gross_profit_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "last30_sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "last7_gross_profit_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "last7_sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "profit_visible" : {
+            "description" : "True when profit figures are included",
+            "type" : "boolean"
+          },
+          "shops" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDashboardShop"
+            },
+            "type" : "array"
+          },
+          "stock" : {
+            "$ref" : "#/components/schemas/RetailDashboardStock"
+          },
+          "today" : {
+            "$ref" : "#/components/schemas/RetailDashboardToday"
+          }
+        }
+      },
+      "RetailDashboardDay" : {
+        "description" : "The last 30 days ending today, one entry a day, oldest first",
+        "properties" : {
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "gross_profit_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailDashboardShop" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "last30_sales_minor" : {
+            "description" : "Present only with retail.sale.read in this branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "last7_sales_minor" : {
+            "description" : "Present only with retail.sale.read in this branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "low_stock" : {
+            "description" : "Present only with retail.stock.read",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "out_of_stock" : {
+            "description" : "Present only with retail.stock.read",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "stock_at_cost_minor" : {
+            "description" : "Present only with retail.profit.read in this branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "stock_at_price_minor" : {
+            "description" : "Present only with retail.stock.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "today_gross_profit_minor" : {
+            "description" : "Present only with retail.profit.read in this branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "today_sales_minor" : {
+            "description" : "Present only with retail.sale.read in this branch",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailDashboardStock" : {
+        "description" : "Present only with retail.stock.read",
+        "properties" : {
+          "low_stock" : {
+            "description" : "Active items at or below low_stock_threshold (ADR-029), out of stock ones included, as the stock list's low tab counts them",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "low_stock_threshold" : {
+            "type" : "string"
+          },
+          "out_of_stock" : {
+            "description" : "Active items whose balance is zero or less, as the stock list judges it: a branch alone, or the sum over the branches reported",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "value_at_cost_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers; stock above zero at the current cost",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value_at_price_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailDashboardToday" : {
+        "properties" : {
+          "cash_minor" : {
+            "description" : "Sales paid at the sale: cash, mobile money or bank",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "credit_minor" : {
+            "description" : "Sales on credit, whether or not paid since",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "gross_profit_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers; sales less the cost snapshots",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sale_count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailDeadStock" : {
+        "description" : "Stock on hand with no sale in the branch in the last 90 days",
+        "properties" : {
+          "branches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDeadStockBranch"
+            },
+            "type" : "array"
+          },
+          "days" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "items" : {
+            "description" : "The largest by value at price",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDeadStockItem"
+            },
+            "type" : "array"
+          },
+          "items_total" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "value_at_cost_minor" : {
+            "description" : "All reported branches; Present only with retail.profit.read in this branch in every branch reported",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value_at_price_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailDeadStockBranch" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "item_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "value_at_cost_minor" : {
+            "description" : "Present only with retail.profit.read in this branch; quantity times the current cost",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value_at_price_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailDeadStockItem" : {
+        "description" : "The largest by value at price",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty_on_hand" : {
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "value_at_cost_minor" : {
+            "description" : "Present only with retail.profit.read in this branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value_at_price_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailEvaluationBranch" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "categories" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailEvaluationCategory"
+            },
+            "type" : "array"
+          },
+          "period" : {
+            "$ref" : "#/components/schemas/RetailEvaluationPeriod"
+          },
+          "run_rate" : {
+            "$ref" : "#/components/schemas/RetailEvaluationRunRate"
+          },
+          "stock" : {
+            "$ref" : "#/components/schemas/RetailEvaluationStock"
+          }
+        }
+      },
+      "RetailEvaluationCategory" : {
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "period" : {
+            "$ref" : "#/components/schemas/RetailEvaluationPeriod"
+          },
+          "products" : {
+            "description" : "The largest expected profit first, at most top",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailEvaluationProduct"
+            },
+            "type" : "array"
+          },
+          "products_total" : {
+            "description" : "Items in the category with sales in the period or stock, before the row limit",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "stock" : {
+            "$ref" : "#/components/schemas/RetailEvaluationStock"
+          }
+        }
+      },
+      "RetailEvaluationPeriod" : {
+        "description" : "What was sold in the chosen period, from the sale line snapshots",
+        "properties" : {
+          "margin_bp" : {
+            "description" : "Profit over sales in basis points, half up; absent when sales are not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "profit_minor" : {
+            "description" : "Sales less the cost snapshots of the sale lines; usage and damage are not in it",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailEvaluationProduct" : {
+        "description" : "The largest expected profit first, at most top",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "period" : {
+            "$ref" : "#/components/schemas/RetailEvaluationPeriod"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty_on_hand" : {
+            "type" : "string"
+          },
+          "stock" : {
+            "$ref" : "#/components/schemas/RetailEvaluationStock"
+          },
+          "unit" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailEvaluationRunRate" : {
+        "description" : "The last 30 days of sales as a daily pace",
+        "properties" : {
+          "avg_daily_profit_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "avg_daily_sales_minor" : {
+            "description" : "Sales over 30, rounded half up to the minor unit",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "days_of_stock" : {
+            "description" : "Stock at price over the daily sales, one place; absent when nothing sold",
+            "type" : "string"
+          },
+          "days_of_stock_capped" : {
+            "description" : "True when the days of stock are over 365 and show 365.0",
+            "type" : "boolean"
+          },
+          "profit_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailEvaluationStock" : {
+        "description" : "The stock on hand valued at today's prices; stock at or below zero is left out",
+        "properties" : {
+          "at_cost_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "at_price_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expected_profit_minor" : {
+            "description" : "Stock at price less stock at cost",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "over_cost_bp" : {
+            "description" : "Expected profit over stock at cost in basis points, half up; absent when cost is zero",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailEvaluationTotal" : {
+        "properties" : {
+          "period" : {
+            "$ref" : "#/components/schemas/RetailEvaluationPeriod"
+          },
+          "run_rate" : {
+            "$ref" : "#/components/schemas/RetailEvaluationRunRate"
+          },
+          "stock" : {
+            "$ref" : "#/components/schemas/RetailEvaluationStock"
           }
         }
       },
@@ -6394,6 +7039,126 @@
         },
         "required" : [ "amount_minor", "category_id", "item_id" ]
       },
+      "RetailMarginBelowTarget" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailMarginRow"
+            },
+            "type" : "array"
+          },
+          "total" : {
+            "description" : "How many items are below the target, before the row limit",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailMarginRow" : {
+        "description" : "One item or category; code and unit are set for an item only",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "cost_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "margin_bp" : {
+            "description" : "Absent when the item sold for nothing",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "profit_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "qty" : {
+            "type" : "string"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailMarginTotals" : {
+        "properties" : {
+          "cost_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "margin_bp" : {
+            "description" : "Profit over sales in basis points, half up; absent when sales are not above zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "profit_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailMargins" : {
+        "properties" : {
+          "below_target" : {
+            "$ref" : "#/components/schemas/RetailMarginBelowTarget"
+          },
+          "by_category" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailMarginRow"
+            },
+            "type" : "array"
+          },
+          "by_product" : {
+            "description" : "The top items by profit",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailMarginRow"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "price_changes" : {
+            "$ref" : "#/components/schemas/RetailPriceChanges"
+          },
+          "target_bp" : {
+            "description" : "The margin target in basis points; 2000 is 20 percent",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "top" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/RetailMarginTotals"
+          }
+        }
+      },
       "RetailOpenSale" : {
         "properties" : {
           "balance_minor" : {
@@ -6409,6 +7174,48 @@
             "type" : "string"
           },
           "paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sale_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_no" : {
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailOverdueSale" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "buyer_name" : {
+            "type" : "string"
+          },
+          "customer_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "days_overdue" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "due_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "outstanding_minor" : {
             "format" : "int64",
             "type" : "integer"
           },
@@ -6467,6 +7274,26 @@
           }
         }
       },
+      "RetailPaymentDay" : {
+        "description" : "Payments on credit sales received in the range, by day and method",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "method" : {
+            "type" : "string"
+          }
+        }
+      },
       "RetailPaymentList" : {
         "properties" : {
           "items" : {
@@ -6474,6 +7301,21 @@
               "$ref" : "#/components/schemas/RetailPayment"
             },
             "type" : "array"
+          }
+        }
+      },
+      "RetailPaymentMethodTotal" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "method" : {
+            "type" : "string"
           }
         }
       },
@@ -6557,6 +7399,84 @@
           "source_id" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        }
+      },
+      "RetailPriceChangeImpact" : {
+        "description" : "An item whose sell price changed in the range: the last change decides the split, the figures before it are from the start of the range, those from it are to the end of the range. Cost is the snapshot on each sale line, never the current cost.",
+        "properties" : {
+          "changed_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "days_after" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "days_before" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "margin_after_bp" : {
+            "description" : "Absent when nothing sold from the change",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "margin_before_bp" : {
+            "description" : "Absent when nothing sold before the change",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "new_sell_minor" : {
+            "description" : "The sell price after the last change in the range",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "old_sell_minor" : {
+            "description" : "The sell price before the first change in the range",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sales_after_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_before_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "units_after" : {
+            "type" : "string"
+          },
+          "units_before" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailPriceChanges" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPriceChangeImpact"
+            },
+            "type" : "array"
+          },
+          "total" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -7222,6 +8142,194 @@
         },
         "required" : [ "lines", "payment_method" ]
       },
+      "RetailSalesAnalysis" : {
+        "properties" : {
+          "by_branch" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSalesAnalysisRow"
+            },
+            "type" : "array"
+          },
+          "by_category" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSalesAnalysisRow"
+            },
+            "type" : "array"
+          },
+          "by_product" : {
+            "description" : "The top products by sales",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSalesAnalysisRow"
+            },
+            "type" : "array"
+          },
+          "by_seller" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSalesAnalysisRow"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "group" : {
+            "description" : "day, week or month",
+            "type" : "string"
+          },
+          "no_sales" : {
+            "description" : "Active items with no sale at all in the range. Present only with retail.stock.read and retail.sale.read in the branches the report covers",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailStockedItem"
+            },
+            "type" : "array"
+          },
+          "no_sales_total" : {
+            "description" : "Present only with retail.stock.read and retail.sale.read in the branches the report covers",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "profit_visible" : {
+            "description" : "True when cost and profit figures are included",
+            "type" : "boolean"
+          },
+          "series" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSalesAnalysisPeriod"
+            },
+            "type" : "array"
+          },
+          "slow_days" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "slow_movers" : {
+            "description" : "Items with stock on hand and no sale in the last slow_days days, as of today. Present only with retail.stock.read and retail.sale.read in the branches the report covers",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailStockedItem"
+            },
+            "type" : "array"
+          },
+          "slow_movers_total" : {
+            "description" : "Present only with retail.stock.read and retail.sale.read in the branches the report covers",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "top" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "top_by_quantity" : {
+            "description" : "The top products by quantity",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSalesAnalysisRow"
+            },
+            "type" : "array"
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/RetailSalesAnalysisTotals"
+          }
+        }
+      },
+      "RetailSalesAnalysisPeriod" : {
+        "properties" : {
+          "gross_profit_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "margin_bp" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "period_start" : {
+            "description" : "First day of the day, ISO week (Monday) or month",
+            "format" : "date",
+            "type" : "string"
+          },
+          "sale_count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailSalesAnalysisRow" : {
+        "description" : "One branch, category, product or seller. code and unit are set for a product only.",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "gross_profit_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "margin_bp" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "qty" : {
+            "type" : "string"
+          },
+          "sale_count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSalesAnalysisTotals" : {
+        "properties" : {
+          "gross_profit_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers; sales less the cost snapshots of the sale lines",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "margin_bp" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers; gross profit over sales in basis points, half up",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "qty" : {
+            "description" : "Units sold, summed over lines of every unit of measure; a rough volume only",
+            "type" : "string"
+          },
+          "sale_count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "RetailSavings" : {
         "properties" : {
           "amount_minor" : {
@@ -7415,6 +8523,57 @@
         },
         "required" : [ "suggestion_token" ]
       },
+      "RetailShrinkageBranch" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "damaged_cost_minor" : {
+            "description" : "Present only with retail.profit.read in this branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "damaged_reports" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "net_cost_minor" : {
+            "description" : "Present only with retail.profit.read in this branch; used and damaged plus loss, less gain",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "over_lines" : {
+            "description" : "Stock-take lines that found more than the books",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "short_lines" : {
+            "description" : "Stock-take lines that found less than the books",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "stocktake_gain_minor" : {
+            "description" : "Present only with retail.profit.read in this branch; the value at cost of what stock-takes found extra",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "stocktake_loss_minor" : {
+            "description" : "Present only with retail.profit.read in this branch; the value at cost of what stock-takes found missing",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "used_cost_minor" : {
+            "description" : "Present only with retail.profit.read in this branch; usage reported as used, at the cost when reported",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "used_reports" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
       "RetailStockBranch" : {
         "properties" : {
           "code" : {
@@ -7429,6 +8588,56 @@
           },
           "name" : {
             "type" : "string"
+          }
+        }
+      },
+      "RetailStockHealth" : {
+        "properties" : {
+          "cover" : {
+            "$ref" : "#/components/schemas/RetailCoverList"
+          },
+          "cover_days" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "dead_stock" : {
+            "$ref" : "#/components/schemas/RetailDeadStock"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "lead_days" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "profit_visible" : {
+            "description" : "True when cost figures are included for every branch reported (retail.profit.read)",
+            "type" : "boolean"
+          },
+          "reorder" : {
+            "$ref" : "#/components/schemas/RetailCoverList"
+          },
+          "shrinkage" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailShrinkageBranch"
+            },
+            "type" : "array"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "top" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "velocity_days" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -7550,6 +8759,32 @@
             "type" : "string"
           },
           "sell_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailStockedItem" : {
+        "description" : "A product with stock on hand, summed over the reported branches",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty_on_hand" : {
+            "type" : "string"
+          },
+          "stock_at_price_minor" : {
+            "description" : "Quantity on hand times the current sell price",
             "format" : "int64",
             "type" : "integer"
           },
@@ -17233,6 +18468,61 @@
         "tags" : [ "retail-purchasing" ]
       }
     },
+    "/api/v1/retail/reports/business-evaluation" : {
+      "get" : {
+        "operationId" : "getRetailBusinessEvaluation",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "top",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailBusinessEvaluation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Profit to date, expected profit of the stock on hand and a 30 day run rate (issue #149)",
+        "tags" : [ "retail-reports" ]
+      }
+    },
     "/api/v1/retail/reports/cash/advances" : {
       "get" : {
         "operationId" : "getRetailCashAdvancesReport",
@@ -17474,6 +18764,162 @@
         "tags" : [ "retail-cashbook" ]
       }
     },
+    "/api/v1/retail/reports/credit-control" : {
+      "get" : {
+        "operationId" : "getRetailCreditControl",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "top",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sort",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCreditControl"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Outstanding credit by buyer with ageing, the overdue list and payments received (issue #149)",
+        "tags" : [ "retail-reports" ]
+      }
+    },
+    "/api/v1/retail/reports/dashboard" : {
+      "get" : {
+        "operationId" : "getRetailDashboard",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailDashboard"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Owner dashboard: today, 7 and 30 days, stock value and counts, by shop (issue #149)",
+        "tags" : [ "retail-reports" ]
+      }
+    },
+    "/api/v1/retail/reports/margins" : {
+      "get" : {
+        "operationId" : "getRetailMargins",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "top",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "target_bp",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailMargins"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Profit and margin by item and category, items under a target, price change impact (issue #149)",
+        "tags" : [ "retail-reports" ]
+      }
+    },
     "/api/v1/retail/reports/profit/daily" : {
       "get" : {
         "operationId" : "getRetailDailyProfit",
@@ -17518,6 +18964,147 @@
           }
         },
         "summary" : "Profit per branch per day (FR-RET-10)",
+        "tags" : [ "retail-reports" ]
+      }
+    },
+    "/api/v1/retail/reports/sales-analysis" : {
+      "get" : {
+        "operationId" : "getRetailSalesAnalysis",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "group",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "top",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "slow_days",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSalesAnalysis"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sales by period, branch, category, product and seller, with slow movers (issue #149)",
+        "tags" : [ "retail-reports" ]
+      }
+    },
+    "/api/v1/retail/reports/stock-health" : {
+      "get" : {
+        "operationId" : "getRetailStockHealth",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "top",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "lead_days",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cover_days",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailStockHealth"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Days of cover, reorder suggestions, dead stock and shrinkage by branch (issue #149)",
         "tags" : [ "retail-reports" ]
       }
     },

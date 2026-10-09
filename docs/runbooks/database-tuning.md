@@ -118,3 +118,38 @@ updates. Recommended on the staging host and not yet applied: `autovacuum_max_wo
 `autovacuum_work_mem = 16MB` (`deploy/postgres/recommended/pi-staging.conf`), so autovacuum cannot
 take more than 32 MB beside the 48 MB of buffers. Check that autovacuum keeps up with
 `database-health-check.md` section 5 before and after any change.
+
+## 6. The retail analytics reports (issue #149)
+
+The analytics reports read existing tables only and add no index. Each statement is a file in `scripts/db-bench/queries`
+(`k01` to `k15`, the hot path list of ADR-028), bounded by a date range or window, the branch scope and a row limit; the
+two exceptions are the open credit debts (`k10`, `k11`, bounded by the predicate that the debt is open, as the credit sales
+list is) and the current stock position (`k15`, the balances of the branches in scope, one row a branch comes back).
+
+Measured with `scripts/db-bench` at 10 times the data (not 25) on PostgreSQL 16 with the default settings of a cloud machine
+(the Pi profile was not applied), seven runs, median in milliseconds, the largest tenant, a year for `k02` and a month or 30
+days for the rest:
+
+| Query | Median ms | Plan head |
+|---|---:|---|
+| `k01` sales by day, a month | 16 | GroupAggregate |
+| `k02` top ten items by sales, a year | 302 | Limit over a sort of the aggregate |
+| `k03` slow movers, 30 days | 48 | Limit |
+| `k04` items with no sale, a month | 42 | Limit |
+| `k05` items below the margin target, a month | 27 | Limit |
+| `k07` days of cover, 30 days | 45 | Limit |
+| `k08` dead stock totals, 90 days | 170 | Sort |
+| `k10` credit ageing by buyer | 39 | Limit |
+| `k11` overdue list | 34 | Limit |
+| `k13` business evaluation | 113 | Incremental Sort |
+| `k14` dashboard sales, 30 days | 21 | GroupAggregate |
+| `k15` dashboard stock position | 33 | HashAggregate |
+
+`k06` (price change impact), `k09` (shrinkage) and `k12` (credit payments) read tables the bench seed leaves empty or
+undated for the range (`retail_price_history`, `retail_sale_payments`, `retail_usage_reports`), so their rows are not a
+measurement. Their access is a filter over the tenant's rows of a table that grows with price events and credit payments, not with
+sales; `retail_sale_payments_sale` and `retail_price_history_product` lead with the sale and the product, so a date range
+reads the tenant's rows. If a real tenant's payments or price history make either slow, measure an index on
+`(tenant_id, paid_on)` or `(tenant_id, created_at)` then, in its own migration; none is added speculatively (ADR-028
+decision 1). Run `scripts/db-bench/run.sh measure` on the staging host out of hours to confirm the numbers on the Pi, as ADR-028
+asks.

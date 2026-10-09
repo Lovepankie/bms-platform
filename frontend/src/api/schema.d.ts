@@ -2739,6 +2739,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/reports/business-evaluation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Profit to date, expected profit of the stock on hand and a 30 day run rate (issue #149) */
+        get: operations["getRetailBusinessEvaluation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/reports/cash/advances": {
         parameters: {
             query?: never;
@@ -2824,6 +2841,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/reports/credit-control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Outstanding credit by buyer with ageing, the overdue list and payments received (issue #149) */
+        get: operations["getRetailCreditControl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/reports/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Owner dashboard: today, 7 and 30 days, stock value and counts, by shop (issue #149) */
+        get: operations["getRetailDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/reports/margins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Profit and margin by item and category, items under a target, price change impact (issue #149) */
+        get: operations["getRetailMargins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/reports/profit/daily": {
         parameters: {
             query?: never;
@@ -2833,6 +2901,40 @@ export interface paths {
         };
         /** Profit per branch per day (FR-RET-10) */
         get: operations["getRetailDailyProfit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/reports/sales-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sales by period, branch, category, product and seller, with slow movers (issue #149) */
+        get: operations["getRetailSalesAnalysis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/reports/stock-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Days of cover, reorder suggestions, dead stock and shrinkage by branch (issue #149) */
+        get: operations["getRetailStockHealth"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5564,6 +5666,21 @@ export interface components {
             /** Format: uuid */
             taken_by_party_id?: string;
         };
+        /** @description What is owed on completed credit sales, by days past the due date as of today; a sale with no due date counts as not yet due */
+        RetailAgeing: {
+            /** Format: int64 */
+            days1_to30_minor?: number;
+            /** Format: int64 */
+            days31_to60_minor?: number;
+            /** Format: int64 */
+            days61_to90_minor?: number;
+            /** Format: int64 */
+            not_due_minor?: number;
+            /** Format: int64 */
+            over90_minor?: number;
+            /** Format: int64 */
+            owed_minor?: number;
+        };
         /** @description One product with its balance in every branch of the page */
         RetailAllBranchesRow: {
             /** @description One entry per branch of the page, in the page's branch order */
@@ -5766,6 +5883,21 @@ export interface components {
             /** @example 10 */
             qty: string;
         };
+        RetailBusinessEvaluation: {
+            branches?: components["schemas"]["RetailEvaluationBranch"][];
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            /** @description A plain statement that these are estimates, not forecasts */
+            note?: string;
+            /** Format: int32 */
+            run_rate_days?: number;
+            /** Format: date */
+            to?: string;
+            /** Format: int32 */
+            top?: number;
+            total?: components["schemas"]["RetailEvaluationTotal"];
+        };
         RetailCashCategoryPatch: {
             active?: boolean;
             /**
@@ -5951,6 +6083,79 @@ export interface components {
             active?: boolean;
             name?: string;
         };
+        /** @description Items with cover below lead_days, the lowest first, with a suggested quantity */
+        RetailCoverList: {
+            items?: components["schemas"]["RetailCoverRow"][];
+            /**
+             * Format: int32
+             * @description Rows before the row limit
+             */
+            total?: number;
+        };
+        /** @description Stock against the pace of the last 30 days of sales, in one branch */
+        RetailCoverRow: {
+            /** @description Average units sold a day over the last 30 days, three places */
+            avg_daily?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** @description True when the cover is above 365 days and days_of_cover shows 365.0 */
+            capped?: boolean;
+            code?: string;
+            /** @description Stock divided by the daily average, one place; 0.0 when none is left */
+            days_of_cover?: string;
+            description?: string;
+            /** Format: uuid */
+            product_id?: string;
+            qty_on_hand?: string;
+            /** @description Units sold in the last 30 days in this branch */
+            sold_last30?: string;
+            /** @description Reorder rows only: units to buy to reach cover_days of cover at this pace */
+            suggested_qty?: string;
+            unit?: string;
+        };
+        /** @description Buyers owing the most first */
+        RetailCreditBuyer: {
+            ageing?: components["schemas"]["RetailAgeing"];
+            /**
+             * Format: uuid
+             * @description The credit buyer's id; absent for a buyer who was typed in by name
+             */
+            customer_id?: string;
+            name?: string;
+            /**
+             * Format: int32
+             * @description Days past the due date of the oldest overdue sale; absent when none is overdue
+             */
+            oldest_overdue_days?: number;
+            /** Format: int32 */
+            sale_count?: number;
+        };
+        RetailCreditControl: {
+            /** Format: date */
+            as_of?: string;
+            /** Format: int32 */
+            buyer_count?: number;
+            /** @description Buyers owing the most first */
+            buyers?: components["schemas"]["RetailCreditBuyer"][];
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            overdue?: components["schemas"]["RetailOverdueSale"][];
+            /** Format: int32 */
+            overdue_count?: number;
+            /** @description Payments on credit sales received in the range, by day and method */
+            payments?: components["schemas"]["RetailPaymentDay"][];
+            payments_by_method?: components["schemas"]["RetailPaymentMethodTotal"][];
+            /** Format: int64 */
+            payments_minor?: number;
+            /** @description amount or age */
+            sort?: string;
+            /** Format: date */
+            to?: string;
+            /** Format: int32 */
+            top?: number;
+            totals?: components["schemas"]["RetailAgeing"];
+        };
         RetailCustomer: {
             /**
              * Format: int64
@@ -6033,6 +6238,266 @@ export interface components {
             /** Format: int64 */
             usage_cost_minor?: number;
         };
+        RetailDashboard: {
+            currency?: string;
+            /** Format: date */
+            date?: string;
+            /** @description The last 30 days ending today, one entry a day, oldest first */
+            days?: components["schemas"]["RetailDashboardDay"][];
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers
+             */
+            last30_gross_profit_minor?: number;
+            /** Format: int64 */
+            last30_sales_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers
+             */
+            last7_gross_profit_minor?: number;
+            /** Format: int64 */
+            last7_sales_minor?: number;
+            /** @description True when profit figures are included */
+            profit_visible?: boolean;
+            shops?: components["schemas"]["RetailDashboardShop"][];
+            stock?: components["schemas"]["RetailDashboardStock"];
+            today?: components["schemas"]["RetailDashboardToday"];
+        };
+        /** @description The last 30 days ending today, one entry a day, oldest first */
+        RetailDashboardDay: {
+            /** Format: date */
+            date?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers
+             */
+            gross_profit_minor?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+        };
+        RetailDashboardShop: {
+            /** Format: uuid */
+            branch_id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.sale.read in this branch
+             */
+            last30_sales_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.sale.read in this branch
+             */
+            last7_sales_minor?: number;
+            /**
+             * Format: int32
+             * @description Present only with retail.stock.read
+             */
+            low_stock?: number;
+            /**
+             * Format: int32
+             * @description Present only with retail.stock.read
+             */
+            out_of_stock?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in this branch
+             */
+            stock_at_cost_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.stock.read
+             */
+            stock_at_price_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in this branch
+             */
+            today_gross_profit_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.sale.read in this branch
+             */
+            today_sales_minor?: number;
+        };
+        /** @description Present only with retail.stock.read */
+        RetailDashboardStock: {
+            /**
+             * Format: int32
+             * @description Active items at or below low_stock_threshold (ADR-029), out of stock ones included, as the stock list's low tab counts them
+             */
+            low_stock?: number;
+            low_stock_threshold?: string;
+            /**
+             * Format: int32
+             * @description Active items whose balance is zero or less, as the stock list judges it: a branch alone, or the sum over the branches reported
+             */
+            out_of_stock?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers; stock above zero at the current cost
+             */
+            value_at_cost_minor?: number;
+            /** Format: int64 */
+            value_at_price_minor?: number;
+        };
+        RetailDashboardToday: {
+            /**
+             * Format: int64
+             * @description Sales paid at the sale: cash, mobile money or bank
+             */
+            cash_minor?: number;
+            /**
+             * Format: int64
+             * @description Sales on credit, whether or not paid since
+             */
+            credit_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers; sales less the cost snapshots
+             */
+            gross_profit_minor?: number;
+            /** Format: int64 */
+            sale_count?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+        };
+        /** @description Stock on hand with no sale in the branch in the last 90 days */
+        RetailDeadStock: {
+            branches?: components["schemas"]["RetailDeadStockBranch"][];
+            /** Format: int32 */
+            days?: number;
+            /** @description The largest by value at price */
+            items?: components["schemas"]["RetailDeadStockItem"][];
+            /** Format: int32 */
+            items_total?: number;
+            /**
+             * Format: int64
+             * @description All reported branches; Present only with retail.profit.read in this branch in every branch reported
+             */
+            value_at_cost_minor?: number;
+            /** Format: int64 */
+            value_at_price_minor?: number;
+        };
+        RetailDeadStockBranch: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: int32 */
+            item_count?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in this branch; quantity times the current cost
+             */
+            value_at_cost_minor?: number;
+            /** Format: int64 */
+            value_at_price_minor?: number;
+        };
+        /** @description The largest by value at price */
+        RetailDeadStockItem: {
+            /** Format: uuid */
+            branch_id?: string;
+            code?: string;
+            description?: string;
+            /** Format: uuid */
+            product_id?: string;
+            qty_on_hand?: string;
+            unit?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in this branch
+             */
+            value_at_cost_minor?: number;
+            /** Format: int64 */
+            value_at_price_minor?: number;
+        };
+        RetailEvaluationBranch: {
+            /** Format: uuid */
+            branch_id?: string;
+            categories?: components["schemas"]["RetailEvaluationCategory"][];
+            period?: components["schemas"]["RetailEvaluationPeriod"];
+            run_rate?: components["schemas"]["RetailEvaluationRunRate"];
+            stock?: components["schemas"]["RetailEvaluationStock"];
+        };
+        RetailEvaluationCategory: {
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
+            period?: components["schemas"]["RetailEvaluationPeriod"];
+            /** @description The largest expected profit first, at most top */
+            products?: components["schemas"]["RetailEvaluationProduct"][];
+            /**
+             * Format: int32
+             * @description Items in the category with sales in the period or stock, before the row limit
+             */
+            products_total?: number;
+            stock?: components["schemas"]["RetailEvaluationStock"];
+        };
+        /** @description What was sold in the chosen period, from the sale line snapshots */
+        RetailEvaluationPeriod: {
+            /**
+             * Format: int64
+             * @description Profit over sales in basis points, half up; absent when sales are not above zero
+             */
+            margin_bp?: number;
+            /**
+             * Format: int64
+             * @description Sales less the cost snapshots of the sale lines; usage and damage are not in it
+             */
+            profit_minor?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+        };
+        /** @description The largest expected profit first, at most top */
+        RetailEvaluationProduct: {
+            code?: string;
+            description?: string;
+            period?: components["schemas"]["RetailEvaluationPeriod"];
+            /** Format: uuid */
+            product_id?: string;
+            qty_on_hand?: string;
+            stock?: components["schemas"]["RetailEvaluationStock"];
+            unit?: string;
+        };
+        /** @description The last 30 days of sales as a daily pace */
+        RetailEvaluationRunRate: {
+            /** Format: int64 */
+            avg_daily_profit_minor?: number;
+            /**
+             * Format: int64
+             * @description Sales over 30, rounded half up to the minor unit
+             */
+            avg_daily_sales_minor?: number;
+            /** @description Stock at price over the daily sales, one place; absent when nothing sold */
+            days_of_stock?: string;
+            /** @description True when the days of stock are over 365 and show 365.0 */
+            days_of_stock_capped?: boolean;
+            /** Format: int64 */
+            profit_minor?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+        };
+        /** @description The stock on hand valued at today's prices; stock at or below zero is left out */
+        RetailEvaluationStock: {
+            /** Format: int64 */
+            at_cost_minor?: number;
+            /** Format: int64 */
+            at_price_minor?: number;
+            /**
+             * Format: int64
+             * @description Stock at price less stock at cost
+             */
+            expected_profit_minor?: number;
+            /**
+             * Format: int64
+             * @description Expected profit over stock at cost in basis points, half up; absent when cost is zero
+             */
+            over_cost_bp?: number;
+        };
+        RetailEvaluationTotal: {
+            period?: components["schemas"]["RetailEvaluationPeriod"];
+            run_rate?: components["schemas"]["RetailEvaluationRunRate"];
+            stock?: components["schemas"]["RetailEvaluationStock"];
+        };
         RetailExpense: {
             /** Format: int64 */
             amount_minor?: number;
@@ -6110,6 +6575,67 @@ export interface components {
             /** Format: uuid */
             receipt_document_id?: string;
         };
+        RetailMarginBelowTarget: {
+            items?: components["schemas"]["RetailMarginRow"][];
+            /**
+             * Format: int32
+             * @description How many items are below the target, before the row limit
+             */
+            total?: number;
+        };
+        /** @description One item or category; code and unit are set for an item only */
+        RetailMarginRow: {
+            code?: string;
+            /** Format: int64 */
+            cost_minor?: number;
+            /** Format: uuid */
+            id?: string;
+            label?: string;
+            /**
+             * Format: int64
+             * @description Absent when the item sold for nothing
+             */
+            margin_bp?: number;
+            /** Format: int64 */
+            profit_minor?: number;
+            qty?: string;
+            /** Format: int64 */
+            sales_minor?: number;
+            unit?: string;
+        };
+        RetailMarginTotals: {
+            /** Format: int64 */
+            cost_minor?: number;
+            /**
+             * Format: int64
+             * @description Profit over sales in basis points, half up; absent when sales are not above zero
+             */
+            margin_bp?: number;
+            /** Format: int64 */
+            profit_minor?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+        };
+        RetailMargins: {
+            below_target?: components["schemas"]["RetailMarginBelowTarget"];
+            by_category?: components["schemas"]["RetailMarginRow"][];
+            /** @description The top items by profit */
+            by_product?: components["schemas"]["RetailMarginRow"][];
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            price_changes?: components["schemas"]["RetailPriceChanges"];
+            /**
+             * Format: int32
+             * @description The margin target in basis points; 2000 is 20 percent
+             */
+            target_bp?: number;
+            /** Format: date */
+            to?: string;
+            /** Format: int32 */
+            top?: number;
+            totals?: components["schemas"]["RetailMarginTotals"];
+        };
         RetailOpenSale: {
             /** Format: int64 */
             balance_minor?: number;
@@ -6119,6 +6645,26 @@ export interface components {
             due_date?: string;
             /** Format: int64 */
             paid_minor?: number;
+            /** Format: date */
+            sale_date?: string;
+            /** Format: uuid */
+            sale_id?: string;
+            sale_no?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailOverdueSale: {
+            /** Format: uuid */
+            branch_id?: string;
+            buyer_name?: string;
+            /** Format: uuid */
+            customer_id?: string;
+            /** Format: int32 */
+            days_overdue?: number;
+            /** Format: date */
+            due_date?: string;
+            /** Format: int64 */
+            outstanding_minor?: number;
             /** Format: date */
             sale_date?: string;
             /** Format: uuid */
@@ -6145,8 +6691,25 @@ export interface components {
             /** Format: uuid */
             sale_id?: string;
         };
+        /** @description Payments on credit sales received in the range, by day and method */
+        RetailPaymentDay: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: int32 */
+            count?: number;
+            /** Format: date */
+            date?: string;
+            method?: string;
+        };
         RetailPaymentList: {
             items?: components["schemas"]["RetailPayment"][];
+        };
+        RetailPaymentMethodTotal: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: int32 */
+            count?: number;
+            method?: string;
         };
         RetailPaymentRequest: {
             /** Format: int64 */
@@ -6192,6 +6755,51 @@ export interface components {
             source?: string;
             /** Format: uuid */
             source_id?: string;
+        };
+        /** @description An item whose sell price changed in the range: the last change decides the split, the figures before it are from the start of the range, those from it are to the end of the range. Cost is the snapshot on each sale line, never the current cost. */
+        RetailPriceChangeImpact: {
+            /** Format: date */
+            changed_on?: string;
+            code?: string;
+            /** Format: int32 */
+            days_after?: number;
+            /** Format: int32 */
+            days_before?: number;
+            description?: string;
+            /**
+             * Format: int64
+             * @description Absent when nothing sold from the change
+             */
+            margin_after_bp?: number;
+            /**
+             * Format: int64
+             * @description Absent when nothing sold before the change
+             */
+            margin_before_bp?: number;
+            /**
+             * Format: int64
+             * @description The sell price after the last change in the range
+             */
+            new_sell_minor?: number;
+            /**
+             * Format: int64
+             * @description The sell price before the first change in the range
+             */
+            old_sell_minor?: number;
+            /** Format: uuid */
+            product_id?: string;
+            /** Format: int64 */
+            sales_after_minor?: number;
+            /** Format: int64 */
+            sales_before_minor?: number;
+            unit?: string;
+            units_after?: string;
+            units_before?: string;
+        };
+        RetailPriceChanges: {
+            items?: components["schemas"]["RetailPriceChangeImpact"][];
+            /** Format: int32 */
+            total?: number;
         };
         /** @description At least one price; FR-RET-02 */
         RetailPriceEditRequest: {
@@ -6495,6 +7103,106 @@ export interface components {
              */
             sale_date?: string;
         };
+        RetailSalesAnalysis: {
+            by_branch?: components["schemas"]["RetailSalesAnalysisRow"][];
+            by_category?: components["schemas"]["RetailSalesAnalysisRow"][];
+            /** @description The top products by sales */
+            by_product?: components["schemas"]["RetailSalesAnalysisRow"][];
+            by_seller?: components["schemas"]["RetailSalesAnalysisRow"][];
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            /** @description day, week or month */
+            group?: string;
+            /** @description Active items with no sale at all in the range. Present only with retail.stock.read and retail.sale.read in the branches the report covers */
+            no_sales?: components["schemas"]["RetailStockedItem"][];
+            /**
+             * Format: int32
+             * @description Present only with retail.stock.read and retail.sale.read in the branches the report covers
+             */
+            no_sales_total?: number;
+            /** @description True when cost and profit figures are included */
+            profit_visible?: boolean;
+            series?: components["schemas"]["RetailSalesAnalysisPeriod"][];
+            /** Format: int32 */
+            slow_days?: number;
+            /** @description Items with stock on hand and no sale in the last slow_days days, as of today. Present only with retail.stock.read and retail.sale.read in the branches the report covers */
+            slow_movers?: components["schemas"]["RetailStockedItem"][];
+            /**
+             * Format: int32
+             * @description Present only with retail.stock.read and retail.sale.read in the branches the report covers
+             */
+            slow_movers_total?: number;
+            /** Format: date */
+            to?: string;
+            /** Format: int32 */
+            top?: number;
+            /** @description The top products by quantity */
+            top_by_quantity?: components["schemas"]["RetailSalesAnalysisRow"][];
+            totals?: components["schemas"]["RetailSalesAnalysisTotals"];
+        };
+        RetailSalesAnalysisPeriod: {
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers
+             */
+            gross_profit_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers
+             */
+            margin_bp?: number;
+            /**
+             * Format: date
+             * @description First day of the day, ISO week (Monday) or month
+             */
+            period_start?: string;
+            /** Format: int64 */
+            sale_count?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+        };
+        /** @description One branch, category, product or seller. code and unit are set for a product only. */
+        RetailSalesAnalysisRow: {
+            code?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers
+             */
+            gross_profit_minor?: number;
+            /** Format: uuid */
+            id?: string;
+            label?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers
+             */
+            margin_bp?: number;
+            qty?: string;
+            /** Format: int64 */
+            sale_count?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+            unit?: string;
+        };
+        RetailSalesAnalysisTotals: {
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers; sales less the cost snapshots of the sale lines
+             */
+            gross_profit_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers; gross profit over sales in basis points, half up
+             */
+            margin_bp?: number;
+            /** @description Units sold, summed over lines of every unit of measure; a rough volume only */
+            qty?: string;
+            /** Format: int64 */
+            sale_count?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+        };
         RetailSavings: {
             /**
              * Format: int64
@@ -6600,12 +7308,76 @@ export interface components {
             /** Format: int64 */
             total_sold_minor?: number;
         };
+        RetailShrinkageBranch: {
+            /** Format: uuid */
+            branch_id?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in this branch
+             */
+            damaged_cost_minor?: number;
+            /** Format: int32 */
+            damaged_reports?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in this branch; used and damaged plus loss, less gain
+             */
+            net_cost_minor?: number;
+            /**
+             * Format: int32
+             * @description Stock-take lines that found more than the books
+             */
+            over_lines?: number;
+            /**
+             * Format: int32
+             * @description Stock-take lines that found less than the books
+             */
+            short_lines?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in this branch; the value at cost of what stock-takes found extra
+             */
+            stocktake_gain_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in this branch; the value at cost of what stock-takes found missing
+             */
+            stocktake_loss_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in this branch; usage reported as used, at the cost when reported
+             */
+            used_cost_minor?: number;
+            /** Format: int32 */
+            used_reports?: number;
+        };
         RetailStockBranch: {
             code?: string;
             head_office?: boolean;
             /** Format: uuid */
             id?: string;
             name?: string;
+        };
+        RetailStockHealth: {
+            cover?: components["schemas"]["RetailCoverList"];
+            /** Format: int32 */
+            cover_days?: number;
+            currency?: string;
+            dead_stock?: components["schemas"]["RetailDeadStock"];
+            /** Format: date */
+            from?: string;
+            /** Format: int32 */
+            lead_days?: number;
+            /** @description True when cost figures are included for every branch reported (retail.profit.read) */
+            profit_visible?: boolean;
+            reorder?: components["schemas"]["RetailCoverList"];
+            shrinkage?: components["schemas"]["RetailShrinkageBranch"][];
+            /** Format: date */
+            to?: string;
+            /** Format: int32 */
+            top?: number;
+            /** Format: int32 */
+            velocity_days?: number;
         };
         RetailStockMovement: {
             /** Format: date-time */
@@ -6663,6 +7435,20 @@ export interface components {
             qty?: string;
             /** Format: int64 */
             sell_minor?: number;
+            unit?: string;
+        };
+        /** @description A product with stock on hand, summed over the reported branches */
+        RetailStockedItem: {
+            code?: string;
+            description?: string;
+            /** Format: uuid */
+            product_id?: string;
+            qty_on_hand?: string;
+            /**
+             * Format: int64
+             * @description Quantity on hand times the current sell price
+             */
+            stock_at_price_minor?: number;
             unit?: string;
         };
         RetailStocktake: {
@@ -12508,6 +13294,31 @@ export interface operations {
             };
         };
     };
+    getRetailBusinessEvaluation: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                top?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailBusinessEvaluation"];
+                };
+            };
+        };
+    };
     getRetailCashAdvancesReport: {
         parameters: {
             query?: {
@@ -12629,6 +13440,80 @@ export interface operations {
             };
         };
     };
+    getRetailCreditControl: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                top?: number;
+                sort?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCreditControl"];
+                };
+            };
+        };
+    };
+    getRetailDashboard: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailDashboard"];
+                };
+            };
+        };
+    };
+    getRetailMargins: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                top?: number;
+                target_bp?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailMargins"];
+                };
+            };
+        };
+    };
     getRetailDailyProfit: {
         parameters: {
             query?: {
@@ -12649,6 +13534,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailDailyProfit"];
+                };
+            };
+        };
+    };
+    getRetailSalesAnalysis: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                group?: string;
+                top?: number;
+                slow_days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSalesAnalysis"];
+                };
+            };
+        };
+    };
+    getRetailStockHealth: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                top?: number;
+                lead_days?: number;
+                cover_days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStockHealth"];
                 };
             };
         };

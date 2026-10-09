@@ -22,6 +22,11 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 | `/staff/retail/transfers` | Stock moves from or to the branch; open one; cancel it | `retail.stock.read` (cancel: `retail.stock.transfer`) |
 | `/staff/retail/valuation` | Stock at price; at cost too with `retail.profit.read` | `retail.stock.read` (cost columns: `retail.profit.read`) |
 | `/staff/retail/profit` | Daily profit per branch, with the stock-take difference as its own column (#121) | `retail.profit.read` |
+| `/staff/retail/sales-analysis` | Sales analysis: totals by day, week or month, top items as bars, by branch, category, item and seller, slow movers, items with no sale (#149) | `retail.sale.read` (profit columns: `retail.profit.read`) |
+| `/staff/retail/margins` | Margins: profit and margin by item and category, items under a margin target, price change impact (#149) | `retail.profit.read` |
+| `/staff/retail/stock-health` | Stock health: days of cover, reorder suggestions, dead stock, used, damaged and found missing (#149) | `retail.stock.read` (cost: `retail.profit.read`) |
+| `/staff/retail/credit-control` | Credit control: what credit buyers owe by age, the overdue list, payments received (#149) | `retail.sale.read` |
+| `/staff/retail/evaluation` | Business evaluation: profit to date, expected profit of the stock at today's prices, a 30 day pace (#149) | `retail.profit.read` |
 | `/staff/retail/catalogue` | Catalogue home: links to the screens below the session may use | any one of the catalogue screens' permissions |
 | `/staff/retail/catalogue/products` | Items: list with search, category and on sale filters; add, edit, change price, price history (#146) | `retail.catalogue.manage` and `retail.stock.read` (Change price: `retail.price.edit`; cost: `retail.profit.read`) |
 | `/staff/retail/catalogue/categories`, `/units` | Add, rename, switch off or on, with the number of items using each | `retail.catalogue.manage` and `retail.stock.read` |
@@ -316,6 +321,49 @@ price history crashed on the `null` the server sends for a first price. The pric
 enforced on a sale), so the form warns instead of refusing. A shop that counts in its opening stock with a stock-take will see
 that stock as a stock-take difference, and so as profit, at cost, on that day: bring opening stock in with a restock instead.
 
+## Analytics screens (#149)
+
+The analytics pass is reports only, on existing data (`docs/sdd/07-api-design.md` section 7.11.20, `GET /retail/reports/...`).
+Each screen is a date range (the last 30 days, at most 366, checked on the screen as the server checks it), a
+"Rows to show" choice (the `top` limit of every list) and its own few choices, then sections. They share
+`analytics-ui.tsx` (date range, choice, section, `Bars`, `Sparkline`) and read through `api/retail-analytics.ts`.
+
+- **Phone first.** A table with a name and one or two figures; on a phone a second figure goes under the first or into
+  the grey line under the name (a profit under the sales, the quantity and margin under an item), because two money columns
+  of seven digits do not fit in 360px. A price change, a shrinkage line and a number of stat tiles are cards on a phone.
+  Dates are written year first (2026-10-07) so they sort as they read.
+- **Drawn, not charted.** The top ten items are `Bars` (a track and a fill as inline SVG, scaled to the largest), the
+  sales over time and the 7 and 30 day trend are `Sparkline` (a polyline). Both are decoration beside the figures, which are
+  always in text, and have no inline style: the colours are classes on the tokens (`.bar-fill`, `.spark-line` in
+  `retail.css`). No chart library.
+- **Profit is only what the server sent.** Every profit, margin and cost column is drawn when its field is in the body
+  and not otherwise. The component tests strip those keys the way the server does and check that no word of cost, profit or
+  margin is left on the page. Margins and Business evaluation need `retail.profit.read` as a whole and the other screens show
+  their profit parts only for it.
+- **The retail home is the owner dashboard (#149 step 6).** Today (sales, cash and mobile money, credit, profit), the 7
+  and 30 day sparklines, stock at price and at cost with the out of stock and low stock counts, and a table by shop; the
+  tiles of the screens follow, each only with its permission. For an owner (a profit reader) the dashboard comes first. For a
+  seller the tiles come first (Record a sale is one tap away) and the sales and stock parts follow. Two dashed slots,
+  "Banked against expected" and "Savings", are marked placeholders for the cash book: they carry `data-placeholder="cash-book"`,
+  show no number and call no endpoint, since the cash book is not on this server yet.
+- **Business evaluation says what it is.** The page opens with "an estimate from today's prices and the last 30 days
+  of sales; not a forecast or a promise" (the server sends the same sentence as `note`), and repeats it at the end.
+- **Credit control** counts days from the due date; a sale with no due date counts as not yet due, as the line under the
+  title says.
+
+### Verification of the analytics screens (#149)
+
+The real stack as in `docs/ui/design-system/analytics/README.md` (API jar from `mvn package` at V28, the built PWA served
+by a small static server that proxies `/api`, headless Chromium at 360px and 1280px, a real invitation, password and TOTP
+sign-in as the tenant administrator): a fabricated tenant with three shops, fifteen items in four categories, 44 days of
+sales by three sellers (cash, mobile money and credit), restocks, usage and damage, a stock-take that found two items
+missing, three price changes with sales after them, and credit sales part paid. All six screens (and the home) loaded
+with no console error and no failed request; none overflowed sideways at either width. The first pass found and fixed:
+tables with a sales and a profit column cut off on a phone, the price change table (now a card each), the dead stock
+and shrinkage tables, a "Biggest amount first" choice cut short, the By shop table beyond the column on a wide screen
+(the home is the wide column when it carries the dashboard), and "1 reports". Not walked: a seller session (its
+screens are covered by the component tests and the API tests for the permission and the profit gating).
+
 ## The cash book screens (#147)
 
 Savings, Banking, Banking report, Expenses, Expenses report, Expense lists, Cash withdrawals, Advances and Cash
@@ -344,6 +392,7 @@ widths: see its README), and the script is not committed. Notes:
 ## Left to do
 
 - Void a sale and pay a credit sale screens; see `docs/specs/retail-ui-parity.md`.
+- Analytics: export to PDF and Excel and the daily WhatsApp summary (#149 items 8), and the cash view per shop per day (item 5), which need the cash book.
 - The component tests render static markup (no DOM in the test setup); the browser run above covers behaviour.
 - Offline use, barcode scanning and receipts to SMS are out of the first release.
 - The tenant's timezone and a transfer number are not in the API; when they are, use them (#112).

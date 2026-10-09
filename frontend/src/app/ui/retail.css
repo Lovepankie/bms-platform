@@ -214,3 +214,153 @@
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
 }
+
+/* The analytics screens (issue #149): sections, bars and sparklines drawn as inline SVG. */
+.an-section {
+  margin-top: var(--space-6);
+}
+
+.an-section > h2 {
+  margin-bottom: var(--space-2);
+}
+
+.bars {
+  list-style: none;
+  margin: var(--space-2) 0;
+  padding: 0;
+}
+
+.bars li {
+  margin: var(--space-2) 0;
+}
+
+.bars-line {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.bars-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bar {
+  display: block;
+  width: 100%;
+  height: 8px;
+}
+
+.bar-track {
+  fill: var(--color-border);
+}
+
+.bar-fill {
+  fill: var(--color-primary);
+}
+
+.spark {
+  display: block;
+  width: 100%;
+  height: 32px;
+}
+
+.spark-base {
+  stroke: var(--color-border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.spark-line {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The owner dashboard on the retail home (issue #149). */
+.an-dashboard {
+  margin-bottom: var(--space-6);
+}
+
+.an-dashboard > h3 {
+  margin-top: var(--space-5);
+}
+
+.an-stats {
+  list-style: none;
+  margin: var(--space-3) 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.an-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.an-stat-label {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.an-stat-value {
+  font-size: var(--text-lg);
+  overflow-wrap: anywhere;
+}
+
+.an-placeholder {
+  border-style: dashed;
+  background: var(--color-surface-muted);
+}
+
+.an-sparks {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.an-spark-title {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-1);
+}
+
+.an-category {
+  margin-top: var(--space-4);
+}
+
+@media (min-width: 720px) {
+  .an-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .an-sparks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.an-cards {
+  list-style: none;
+  margin: var(--space-2) 0;
+  padding: 0;
+}
+
+.an-cards .rt-row > span:last-child {
+  text-align: right;
+}
+
+/* The first table under a row of controls on the analytics screens needs room above it. */
+.rt-row + .table-wrap,
+.rt-row + .rt-total {
+  margin-top: var(--space-4);
+}

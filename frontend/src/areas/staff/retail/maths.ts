@@ -41,8 +41,8 @@ export function lineTotalMinor(unitPriceMinor: number, qtyMilli: number): number
 }
 
 /** Basis points as a percentage for people: 4872 is "48.72%", 5000 is "50%"; "n/a" when there is none. */
-export function showPercent(bp: number | undefined): string {
-  if (bp === undefined) return 'n/a';
+export function showPercent(bp: number | null | undefined): string {
+  if (bp === undefined || bp === null) return 'n/a';
   const abs = Math.abs(bp);
   const whole = Math.floor(abs / 100);
   const frac = String(abs % 100).padStart(2, '0').replace(/0+$/, '');
