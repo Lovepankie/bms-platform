@@ -43,12 +43,13 @@ only retail has this need.
    prefixed `retail_`, copying the shape of `lending.members` and of `retail.sales`. It uses core
    modules only and never touches lending packages. Its declared `allowedDependencies` (Spring
    Modulith, `ModularityTest`) are exactly: `kernel`, `core.tenancy`, `core.audit`, `core.ledger`,
-   `core.documents`, `retail.sales` (the day's cash sales and payments), `retail.purchasing` (cash
+   `core.documents`, `core.operations` (the shared Idempotency, added by #177), `retail.sales` (the day's cash sales and payments), `retail.purchasing` (cash
    restocks), `retail.reports` (the daily profit, read only for callers with `retail.profit.read`) and
-   `retail.stock` (the posting and idempotency helpers); it must not depend on `lending.*`, and
+   `retail.stock` (the posting helpers; the idempotency helper moved to `core.operations` in #177); it must not depend on `lending.*`, and
    `retail.imports` adds `retail.cashbook` to its own allowed list for the cash book import. No
    retail module depends on `retail.cashbook` except `retail.imports`, so no cycle forms.
-   When lending needs the same concepts, the shared part is extracted to core by a new ADR. This
+   When lending needs the same concepts, the shared part is extracted to core by a new ADR (for the idempotency helper, issue #177 and its note in ADR-026 are that
+   record). This
    keeps `retailNeverDependsOnLending` true and answers ADR-020's "likely partly core".
 2. **Advances are not lending.** Money advanced to the owner or the company is a retail cash book
    advance with repayments. It has no schedule, interest, member, collateral or approval chain of

@@ -11,7 +11,7 @@ SELECT id AS p2 FROM retail_products WHERE lower(code) = lower('P' || lpad(':r2'
 SELECT id AS p3 FROM retail_products WHERE lower(code) = lower('P' || lpad(':r3', 5, '0')) \gset
 SELECT gen_random_uuid() AS sale, gen_random_uuid() AS l1, gen_random_uuid() AS l2, gen_random_uuid() AS l3,
        gen_random_uuid() AS idem \gset
--- Idempotency claim (JdbcRetailIdempotency).
+-- Idempotency claim (JdbcIdempotency (core.operations)).
 SET LOCAL lock_timeout = '5s';
 INSERT INTO idempotency_keys (tenant_id, principal_id, key, method, path, request_hash, status)
 VALUES (current_setting('app.tenant_id')::uuid, ':user', ':idem', 'POST', '/api/v1/retail/sales', repeat('c', 64), 'in_progress')

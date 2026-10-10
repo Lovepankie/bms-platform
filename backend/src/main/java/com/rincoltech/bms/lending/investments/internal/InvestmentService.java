@@ -3,6 +3,8 @@ package com.rincoltech.bms.lending.investments.internal;
 import com.rincoltech.bms.core.approvals.Approvals;
 import com.rincoltech.bms.core.approvals.Approvals.ActionRequest;
 import com.rincoltech.bms.core.audit.AuditLog;
+import com.rincoltech.bms.core.operations.Idempotency;
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.ApiException;
@@ -27,7 +29,6 @@ import com.rincoltech.bms.lending.investments.internal.InvestmentApi.Schedule;
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.Statement;
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.StatementLine;
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.TransactionResult;
-import com.rincoltech.bms.lending.investments.internal.InvestmentIdempotency.Outcome;
 import com.rincoltech.bms.lending.investments.internal.InvestmentRepository.Inv;
 import com.rincoltech.bms.lending.investments.internal.InvestmentRepository.Item;
 import com.rincoltech.bms.lending.investments.internal.InvestmentReturns.EarlySettlement;
@@ -61,7 +62,7 @@ class InvestmentService {
     private final InvestmentServicer servicer;
     private final MemberLookup members;
     private final Approvals approvals;
-    private final InvestmentIdempotency idempotency;
+    private final Idempotency idempotency;
     private final CurrentTenant currentTenant;
     private final Branches branches;
     private final AuditLog audit;
@@ -71,7 +72,7 @@ class InvestmentService {
             InvestmentServicer servicer,
             MemberLookup members,
             Approvals approvals,
-            InvestmentIdempotency idempotency,
+            Idempotency idempotency,
             CurrentTenant currentTenant,
             Branches branches,
             AuditLog audit) {

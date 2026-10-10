@@ -82,7 +82,7 @@ still open. These questions are not settled by the chapters as written:
    the audit log, once each; delivery waits for the SMS adapter (pending ADR-013). The maturities
    screen is the staff's list until then.
 10. **The idempotency helper is copied, once more.** `lending.investments` may not depend on
-    `lending.loans` internals (ADR-002); issue #177 lifts the three copies into `core.operations`.
+    `lending.loans` internals (ADR-002); issue #177 lifted the copies into `core.operations`. Done in #177.
 
 ## Consequences
 
@@ -95,7 +95,7 @@ flat, compounding, leap-year, cross-year and part-month cases. The owner sees wh
 **Worse:** an early withdrawal after months of full-rate accrual reverses expense in the month it
 happens, so a month's return expense can be negative. The month-based rule pays the same return
 for February as for March, which a strictly daily product would not. Correcting an accrual or a
-rollover takes an accountant's manual journal. The idempotency helper has a third copy until #177.
+rollover takes an accountant's manual journal. The idempotency helper is the shared one in `core.operations` since #177.
 
 **Watch for:** the pilot's answer to open question 3 (a contribution plan would be a new product
 type with its own schedule rule); a GL period closed before the job posts a period's accrual (the

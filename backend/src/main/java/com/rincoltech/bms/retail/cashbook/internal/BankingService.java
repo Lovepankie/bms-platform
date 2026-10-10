@@ -4,6 +4,8 @@ import static com.rincoltech.bms.retail.cashbook.internal.CashbookSupport.mayPro
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.ledger.LedgerPosting.PostedEntry;
+import com.rincoltech.bms.core.operations.Idempotency;
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.ApiException;
@@ -25,8 +27,6 @@ import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.BankingRow
 import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.WithdrawalRow;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
-import com.rincoltech.bms.retail.stock.RetailIdempotency;
-import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -54,7 +54,7 @@ class BankingService {
     private final CashbookSupport support;
     private final CashFigures figures;
     private final RetailBooks books;
-    private final RetailIdempotency idempotency;
+    private final Idempotency idempotency;
     private final RetailBranchContext branchContext;
     private final Branches branches;
     private final CurrentTenant tenant;
@@ -65,7 +65,7 @@ class BankingService {
             CashbookSupport support,
             CashFigures figures,
             RetailBooks books,
-            RetailIdempotency idempotency,
+            Idempotency idempotency,
             RetailBranchContext branchContext,
             Branches branches,
             CurrentTenant tenant,

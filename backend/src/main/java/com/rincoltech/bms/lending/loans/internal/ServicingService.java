@@ -2,10 +2,11 @@ package com.rincoltech.bms.lending.loans.internal;
 
 import com.rincoltech.bms.core.approvals.Approvals;
 import com.rincoltech.bms.core.approvals.Approvals.ActionRequest;
+import com.rincoltech.bms.core.operations.Idempotency;
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
-import com.rincoltech.bms.lending.loans.internal.LoanIdempotency.Outcome;
 import com.rincoltech.bms.lending.loans.internal.LoanRepository.Loan;
 import com.rincoltech.bms.lending.loans.internal.Servicing.Quote;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.ActionOutcome;
@@ -41,14 +42,14 @@ class ServicingService {
     private final ServicingRepository repo;
     private final LoanServicer servicer;
     private final Approvals approvals;
-    private final LoanIdempotency idempotency;
+    private final Idempotency idempotency;
 
     ServicingService(
             LoanRepository loans,
             ServicingRepository repo,
             LoanServicer servicer,
             Approvals approvals,
-            LoanIdempotency idempotency) {
+            Idempotency idempotency) {
         this.loans = loans;
         this.repo = repo;
         this.servicer = servicer;

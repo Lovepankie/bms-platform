@@ -248,6 +248,9 @@ Server behaviour:
    same key.
 5. Keys are kept 7 days.
 
+The protocol is implemented once, `Idempotency` in `core.operations`, and every vertical's
+money-moving routes call it.
+
 Gateway callbacks use the provider's transaction reference as the idempotency key
 (FR-PAY-03).
 

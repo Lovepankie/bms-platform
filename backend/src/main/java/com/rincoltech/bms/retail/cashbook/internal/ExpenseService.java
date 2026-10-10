@@ -3,6 +3,8 @@ package com.rincoltech.bms.retail.cashbook.internal;
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.documents.Documents;
 import com.rincoltech.bms.core.ledger.LedgerPosting.PostedEntry;
+import com.rincoltech.bms.core.operations.Idempotency;
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
@@ -19,8 +21,6 @@ import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.ItemRow;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.PartyRow;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
-import com.rincoltech.bms.retail.stock.RetailIdempotency;
-import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -47,7 +47,7 @@ class ExpenseService {
     private final CashbookRepository repo;
     private final CashbookSupport support;
     private final RetailBooks books;
-    private final RetailIdempotency idempotency;
+    private final Idempotency idempotency;
     private final RetailBranchContext branchContext;
     private final Documents documents;
     private final AuditLog audit;
@@ -56,7 +56,7 @@ class ExpenseService {
             CashbookRepository repo,
             CashbookSupport support,
             RetailBooks books,
-            RetailIdempotency idempotency,
+            Idempotency idempotency,
             RetailBranchContext branchContext,
             Documents documents,
             AuditLog audit) {

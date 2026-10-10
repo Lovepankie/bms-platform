@@ -8,7 +8,14 @@
 @ApplicationModule(
         id = "retail.sales",
         displayName = "Retail: Sales",
-        allowedDependencies = {"kernel", "core.tenancy", "core.audit", "core.ledger", "retail.catalogue", "retail.stock"
+        allowedDependencies = {
+            "kernel",
+            "core.tenancy",
+            "core.audit",
+            "core.ledger",
+            "core.operations",
+            "retail.catalogue",
+            "retail.stock"
         })
 package com.rincoltech.bms.retail.sales;
 

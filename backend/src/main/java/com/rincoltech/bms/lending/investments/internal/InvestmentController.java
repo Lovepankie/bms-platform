@@ -1,5 +1,6 @@
 package com.rincoltech.bms.lending.investments.internal;
 
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.ActionOutcome;
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.Certificate;
@@ -19,7 +20,6 @@ import com.rincoltech.bms.lending.investments.internal.InvestmentApi.RolloverRes
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.Schedule;
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.Statement;
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.TransactionResult;
-import com.rincoltech.bms.lending.investments.internal.InvestmentIdempotency.Outcome;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

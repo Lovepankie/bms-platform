@@ -1,5 +1,6 @@
 package com.rincoltech.bms.lending.savings.internal;
 
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.lending.savings.internal.SavingsApi.Account;
 import com.rincoltech.bms.lending.savings.internal.SavingsApi.AccountPage;
@@ -12,7 +13,6 @@ import com.rincoltech.bms.lending.savings.internal.SavingsApi.ReasonRequest;
 import com.rincoltech.bms.lending.savings.internal.SavingsApi.Statement;
 import com.rincoltech.bms.lending.savings.internal.SavingsApi.TransactionPage;
 import com.rincoltech.bms.lending.savings.internal.SavingsApi.WithdrawalRequest;
-import com.rincoltech.bms.lending.savings.internal.SavingsIdempotency.Outcome;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

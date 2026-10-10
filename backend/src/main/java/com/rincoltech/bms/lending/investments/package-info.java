@@ -20,6 +20,7 @@
             "core.audit",
             "core.jobs",
             "core.ledger",
+            "core.operations",
             "core.approvals",
             "lending.members"
         })

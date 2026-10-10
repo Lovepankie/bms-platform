@@ -20,6 +20,7 @@
             "core.audit",
             "core.ledger",
             "core.documents",
+            "core.operations",
             "retail.sales",
             "retail.purchasing",
             "retail.reports",

@@ -18,6 +18,7 @@
             "core.jobs",
             "core.ledger",
             "core.approvals",
+            "core.operations",
             "lending.members",
             "lending.products",
             "lending.collateral"

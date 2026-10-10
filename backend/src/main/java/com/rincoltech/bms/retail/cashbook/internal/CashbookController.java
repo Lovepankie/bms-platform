@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.cashbook.internal;
 
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.Advance;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.AdvancePage;
@@ -26,7 +27,6 @@ import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.VoidRequest;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.Withdrawal;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.WithdrawalPage;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.WithdrawalRequest;
-import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

@@ -3,6 +3,8 @@ package com.rincoltech.bms.lending.savings.internal;
 import com.rincoltech.bms.core.approvals.Approvals;
 import com.rincoltech.bms.core.approvals.Approvals.ActionRequest;
 import com.rincoltech.bms.core.audit.AuditLog;
+import com.rincoltech.bms.core.operations.Idempotency;
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
@@ -34,7 +36,6 @@ import com.rincoltech.bms.lending.savings.internal.SavingsApi.Transaction;
 import com.rincoltech.bms.lending.savings.internal.SavingsApi.TransactionPage;
 import com.rincoltech.bms.lending.savings.internal.SavingsApi.UpdateProductRequest;
 import com.rincoltech.bms.lending.savings.internal.SavingsApi.WithdrawalRequest;
-import com.rincoltech.bms.lending.savings.internal.SavingsIdempotency.Outcome;
 import com.rincoltech.bms.lending.savings.internal.SavingsRepository.AccountRow;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -64,7 +65,7 @@ class SavingsService {
     private final SavingsRepository repo;
     private final SavingsServicer servicer;
     private final Approvals approvals;
-    private final SavingsIdempotency idempotency;
+    private final Idempotency idempotency;
     private final MemberLookup members;
     private final CurrentTenant currentTenant;
     private final AuditLog audit;
@@ -73,7 +74,7 @@ class SavingsService {
             SavingsRepository repo,
             SavingsServicer servicer,
             Approvals approvals,
-            SavingsIdempotency idempotency,
+            Idempotency idempotency,
             MemberLookup members,
             CurrentTenant currentTenant,
             AuditLog audit) {
@@ -271,7 +272,7 @@ class SavingsService {
 
     @Transactional
     Outcome<DepositResult> deposit(UUID id, String key, MoneyRequest r) {
-        return idempotency.once(key, BASE + id + "/deposits", r, DepositResult.class, () -> {
+        return idempotency.once(key, "POST", BASE + id + "/deposits", r, DepositResult.class, () -> {
             AccountRow a = lock(id, "lending.savings.deposit");
             LocalDate date = r.valueDate() != null ? r.valueDate() : servicer.today();
             servicer.checkDeposit(a, r.amountMinor(), date, r.paymentMethodKey());
@@ -291,7 +292,7 @@ class SavingsService {
     /** FR-SAV-03: executes at once below the tenant's threshold (FR-APR-04), else waits for a checker. */
     @Transactional
     Outcome<ActionOutcome> withdraw(UUID id, String key, WithdrawalRequest r) {
-        return idempotency.once(key, BASE + id + "/withdrawals", r, ActionOutcome.class, () -> {
+        return idempotency.once(key, "POST", BASE + id + "/withdrawals", r, ActionOutcome.class, () -> {
             AccountRow a = lock(id, "lending.savings.withdraw");
             servicer.checkWithdrawal(a, r.amountMinor(), servicer.today(), r.paymentMethodKey());
             Map<String, Object> payload = new LinkedHashMap<>();
@@ -307,7 +308,7 @@ class SavingsService {
     /** FR-SAV-07: the whole balance after interest to date; the threshold applies to the balance. */
     @Transactional
     Outcome<ActionOutcome> close(UUID id, String key, CloseRequest r) {
-        return idempotency.once(key, BASE + id + "/close", r, ActionOutcome.class, () -> {
+        return idempotency.once(key, "POST", BASE + id + "/close", r, ActionOutcome.class, () -> {
             AccountRow a = lock(id, "lending.savings.withdraw");
             long amount = servicer.checkClosable(a, r.paymentMethodKey());
             Map<String, Object> payload = new LinkedHashMap<>();
@@ -324,22 +325,24 @@ class SavingsService {
     /** Always waits for a checker (chapter 8 section 8.4, {@code savings_reversal}). */
     @Transactional
     Outcome<ActionOutcome> reverse(UUID id, UUID txnId, String key, ReasonRequest r) {
-        return idempotency.once(key, BASE + id + "/transactions/" + txnId + "/reverse", r, ActionOutcome.class, () -> {
-            AccountRow a = lock(id, "lending.savings.withdraw");
-            Transaction t = repo.transaction(txnId)
-                    .filter(x -> repo.accountOfTxn(txnId).map(id::equals).orElse(false))
-                    .orElseThrow(ApiException::notFound);
-            servicer.checkReversible(a, t);
-            Approvals.Outcome o = approvals.request(new ActionRequest(
-                    SavingsReversalAction.TYPE,
-                    a.branchId(),
-                    t.id(),
-                    a.version(),
-                    t.amountMinor(),
-                    a.currency(),
-                    Map.of(SavingsReversalAction.REASON, r.reason().trim())));
-            return outcome(id, o, a.txnCount(), "reversal");
-        });
+        return idempotency.once(
+                key, "POST", BASE + id + "/transactions/" + txnId + "/reverse", r, ActionOutcome.class, () -> {
+                    AccountRow a = lock(id, "lending.savings.withdraw");
+                    Transaction t = repo.transaction(txnId)
+                            .filter(x ->
+                                    repo.accountOfTxn(txnId).map(id::equals).orElse(false))
+                            .orElseThrow(ApiException::notFound);
+                    servicer.checkReversible(a, t);
+                    Approvals.Outcome o = approvals.request(new ActionRequest(
+                            SavingsReversalAction.TYPE,
+                            a.branchId(),
+                            t.id(),
+                            a.version(),
+                            t.amountMinor(),
+                            a.currency(),
+                            Map.of(SavingsReversalAction.REASON, r.reason().trim())));
+                    return outcome(id, o, a.txnCount(), "reversal");
+                });
     }
 
     // ---- Status (FR-SAV-06) -----------------------------------------------------------------

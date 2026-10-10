@@ -105,7 +105,7 @@ class ModularityTest {
     @Test
     void theCashBookDeclaresOnlyItsAllowedDependenciesAndOnlyTheImporterUsesIt() {
         ApplicationModule cashbook = MODULES.getModuleByName("retail.cashbook").orElseThrow();
-        // ADR-022 decision 1 says the declared list is exactly these nine.
+        // ADR-022 decision 1 says the declared list is exactly these ten (core.operations joined with #177).
         assertThat(com.rincoltech.bms.retail.cashbook.CashBookHistory.class
                         .getPackage()
                         .getAnnotation(org.springframework.modulith.ApplicationModule.class)
@@ -116,6 +116,7 @@ class ModularityTest {
                         "core.audit",
                         "core.ledger",
                         "core.documents",
+                        "core.operations",
                         "retail.sales",
                         "retail.purchasing",
                         "retail.reports",
@@ -129,6 +130,7 @@ class ModularityTest {
                         "core.audit",
                         "core.ledger",
                         "core.documents",
+                        "core.operations",
                         "retail.sales",
                         "retail.purchasing",
                         "retail.reports",

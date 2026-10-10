@@ -21,6 +21,7 @@
             "core.audit",
             "core.jobs",
             "core.ledger",
+            "core.operations",
             "core.approvals",
             "core.notifications",
             "lending.members"

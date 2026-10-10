@@ -4,6 +4,8 @@ import static com.rincoltech.bms.retail.cashbook.internal.CashbookSupport.mayPro
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.ledger.LedgerPosting.PostedEntry;
+import com.rincoltech.bms.core.operations.Idempotency;
+import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
@@ -18,8 +20,6 @@ import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.SavingsRow
 import com.rincoltech.bms.retail.reports.DailyProfits;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
-import com.rincoltech.bms.retail.stock.RetailIdempotency;
-import com.rincoltech.bms.retail.stock.RetailIdempotency.Outcome;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -50,7 +50,7 @@ class SavingsService {
     private final CashFigures figures;
     private final DailyProfits profits;
     private final RetailBooks books;
-    private final RetailIdempotency idempotency;
+    private final Idempotency idempotency;
     private final RetailBranchContext branchContext;
     private final AuditLog audit;
 
@@ -60,7 +60,7 @@ class SavingsService {
             CashFigures figures,
             DailyProfits profits,
             RetailBooks books,
-            RetailIdempotency idempotency,
+            Idempotency idempotency,
             RetailBranchContext branchContext,
             AuditLog audit) {
         this.repo = repo;

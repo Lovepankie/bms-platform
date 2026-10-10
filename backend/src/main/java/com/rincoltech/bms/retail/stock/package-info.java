@@ -6,14 +6,22 @@
  * balances, keeping both in one transaction under the balance row's lock. The module's public
  * API also carries what every retail money event shares: {@link
  * com.rincoltech.bms.retail.stock.RetailBooks} (posting by {@code system_key}),
- * {@link com.rincoltech.bms.retail.stock.RetailIdempotency} (chapter 7 section 7.8),
  * {@link com.rincoltech.bms.retail.stock.RetailBranchContext} and
- * {@link com.rincoltech.bms.retail.stock.Quantities}.
+ * {@link com.rincoltech.bms.retail.stock.Quantities}. The {@code Idempotency-Key} protocol
+ * (chapter 7 section 7.8) is the core's {@link com.rincoltech.bms.core.operations.Idempotency}.
  */
 @ApplicationModule(
         id = "retail.stock",
         displayName = "Retail: Stock",
-        allowedDependencies = {"kernel", "core.tenancy", "core.audit", "core.ledger", "core.jobs", "retail.catalogue"})
+        allowedDependencies = {
+            "kernel",
+            "core.tenancy",
+            "core.audit",
+            "core.ledger",
+            "core.jobs",
+            "core.operations",
+            "retail.catalogue"
+        })
 package com.rincoltech.bms.retail.stock;
 
 import org.springframework.modulith.ApplicationModule;

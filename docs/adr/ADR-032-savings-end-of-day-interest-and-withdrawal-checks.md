@@ -128,7 +128,7 @@ so the insights page can add the savings panel with a one-line adapter once #156
 
 - When the SMS sender lands, it should send only rows still inside their two days; older ones are
   already marked failed by the purge.
-- When #177 lands, `SavingsIdempotency` goes with the other copies.
+- Done in #177: `SavingsIdempotency` is removed; savings uses the shared `Idempotency` in `core.operations`.
 - When the insights pull request (#156) is on `main`, register a savings `InsightsPanel` that adapts
   `SavingsMetrics`.
 - A savings-secured loan (open question 2) will need `hold_minor` set and released by the loans

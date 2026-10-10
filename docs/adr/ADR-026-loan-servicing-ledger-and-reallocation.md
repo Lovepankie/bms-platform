@@ -58,9 +58,11 @@ questions are not settled by chapters 3 and 6 as written:
    tenant that already holds members, products, loans or journals, and records the audit action
    `lending.seed.fabricated` as the marker that refuses a second run. It runs only when named,
    never at startup (`docs/runbooks/seed-lending.md`).
-5. **Lending keeps its own copy of the idempotency protocol** (`LoanIdempotency`), byte for byte
-   the behaviour of chapter 7 section 7.8 that retail implements. Lifting both into one core
-   helper is a follow-up refactor that touches retail, kept out of this increment.
+5. **Lending first kept its own copy of the idempotency protocol** (`LoanIdempotency`), byte for
+   byte the behaviour of chapter 7 section 7.8 that retail implements. Lifting the copies into
+   one core helper was a follow-up refactor that touches retail, kept out of this increment.
+   Issue #177 did it: the one `Idempotency` in `core.operations` now serves retail and lending
+   (see the note under Consequences).
 
 Also decided here, within the rules of chapter 3:
 
@@ -90,7 +92,10 @@ Also decided here, within the rules of chapter 3:
 
 - A replay reads every repayment of the loan; cost grows with the number of repayments (tens per
   loan in practice).
-- Two copies of the idempotency protocol until the follow-up refactor.
+- Two copies of the idempotency protocol until the follow-up refactor. (Done in #177: retail
+  stock, sales, purchasing and the cash book, and lending loans, savings and investments all use
+  the one `Idempotency` in `core.operations`; `RetailIdempotency`, `LoanIdempotency`,
+  `SavingsIdempotency` and `InvestmentIdempotency` are removed. Behaviour is unchanged.)
 - Receipts taken out of order must be keyed in order; a late keyed older receipt cannot be
   recorded with its true value date once a newer one is in.
 - `LoanServicing` lets code without a principal disburse without an approval request. Only
