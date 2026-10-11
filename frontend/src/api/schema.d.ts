@@ -2425,6 +2425,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/branch-roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The active branches in the caller's stock scope with their roles; 404 capability_not_enabled when off */
+        get: operations["listRetailBranchRoles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/branch-roles/{branch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set a branch's role (store, shop or both); audited; 422 branch_has_open_work while a transfer is unreceived */
+        put: operations["setRetailBranchRole"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/cash-parties": {
         parameters: {
             query?: never;
@@ -3076,6 +3110,24 @@ export interface paths {
         put?: never;
         /** Void a savings record and free its day (FR-RET-28); M */
         post: operations["voidRetailSavings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/settings/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The tenant's retail capabilities, absent keys off */
+        get: operations["getRetailCapabilities"];
+        /** Switch retail capabilities or choose the shop or trade profile; audited with old and new values */
+        put: operations["updateRetailCapabilities"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5276,6 +5328,12 @@ export interface components {
             kind?: string;
             mfa_enabled?: boolean;
             mfa_required?: boolean;
+            /** @description Per enabled module that has a settings group, the capabilities switched on (ADR-033); the PWA offers a capability's screens only when listed */
+            module_capabilities?: {
+                [key: string]: string[];
+            };
+            /** @description Keys of the modules the tenant has switched on, sorted (issue #185) */
+            modules?: string[];
             /** @description Per permission key, the branches it applies in */
             permission_scopes?: {
                 [key: string]: components["schemas"]["MePermissionScope"];
@@ -5883,6 +5941,17 @@ export interface components {
             /** @example 10 */
             qty: string;
         };
+        RetailBranchRole: {
+            /** Format: uuid */
+            branch_id?: string;
+            can_sell?: boolean;
+            code?: string;
+            name?: string;
+            role?: string;
+        };
+        RetailBranchRoleList: {
+            items?: components["schemas"]["RetailBranchRole"][];
+        };
         RetailBusinessEvaluation: {
             branches?: components["schemas"]["RetailEvaluationBranch"][];
             currency?: string;
@@ -5897,6 +5966,18 @@ export interface components {
             /** Format: int32 */
             top?: number;
             total?: components["schemas"]["RetailEvaluationTotal"];
+        };
+        RetailCapabilities: {
+            branch_roles?: boolean;
+            customer_accounts?: boolean;
+            documents?: boolean;
+            price_lists?: boolean;
+            /** @enum {string} */
+            profile?: "shop" | "trade";
+            purchasing?: boolean;
+            returns?: boolean;
+            transfer_receipt?: boolean;
+            units?: boolean;
         };
         RetailCashCategoryPatch: {
             active?: boolean;
@@ -8272,6 +8353,10 @@ export interface components {
         SetLoanGuarantorsRequest: {
             guarantors: components["schemas"]["LoanGuarantorInput"][];
         };
+        SetRetailBranchRoleRequest: {
+            /** @enum {string} */
+            role: "store" | "shop" | "both";
+        };
         SignInRequest: {
             /** @description Email, or phone for staff */
             login: string;
@@ -8462,6 +8547,18 @@ export interface components {
             phone?: string;
             relationship?: string;
             relationship_text?: string;
+        };
+        UpdateRetailCapabilitiesRequest: {
+            branch_roles?: boolean;
+            customer_accounts?: boolean;
+            documents?: boolean;
+            price_lists?: boolean;
+            /** @enum {string} */
+            profile?: "shop" | "trade";
+            purchasing?: boolean;
+            returns?: boolean;
+            transfer_receipt?: boolean;
+            units?: boolean;
         };
         /** @description Omitted fields are unchanged; prices change only through /prices */
         UpdateRetailProductRequest: {
@@ -12634,6 +12731,52 @@ export interface operations {
             };
         };
     };
+    listRetailBranchRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailBranchRoleList"];
+                };
+            };
+        };
+    };
+    setRetailBranchRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                branch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRetailBranchRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailBranchRole"];
+                };
+            };
+        };
+    };
     listRetailCashParties: {
         parameters: {
             query?: {
@@ -13872,6 +14015,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSavings"];
+                };
+            };
+        };
+    };
+    getRetailCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCapabilities"];
+                };
+            };
+        };
+    };
+    updateRetailCapabilities: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRetailCapabilitiesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCapabilities"];
                 };
             };
         };

@@ -3,6 +3,9 @@ package com.rincoltech.bms.core.tenancy.internal;
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.documents.Documents;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
+import com.rincoltech.bms.core.tenancy.ModuleSettings;
+import com.rincoltech.bms.core.tenancy.ModuleSettingsGroup;
+import com.rincoltech.bms.core.tenancy.TenantModules;
 import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.core.tenancy.internal.SettingsController.SettingsResponse;
 import com.rincoltech.bms.core.tenancy.internal.SettingsController.UpdateSettingsRequest;
@@ -31,10 +34,11 @@ import tools.jackson.databind.ObjectMapper;
  * is validated and audited with the before and after values of the keys that changed.
  */
 @Service
-class SettingsService implements TenantSettings {
+class SettingsService implements TenantSettings, ModuleSettings {
 
     static final Map<String, Integer> DEFAULT_APPRAISAL_WEIGHTS =
             Map.of("repayment_history", 40, "affordability", 30, "collateral_cover", 20, "exposure", 10);
+    private static final String MODULE_GROUPS = "module_groups";
     private static final Pattern ACTION_TYPE = Pattern.compile("^[a-z][a-z0-9_]{2,62}$");
     private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
 
@@ -43,13 +47,24 @@ class SettingsService implements TenantSettings {
     private final CurrentTenant tenant;
     private final AuditLog audit;
     private final Documents documents;
+    private final Map<String, ModuleSettingsGroup> groups = new TreeMap<>();
+    private final TenantModules modules;
 
-    SettingsService(JdbcClient jdbc, ObjectMapper mapper, CurrentTenant tenant, AuditLog audit, Documents documents) {
+    SettingsService(
+            JdbcClient jdbc,
+            ObjectMapper mapper,
+            CurrentTenant tenant,
+            AuditLog audit,
+            Documents documents,
+            List<ModuleSettingsGroup> groupBeans,
+            TenantModules modules) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.tenant = tenant;
         this.audit = audit;
         this.documents = documents;
+        groupBeans.forEach(g -> groups.put(g.moduleKey(), g));
+        this.modules = modules;
     }
 
     private record Stored(Map<String, Object> values, int version) {}
@@ -190,6 +205,78 @@ class SettingsService implements TenantSettings {
     @Transactional(readOnly = true)
     public Integer maxActiveLoansPerMember() {
         return current().maxActiveLoansPerMember();
+    }
+
+    // ---- module settings groups (ADR-033) ---------------------------------------------------
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> group(String moduleKey) {
+        ModuleSettingsGroup group = groupOf(moduleKey);
+        return group.normalise(storedGroup(load(false), moduleKey), Map.of());
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> change(String moduleKey, Map<String, Object> proposed, int expectedVersion) {
+        ModuleSettingsGroup group = groupOf(moduleKey);
+        Stored stored = lock();
+        if (stored.version() != expectedVersion) {
+            throw Versions.conflict(stored.version());
+        }
+        Map<String, Object> before = group.normalise(storedGroup(stored, moduleKey), Map.of());
+        Map<String, Object> after = group.normalise(before, proposed);
+        if (after.equals(before)) {
+            return after;
+        }
+        Map<String, Object> next = new TreeMap<>(stored.values());
+        Map<String, Object> all = new TreeMap<>(allGroups(stored));
+        all.put(moduleKey, after);
+        next.put(MODULE_GROUPS, all);
+        jdbc.sql("UPDATE tenant_settings SET settings = CAST(? AS jsonb), updated_at = now(), version = version + 1")
+                .param(mapper.writeValueAsString(next))
+                .update();
+        audit.record(new AuditLog.Entry(
+                group.auditAction(), "core.tenant_settings", tenant.profile().id(), null, before, after));
+        return after;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public int version() {
+        return load(false).version();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, List<String>> enabledCapabilities() {
+        Stored stored = load(false);
+        Map<String, List<String>> out = new TreeMap<>();
+        for (ModuleSettingsGroup group : groups.values()) {
+            if (modules.isEnabled(group.moduleKey())) {
+                Map<String, Object> normalised = group.normalise(storedGroup(stored, group.moduleKey()), Map.of());
+                out.put(group.moduleKey(), group.enabledCapabilities(normalised));
+            }
+        }
+        return out;
+    }
+
+    private ModuleSettingsGroup groupOf(String moduleKey) {
+        ModuleSettingsGroup group = groups.get(moduleKey);
+        if (group == null) {
+            throw new IllegalArgumentException("No settings group for module " + moduleKey);
+        }
+        return group;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> allGroups(Stored stored) {
+        return stored.values().get(MODULE_GROUPS) instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> storedGroup(Stored stored, String moduleKey) {
+        return allGroups(stored).get(moduleKey) instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
     }
 
     private Stored load(boolean forUpdate) {

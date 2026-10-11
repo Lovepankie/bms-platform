@@ -10,7 +10,8 @@ import { useStaff } from './context';
 export function StaffHome() {
   const { me, branch } = useStaff();
   const health = useQuery({ queryKey: ['health'], queryFn: fetchHealth });
-  const canReadMembers = (me.permissions ?? []).includes('lending.members.read');
+  // The lending module's screens are offered only to a tenant that has it (issue #185).
+  const canReadMembers = (me.permissions ?? []).includes('lending.members.read') && (!me.modules || me.modules.includes('lending'));
   const members = useQuery({
     queryKey: ['members', branch],
     queryFn: () => listMembers(branchFilter(branch), 50),

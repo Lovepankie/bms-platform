@@ -33,6 +33,7 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.UpdateCustomerRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.VoidRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.Header;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.NewLine;
+import com.rincoltech.bms.retail.stock.BranchRoles;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
@@ -76,6 +77,7 @@ class SalesService {
     private final CurrentTenant tenant;
     private final BusinessClock clock;
     private final AuditLog audit;
+    private final BranchRoles roles;
 
     SalesService(
             SalesRepository repo,
@@ -87,7 +89,8 @@ class SalesService {
             TenantSequences sequences,
             CurrentTenant tenant,
             BusinessClock clock,
-            AuditLog audit) {
+            AuditLog audit,
+            BranchRoles roles) {
         this.repo = repo;
         this.catalogue = catalogue;
         this.stock = stock;
@@ -98,6 +101,7 @@ class SalesService {
         this.tenant = tenant;
         this.clock = clock;
         this.audit = audit;
+        this.roles = roles;
     }
 
     /** The general ledger account a payment method lands in (chapter 6 section 6.11.1). */
@@ -120,6 +124,8 @@ class SalesService {
     /** FR-RET-04, FR-RET-05, FR-RET-11. */
     private Sale record(SaleRequest r) {
         UUID branch = branches.resolve("retail.sale.create", r.branchId());
+        // ADR-033: a store never sells; with branch_roles off every branch acts as both.
+        roles.requireMaySell(branch);
         LocalDate today = clock.today(tenant.profile().timezone());
         LocalDate saleDate = r.saleDate() == null ? today : r.saleDate();
         List<FieldProblem> problems = new ArrayList<>();

@@ -1,4 +1,5 @@
 import type { Me } from '../../../api/client';
+import type { BranchRole } from '../../../api/retail';
 
 // Which retail screens a session may use. The API is the authority; this only decides what the
 // menu and the routes offer, from the same /me permissions the rest of the app reads. Cost,
@@ -136,6 +137,30 @@ export function showRetail(me: Pick<Me, 'permissions'> & { modules?: string[] })
   return hasAnyRetailPermission(me);
 }
 
+/** The retail capabilities of ADR-033; a screen of a capability is offered only while /me lists it. */
+export const BRANCH_ROLES = 'branch_roles';
+export const BRANCH_ROLE_MANAGE = 'retail.branch_role.manage';
+
+/** True when /me lists `capability` among the enabled capabilities of `module` (absent means off). */
+export function capabilityOn(me: Pick<Me, 'module_capabilities'>, module: string, capability: string): boolean {
+  return (me.module_capabilities?.[module] ?? []).includes(capability);
+}
+
+/**
+ * Whether a sale may be made at the branch. `roles` is undefined while branch_roles is off or not yet
+ * read, and then every branch sells, as before roles existed. The server refuses a sale at a store
+ * whatever this says (422 branch_role_forbids_sales).
+ */
+export function sellsAt(roles: BranchRole[] | undefined, branchId: string | null | undefined): boolean {
+  if (!roles || !branchId) return true;
+  return roles.find((r) => r.branch_id === branchId)?.can_sell ?? true;
+}
+
+/** The branches of `branches` a sale may be made at: stores are left out. */
+export function sellingBranches<B extends { id?: string }>(branches: B[], roles: BranchRole[] | undefined): B[] {
+  return branches.filter((b) => sellsAt(roles, b.id));
+}
+
 export const SCREENS: { screen: RetailScreen; path: string; label: string; hint: string }[] = [
   { screen: 'sale', path: '/staff/retail/sale', label: 'Record a sale', hint: 'Sell items and take payment' },
   { screen: 'creditSales', path: '/staff/retail/credit-sales', label: 'Credit sales', hint: 'Who owes, how much, and by when' },
@@ -174,6 +199,10 @@ export const CATALOGUE_LINKS: { screen: RetailScreen; path: string; label: strin
   { screen: 'buyers', path: '/staff/retail/catalogue/buyers', label: 'Credit buyers', hint: 'Who buys on credit' },
 ];
 
-export function screensFor(me: Pick<Me, 'permissions'>) {
-  return SCREENS.filter((s) => canUse(me, s.screen));
+/**
+ * The screens the session may use. With `sells` false (every branch it can sell at is a store) the
+ * sales screen is left out, so a user whose branches are stores starts from the stock screens.
+ */
+export function screensFor(me: Pick<Me, 'permissions'>, opts: { sells?: boolean } = {}) {
+  return SCREENS.filter((s) => canUse(me, s.screen) && (opts.sells !== false || s.screen !== 'sale'));
 }

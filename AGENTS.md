@@ -57,8 +57,18 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   ADR-032) `V30`, the first-run preferences (issue #19, ADR-025) `V31`, and lending investments
   (issue #152, ADR-031) `V32`, and lending insights (issue #153, ADR-030) `V33`. Flyway runs with
   `outOfOrder` off, so a new migration takes a number above the highest one on any open branch
-  (`V34` is the retail cash book, issue #147; `V35` next). The retail analytics pass (issue #149) is reports only on existing data: no migration; its
+  (`V34` is the retail cash book, issue #147; `V35` is claimed by lending, issue #176; `V36` is claimed by lending payment methods, issue #160; `V37` is retail branch roles, issue #191; `V38` next). The retail analytics pass (issue #149) is reports only on existing data: no migration; its
   queries are in `scripts/db-bench/queries` (k01 to k15).
+- **Built (trade 1 of 10, issue #191, ADR-033):** migration `V37` (`retail_branch_roles`, the permission
+  `retail.branch_role.manage`, a backfill of role `both`); the tenant settings group `retail.capabilities`
+  (eight flags, the `shop` or `trade` profile as a preset, all off by default) through a vertical-neutral
+  core hook (`core.tenancy.ModuleSettingsGroup`, supplied by `retail.manifest`); `/me` now lists `modules`
+  and `module_capabilities`; branch roles `store`, `shop`, `both` owned by `retail.stock` (`BranchRoles`,
+  `RetailCapabilities`), enforced on sales only (422 `branch_role_forbids_sales`; restock and transfer are
+  never role limited; a missing row and capability off both read as `both`); the sales screen follows the
+  role and the menu follows the tenant's modules (issue #185). Deferred to the next slices: units, price
+  lists, customer accounts, documents, purchasing, transfer receipt, returns, and an administrator screen
+  for the flags and roles (the routes exist).
 - **Self-onboarding, build step 1 (issue #89, ADR-024):** migration `V23` with
   `onboarding_applications` and `notification_outbox`, reached only through definer functions;
   the public sign-up and applicant page; the operator portal on the platform host (operator

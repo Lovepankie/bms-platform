@@ -81,7 +81,9 @@ Changing the profile or a flag needs `core.settings.manage` (administrators only
 (`retail.capabilities.changed`, old and new values) and takes effect on the next request.
 
 **Module-aware UI (issue #185).** The user's `/me` response lists the enabled modules; this design
-adds the enabled retail capabilities beside them as `retail_capabilities: ["branch_roles", ...]`.
+adds the enabled capabilities of each module that has a settings group beside them as
+`module_capabilities: {"retail": ["branch_roles", ...]}` (a vertical-neutral shape, because the core
+never names a vertical). Built in slice 1 together with the profile preset.
 The PWA's menu, home tiles and guided tours (ADR-025) read that one list: a screen, a menu entry, a
 tile and a tour step appear only when its module and its capability are enabled, and only when the
 user holds the permission. Tours are data with a version (ADR-025): each capability adds its own
@@ -133,7 +135,7 @@ only narrow what the branch accepts.
 | Case | Result |
 |---|---|
 | User holds `retail.sale.create` at a store | 422 `branch_role_forbids_sales` (permission and scope pass, role refuses); not 403, because the user is entitled, the branch is not |
-| User holds `retail.sale.create` nowhere that is a shop | the sales menu is hidden; a direct call is 403 as today |
+| User holds `retail.sale.create` only at stores | the sales menu is hidden; a direct sale at a store is 422 `branch_role_forbids_sales` (permission and scope pass); 403 only where the permission is not held |
 | Transfer from a store to a shop | needs `retail.stock.transfer` at the source (as today); the destination branch must be active and may be outside the caller's scope (as today) |
 | A manager scoped to Store 1 and the shop | sees both in stock views; sells only at the shop |
 | A branch-scoped caller reads the stock of Store 2 | 404 as today for a branch outside scope |
@@ -525,7 +527,7 @@ Branch-bound routes check scope per ADR-017. Full catalogue goes in SDD 7.11.23.
 
 | Method | Path | Permission | Capability |
 |---|---|---|---|
-| GET, PUT | `/retail/settings/capabilities` | `core.settings.manage` | none |
+| GET, PUT | `/retail/settings/capabilities` | `core.settings.manage`; PUT needs `If-Match` (the settings version, as `PATCH /settings`) | none |
 | GET, PUT | `/retail/branch-roles`, `/retail/branch-roles/{branch_id}` | read: `retail.stock.read`; write: `retail.branch_role.manage` | `branch_roles` |
 | GET, POST, PATCH | `/retail/products/{id}/units` | `retail.catalogue.manage` | `units` |
 | GET, POST, PATCH | `/retail/price-lists`, `/retail/price-lists/{id}/items` | read: `retail.sale.create`; write: `retail.pricelist.manage` | `price_lists` |
@@ -720,7 +722,7 @@ capabilities off changing nothing. Order matters: **slice 1 alone unblocks the w
 | Slice | Issue | Delivers | Depends on |
 |---|---|---|---|
 | 1 | #191 | Branch roles, the capability settings group and the core module-settings hook; enforcement on sales only | none |
-| 2 | #192 | Tenant profile switch, `retail_capabilities` in `/me`, capability-aware menus and tours (with #185) | 1 |
+| 2 | #192 | Administrator screen for the profile and the flags, capability-aware menus and tours for the other capabilities (with #185). The profile preset and `module_capabilities` in `/me` are built in slice 1 | 1 |
 | 3 | #193 | Stock by store and shop report, combined total, and two-step transfers (replaced status check, entry-pair check, update guard) with the in-flight report | 1 |
 | 4 | #194 | Units of measure: packs, conversions, sale and restock in any unit, import columns | 1 |
 | 5 | #195 | Price lists, quantity breaks, effective dates, customer groups (adds the group and list columns to customers) | 4 |

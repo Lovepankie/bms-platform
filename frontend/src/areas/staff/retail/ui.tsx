@@ -1,12 +1,13 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { RETAIL_CURRENCY, RetailError, retail, type Product } from '../../../api/retail';
+import type { Me } from '../../../api/client';
+import { RETAIL_CURRENCY, RetailError, retail, type BranchRole, type Product } from '../../../api/retail';
 import { ALL_BRANCHES, branchLabel } from '../../../auth/branch';
 import { formatMinor } from '../../../components/money';
 import { useStockedBranches } from '../branch-picker';
 import { useStaff } from '../context';
 import { showQty } from './maths';
-import { branchesWhere, canSeeProfit, canUse, type RetailScreen } from './permissions';
+import { BRANCH_ROLES, branchesWhere, canSeeProfit, canUse, capabilityOn, sellingBranches, type RetailScreen } from './permissions';
 
 // Shared pieces of the retail screens. Phone first: one column, 44px tap targets, labels on every
 // input, a visible focus ring, and state shown in words as well as colour.
@@ -116,6 +117,22 @@ export function Gate({ screen, title, children, wide }: { screen: RetailScreen; 
       {children}
     </main>
   );
+}
+
+/**
+ * The roles of the branches (ADR-033): undefined while the capability is off, the session cannot read
+ * stock, or the read is on its way, and then every branch behaves as before roles existed.
+ */
+export function useBranchRoles(me: Pick<Me, 'permissions' | 'module_capabilities'>): BranchRole[] | undefined {
+  const enabled = capabilityOn(me, 'retail', BRANCH_ROLES) && (me.permissions ?? []).includes('retail.stock.read');
+  const roles = useQuery({ queryKey: ['retail', 'branch-roles'], queryFn: () => retail.branchRoles(), enabled, staleTime: 60_000, retry: 1 });
+  return enabled ? roles.data : undefined;
+}
+
+/** True unless branch roles are on and every branch the session can sell at is a store. */
+export function useCanSellAnywhere(me: Me): boolean {
+  const roles = useBranchRoles(me);
+  return sellingBranches(branchesWhere(me, 'retail.sale.create'), roles).length > 0;
 }
 
 /** The active branch as one concrete branch, or a prompt to choose one. */

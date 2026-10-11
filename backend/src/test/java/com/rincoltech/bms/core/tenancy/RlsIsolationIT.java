@@ -348,6 +348,10 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), transfer, t.tenantId())
                 .update();
+        // Retail branch roles (ADR-033, #191).
+        owner.sql("INSERT INTO retail_branch_roles (tenant_id, branch_id, role) VALUES (?, ?, 'store')")
+                .params(t.tenantId(), t.secondBranch())
+                .update();
         // Loan servicing (increment 5, #108): a schedule item, a repayment on the fixture journal, its allocation.
         UUID item = UUID.randomUUID();
         owner.sql("""

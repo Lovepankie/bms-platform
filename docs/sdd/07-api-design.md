@@ -929,9 +929,20 @@ Error codes: the cash book's codes are listed in section 7.7 (409 `cash_record_v
 `repayment_exceeds_balance`, `advance_settled`, `branch_required`; the field code `future_date`). The cash book has no import endpoint; its history comes through the
 `import-retail` command (chapter 13 section 13.13).
 
-### 7.11.23 Retail trade capabilities (`/retail`, ADR-033, issue #190; planned)
+### 7.11.23 Retail trade capabilities (`/retail`, ADR-033, issue #190)
 
-Design only. Every route below answers 404 `capability_not_enabled` unless its capability is on
+Built (issue #191): `GET` and `PUT /retail/settings/capabilities` (`core.settings.manage`; the body is
+the profile and the eight flags, `PUT` needs `If-Match` with the settings version as `PATCH /settings`
+does (the `ETag` is returned by `GET`), a change is partial, choosing a profile writes its preset
+first, the change is audited as `retail.capabilities.changed` with old and new values; an unknown key
+is 400 and a wrong value 422); `GET /retail/branch-roles` (`retail.stock.read`; the active branches in
+the caller's scope with `role` and `can_sell`) and `PUT /retail/branch-roles/{branch_id}` (body
+`{role}`, `retail.branch_role.manage`, audited as `retail.branch_role.changed`, 404 outside the
+caller's scope, 422 `branch_has_open_work` while a dispatched transfer is unreceived), both 404
+`capability_not_enabled` until `branch_roles` is on. `POST /retail/sales` answers 422
+`branch_role_forbids_sales` for a store. Design only, not built: the rest of this section.
+
+Every route below answers 404 `capability_not_enabled` unless its capability is on
 (after 404 `module_not_enabled`); the full route table, permissions and the money-moving (`M`)
 routes are in `docs/specs/trade-capabilities.md` section 11: capability settings, branch roles,
 product units, price lists and price resolution, customer account, statement, payment on account and

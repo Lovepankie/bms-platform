@@ -1,8 +1,8 @@
 # ADR-033: Wholesale support as optional per-tenant capabilities of the retail module
 
-## Status
+## Status: Accepted
 
-Proposed (2026-10-11, issue #190), accepted on merge. Builds on ADR-020 (retail vertical) and keeps
+Proposed 2026-10-11 (issue #190), accepted on merge. Builds on ADR-020 (retail vertical) and keeps
 its decision 11 (retail is generic). Design: `docs/specs/trade-capabilities.md`.
 
 ## Context

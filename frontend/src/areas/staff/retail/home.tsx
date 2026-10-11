@@ -3,12 +3,14 @@ import { icons } from '../../../components/icons';
 import { useStaff } from '../context';
 import { RetailDashboard } from './dashboard';
 import { canUse, screensFor, showRetail } from './permissions';
+import { useCanSellAnywhere } from './ui';
 
 // The Retail landing page: one big tile per screen the session may use. Nothing else is listed.
 
 export function RetailHome() {
   const { me } = useStaff();
-  const screens = showRetail(me) ? screensFor(me) : [];
+  const sells = useCanSellAnywhere(me);
+  const screens = showRetail(me) ? screensFor(me, { sells }) : [];
   // The dashboard is a sales read; its profit and stock parts depend on the other permissions.
   const dashboard = showRetail(me) && canUse(me, 'salesHistory');
   // The owner reads the figures first; a seller starts from the tiles (Record a sale) and finds them below.

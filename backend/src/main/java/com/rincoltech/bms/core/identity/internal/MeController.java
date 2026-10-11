@@ -8,6 +8,8 @@ import com.rincoltech.bms.core.identity.internal.UserApi.RoleCatalogue;
 import com.rincoltech.bms.core.identity.internal.UserApi.RoleResponse;
 import com.rincoltech.bms.core.identity.internal.UserApi.UserResponse;
 import com.rincoltech.bms.core.tenancy.Branches;
+import com.rincoltech.bms.core.tenancy.ModuleSettings;
+import com.rincoltech.bms.core.tenancy.TenantModules;
 import com.rincoltech.bms.kernel.AuthenticatedEndpoint;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
@@ -45,13 +47,24 @@ class MeController {
     private final Branches branches;
     private final JdbcClient jdbc;
     private final TourProgress tours;
+    private final TenantModules modules;
+    private final ModuleSettings moduleSettings;
 
-    MeController(UserService users, StaffAccounts accounts, Branches branches, JdbcClient jdbc, TourProgress tours) {
+    MeController(
+            UserService users,
+            StaffAccounts accounts,
+            Branches branches,
+            JdbcClient jdbc,
+            TourProgress tours,
+            TenantModules modules,
+            ModuleSettings moduleSettings) {
         this.users = users;
         this.accounts = accounts;
         this.branches = branches;
         this.jdbc = jdbc;
         this.tours = tours;
+        this.modules = modules;
+        this.moduleSettings = moduleSettings;
     }
 
     @GetMapping("/me")
@@ -86,7 +99,9 @@ class MeController {
                 user.mfaEnabled(),
                 accounts.mfaRequired(user.id()),
                 accounts.unusedRecoveryCodes(user.id()),
-                tours.of(user.id()));
+                tours.of(user.id()),
+                modules.enabledKeys(),
+                moduleSettings.enabledCapabilities());
     }
 
     /**

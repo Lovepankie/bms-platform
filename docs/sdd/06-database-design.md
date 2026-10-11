@@ -1656,7 +1656,16 @@ error. Daily profit per branch and day is the sum of `retail_sale_lines.line_tot
 lines, never the sale header, review F10), less `retail_usage_reports.cost_total_minor` by
 `occurred_on`; snapshots only, never current prices.
 
-### 6.11.3a Trade capabilities (ADR-033; design only, no migration yet)
+### 6.11.3a Trade capabilities (ADR-033)
+
+Built: `retail_branch_roles` (issue #191, migration V37). One row per branch at most:
+`tenant_id`, `branch_id` (composite foreign key to `branches`), `role` in (`store`, `shop`, `both`),
+`changed_by`, `changed_at`; primary key `(tenant_id, branch_id)`; forced RLS; the application role may
+SELECT, INSERT and UPDATE. A missing row means `both`. The migration backfills `both` for the branches
+of tenants that have the retail module, so a populated database changes in no way; correctness never
+depends on the backfill. The capability flags are not a table: they live in `tenant_settings.settings`
+under `module_groups.retail` (opaque to the core, validated by `retail.manifest`). Design only, no
+migration yet: everything else below.
 
 Optional tables and columns for the trade capabilities (FR-RET-33 to FR-RET-40): `retail_branch_roles`,
 `retail_product_units`, `retail_price_lists`, `retail_price_list_items`, `retail_customer_groups`,

@@ -42,7 +42,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
             api = container "API" "Modular monolith (ADR-002). REST under /api/v1; one database transaction per request, bound to the tenant (ADR-003). Also runs the worker role: db-scheduler jobs on PostgreSQL (ADR-008)." "Java 25, Spring Boot 4.1, Spring Modulith 2.1 (ADR-010)" "app" {
 
                 # ---------------- core ----------------
-                tenancy       = component "Tenancy" "Tenants, plans and limits, module switching, settings, branding (logo, theme colour), branches. Resolves the tenant from the host, binds app.tenant_id, and makes a suspended tenant read only." "core" "core"
+                tenancy       = component "Tenancy" "Tenants, plans and limits, module switching, settings (including a vertical's settings group, stored as opaque jsonb and validated by the vertical, ADR-033), branding (logo, theme colour), branches. Resolves the tenant from the host, binds app.tenant_id, and makes a suspended tenant read only." "core" "core"
                 identity      = component "Identity and Access" "Staff and platform sign-in (argon2id, TOTP with recovery codes, ADR-014), revocable server-side sessions, invitations whose acceptance signs the user in (ADR-025), roles, permission matrix, per-permission branch scope, and each user's own guided tour progress (users.preferences, migration V31)." "core" "core"
                 audit         = component "Audit" "Append-only audit log written in the same transaction as each change; platform audit log; search and CSV export." "core" "core"
                 approvals     = component "Approvals" "Maker-checker requests with payload snapshots; executes approved actions through actions registered by the owning modules (ADR-015)." "core" "core"
@@ -70,7 +70,8 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
 
                 # ---------------- retail vertical (ADR-020) ----------------
                 retailCatalogue = component "Retail: Catalogue" "Categories, units, products with current cost and sell price; append-only price history written with every price change." "retail" "retail"
-                retailStock     = component "Retail: Stock" "Append-only stock movements and per-branch balances kept in the same transaction under a row lock; stock-takes; stock transfers between branches at cost, one entry per branch through inter-branch clearing; nightly reconciliation of balances against movements; retail posting rules." "retail" "retail"
+                retailStock     = component "Retail: Stock" "Append-only stock movements and per-branch balances kept in the same transaction under a row lock; stock-takes; stock transfers between branches at cost, one entry per branch through inter-branch clearing; nightly reconciliation of balances against movements; retail posting rules; branch roles (store, shop, both) and the capability reads (ADR-033)." "retail" "retail"
+                retailManifest  = component "Retail: Manifest" "The retail registration with the core: the module key and the retail.capabilities settings group (eight capability flags, shop or trade profile preset), validated here and stored by the core (ADR-033)." "retail" "retail"
                 retailSales     = component "Retail: Sales" "Sales with unit cost and price snapshots, credit buyers, payments against credit sales, voids by reversal; revenue and cost of goods sold posted per branch." "retail" "retail"
                 retailReports    = component "Retail: Reports" "Stock valuation at cost and expected sales at price per branch, the revaluation difference against the inventory account, daily profit per branch from the sale snapshots; the analytics reports (sales analysis, margins, stock health, credit control, business evaluation, owner dashboard); cost and profit only with retail.profit.read." "retail" "retail"
                 retailPurchasing = component "Retail: Purchasing" "Suppliers and restocks that set product prices, with history, in the same transaction as the stock movements and the per-branch journals." "retail" "retail"
@@ -209,7 +210,9 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.retailSales -> bms.api.retailStock "Moves stock; posts through the retail books"
         bms.api.retailStock -> bms.api.retailCatalogue "Reads the product cost for stock-take valuation"
         bms.api.retailStock -> bms.api.ledger "Posts and reverses entries by system key, one per branch, in the same transaction"
-        bms.api.retailStock -> bms.api.tenancy "Resolves the branch"
+        bms.api.retailStock -> bms.api.tenancy "Resolves the branch; reads and writes the retail capability settings group; owns branch roles (store, shop, both) and the capability reads"
+        bms.api.retailManifest -> bms.api.tenancy "Registers the module and supplies the retail.capabilities settings group the core validates through"
+        bms.api.retailSales -> bms.api.tenancy "Reads the tenant profile and takes receipt and sale numbers from the tenant sequences"
         bms.api.retailStock -> bms.api.jobs "Runs the nightly stock reconciliation per retail tenant"
         bms.api.retailStock -> bms.db "Append-only movements and balances under a row lock"
         bms.api.retailSales -> bms.api.audit "Writes audit rows"

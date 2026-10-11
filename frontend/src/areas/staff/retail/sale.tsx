@@ -7,8 +7,10 @@ import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, type Draft } from './sale-state';
 import { EmptyState } from '../../../components/states';
-import { BranchRequired, Gate, NoStockHere, Note, ProductPicker, Problem, money, useProfitAccess, useSingleBranch } from './ui';
-import { needsOf } from './permissions';
+import { BranchRequired, Gate, NoStockHere, Note, ProductPicker, Problem, money, useBranchRoles, useProfitAccess, useSingleBranch } from './ui';
+import { branchLabel } from '../../../auth/branch';
+import type { BranchRole } from '../../../api/retail';
+import { BRANCH_ROLES, branchesWhere, capabilityOn, needsOf, sellingBranches } from './permissions';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -198,14 +200,48 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
   );
 }
 
+/**
+ * Says plainly that the chosen branch is a store, which never sells (ADR-033), with a button for each
+ * branch the user can sell at; or that there is none, and where to go instead.
+ */
+export function StoreBranch({ branchName, roles }: { branchName: string; roles: BranchRole[] }) {
+  const { me, chooseBranch } = useStaff();
+  const shops = sellingBranches(branchesWhere(me, 'retail.sale.create'), roles);
+  return (
+    <div role="status" className="alert alert-warning" data-testid="store-branch">
+      <div className="stack">
+        <p>
+          <strong>{branchName}</strong> is a store, and a store does not sell.
+          {shops.length > 0 ? ' Choose a shop to record this sale.' : ' None of your branches sells; use Stock or Move stock instead.'}
+        </p>
+        {chooseBranch &&
+          shops.map((b) => (
+            <button key={b.id} type="button" onClick={() => chooseBranch(b.id ?? '')}>
+              Sell at {branchLabel(b)}
+            </button>
+          ))}
+      </div>
+    </div>
+  );
+}
+
 export function RecordSale() {
+  const { me } = useStaff();
+  const roles = useBranchRoles(me);
   const { branchId, branchName } = useSingleBranch();
+  const store = branchId !== null && roles !== undefined && roles.some((r) => r.branch_id === branchId && !r.can_sell);
+  // With branch roles on, the sale form waits for the roles, so it is never drawn at a store while they load.
+  const waiting = capabilityOn(me, 'retail', BRANCH_ROLES) && (me.permissions ?? []).includes('retail.stock.read') && roles === undefined;
   const [sale, setSale] = useState<Sale | null>(null);
   const [round, setRound] = useState(0);
   return (
     <Gate screen="sale" title="Record a sale">
       {branchId === null ? (
         <BranchRequired permissions={needsOf('sale')} />
+      ) : waiting ? (
+        <p role="status">Loading</p>
+      ) : store && roles ? (
+        <StoreBranch branchName={branchName} roles={roles} />
       ) : sale ? (
         <Receipt sale={sale} onNew={() => { setSale(null); setRound((n) => n + 1); }} />
       ) : (

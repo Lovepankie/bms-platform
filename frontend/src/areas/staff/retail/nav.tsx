@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router';
 import type { Me } from '../../../api/client';
 import { icons } from '../../../components/icons';
 import { SCREENS, canUse, type RetailScreen } from './permissions';
+import { useCanSellAnywhere } from './ui';
 
 // The retail menu (#95): the retail home and the first shortcuts the session may use, with the short
 // names a phone's bottom bar has room for. The pilot's order comes first (Sales, Banked, Savings,
@@ -14,15 +15,15 @@ const SHORTCUTS: Partial<Record<RetailScreen, string>> = {
 const MAX_SHORTCUTS = 5;
 
 /** The shortcuts the session may use, in the pilot's order, at most as many as the bar has room for. */
-export function shortcutsFor(me: Pick<Me, 'permissions'>) {
+export function shortcutsFor(me: Pick<Me, 'permissions'>, opts: { sells?: boolean } = {}) {
   const order = Object.keys(SHORTCUTS) as RetailScreen[];
-  return SCREENS.filter((s) => canUse(me, s.screen) && s.screen in SHORTCUTS)
+  return SCREENS.filter((s) => canUse(me, s.screen) && s.screen in SHORTCUTS && (opts.sells !== false || s.screen !== 'sale'))
     .sort((a, b) => order.indexOf(a.screen) - order.indexOf(b.screen))
     .slice(0, MAX_SHORTCUTS);
 }
 
-export function RetailNav({ me }: { me: Pick<Me, 'permissions'> }) {
-  const shortcuts = shortcutsFor(me);
+export function RetailNav({ me }: { me: Me }) {
+  const shortcuts = shortcutsFor(me, { sells: useCanSellAnywhere(me) });
   return (
     <nav className="bottom-nav" aria-label="Retail" data-tour="retail-nav">
       <Link to="/staff/retail" activeOptions={{ exact: true }}>

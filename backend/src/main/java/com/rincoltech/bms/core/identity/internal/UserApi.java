@@ -99,7 +99,15 @@ final class UserApi {
             int unusedRecoveryCodes,
 
             @Schema(description = "Guided tours the user finished or dismissed, by tour id (issue #19)")
-            Map<String, TourProgress.TourState> tours) {}
+            Map<String, TourProgress.TourState> tours,
+
+            @Schema(description = "Keys of the modules the tenant has switched on, sorted (issue #185)")
+            List<String> modules,
+
+            @Schema(
+                    description =
+                            "Per enabled module that has a settings group, the capabilities switched on (ADR-033); the PWA offers a capability's screens only when listed")
+            Map<String, List<String>> moduleCapabilities) {}
 
     @Schema(name = "PlatformMe")
     record PlatformMeResponse(UUID userId, String kind, String fullName, String email, List<String> permissions) {}

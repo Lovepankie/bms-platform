@@ -544,6 +544,13 @@ export function createMockRetail(): RetailApi {
 
     stockedBranches: () => delay([BRANCH_A, BRANCH_B].filter((b) => [...products.values()].some((p) => bal(b, p.id) > 0))),
 
+    branchRoles: () => delay(MOCK_BRANCHES.map((b) => ({ branch_id: b.id, code: b.code, name: b.name, role: 'both', can_sell: true }))),
+
+    setBranchRole: (branchId, role) => {
+      const b = MOCK_BRANCHES.find((x) => x.id === branchId);
+      return delay({ branch_id: branchId, code: b?.code, name: b?.name, role, can_sell: role !== 'store' });
+    },
+
     dailyProfit: ({ branchId, from, to }) => {
       if (!profitAccess) return Promise.reject(new RetailError(retailMessage({ code: 'permission_denied' }, 403), 403, 'permission_denied'));
       const ids = branchId ? [branchId] : MOCK_BRANCHES.map((b) => b.id);

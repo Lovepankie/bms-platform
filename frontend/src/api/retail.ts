@@ -16,6 +16,8 @@ export type StockRow = S['RetailStockRow'];
 export type AllBranchesRow = S['RetailAllBranchesRow'];
 export type StockBranch = S['RetailStockBranch'];
 export type AllBranchesStock = { branches: StockBranch[]; items: AllBranchesRow[] };
+export type BranchRole = S['RetailBranchRole'];
+export type RetailCapabilities = S['RetailCapabilities'];
 export type Category = S['RetailCategory'];
 export type Unit = S['RetailUnit'];
 export type ProductPage = S['RetailProductPage'];
@@ -179,6 +181,9 @@ export interface RetailApi {
   valuation(q: { branchId?: string; asOf?: string }): Promise<Valuation>;
   /** The branches in the caller's stock scope holding a quantity above zero of anything (#103). */
   stockedBranches(): Promise<string[]>;
+  /** The branches in the caller's stock scope with their roles (ADR-033); 404 capability_not_enabled while branch_roles is off. */
+  branchRoles(): Promise<BranchRole[]>;
+  setBranchRole(branchId: string, role: 'store' | 'shop' | 'both'): Promise<BranchRole>;
   dailyProfit(q: { branchId?: string; from: string; to: string }): Promise<DailyProfit>;
   createTransfer(body: TransferRequest, idempotencyKey: string): Promise<Transfer>;
   listTransfers(q: { branchId?: string; cursor?: string }): Promise<TransferPage>;
@@ -425,6 +430,14 @@ const realRetail: RetailApi = {
   async stockedBranches() {
     const all = unwrap(await api.GET('/api/v1/retail/reports/valuation', { params: { query: {} } }));
     return [...new Set((all.rows ?? []).filter((r) => r.qty !== undefined && !r.qty.startsWith('-')).map((r) => r.branch_id ?? ''))];
+  },
+
+  async branchRoles() {
+    return unwrap(await api.GET('/api/v1/retail/branch-roles')).items ?? [];
+  },
+
+  async setBranchRole(branchId, role) {
+    return unwrap(await api.PUT('/api/v1/retail/branch-roles/{branch_id}', { params: { path: { branch_id: branchId } }, body: { role } }));
   },
 
   async dailyProfit({ branchId, from, to }) {
