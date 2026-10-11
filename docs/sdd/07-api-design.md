@@ -929,6 +929,19 @@ Error codes: the cash book's codes are listed in section 7.7 (409 `cash_record_v
 `repayment_exceeds_balance`, `advance_settled`, `branch_required`; the field code `future_date`). The cash book has no import endpoint; its history comes through the
 `import-retail` command (chapter 13 section 13.13).
 
+### 7.11.23 Retail trade capabilities (`/retail`, ADR-033, issue #190; planned)
+
+Design only. Every route below answers 404 `capability_not_enabled` unless its capability is on
+(after 404 `module_not_enabled`); the full route table, permissions and the money-moving (`M`)
+routes are in `docs/specs/trade-capabilities.md` section 11: capability settings, branch roles,
+product units, price lists and price resolution, customer account, statement, payment on account and
+ageing, documents and quotations, purchase orders, goods receipts, supplier bills, credits and
+payments, landed cost, transfer receive and cancel, sale returns, and the reports stock-by-location,
+transfers-in-flight and supplier-payables. Existing routes gain optional request fields (a sale
+line's `unit_id`, a sale's `price_list_id`) that are ignored when the capability is off. New error
+codes: 422 `branch_role_forbids_sales`, `quantity_not_representable`, `no_price_in_list`,
+`credit_limit_exceeded`, `customer_required`, `payment_exceeds_allocatable`, `received_exceeds_dispatched`, `branch_has_open_work`, `unit_in_use_by_pack`; 409 `price_item_overlap`.
+
 ### 7.11.22 Lending: insights (`/lending/insights`, #153, ADR-030)
 
 Read-only. Every route takes the page filter: `from` and `to` (inclusive dates, default the first

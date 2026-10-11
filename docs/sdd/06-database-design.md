@@ -1656,6 +1656,20 @@ error. Daily profit per branch and day is the sum of `retail_sale_lines.line_tot
 lines, never the sale header, review F10), less `retail_usage_reports.cost_total_minor` by
 `occurred_on`; snapshots only, never current prices.
 
+### 6.11.3a Trade capabilities (ADR-033; design only, no migration yet)
+
+Optional tables and columns for the trade capabilities (FR-RET-33 to FR-RET-40): `retail_branch_roles`,
+`retail_product_units`, `retail_price_lists`, `retail_price_list_items`, `retail_customer_groups`,
+`retail_document_series`, `retail_documents`, `retail_quotations`, `retail_purchase_orders`,
+`retail_goods_receipts`, `retail_supplier_bills`, `retail_supplier_credits`,
+`retail_supplier_payments`, `retail_sale_returns`; nullable columns on `retail_customers`, `retail_sales`,
+`retail_sale_lines` and `retail_transfers`; the system accounts 2110, 4110, 5120 and 5130. Columns,
+indexes, RLS and postings are in `docs/specs/trade-capabilities.md` sections 10 and 12 and move
+into this chapter slice by slice as each is built. Most additions are expand only and default to
+the behaviour of this section; two replace constraints (the transfer status and entry-pair checks and
+update guard of `retail_transfers`, and the kind and sign checks of `retail_stock_movements`) and do
+it as `NOT VALID` first, `VALIDATE` in a later migration, old constraint dropped last.
+
 ### 6.11.4 The pilot import (FR-RET-12; ADR-020 decision 9; #55)
 
 The `import-retail` command (chapter 13 section 13.13) writes through the modules' history ports,

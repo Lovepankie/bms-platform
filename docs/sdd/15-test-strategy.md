@@ -86,6 +86,8 @@ because no production action exists before increment 2 (ADR-015).
 Every retail table gets its factory row in `RlsIsolationIT`, so the catalogue, cross-tenant read,
 write and unbound-session tests cover it without a separate suite.
 
+Trade capabilities (ADR-033, design only): the strategy in `docs/specs/trade-capabilities.md` section 13 applies. Its anchor is an all-off contract test that runs the existing retail suites on a tenant with every capability off after each trade migration and requires identical results; every other trade test is added with its slice.
+
 | Test | Proves |
 |---|---|
 | `RetailCatalogueIT` (#51) | Products with an `initial` history row and audit; codes unique ignoring case; a manual price edit and its history row commit together and need `retail.price.edit`; PATCH never changes a price; a user signed in with the `retail_sales` role holds exactly the sales column and receives no cost field at all (absent, not null) on products and price history; a tenant without the module gets `module_not_enabled`; switching the module on seeds the retail chart once and shares cash, bank and opening balance equity with the lending chart; price history rejects UPDATE and DELETE for `bms_app` (no privilege) and the owner (trigger) (FR-RET-01, FR-RET-02, FR-RET-13, FR-RET-14) |

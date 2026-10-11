@@ -366,6 +366,9 @@ Accepted (this list is the ADR index):
 - ADR-032 Savings: end-of-day balances with interest rounded once per posting, movements only after
   the closed day, withdrawals checked again at execution, receipts queued as SMS that expire unsent
   (proposed, #151)
+- ADR-033 Wholesale support as optional per-tenant capabilities of the retail module: branch roles,
+  units, price lists, customer accounts, documents, purchasing; no second vertical (proposed, #190;
+  spec `docs/specs/trade-capabilities.md`)
 
 Pending (cite only as "pending ADR-NNN"):
 

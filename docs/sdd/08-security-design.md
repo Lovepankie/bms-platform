@@ -268,6 +268,16 @@ Notes:
   the suggestion (FR-RET-19, ADR-022 decision 12). Voiding needs `retail.cashbook.void`. No cash
   book approval action is registered (open question 3); if one is, its row joins section 8.4 with a
   threshold set first.
+- Trade capabilities (ADR-033, design only): the nine permissions `retail.branch_role.manage`,
+  `retail.pricelist.manage`, `retail.pricelist.use`, `retail.price.override`, `retail.credit.manage`,
+  `retail.credit.override`, `retail.sale.return`, `retail.document.issue` and `retail.payable.manage`
+  are design only: they are not rows of the matrix above, and each is added to the matrix by the migration of the slice that needs it (design, seeded by the slice that needs each). Only `retail.price.override`,
+  which guards behaviour the sales role already has, is granted to every holder of
+  `retail.sale.create`; all others, `retail.pricelist.use` included, are administrators only.
+  `retail.credit.manage` alone sets credit limits and terms: `retail.customer.manage`, which the sales
+  role holds, edits name and contact only. A branch role can only refuse an action, never grant a
+  permission or widen scope; cost, margin and landed unit cost fields need `retail.profit.read` in
+  the row's branch.
 - `retail.stock.transfer` (issue #84, migration V22, FR-RET-16) moves stock from one branch to
   another. It is money-moving (it posts an inventory entry at each branch) and goes to the roles
   that restock, which in the default roles is the tenant admin only. Its branch scope is checked
