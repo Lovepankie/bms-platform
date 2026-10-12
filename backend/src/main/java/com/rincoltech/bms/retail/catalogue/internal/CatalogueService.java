@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.catalogue.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
+import com.rincoltech.bms.core.tenancy.ModuleSettings;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
@@ -13,6 +14,9 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Category;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.CategoryList;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.CategoryRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.CreateProductRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Pack;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PackList;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PackRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceChange;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceEditRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceHistory;
@@ -22,6 +26,7 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Unit;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitList;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateCategoryRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdatePackRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateProductRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateUnitRequest;
 import java.util.LinkedHashMap;
@@ -51,11 +56,48 @@ class CatalogueService {
     private final CatalogueRepository repo;
     private final CurrentTenant currentTenant;
     private final AuditLog audit;
+    private final ModuleSettings settings;
 
-    CatalogueService(CatalogueRepository repo, CurrentTenant currentTenant, AuditLog audit) {
+    CatalogueService(CatalogueRepository repo, CurrentTenant currentTenant, AuditLog audit, ModuleSettings settings) {
         this.repo = repo;
         this.currentTenant = currentTenant;
         this.audit = audit;
+        this.settings = settings;
+    }
+
+    /**
+     * The {@code units} capability of the tenant (ADR-033); off is the default and means no packs anywhere. The catalogue
+     * cannot use {@code retail.stock}'s {@code RetailCapabilities} (stock depends on the catalogue, and the boundary test
+     * forbids the cycle), so it reads the same settings group with the shared key; one read per request that needs it.
+     */
+    boolean unitsOn() {
+        return Boolean.TRUE.equals(settings.group("retail").get(RetailCatalogue.UNITS_CAPABILITY));
+    }
+
+    private void requireUnits() {
+        if (!unitsOn()) {
+            throw new ApiException(
+                    HttpStatus.NOT_FOUND,
+                    "capability_not_enabled",
+                    "Capability not enabled",
+                    "This capability is not enabled for the tenant.");
+        }
+    }
+
+    /** Pack sizes on the products, in one statement, while the capability is on; untouched while it is off. */
+    private List<Product> withPacks(List<Product> products) {
+        if (products.isEmpty() || !unitsOn()) {
+            return products;
+        }
+        Map<UUID, List<Pack>> packs =
+                repo.packsOf(products.stream().map(Product::id).toList());
+        return products.stream()
+                .map(p -> p.withPacks(packs.getOrDefault(p.id(), List.of())))
+                .toList();
+    }
+
+    private Product withPacks(Product p) {
+        return withPacks(List.of(p)).getFirst();
     }
 
     // ---- Categories and units ------------------------------------------------------------
@@ -146,6 +188,11 @@ class CatalogueService {
         if (now.isEmpty()) {
             return before;
         }
+        if (before.active() && !active && repo.unitHasPacks(id)) {
+            throw ApiException.rule(
+                    "unit_in_use_by_pack",
+                    "This unit is the unit of an active pack size. Switch those packs off on their items first.");
+        }
         try {
             if (repo.updateUnit(id, name, active, expected) == 0) {
                 throw staleUnit(id);
@@ -215,7 +262,7 @@ class CatalogueService {
         after.put("unit_id", p.unitId());
         after.put("sell_minor", p.sellMinor());
         audit.record(AuditLog.Entry.created("retail.product.created", PRODUCT, p.id(), null, after));
-        return visible(repo.find(p.id()).orElseThrow());
+        return withPacks(visible(repo.find(p.id()).orElseThrow()));
     }
 
     @Transactional(readOnly = true)
@@ -239,12 +286,12 @@ class CatalogueService {
         String next = more
                 ? Cursor.encode(items.getLast().code() + "|" + items.getLast().id())
                 : null;
-        return new ProductPage(items.stream().map(this::visible).toList(), next);
+        return new ProductPage(withPacks(items.stream().map(this::visible).toList()), next);
     }
 
     @Transactional(readOnly = true)
     Product get(UUID id) {
-        return visible(repo.find(id).orElseThrow(ApiException::notFound));
+        return withPacks(visible(repo.find(id).orElseThrow(ApiException::notFound)));
     }
 
     /** Non-price fields; omitted fields are unchanged. Prices change only through {@link #editPrices}. */
@@ -289,7 +336,12 @@ class CatalogueService {
         diff(was, now, "unit_id", before.unitId(), after.unitId());
         diff(was, now, "active", before.active(), after.active());
         if (now.isEmpty()) {
-            return visible(before);
+            return withPacks(visible(before));
+        }
+        if (!before.unitId().equals(after.unitId()) && repo.productHasPacks(id)) {
+            throw ApiException.rule(
+                    "unit_in_use_by_pack",
+                    "The unit cannot change while the product has active pack sizes: they count base units. Switch them off first.");
         }
         try {
             repo.update(after);
@@ -297,7 +349,104 @@ class CatalogueService {
             throw duplicateCode();
         }
         audit.record(new AuditLog.Entry("retail.product.updated", PRODUCT, id, null, was, now));
-        return visible(repo.find(id).orElseThrow());
+        return withPacks(visible(repo.find(id).orElseThrow()));
+    }
+
+    // ---- Pack sizes (ADR-033, issue #194; docs/specs/trade-capabilities.md section 4) ---------------
+
+    static final String PACK = "retail.product_unit";
+
+    @Transactional(readOnly = true)
+    PackList packs(UUID productId) {
+        requireUnits();
+        repo.find(productId).orElseThrow(ApiException::notFound);
+        return new PackList(repo.packs(productId));
+    }
+
+    /**
+     * A pack of a unit other than the product's base unit, once per unit. Chains are impossible by
+     * construction: a pack counts base units of its own product only.
+     */
+    @Transactional
+    Pack addPack(UUID productId, PackRequest r) {
+        requireUnits();
+        Product product = repo.lock(productId).orElseThrow(ApiException::notFound);
+        Unit unit = repo.unit(r.unitId()).orElse(null);
+        if (unit == null) {
+            throw ApiException.validation(List.of(new FieldProblem("unit_id", "unknown_unit", "No such unit.")));
+        }
+        if (!unit.active()) {
+            throw ApiException.validation(List.of(
+                    new FieldProblem("unit_id", "inactive_unit", "This unit is switched off. Choose another one.")));
+        }
+        if (unit.id().equals(product.unitId())) {
+            throw ApiException.rule(
+                    "pack_unit_is_base_unit",
+                    "A pack must be a different unit from the one the product is counted in.");
+        }
+        UUID id = UUID.randomUUID();
+        try {
+            repo.insertPack(
+                    id,
+                    productId,
+                    r.unitId(),
+                    r.factor(),
+                    CurrentPrincipal.require().userId());
+        } catch (DuplicateKeyException e) {
+            throw duplicate("duplicate_pack", "The product has a pack of this unit already.");
+        }
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("product_id", productId);
+        after.put("unit_id", r.unitId());
+        after.put("factor", r.factor().setScale(3).toPlainString());
+        audit.record(AuditLog.Entry.created("retail.product_unit.created", PACK, id, null, after));
+        return repo.pack(productId, r.unitId()).orElseThrow();
+    }
+
+    /** Change the factor (future sales and restocks only: lines keep the factor they used) or switch a pack off. */
+    @Transactional
+    Pack updatePack(UUID productId, UUID unitId, String ifMatch, UpdatePackRequest r) {
+        requireUnits();
+        int expected = Versions.fromIfMatch(ifMatch);
+        Product product = repo.lock(productId).orElseThrow(ApiException::notFound);
+        Pack before = repo.pack(productId, unitId).orElseThrow(ApiException::notFound);
+        if (before.version() != expected) {
+            throw Versions.conflict(before.version());
+        }
+        java.math.BigDecimal factor = r.factor() == null ? new java.math.BigDecimal(before.factor()) : r.factor();
+        boolean active = r.active() == null ? before.active() : r.active();
+        if (active && !before.active()) {
+            // Switching on again: the item's unit may have changed while the pack was off, so the factor is confirmed.
+            Unit unit = repo.unit(unitId).orElseThrow(ApiException::notFound);
+            if (r.factor() == null) {
+                throw ApiException.rule(
+                        "factor_required",
+                        "Confirm how many of the item are in one pack when switching it on again: the item's unit may have changed.");
+            }
+            if (!unit.active()) {
+                throw ApiException.validation(List.of(new FieldProblem(
+                        "unit_id", "inactive_unit", "This unit is switched off. Switch it on first.")));
+            }
+            if (unitId.equals(product.unitId())) {
+                throw ApiException.rule(
+                        "pack_unit_is_base_unit",
+                        "This unit is now the one the item is counted in, so it cannot also be a pack.");
+            }
+        }
+        Map<String, Object> was = new LinkedHashMap<>();
+        Map<String, Object> now = new LinkedHashMap<>();
+        diff(was, now, "factor", before.factor(), factor.setScale(3).toPlainString());
+        diff(was, now, "active", before.active(), active);
+        if (now.isEmpty()) {
+            return before;
+        }
+        if (repo.updatePack(before.id(), factor, active, expected) == 0) {
+            throw repo.pack(productId, unitId)
+                    .map(k -> Versions.conflict(k.version()))
+                    .orElseGet(ApiException::notFound);
+        }
+        audit.record(new AuditLog.Entry("retail.product_unit.updated", PACK, before.id(), null, was, now));
+        return repo.pack(productId, unitId).orElseThrow();
     }
 
     /**

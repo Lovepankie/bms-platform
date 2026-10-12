@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.purchasing.internal;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -62,7 +63,9 @@ final class PurchasingApi {
             @NotNull
             @PositiveOrZero
             @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
-            @Schema(description = "Unit cost; becomes the product's cost")
+            @Schema(
+                    description = "Cost per unit_id when one is given, otherwise per base unit; becomes the product's"
+                            + " cost per base unit (a pack cost divided by the factor, rounded half up)")
             Long costMinor,
 
             @PositiveOrZero
@@ -70,7 +73,12 @@ final class PurchasingApi {
             @Schema(description = "When given, becomes the product's sell price")
             Long sellMinor,
 
-            @NotEmpty @Size(max = 50) List<@Valid @NotNull BranchQty> qtyByBranch) {}
+            @NotEmpty @Size(max = 50) List<@Valid @NotNull BranchQty> qtyByBranch,
+
+            @Schema(
+                    description = "A pack unit of the product (units capability): the quantities and cost_minor are"
+                            + " then in that unit and stock moves in base units. Absent or the base unit: as before")
+            UUID unitId) {}
 
     @Schema(name = "RetailPurchaseRequest")
     record PurchaseRequest(
@@ -85,7 +93,14 @@ final class PurchasingApi {
             @NotEmpty @Size(max = 500) List<@Valid @NotNull PurchaseLineRequest> lines) {}
 
     @Schema(name = "RetailPurchaseLineBranch")
-    record LineBranch(UUID branchId, String qty) {}
+    record LineBranch(
+            UUID branchId,
+
+            @Schema(description = "In base units, always") String qty,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The quantity in the unit the line was entered in; absent for a base unit line")
+            String unitQty) {}
 
     @Schema(name = "RetailPurchaseLine")
     record PurchaseLine(
@@ -94,11 +109,34 @@ final class PurchasingApi {
             UUID productId,
             String code,
             String description,
+
+            @Schema(description = "Per base unit: the movement snapshot and the product's cost")
             long costMinor,
+
             Long sellMinor,
-            String qtyTotal,
+
+            @Schema(description = "In base units") String qtyTotal,
+
+            @Schema(description = "The amount paid or owed for the line, as entered")
             long lineTotalMinor,
-            List<LineBranch> qtyByBranch) {}
+
+            List<LineBranch> qtyByBranch,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The unit the line was entered in; absent means the base unit")
+            UUID unitId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) String unit,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Base units in one unit when the line was made")
+            String unitFactor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = "Quantity in the unit")
+            String unitQtyTotal,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = "Cost per unit as entered")
+            Long unitCostMinor) {}
 
     @Schema(name = "RetailPurchase")
     record Purchase(

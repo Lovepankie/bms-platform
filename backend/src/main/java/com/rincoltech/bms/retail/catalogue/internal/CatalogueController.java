@@ -7,6 +7,9 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.CategoryRequest
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.CreateProductRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ImportRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ImportResult;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Pack;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PackList;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PackRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceEditRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceHistory;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Product;
@@ -15,6 +18,7 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Unit;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitList;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateCategoryRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdatePackRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateProductRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateUnitRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -160,6 +164,43 @@ class CatalogueController {
             @Valid @RequestBody UpdateProductRequest request) {
         Product p = service.update(id, ifMatch, request);
         return ResponseEntity.ok().eTag(String.valueOf(p.version())).body(p);
+    }
+
+    // ---- Pack sizes (ADR-033, issue #194): 404 capability_not_enabled while units is off ------------
+
+    @GetMapping("/products/{product_id}/units")
+    @RequiresPermission("retail.stock.read")
+    @Operation(
+            summary = "The pack sizes of a product; the units capability (issue #194)",
+            operationId = "listRetailProductUnits")
+    PackList packs(@PathVariable("product_id") UUID id) {
+        return service.packs(id);
+    }
+
+    @PostMapping("/products/{product_id}/units")
+    @RequiresPermission("retail.catalogue.manage")
+    @Operation(
+            summary = "Add a pack size to a product: a unit and the base units in one pack (issue #194)",
+            operationId = "createRetailProductUnit")
+    ResponseEntity<Pack> addPack(@PathVariable("product_id") UUID id, @Valid @RequestBody PackRequest request) {
+        Pack created = service.addPack(id, request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .eTag(String.valueOf(created.version()))
+                .body(created);
+    }
+
+    @PatchMapping("/products/{product_id}/units/{unit_id}")
+    @RequiresPermission("retail.catalogue.manage")
+    @Operation(
+            summary = "Change a pack's factor or switch it off under If-Match; never deleted (issue #194)",
+            operationId = "updateRetailProductUnit")
+    ResponseEntity<Pack> updatePack(
+            @PathVariable("product_id") UUID id,
+            @PathVariable("unit_id") UUID unitId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody UpdatePackRequest request) {
+        Pack k = service.updatePack(id, unitId, ifMatch, request);
+        return ResponseEntity.ok().eTag(String.valueOf(k.version())).body(k);
     }
 
     @PostMapping("/products/{product_id}/prices")

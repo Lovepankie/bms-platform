@@ -1,5 +1,5 @@
 import type {
-  AllBranchesRow, Category, CapabilitiesRead, Customer, InFlightReport, LocationRow, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockByLocation, StockRow,
+  AllBranchesRow, Category, CapabilitiesRead, Pack, Customer, InFlightReport, LocationRow, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockByLocation, StockRow,
   Supplier, Transfer, Unit, Usage, Valuation, ValuationRow,
 } from './retail';
 import { RetailError, businessToday, daysBefore } from './retail';
@@ -141,6 +141,7 @@ export function createMockRetail(): RetailApi {
   const unitRows: { id: string; name: string; active: boolean; version: number }[] = unitNames.map((name, i) => ({ id: `00000000-0000-4000-8000-0000000d${String(i + 1).padStart(4, '0')}`, name, active: true, version: 1 }));
   const categoryId = (name: string): string => cats.find((c) => c.name === name)?.id ?? '';
   const history = new Map<string, PriceChange[]>();
+  const packs = new Map<string, Pack[]>();
   const used = <K extends 'category' | 'unit'>(key: K, name: string) => [...products.values()].filter((p) => p[key] === name).length;
   const refreshed = <T extends { name?: string }>(row: T, key: 'category' | 'unit') => ({ ...row, product_count: used(key, row.name ?? '') });
   const asProduct = (p: MockProduct): Product =>
@@ -277,6 +278,34 @@ export function createMockRetail(): RetailApi {
       }),
 
     priceHistory: (id) => run(() => ((find(id) && history.get(id)) || undefined)?.map((h) => (profitAccess ? h : { ...h, old_cost_minor: undefined, new_cost_minor: undefined })) || [{ id: nextId('h'), at: '2026-09-01T08:00:00Z', source: 'initial', new_sell_minor: find(id).sellMinor, currency: 'UGX', ...(profitAccess ? { new_cost_minor: find(id).costMinor } : {}) }]),
+
+    // Pack sizes (ADR-033): kept per item in memory; the mock tenant has the units capability off, so products carry none.
+    // JUSTIFICATION-A3: RetailApi gained three methods; the mock must implement them, and nothing existing carries packs.
+    listPacks: (productId) => run(() => packs.get(find(productId).id) ?? []),
+
+    addPack: (productId, body) =>
+      run(() => {
+        const p = find(productId);
+        const unit = unitRows.find((u) => u.id === body.unit_id);
+        if (!unit) refuse(422, 'validation_failed', 'No such unit.');
+        if (unit?.name === p.unit) refuse(422, 'pack_unit_is_base_unit', 'A pack must be a different unit from the one the item is counted in.');
+        const rows = packs.get(p.id) ?? [];
+        if (rows.some((k) => k.unit_id === body.unit_id)) refuse(409, 'duplicate_pack', 'The item has a pack of this unit already.');
+        const pack: Pack = { id: nextId('k'), product_id: p.id, unit_id: body.unit_id, unit: unit?.name ?? '', factor: body.factor, active: true, version: 1 };
+        packs.set(p.id, [...rows, pack]);
+        return pack;
+      }),
+
+    updatePack: (productId, unitId, version, body) =>
+      run(() => {
+        const rows = packs.get(find(productId).id) ?? [];
+        const pack = rows.find((k) => k.unit_id === unitId);
+        if (!pack) refuse(404, 'not_found', 'No such pack.');
+        if (pack && pack.version !== version) refuse(409, 'version_conflict', 'The pack changed since it was read.');
+        const next: Pack = { ...(pack as Pack), ...(body.factor === undefined ? {} : { factor: body.factor }), ...(body.active === undefined ? {} : { active: body.active }), version: (pack?.version ?? 0) + 1 };
+        packs.set(productId, rows.map((k) => (k.unit_id === unitId ? next : k)));
+        return next;
+      }),
 
     importProducts: (csv, dryRun) =>
       run(() => {

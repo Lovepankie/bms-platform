@@ -352,6 +352,15 @@ class RlsIsolationIT {
         owner.sql("INSERT INTO retail_branch_roles (tenant_id, branch_id, role) VALUES (?, ?, 'store')")
                 .params(t.tenantId(), t.secondBranch())
                 .update();
+        // Retail pack sizes (ADR-033, #194): a pack of a unit other than the product's own.
+        // JUSTIFICATION-A3: a fixture row for the new table; the isolation test needs one row per tenant table.
+        owner.sql("""
+                        WITH u AS (INSERT INTO retail_units (id, tenant_id, name) VALUES (gen_random_uuid(), ?, 'rls-carton')
+                                   RETURNING id)
+                        INSERT INTO retail_product_units (id, tenant_id, product_id, unit_id, factor)
+                        SELECT gen_random_uuid(), ?, (SELECT id FROM retail_products WHERE tenant_id = ? LIMIT 1), u.id, 12
+                          FROM u
+                        """).params(t.tenantId(), t.tenantId(), t.tenantId()).update();
         // Loan servicing (increment 5, #108): a schedule item, a repayment on the fixture journal, its allocation.
         UUID item = UUID.randomUUID();
         owner.sql("""

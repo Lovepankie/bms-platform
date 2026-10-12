@@ -672,7 +672,34 @@ export const transferReceiptCapability: Tour = {
 };
 
 /** Every tour, in the order the first matching auto tour is chosen. */
+// The tour of the pack sizes capability (units of measure, issue #194): it starts once for whoever manages the
+// catalogue, when first enabled. Pack sizes are set on each item and chosen on the sale and restock forms.
+export const unitsCapability: Tour = {
+  id: 'capability-units',
+  version: 1,
+  title: 'New: pack sizes',
+  audience: (me) => held(me, 'retail.catalogue.manage'),
+  autoStart: true,
+  capability: { module: 'retail', key: 'units' },
+  steps: [
+    {
+      id: 'intro',
+      title: 'Pack sizes are on',
+      body: 'An item can now have packs, like a carton of 12. Stock is still counted in single items; a sale or a restock can be entered by the pack.',
+    },
+    {
+      id: 'tile',
+      route: '/staff/retail',
+      target: 'retail-catalogue',
+      module: 'retail',
+      optional: true,
+      title: 'Add the packs',
+      body: 'Open Catalogue, then Items. Choose Edit on an item and add its pack sizes. Then the sale and restock screens offer them.',
+    },
+  ],
+};
+
 export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
-  retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability,
+  retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
 ];

@@ -26,6 +26,13 @@ class CatalogueLookup implements RetailCatalogue {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Optional<PackUnit> packUnit(UUID productId, UUID unitId) {
+        return repo.pack(productId, unitId)
+                .map(k -> new PackUnit(k.unitId(), k.unit(), new java.math.BigDecimal(k.factor()), k.active()));
+    }
+
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<ProductSnapshot> lock(UUID productId) {
         return repo.lock(productId).map(CatalogueLookup::snapshot);
@@ -44,6 +51,14 @@ class CatalogueLookup implements RetailCatalogue {
 
     static ProductSnapshot snapshot(CatalogueApi.Product p) {
         return new ProductSnapshot(
-                p.id(), p.code(), p.description(), p.unit(), p.costMinor(), p.sellMinor(), p.currency(), p.active());
+                p.id(),
+                p.code(),
+                p.description(),
+                p.unitId(),
+                p.unit(),
+                p.costMinor(),
+                p.sellMinor(),
+                p.currency(),
+                p.active());
     }
 }

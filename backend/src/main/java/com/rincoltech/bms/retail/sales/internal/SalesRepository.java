@@ -55,7 +55,11 @@ class SalesRepository {
             long unitPriceMinor,
             long unitCostMinor,
             long lineTotalMinor,
-            long lineCostMinor) {}
+            long lineCostMinor,
+            UUID saleUnitId,
+            BigDecimal saleQty,
+            Long saleUnitPriceMinor,
+            BigDecimal unitFactor) {}
 
     // ---- Sales ---------------------------------------------------------------------------
 
@@ -180,8 +184,9 @@ class SalesRepository {
     void insertLine(UUID saleId, NewLine l) {
         jdbc.sql("""
                         INSERT INTO retail_sale_lines (id, tenant_id, sale_id, line_no, product_id, qty, unit_price_minor,
-                            unit_cost_minor, line_total_minor, line_cost_minor)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?)
+                            unit_cost_minor, line_total_minor, line_cost_minor, sale_unit_id, sale_qty,
+                            sale_unit_price_minor, unit_factor)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """)
                 .params(
                         l.id(),
@@ -192,7 +197,11 @@ class SalesRepository {
                         l.unitPriceMinor(),
                         l.unitCostMinor(),
                         l.lineTotalMinor(),
-                        l.lineCostMinor())
+                        l.lineCostMinor(),
+                        l.saleUnitId(),
+                        l.saleQty(),
+                        l.saleUnitPriceMinor(),
+                        l.unitFactor())
                 .update();
     }
 
@@ -222,8 +231,10 @@ class SalesRepository {
         Map<UUID, List<SaleLine>> bySale = new HashMap<>();
         jdbc.sql("""
                         SELECT l.sale_id, l.id, l.line_no, l.product_id, p.code, p.description, l.qty, l.unit_price_minor,
-                               l.line_total_minor, l.unit_cost_minor, l.line_cost_minor
+                               l.line_total_minor, l.unit_cost_minor, l.line_cost_minor, l.sale_unit_id, su.name AS sale_unit,
+                               l.sale_qty, l.sale_unit_price_minor, l.unit_factor
                           FROM retail_sale_lines l JOIN retail_products p ON p.id = l.product_id
+                          LEFT JOIN retail_units su ON su.id = l.sale_unit_id
                          WHERE l.sale_id IN (:ids) ORDER BY l.sale_id, l.line_no
                         """).param("ids", sales.stream().map(Sale::id).toList()).query(rs -> {
             bySale.computeIfAbsent(rs.getObject("sale_id", UUID.class), k -> new ArrayList<>())
@@ -237,7 +248,16 @@ class SalesRepository {
                             rs.getLong("unit_price_minor"),
                             rs.getLong("line_total_minor"),
                             rs.getLong("unit_cost_minor"),
-                            rs.getLong("line_cost_minor")));
+                            rs.getLong("line_cost_minor"),
+                            rs.getObject("sale_unit_id", UUID.class),
+                            rs.getString("sale_unit"),
+                            rs.getBigDecimal("sale_qty") == null
+                                    ? null
+                                    : Quantities.format(rs.getBigDecimal("sale_qty")),
+                            rs.getObject("sale_unit_price_minor", Long.class),
+                            rs.getBigDecimal("unit_factor") == null
+                                    ? null
+                                    : Quantities.format(rs.getBigDecimal("unit_factor"))));
         });
         return sales.stream()
                 .map(s -> withLines(s, bySale.getOrDefault(s.id(), new ArrayList<>())))

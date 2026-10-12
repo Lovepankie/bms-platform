@@ -12,6 +12,7 @@ import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
+import com.rincoltech.bms.retail.catalogue.RetailCatalogue.PackUnit;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.BranchQty;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.Purchase;
@@ -28,6 +29,7 @@ import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
 import com.rincoltech.bms.retail.stock.RetailBooks.Posting;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
+import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.Movement;
 import java.math.BigDecimal;
@@ -70,6 +72,7 @@ class PurchasingService {
     private final CurrentTenant tenant;
     private final BusinessClock clock;
     private final AuditLog audit;
+    private final RetailCapabilities capabilities;
 
     PurchasingService(
             PurchasingRepository repo,
@@ -81,7 +84,8 @@ class PurchasingService {
             TenantSequences sequences,
             CurrentTenant tenant,
             BusinessClock clock,
-            AuditLog audit) {
+            AuditLog audit,
+            RetailCapabilities capabilities) {
         this.repo = repo;
         this.catalogue = catalogue;
         this.stock = stock;
@@ -92,6 +96,7 @@ class PurchasingService {
         this.tenant = tenant;
         this.clock = clock;
         this.audit = audit;
+        this.capabilities = capabilities;
     }
 
     static String accountFor(String method) {
@@ -195,6 +200,8 @@ class PurchasingService {
         }
         String currency = tenant.profile().currency();
         Set<UUID> products = new TreeSet<>();
+        // ADR-033: the pack of each line entered in a pack unit, by line index; a base unit line has none.
+        Map<Integer, PackUnit> packs = new java.util.HashMap<>();
         for (int i = 0; i < r.lines().size(); i++) {
             PurchaseLineRequest l = r.lines().get(i);
             String field = "lines[" + i + "]";
@@ -202,6 +209,22 @@ class PurchasingService {
             if (p == null) {
                 problems.add(new FieldProblem(field + ".product_id", "unknown_product", "No such product."));
                 continue;
+            }
+            if (l.unitId() != null && !l.unitId().equals(p.unitId())) {
+                if (!capabilities.enabled(RetailCapabilities.UNITS)) {
+                    problems.add(new FieldProblem(
+                            field + ".unit_id",
+                            "capability_not_enabled",
+                            "Pack sizes are not enabled for this business."));
+                    continue;
+                }
+                PackUnit pack = catalogue.packUnit(p.id(), l.unitId()).orElse(null);
+                if (pack == null || !pack.active()) {
+                    problems.add(new FieldProblem(
+                            field + ".unit_id", "unknown_pack_unit", "This item is not bought in that unit."));
+                    continue;
+                }
+                packs.put(i, pack);
             }
             if (!p.currency().equals(currency)) {
                 problems.add(new FieldProblem(field + ".product_id", "currency_mismatch", "Priced in " + p.currency()));
@@ -235,18 +258,54 @@ class PurchasingService {
         String purchaseNo = "RP%08d".formatted(sequences.next("retail_purchase_no"));
         List<NewLine> lines = new ArrayList<>();
         Map<UUID, Long> valueByBranch = new TreeMap<>();
+        // What is owed or paid per branch is the amount as entered; what goes to inventory is the movements at the
+        // cost per base unit. They differ only for a pack cost that does not divide exactly (purchase_rounding).
+        Map<UUID, Long> stockByBranch = new TreeMap<>();
+        // Per line, the quantity of each branch in base units (a base unit line: as entered).
+        List<List<BigDecimal>> baseQtys = new ArrayList<>();
         for (int i = 0; i < r.lines().size(); i++) {
             PurchaseLineRequest l = r.lines().get(i);
+            PackUnit pack = packs.get(i);
+            long costBase = pack == null ? l.costMinor() : Quantities.baseCost(l.costMinor(), pack.factor());
+            if (costBase > RetailCatalogue.MAX_AMOUNT_MINOR) {
+                throw ApiException.rule(
+                        "amount_out_of_range", "The cost on line " + (i + 1) + " is too large to compute.");
+            }
             long lineTotal = 0;
             BigDecimal qtyTotal = BigDecimal.ZERO;
+            BigDecimal unitQtyTotal = BigDecimal.ZERO;
+            List<BigDecimal> bases = new ArrayList<>();
             for (BranchQty b : l.qtyByBranch()) {
-                long value = Quantities.value(b.qty(), l.costMinor());
-                lineTotal = Math.addExact(lineTotal, value);
-                qtyTotal = qtyTotal.add(b.qty());
-                valueByBranch.merge(b.branchId(), value, Math::addExact);
+                BigDecimal base = b.qty();
+                if (pack != null) {
+                    base = Quantities.toBase(b.qty(), pack.factor())
+                            .orElseThrow(() -> ApiException.rule(
+                                    "quantity_not_representable",
+                                    b.qty() + " " + pack.unit() + " does not convert exactly to thousandths of the"
+                                            + " item's unit. Change the quantity."));
+                    unitQtyTotal = unitQtyTotal.add(b.qty());
+                }
+                long entered = Quantities.value(b.qty(), l.costMinor());
+                long stocked = pack == null ? entered : Quantities.value(base, costBase);
+                lineTotal = Math.addExact(lineTotal, entered);
+                qtyTotal = qtyTotal.add(base);
+                bases.add(base);
+                valueByBranch.merge(b.branchId(), entered, Math::addExact);
+                stockByBranch.merge(b.branchId(), stocked, Math::addExact);
             }
+            baseQtys.add(bases);
             lines.add(new NewLine(
-                    UUID.randomUUID(), i + 1, l.productId(), l.costMinor(), l.sellMinor(), qtyTotal, lineTotal));
+                    UUID.randomUUID(),
+                    i + 1,
+                    l.productId(),
+                    costBase,
+                    l.sellMinor(),
+                    qtyTotal,
+                    lineTotal,
+                    pack == null ? null : pack.unitId(),
+                    pack == null ? null : pack.factor(),
+                    pack == null ? null : unitQtyTotal,
+                    pack == null ? null : l.costMinor()));
         }
         long total = lines.stream().mapToLong(NewLine::lineTotalMinor).reduce(0, Math::addExact);
         repo.insertPurchase(new Purchase(
@@ -266,12 +325,14 @@ class PurchasingService {
             NewLine line = lines.get(i);
             repo.insertLine(id, line);
             catalogue.applyPurchasePrices(line.productId(), line.costMinor(), line.sellMinor(), id);
-            for (BranchQty b : r.lines().get(i).qtyByBranch()) {
+            List<BranchQty> entered = r.lines().get(i).qtyByBranch();
+            for (int j = 0; j < entered.size(); j++) {
+                BranchQty b = entered.get(j);
                 movements.add(new Movement(
                         b.branchId(),
                         line.productId(),
                         "purchase",
-                        b.qty(),
+                        baseQtys.get(i).get(j),
                         line.costMinor(),
                         PURCHASE,
                         id,
@@ -286,6 +347,15 @@ class PurchasingService {
             if (r.paymentMethod().equals("credit")) {
                 pay = pay.withSubledger("retail.supplier", r.supplierId());
             }
+            long stocked = stockByBranch.get(branch);
+            // Zero for every base unit line, so a restock without packs posts exactly as before.
+            long rounding = value - stocked;
+            List<Leg> legs = new ArrayList<>(List.of(Leg.debit("inventory", stocked), pay));
+            if (rounding > 0) {
+                legs.add(Leg.debit("purchase_rounding", rounding));
+            } else if (rounding < 0) {
+                legs.add(Leg.credit("purchase_rounding", -rounding));
+            }
             books.post(new Posting(
                     branch,
                     r.purchasedOn(),
@@ -294,7 +364,7 @@ class PurchasingService {
                     PURCHASE,
                     id,
                     "retail.purchase:" + id + ":" + branch,
-                    List.of(Leg.debit("inventory", value), pay)));
+                    legs));
         });
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("purchase_no", purchaseNo);

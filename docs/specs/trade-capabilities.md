@@ -2,7 +2,7 @@
 
 **Status:** Proposed (design only, issue #190) · **Decision record:** ADR-033 · **Module:** `retail`
 
-No code and no migration exist. This page designs how the retail module serves a wholesaler
+Slices 1 (branch roles), 3 (two-step transfers) and 4 (units of measure, section 4) are built; the others are design only. This page designs how the retail module serves a wholesaler
 without a second module and without changing anything for a plain shop. Migration numbers are not
 given here: they are assigned at merge time (AGENTS.md). Every amount and name in this page is
 fabricated.
@@ -229,6 +229,8 @@ the list row, so concurrent edits serialise and the second gets 409 `price_item_
 its snapshot, so back-dating a list gains nothing).
 
 ## 4. Units of measure
+
+**Built in slice 4 (issue #194, migration V39).** Choices the design left open: a pack's default price is `sell_minor x factor` rounded half up to a whole minor unit per pack, and the line is `sale_qty` times that price rounded half up once, so `line_total_minor = sale_qty x sale_unit_price_minor` holds exactly (for a whole factor the pack price is exact); the per-base price is `line_total / base_qty` rounded half up and is display only; a restock's `sell_minor` stays per base unit; `purchase_rounding` (5120) is seeded by the migration for every retail tenant and by the chart function for new ones, instead of when the capability is first switched on, because an account that stays at zero costs nothing and a switch-on hook would need the chart in the settings path; the pack list is read with `retail.stock.read` so the sales screen can offer it, and only changed with `retail.catalogue.manage`; a pack is addressed by its unit, keyed `/retail/products/{id}/units/{unit_id}`; a pack is switched off, never deleted (only an active pack ties its unit and the item's unit down; switching on again confirms the factor); a factor is at least 1, so the smaller unit is always the base unit; a naming of the base unit as `unit_id` is the base unit and takes the pre-existing path with the capability on or off. A factor change applies to later lines because every line keeps the factor it used.
 
 ### 4.1 Rules
 
@@ -561,7 +563,7 @@ Branch-bound routes check scope per ADR-017. Full catalogue goes in SDD 7.11.23.
 |---|---|---|---|
 | GET, PUT | `/retail/settings/capabilities` | `core.settings.manage`; PUT needs `If-Match` (the settings version, as `PATCH /settings`) | none |
 | GET, PUT | `/retail/branch-roles`, `/retail/branch-roles/{branch_id}` | read: `retail.stock.read`; write: `retail.branch_role.manage` | `branch_roles` |
-| GET, POST, PATCH | `/retail/products/{id}/units` | `retail.catalogue.manage` | `units` |
+| GET, POST, PATCH | `/retail/products/{id}/units`, `/retail/products/{id}/units/{unit_id}` | read: `retail.stock.read`; write: `retail.catalogue.manage` (built, issue #194) | `units` |
 | GET, POST, PATCH | `/retail/price-lists`, `/retail/price-lists/{id}/items` | read: `retail.sale.create`; write: `retail.pricelist.manage` | `price_lists` |
 | POST | `/retail/prices/resolve` | `retail.sale.create` | `price_lists`; `{customer_id?, price_list_id?, branch_id, lines: [{product_id, unit_id?, qty}]}` returns price and source per line, never cost |
 | POST | `/retail/sales` | `retail.sale.create` | existing route; lines gain `unit_id?`, request gains `price_list_id?` |

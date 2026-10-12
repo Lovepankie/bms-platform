@@ -179,6 +179,7 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-stock-by-location': [TRADER],
   'page-in-transit': [TRADER],
   'capability-transfer-receipt': [TRADER],
+  'capability-units': [ADMIN],
 };
 
 describe('every tour target exists on its screen', () => {

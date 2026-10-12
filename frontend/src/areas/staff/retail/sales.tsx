@@ -2,8 +2,8 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { businessToday, daysBefore, retail, type Sale, type SalePayment, type SalesQuery } from '../../../api/retail';
+import { enteredPriceMinor, enteredQty } from './units-state';
 import { useCrumbTail } from '../../../components/breadcrumbs';
-import { showQty } from './maths';
 import { showDate } from './transfers';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone, useProfitAccess } from './ui';
 
@@ -106,9 +106,9 @@ export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: str
         <tbody>
           {(sale.lines ?? []).map((l) => (
             <tr key={l.id ?? l.product_id}>
-              <td>{l.description}{phone && <><br /><span className="hint">{showQty(l.qty ?? '0')} at {money(l.unit_price_minor ?? 0)}</span></>}</td>
-              {!phone && <td className="num">{showQty(l.qty ?? '0')}</td>}
-              {!phone && <td className="num">{money(l.unit_price_minor ?? 0)}</td>}
+              <td>{l.description}{phone && <><br /><span className="hint">{enteredQty(l)} at {money(enteredPriceMinor(l))}</span></>}</td>
+              {!phone && <td className="num">{enteredQty(l)}</td>}
+              {!phone && <td className="num">{money(enteredPriceMinor(l))}</td>}
               <td className="num">{money(l.line_total_minor ?? 0)}</td>
             </tr>
           ))}

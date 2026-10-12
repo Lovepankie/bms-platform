@@ -3,11 +3,14 @@ package com.rincoltech.bms.retail.catalogue.internal;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -126,7 +129,70 @@ final class CatalogueApi {
 
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "True when the branch balance is below zero")
-            Boolean negative) {
+            Boolean negative,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The pack sizes of the product; present only while the units capability is on")
+            List<Pack> packs) {
+
+        /** A product without packs, the shape every read had before units of measure (ADR-033). */
+        Product(
+                UUID id,
+                String code,
+                String description,
+                UUID categoryId,
+                String category,
+                UUID unitId,
+                String unit,
+                long sellMinor,
+                Long costMinor,
+                String currency,
+                boolean active,
+                Instant createdAt,
+                Instant updatedAt,
+                int version,
+                String qty,
+                Boolean negative) {
+            this(
+                    id,
+                    code,
+                    description,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sellMinor,
+                    costMinor,
+                    currency,
+                    active,
+                    createdAt,
+                    updatedAt,
+                    version,
+                    qty,
+                    negative,
+                    null);
+        }
+
+        Product withPacks(List<Pack> packs) {
+            return new Product(
+                    id,
+                    code,
+                    description,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sellMinor,
+                    costMinor,
+                    currency,
+                    active,
+                    createdAt,
+                    updatedAt,
+                    version,
+                    qty,
+                    negative,
+                    packs);
+        }
 
         Product withoutCost() {
             return new Product(
@@ -145,7 +211,8 @@ final class CatalogueApi {
                     updatedAt,
                     version,
                     qty,
-                    negative);
+                    negative,
+                    packs);
         }
     }
 
@@ -217,4 +284,49 @@ final class CatalogueApi {
 
             List<String> unitsCreated,
             List<ImportRow> rows) {}
+
+    // ---- Pack sizes (ADR-033, issue #194) ------------------------------------------------------
+
+    @Schema(name = "RetailPackRequest", description = "A pack size: factor base units in one pack of the unit")
+    record PackRequest(
+            @NotNull UUID unitId,
+
+            @NotNull
+            @DecimalMin("1")
+            @Digits(integer = 11, fraction = 3)
+            @Schema(
+                    type = "string",
+                    description = "Base units in one pack, at least 1, up to three places, for example 12 or 12.5")
+            BigDecimal factor) {}
+
+    @Schema(
+            name = "RetailPackUpdate",
+            description = "Omitted fields are unchanged; a pack is never deleted, only switched off")
+    record UpdatePackRequest(
+            @DecimalMin("1")
+            @Digits(integer = 11, fraction = 3)
+            @Schema(
+                    type = "string",
+                    description = "Base units in one pack, at least 1; required to switch a pack on again")
+            BigDecimal factor,
+
+            Boolean active) {}
+
+    @Schema(name = "RetailPack")
+    record Pack(
+            UUID id,
+            UUID productId,
+            UUID unitId,
+            String unit,
+
+            @Schema(description = "Base units in one pack, three places, for example 12.000")
+            String factor,
+
+            boolean active,
+
+            @Schema(description = "Send as If-Match when updating")
+            int version) {}
+
+    @Schema(name = "RetailPackList")
+    record PackList(List<Pack> items) {}
 }

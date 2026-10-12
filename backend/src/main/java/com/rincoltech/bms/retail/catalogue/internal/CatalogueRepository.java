@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.catalogue.internal;
 
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Category;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Pack;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceChange;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Product;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Unit;
@@ -321,6 +322,84 @@ class CatalogueRepository {
                 .list();
     }
 
+    // ---- Pack sizes (ADR-033, issue #194) ------------------------------------------------------
+
+    private static final String SELECT_PACK = """
+            SELECT k.id, k.product_id, k.unit_id, u.name AS unit, k.factor, k.active, k.version
+              FROM retail_product_units k JOIN retail_units u ON u.id = k.unit_id
+            """;
+
+    private static Pack pack(ResultSet rs, int n) throws SQLException {
+        return new Pack(
+                rs.getObject("id", UUID.class),
+                rs.getObject("product_id", UUID.class),
+                rs.getObject("unit_id", UUID.class),
+                rs.getString("unit"),
+                rs.getBigDecimal("factor").setScale(3).toPlainString(),
+                rs.getBoolean("active"),
+                rs.getInt("version"));
+    }
+
+    List<Pack> packs(UUID productId) {
+        return jdbc.sql(SELECT_PACK + " WHERE k.product_id = ? ORDER BY lower(u.name), k.id")
+                .param(productId)
+                .query(CatalogueRepository::pack)
+                .list();
+    }
+
+    /** The packs of many products in one statement, grouped by product; the key is absent for a product with none. */
+    Map<UUID, List<Pack>> packsOf(java.util.Collection<UUID> productIds) {
+        Map<UUID, List<Pack>> byProduct = new java.util.HashMap<>();
+        if (productIds.isEmpty()) {
+            return byProduct;
+        }
+        jdbc.sql(SELECT_PACK + " WHERE k.product_id IN (:ids) ORDER BY k.product_id, lower(u.name), k.id")
+                .param("ids", productIds)
+                .query(CatalogueRepository::pack)
+                .list()
+                .forEach(k -> byProduct
+                        .computeIfAbsent(k.productId(), x -> new java.util.ArrayList<>())
+                        .add(k));
+        return byProduct;
+    }
+
+    Optional<Pack> pack(UUID productId, UUID unitId) {
+        return jdbc.sql(SELECT_PACK + " WHERE k.product_id = ? AND k.unit_id = ?")
+                .params(productId, unitId)
+                .query(CatalogueRepository::pack)
+                .optional();
+    }
+
+    void insertPack(UUID id, UUID productId, UUID unitId, java.math.BigDecimal factor, UUID by) {
+        jdbc.sql("""
+                        INSERT INTO retail_product_units (id, tenant_id, product_id, unit_id, factor, created_by)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?)
+                        """).params(id, productId, unitId, factor, by).update();
+    }
+
+    /** Rows changed: 0 when the version moved since it was read. */
+    int updatePack(UUID id, java.math.BigDecimal factor, boolean active, int expectedVersion) {
+        return jdbc.sql(
+                        "UPDATE retail_product_units SET factor = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
+                .params(factor, active, id, expectedVersion)
+                .update();
+    }
+
+    /** Active packs only: a pack that was switched off no longer ties the product's unit or the pack's unit down. */
+    boolean productHasPacks(UUID productId) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM retail_product_units WHERE product_id = ? AND active)")
+                .param(productId)
+                .query(Boolean.class)
+                .single();
+    }
+
+    boolean unitHasPacks(UUID unitId) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM retail_product_units WHERE unit_id = ? AND active)")
+                .param(unitId)
+                .query(Boolean.class)
+                .single();
+    }
+
     static Product product(ResultSet rs, int n) throws SQLException {
         return new Product(
                 rs.getObject("id", UUID.class),
@@ -361,7 +440,8 @@ class CatalogueRepository {
                 p.updatedAt(),
                 p.version(),
                 q.toPlainString(),
-                q.signum() < 0);
+                q.signum() < 0,
+                null);
     }
 
     static Instant instant(ResultSet rs, String column) throws SQLException {

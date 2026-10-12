@@ -2755,6 +2755,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/products/{product_id}/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The pack sizes of a product; the units capability (issue #194) */
+        get: operations["listRetailProductUnits"];
+        put?: never;
+        /** Add a pack size to a product: a unit and the base units in one pack (issue #194) */
+        post: operations["createRetailProductUnit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products/{product_id}/units/{unit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a pack's factor or switch it off under If-Match; never deleted (issue #194) */
+        patch: operations["updateRetailProductUnit"];
+        trace?: never;
+    };
     "/api/v1/retail/purchases": {
         parameters: {
             query?: never;
@@ -6961,6 +6996,40 @@ export interface components {
             /** Format: int64 */
             total_minor?: number;
         };
+        /** @description The pack sizes of the product; present only while the units capability is on */
+        RetailPack: {
+            active?: boolean;
+            /** @description Base units in one pack, three places, for example 12.000 */
+            factor?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            product_id?: string;
+            unit?: string;
+            /** Format: uuid */
+            unit_id?: string;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
+        };
+        RetailPackList: {
+            items?: components["schemas"]["RetailPack"][];
+        };
+        /** @description A pack size: factor base units in one pack of the unit */
+        RetailPackRequest: {
+            /** @description Base units in one pack, at least 1, up to three places, for example 12 or 12.5 */
+            factor: string;
+            /** Format: uuid */
+            unit_id: string;
+        };
+        /** @description Omitted fields are unchanged; a pack is never deleted, only switched off */
+        RetailPackUpdate: {
+            active?: boolean;
+            /** @description Base units in one pack, at least 1; required to switch a pack on again */
+            factor?: string;
+        };
         RetailPayment: {
             /** Format: int64 */
             amount_minor?: number;
@@ -7119,6 +7188,8 @@ export interface components {
             id?: string;
             /** @description True when the branch balance is below zero */
             negative?: boolean;
+            /** @description The pack sizes of the product; present only while the units capability is on */
+            packs?: components["schemas"]["RetailPack"][];
             /** @description The branch balance, when branch_id was given */
             qty?: string;
             /** Format: int64 */
@@ -7184,31 +7255,56 @@ export interface components {
         };
         RetailPurchaseLine: {
             code?: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Per base unit: the movement snapshot and the product's cost
+             */
             cost_minor?: number;
             description?: string;
             /** Format: uuid */
             id?: string;
             /** Format: int32 */
             line_no?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description The amount paid or owed for the line, as entered
+             */
             line_total_minor?: number;
             /** Format: uuid */
             product_id?: string;
             qty_by_branch?: components["schemas"]["RetailPurchaseLineBranch"][];
+            /** @description In base units */
             qty_total?: string;
             /** Format: int64 */
             sell_minor?: number;
+            unit?: string;
+            /**
+             * Format: int64
+             * @description Cost per unit as entered
+             */
+            unit_cost_minor?: number;
+            /** @description Base units in one unit when the line was made */
+            unit_factor?: string;
+            /**
+             * Format: uuid
+             * @description The unit the line was entered in; absent means the base unit
+             */
+            unit_id?: string;
+            /** @description Quantity in the unit */
+            unit_qty_total?: string;
         };
         RetailPurchaseLineBranch: {
             /** Format: uuid */
             branch_id?: string;
+            /** @description In base units, always */
             qty?: string;
+            /** @description The quantity in the unit the line was entered in; absent for a base unit line */
+            unit_qty?: string;
         };
         RetailPurchaseLineRequest: {
             /**
              * Format: int64
-             * @description Unit cost; becomes the product's cost
+             * @description Cost per unit_id when one is given, otherwise per base unit; becomes the product's cost per base unit (a pack cost divided by the factor, rounded half up)
              */
             cost_minor: number;
             /** Format: uuid */
@@ -7219,6 +7315,11 @@ export interface components {
              * @description When given, becomes the product's sell price
              */
             sell_minor?: number;
+            /**
+             * Format: uuid
+             * @description A pack unit of the product (units capability): the quantities and cost_minor are then in that unit and stock moves in base units. Absent or the base unit: as before
+             */
+            unit_id?: string;
         };
         RetailPurchasePage: {
             items?: components["schemas"]["RetailPurchase"][];
@@ -7350,13 +7451,32 @@ export interface components {
             line_total_minor?: number;
             /** Format: uuid */
             product_id?: string;
+            /** @description In base units, always */
             qty?: string;
+            /** @description Quantity in sale_unit */
+            sale_qty?: string;
+            sale_unit?: string;
+            /**
+             * Format: uuid
+             * @description The unit the line was entered in; absent means the base unit
+             */
+            sale_unit_id?: string;
+            /**
+             * Format: int64
+             * @description Price per sale_unit; line_total_minor = sale_qty x this, rounded half up once
+             */
+            sale_unit_price_minor?: number;
             /**
              * Format: int64
              * @description Present only with retail.profit.read
              */
             unit_cost_minor?: number;
-            /** Format: int64 */
+            /** @description Base units in one sale_unit when the line was made */
+            unit_factor?: string;
+            /**
+             * Format: int64
+             * @description Per base unit; for a pack line the derived, rounded display value
+             */
             unit_price_minor?: number;
         };
         RetailSaleLineRequest: {
@@ -7365,8 +7485,13 @@ export interface components {
             /** @example 2.5 */
             qty: string;
             /**
+             * Format: uuid
+             * @description A pack unit of the product (units capability): qty and unit_price_minor are then in that unit and stock moves in base units. Absent or the base unit: as before
+             */
+            unit_id?: string;
+            /**
              * Format: int64
-             * @description Defaults to the product's sell price
+             * @description Per unit_id when one is given, otherwise per base unit. Defaults to the product's sell price (times the pack factor, rounded half up once, for a pack)
              */
             unit_price_minor?: number;
         };
@@ -13653,6 +13778,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    listRetailProductUnits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPackList"];
+                };
+            };
+        };
+    };
+    createRetailProductUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPackRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPack"];
+                };
+            };
+        };
+    };
+    updateRetailProductUnit: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                product_id: string;
+                unit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPackUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPack"];
                 };
             };
         };

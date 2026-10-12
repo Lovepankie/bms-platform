@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.catalogue.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
+import com.rincoltech.bms.core.tenancy.ModuleSettings;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
@@ -47,11 +48,13 @@ class ProductImportService {
     private final CatalogueRepository repo;
     private final CurrentTenant tenant;
     private final AuditLog audit;
+    private final ModuleSettings settings;
 
-    ProductImportService(CatalogueRepository repo, CurrentTenant tenant, AuditLog audit) {
+    ProductImportService(CatalogueRepository repo, CurrentTenant tenant, AuditLog audit, ModuleSettings settings) {
         this.repo = repo;
         this.tenant = tenant;
         this.audit = audit;
+        this.settings = settings;
     }
 
     @Transactional
@@ -79,6 +82,10 @@ class ProductImportService {
             }
         }
         boolean withCost = columns.containsKey("cost_price");
+        // ADR-033, issue #194: the optional pack columns, one pack per row. A file without them is read as before.
+        boolean withPack = columns.containsKey("pack_unit") || columns.containsKey("pack_factor");
+        boolean unitsOn =
+                withPack && Boolean.TRUE.equals(settings.group("retail").get(RetailCatalogue.UNITS_CAPABILITY));
         if (withCost && !principal.hasPermission("retail.profit.read")) {
             throw ApiException.rule(
                     "cost_not_allowed",
@@ -117,6 +124,11 @@ class ProductImportService {
             String code = RetailCatalogue.normaliseCode(rawCode).orElse(null);
             String category = cell(cells, columns, "category").strip();
             String unit = cell(cells, columns, "unit").strip();
+            String packUnit = withPack ? cell(cells, columns, "pack_unit").strip() : "";
+            String packFactorText =
+                    withPack ? cell(cells, columns, "pack_factor").strip() : "";
+            boolean hasPack = !packUnit.isEmpty() || !packFactorText.isEmpty();
+            java.math.BigDecimal packFactor = hasPack ? factor(packFactorText) : null;
             Long sell = amount(cell(cells, columns, "sell_price"), exponent);
             Long cost = withCost ? amount(cell(cells, columns, "cost_price"), exponent) : Long.valueOf(0);
             boolean costBlank = withCost && cell(cells, columns, "cost_price").isBlank();
@@ -130,6 +142,15 @@ class ProductImportService {
                 problem = "The category is empty or longer than 100 characters.";
             } else if (unit.isEmpty() || unit.length() > 30) {
                 problem = "The unit is empty or longer than 30 characters.";
+            } else if (hasPack && !unitsOn) {
+                problem =
+                        "Pack sizes need the units capability. Switch it on, or take the pack columns out of the file.";
+            } else if (hasPack && (packUnit.isEmpty() || packUnit.length() > 30 || packFactor == null)) {
+                problem =
+                        "A pack needs both a pack unit (up to 30 characters) and a pack factor of at least 1 with at most"
+                                + " three decimals and no commas, for example 12 or 12.5.";
+            } else if (hasPack && packUnit.equalsIgnoreCase(unit)) {
+                problem = "The pack unit must differ from the unit.";
             } else if (sell == null) {
                 problem = "The sell price must be " + example(exponent, 12000) + ".";
             } else if (cost == null && !costBlank) {
@@ -164,11 +185,15 @@ class ProductImportService {
             }
             String categoryKey = category.toLowerCase(Locale.ROOT);
             String unitKey = unit.toLowerCase(Locale.ROOT);
+            String packKey = packUnit.toLowerCase(Locale.ROOT);
             String off = offCategories.contains(categoryKey)
                     ? "category \"" + category + "\" is switched off. Switch it on or use another category."
                     : offUnits.contains(unitKey)
                             ? "unit \"" + unit + "\" is switched off. Switch it on or use another unit."
-                            : null;
+                            : hasPack && offUnits.contains(packKey)
+                                    ? "pack unit \"" + packUnit
+                                            + "\" is switched off. Switch it on or use another unit."
+                                    : null;
             if (off != null) {
                 seen.remove(key);
                 errors++;
@@ -181,9 +206,24 @@ class ProductImportService {
             if (!units.containsKey(unitKey)) {
                 newUnits.putIfAbsent(unitKey, unit);
             }
+            if (hasPack && !units.containsKey(packKey)) {
+                newUnits.putIfAbsent(packKey, packUnit);
+            }
             added++;
-            report.add(new ImportRow(line, code, description.strip(), "added", dryRun ? "Would be added." : "Added."));
-            pending.add(new Pending(code, description.strip(), category, unit, sell, cost == null ? 0 : cost));
+            String packNote = hasPack
+                    ? " With a pack of " + packFactor.setScale(3).toPlainString() + " in one " + packUnit + "."
+                    : "";
+            report.add(new ImportRow(
+                    line, code, description.strip(), "added", (dryRun ? "Would be added." : "Added.") + packNote));
+            pending.add(new Pending(
+                    code,
+                    description.strip(),
+                    category,
+                    unit,
+                    sell,
+                    cost == null ? 0 : cost,
+                    hasPack ? packUnit : null,
+                    packFactor));
         }
         if (!dryRun) {
             if (errors > 0) {
@@ -275,6 +315,25 @@ class ProductImportService {
                             currency,
                             null),
                     product.id());
+            if (p.packUnit() != null) {
+                UUID packUnitId = unitIds.get(p.packUnit().toLowerCase(Locale.ROOT));
+                UUID packId = UUID.randomUUID();
+                repo.insertPack(packId, product.id(), packUnitId, p.packFactor(), by);
+                audit.record(AuditLog.Entry.created(
+                        "retail.product_unit.created",
+                        "retail.product_unit",
+                        packId,
+                        null,
+                        Map.of(
+                                "product_id",
+                                product.id(),
+                                "unit_id",
+                                packUnitId,
+                                "factor",
+                                p.packFactor().setScale(3).toPlainString(),
+                                "source",
+                                "import")));
+            }
             Map<String, Object> after = new LinkedHashMap<>();
             after.put("code", p.code());
             after.put("description", p.description());
@@ -292,7 +351,29 @@ class ProductImportService {
         audit.record(AuditLog.Entry.created("retail.product.imported", PRODUCT, null, null, summary));
     }
 
-    private record Pending(String code, String description, String category, String unit, long sell, long cost) {}
+    private record Pending(
+            String code,
+            String description,
+            String category,
+            String unit,
+            long sell,
+            long cost,
+            String packUnit,
+            java.math.BigDecimal packFactor) {}
+
+    private static final java.util.regex.Pattern FACTOR =
+            java.util.regex.Pattern.compile("(\\d{1,11})(?:\\.(\\d{1,3}))?");
+
+    /** A pack factor above zero with at most three decimals, or null. */
+    private static java.math.BigDecimal factor(String text) {
+        // A comma is refused, not dropped: "12,5" must not become 125.
+        java.util.regex.Matcher m = FACTOR.matcher(text);
+        if (!m.matches()) {
+            return null;
+        }
+        java.math.BigDecimal value = new java.math.BigDecimal(m.group());
+        return value.compareTo(java.math.BigDecimal.ONE) >= 0 ? value : null;
+    }
 
     /** Header names are matched ignoring case, spaces, hyphens and underscores; a few plain synonyms are accepted. */
     private static Map<String, Integer> columns(List<String> header) {
@@ -306,6 +387,8 @@ class ProductImportService {
                 case "unit", "unit_of_measure" -> "unit";
                 case "sell_price", "selling_price", "sell", "price" -> "sell_price";
                 case "cost_price", "cost", "buying_price" -> "cost_price";
+                case "pack_unit" -> "pack_unit";
+                case "pack_factor", "pack_size" -> "pack_factor";
                 default -> null;
             };
             if (canonical != null) {

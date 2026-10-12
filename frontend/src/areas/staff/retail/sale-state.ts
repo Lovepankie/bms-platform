@@ -1,6 +1,7 @@
 import { RETAIL_CURRENCY, type Product, type SalePayment, type SaleRequest } from '../../../api/retail';
 import { parseMinor } from '../../../components/money';
 import { lineTotalMinor, milliOf, parseQty, qtyString, showQty } from './maths';
+import { baseQtyMilli, chosenPack, lineCostMinor, packPriceMinor } from './units-state';
 
 // The sale form's pure logic: the running total, the early hints and the request it submits. The
 // hints (stock and price floor) only save a round trip: the server is the authority and refuses
@@ -11,7 +12,22 @@ import { lineTotalMinor, milliOf, parseQty, qtyString, showQty } from './maths';
 export interface DraftLine {
   product: Product;
   qty: string;
+  /** Per the chosen unit: per pack for a pack line, per base unit otherwise. */
   price: string;
+  /** A pack unit of the product (ADR-033, units capability); absent means the base unit. */
+  unitId?: string;
+}
+
+/** The price the server defaults to for the line's unit: the sell price, times the factor for a pack. */
+export function defaultPrice(product: Product, unitId: string | undefined): number {
+  const pack = chosenPack(product, unitId);
+  return pack ? packPriceMinor(product.sell_minor ?? 0, pack.factor) : (product.sell_minor ?? 0);
+}
+
+/** The line in another unit: the price goes back to that unit's default, as the form shows it. */
+export function withUnit(line: DraftLine, unitId: string): DraftLine {
+  const next = unitId || undefined;
+  return { ...line, unitId: next, price: String(defaultPrice(line.product, next)) };
 }
 
 export interface Draft {
@@ -41,10 +57,15 @@ export function lineHint(line: DraftLine): string | null {
   const f = lineFigures(line);
   if (f === null) return null;
   const { qty, cost_minor: cost, unit } = line.product;
-  if (qty !== undefined && f.qtyMilli > Math.max(milliOf(qty), 0)) {
+  const pack = chosenPack(line.product, line.unitId);
+  // A pack line is checked in base units, as the server does: the stock, and the line total against the line cost.
+  const baseMilli = pack ? baseQtyMilli(f.qtyMilli, pack.factor) : f.qtyMilli;
+  if (baseMilli === null) return `${line.qty} ${pack?.unit ?? ''} does not convert exactly to ${unit ?? 'items'}. Change the quantity.`;
+  if (qty !== undefined && baseMilli > Math.max(milliOf(qty), 0)) {
     return `Only ${qty.startsWith('-') ? '0' : showQty(qty)} ${unit ?? 'items'} in stock at this branch.`;
   }
-  if (cost !== undefined && f.priceMinor <= cost) return 'The price must be above what the item cost.';
+  if (cost !== undefined && pack && f.totalMinor <= lineCostMinor(baseMilli, cost)) return 'The price must be above what the item cost.';
+  if (cost !== undefined && !pack && f.priceMinor <= cost) return 'The price must be above what the item cost.';
   return null;
 }
 
@@ -77,10 +98,12 @@ export function buildSaleRequest(draft: Draft): SaleRequest {
     lines: draft.lines.map((l) => {
       const f = lineFigures(l);
       if (!f) throw new Error('invalid line');
+      const pack = chosenPack(l.product, l.unitId);
       return {
         product_id: l.product.id ?? '',
         qty: qtyString(f.qtyMilli),
-        ...(f.priceMinor !== l.product.sell_minor ? { unit_price_minor: f.priceMinor } : {}),
+        ...(pack ? { unit_id: pack.unit_id } : {}),
+        ...(f.priceMinor !== defaultPrice(l.product, pack?.unit_id) ? { unit_price_minor: f.priceMinor } : {}),
       };
     }),
   };

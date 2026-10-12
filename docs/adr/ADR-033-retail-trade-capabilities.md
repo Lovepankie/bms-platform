@@ -118,3 +118,55 @@ step, and plain shops see nothing new. **Worse:** a shortage is visible in the l
 shrinkage) but not yet in the daily profit report, which reads sales, usage and stock-take
 differences only. **Watch for:** any later change to the transfer table must extend the guard's list
 of transitions and its test (`RetailTransferGuardIT`) in the same migration.
+
+## Amendment of 2026-10-12 (issue #194): units of measure, as built
+
+Decision 5 is built in slice 4 (migration V39; `docs/specs/trade-capabilities.md` section 4). The choices it
+left open:
+
+1. **The edge is the line.** A sale line or a restock line names a pack `unit_id` and enters the quantity and
+   the price or cost in that unit. The server converts once: the stock movement, the balance, the cost
+   snapshot and every existing report stay in base units. The line keeps the unit, the quantity, the price and
+   the factor in force, in four nullable columns; null means "entered in the base unit", which is every row
+   that existed and every line of a tenant with the capability off. Naming the base unit is the base unit.
+2. **Quantities refuse, money rounds.** `qty x factor` must be exact to three places and fit the column, or
+   the line is refused (422 `quantity_not_representable`); a pack price is `sell x factor` and a pack cost
+   per base unit is `pack cost / factor`, both rounded half up once; all of it is `BigDecimal` and `long`.
+3. **The price floor is judged on the line.** A pack line is below cost when its line total is not above its
+   line cost; the rounded price per base unit is never compared, so a carton of twelve costing 83 a piece is
+   accepted at 997 although 997 / 12 rounds to the cost.
+4. **The remainder has one home.** A restock priced per pack posts the amount as entered (cash, bank or the
+   supplier) and the movements at the rounded cost per base unit; the difference per branch posts to the new
+   system account `purchase_rounding` (5120) in the branch's own entry, a debit or a credit, nothing when the
+   cost divides exactly. The account is added to the retail chart for existing retail tenants by the
+   migration, and stays at zero until a restock names a pack.
+5. **Packs belong to the catalogue.** `retail_product_units` is catalogue data (a unit and a factor per
+   product, one per unit, switched off rather than deleted). A factor is at least 1: a pack holds at least
+   one base unit, so the smaller unit is the base unit and the larger the pack (a fraction such as a carton
+   base sold by the piece at 0.083 would drift stock). Factors are relative to the base unit, so while a
+   product has an **active** pack its base unit cannot change, and a unit that an **active** pack uses
+   cannot be switched off (422 `unit_in_use_by_pack`); a pack switched off ties nothing down. Switching a
+   pack on again must carry the factor (422 `factor_required`), and the unit must be active and no longer
+   the item's own unit, because the base unit may have changed while the pack was off. No permission is
+   added.
+6. **Expand only.** One table with forced RLS, eight nullable columns, and checks and foreign keys added
+   `NOT VALID` then validated in the same migration. Flyway runs the file in one transaction, so this does
+   not shorten the lock: the exclusive lock on each line table is held through the validation scan to the
+   commit. That is accepted because the new columns are null on every existing row and the line tables of a
+   small or medium business are modest; a very large tenant would move the validation to a later migration.
+   The checks also tie `qty` to `sale_qty x unit_factor` (and `qty_total` to `unit_qty_total x unit_factor`)
+   so a line cannot say one thing in each unit. The covering index of V26 is untouched; the sale line read
+   statements in `scripts/db-bench/queries` were updated to the new SQL, but the 25-times benchmark itself
+   (k01 to k15, needs Docker and about 3.6 GB) was not run for this change: no column is indexed, no existing
+   statement of the daily profit or analytics reports changed, and the new columns are nullable, so those
+   plans cannot move; the benchmark should be run on a Docker host before the first tenant switches
+   `units` on. A database at V37 holding sale and purchase lines is a migration test.
+7. **One sale, many lines of an item.** A sale may hold a carton line and a loose-pieces line of the same
+   item (the sale screen allows a second line of an item while the item has pack sizes).
+
+**Better:** a wholesaler can buy by the carton and sell by the carton or the piece against one stock figure,
+and nothing a plain shop reads has changed meaning. **Worse:** a pack cost that does not divide shows as a
+small expense or income in `purchase_rounding`, and a factor with decimals makes the pack price a rounded
+figure. **Watch for:** price lists (slice 5) key items by unit and must resolve a pack price before the
+default `sell x factor`; the product CSV import skips an existing code, so packs cannot be added to existing
+items by import, only by the pack routes.

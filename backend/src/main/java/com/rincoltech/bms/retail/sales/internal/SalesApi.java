@@ -39,8 +39,15 @@ final class SalesApi {
 
             @PositiveOrZero
             @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
-            @Schema(description = "Defaults to the product's sell price")
-            Long unitPriceMinor) {}
+            @Schema(
+                    description = "Per unit_id when one is given, otherwise per base unit. Defaults to the product's"
+                            + " sell price (times the pack factor, rounded half up once, for a pack)")
+            Long unitPriceMinor,
+
+            @Schema(
+                    description = "A pack unit of the product (units capability): qty and unit_price_minor are then"
+                            + " in that unit and stock moves in base units. Absent or the base unit: as before")
+            UUID unitId) {}
 
     @Schema(name = "RetailSaleRequest")
     record SaleRequest(
@@ -67,15 +74,35 @@ final class SalesApi {
             UUID productId,
             String code,
             String description,
-            String qty,
+            @Schema(description = "In base units, always") String qty,
+
+            @Schema(description = "Per base unit; for a pack line the derived, rounded display value")
             long unitPriceMinor,
+
             long lineTotalMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)
             Long unitCostMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)
-            Long lineCostMinor) {}
+            Long lineCostMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The unit the line was entered in; absent means the base unit")
+            UUID saleUnitId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) String saleUnit,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = "Quantity in sale_unit")
+            String saleQty,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Price per sale_unit; line_total_minor = sale_qty x this, rounded half up once")
+            Long saleUnitPriceMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Base units in one sale_unit when the line was made")
+            String unitFactor) {}
 
     @Schema(name = "RetailSale")
     record Sale(

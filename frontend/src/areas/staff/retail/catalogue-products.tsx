@@ -6,6 +6,7 @@ import { formatMinor, parseMinor } from '../../../components/money';
 import { useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { BackToCatalogue } from './catalogue';
+import { PackEditor } from './catalogue-packs';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
 
@@ -130,6 +131,7 @@ export function ProductForm({ product, onSaved, onCancel }: { product?: Product;
             <input id="item-active" type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> On sale (clear this to switch the item off)
           </label>
           <p className="hint">To change the price, use Change price on the list.</p>
+          <PackEditor product={product} />
         </>
       ) : (
         <>

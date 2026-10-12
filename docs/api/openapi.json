@@ -7550,6 +7550,74 @@
           }
         }
       },
+      "RetailPack" : {
+        "description" : "The pack sizes of the product; present only while the units capability is on",
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "factor" : {
+            "description" : "Base units in one pack, three places, for example 12.000",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "unit_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "Send as If-Match when updating",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailPackList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPack"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailPackRequest" : {
+        "description" : "A pack size: factor base units in one pack of the unit",
+        "properties" : {
+          "factor" : {
+            "description" : "Base units in one pack, at least 1, up to three places, for example 12 or 12.5",
+            "type" : "string"
+          },
+          "unit_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "factor", "unit_id" ]
+      },
+      "RetailPackUpdate" : {
+        "description" : "Omitted fields are unchanged; a pack is never deleted, only switched off",
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "factor" : {
+            "description" : "Base units in one pack, at least 1; required to switch a pack on again",
+            "type" : "string"
+          }
+        }
+      },
       "RetailPayment" : {
         "properties" : {
           "amount_minor" : {
@@ -7865,6 +7933,13 @@
             "description" : "True when the branch balance is below zero",
             "type" : "boolean"
           },
+          "packs" : {
+            "description" : "The pack sizes of the product; present only while the units capability is on",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPack"
+            },
+            "type" : "array"
+          },
           "qty" : {
             "description" : "The branch balance, when branch_id was given",
             "type" : "string"
@@ -8030,6 +8105,7 @@
             "type" : "string"
           },
           "cost_minor" : {
+            "description" : "Per base unit: the movement snapshot and the product's cost",
             "format" : "int64",
             "type" : "integer"
           },
@@ -8045,6 +8121,7 @@
             "type" : "integer"
           },
           "line_total_minor" : {
+            "description" : "The amount paid or owed for the line, as entered",
             "format" : "int64",
             "type" : "integer"
           },
@@ -8059,11 +8136,33 @@
             "type" : "array"
           },
           "qty_total" : {
+            "description" : "In base units",
             "type" : "string"
           },
           "sell_minor" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "unit_cost_minor" : {
+            "description" : "Cost per unit as entered",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit_factor" : {
+            "description" : "Base units in one unit when the line was made",
+            "type" : "string"
+          },
+          "unit_id" : {
+            "description" : "The unit the line was entered in; absent means the base unit",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit_qty_total" : {
+            "description" : "Quantity in the unit",
+            "type" : "string"
           }
         }
       },
@@ -8074,6 +8173,11 @@
             "type" : "string"
           },
           "qty" : {
+            "description" : "In base units, always",
+            "type" : "string"
+          },
+          "unit_qty" : {
+            "description" : "The quantity in the unit the line was entered in; absent for a base unit line",
             "type" : "string"
           }
         }
@@ -8081,7 +8185,7 @@
       "RetailPurchaseLineRequest" : {
         "properties" : {
           "cost_minor" : {
-            "description" : "Unit cost; becomes the product's cost",
+            "description" : "Cost per unit_id when one is given, otherwise per base unit; becomes the product's cost per base unit (a pack cost divided by the factor, rounded half up)",
             "format" : "int64",
             "maximum" : 10000000000000,
             "minimum" : 0,
@@ -8105,6 +8209,11 @@
             "maximum" : 10000000000000,
             "minimum" : 0,
             "type" : "integer"
+          },
+          "unit_id" : {
+            "description" : "A pack unit of the product (units capability): the quantities and cost_minor are then in that unit and stock moves in base units. Absent or the base unit: as before",
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "required" : [ "cost_minor", "product_id", "qty_by_branch" ]
@@ -8376,14 +8485,37 @@
             "type" : "string"
           },
           "qty" : {
+            "description" : "In base units, always",
             "type" : "string"
+          },
+          "sale_qty" : {
+            "description" : "Quantity in sale_unit",
+            "type" : "string"
+          },
+          "sale_unit" : {
+            "type" : "string"
+          },
+          "sale_unit_id" : {
+            "description" : "The unit the line was entered in; absent means the base unit",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_unit_price_minor" : {
+            "description" : "Price per sale_unit; line_total_minor = sale_qty x this, rounded half up once",
+            "format" : "int64",
+            "type" : "integer"
           },
           "unit_cost_minor" : {
             "description" : "Present only with retail.profit.read",
             "format" : "int64",
             "type" : "integer"
           },
+          "unit_factor" : {
+            "description" : "Base units in one sale_unit when the line was made",
+            "type" : "string"
+          },
           "unit_price_minor" : {
+            "description" : "Per base unit; for a pack line the derived, rounded display value",
             "format" : "int64",
             "type" : "integer"
           }
@@ -8399,8 +8531,13 @@
             "example" : "2.5",
             "type" : "string"
           },
+          "unit_id" : {
+            "description" : "A pack unit of the product (units capability): qty and unit_price_minor are then in that unit and stock moves in base units. Absent or the base unit: as before",
+            "format" : "uuid",
+            "type" : "string"
+          },
           "unit_price_minor" : {
-            "description" : "Defaults to the product's sell price",
+            "description" : "Per unit_id when one is given, otherwise per base unit. Defaults to the product's sell price (times the pack factor, rounded half up once, for a pack)",
             "format" : "int64",
             "maximum" : 10000000000000,
             "minimum" : 0,
@@ -18911,6 +19048,123 @@
           }
         },
         "summary" : "Edit prices by hand under If-Match, with a history row (FR-RET-02)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/products/{product_id}/units" : {
+      "get" : {
+        "operationId" : "listRetailProductUnits",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPackList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The pack sizes of a product; the units capability (issue #194)",
+        "tags" : [ "retail-catalogue" ]
+      },
+      "post" : {
+        "operationId" : "createRetailProductUnit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailPackRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPack"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add a pack size to a product: a unit and the base units in one pack (issue #194)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/products/{product_id}/units/{unit_id}" : {
+      "patch" : {
+        "operationId" : "updateRetailProductUnit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "unit_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailPackUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPack"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change a pack's factor or switch it off under If-Match; never deleted (issue #194)",
         "tags" : [ "retail-catalogue" ]
       }
     },

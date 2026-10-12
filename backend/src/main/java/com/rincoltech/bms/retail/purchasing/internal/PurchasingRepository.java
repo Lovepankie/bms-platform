@@ -39,7 +39,11 @@ class PurchasingRepository {
             long costMinor,
             Long sellMinor,
             BigDecimal qtyTotal,
-            long lineTotalMinor) {}
+            long lineTotalMinor,
+            UUID unitId,
+            BigDecimal unitFactor,
+            BigDecimal unitQtyTotal,
+            Long unitCostMinor) {}
 
     // ---- Suppliers -----------------------------------------------------------------------
 
@@ -106,8 +110,8 @@ class PurchasingRepository {
     void insertLine(UUID purchaseId, NewLine l) {
         jdbc.sql("""
                         INSERT INTO retail_purchase_lines (id, tenant_id, purchase_id, line_no, product_id, cost_minor,
-                            sell_minor, qty_total, line_total_minor)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?)
+                            sell_minor, qty_total, line_total_minor, unit_id, unit_factor, unit_qty_total, unit_cost_minor)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """)
                 .params(
                         l.id(),
@@ -117,7 +121,11 @@ class PurchasingRepository {
                         l.costMinor(),
                         l.sellMinor(),
                         l.qtyTotal(),
-                        l.lineTotalMinor())
+                        l.lineTotalMinor(),
+                        l.unitId(),
+                        l.unitFactor(),
+                        l.unitQtyTotal(),
+                        l.unitCostMinor())
                 .update();
     }
 
@@ -208,13 +216,15 @@ class PurchasingRepository {
                         """).param("ids", ids).query(rs -> {
             byLine.computeIfAbsent(rs.getObject("source_line_id", UUID.class), k -> new ArrayList<>())
                     .add(new LineBranch(
-                            rs.getObject("branch_id", UUID.class), Quantities.format(rs.getBigDecimal("qty"))));
+                            rs.getObject("branch_id", UUID.class), Quantities.format(rs.getBigDecimal("qty")), null));
         });
         Map<UUID, List<PurchaseLine>> byPurchase = new HashMap<>();
         jdbc.sql("""
                         SELECT l.purchase_id, l.id, l.line_no, l.product_id, pr.code, pr.description, l.cost_minor,
-                               l.sell_minor, l.qty_total, l.line_total_minor
+                               l.sell_minor, l.qty_total, l.line_total_minor, l.unit_id, u.name AS unit, l.unit_factor,
+                               l.unit_qty_total, l.unit_cost_minor
                           FROM retail_purchase_lines l JOIN retail_products pr ON pr.id = l.product_id
+                          LEFT JOIN retail_units u ON u.id = l.unit_id
                          WHERE l.purchase_id IN (:ids) ORDER BY l.purchase_id, l.line_no
                         """).param("ids", ids).query(rs -> {
             UUID lineId = rs.getObject("id", UUID.class);
@@ -230,7 +240,12 @@ class PurchasingRepository {
                             rs.getObject("sell_minor", Long.class),
                             Quantities.format(rs.getBigDecimal("qty_total")),
                             rs.getLong("line_total_minor"),
-                            byLine.getOrDefault(lineId, new ArrayList<>())));
+                            inUnit(byLine.getOrDefault(lineId, new ArrayList<>()), rs.getBigDecimal("unit_factor")),
+                            rs.getObject("unit_id", UUID.class),
+                            rs.getString("unit"),
+                            decimal(rs.getBigDecimal("unit_factor")),
+                            decimal(rs.getBigDecimal("unit_qty_total")),
+                            rs.getObject("unit_cost_minor", Long.class)));
         });
         return purchases.stream()
                 .map(p -> withLines(p, byPurchase.getOrDefault(p.id(), List.of()), branchIds))
@@ -259,15 +274,38 @@ class PurchasingRepository {
                 p.createdBy());
     }
 
+    private static String decimal(BigDecimal d) {
+        return d == null ? null : Quantities.format(d);
+    }
+
+    /** A line entered in a pack unit shows each branch's quantity in that unit too; the division is exact. */
+    private static List<LineBranch> inUnit(List<LineBranch> branches, BigDecimal factor) {
+        if (factor == null) {
+            return branches;
+        }
+        return branches.stream()
+                .map(b -> new LineBranch(
+                        b.branchId(), b.qty(), Quantities.format(Quantities.fromBase(new BigDecimal(b.qty()), factor))))
+                .toList();
+    }
+
     private static PurchaseLine scoped(PurchaseLine l, List<UUID> branchIds) {
         List<LineBranch> inScope = l.qtyByBranch().stream()
                 .filter(b -> branchIds.contains(b.branchId()))
                 .toList();
         BigDecimal qty = BigDecimal.ZERO;
+        BigDecimal unitQty = BigDecimal.ZERO;
         long value = 0;
         for (LineBranch b : inScope) {
             qty = qty.add(new BigDecimal(b.qty()));
-            value = Math.addExact(value, Quantities.value(new BigDecimal(b.qty()), l.costMinor()));
+            if (l.unitId() == null) {
+                value = Math.addExact(value, Quantities.value(new BigDecimal(b.qty()), l.costMinor()));
+            } else {
+                // Rounded per branch as the purchase was, in the unit it was entered in.
+                BigDecimal entered = new BigDecimal(b.unitQty());
+                unitQty = unitQty.add(entered);
+                value = Math.addExact(value, Quantities.value(entered, l.unitCostMinor()));
+            }
         }
         return new PurchaseLine(
                 l.id(),
@@ -279,7 +317,12 @@ class PurchasingRepository {
                 l.sellMinor(),
                 Quantities.format(qty),
                 value,
-                inScope);
+                inScope,
+                l.unitId(),
+                l.unit(),
+                l.unitFactor(),
+                l.unitId() == null ? null : Quantities.format(unitQty),
+                l.unitCostMinor());
     }
 
     private static Purchase header(ResultSet rs) throws SQLException {

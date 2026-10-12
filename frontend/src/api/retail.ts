@@ -12,6 +12,8 @@ import type { components } from './schema';
 type S = components['schemas'];
 
 export type Product = S['RetailProduct'];
+/** A pack size of an item (units of measure, ADR-033): `factor` base units in one pack of `unit`, three places ("12.000"). */
+export type Pack = S['RetailPack'];
 export type StockRow = S['RetailStockRow'];
 export type AllBranchesRow = S['RetailAllBranchesRow'];
 export type StockBranch = S['RetailStockBranch'];
@@ -35,10 +37,13 @@ export type CustomerPage = S['RetailCustomerList'];
 export type Supplier = S['RetailSupplier'];
 export type SaleRequest = S['RetailSaleRequest'];
 export type Sale = S['RetailSale'];
+/** `sale_*` and `unit_factor` are present only for a line entered in a pack; `qty` and `unit_price_minor` are always per base unit. */
 export type SaleLine = S['RetailSaleLine'];
 export type SalePage = S['RetailSalePage'];
 export type PurchaseRequest = S['RetailPurchaseRequest'];
 export type Purchase = S['RetailPurchase'];
+/** `unit*` are present only for a line entered in a pack; `cost_minor` and `qty_total` are always per base unit. */
+export type PurchaseLine = S['RetailPurchaseLine'];
 export type UsageRequest = S['RetailUsageRequest'];
 export type Usage = S['RetailUsageReport'];
 export type StocktakeRequest = S['RetailStocktakeRequest'];
@@ -162,6 +167,11 @@ export interface RetailApi {
   /** A price change under If-Match; the server writes the history row. */
   editPrices(id: string, version: number, body: PriceEdit): Promise<Product>;
   priceHistory(id: string): Promise<PriceChange[]>;
+  /** The pack sizes of an item (the units capability, issue #194); 404 capability_not_enabled while it is off. */
+  listPacks(productId: string): Promise<Pack[]>;
+  addPack(productId: string, body: { unit_id: string; factor: string }): Promise<Pack>;
+  /** Under If-Match with the pack's version: a new factor, or switch the pack off or on. */
+  updatePack(productId: string, unitId: string, version: number, body: { factor?: string; active?: boolean }): Promise<Pack>;
   /** The CSV item import: a dry run reports, an apply adds the rows that are fine (administrators only). */
   importProducts(csv: string, dryRun: boolean): Promise<ImportResult>;
   createCategory(name: string): Promise<Category>;
@@ -337,6 +347,23 @@ const realRetail: RetailApi = {
 
   async priceHistory(id) {
     return unwrap(await api.GET('/api/v1/retail/products/{product_id}/price-history', { params: { path: { product_id: id } } })).items ?? [];
+  },
+
+  async listPacks(productId) {
+    return unwrap(await api.GET('/api/v1/retail/products/{product_id}/units', { params: { path: { product_id: productId } } })).items ?? [];
+  },
+
+  async addPack(productId, body) {
+    return unwrap(await api.POST('/api/v1/retail/products/{product_id}/units', { params: { path: { product_id: productId } }, body }));
+  },
+
+  async updatePack(productId, unitId, version, body) {
+    return unwrap(
+      await api.PATCH('/api/v1/retail/products/{product_id}/units/{unit_id}', {
+        params: { path: { product_id: productId, unit_id: unitId }, header: { 'If-Match': `"${version}"` } },
+        body,
+      }),
+    );
   },
 
   async importProducts(csv, dryRun) {
