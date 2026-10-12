@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { investments, type Investment, type InvestmentSchedule, type InvestmentStatementLine } from '../../../api/investments';
+import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { EarlyWithdrawalForm, FundForm, InstructionForm, PayForm, ReverseForm, RolloverForm } from './investment-actions';
@@ -252,6 +253,7 @@ const route = getRouteApi('/staff/lending/investments/$investmentId');
 function InvestmentPage() {
   const { investmentId } = route.useParams();
   const inv = useQuery({ queryKey: ['lending', 'investment', investmentId], queryFn: () => investments.get(investmentId) });
+  useCrumbLabel(inv.data?.certificate_no ?? inv.data?.account_no);
   return (
     <InvestmentsGate title="Investment">
       {inv.isPending && <p className="loading">Loading the investment</p>}

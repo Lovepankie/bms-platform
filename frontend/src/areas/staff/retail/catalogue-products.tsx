@@ -3,8 +3,10 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { RETAIL_CURRENCY, RETAIL_ZONE, retail, type PriceChange, type Product } from '../../../api/retail';
 import { formatMinor, parseMinor } from '../../../components/money';
+import { useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { BackToCatalogue } from './catalogue';
+import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
 
 // Items (#146): list with search, category and active filters; add and edit an item's code,
@@ -216,6 +218,7 @@ type View = { mode: 'list' } | { mode: 'new' } | { mode: 'edit' | 'price'; id: s
 
 function Editing({ id, mode, onSaved, onCancel }: { id: string; mode: 'edit' | 'price'; onSaved: (text: string) => void; onCancel: () => void }) {
   const product = useQuery({ queryKey: ['retail', 'product', id], queryFn: () => retail.getProduct(id), gcTime: 0 });
+  useCrumbTail(product.data?.description, onCancel);
   if (product.isPending) return <p className="loading">Loading</p>;
   if (!product.data) return <Problem error={product.error} />;
   return mode === 'edit' ? <ProductForm product={product.data} onSaved={onSaved} onCancel={onCancel} /> : <PriceForm product={product.data} onSaved={onSaved} onCancel={onCancel} />;
@@ -237,6 +240,8 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
   });
   const items = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
   const canPrice = (me.permissions ?? []).includes(PRICE);
+  const g = useCategoryGroups({ screen: 'items', items, categoryOf: (p) => p.category, resetKey: [query, categoryId, activeFilter].join('|'), searching: query.trim() !== '' });
+  const card = (p: Product) => <ProductCard key={p.id} product={p} showCost={profit} canPrice={canPrice} onEdit={() => onEdit(p.id ?? '')} onPrice={() => onPrice(p.id ?? '')} />;
   return (
     <>
       <BackToCatalogue />
@@ -263,11 +268,8 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
       {page.isPending && <p className="loading">Loading</p>}
       <Problem error={page.error} />
       {page.data && items.length === 0 && <p className="empty-state">No items found.</p>}
-      <ul style={{ listStyle: 'none', padding: 0 }}>
-        {items.map((p) => (
-          <ProductCard key={p.id} product={p} showCost={profit} canPrice={canPrice} onEdit={() => onEdit(p.id ?? '')} onPrice={() => onPrice(p.id ?? '')} />
-        ))}
-      </ul>
+      {items.length > 0 && <GroupControls state={g} paged={page.hasNextPage} />}
+      {g.active ? <GroupedCards state={g} renderItem={card} /> : <ul style={{ listStyle: 'none', padding: 0 }}>{items.map(card)}</ul>}
       {page.hasNextPage && <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>{page.isFetchingNextPage ? 'Loading' : 'Show more items'}</button>}
     </>
   );

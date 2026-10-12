@@ -198,3 +198,90 @@ body:has(.bottom-nav) .app-footer {
     padding-bottom: var(--space-4);
   }
 }
+
+/*
+ * Breadcrumbs (components/breadcrumbs.tsx): one trail under the staff bar. Long labels cut off with an
+ * ellipsis (the full text is the link's title). On a phone only the parent, as "Back to <parent>", and
+ * the current page stay.
+ */
+.breadcrumbs {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-text-muted);
+}
+
+.breadcrumbs li {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.breadcrumbs li + li::before {
+  content: '/';
+  margin-right: var(--space-2);
+}
+
+.breadcrumbs a,
+.breadcrumbs .crumb-link,
+.breadcrumbs [aria-current='page'] {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  max-width: 16rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.breadcrumbs a,
+.breadcrumbs .crumb-link {
+  color: var(--color-link);
+}
+
+.breadcrumbs .crumb-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.breadcrumbs [aria-current='page'] {
+  display: block;
+  line-height: var(--tap);
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+}
+
+.breadcrumbs .crumb-back {
+  display: none;
+  white-space: pre;
+}
+
+@media (max-width: 719px) {
+  .breadcrumbs li:not(.crumb-parent):not(:last-child) {
+    display: none;
+  }
+
+  .breadcrumbs li.crumb-parent .crumb-back {
+    display: inline;
+  }
+
+  .breadcrumbs a,
+  .breadcrumbs .crumb-link,
+  .breadcrumbs [aria-current='page'] {
+    max-width: 11rem;
+  }
+}

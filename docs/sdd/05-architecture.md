@@ -250,6 +250,11 @@ frontend/src/
 Each area is a lazily loaded route tree. The staff area reads the principal's permissions
 from `/me` and hides actions the user cannot take.
 
+Breadcrumbs (FR-UXN-01) are one component in `components/breadcrumbs.tsx`, drawn once by the staff layout. The trail is read
+from the router's route table: each staff route declares a `crumb` label in its static data (`app/router.tsx`), so there is no
+second map to keep; a test fails when a staff route has no label. Category grouping of item lists (FR-UXN-02) is a pure
+function and a small hook in `areas/staff/retail/category-groups.tsx`; both are frontend only.
+
 Guided tours (FR-IAM-14, ADR-025) live in `frontend/src/tour/`: `model.ts` (the step type, who sees
 a step by permission, module and feature flag, when a tour starts, the focus trap and key rules),
 `tours.ts` (the tours as data), `spotlight.tsx` (the card and the dimmed layer) and `host.tsx` (the

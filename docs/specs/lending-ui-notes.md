@@ -74,6 +74,12 @@ The loan page links to the member's savings for a session holding `lending.savin
   `value_date_closed`, `product_in_use` and others) are in plain words in `src/api/savings.ts`.
 - Deposits are dated today: once the nightly end of day has run, an earlier day is closed (ADR-032).
 
+## Breadcrumbs (issue #240, FR-UXN-01)
+
+The lending screens carry the same trail as the retail ones (Home / Lending / Savings / Account, Home / Lending /
+Investments / Member investments). The loan, investment and savings account pages name their last crumb after the
+number they have already loaded. See `docs/specs/retail-ui-notes.md`, section "Breadcrumbs and category groups".
+
 ## Deferred
 
 - Member self-service savings screens (increment 11), USSD and online payments (phase 2), transfers between accounts.

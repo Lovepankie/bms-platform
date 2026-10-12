@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, createLazyRoute, getRouteApi } from '@tanstack/react-router';
 import { useState } from 'react';
 import { lending, type Loan, type LoanSchedule, type LoanTransaction, type RepaymentResult } from '../../../api/lending';
+import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { DisburseForm, PayoffQuotePanel, RepaymentForm, RepaymentReceipt, ReverseForm, WriteOffForm } from './actions';
@@ -264,6 +265,7 @@ function LoanPage() {
     queryFn: () => lending.getMemberName(memberId ?? ''),
     enabled: !!memberId && (me.permissions ?? []).includes(MEMBERS_READ),
   });
+  useCrumbLabel(loan.data?.loan_no);
   return (
     <LendingGate title="Loan">
       <Link to="/staff/lending" className="btn btn-ghost">Back to loans</Link>

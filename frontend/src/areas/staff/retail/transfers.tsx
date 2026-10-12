@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type Transfer } from '../../../api/retail';
+import { useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { canUse } from './permissions';
 import { TransferSummary, useBranchLabel } from './transfer';
@@ -65,6 +66,7 @@ function TransferDetail({ id, onClose }: { id: string; onClose: () => void }) {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['retail'] }),
   });
   const t = transfer.data;
+  useCrumbTail(t ? `Move of ${t.transfer_date}` : undefined, onClose);
   const mayCancel = canUse(me, 'transfer') && t?.status === 'completed';
   return (
     <section>

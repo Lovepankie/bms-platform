@@ -14,7 +14,7 @@ describe('cash book routes and tiles', () => {
     const router = readFileSync(new URL('../../../app/router.tsx', import.meta.url), 'utf8');
     for (const s of SCREENS) {
       const suffix = s.path.replace('/staff/retail', '') || '/';
-      expect(router, s.path).toContain(`retailScreen('${suffix}')`);
+      expect(router, s.path).toContain(`retailScreen('${suffix}'`);
     }
   });
 

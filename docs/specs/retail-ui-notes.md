@@ -389,6 +389,50 @@ widths: see its README), and the script is not committed. Notes:
 - The savings report endpoint (`GET /retail/reports/cash/savings`) is built but has no screen; the savings
   records list covers it. CSV export of the reports waits for the report runs.
 
+## Breadcrumbs and category groups (issue #240, FR-UXN-01 and FR-UXN-02)
+
+Frontend only: no API, schema or permission change.
+
+**Breadcrumbs.** One trail under the staff bar on every staff screen, drawn once by the staff layout
+(`StaffBreadcrumbs` in `components/breadcrumbs.tsx`). It is not a second map of the app: each route in
+`app/router.tsx` has a `crumb` label in its static data (`retailScreen(path, label)`,
+`lendingScreen(path, label)`), and the trail is the labelled routes whose path is a prefix of the open one, for
+example Home / Retail / Catalogue / Items. A new route gets its place by declaring a label;
+`breadcrumbs.test.tsx` fails when a staff route has none.
+
+- A routed detail page names its crumb after the entity the screen already loads (`useCrumbLabel`: loan,
+  investment and savings account numbers) and shows the generic label while it loads. Nothing is requested for
+  the name.
+- A detail view inside a screen adds a last crumb (`useCrumbTail`): the open sale ("Sale <number>"), the open
+  stock move, the item being edited or priced, and the whole-business stock view ("By location", the stock
+  screen with All branches chosen). Where the screen can go back, its own crumb becomes the button that does.
+- Markup: `<nav aria-label="Breadcrumb">` with an `<ol>`; the last item is a `<span aria-current="page">`, not a
+  link. Labels longer than 16rem are cut with an ellipsis (the full text is the title). Below 720px the trail
+  collapses to "Back to <parent>" and the current page.
+
+**Category groups.** Stock per branch, stock across branches (table, and cards on a phone), the catalogue
+items and the shared product picker (the sale and Move stock screens) group by category
+(`retail/category-groups.tsx`). The low and out of stock lists are the same Stock screen with its level filter,
+so they group too.
+
+- A header per category (a button with `aria-expanded` and `aria-controls`) shows the count and, on the stock
+  lists, a subtotal: the quantity when every item of the group has the same unit, and what the group holds at
+  the selling price. The catalogue and the pickers show the count only. Expand all and Collapse all sit above
+  the list.
+- Categories are A to Z; items without one are in "Uncategorised", last; items keep the order the server sent.
+- Sections start open for 30 items or fewer and closed above that. A search (the stock and items search boxes,
+  the picker's) opens them, so a match inside a closed section shows. The default is decided when results first
+  arrive for a search and filters and held while more load, so "Show more items" never opens or closes a section.
+- The "Group by category" switch is remembered per screen (`stock`, `items`, `picker`) in `localStorage`, inside
+  try and catch: with storage blocked it defaults to on and is forgotten at reload. The picker shows the switch
+  only when its matches span more than one category.
+- The restock and usage screens have pickers of their own and stay flat for now.
+- Grouping is within the items the screen holds. Stock and the pickers are not paged. The catalogue items list is
+  (cursor paging): its hint says "Grouped within the items loaded so far. Show more items loads the rest."
+- Search and filters stay the screen's own (plain component state, sent to the server as before); the grouping
+  takes the already filtered items. Grouped lists drop the Category column and the per-row category label,
+  since the header says it.
+
 ## Left to do
 
 - Void a sale and pay a credit sale screens; see `docs/specs/retail-ui-parity.md`.

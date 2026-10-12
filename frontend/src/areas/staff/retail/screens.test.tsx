@@ -94,10 +94,12 @@ describe('stock screen', () => {
     expect(admin).toContain('UGX 3,500');
   });
 
-  it('shows the category of each item in a Category column', () => {
+  it('shows the category of each item in a Category column when the list is not grouped', () => {
+    vi.stubGlobal('localStorage', { getItem: () => 'off', setItem: () => undefined });
     const html = renderToString(<StockTable rows={rows.map((r) => ({ ...r, category: 'Lighting' }))} showCost={false} />);
     expect(html).toContain('<th>Category</th>');
     expect(html).toContain('<td>Lighting</td>');
+    vi.unstubAllGlobals();
   });
 
   it('offers a category select with All categories', () => {

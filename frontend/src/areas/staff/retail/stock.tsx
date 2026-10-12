@@ -3,7 +3,9 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type AllBranchesStock, type StockLevel, type StockRow } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
-import { showQty } from './maths';
+import { useCrumbTail } from '../../../components/breadcrumbs';
+import { GroupControls, GroupedBodies, GroupedCards, sameUnitQty, useCategoryGroups } from './category-groups';
+import { lineTotalMinor, milliOf, showQty } from './maths';
 import { EmptyState, SkeletonList } from '../../../components/states';
 import { BranchRequired, CategoryLabel, Gate, NoStockHere, Problem, money, useBranchView, useIsPhone, useProfitAccess } from './ui';
 import { needsOf } from './permissions';
@@ -12,36 +14,49 @@ import { needsOf } from './permissions';
 // exists only for a session holding retail.profit.read: showCost is the screen's choice and the server
 // sends no cost field to anyone else.
 
-export function StockTable({ rows, showCost }: { rows: StockRow[]; showCost: boolean }) {
+/** Search and filters of a stock list, so its groups start again when they change (category-groups.tsx). */
+type Narrowing = { searching?: boolean; filterKey?: string };
+
+/** A category group's subtotal: its quantity when the items share a unit, and what it holds at the selling price. */
+function stockSubtotal(rows: { qty?: string; unit?: string; sell_minor?: number }[]): string {
+  const value = rows.reduce((sum, r) => sum + lineTotalMinor(r.sell_minor ?? 0, milliOf(r.qty ?? '0')), 0);
+  return [sameUnitQty(rows), `${money(value)} at price`].filter(Boolean).join(', ');
+}
+
+export function StockTable({ rows, showCost, searching = false, filterKey = '' }: { rows: StockRow[]; showCost: boolean } & Narrowing) {
   // On a phone the category sits under the item's name, so the table keeps room for the quantity and price.
   const phone = useIsPhone();
+  const g = useCategoryGroups({ screen: 'stock', items: rows, categoryOf: (r) => r.category, subtotalOf: stockSubtotal, resetKey: filterKey, searching });
   if (rows.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
+  const showCategory = !g.active && phone;
+  const row = (r: StockRow) => (
+    <tr key={r.product_id}>
+      <td>{r.description}{showCategory && r.category && <><br /><CategoryLabel category={r.category} /></>}</td>
+      {!phone && !g.active && <td>{r.category}</td>}
+      <td className="num">
+        {showQty(r.qty ?? '0')} {r.unit}
+        {r.negative && <div className="rt-flag">Negative</div>}
+      </td>
+      <td className="num">{money(r.sell_minor ?? 0)}</td>
+      {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
+    </tr>
+  );
   return (
+    <>
+    <GroupControls state={g} />
     <div className="table-wrap" tabIndex={0}><table>
       <thead>
         <tr>
           <th>Item</th>
-          {!phone && <th>Category</th>}
+          {!phone && !g.active && <th>Category</th>}
           <th className="num">In stock</th>
           <th className="num">Price</th>
           {showCost && <th className="num">Cost</th>}
         </tr>
       </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.product_id}>
-            <td>{r.description}{phone && r.category && <><br /><CategoryLabel category={r.category} /></>}</td>
-            {!phone && <td>{r.category}</td>}
-            <td className="num">
-              {showQty(r.qty ?? '0')} {r.unit}
-              {r.negative && <div className="rt-flag">Negative</div>}
-            </td>
-            <td className="num">{money(r.sell_minor ?? 0)}</td>
-            {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
-          </tr>
-        ))}
-      </tbody>
+      {g.active ? <GroupedBodies state={g} colSpan={3 + (showCost ? 1 : 0)} renderRow={row} /> : <tbody>{rows.map(row)}</tbody>}
     </table></div>
+    </>
   );
 }
 
@@ -55,13 +70,30 @@ function Qty({ qty, unit, negative }: { qty: string; unit?: string; negative?: b
   );
 }
 
+/** The subtotal of a group of all-branches rows: the total quantity and what it holds at the selling price. */
+const totalsSubtotal = (rows: AllBranchesStock['items']) => stockSubtotal(rows.map((r) => ({ qty: r.total_qty, unit: r.unit, sell_minor: r.sell_minor })));
+
 const branchName = (b: { code?: string; name?: string }) => branchLabel(b);
 
 /** All branches on a wide screen: a column per branch and a total, the negative flag on each cell. */
-export function AllBranchesTable({ data, showCost: mayCost }: { data: AllBranchesStock; showCost: boolean }) {
+export function AllBranchesTable({ data, showCost: mayCost, searching = false, filterKey = '' }: { data: AllBranchesStock; showCost: boolean } & Narrowing) {
   const showCost = mayCost && data.items.some((r) => r.cost_minor !== undefined);
+  const g = useCategoryGroups({ screen: 'stock', items: data.items, categoryOf: (r) => r.category, subtotalOf: totalsSubtotal, resetKey: filterKey, searching });
   if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
+  const row = (r: AllBranchesStock['items'][number]) => (
+    <tr key={r.product_id}>
+      <td>{r.description}{!g.active && <><br /><CategoryLabel category={r.category} /></>}</td>
+      <td className="num"><strong><Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} /></strong></td>
+      {(r.balances ?? []).map((c) => (
+        <td key={c.branch_id} className="num"><Qty qty={c.qty ?? '0'} negative={c.negative} /></td>
+      ))}
+      <td className="num">{money(r.sell_minor ?? 0)}</td>
+      {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
+    </tr>
+  );
   return (
+    <>
+    <GroupControls state={g} />
     <div className="table-wrap" tabIndex={0}><table className="stock-matrix">
       <thead>
         <tr>
@@ -72,31 +104,19 @@ export function AllBranchesTable({ data, showCost: mayCost }: { data: AllBranche
           {showCost && <th className="num">Cost</th>}
         </tr>
       </thead>
-      <tbody>
-        {data.items.map((r) => (
-          <tr key={r.product_id}>
-            <td>{r.description}<br /><CategoryLabel category={r.category} /></td>
-            <td className="num"><strong><Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} /></strong></td>
-            {(r.balances ?? []).map((c) => (
-              <td key={c.branch_id} className="num"><Qty qty={c.qty ?? '0'} negative={c.negative} /></td>
-            ))}
-            <td className="num">{money(r.sell_minor ?? 0)}</td>
-            {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
-          </tr>
-        ))}
-      </tbody>
+      {g.active ? <GroupedBodies state={g} colSpan={3 + data.branches.length + (showCost ? 1 : 0)} renderRow={row} /> : <tbody>{data.items.map(row)}</tbody>}
     </table></div>
+    </>
   );
 }
 
 /** All branches on a phone: one card per product with the total, and a button that opens its branches. */
-export function AllBranchesList({ data, showCost }: { data: AllBranchesStock; showCost: boolean }) {
+export function AllBranchesList({ data, showCost, searching = false, filterKey = '' }: { data: AllBranchesStock; showCost: boolean } & Narrowing) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const g = useCategoryGroups({ screen: 'stock', items: data.items, categoryOf: (r) => r.category, subtotalOf: totalsSubtotal, resetKey: filterKey, searching });
   if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
   const names = Object.fromEntries(data.branches.map((b) => [b.id ?? '', branchName(b)]));
-  return (
-    <ul style={{ listStyle: 'none', padding: 0 }}>
-      {data.items.map((r) => {
+  const card = (r: AllBranchesStock['items'][number]) => {
         const id = r.product_id ?? '';
         const expanded = open[id] === true;
         return (
@@ -104,8 +124,7 @@ export function AllBranchesList({ data, showCost }: { data: AllBranchesStock; sh
             <div className="rt-row">
               <span>
                 <strong>{r.description}</strong>
-                <br />
-                <CategoryLabel category={r.category} />
+                {!g.active && <><br /><CategoryLabel category={r.category} /></>}
               </span>
               <span className="num"><strong>Total <Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} /></strong></span>
             </div>
@@ -125,8 +144,12 @@ export function AllBranchesList({ data, showCost }: { data: AllBranchesStock; sh
             )}
           </li>
         );
-      })}
-    </ul>
+  };
+  return (
+    <>
+      <GroupControls state={g} />
+      {g.active ? <GroupedCards state={g} renderItem={card} /> : <ul style={{ listStyle: 'none', padding: 0 }}>{data.items.map(card)}</ul>}
+    </>
   );
 }
 
@@ -173,6 +196,9 @@ export function StockPage() {
     enabled: all,
   });
   const result = all ? many : one;
+  // The whole-business view is the stock "by location": a last crumb says so (components/breadcrumbs.tsx).
+  useCrumbTail(all ? 'By location' : undefined);
+  const narrowing = { searching: query.trim() !== '', filterKey: [all ? 'all' : branchId, query, categoryId, negativeOnly, level].join('|') };
   return (
     <Gate screen="stock" title="Stock">
       <p className="branch-line">Branch: <strong>{all ? 'All branches' : name}</strong></p>
@@ -196,8 +222,8 @@ export function StockPage() {
       {!all && branchId === null && <BranchRequired permissions={needsOf('stock')} />}
       {result.isPending && (all || branchId !== null) && <SkeletonList label="Loading stock" />}
       <Problem error={result.error} />
-      {!all && one.data && <StockTable rows={one.data} showCost={canProfit} />}
-      {all && many.data && (phone ? <AllBranchesList data={many.data} showCost={canProfit} /> : <AllBranchesTable data={many.data} showCost={canProfit} />)}
+      {!all && one.data && <StockTable rows={one.data} showCost={canProfit} {...narrowing} />}
+      {all && many.data && (phone ? <AllBranchesList data={many.data} showCost={canProfit} {...narrowing} /> : <AllBranchesTable data={many.data} showCost={canProfit} {...narrowing} />)}
     </Gate>
   );
 }

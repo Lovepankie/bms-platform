@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { businessToday, daysBefore, retail, type Sale, type SalePayment, type SalesQuery } from '../../../api/retail';
+import { useCrumbTail } from '../../../components/breadcrumbs';
 import { showQty } from './maths';
 import { showDate } from './transfers';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone, useProfitAccess } from './ui';
@@ -128,6 +129,7 @@ export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: str
 function OpenSale({ id, onClose }: { id: string; onClose: () => void }) {
   const nameOf = useBranchName();
   const sale = useQuery({ queryKey: ['retail', 'sale', id], queryFn: () => retail.getSale(id) });
+  useCrumbTail(sale.data?.sale_no ? `Sale ${sale.data.sale_no}` : undefined, onClose);
   return (
     <>
       <button type="button" onClick={onClose}>Back to the list</button>

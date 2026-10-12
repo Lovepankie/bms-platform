@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, createLazyRoute, getRouteApi } from '@tanstack/react-router';
 import { useState } from 'react';
 import { savings, type SavingsAccount, type SavingsTransaction } from '../../../api/savings';
+import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { methodWords, money, words } from './loan-state';
@@ -180,6 +181,7 @@ const route = getRouteApi('/staff/lending/savings/accounts/$accountId');
 function AccountPage() {
   const { accountId } = route.useParams();
   const account = useQuery({ queryKey: ['savings', 'account', accountId], queryFn: () => savings.getAccount(accountId) });
+  useCrumbLabel(account.data?.account_no);
   return (
     <SavingsGate title="Savings account">
       <Link to="/staff/lending/savings" className="btn btn-ghost">Back to savings</Link>

@@ -5,6 +5,7 @@ import { api, fetchMe, fetchSettings, type Me } from '../../api/client';
 import { loadRetailMock, retailMockEnabled } from '../../api/retail';
 import { getAccessToken, refreshSession, setAccessToken, subscribe } from '../../auth/session';
 import { HelpMenu, TourProvider } from '../../tour/host';
+import { CrumbProvider, StaffBreadcrumbs } from '../../components/breadcrumbs';
 import { icons } from '../../components/icons';
 import { BrandLoader } from '../../components/states';
 import { BranchPicker, useActiveBranch } from './branch-picker';
@@ -76,6 +77,7 @@ function StaffLayout() {
   return (
     <StaffContext.Provider value={{ me: profile, branch, chooseBranch: choose }}>
       <TourProvider me={profile} saveProgress={!mock}>
+        <CrumbProvider>
         <StaffBar me={profile} branch={branch} onBranch={choose} onSignOut={() => void signOut()} />
         {profile.mfa_enabled && recoveryCodesLeft <= 2 && (
           <p role="status" className="alert alert-warning">
@@ -83,7 +85,9 @@ function StaffLayout() {
           </p>
         )}
         {pathname.startsWith('/staff/retail') && showRetail(profile) && <RetailNav me={profile} />}
+        <StaffBreadcrumbs />
         <Outlet />
+        </CrumbProvider>
       </TourProvider>
     </StaffContext.Provider>
   );

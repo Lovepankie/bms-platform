@@ -364,3 +364,98 @@
 .rt-row + .rt-total {
   margin-top: var(--space-4);
 }
+
+/*
+ * Item lists grouped by category (retail/category-groups.tsx): the switch and Expand all / Collapse all
+ * above the list, then one section per category whose header is a full-width button with the name on
+ * the left and the count and subtotal on the right (under the name on a phone). The caret turns with
+ * aria-expanded. A fixed header height keeps the list from shifting when "Show more" adds items.
+ */
+.cat-controls {
+  margin: var(--space-2) 0;
+}
+
+.cat-controls .cat-switch {
+  margin: 0;
+}
+
+.cat-group {
+  margin: 0;
+}
+
+.cat-title {
+  margin: 0;
+  font-size: inherit;
+}
+
+.cat-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 var(--space-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  border-radius: 0;
+  border-width: 0 0 1px;
+  background: var(--color-surface-muted);
+  text-align: left;
+  font-weight: var(--weight-semibold);
+}
+
+.cat-head::before {
+  content: '';
+  flex: none;
+  width: 0;
+  height: 0;
+  border: 5px solid transparent;
+  border-left-color: var(--color-text-muted);
+  border-right-width: 0;
+  transition: transform 120ms ease;
+}
+
+.cat-head[aria-expanded='true']::before {
+  transform: rotate(90deg);
+}
+
+.cat-name {
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cat-meta {
+  flex: 0 1 auto;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  text-align: right;
+}
+
+th[scope='rowgroup'] {
+  padding: 0;
+  background: var(--color-surface-muted);
+}
+
+th[scope='rowgroup'] .cat-head {
+  border-width: 0;
+}
+
+.cat-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+@media (max-width: 719px) {
+  .cat-meta {
+    flex-basis: 100%;
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cat-head::before {
+    transition: none;
+  }
+}

@@ -6,6 +6,7 @@ import { ALL_BRANCHES, branchLabel } from '../../../auth/branch';
 import { formatMinor } from '../../../components/money';
 import { useStockedBranches } from '../branch-picker';
 import { useStaff } from '../context';
+import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { showQty } from './maths';
 import { BRANCH_ROLES, branchesWhere, canSeeProfit, canUse, capabilityOn, sellingBranches, type RetailScreen } from './permissions';
 
@@ -259,31 +260,34 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false }: {
     queryKey: ['retail', 'products', branchId, search],
     queryFn: () => retail.listProducts({ query: search, branchId }),
   });
+  // The first 20 matches, in category groups when there is more than one category (category-groups.tsx).
+  const shown = (products.data ?? []).slice(0, 20);
+  const g = useCategoryGroups({ screen: 'picker', items: shown, categoryOf: (p) => p.category, resetKey: `${branchId}|${search}`, searching: search.trim() !== '', minGroups: 2 });
+  const card = (p: Product) => (
+    <li key={p.id} className="rt-card">
+      <div className="rt-row">
+        <span>
+          <strong>{p.description}</strong> ({p.code})
+          <br />
+          {!g.active && <CategoryLabel category={p.category} />}
+          {!g.active && p.category && <br />}
+          {showPrice && `${money(p.sell_minor ?? 0)} each, `}in stock here:{' '}
+          {p.qty !== undefined && p.qty.startsWith('-') ? <span className="rt-flag">{showQty(p.qty)} (negative)</span> : showQty(p.qty ?? '0')}{' '}
+          {p.unit}
+        </span>
+        <button type="button" onClick={() => onAdd(p)} aria-label={`Add ${p.description}`}>
+          Add
+        </button>
+      </div>
+    </li>
+  );
   return (
     <>
       <label htmlFor={id}>Find an item by name, code or category</label>
       <input id={id} type="search" value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
       {products.isError && <Problem error={products.error} />}
-      <ul style={{ listStyle: 'none', padding: 0, maxHeight: 220, overflowY: 'auto' }}>
-        {(products.data ?? []).slice(0, 20).map((p) => (
-          <li key={p.id} className="rt-card">
-            <div className="rt-row">
-              <span>
-                <strong>{p.description}</strong> ({p.code})
-                <br />
-                <CategoryLabel category={p.category} />
-                {p.category && <br />}
-                {showPrice && `${money(p.sell_minor ?? 0)} each, `}in stock here:{' '}
-                {p.qty !== undefined && p.qty.startsWith('-') ? <span className="rt-flag">{showQty(p.qty)} (negative)</span> : showQty(p.qty ?? '0')}{' '}
-                {p.unit}
-              </span>
-              <button type="button" onClick={() => onAdd(p)} aria-label={`Add ${p.description}`}>
-                Add
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {shown.length > 0 && <GroupControls state={g} />}
+      {g.active ? <GroupedCards state={g} renderItem={card} scroll /> : <ul style={{ listStyle: 'none', padding: 0, maxHeight: 220, overflowY: 'auto' }}>{shown.map(card)}</ul>}
     </>
   );
 }
