@@ -2512,6 +2512,41 @@ export interface paths {
         patch: operations["updateRetailCategory"];
         trace?: never;
     };
+    "/api/v1/retail/customer-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The customer groups (issue #195) */
+        get: operations["listRetailCustomerGroups"];
+        put?: never;
+        /** Create a customer group (issue #195) */
+        post: operations["createRetailCustomerGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/customer-groups/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace a group's name, list and switch under If-Match; never deleted (issue #195) */
+        put: operations["updateRetailCustomerGroup"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/customers": {
         parameters: {
             query?: never;
@@ -2557,6 +2592,23 @@ export interface paths {
         /** What a credit buyer owes (FR-RET-05) */
         get: operations["getRetailCustomerBalance"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/customers/{customer_id}/pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set a credit buyer's customer group and own price list under If-Match (issue #195) */
+        put: operations["setRetailCustomerPricing"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2662,6 +2714,94 @@ export interface paths {
         put?: never;
         /** Void an expense (FR-RET-28); M */
         post: operations["voidRetailExpense"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/price-lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The price lists (issue #195) */
+        get: operations["listRetailPriceLists"];
+        put?: never;
+        /** Create a price list (issue #195) */
+        post: operations["createRetailPriceList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/price-lists/{price_list_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A price list */
+        get: operations["getRetailPriceList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename, make strict or switch a list off under If-Match; never deleted (issue #195) */
+        patch: operations["updateRetailPriceList"];
+        trace?: never;
+    };
+    "/api/v1/retail/price-lists/{price_list_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The items of a list, by product; ended items only with include_ended (issue #195) */
+        get: operations["listRetailPriceListItems"];
+        put?: never;
+        /** Add a price: a product in a unit from a quantity and a date; an open ended one replaces the current one from its first day (issue #195) */
+        post: operations["createRetailPriceListItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/price-lists/{price_list_id}/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** End an open price on a day: the only change an item takes (issue #195) */
+        patch: operations["endRetailPriceListItem"];
+        trace?: never;
+    };
+    "/api/v1/retail/prices/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The price and its source for each line of a sale, as the sale would take them; never the cost (issue #195) */
+        post: operations["resolveRetailPrices"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6349,9 +6489,19 @@ export interface components {
             contact?: string;
             /** Format: date-time */
             created_at?: string;
+            /**
+             * Format: uuid
+             * @description The customer group; present only while the price_lists capability is on
+             */
+            customer_group_id?: string;
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: uuid
+             * @description The customer's own price list; present only while the price_lists capability is on
+             */
+            price_list_id?: string;
             /**
              * Format: int32
              * @description Send as If-Match when updating
@@ -6367,9 +6517,53 @@ export interface components {
             customer_id?: string;
             open_sales?: components["schemas"]["RetailOpenSale"][];
         };
+        RetailCustomerGroup: {
+            active?: boolean;
+            /**
+             * Format: int32
+             * @description Customers in the group
+             */
+            customer_count?: number;
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            price_list?: string;
+            /** Format: uuid */
+            price_list_id?: string;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
+        };
+        RetailCustomerGroupList: {
+            items?: components["schemas"]["RetailCustomerGroup"][];
+        };
+        RetailCustomerGroupRequest: {
+            name: string;
+            /**
+             * Format: uuid
+             * @description The list every customer of the group is priced from, unless the customer has their own
+             */
+            price_list_id?: string;
+        };
+        /** @description Replaces the group's fields; an absent price_list_id clears the list. Never deleted */
+        RetailCustomerGroupUpdate: {
+            active: boolean;
+            name: string;
+            /** Format: uuid */
+            price_list_id?: string;
+        };
         RetailCustomerList: {
             items?: components["schemas"]["RetailCustomer"][];
             next_cursor?: string;
+        };
+        /** @description Replaces the customer's group and own price list; an absent field clears it (price_lists capability) */
+        RetailCustomerPricing: {
+            /** Format: uuid */
+            customer_group_id?: string;
+            /** Format: uuid */
+            price_list_id?: string;
         };
         RetailCustomerRequest: {
             contact?: string;
@@ -7169,6 +7363,159 @@ export interface components {
         RetailPriceHistory: {
             items?: components["schemas"]["RetailPriceChange"][];
         };
+        RetailPriceList: {
+            active?: boolean;
+            currency?: string;
+            /**
+             * Format: int32
+             * @description Items that apply today or later
+             */
+            current_items?: number;
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            strict?: boolean;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating
+             */
+            version?: number;
+        };
+        RetailPriceListItem: {
+            /** @description Present only with retail.profit.read */
+            below_cost?: boolean;
+            code?: string;
+            description?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @description Three places, for example 10.000 */
+            min_qty?: string;
+            /** Format: uuid */
+            price_list_id?: string;
+            /** Format: int64 */
+            price_minor?: number;
+            /** Format: uuid */
+            product_id?: string;
+            /** @description scheduled (starts later), current, or ended */
+            status?: string;
+            unit?: string;
+            /** Format: uuid */
+            unit_id?: string;
+            /** Format: date */
+            valid_from?: string;
+            /** Format: date */
+            valid_to?: string;
+        };
+        /** @description Ends an open item: it applies up to and including valid_to */
+        RetailPriceListItemEnd: {
+            /** Format: date */
+            valid_to: string;
+        };
+        RetailPriceListItemPage: {
+            items?: components["schemas"]["RetailPriceListItem"][];
+            next_cursor?: string;
+        };
+        RetailPriceListItemRequest: {
+            /** @description The quantity break, in unit_id; absent or 0 means from any quantity */
+            min_qty?: string;
+            /**
+             * Format: int64
+             * @description Per unit_id, in minor units
+             */
+            price_minor: number;
+            /** Format: uuid */
+            product_id: string;
+            /**
+             * Format: uuid
+             * @description The product's base unit or one of its active packs
+             */
+            unit_id: string;
+            /**
+             * Format: date
+             * @description The first day it applies; defaults to today and is never in the past
+             */
+            valid_from?: string;
+            /**
+             * Format: date
+             * @description The last day it applies; absent means open ended
+             */
+            valid_to?: string;
+        };
+        RetailPriceListList: {
+            items?: components["schemas"]["RetailPriceList"][];
+        };
+        RetailPriceListRequest: {
+            name: string;
+            /** @description Refuse a product that is not in the list instead of using the retail price */
+            strict?: boolean;
+        };
+        /** @description Omitted fields are unchanged; a list is never deleted */
+        RetailPriceListUpdate: {
+            active?: boolean;
+            name?: string;
+            strict?: boolean;
+        };
+        /** @description Price and source per line; never the cost */
+        RetailPriceResolution: {
+            lines?: components["schemas"]["RetailPriceResolveLine"][];
+            /** @description Why this list: request, customer or customer_group */
+            origin?: string;
+            price_list?: string;
+            /** Format: uuid */
+            price_list_id?: string;
+        };
+        RetailPriceResolveLine: {
+            break_min_qty?: string;
+            /** Format: int64 */
+            line_total_minor?: number;
+            /** Format: uuid */
+            price_list_id?: string;
+            /** @description retail or list */
+            price_source?: string;
+            /** @description no_price_in_list when a strict list has no price for the line; the sale would be refused */
+            problem?: string;
+            /** Format: uuid */
+            product_id?: string;
+            qty?: string;
+            /** Format: uuid */
+            unit_id?: string;
+            /**
+             * Format: int64
+             * @description Per unit_id, or per base unit when none
+             */
+            unit_price_minor?: number;
+        };
+        RetailPriceResolveLineRequest: {
+            /** Format: uuid */
+            product_id: string;
+            /** @example 2.5 */
+            qty: string;
+            /**
+             * Format: uuid
+             * @description A pack unit of the product; absent or the base unit means the base unit
+             */
+            unit_id?: string;
+        };
+        RetailPriceResolveRequest: {
+            /**
+             * Format: uuid
+             * @description Defaults to the caller's one branch
+             */
+            branch_id?: string;
+            /** Format: uuid */
+            customer_id?: string;
+            lines: components["schemas"]["RetailPriceResolveLineRequest"][];
+            /**
+             * Format: uuid
+             * @description As on a sale: needs retail.pricelist.use unless it is the customer's own or group's list
+             */
+            price_list_id?: string;
+            /**
+             * Format: date
+             * @description Defaults to today; not in the future
+             */
+            sale_date?: string;
+        };
         RetailProduct: {
             active?: boolean;
             category?: string;
@@ -7416,6 +7763,12 @@ export interface components {
             /** Format: int64 */
             paid_minor?: number;
             payment_method?: string;
+            price_list?: string;
+            /**
+             * Format: uuid
+             * @description The price list the sale was priced from, when one applied
+             */
+            price_list_id?: string;
             /**
              * Format: int64
              * @description Present only with retail.profit.read
@@ -7449,6 +7802,7 @@ export interface components {
             line_no?: number;
             /** Format: int64 */
             line_total_minor?: number;
+            price?: components["schemas"]["RetailSaleLinePrice"];
             /** Format: uuid */
             product_id?: string;
             /** @description In base units, always */
@@ -7479,7 +7833,25 @@ export interface components {
              */
             unit_price_minor?: number;
         };
+        /** @description How the price of a line was chosen; absent on a line made without the price_lists capability */
+        RetailSaleLinePrice: {
+            /** @description The quantity break of the list item that applied, in the sale unit */
+            break_min_qty?: string;
+            override_reason?: string;
+            price_list?: string;
+            /** Format: uuid */
+            price_list_id?: string;
+            /**
+             * Format: int64
+             * @description What the system resolved, per sale unit (per base unit when no pack), before any override
+             */
+            resolved_unit_price_minor?: number;
+            /** @description retail (the product's sell price), list (a price list item) or override (the seller's price instead of the resolved one) */
+            source?: string;
+        };
         RetailSaleLineRequest: {
+            /** @description Why the unit price differs from the price the price list resolved; required for such a price (retail.price.override) while the price_lists capability is on, ignored otherwise */
+            price_override_reason?: string;
             /** Format: uuid */
             product_id: string;
             /** @example 2.5 */
@@ -7516,6 +7888,11 @@ export interface components {
             due_date?: string;
             lines: components["schemas"]["RetailSaleLineRequest"][];
             payment_method: string;
+            /**
+             * Format: uuid
+             * @description Price the sale from this list instead of the customer's own or the customer group's; needs retail.pricelist.use unless it is one of those (price_lists capability)
+             */
+            price_list_id?: string;
             /**
              * Format: date
              * @description Defaults to today; not in the future
@@ -13295,6 +13672,78 @@ export interface operations {
             };
         };
     };
+    listRetailCustomerGroups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomerGroupList"];
+                };
+            };
+        };
+    };
+    createRetailCustomerGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCustomerGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomerGroup"];
+                };
+            };
+        };
+    };
+    updateRetailCustomerGroup: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCustomerGroupUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomerGroup"];
+                };
+            };
+        };
+    };
     listRetailCustomers: {
         parameters: {
             query?: {
@@ -13389,6 +13838,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailCustomerBalance"];
+                };
+            };
+        };
+    };
+    setRetailCustomerPricing: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCustomerPricing"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomer"];
                 };
             };
         };
@@ -13601,6 +14078,205 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailExpense"];
+                };
+            };
+        };
+    };
+    listRetailPriceLists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPriceListList"];
+                };
+            };
+        };
+    };
+    createRetailPriceList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPriceListRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPriceList"];
+                };
+            };
+        };
+    };
+    getRetailPriceList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                price_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPriceList"];
+                };
+            };
+        };
+    };
+    updateRetailPriceList: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                price_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPriceListUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPriceList"];
+                };
+            };
+        };
+    };
+    listRetailPriceListItems: {
+        parameters: {
+            query?: {
+                product_id?: string;
+                query?: string;
+                include_ended?: boolean;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                price_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPriceListItemPage"];
+                };
+            };
+        };
+    };
+    createRetailPriceListItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                price_list_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPriceListItemRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPriceListItem"];
+                };
+            };
+        };
+    };
+    endRetailPriceListItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                price_list_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPriceListItemEnd"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPriceListItem"];
+                };
+            };
+        };
+    };
+    resolveRetailPrices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPriceResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPriceResolution"];
                 };
             };
         };

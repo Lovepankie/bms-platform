@@ -361,6 +361,20 @@ class RlsIsolationIT {
                         SELECT gen_random_uuid(), ?, (SELECT id FROM retail_products WHERE tenant_id = ? LIMIT 1), u.id, 12
                           FROM u
                         """).params(t.tenantId(), t.tenantId(), t.tenantId()).update();
+        // Retail price lists, their items and customer groups (ADR-033, #195).
+        // JUSTIFICATION-A3: a fixture row for each new table; the isolation test needs one row per tenant table.
+        owner.sql("""
+                        WITH l AS (INSERT INTO retail_price_lists (id, tenant_id, name, currency)
+                                   VALUES (gen_random_uuid(), ?, 'rls-wholesale', 'UGX') RETURNING id),
+                             g AS (INSERT INTO retail_customer_groups (id, tenant_id, name, price_list_id)
+                                   SELECT gen_random_uuid(), ?, 'rls-group', l.id FROM l RETURNING id)
+                        INSERT INTO retail_price_list_items (id, tenant_id, price_list_id, product_id, unit_id, min_qty,
+                                                             price_minor, valid_from)
+                        SELECT gen_random_uuid(), ?, l.id, p.id, p.unit_id, 0, 90, DATE '2026-01-15'
+                          FROM l, (SELECT id, unit_id FROM retail_products WHERE tenant_id = ? LIMIT 1) p
+                        """)
+                .params(t.tenantId(), t.tenantId(), t.tenantId(), t.tenantId())
+                .update();
         // Loan servicing (increment 5, #108): a schedule item, a repayment on the fixture journal, its allocation.
         UUID item = UUID.randomUUID();
         owner.sql("""

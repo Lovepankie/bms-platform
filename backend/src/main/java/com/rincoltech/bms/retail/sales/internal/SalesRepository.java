@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.sales.internal;
 
 import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Customer;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.LinePrice;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.OpenSale;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Payment;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Sale;
@@ -31,7 +32,8 @@ class SalesRepository {
     private static final String SELECT_SALE = """
             SELECT id, sale_no, branch_id, sale_date, payment_method, customer_id, buyer_name, buyer_contact,
                    due_date, status, currency, total_minor, paid_minor, cost_total_minor, historical, created_at,
-                   created_by, voided_at, voided_by, void_reason, version, sale_entry_id, cost_entry_id
+                   created_by, voided_at, voided_by, void_reason, version, sale_entry_id, cost_entry_id, price_list_id,
+                   (SELECT l.name FROM retail_price_lists l WHERE l.id = retail_sales.price_list_id) AS price_list
               FROM retail_sales
             """;
 
@@ -60,7 +62,19 @@ class SalesRepository {
             UUID saleUnitId,
             BigDecimal saleQty,
             Long saleUnitPriceMinor,
-            BigDecimal unitFactor) {}
+            BigDecimal unitFactor,
+            LinePricing pricing) {}
+
+    /** How the price of a line was chosen (price_lists capability); null on a line made without it. */
+    record LinePricing(
+            String source,
+            UUID priceListId,
+            BigDecimal breakMinQty,
+            long resolvedUnitPriceMinor,
+            String overrideReason) {}
+
+    /** The group and the own price list of a credit buyer. */
+    record CustomerPricing(UUID customerGroupId, UUID priceListId) {}
 
     // ---- Sales ---------------------------------------------------------------------------
 
@@ -159,9 +173,9 @@ class SalesRepository {
         jdbc.sql("""
                         INSERT INTO retail_sales (id, tenant_id, branch_id, sale_no, sale_date, payment_method, customer_id,
                             buyer_name, buyer_contact, due_date, currency, total_minor, cost_total_minor, paid_minor, status,
-                            created_by)
+                            created_by, price_list_id)
                         VALUES (:id, current_setting('app.tenant_id')::uuid, :branch, :no, :date, :method, :customer,
-                            :buyerName, :buyerContact, :due, :currency, :total, :cost, :paid, 'completed', :by)
+                            :buyerName, :buyerContact, :due, :currency, :total, :cost, :paid, 'completed', :by, :priceList)
                         """)
                 .param("id", s.id())
                 .param("branch", s.branchId())
@@ -177,6 +191,7 @@ class SalesRepository {
                 .param("cost", s.costTotalMinor())
                 .param("paid", s.paidMinor())
                 .param("by", s.createdBy())
+                .param("priceList", s.priceListId())
                 .update();
     }
 
@@ -184,8 +199,9 @@ class SalesRepository {
         jdbc.sql("""
                         INSERT INTO retail_sale_lines (id, tenant_id, sale_id, line_no, product_id, qty, unit_price_minor,
                             unit_cost_minor, line_total_minor, line_cost_minor, sale_unit_id, sale_qty,
-                            sale_unit_price_minor, unit_factor)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            sale_unit_price_minor, unit_factor, price_source, price_list_id, price_break_min_qty,
+                            resolved_unit_price_minor, price_override_reason)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """)
                 .params(
                         l.id(),
@@ -200,7 +216,12 @@ class SalesRepository {
                         l.saleUnitId(),
                         l.saleQty(),
                         l.saleUnitPriceMinor(),
-                        l.unitFactor())
+                        l.unitFactor(),
+                        l.pricing() == null ? null : l.pricing().source(),
+                        l.pricing() == null ? null : l.pricing().priceListId(),
+                        l.pricing() == null ? null : l.pricing().breakMinQty(),
+                        l.pricing() == null ? null : l.pricing().resolvedUnitPriceMinor(),
+                        l.pricing() == null ? null : l.pricing().overrideReason())
                 .update();
     }
 
@@ -231,9 +252,12 @@ class SalesRepository {
         jdbc.sql("""
                         SELECT l.sale_id, l.id, l.line_no, l.product_id, p.code, p.description, l.qty, l.unit_price_minor,
                                l.line_total_minor, l.unit_cost_minor, l.line_cost_minor, l.sale_unit_id, su.name AS sale_unit,
-                               l.sale_qty, l.sale_unit_price_minor, l.unit_factor
+                               l.sale_qty, l.sale_unit_price_minor, l.unit_factor, l.price_source, l.price_list_id,
+                               pl.name AS price_list, l.price_break_min_qty, l.resolved_unit_price_minor,
+                               l.price_override_reason
                           FROM retail_sale_lines l JOIN retail_products p ON p.id = l.product_id
                           LEFT JOIN retail_units su ON su.id = l.sale_unit_id
+                          LEFT JOIN retail_price_lists pl ON pl.id = l.price_list_id
                          WHERE l.sale_id IN (:ids) ORDER BY l.sale_id, l.line_no
                         """).param("ids", sales.stream().map(Sale::id).toList()).query(rs -> {
             bySale.computeIfAbsent(rs.getObject("sale_id", UUID.class), k -> new ArrayList<>())
@@ -256,7 +280,18 @@ class SalesRepository {
                             rs.getObject("sale_unit_price_minor", Long.class),
                             rs.getBigDecimal("unit_factor") == null
                                     ? null
-                                    : Quantities.format(rs.getBigDecimal("unit_factor"))));
+                                    : Quantities.format(rs.getBigDecimal("unit_factor")),
+                            rs.getString("price_source") == null
+                                    ? null
+                                    : new LinePrice(
+                                            rs.getString("price_source"),
+                                            rs.getObject("price_list_id", UUID.class),
+                                            rs.getString("price_list"),
+                                            rs.getBigDecimal("price_break_min_qty") == null
+                                                    ? null
+                                                    : Quantities.format(rs.getBigDecimal("price_break_min_qty")),
+                                            rs.getLong("resolved_unit_price_minor"),
+                                            rs.getString("price_override_reason"))));
         });
         return sales.stream()
                 .map(s -> withLines(s, bySale.getOrDefault(s.id(), new ArrayList<>())))
@@ -281,6 +316,8 @@ class SalesRepository {
                 s.balanceMinor(),
                 s.costTotalMinor(),
                 s.profitMinor(),
+                s.priceListId(),
+                s.priceList(),
                 lines,
                 s.historical(),
                 s.createdAt(),
@@ -314,6 +351,8 @@ class SalesRepository {
                 voided ? 0 : total - paid,
                 cost,
                 total - cost,
+                rs.getObject("price_list_id", UUID.class),
+                rs.getString("price_list"),
                 List.of(),
                 rs.getBoolean("historical"),
                 instant(rs, "created_at"),
@@ -380,7 +419,8 @@ class SalesRepository {
     }
 
     Optional<Customer> customer(UUID id) {
-        return jdbc.sql("SELECT id, name, contact, created_at, version FROM retail_customers WHERE id = ?")
+        return jdbc.sql(
+                        "SELECT id, name, contact, created_at, version, customer_group_id, price_list_id FROM retail_customers WHERE id = ?")
                 .param(id)
                 .query(SalesRepository::customer)
                 .optional();
@@ -391,6 +431,17 @@ class SalesRepository {
         return jdbc.sql(
                         "UPDATE retail_customers SET name = ?, contact = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
                 .params(name, contact, id, expectedVersion)
+                .update();
+    }
+
+    /** Rows changed: 0 when the version moved since it was read. */
+    int updateCustomerPricing(UUID id, UUID customerGroupId, UUID priceListId, int expectedVersion) {
+        return jdbc.sql("""
+                        UPDATE retail_customers SET customer_group_id = ?, price_list_id = ?, updated_at = now(),
+                               version = version + 1
+                         WHERE id = ? AND version = ?
+                        """)
+                .params(customerGroupId, priceListId, id, expectedVersion)
                 .update();
     }
 
@@ -431,7 +482,8 @@ class SalesRepository {
         Search.Match match = query == null ? null : query.match(CUSTOMER_SEARCH);
         Map<String, Object> params = new LinkedHashMap<>();
         StringBuilder sql = new StringBuilder("""
-                SELECT c.id, c.name, c.contact, c.created_at, c.version, lower(c.name) AS sort_key,
+                SELECT c.id, c.name, c.contact, c.created_at, c.version, c.customer_group_id, c.price_list_id,
+                       lower(c.name) AS sort_key,
                        (SELECT coalesce(sum(s.total_minor - s.paid_minor), 0) FROM retail_sales s
                          WHERE s.customer_id = c.id AND s.payment_method = 'credit' AND s.status = 'completed'
                            AND s.paid_minor < s.total_minor""");
@@ -476,6 +528,8 @@ class SalesRepository {
                                 rs.getString("contact"),
                                 instant(rs, "created_at"),
                                 rs.getLong("owed"),
+                                rs.getObject("customer_group_id", UUID.class),
+                                rs.getObject("price_list_id", UUID.class),
                                 rs.getInt("version")),
                         rs.getString("sort_key"),
                         match == null ? 0 : rs.getInt("search_rank")))
@@ -521,6 +575,8 @@ class SalesRepository {
                 rs.getString("contact"),
                 instant(rs, "created_at"),
                 null,
+                rs.getObject("customer_group_id", UUID.class),
+                rs.getObject("price_list_id", UUID.class),
                 rs.getInt("version"));
     }
 

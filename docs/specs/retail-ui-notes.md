@@ -495,6 +495,25 @@ one pack), change the number, switch a pack off. The unit choice on the sale scr
 whoever manages the catalogue (`capability-units`: an introduction and the Catalogue tile); `units` is marked ready in `capabilities-state.ts`.
 It adds no routes, so there is no new breadcrumb: the item screen already adds the item's name as its last crumb.
 
+## Price lists (#195, ADR-033)
+
+Two screens exist while `/me` lists `price_lists` and the user holds `retail.pricelist.manage` (and, for the first, `retail.stock.read`):
+**Price lists** (`/staff/retail/price-lists`, crumb "Price lists") and **Customer groups** (`/staff/retail/customer-groups`, crumb "Customer groups"); both are
+in `SCREEN_CAPABILITY`, so they are offered nowhere while the feature is off and a seller never sees them. Price lists: a card per list (rename, make strict, switch
+off, never delete) and Prices, which opens the list's items with the usual search (`type="search"`, the debounced query of the other lists), "Show ended prices" and
+Show more. Add a price finds an item with the product search, then the unit (its base unit or an active pack), the quantity break ("leave empty for any quantity"), the
+price, the first day (today or later) and the optional last day; a price not above cost is flagged before saving, but only for a session that holds `retail.profit.read`.
+A price is never edited: an open price is ended ("End" sets today as its last day), and a new open ended price takes over from the current one on its first day. The Credit
+buyers screen shows each buyer's group and own list and, for `retail.pricelist.manage`, a Change prices form; the buyer's own list wins over the group's.
+
+On the sale screen, while the feature is on, a customer can be named on any sale ("Customer (optional): sets the price list"); the form asks `POST /retail/prices/resolve`
+for the lines (debounced) and shows the resolved price with its note ("Price list Wholesale, from 10", "Retail price") under each line (`data-tour="sale-price-source"`), the list
+in force for the sale (`sale-price-list`) and, for a user holding `retail.pricelist.use`, a choice of another list. A user without `retail.price.override` sees the price
+read only and a sentence saying so; with it, typing another price shows the old one, asks for a reason of at least five characters and offers "Use the list price". Save waits
+for the resolution and is refused for a line a strict list has no price for. The receipt and All sales show each line's note and, for a changed price, the old price and the
+reason (`units-state.ts` and `price-state.ts` hold the pure rules). With the feature off none of this is drawn and the form is exactly what it was. `price_lists` is marked
+ready in `capabilities-state.ts` with its tour (`capability-price-lists`: an introduction, the Price lists tile, the lists) and a Help page tour (`page-price-lists`).
+
 ## Left to do
 
 - Void a sale and pay a credit sale screens; see `docs/specs/retail-ui-parity.md`.

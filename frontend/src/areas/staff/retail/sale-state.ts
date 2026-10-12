@@ -1,6 +1,7 @@
-import { RETAIL_CURRENCY, type Product, type SalePayment, type SaleRequest } from '../../../api/retail';
+import { RETAIL_CURRENCY, type Product, type ResolvedLine, type ResolveRequest, type SalePayment, type SaleRequest } from '../../../api/retail';
 import { parseMinor } from '../../../components/money';
 import { lineTotalMinor, milliOf, parseQty, qtyString, showQty } from './maths';
+import { hasNoPrice, isOverride, reasonOk } from './price-state';
 import { baseQtyMilli, chosenPack, lineCostMinor, packPriceMinor } from './units-state';
 
 // The sale form's pure logic: the running total, the early hints and the request it submits. The
@@ -16,6 +17,10 @@ export interface DraftLine {
   price: string;
   /** A pack unit of the product (ADR-033, units capability); absent means the base unit. */
   unitId?: string;
+  /** The seller typed the price (price lists on): it is kept whatever the list says, and is an override when it differs. */
+  typed?: boolean;
+  /** Why the typed price differs from the resolved one; required then. */
+  reason?: string;
 }
 
 /** The price the server defaults to for the line's unit: the sell price, times the factor for a pack. */
@@ -27,7 +32,7 @@ export function defaultPrice(product: Product, unitId: string | undefined): numb
 /** The line in another unit: the price goes back to that unit's default, as the form shows it. */
 export function withUnit(line: DraftLine, unitId: string): DraftLine {
   const next = unitId || undefined;
-  return { ...line, unitId: next, price: String(defaultPrice(line.product, next)) };
+  return { ...line, unitId: next, price: String(defaultPrice(line.product, next)), typed: false, reason: undefined };
 }
 
 export interface Draft {
@@ -37,7 +42,19 @@ export interface Draft {
   newBuyerName: string;
   newBuyerContact: string;
   dueDate: string;
+  /** A price list chosen for the sale (retail.pricelist.use), instead of the customer's own or the group's. */
+  priceListId?: string;
   lines: DraftLine[];
+}
+
+/**
+ * What price lists add to the form (the price_lists capability): the server's resolution of the lines, whether it is
+ * still being fetched, and the lines already given their resolved prices. Absent while the capability is off, and then
+ * the form is exactly what it was before price lists.
+ */
+export interface Pricing {
+  resolved?: readonly ResolvedLine[];
+  checking: boolean;
 }
 
 export function newLine(product: Product): DraftLine {
@@ -75,10 +92,16 @@ export function draftTotal(lines: DraftLine[]): number {
 }
 
 /** What stops the sale being saved, in plain words, or null when it can be saved. */
-export function draftProblem(draft: Draft): string | null {
+export function draftProblem(draft: Draft, pricing?: Pricing): string | null {
   if (draft.lines.length === 0) return 'Add at least one item.';
   if (draft.lines.some((l) => lineFigures(l) === null)) return 'Check the quantity and price on each item.';
   if (draft.lines.some((l) => lineHint(l) !== null)) return 'Fix the items marked above.';
+  if (pricing) {
+    if (pricing.checking) return 'Checking the prices.';
+    if (!pricing.resolved) return 'The prices could not be checked. Try again.';
+    if (pricing.resolved.some(hasNoPrice)) return 'A price list has no price for an item marked above.';
+    if (draft.lines.some((l, i) => isOverride(l, pricing.resolved?.[i]) && !reasonOk(l.reason))) return 'Give a reason for each changed price.';
+  }
   if (draft.method === 'credit') {
     if (draft.customerId === '' && draft.newBuyerName.trim() === '') return 'Choose or add the buyer for a credit sale.';
     if (draft.dueDate === '') return 'Enter the date the buyer will pay.';
@@ -86,24 +109,45 @@ export function draftProblem(draft: Draft): string | null {
   return null;
 }
 
-export function buildSaleRequest(draft: Draft): SaleRequest {
+/**
+ * The question the form asks the server while price lists are on: the price and source of every line for the chosen
+ * customer and list. Null until every line has a quantity the server can read, so a half-typed one asks nothing.
+ */
+export function resolveRequestOf(draft: Draft): ResolveRequest | null {
+  if (draft.lines.length === 0) return null;
+  const lines: ResolveRequest['lines'] = [];
+  for (const l of draft.lines) {
+    const qty = parseQty(l.qty);
+    if (qty === null) return null;
+    const pack = chosenPack(l.product, l.unitId);
+    lines.push({ product_id: l.product.id ?? '', qty: qtyString(qty), ...(pack ? { unit_id: pack.unit_id } : {}) });
+  }
+  return { branch_id: draft.branchId, ...(draft.customerId ? { customer_id: draft.customerId } : {}), ...(draft.priceListId ? { price_list_id: draft.priceListId } : {}), lines };
+}
+
+export function buildSaleRequest(draft: Draft, pricing?: Pricing): SaleRequest {
   const credit = draft.method === 'credit';
   return {
     branch_id: draft.branchId,
     payment_method: draft.method,
-    ...(credit && draft.customerId ? { customer_id: draft.customerId } : {}),
+    // With price lists on, a named customer sets the price list on any sale; otherwise only a credit sale names one.
+    ...((credit || pricing) && draft.customerId ? { customer_id: draft.customerId } : {}),
+    ...(pricing && draft.priceListId ? { price_list_id: draft.priceListId } : {}),
     ...(credit && !draft.customerId ? { buyer_name: draft.newBuyerName.trim() } : {}),
     ...(credit && !draft.customerId && draft.newBuyerContact.trim() ? { buyer_contact: draft.newBuyerContact.trim() } : {}),
     ...(credit ? { due_date: draft.dueDate } : {}),
-    lines: draft.lines.map((l) => {
+    lines: draft.lines.map((l, i) => {
       const f = lineFigures(l);
       if (!f) throw new Error('invalid line');
       const pack = chosenPack(l.product, l.unitId);
+      // With price lists on, only a price that differs from the resolved one is sent, with its reason (an override).
+      const override = pricing ? isOverride(l, pricing.resolved?.[i]) : f.priceMinor !== defaultPrice(l.product, pack?.unit_id);
       return {
         product_id: l.product.id ?? '',
         qty: qtyString(f.qtyMilli),
         ...(pack ? { unit_id: pack.unit_id } : {}),
-        ...(f.priceMinor !== defaultPrice(l.product, pack?.unit_id) ? { unit_price_minor: f.priceMinor } : {}),
+        ...(override ? { unit_price_minor: f.priceMinor } : {}),
+        ...(pricing && override ? { price_override_reason: (l.reason ?? '').trim() } : {}),
       };
     }),
   };

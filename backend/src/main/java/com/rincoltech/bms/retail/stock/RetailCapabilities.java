@@ -3,6 +3,7 @@ package com.rincoltech.bms.retail.stock;
 import com.rincoltech.bms.core.tenancy.ModuleSettings;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
+import com.rincoltech.bms.retail.catalogue.RetailPricing;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -18,6 +19,7 @@ public class RetailCapabilities {
 
     public static final String BRANCH_ROLES = "branch_roles";
     public static final String UNITS = RetailCatalogue.UNITS_CAPABILITY;
+    public static final String PRICE_LISTS = RetailPricing.PRICE_LISTS_CAPABILITY;
     public static final String TRANSFER_RECEIPT = "transfer_receipt";
     private static final String MODULE = "retail";
 

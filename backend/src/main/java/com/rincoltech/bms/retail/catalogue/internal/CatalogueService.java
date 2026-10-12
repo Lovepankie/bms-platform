@@ -351,6 +351,11 @@ class CatalogueService {
                     "unit_in_use_by_pack",
                     "The unit cannot change while the product has active pack sizes: they count base units. Switch them off first.");
         }
+        if (!before.unitId().equals(after.unitId()) && repo.productHasPriceItems(id)) {
+            throw ApiException.rule(
+                    "unit_in_use_by_price_list",
+                    "The unit cannot change while a price list has a price for the product: prices are per unit.");
+        }
         try {
             repo.update(after);
         } catch (DuplicateKeyException e) {

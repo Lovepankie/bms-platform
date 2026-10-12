@@ -425,6 +425,14 @@ class CatalogueRepository {
                 .single();
     }
 
+    /** Any price list item of the product: items price per unit, so the base unit cannot change under them (issue #195). */
+    boolean productHasPriceItems(UUID productId) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM retail_price_list_items WHERE product_id = ?)")
+                .param(productId)
+                .query(Boolean.class)
+                .single();
+    }
+
     boolean unitHasPacks(UUID unitId) {
         return jdbc.sql("SELECT EXISTS (SELECT 1 FROM retail_product_units WHERE unit_id = ? AND active)")
                 .param(unitId)

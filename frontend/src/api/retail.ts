@@ -39,7 +39,18 @@ export type SaleRequest = S['RetailSaleRequest'];
 export type Sale = S['RetailSale'];
 /** `sale_*` and `unit_factor` are present only for a line entered in a pack; `qty` and `unit_price_minor` are always per base unit. */
 export type SaleLine = S['RetailSaleLine'];
+/** How the price of a line was chosen (price_lists capability, ADR-033): absent on a line made without the capability. */
+export type LinePrice = S['RetailSaleLinePrice'];
 export type SalePage = S['RetailSalePage'];
+/** Price lists, their items and customer groups (ADR-033, issue #195). Prices are integer minor units per `unit`. */
+export type PriceList = S['RetailPriceList'];
+export type PriceListItem = S['RetailPriceListItem'];
+export type PriceListItemPage = S['RetailPriceListItemPage'];
+export type NewPriceListItem = S['RetailPriceListItemRequest'];
+export type CustomerGroup = S['RetailCustomerGroup'];
+export type PriceResolution = S['RetailPriceResolution'];
+export type ResolvedLine = S['RetailPriceResolveLine'];
+export type ResolveRequest = S['RetailPriceResolveRequest'];
 export type PurchaseRequest = S['RetailPurchaseRequest'];
 export type Purchase = S['RetailPurchase'];
 /** `unit*` are present only for a line entered in a pack; `cost_minor` and `qty_total` are always per base unit. */
@@ -192,6 +203,23 @@ export interface RetailApi {
   createSupplier(body: { name: string; contact?: string }): Promise<Supplier>;
   updateSupplier(id: string, version: number, body: { name?: string; contact?: string; active?: boolean }): Promise<Supplier>;
   createCustomer(body: { name: string; contact?: string }): Promise<Customer>;
+  /** The price lists, their items and customer groups (the price_lists capability, issue #195); 404 capability_not_enabled while it is off. */
+  listPriceLists(): Promise<PriceList[]>;
+  createPriceList(body: { name: string; strict?: boolean }): Promise<PriceList>;
+  /** Under If-Match with the list's version: rename, make strict or switch off; never deleted. */
+  updatePriceList(id: string, version: number, body: { name?: string; strict?: boolean; active?: boolean }): Promise<PriceList>;
+  listPriceListItems(listId: string, q: { query?: string; includeEnded?: boolean; cursor?: string; signal?: AbortSignal }): Promise<PriceListItemPage>;
+  /** A new price; an open ended one takes over from the current open ended one from its first day (409 price_item_overlap otherwise). */
+  addPriceListItem(listId: string, body: NewPriceListItem): Promise<PriceListItem>;
+  /** Ends an open price: it applies up to and including `validTo`. */
+  endPriceListItem(listId: string, itemId: string, validTo: string): Promise<PriceListItem>;
+  listCustomerGroups(): Promise<CustomerGroup[]>;
+  createCustomerGroup(body: { name: string; price_list_id?: string }): Promise<CustomerGroup>;
+  updateCustomerGroup(id: string, version: number, body: { name: string; price_list_id?: string; active: boolean }): Promise<CustomerGroup>;
+  /** A buyer's group and own list, replaced under If-Match; an absent field clears it (retail.pricelist.manage). */
+  setCustomerPricing(id: string, version: number, body: { customer_group_id?: string; price_list_id?: string }): Promise<Customer>;
+  /** The price and its source for each line as a sale would take them, without making one (never the cost). */
+  resolvePrices(body: ResolveRequest): Promise<PriceResolution>;
   updateCustomer(id: string, version: number, body: { name?: string; contact?: string }): Promise<Customer>;
   createSale(body: SaleRequest, idempotencyKey: string): Promise<Sale>;
   createPurchase(body: PurchaseRequest, idempotencyKey: string): Promise<Purchase>;
@@ -462,6 +490,60 @@ const realRetail: RetailApi = {
 
   async updateCustomer(id, version, body) {
     return unwrap(await api.PATCH('/api/v1/retail/customers/{customer_id}', { params: { path: { customer_id: id }, header: { 'If-Match': `"${version}"` } }, body }));
+  },
+
+  async listPriceLists() {
+    return unwrap(await api.GET('/api/v1/retail/price-lists')).items ?? [];
+  },
+
+  async createPriceList(body) {
+    return unwrap(await api.POST('/api/v1/retail/price-lists', { body }));
+  },
+
+  async updatePriceList(id, version, body) {
+    return unwrap(await api.PATCH('/api/v1/retail/price-lists/{price_list_id}', { params: { path: { price_list_id: id }, header: { 'If-Match': `"${version}"` } }, body }));
+  },
+
+  async listPriceListItems(listId, { query, includeEnded, cursor, signal }) {
+    return unwrap(
+      await api.GET('/api/v1/retail/price-lists/{price_list_id}/items', {
+        params: { path: { price_list_id: listId }, query: { query: query || undefined, include_ended: includeEnded || undefined, limit: 50, cursor } },
+        signal,
+      }),
+    );
+  },
+
+  async addPriceListItem(listId, body) {
+    return unwrap(await api.POST('/api/v1/retail/price-lists/{price_list_id}/items', { params: { path: { price_list_id: listId } }, body }));
+  },
+
+  async endPriceListItem(listId, itemId, validTo) {
+    return unwrap(
+      await api.PATCH('/api/v1/retail/price-lists/{price_list_id}/items/{item_id}', {
+        params: { path: { price_list_id: listId, item_id: itemId } },
+        body: { valid_to: validTo },
+      }),
+    );
+  },
+
+  async listCustomerGroups() {
+    return unwrap(await api.GET('/api/v1/retail/customer-groups')).items ?? [];
+  },
+
+  async createCustomerGroup(body) {
+    return unwrap(await api.POST('/api/v1/retail/customer-groups', { body }));
+  },
+
+  async updateCustomerGroup(id, version, body) {
+    return unwrap(await api.PUT('/api/v1/retail/customer-groups/{group_id}', { params: { path: { group_id: id }, header: { 'If-Match': `"${version}"` } }, body }));
+  },
+
+  async setCustomerPricing(id, version, body) {
+    return unwrap(await api.PUT('/api/v1/retail/customers/{customer_id}/pricing', { params: { path: { customer_id: id }, header: { 'If-Match': `"${version}"` } }, body }));
+  },
+
+  async resolvePrices(body) {
+    return unwrap(await api.POST('/api/v1/retail/prices/resolve', { body }));
   },
 
   async createSale(body, key) {

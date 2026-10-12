@@ -12,6 +12,7 @@ import { StaffHome } from '../areas/staff/home';
 import { LoanView } from '../areas/staff/lending/loan';
 import { Loans } from '../areas/staff/lending/loans';
 import { BranchRoles } from '../areas/staff/retail/branch-roles';
+import { PriceLists } from '../areas/staff/retail/price-lists';
 import { CataloguePage } from '../areas/staff/retail/catalogue';
 import { RetailHome } from '../areas/staff/retail/home';
 import { RetailNav } from '../areas/staff/retail/nav';
@@ -83,6 +84,8 @@ function screen(path: string | undefined): ReactElement {
       return <RetailSettings />;
     case '/staff/retail/branch-roles':
       return <BranchRoles />;
+    case '/staff/retail/price-lists':
+      return <PriceLists />;
     case '/staff/lending':
       return <Loans />;
     case '/staff/lending/loans/$loanId':
@@ -163,6 +166,9 @@ const OFFICER: Me = {
 // A wholesaler's manager: the trade capabilities are on (ADR-033).
 const TRADER: Me = { ...MANAGER, full_name: 'Test Trader 01', module_capabilities: { retail: ['branch_roles', 'transfer_receipt'] } };
 
+// An administrator of a business that switched price lists on (ADR-033, issue #195).
+const PRICER: Me = { ...ADMIN, full_name: 'Test Pricer 01', module_capabilities: { retail: ['branch_roles', 'price_lists'] } };
+
 const AUDIENCE: Record<string, Me[]> = {
   'admin-welcome': [ADMIN],
   'retail-sales': [SELLER, MANAGER],
@@ -180,6 +186,8 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-in-transit': [TRADER],
   'capability-transfer-receipt': [TRADER],
   'capability-units': [ADMIN],
+  'capability-price-lists': [PRICER],
+  'page-price-lists': [PRICER],
 };
 
 describe('every tour target exists on its screen', () => {

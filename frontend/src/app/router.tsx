@@ -86,6 +86,8 @@ const retailCashSummaryRoute = retailScreen('/cash-summary', 'Cash summary').laz
 const retailSavingsRoute = retailScreen('/savings', 'Savings').lazy(() => import('../areas/staff/retail/savings').then((m) => m.Route));
 const retailSettingsRoute = retailScreen('/settings', 'Retail settings').lazy(() => import('../areas/staff/retail/settings').then((m) => m.Route));
 const retailBranchRolesRoute = retailScreen('/branch-roles', 'Branch roles').lazy(() => import('../areas/staff/retail/branch-roles').then((m) => m.Route));
+const retailPriceListsRoute = retailScreen('/price-lists', 'Price lists').lazy(() => import('../areas/staff/retail/price-lists').then((m) => m.Route));
+const retailCustomerGroupsRoute = retailScreen('/customer-groups', 'Customer groups').lazy(() => import('../areas/staff/retail/customer-groups').then((m) => m.Route));
 
 // The living style page (#106): every component and illustration, for development builds and the
 // platform host only (the page itself checks); a chunk of its own, so no tenant downloads it.
@@ -197,6 +199,8 @@ export const router = createRouter({
         retailExpenseListsRoute,
         retailSettingsRoute,
         retailBranchRolesRoute,
+        retailPriceListsRoute,
+        retailCustomerGroupsRoute,
         retailBankingRoute,
         retailBankingReportRoute,
       ]), staffLendingRoute.addChildren([

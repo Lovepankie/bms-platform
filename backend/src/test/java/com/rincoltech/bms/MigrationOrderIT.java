@@ -37,7 +37,7 @@ class MigrationOrderIT {
     /** The migrations already merged and deployed: their numbers never change and none is removed. */
     static final List<String> MERGED = List.of(
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26",
-            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39");
+            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41");
 
     /** Every migration file on the classpath in numeric order: a new migration only adds its file. */
     static final List<String> VERSIONS = discoveredVersions();
@@ -566,6 +566,112 @@ class MigrationOrderIT {
                                     VALUES (gen_random_uuid(), ?, ?, 2, ?, 1, 100, 83, 100, 83, 1)
                                     """).params(tenant, sale, product).update())
                     .hasMessageContaining("retail_sale_lines_unit_chk");
+        }
+    }
+
+    /**
+     * #195: staging already holds sales and credit buyers when price lists arrive. The migration adds three tables, nullable
+     * columns and three permissions; every existing sale line keeps null price columns (priced as before), every buyer has no
+     * group and no list, every new check and foreign key ends validated, the sales role gets the price override it has always
+     * had in effect and only the administrator the list permissions, and a half-recorded price is refused.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates sales across V41 (V40 sits between).
+     */
+    @Test
+    void priceListsMigrationKeepsTheSalesAndBuyersOfADatabaseAtV39() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            assertThat(flyway(postgres, "39").migrate().targetSchemaVersion).isEqualTo("39");
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            UUID branch = UUID.randomUUID();
+            UUID product = UUID.randomUUID();
+            UUID customer = UUID.randomUUID();
+            UUID sale = UUID.randomUUID();
+            owner.sql(
+                            "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v39p', 'Test Tenant V39P', '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            owner.sql(
+                            "INSERT INTO branches (id, tenant_id, code, name, is_head_office) VALUES (?, ?, 'HQ', 'Head Office', true)")
+                    .params(branch, tenant)
+                    .update();
+            owner.sql("SELECT platform_set_tenant_modules(?, ?::text[], NULL)")
+                    .params(tenant, "{retail}")
+                    .query((rs, n) -> 1)
+                    .single();
+            owner.sql("""
+                            WITH c AS (INSERT INTO retail_categories (id, tenant_id, name) VALUES (gen_random_uuid(), ?, 'Test')
+                                       RETURNING id),
+                                 u AS (INSERT INTO retail_units (id, tenant_id, name) VALUES (gen_random_uuid(), ?, 'pcs')
+                                       RETURNING id)
+                            INSERT INTO retail_products (id, tenant_id, code, description, category_id, unit_id, cost_minor,
+                                                         sell_minor, currency)
+                            SELECT ?, ?, 'T1', 'Test product', c.id, u.id, 83, 100, 'UGX' FROM c, u
+                            """).params(tenant, tenant, product, tenant).update();
+            owner.sql("INSERT INTO retail_customers (id, tenant_id, name) VALUES (?, ?, 'Test Buyer 01')")
+                    .params(customer, tenant)
+                    .update();
+            owner.sql("""
+                            INSERT INTO retail_sales (id, tenant_id, branch_id, sale_no, sale_date, payment_method, customer_id,
+                                currency, total_minor, cost_total_minor, paid_minor, status, created_by)
+                            VALUES (?, ?, ?, 'RS00000001', DATE '2026-01-15', 'cash', ?, 'UGX', 300, 249, 300, 'completed',
+                                gen_random_uuid())
+                            """).params(sale, tenant, branch, customer).update();
+            owner.sql("""
+                            INSERT INTO retail_sale_lines (id, tenant_id, sale_id, line_no, product_id, qty, unit_price_minor,
+                                unit_cost_minor, line_total_minor, line_cost_minor)
+                            VALUES (gen_random_uuid(), ?, ?, 1, ?, 3, 100, 83, 300, 249)
+                            """).params(tenant, sale, product).update();
+
+            MigrateResult result =
+                    DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+            assertThat(result.success).isTrue();
+            assertThat(result.migrations.stream().map(m -> m.version).toList())
+                    .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("39") + 1, VERSIONS.size()));
+            assertThat(owner.sql("""
+                                    SELECT count(*) FROM retail_sale_lines
+                                     WHERE tenant_id = ? AND price_source IS NULL AND price_list_id IS NULL
+                                       AND price_break_min_qty IS NULL AND resolved_unit_price_minor IS NULL
+                                       AND price_override_reason IS NULL AND line_total_minor = 300
+                                    """).param(tenant).query(Long.class).single()).isEqualTo(1);
+            assertThat(owner.sql("""
+                                    SELECT count(*) FROM retail_customers
+                                     WHERE tenant_id = ? AND customer_group_id IS NULL AND price_list_id IS NULL
+                                    """).param(tenant).query(Long.class).single()).isEqualTo(1);
+            assertThat(owner.sql("SELECT price_list_id IS NULL FROM retail_sales WHERE id = ?")
+                            .param(sale)
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("""
+                                    SELECT count(*) FROM pg_constraint
+                                     WHERE conrelid IN ('retail_sale_lines'::regclass, 'retail_sales'::regclass,
+                                                        'retail_customers'::regclass, 'retail_price_lists'::regclass,
+                                                        'retail_price_list_items'::regclass,
+                                                        'retail_customer_groups'::regclass)
+                                       AND NOT convalidated
+                                    """).query(Long.class).single())
+                    .as("every constraint ends validated")
+                    .isZero();
+            assertThat(owner.sql("""
+                                    SELECT string_agg(role_key, ',' ORDER BY role_key) FROM role_permissions
+                                     WHERE permission_key = 'retail.price.override'
+                                    """).query(String.class).single()).isEqualTo("retail_sales,tenant_admin");
+            assertThat(owner.sql("""
+                                    SELECT string_agg(role_key, ',' ORDER BY role_key) FROM role_permissions
+                                     WHERE permission_key IN ('retail.pricelist.manage', 'retail.pricelist.use')
+                                    """).query(String.class).single()).isEqualTo("tenant_admin,tenant_admin");
+            // A half-recorded price is refused by the database: an override with no reason.
+            assertThatThrownBy(
+                            () -> owner.sql("""
+                                    INSERT INTO retail_sale_lines (id, tenant_id, sale_id, line_no, product_id, qty,
+                                        unit_price_minor, unit_cost_minor, line_total_minor, line_cost_minor, price_source,
+                                        resolved_unit_price_minor)
+                                    VALUES (gen_random_uuid(), ?, ?, 2, ?, 1, 100, 83, 100, 83, 'override', 100)
+                                    """).params(tenant, sale, product).update())
+                    .hasMessageContaining("retail_sale_lines_price_chk");
         }
     }
 

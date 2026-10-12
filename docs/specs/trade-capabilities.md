@@ -2,7 +2,7 @@
 
 **Status:** Proposed (design only, issue #190) · **Decision record:** ADR-033 · **Module:** `retail`
 
-Slices 1 (branch roles), 3 (two-step transfers) and 4 (units of measure, section 4) are built; the others are design only. This page designs how the retail module serves a wholesaler
+Slices 1 (branch roles), 3 (two-step transfers), 4 (units of measure, section 4) and 5 (price lists, section 3) are built; the others are design only. This page designs how the retail module serves a wholesaler
 without a second module and without changing anything for a plain shop. Migration numbers are not
 given here: they are assigned at merge time (AGENTS.md). Every amount and name in this page is
 fabricated.
@@ -163,6 +163,8 @@ Rollback: switch the capability off. Rows stay, behaviour is today's.
 
 ## 3. Price lists
 
+**Built in slice 5 (issue #195, migration V41).** Choices the design left open: the sale's list is chosen as in 3.2 with a list that is switched off passed over (the next level applies; a named list that is off or unknown is a field problem); a break is `min_qty >= 0`, where 0 (the default) means from any quantity; an item prices one unit, so a carton line takes a carton item and a base item never prices a carton (a carton with no item takes the retail price of the carton, `sell x factor`); the date rules are: `valid_from` defaults to today and may not be in the past, `valid_to` is the last day, a new open ended item takes over from the current open ended one by closing it the day before (an item that starts on or before the old one's first day is 409 `price_item_overlap`), and any other overlap is refused, so a promotion inside an open price needs that price ended first; an open item is ended on a day not before today or its first day, and a typo in a price that starts today is fixed by ending it and adding the corrected one from the next day (or by an override with a reason), because an item takes no other change; a list is switched off, never deleted, and a switched-off list is passed over at sale time; the sale line stores `price_source`, the list, the break that applied, the price the system resolved per sale unit and the override reason, and the sale stores the list in force; a base unit cannot change while any list prices the product (422 `unit_in_use_by_price_list`); `retail.pricelist.use` goes to administrators only (the review table in 14.1 said otherwise; 3.2 and section 11 govern). A strict list means strict: an item missing from it cannot be sold to that list's customers even by a holder of `retail.price.override` who gives a reason (422 `no_price_in_list`; an override changes a price the system resolved, and there is none), the administrator adds the price or switches the list off. Every changed price is written to the audit entry of the sale (`price_overrides`: line, product, list, resolved price, price used, reason). With the capability off, an earlier sale shows no list and no pricing on its lines. A customer's own list and group are set with `PUT /retail/customers/{id}/pricing` (`retail.pricelist.manage`), because the sales role's `retail.customer.manage` edits name and contact only.
+
 ### 3.1 Model
 
 - **The retail list is the product's own `sell_minor`.** It is not copied into a list table. This is
@@ -215,10 +217,10 @@ snapshots, never from lists (ADR-020 decision 5), so editing a list never change
   clearance), but the editor warns, and a sale at it needs the permission anyway. This keeps the
   rule in one place: the sale.
 - **Cost visibility.** Cost, margin and profit appear only with `retail.profit.read` covering the
-  branch (omitted, never null). The price list screens show prices to anyone who can use the list;
+  branch (omitted, never null). The price list screens are for `retail.pricelist.manage`;
   the editor's "margin" column and the below-cost warning need `retail.profit.read` and are absent
   without it. Resolving a price returns the price and its source, never the cost.
-- **Managing lists** needs `retail.pricelist.manage`; seeded to administrators only.
+- **Managing and reading lists** needs `retail.pricelist.manage`; seeded to administrators only. A seller sees a price only through the resolved price of a sale line.
 
 ### 3.4 Effective dates and overlaps
 
@@ -564,8 +566,8 @@ Branch-bound routes check scope per ADR-017. Full catalogue goes in SDD 7.11.23.
 | GET, PUT | `/retail/settings/capabilities` | `core.settings.manage`; PUT needs `If-Match` (the settings version, as `PATCH /settings`) | none |
 | GET, PUT | `/retail/branch-roles`, `/retail/branch-roles/{branch_id}` | read: `retail.stock.read`; write: `retail.branch_role.manage` | `branch_roles` |
 | GET, POST, PATCH | `/retail/products/{id}/units`, `/retail/products/{id}/units/{unit_id}` | read: `retail.stock.read`; write: `retail.catalogue.manage` (built, issue #194) | `units` |
-| GET, POST, PATCH | `/retail/price-lists`, `/retail/price-lists/{id}/items` | read: `retail.sale.create`; write: `retail.pricelist.manage` | `price_lists` |
-| POST | `/retail/prices/resolve` | `retail.sale.create` | `price_lists`; `{customer_id?, price_list_id?, branch_id, lines: [{product_id, unit_id?, qty}]}` returns price and source per line, never cost |
+| GET, POST, PATCH | `/retail/price-lists`, `/retail/price-lists/{id}`, `/retail/price-lists/{id}/items`, `/retail/price-lists/{id}/items/{item_id}`; `/retail/customer-groups` (GET, POST, PUT); `PUT /retail/customers/{id}/pricing` | read and write: `retail.pricelist.manage` (built, issue #195; the design said read `retail.sale.create`, which would let any seller list every customer's negotiated prices, so the sale asks `/retail/prices/resolve` instead) | `price_lists` |
+| POST | `/retail/prices/resolve` | `retail.sale.create` (built, issue #195) | `price_lists`; `{customer_id?, price_list_id?, branch_id, lines: [{product_id, unit_id?, qty}]}` returns price and source per line, never cost |
 | POST | `/retail/sales` | `retail.sale.create` | existing route; lines gain `unit_id?`, request gains `price_list_id?` |
 | GET, PUT | `/retail/customers/{id}/account` | read `retail.sale.read`; write limit and terms `retail.credit.manage` | `customer_accounts` |
 | GET | `/retail/customers/{id}/statement` | `retail.sale.read` | `customer_accounts` |
@@ -673,7 +675,7 @@ Answers written after one pass looking for what breaks.
 |---|---|
 | A new column or table slows or changes the sales path | The sale path reads capability flags once per request; with all off it takes the pre-existing code path (no list lookup, no unit conversion, no role lookup). New columns on `retail_sale_lines` are nullable and add no index; the covering index V26 is untouched, so the daily profit query plan is unchanged. The performance benchmark queries k01 to k15 run in the slice that adds columns |
 | A menu or tour shows something new | Nothing renders unless its capability is on; the component test "all off equals today" fails otherwise |
-| A new permission appears and the sales role loses something | Permissions that guard existing behaviour (`price.override`, `pricelist.use`) are seeded to every holder of `retail.sale.create`; they are only consulted when the capability is on |
+| A new permission appears and the sales role loses something | A permission that guards existing behaviour (`price.override`) is seeded to every holder of `retail.sale.create`; `pricelist.use` is not, because it names a list other than the customer's own, which no seller could do before. They are only consulted when the capability is on |
 | The profile preset surprises an administrator | `shop` is the default and switches nothing on; `trade` is an explicit choice that lists the flags it will set and asks for confirmation; flags remain individually editable |
 | Settings read fails or a flag is absent | Absent reads as off. A failure to read settings fails the request closed, as every settings read does |
 | A plain shop is accidentally given `branch_roles` and a branch is a store | Role changes are an explicit administrator action; the default is `both`; a store can never be created by default |
@@ -759,7 +761,7 @@ capabilities off changing nothing. Order matters: **slice 1 alone unblocks the w
 | 2 | #192 | Administrator screen for the profile and the flags, capability-aware menus and tours for the other capabilities (with #185). The profile preset and `module_capabilities` in `/me` are built in slice 1. Built: no migration and no API change; PWA only (`docs/specs/retail-ui-notes.md`, "Retail settings and branch roles") | 1 |
 | 3 | #193 | Stock by store and shop report, combined total, and two-step transfers (replaced status check, entry-pair check, void-column checks, update guard) with the in-flight report. **Built**, migration V38 | 1 |
 | 4 | #194 | Units of measure: packs, conversions, sale and restock in any unit, import columns | 1 |
-| 5 | #195 | Price lists, quantity breaks, effective dates, customer groups (adds the group and list columns to customers) | 4 |
+| 5 | #195 | Price lists, quantity breaks, effective dates, customer groups (adds the group and list columns to customers). **Built**, migration V41 | 4 |
 | 6 | #196 | Customer accounts: limit, terms (admin only), ageing, statement, payment on account | none |
 | 7 | #201 | Customer returns and sales credit notes (`returns`) | 6 |
 | 8 | #197 | Optional documents: invoice, delivery note, quotation, credit note, numbered series | 5, 6 and 7 optional |

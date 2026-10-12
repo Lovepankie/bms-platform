@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Highlight, NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { businessToday, daysBefore, retail, type Sale, type SalePayment, type SalesQuery } from '../../../api/retail';
+import { receiptNote } from './price-state';
 import { enteredPriceMinor, enteredQty } from './units-state';
 import { useCrumbTail } from '../../../components/breadcrumbs';
 import { showDate } from './transfers';
@@ -110,7 +111,11 @@ export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: str
         <tbody>
           {(sale.lines ?? []).map((l) => (
             <tr key={l.id ?? l.product_id}>
-              <td>{l.description}{phone && <><br /><span className="hint">{enteredQty(l)} at {money(enteredPriceMinor(l))}</span></>}</td>
+              <td>
+                {l.description}
+                {phone && <><br /><span className="hint">{enteredQty(l)} at {money(enteredPriceMinor(l))}</span></>}
+                {l.price && <><br /><span className="hint" data-testid="price-note">{receiptNote(l, money)}</span></>}
+              </td>
               {!phone && <td className="num">{enteredQty(l)}</td>}
               {!phone && <td className="num">{money(enteredPriceMinor(l))}</td>}
               <td className="num">{money(l.line_total_minor ?? 0)}</td>

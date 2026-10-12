@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mockMe } from '../../../api/retail-mock';
 import { shortcutsFor } from './nav';
-import { canSeeProfit, canUse, screensFor, showRetail } from './permissions';
+import { canSeeProfit, canUse, holdsAt, screensFor, showRetail } from './permissions';
 
 describe('retail permission gating', () => {
   const sales = mockMe('sales');
@@ -103,5 +103,19 @@ describe('the retail bottom bar', () => {
     const me = mockMe('sales');
     const plain = { ...me, permissions: (me.permissions ?? []).filter((p) => !/cash|savings|banking|expense/.test(p)) };
     expect(shortcutsFor(plain).map((s) => s.screen)).toEqual(['sale', 'stock', 'usage']);
+  });
+});
+
+describe('a permission held at a branch (issue #195)', () => {
+  const me = {
+    permissions: ['retail.price.override'],
+    permission_scopes: { 'retail.price.override': { all_branches: false, branch_ids: ['b1'] } },
+    branches: [{ id: 'b1' }, { id: 'b2' }],
+  };
+  it('is held at the branches of its scope and not at the others, as the server decides', () => {
+    expect(holdsAt(me, 'retail.price.override', 'b1')).toBe(true);
+    expect(holdsAt(me, 'retail.price.override', 'b2')).toBe(false);
+    expect(holdsAt(me, 'retail.price.override', undefined)).toBe(true);
+    expect(holdsAt(me, 'retail.pricelist.use', 'b1')).toBe(false);
   });
 });

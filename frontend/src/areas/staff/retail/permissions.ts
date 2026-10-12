@@ -12,7 +12,7 @@ export type RetailScreen =
   | 'sale' | 'creditSales' | 'salesHistory' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit' | 'salesAnalysis' | 'margins' | 'stockHealth' | 'creditControl' | 'evaluation'
   | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer'
   // The trade screens of ADR-033: offered only while their capability is on (SCREEN_CAPABILITY below).
-  | 'stockByLocation' | 'inTransit'
+  | 'stockByLocation' | 'inTransit' | 'priceLists' | 'customerGroups'
   // The cash book (ADR-022, FR-RET-31).
   | 'savings' | 'banking' | 'expenses' | 'withdrawals' | 'advances' | 'cashSummary' | 'bankingReport' | 'expensesReport' | 'expenseSetup'
   // The administrator's retail settings (profile and capabilities) and the screens of a capability (ADR-033).
@@ -27,12 +27,19 @@ export const SCREEN_CAPABILITY: Partial<Record<RetailScreen, string>> = {
   branchRoles: 'branch_roles',
   stockByLocation: 'branch_roles',
   inTransit: 'transfer_receipt',
+  priceLists: 'price_lists',
+  customerGroups: 'price_lists',
 };
 
 /** The catalogue management screens (#146); the Catalogue tile opens when any of them may be used. */
 export const CATALOGUE_SCREENS: RetailScreen[] = ['products', 'categories', 'units', 'suppliers', 'buyers'];
 
 export const TRANSFER = 'retail.stock.transfer';
+export const PRICELIST_MANAGE = 'retail.pricelist.manage';
+/** Price a sale from a list other than the customer's own or the group's. */
+export const PRICELIST_USE = 'retail.pricelist.use';
+/** Charge a price other than the one a price list resolved, with a reason. */
+export const PRICE_OVERRIDE = 'retail.price.override';
 export const SAVINGS_RECORD = 'retail.savings.record';
 export const SAVINGS_OVERWRITE = 'retail.savings.overwrite';
 export const CASHBOOK_READ = 'retail.cashbook.read';
@@ -63,6 +70,9 @@ const NEEDS: Record<RetailScreen, string[]> = {
   // stores and shops; a seller sees the same screens with every capability on as with every one off.
   stockByLocation: [TRANSFER, 'retail.stock.read'],
   inTransit: [TRANSFER, 'retail.stock.read'],
+  // Price lists and customer groups are the administrator's (retail.pricelist.manage); the editor finds items by the stock read.
+  priceLists: [PRICELIST_MANAGE, 'retail.stock.read'],
+  customerGroups: [PRICELIST_MANAGE],
   // Stock value is a stock read; its cost columns and the profit report need retail.profit.read.
   valuation: ['retail.stock.read'],
   profit: [PROFIT],
@@ -147,6 +157,16 @@ export function holds(me: Pick<Me, 'permissions'>, permission: string): boolean 
   return permissionsOf(me).includes(permission);
 }
 
+/**
+ * True when the session holds `permission` at `branchId`: the check the server makes (ADR-017), so a user whose override
+ * covers one branch is not offered it at another. Without a branch it is the plain `holds`.
+ */
+export function holdsAt(me: Pick<Me, 'permissions' | 'permission_scopes' | 'branches'>, permission: string, branchId: string | null | undefined): boolean {
+  if (!holds(me, permission)) return false;
+  if (!branchId) return true;
+  return branchesWhere(me, permission).some((b) => b.id === branchId);
+}
+
 export function hasAnyRetailPermission(me: Pick<Me, 'permissions'>): boolean {
   return permissionsOf(me).some((p) => p.startsWith('retail.'));
 }
@@ -164,6 +184,7 @@ export function showRetail(me: Pick<Me, 'permissions'> & { modules?: string[] })
 /** The retail capabilities of ADR-033; a screen of a capability is offered only while /me lists it. */
 export const BRANCH_ROLES = 'branch_roles';
 export const UNITS = 'units';
+export const PRICE_LISTS = 'price_lists';
 export const BRANCH_ROLE_MANAGE = 'retail.branch_role.manage';
 export const TRANSFER_RECEIPT = 'transfer_receipt';
 
@@ -216,6 +237,8 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'bankingReport', path: '/staff/retail/banking-report', label: 'Banking report', hint: 'Expected, banked and unbanked' },
   { screen: 'expensesReport', path: '/staff/retail/expenses-report', label: 'Expenses report', hint: 'Spending by category and item' },
   { screen: 'expenseSetup', path: '/staff/retail/expense-lists', label: 'Expense lists', hint: 'Categories and items' },
+  { screen: 'priceLists', path: '/staff/retail/price-lists', label: 'Price lists', hint: 'Different prices for different customers, with quantity discounts' },
+  { screen: 'customerGroups', path: '/staff/retail/customer-groups', label: 'Customer groups', hint: 'Group customers that share a price list' },
   { screen: 'branchRoles', path: '/staff/retail/branch-roles', label: 'Branch roles', hint: 'Which branches are stores and which are shops' },
   { screen: 'settings', path: '/staff/retail/settings', label: 'Retail settings', hint: 'Shop or trade, and the features you use' },
 ];

@@ -6,6 +6,7 @@ import { RetailError, businessToday, daysBefore } from './retail';
 import { retailMessage } from './retail-errors';
 import type { Me } from './client';
 import { createCashbookMock } from './retail-cashbook-mock';
+import { createPricingMock } from './retail-pricing-mock';
 
 // Fabricated retail data for VITE_RETAIL_MOCK and for tests: invented products, branches and
 // balances, held in memory, with the REAL snake_case shapes of docs/sdd/07-api-design.md section
@@ -25,13 +26,13 @@ const MOCK_BRANCHES = [
 // profit: record savings (the standard amount only), banking and expenses, and read the lists and reports
 // (ADR-022 decision 13, chapter 8 matrix).
 const SALES_PERMISSIONS = [
-  'retail.sale.create', 'retail.sale.read', 'retail.stock.read', 'retail.usage.report', 'retail.customer.manage',
+  'retail.sale.create', 'retail.sale.read', 'retail.stock.read', 'retail.usage.report', 'retail.customer.manage', 'retail.price.override',
   'retail.savings.record', 'retail.banking.record', 'retail.expense.record', 'retail.cashbook.read',
 ];
 const CASHIER_PERMISSIONS = SALES_PERMISSIONS;
 const ADMIN_PERMISSIONS = [
   ...SALES_PERMISSIONS, 'retail.catalogue.manage', 'retail.price.edit', 'retail.sale.void',
-  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage',
+  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use',
   'retail.savings.record', 'retail.savings.overwrite', 'retail.banking.record', 'retail.expense.record', 'retail.expense.manage',
   'retail.withdrawal.record', 'retail.advance.create', 'retail.advance.repay', 'retail.cashbook.read', 'retail.cashbook.void',
 ];
@@ -145,7 +146,7 @@ export function createMockRetail(): RetailApi {
   const used = <K extends 'category' | 'unit'>(key: K, name: string) => [...products.values()].filter((p) => p[key] === name).length;
   const refreshed = <T extends { name?: string }>(row: T, key: 'category' | 'unit') => ({ ...row, product_count: used(key, row.name ?? '') });
   const asProduct = (p: MockProduct): Product =>
-    cost({ id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, sell_minor: p.sellMinor, currency: 'UGX', active: p.active !== false, version: p.version ?? 1 }, { cost_minor: p.costMinor });
+    cost({ id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, unit_id: unitRows.find((u) => u.name === p.unit)?.id, sell_minor: p.sellMinor, currency: 'UGX', active: p.active !== false, version: p.version ?? 1 }, { cost_minor: p.costMinor });
   const clash = (list: { id: string; name: string }[], id: string, name: string, code: string, what: string) => {
     if (list.some((x) => x.id !== id && x.name.toLowerCase() === name.trim().toLowerCase())) refuse(409, code, `A ${what} with this name exists.`);
   };
@@ -205,13 +206,26 @@ export function createMockRetail(): RetailApi {
     };
   };
 
+  // Price lists, items and customer groups (ADR-033, issue #195); they answer 404 while the capability is off.
+  const { resolveFor, ...pricingApi } = createPricingMock({
+    on: () => caps.value['price_lists'] === true,
+    today, nextId, delay, run, refuse,
+    customer: (id) => customers.find((c) => c.id === id),
+    customerCount: (groupId) => customers.filter((c) => c.customer_group_id === groupId).length,
+    product: (id) => {
+      const p = products.get(id);
+      return p && { sellMinor: p.sellMinor, unitId: unitRows.find((u) => u.name === p.unit)?.id ?? '', code: p.code, description: p.description, unit: p.unit };
+    },
+  });
+
   return {
+    ...pricingApi,
     ...createCashbookMock({ profit: () => profitAccess, today, sold, branchIds: MOCK_BRANCHES.map((b) => b.id), delay, run, once, nextId }),
 
     listProducts: ({ query, branchId }) =>
       delay([...products.values()].filter((p) => p.active !== false && matches(p, query)).map((p): Product => {
         const row: Product = {
-          id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, sell_minor: p.sellMinor, currency: 'UGX', active: true,
+          id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, unit_id: unitRows.find((u) => u.name === p.unit)?.id, sell_minor: p.sellMinor, currency: 'UGX', active: true,
         };
         if (branchId) {
           row.qty = fromMilli(bal(branchId, p.id));
@@ -480,18 +494,38 @@ export function createMockRetail(): RetailApi {
         return { ...c };
       }),
 
+    setCustomerPricing: (id, version, body) =>
+      run(() => {
+        if (caps.value['price_lists'] !== true) refuse(404, 'capability_not_enabled', 'This capability is not enabled for the tenant.');
+        const c = customers.find((x) => x.id === id);
+        if (!c) return refuse(404, 'not_found', 'That could not be found.');
+        staleRow(c, version);
+        c.customer_group_id = body.customer_group_id;
+        c.price_list_id = body.price_list_id;
+        c.version = (c.version ?? 1) + 1;
+        return { ...c };
+      }),
+
     createSale: (body, key) =>
       run(() => once(`sale|${key}`, body, (): Sale => {
       const branchId = body.branch_id ?? BRANCH_A;
       body.lines.forEach((l) => guard(branchId, l.product_id, toMilli(l.qty)));
       let costTotal = 0;
+      const priced = caps.value['price_lists'] === true;
       const lines: SaleLine[] = body.lines.map((l, n) => {
         const p = find(l.product_id);
         const milli = toMilli(l.qty);
-        const price = l.unit_price_minor ?? p.sellMinor;
+        // With price lists on, the line takes the list price (or the retail price) and says so (spec 3.2).
+        const hit = priced ? resolveFor(body.customer_id, body.price_list_id, p.id, undefined, l.qty, body.sale_date ?? today()) : undefined;
+        const resolved = hit?.price ?? p.sellMinor;
+        const price = l.unit_price_minor ?? resolved;
+        const overridden = priced && l.unit_price_minor !== undefined && l.unit_price_minor !== resolved;
         move(branchId, p.id, -milli);
         costTotal += lineTotal(p.costMinor, milli);
-        return cost({ id: nextId('l'), line_no: n + 1, product_id: p.id, code: p.code, description: p.description, qty: l.qty, unit_price_minor: price, line_total_minor: lineTotal(price, milli) },
+        const how = priced
+          ? { price: { source: overridden ? 'override' : hit ? 'list' : 'retail', resolved_unit_price_minor: resolved, ...(hit ? { price_list_id: hit.list.id, price_list: hit.list.name, break_min_qty: hit.minQty } : {}), ...(overridden ? { override_reason: l.price_override_reason } : {}) } }
+          : {};
+        return cost({ id: nextId('l'), line_no: n + 1, product_id: p.id, code: p.code, description: p.description, qty: l.qty, unit_price_minor: price, line_total_minor: lineTotal(price, milli), ...how },
           { unit_cost_minor: p.costMinor, line_cost_minor: lineTotal(p.costMinor, milli) });
       });
       const total = lines.reduce((sum, l) => sum + (l.line_total_minor ?? 0), 0);

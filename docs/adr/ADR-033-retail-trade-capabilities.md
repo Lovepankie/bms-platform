@@ -170,3 +170,53 @@ small expense or income in `purchase_rounding`, and a factor with decimals makes
 figure. **Watch for:** price lists (slice 5) key items by unit and must resolve a pack price before the
 default `sell x factor`; the product CSV import skips an existing code, so packs cannot be added to existing
 items by import, only by the pack routes.
+
+## Amendment of 2026-10-12 (issue #195): price lists, as built
+
+Decision 4 is built in slice 5 (migration V41; `docs/specs/trade-capabilities.md` section 3). The choices it left open:
+
+1. **The server prices the line, in a fixed order.** The list is the one the sale names (a list other than the customer's own
+   or the customer group's needs `retail.pricelist.use`), else the customer's own, else the customer group's, else none; a list
+   that is switched off is passed over. In the list the item is the one for the product and the sale unit with the largest
+   quantity break not above the line's quantity, valid on the sale date (a break applies to the whole line, never in tiers).
+   No item takes the retail price of that unit (`sell x factor` for a pack), unless the list is strict, which refuses the sale
+   with 422 `no_price_in_list`. A pack is priced from its own item only: a piece item never prices a carton.
+2. **An item is a fact with a date range, never edited.** `retail_price_list_items` keeps a price per list, product, unit and
+   break, with `valid_from` and an inclusive `valid_to`. The one change a row takes is its `valid_to`, once, by a guard trigger;
+   deletes are refused. A new open ended price takes over from the current one on its first day; anything else that overlaps is
+   409 `price_item_overlap`, checked under a row lock on the list so concurrent edits serialise (an exclusion constraint would
+   need the `btree_gist` extension, and the unique index on the open ended row is the database's backstop). A price may not
+   start in the past, because a sale already made keeps its price and back-dating gains nothing.
+3. **History never changes.** The line stores how it was priced: `price_source` (`retail`, `list`, `override`), the list, the
+   break that applied, the price the system resolved per sale unit and the override reason, in nullable columns checked to be
+   all null or one of three shapes. The sale stores the list in force. Editing, ending or switching off a list therefore touches
+   no sale, and a sale made while the capability is off writes nothing new.
+4. **A different price is an override with a reason.** A typed `unit_price_minor` that differs from the resolved price needs
+   `retail.price.override` (403) and a reason of at least five characters (422 `override_reason_required`); the same price typed
+   back is not an override. The permission is seeded to every holder of `retail.sale.create`, so nothing changes until an
+   administrator removes it, and it is consulted only while the capability is on. The price floor judges the charged price on
+   the line, as for packs; a list item below cost can be saved and is flagged, only to a caller with `retail.profit.read`.
+5. **Lists and groups are administrator work.** `retail.pricelist.manage` creates and edits lists, items and groups and sets a
+   buyer's group and own list (`PUT /retail/customers/{id}/pricing`: choosing a buyer's list is choosing what that buyer pays, so
+   it is not part of `retail.customer.manage`, which edits name and contact). `retail.pricelist.use` goes to administrators
+   only. A list and a group are switched off, never deleted. The buyer's own list wins over the group's.
+6. **Expand only, and the lock is honest.** Three tables with forced RLS, two nullable columns on `retail_customers`, one on
+   `retail_sales`, five on `retail_sale_lines`, and three permissions. The foreign keys and the check on the existing tables are
+   added `NOT VALID` and validated in the same migration. The lock cost is this, and not the milder one an earlier draft
+   claimed: `ADD COLUMN` and `ADD CONSTRAINT ... CHECK` take an access exclusive lock, a foreign key takes share row
+   exclusive, and Flyway runs the file in one transaction, so every one is held to the commit. Sales, sale history and the daily
+   profit report on `retail_sale_lines`, `retail_sales` and `retail_customers` therefore wait for the migration; at the size
+   of a small or medium business that is brief. The validation scan is kept because it is one pass over rows whose new columns
+   are all null, it blocks nothing the `ADD COLUMN` lock did not already block, and a constraint left `NOT VALID` stays
+   unvalidated for good. A very large tenant would add the columns in one migration and validate in a later one. The covering
+   index of V26 is untouched. The 25-times benchmark (k01 to k15, needs Docker) was not run for this change: no column is
+   indexed on a sale table and no existing report statement changed.
+7. **Cost stays out.** Resolution returns the price and its source, never the cost; an item carries `below_cost` only for a
+   caller with `retail.profit.read`; the refusal for a price at or below cost carries no figure.
+
+**Better:** a wholesaler prices by customer, group and quantity without copying a price, and every sale says which price applied
+and why. **Worse:** a typo in a price that starts today is fixed by ending it and adding the corrected one from tomorrow, or by an
+override with a reason, because an item takes no other change; a promotion inside an open price needs that price ended first.
+**Watch for:** an item prices one unit, so a product's base unit cannot change while a list prices it (422
+`unit_in_use_by_price_list`); a pack switched off leaves its items in the list, unused; documents (slice 8) must read the line's
+stored price and never resolve again; and quotations (slice 8) re-price through the normal sale path.

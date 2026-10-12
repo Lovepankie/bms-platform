@@ -229,11 +229,14 @@ export function useProfitAccess(): boolean {
  * Search the catalogue and add an item, each with what `branchId` holds (negative flagged). The
  * sale screen shows the selling price too; the stock move screen shows the source branch's stock.
  */
-export function ProductPicker({ id, branchId, onAdd, showPrice = false }: {
+export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStock = true, addLabel = 'Add' }: {
   id: string;
-  branchId: string;
+  /** Absent for a screen that is about an item and not a branch's stock (the price list editor), which also sets showStock false. */
+  branchId?: string;
   onAdd: (p: Product) => void;
   showPrice?: boolean;
+  showStock?: boolean;
+  addLabel?: string;
 }) {
   const search = useLiveSearch();
   const products = useQuery({
@@ -244,7 +247,7 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false }: {
   const finding = products.isPlaceholderData || products.isFetching;
   // The first 20 matches, in category groups when there is more than one category (category-groups.tsx).
   const shown = (products.data ?? []).slice(0, 20);
-  const g = useCategoryGroups({ screen: 'picker', items: shown, categoryOf: (p) => p.category, resetKey: `${branchId}|${search.term}`, searching: search.term !== '', pending: products.isPlaceholderData, minGroups: 2 });
+  const g = useCategoryGroups({ screen: 'picker', items: shown, categoryOf: (p) => p.category, resetKey: `${branchId ?? ''}|${search.term}`, searching: search.term !== '', pending: products.isPlaceholderData, minGroups: 2 });
   const card = (p: Product) => (
     <li key={p.id} className="rt-card">
       <div className="rt-row">
@@ -253,12 +256,17 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false }: {
           <br />
           {!g.active && <CategoryLabel category={p.category} />}
           {!g.active && p.category && <br />}
-          {showPrice && `${money(p.sell_minor ?? 0)} each, `}in stock here:{' '}
-          {p.qty !== undefined && p.qty.startsWith('-') ? <span className="rt-flag">{showQty(p.qty)} (negative)</span> : showQty(p.qty ?? '0')}{' '}
-          {p.unit}
+          {showPrice && `${money(p.sell_minor ?? 0)} each${showStock ? ', ' : ''}`}
+          {showStock && (
+            <>
+              in stock here:{' '}
+              {p.qty !== undefined && p.qty.startsWith('-') ? <span className="rt-flag">{showQty(p.qty)} (negative)</span> : showQty(p.qty ?? '0')}{' '}
+              {p.unit}
+            </>
+          )}
         </span>
-        <button type="button" onClick={() => onAdd(p)} aria-label={`Add ${p.description}`}>
-          Add
+        <button type="button" onClick={() => onAdd(p)} aria-label={`${addLabel} ${p.description}`}>
+          {addLabel}
         </button>
       </div>
     </li>

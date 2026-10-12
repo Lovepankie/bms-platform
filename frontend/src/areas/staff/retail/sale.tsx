@@ -1,17 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useState } from 'react';
-import { retail, type Product, type Sale, type SalePayment } from '../../../api/retail';
+import { useEffect, useState } from 'react';
+import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch';
+import { retail, type Product, type ResolvedLine, type Sale, type SalePayment } from '../../../api/retail';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
-import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, withUnit, type Draft, type DraftLine } from './sale-state';
+import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, resolveRequestOf, withUnit, type Draft, type DraftLine, type Pricing } from './sale-state';
+import { MIN_REASON, hasNoPrice, isOverride, pricedLines, receiptNote, reasonOk, sourceNote } from './price-state';
 import { activePacks, chosenPack, enteredPriceMinor, enteredQty } from './units-state';
 import { EmptyState } from '../../../components/states';
 import { BranchRequired, Gate, NoStockHere, Note, ProductPicker, Problem, money, useBranchRoles, useProfitAccess, useSingleBranch } from './ui';
 import { branchLabel } from '../../../auth/branch';
 import type { BranchRole } from '../../../api/retail';
-import { BRANCH_ROLES, UNITS, branchesWhere, capabilityOn, needsOf, sellingBranches } from './permissions';
+import { BRANCH_ROLES, PRICELIST_MANAGE, PRICELIST_USE, PRICE_LISTS, PRICE_OVERRIDE, UNITS, branchesWhere, capabilityOn, holds, holdsAt, needsOf, sellingBranches } from './permissions';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -23,6 +25,17 @@ const METHODS: { value: SalePayment; label: string }[] = [
   { value: 'bank', label: 'Bank' },
   { value: 'credit', label: 'Credit (pay later)' },
 ];
+
+/** The value once it has stopped changing for the search delay, with the shared debouncer of the live search. */
+function useSettled<T>(value: T): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const debouncer = createDebouncer(SEARCH_DELAY_MS, setSettled);
+    debouncer.push(value);
+    return debouncer.cancel;
+  }, [value]);
+  return settled;
+}
 
 export function Receipt({ sale, onNew }: { sale: Sale; onNew?: () => void }) {
   const canProfit = useProfitAccess();
@@ -45,7 +58,10 @@ export function Receipt({ sale, onNew }: { sale: Sale; onNew?: () => void }) {
         <tbody>
           {(sale.lines ?? []).map((l) => (
             <tr key={l.product_id}>
-              <td>{l.description}</td>
+              <td>
+                {l.description}
+                {l.price && <small className="hint" data-testid="price-note"><br />{receiptNote(l, money)}</small>}
+              </td>
               <td className="num">{enteredQty(l)}</td>
               <td className="num">{money(enteredPriceMinor(l))}</td>
               <td className="num">{money(l.line_total_minor ?? 0)}</td>
@@ -74,13 +90,17 @@ export function Receipt({ sale, onNew }: { sale: Sale; onNew?: () => void }) {
  * One line of the sale being made. The unit choice is drawn only while the tenant has the units capability
  * (`unitsOn`) and the item has active pack sizes; otherwise the line is exactly what it was before packs.
  */
-export function SaleLineCard({ line, index, unitsOn, onQty, onPrice, onUnit, onRemove }: {
+export function SaleLineCard({ line, index, unitsOn, price, onQty, onPrice, onUnit, onReason, onReset, onRemove }: {
   line: DraftLine;
   index: number;
   unitsOn: boolean;
+  /** Present while price lists are on: how the line was priced, and what the seller may do about it. */
+  price?: { resolved?: ResolvedLine; listName?: string; canOverride: boolean };
   onQty: (v: string) => void;
   onPrice: (v: string) => void;
   onUnit: (unitId: string) => void;
+  onReason?: (v: string) => void;
+  onReset?: () => void;
   onRemove: () => void;
 }) {
   const i = index;
@@ -88,6 +108,8 @@ export function SaleLineCard({ line, index, unitsOn, onQty, onPrice, onUnit, onR
   const hint = lineHint(line);
   const packs = unitsOn ? activePacks(line.product) : [];
   const pack = unitsOn ? chosenPack(line.product, line.unitId) : undefined;
+  const override = price ? isOverride(line, price.resolved) : false;
+  const noPrice = price ? hasNoPrice(price.resolved) : false;
   return (
     <div className="rt-card">
       <strong>{line.product.description}</strong>
@@ -107,9 +129,24 @@ export function SaleLineCard({ line, index, unitsOn, onQty, onPrice, onUnit, onR
         </div>
         <div>
           <label htmlFor={`price-${i}`}>{pack ? `Price per ${pack.unit}` : 'Unit price'}</label>
-          <input id={`price-${i}`} inputMode="numeric" value={line.price} onChange={(e) => onPrice(e.target.value)} aria-invalid={f === null} />
+          <input id={`price-${i}`} inputMode="numeric" value={line.price} onChange={(e) => onPrice(e.target.value)} aria-invalid={f === null} readOnly={price ? !price.canOverride : false} />
         </div>
       </div>
+      {price && price.resolved && (
+        <p className="hint" data-tour="sale-price-source" data-testid={`price-source-${i}`}>
+          {sourceNote(price.resolved, price.listName)}
+          {override && ` Changed from ${money(price.resolved.unit_price_minor ?? 0)}.`}
+        </p>
+      )}
+      {noPrice && <p role="alert" className="rt-flag">This item has no price in the list.</p>}
+      {price && !price.canOverride && <p className="hint">The price comes from the price list. You do not have permission to change it.</p>}
+      {override && onReason && (
+        <div>
+          <label htmlFor={`reason-${i}`}>Why is the price changed? (at least {MIN_REASON} characters)</label>
+          <input id={`reason-${i}`} value={line.reason ?? ''} maxLength={300} onChange={(e) => onReason(e.target.value)} aria-invalid={!reasonOk(line.reason)} />
+        </div>
+      )}
+      {line.typed && onReset && <p><button type="button" className="btn-sm" onClick={onReset}>Use the list price</button></p>}
       {hint && <p role="alert" className="rt-flag">{hint}</p>}
       <p className="line-foot">
         {f ? `Line total ${money(f.totalMinor)}` : <span className="rt-flag">Check quantity and price</span>}{' '}
@@ -129,10 +166,27 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
   });
   const [addingBuyer, setAddingBuyer] = useState(draft.newBuyerName !== '');
 
-  const customers = useQuery({ queryKey: ['retail', 'customers'], queryFn: () => retail.listCustomers(), enabled: draft.method === 'credit' });
+  const pricesOn = capabilityOn(me, 'retail', PRICE_LISTS);
+  const customers = useQuery({ queryKey: ['retail', 'customers'], queryFn: () => retail.listCustomers(), enabled: draft.method === 'credit' || pricesOn });
+  // Reading the lists needs retail.pricelist.manage too (a list is a customer's negotiated price); the checks are the server's, per branch.
+  const canChooseList = pricesOn && holdsAt(me, PRICELIST_USE, branchId) && holds(me, PRICELIST_MANAGE);
+  const lists = useQuery({ queryKey: ['retail', 'price-lists'], queryFn: () => retail.listPriceLists(), enabled: canChooseList });
+  // Price lists on: the server prices every line (the customer's list, the group's, the quantity break) and the form shows it.
+  const asked = pricesOn ? JSON.stringify(resolveRequestOf(draft)) : 'null';
+  const settled = useSettled(asked);
+  const resolution = useQuery({
+    queryKey: ['retail', 'prices', settled],
+    queryFn: () => retail.resolvePrices(JSON.parse(settled)),
+    enabled: settled !== 'null',
+    retry: false,
+  });
+  const checking = asked !== 'null' && (settled !== asked || resolution.isFetching);
+  const resolved = pricesOn && asked !== 'null' && !checking ? resolution.data?.lines : undefined;
+  const pricing: Pricing | undefined = pricesOn ? { resolved, checking } : undefined;
+  const shown: Draft = { ...draft, lines: pricedLines(draft.lines, resolved) };
 
   const save = useMutation({
-    mutationFn: () => retail.createSale(buildSaleRequest(draft), key),
+    mutationFn: () => retail.createSale(buildSaleRequest(shown, pricing), key),
     onSuccess: (sale) => {
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail', 'products'] });
@@ -142,7 +196,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
   });
 
   const update = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
-  const setLine = (i: number, patch: { qty?: string; price?: string }) =>
+  const setLine = (i: number, patch: { qty?: string; price?: string; typed?: boolean; reason?: string }) =>
     setDraft((d) => ({ ...d, lines: d.lines.map((l, n) => (n === i ? { ...l, ...patch } : l)) }));
   const setUnit = (i: number, unitId: string) =>
     setDraft((d) => ({ ...d, lines: d.lines.map((l, n) => (n === i ? withUnit(l, unitId) : l)) }));
@@ -151,8 +205,8 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
   const add = (p: Product) =>
     setDraft((d) => (d.lines.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0) ? d : { ...d, lines: [...d.lines, newLine(p)] }));
 
-  const problem = draftProblem(draft);
-  const total = draftTotal(draft.lines);
+  const problem = draftProblem(shown, pricing);
+  const total = draftTotal(shown.lines);
 
   return (
     <form
@@ -167,18 +221,51 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
 
       <h2>Items</h2>
       {draft.lines.length === 0 && <EmptyState art="noSales" title="No items yet.">Search above and tap Add.</EmptyState>}
-      {draft.lines.map((l, i) => (
+      {pricesOn && resolution.data?.price_list && !checking && (
+        <p className="hint" data-tour="sale-price-list" data-testid="price-list-in-force">
+          Priced from the list {resolution.data.price_list}{resolution.data.origin === 'customer_group' ? ' (the customer group)' : resolution.data.origin === 'customer' ? ' (the customer)' : ''}.
+        </p>
+      )}
+      {pricesOn && <Problem error={resolution.error} />}
+      {shown.lines.map((l, i) => (
         <SaleLineCard
           key={`${l.product.id}-${i}`}
           line={l}
           index={i}
           unitsOn={unitsOn}
+          price={pricesOn ? { resolved: resolved?.[i], listName: resolution.data?.price_list, canOverride: holdsAt(me, PRICE_OVERRIDE, branchId) } : undefined}
           onQty={(v) => setLine(i, { qty: v })}
-          onPrice={(v) => setLine(i, { price: v })}
+          onPrice={(v) => setLine(i, { price: v, typed: true })}
+          onReason={(v) => setLine(i, { reason: v })}
+          onReset={() => setLine(i, { typed: false, reason: '' })}
           onUnit={(unitId) => setUnit(i, unitId)}
           onRemove={() => setDraft((d) => ({ ...d, lines: d.lines.filter((_, n) => n !== i) }))}
         />
       ))}
+
+      {pricesOn && draft.method !== 'credit' && (
+        <fieldset data-tour="sale-customer">
+          <legend>Customer</legend>
+          <label htmlFor="price-customer">Customer (optional): sets the price list</label>
+          <select id="price-customer" value={draft.customerId} onChange={(e) => update({ customerId: e.target.value })}>
+            <option value="">No customer: retail prices</option>
+            {(customers.data ?? []).map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </fieldset>
+      )}
+      {canChooseList && (
+        <div>
+          <label htmlFor="price-list">Price list for this sale</label>
+          <select id="price-list" value={draft.priceListId ?? ''} onChange={(e) => update({ priceListId: e.target.value || undefined })}>
+            <option value="">The customer's own list</option>
+            {(lists.data ?? []).filter((l) => l.active).map((l) => (
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <fieldset data-tour="sale-payment">
         <legend>How is it paid?</legend>

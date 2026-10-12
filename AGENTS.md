@@ -57,7 +57,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   ADR-032) `V30`, the first-run preferences (issue #19, ADR-025) `V31`, and lending investments
   (issue #152, ADR-031) `V32`, and lending insights (issue #153, ADR-030) `V33`. Flyway runs with
   `outOfOrder` off, so a new migration takes a number above the highest one on any open branch
-  (`V34` is the retail cash book, issue #147; `V35` is claimed by lending, issue #176; `V36` is claimed by lending payment methods, issue #160; `V37` is retail branch roles, issue #191; `V38` is the retail two-step transfer, issue #193; `V39` is units of measure, issue #194; `V40` is search, issue #241). The retail analytics pass (issue #149) is reports only on existing data: no migration; its
+  (`V34` is the retail cash book, issue #147; `V35` is claimed by lending, issue #176; `V36` is claimed by lending payment methods, issue #160; `V37` is retail branch roles, issue #191; `V38` is the retail two-step transfer, issue #193; `V39` is units of measure, issue #194; `V40` is search, issue #241; `V41` is price lists, issue #195; `V42` next). The retail analytics pass (issue #149) is reports only on existing data: no migration; its
   queries are in `scripts/db-bench/queries` (k01 to k15).
 - **Built (trade 1 of 10, issue #191, ADR-033):** migration `V37` (`retail_branch_roles`, the permission
   `retail.branch_role.manage`, a backfill of role `both`); the tenant settings group `retail.capabilities`
@@ -90,6 +90,15 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   units; the CSV item import reads `pack unit` and `pack factor`; the sale and restock screens offer the item's packs and the item screen
   edits them while `module_capabilities` lists `units`. No permission added. The pack sizes capability is marked ready with its own tour
   (`capability-units`).
+- **Built (trade 5 of 10, issue #195, ADR-033):** migration `V41` (price lists): `retail_price_lists`, `retail_price_list_items`
+  (append-only apart from the one-time `valid_to`), `retail_customer_groups`, a group and a list on `retail_customers`, a list on
+  `retail_sales`, and how the price was chosen on `retail_sale_lines`; permissions `retail.pricelist.manage` and
+  `retail.pricelist.use` (administrators) and `retail.price.override` (every holder of `retail.sale.create`); routes
+  `/retail/price-lists`, `/retail/customer-groups`, `/retail/prices/resolve` and `PUT /retail/customers/{id}/pricing`; the sale resolves each
+  line on the server (`SalesPricing`: the sale's list, the customer's, the group's, then the quantity break, then the retail price, strict
+  lists refuse) and stores the resolved price, so a later list change never touches a sale; a typed price that differs is an override
+  with a reason. The Price lists and Customer groups screens, the Credit buyers assignment and the sale screen's price notes show while
+  `module_capabilities` lists `price_lists`, which is marked ready with its own tour (`capability-price-lists`).
 - **Self-onboarding, build step 1 (issue #89, ADR-024):** migration `V23` with
   `onboarding_applications` and `notification_outbox`, reached only through definer functions;
   the public sign-up and applicant page; the operator portal on the platform host (operator

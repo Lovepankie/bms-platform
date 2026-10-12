@@ -5,10 +5,13 @@ import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Customer;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerBalance;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerList;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerPricingRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.PaymentList;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.PaymentRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.PaymentResult;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.Resolution;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.ResolveRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Sale;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SalePage;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleRequest;
@@ -28,6 +31,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -161,6 +165,29 @@ class SalesController {
             @Valid @RequestBody UpdateCustomerRequest request) {
         Customer c = service.updateCustomer(id, ifMatch, request);
         return ResponseEntity.ok().eTag(String.valueOf(c.version())).body(c);
+    }
+
+    @PutMapping("/customers/{customer_id}/pricing")
+    @RequiresPermission("retail.pricelist.manage")
+    @Operation(
+            summary = "Set a credit buyer's customer group and own price list under If-Match (issue #195)",
+            operationId = "setRetailCustomerPricing")
+    ResponseEntity<Customer> setPricing(
+            @PathVariable("customer_id") UUID id,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody CustomerPricingRequest request) {
+        Customer c = service.setCustomerPricing(id, ifMatch, request);
+        return ResponseEntity.ok().eTag(String.valueOf(c.version())).body(c);
+    }
+
+    @PostMapping("/prices/resolve")
+    @RequiresPermission("retail.sale.create")
+    @Operation(
+            summary = "The price and its source for each line of a sale, as the sale would take them; never the cost"
+                    + " (issue #195)",
+            operationId = "resolveRetailPrices")
+    Resolution resolve(@Valid @RequestBody ResolveRequest request) {
+        return service.resolve(request);
     }
 
     @GetMapping("/customers/{customer_id}/balance")

@@ -699,7 +699,68 @@ export const unitsCapability: Tour = {
   ],
 };
 
+// The tour of the price lists capability (issue #195): it starts once for whoever manages price lists, when first
+// enabled, and the page tour is Help only. Lists are made on their page; buyers are put in a group on Credit buyers.
+export const priceListsCapability: Tour = {
+  id: 'capability-price-lists',
+  version: 1,
+  title: 'New: price lists',
+  audience: (me) => held(me, 'retail.pricelist.manage'),
+  autoStart: true,
+  capability: { module: 'retail', key: 'price_lists' },
+  steps: [
+    {
+      id: 'intro',
+      title: 'Price lists are on',
+      body: 'You can now give some customers their own prices, with a lower price for larger quantities. An item that is not in a list is sold at its retail price.',
+    },
+    {
+      id: 'tile',
+      route: '/staff/retail',
+      target: 'retail-priceLists',
+      module: 'retail',
+      optional: true,
+      title: 'Make a list',
+      body: 'Open Price lists, add a list, then add the price of each item. Put customers in a group, or give a customer a list of their own.',
+    },
+    {
+      id: 'lists',
+      route: '/staff/retail/price-lists',
+      target: 'price-list-lists',
+      module: 'retail',
+      title: 'Your lists',
+      body: 'Tap Prices on a list to add prices, from a quantity and for a date range. The seller sees which list priced each item on the sale.',
+    },
+  ],
+};
+
+export const priceListsPage: Tour = {
+  id: 'page-price-lists',
+  version: 1,
+  title: 'This page: price lists',
+  audience: (me) => held(me, 'retail.pricelist.manage') && capable(me, 'price_lists'),
+  autoStart: false,
+  page: '/staff/retail/price-lists',
+  steps: [
+    {
+      id: 'help',
+      target: 'price-list-help',
+      module: 'retail',
+      title: 'How a price is chosen',
+      body: 'The customer\'s own list first, then their group\'s list. In the list, the largest quantity break that fits the line. Otherwise the retail price.',
+    },
+    {
+      id: 'lists',
+      target: 'price-list-lists',
+      module: 'retail',
+      title: 'Prices are added, not changed',
+      body: 'A new price takes over from the old one on its first day. Earlier sales keep the price they were made at.',
+    },
+  ],
+};
+
 export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
+  priceListsCapability, priceListsPage,
 ];

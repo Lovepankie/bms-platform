@@ -47,7 +47,14 @@ final class SalesApi {
             @Schema(
                     description = "A pack unit of the product (units capability): qty and unit_price_minor are then"
                             + " in that unit and stock moves in base units. Absent or the base unit: as before")
-            UUID unitId) {}
+            UUID unitId,
+
+            @Size(max = 300)
+            @Schema(
+                    description =
+                            "Why the unit price differs from the price the price list resolved; required for such a"
+                                    + " price (retail.price.override) while the price_lists capability is on, ignored otherwise")
+            String priceOverrideReason) {}
 
     @Schema(name = "RetailSaleRequest")
     record SaleRequest(
@@ -65,7 +72,37 @@ final class SalesApi {
             @Schema(description = "Proposed payment date of a credit sale")
             LocalDate dueDate,
 
+            @Schema(
+                    description = "Price the sale from this list instead of the customer's own or the customer group's;"
+                            + " needs retail.pricelist.use unless it is one of those (price_lists capability)")
+            UUID priceListId,
+
             @NotEmpty @Size(max = 200) List<@Valid @NotNull SaleLineRequest> lines) {}
+
+    @Schema(
+            name = "RetailSaleLinePrice",
+            description =
+                    "How the price of a line was chosen; absent on a line made without the price_lists capability")
+    record LinePrice(
+            @Schema(
+                    description =
+                            "retail (the product's sell price), list (a price list item) or override (the seller's"
+                                    + " price instead of the resolved one)")
+            String source,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID priceListId,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String priceList,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The quantity break of the list item that applied, in the sale unit")
+            String breakMinQty,
+
+            @Schema(
+                    description =
+                            "What the system resolved, per sale unit (per base unit when no pack), before any override")
+            long resolvedUnitPriceMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) String overrideReason) {}
 
     @Schema(name = "RetailSaleLine")
     record SaleLine(
@@ -102,7 +139,9 @@ final class SalesApi {
 
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "Base units in one sale_unit when the line was made")
-            String unitFactor) {}
+            String unitFactor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) LinePrice price) {}
 
     @Schema(name = "RetailSale")
     record Sale(
@@ -127,6 +166,11 @@ final class SalesApi {
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)
             Long profitMinor,
 
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The price list the sale was priced from, when one applied")
+            UUID priceListId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) String priceList,
             List<SaleLine> lines,
             boolean historical,
             Instant createdAt,
@@ -162,6 +206,14 @@ final class SalesApi {
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "In the list only: owed on credit sales in the caller's branch scope")
             Long balanceMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The customer group; present only while the price_lists capability is on")
+            UUID customerGroupId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The customer's own price list; present only while the price_lists capability is on")
+            UUID priceListId,
 
             @Schema(description = "Send as If-Match when updating")
             int version) {}
@@ -211,4 +263,68 @@ final class SalesApi {
 
     @Schema(name = "RetailPaymentList")
     record PaymentList(List<Payment> items) {}
+
+    @Schema(
+            name = "RetailCustomerPricing",
+            description =
+                    "Replaces the customer's group and own price list; an absent field clears it (price_lists capability)")
+    record CustomerPricingRequest(UUID customerGroupId, UUID priceListId) {}
+
+    @Schema(name = "RetailPriceResolveLineRequest")
+    record ResolveLineRequest(
+            @NotNull UUID productId,
+
+            @Schema(description = "A pack unit of the product; absent or the base unit means the base unit")
+            UUID unitId,
+
+            @NotNull @Positive @Digits(integer = 11, fraction = 3) @Schema(type = "string", example = "2.500")
+            BigDecimal qty) {}
+
+    @Schema(name = "RetailPriceResolveRequest")
+    record ResolveRequest(
+            @Schema(description = "Defaults to the caller's one branch")
+            UUID branchId,
+
+            UUID customerId,
+
+            @Schema(
+                    description =
+                            "As on a sale: needs retail.pricelist.use unless it is the customer's own or group's list")
+            UUID priceListId,
+
+            @Schema(description = "Defaults to today; not in the future")
+            LocalDate saleDate,
+
+            @NotEmpty @Size(max = 200) List<@Valid @NotNull ResolveLineRequest> lines) {}
+
+    @Schema(name = "RetailPriceResolveLine")
+    record ResolvedLine(
+            UUID productId,
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID unitId,
+            String qty,
+
+            @Schema(description = "Per unit_id, or per base unit when none")
+            long unitPriceMinor,
+
+            long lineTotalMinor,
+            @Schema(description = "retail or list") String priceSource,
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID priceListId,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String breakMinQty,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "no_price_in_list when a strict list has no price for the line; the sale would be refused")
+            String problem) {}
+
+    @Schema(name = "RetailPriceResolution", description = "Price and source per line; never the cost")
+    record Resolution(
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID priceListId,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String priceList,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Why this list: request, customer or customer_group")
+            String origin,
+
+            List<ResolvedLine> lines) {}
 }
