@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.cashbook;
 
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.retail.RetailTestSupport;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -42,7 +43,7 @@ public final class CashbookTestSupport {
     }
 
     public static LocalDate daysAgo(int n) {
-        return LocalDate.now().minusDays(n);
+        return LocalDate.now(BusinessClock.DEFAULT_ZONE).minusDays(n);
     }
 
     public ResponseEntity<JsonNode> post(String path, Object body, String permissions, String branches) {

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.kernel.BusinessClock;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -464,7 +465,7 @@ class RetailParityIT extends IntegrationTest {
 
     /** A credit sale of one cable; {@code days} is the sale's age and {@code dueInDays} may be negative. */
     UUID creditSale(int days, int dueInDays, UUID customerId, String buyerName) {
-        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        java.time.LocalDate today = java.time.LocalDate.now(BusinessClock.DEFAULT_ZONE);
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("branch_id", t.headOffice());
         body.put("sale_date", today.minusDays(days).toString());

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.kernel.BusinessClock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -144,7 +145,11 @@ class CollateralIT extends IntegrationTest {
                 HttpMethod.POST,
                 valuations,
                 headers(officer, OFFICER, "*", null),
-                Map.of("valued_on", LocalDate.now().plusDays(10).toString(), "market_value_minor", 1000));
+                Map.of(
+                        "valued_on",
+                        LocalDate.now(BusinessClock.DEFAULT_ZONE).plusDays(10).toString(),
+                        "market_value_minor",
+                        1000));
         assertThat(future.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
 
         send(

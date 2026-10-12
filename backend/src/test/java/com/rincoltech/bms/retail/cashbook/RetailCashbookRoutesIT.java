@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.kernel.BusinessClock;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -124,7 +125,8 @@ class RetailCashbookRoutesIT extends IntegrationTest {
 
     @Test
     void aFutureDateOnAnyRecordIsAFieldProblemNamingTheField() {
-        String future = java.time.LocalDate.now().plusDays(1).toString();
+        String future =
+                java.time.LocalDate.now(BusinessClock.DEFAULT_ZONE).plusDays(1).toString();
         ResponseEntity<JsonNode> banking =
                 cb.post("/bankings", Map.of("branch_id", hq, "business_date", future, "amount_minor", 100), ALL);
         assertThat(banking.getBody().get("errors").get(0).get("code").asString())

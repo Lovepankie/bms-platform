@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.retail.RetailTestSupport;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -297,7 +298,9 @@ class RetailCashbookSavingsIT extends IntegrationTest {
     void aFutureDateIsAFieldProblem() {
         JsonNode s = suggestion(PROFIT_RECORDER);
         Map<String, Object> b = body(s, null, null);
-        b.put("business_date", LocalDate.now().plusDays(2).toString());
+        b.put(
+                "business_date",
+                LocalDate.now(BusinessClock.DEFAULT_ZONE).plusDays(2).toString());
         ResponseEntity<JsonNode> r = cb.post("/savings", b, PROFIT_RECORDER);
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(r.getBody().get("errors").get(0).get("code").asString()).isEqualTo("future_date");

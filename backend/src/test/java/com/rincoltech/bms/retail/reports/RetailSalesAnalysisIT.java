@@ -152,7 +152,10 @@ class RetailSalesAnalysisIT extends IntegrationTest {
         for (String fragment : new String[] {"cost", "profit_minor", "margin", "gross"}) {
             assertThat(AnalyticsData.hasKey(a, fragment)).as(fragment).isFalse();
         }
-        assertThat(a.toString()).doesNotContain("3333", "1800");
+        // The profit (1,800) and margin (3,333 bp) are fields of the totals: assert on the fields, not on
+        // digits in the response text, where an id or a date can hold the same digits (#237).
+        assertThat(a.get("totals").has("gross_profit_minor")).isFalse();
+        assertThat(a.get("totals").has("margin_bp")).isFalse();
         assertThat(AnalyticsData.auditRows()).isEqualTo(audit);
     }
 
@@ -185,7 +188,10 @@ class RetailSalesAnalysisIT extends IntegrationTest {
                 .isEqualTo(HttpStatus.FORBIDDEN);
         long audit = AnalyticsData.auditRows();
         ResponseEntity<JsonNode> denied = api.get("/reports/sales-analysis", "retail.stock.read");
-        assertThat(denied.getBody().toString()).doesNotContain("1800", "3600", "5400");
+        assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        for (String field : new String[] {"totals", "by_product", "by_branch", "series", "sales_minor"}) {
+            assertThat(AnalyticsData.hasKey(denied.getBody(), field)).as(field).isFalse();
+        }
         assertThat(AnalyticsData.auditRows()).isEqualTo(audit);
         String today = AnalyticsData.today().toString();
         assertThat(api.get(
@@ -222,7 +228,8 @@ class RetailSalesAnalysisIT extends IntegrationTest {
             boolean headOffice = row.get("id").asString().equals(t.headOffice().toString());
             assertThat(row.has("gross_profit_minor")).as("branch row %s", row).isEqualTo(headOffice);
         }
-        assertThat(body.toString()).doesNotContain("1800");
+        assertThat(body.get("totals").has("gross_profit_minor")).isFalse();
+        assertThat(body.get("totals").has("margin_bp")).isFalse();
 
         // Asking for head office alone is a report over a branch where the permission is held.
         ResponseEntity<JsonNode> one = api.call(

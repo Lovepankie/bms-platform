@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.retail.RetailTestSupport;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -100,7 +101,7 @@ class RetailCashbookBankingIT extends IntegrationTest {
 
     @Test
     void aSaleVoidedTheSameDayNetsToZeroAndALaterVoidMovesOnlyTheVoidDay() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(BusinessClock.DEFAULT_ZONE);
         UUID sameDay = RetailTestSupport.id(cb.sale(hq, "cash", product, "3", today));
         assertThat(expected(ALL, today).get("cash_expected_minor").asLong()).isEqualTo(4_500);
         assertThat(cb.voidIt("/sales/" + sameDay, "Customer left", ALL).getStatusCode())

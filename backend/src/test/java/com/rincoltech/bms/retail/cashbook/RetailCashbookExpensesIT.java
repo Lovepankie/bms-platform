@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.retail.RetailTestSupport;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -267,7 +268,9 @@ class RetailCashbookExpensesIT extends IntegrationTest {
         body.put("category_id", rent);
         body.put("item_id", rentItem);
         body.put("amount_minor", 2_000);
-        body.put("business_date", java.time.LocalDate.now().plusDays(3).toString());
+        body.put(
+                "business_date",
+                java.time.LocalDate.now(BusinessClock.DEFAULT_ZONE).plusDays(3).toString());
         ResponseEntity<JsonNode> future = cb.post("/expenses", body, ALL);
         assertThat(future.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(future.getBody().get("code").asString()).isEqualTo("validation_failed");

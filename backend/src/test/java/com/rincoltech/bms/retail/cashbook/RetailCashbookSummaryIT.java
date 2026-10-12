@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.retail.RetailTestSupport;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -112,7 +113,7 @@ class RetailCashbookSummaryIT extends IntegrationTest {
     void closingEqualsTheLedgerOnTheRecordDaysAndOnTheLaterDayTheVoidsAreMade() {
         LocalDate d1 = daysAgo(6);
         LocalDate d2 = daysAgo(5);
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(BusinessClock.DEFAULT_ZONE);
         Ids ids = theDays(d1, d2);
         long savedOnD1 = TestDatabase.owner()
                 .sql("SELECT amount_minor FROM retail_daily_savings WHERE id = ?")
@@ -295,7 +296,7 @@ class RetailCashbookSummaryIT extends IntegrationTest {
         cb.expense(hq, fuel[0], repairs, 4_000, d);
         UUID wrong = RetailTestSupport.id(cb.expense(hq, fuel[0], fuel[1], 9_000, d));
         cb.voidIt("/expenses/" + wrong, "Entered twice", ALL);
-        String q = "?branch_id=" + hq + "&from=" + daysAgo(5) + "&to=" + LocalDate.now();
+        String q = "?branch_id=" + hq + "&from=" + daysAgo(5) + "&to=" + LocalDate.now(BusinessClock.DEFAULT_ZONE);
 
         JsonNode byCategory = cb.get("/reports/cash/expenses" + q, CASHIER).getBody();
         assertThat(byCategory.get("total_minor").asLong()).isEqualTo(10_000);
@@ -335,14 +336,17 @@ class RetailCashbookSummaryIT extends IntegrationTest {
 
     @Test
     void aRangeOverAYearIsRefused() {
-        assertThat(cb.get("/reports/cash/daily?from=" + daysAgo(500) + "&to=" + LocalDate.now(), ALL)
+        assertThat(cb.get(
+                                "/reports/cash/daily?from=" + daysAgo(500) + "&to="
+                                        + LocalDate.now(BusinessClock.DEFAULT_ZONE),
+                                ALL)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     @Test
     void savingsRecordedTodayShowInTodaysSummaryNextToTheDaysSales() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(BusinessClock.DEFAULT_ZONE);
         cb.sale(hq, "cash", product, "10", today);
         cb.sale(hq, "mobile_money", product, "2", today);
         UUID id = saving(today);
