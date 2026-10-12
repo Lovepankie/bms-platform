@@ -11,6 +11,8 @@ export const PROFIT = 'retail.profit.read';
 export type RetailScreen =
   | 'sale' | 'creditSales' | 'salesHistory' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit' | 'salesAnalysis' | 'margins' | 'stockHealth' | 'creditControl' | 'evaluation'
   | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer'
+  // The trade screens of ADR-033: offered only while their capability is on (SCREEN_CAPABILITY below).
+  | 'stockByLocation' | 'inTransit'
   // The cash book (ADR-022, FR-RET-31).
   | 'savings' | 'banking' | 'expenses' | 'withdrawals' | 'advances' | 'cashSummary' | 'bankingReport' | 'expensesReport' | 'expenseSetup'
   // The administrator's retail settings (profile and capabilities) and the screens of a capability (ADR-033).
@@ -21,7 +23,11 @@ export type RetailScreen =
  * permissions the user holds. A screen that is not listed here belongs to no capability and behaves as
  * it did before capabilities existed. A later slice of the trade build plan adds its screens here.
  */
-export const SCREEN_CAPABILITY: Partial<Record<RetailScreen, string>> = { branchRoles: 'branch_roles' };
+export const SCREEN_CAPABILITY: Partial<Record<RetailScreen, string>> = {
+  branchRoles: 'branch_roles',
+  stockByLocation: 'branch_roles',
+  inTransit: 'transfer_receipt',
+};
 
 /** The catalogue management screens (#146); the Catalogue tile opens when any of them may be used. */
 export const CATALOGUE_SCREENS: RetailScreen[] = ['products', 'categories', 'units', 'suppliers', 'buyers'];
@@ -53,6 +59,10 @@ const NEEDS: Record<RetailScreen, string[]> = {
   // Moving stock needs the transfer permission; the list of transfers is a stock read.
   transfer: [TRANSFER, 'retail.stock.read'],
   transfers: ['retail.stock.read'],
+  // The API needs only a stock read for both, but they are the screens of whoever moves stock between
+  // stores and shops; a seller sees the same screens with every capability on as with every one off.
+  stockByLocation: [TRANSFER, 'retail.stock.read'],
+  inTransit: [TRANSFER, 'retail.stock.read'],
   // Stock value is a stock read; its cost columns and the profit report need retail.profit.read.
   valuation: ['retail.stock.read'],
   profit: [PROFIT],
@@ -154,6 +164,7 @@ export function showRetail(me: Pick<Me, 'permissions'> & { modules?: string[] })
 /** The retail capabilities of ADR-033; a screen of a capability is offered only while /me lists it. */
 export const BRANCH_ROLES = 'branch_roles';
 export const BRANCH_ROLE_MANAGE = 'retail.branch_role.manage';
+export const TRANSFER_RECEIPT = 'transfer_receipt';
 
 /** True when /me lists `capability` among the enabled capabilities of `module` (absent means off). */
 export function capabilityOn(me: Pick<Me, 'module_capabilities'>, module: string, capability: string): boolean {
@@ -184,7 +195,9 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'stock', path: '/staff/retail/stock', label: 'Stock', hint: 'What is on the shelf' },
   { screen: 'stocktake', path: '/staff/retail/stocktake', label: 'Stock-take', hint: 'Count and correct stock' },
   { screen: 'transfer', path: '/staff/retail/transfer', label: 'Move stock', hint: 'Send stock to another branch' },
+  { screen: 'stockByLocation', path: '/staff/retail/stock-by-location', label: 'Stores and shops', hint: 'Stock in each store and shop, and on the way' },
   { screen: 'transfers', path: '/staff/retail/transfers', label: 'Stock moves', hint: 'Stock sent between branches' },
+  { screen: 'inTransit', path: '/staff/retail/in-transit', label: 'On the way', hint: 'Stock sent and not yet received' },
   { screen: 'valuation', path: '/staff/retail/valuation', label: 'Stock value', hint: 'Stock at cost and at price' },
   { screen: 'profit', path: '/staff/retail/profit', label: 'Daily profit', hint: 'Profit per day' },
   { screen: 'salesAnalysis', path: '/staff/retail/sales-analysis', label: 'Sales analysis', hint: 'Sales by day, shop, item and seller' },

@@ -16,8 +16,10 @@ import { CataloguePage } from '../areas/staff/retail/catalogue';
 import { RetailHome } from '../areas/staff/retail/home';
 import { RetailNav } from '../areas/staff/retail/nav';
 import { RecordSale } from '../areas/staff/retail/sale';
+import { InTransitPage } from '../areas/staff/retail/in-transit';
 import { RetailSettings } from '../areas/staff/retail/settings';
 import { StockPage } from '../areas/staff/retail/stock';
+import { StockByLocationPage } from '../areas/staff/retail/stock-by-location';
 import { StocktakePage } from '../areas/staff/retail/stocktake';
 import { StaffBar } from '../areas/staff/route';
 import { Setup } from '../areas/staff/setup';
@@ -71,6 +73,10 @@ function screen(path: string | undefined): ReactElement {
       return <StockPage />;
     case '/staff/retail/stocktake':
       return <StocktakePage />;
+    case '/staff/retail/stock-by-location':
+      return <StockByLocationPage />;
+    case '/staff/retail/in-transit':
+      return <InTransitPage />;
     case '/staff/retail/catalogue':
       return <CataloguePage />;
     case '/staff/retail/settings':
@@ -154,6 +160,9 @@ const OFFICER: Me = {
   branches,
 } as Me;
 
+// A wholesaler's manager: the trade capabilities are on (ADR-033).
+const TRADER: Me = { ...MANAGER, full_name: 'Test Trader 01', module_capabilities: { retail: ['branch_roles', 'transfer_receipt'] } };
+
 const AUDIENCE: Record<string, Me[]> = {
   'admin-welcome': [ADMIN],
   'retail-sales': [SELLER, MANAGER],
@@ -167,6 +176,9 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-stocktake': [ADMIN, MANAGER],
   'page-retail-settings': [ADMIN],
   'capability-branch-roles': [ADMIN],
+  'page-stock-by-location': [TRADER],
+  'page-in-transit': [TRADER],
+  'capability-transfer-receipt': [TRADER],
 };
 
 describe('every tour target exists on its screen', () => {

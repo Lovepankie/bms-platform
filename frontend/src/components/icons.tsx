@@ -66,6 +66,22 @@ export const icons = {
       <path d="M4 18h.01" />
     </Svg>
   ),
+  stockByLocation: (
+    <Svg>
+      <path d="M3 9l9-5 9 5" />
+      <path d="M5 9v11h14V9" />
+      <path d="M9 20v-6h6v6" />
+    </Svg>
+  ),
+  inTransit: (
+    <Svg>
+      <path d="M1 6h13v10H1z" />
+      <path d="M14 9h4l3 3v4h-7" />
+      <circle cx="5.5" cy="17.5" r="1.8" />
+      <circle cx="17.5" cy="17.5" r="1.8" />
+      <path d="M5 11h5" />
+    </Svg>
+  ),
   usage: (
     <Svg>
       <path d="M12 3l9 16H3z" />

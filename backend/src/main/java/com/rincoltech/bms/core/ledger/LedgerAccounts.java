@@ -26,5 +26,13 @@ public interface LedgerAccounts {
      */
     Map<LocalDate, Long> movementByDay(String systemKey, UUID branchId, LocalDate from, LocalDate to);
 
+    /**
+     * The balance (debits less credits, in minor units) of the account with this key over the entries
+     * (and their reversals) that one source posted, whatever the branch: the entries whose {@code
+     * source_module} and {@code source_type} are given. For an account two verticals share (the
+     * inter-branch clearing account), this is how a module reads only its own part of it.
+     */
+    long balanceBySource(String systemKey, String sourceModule, String sourceType);
+
     record Account(UUID id, String code, String currency) {}
 }

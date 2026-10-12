@@ -2,6 +2,8 @@ package com.rincoltech.bms.retail.stock.internal;
 
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.RequiresPermission;
+import com.rincoltech.bms.retail.stock.internal.TransferApi.CancelRequest;
+import com.rincoltech.bms.retail.stock.internal.TransferApi.ReceiveRequest;
 import com.rincoltech.bms.retail.stock.internal.TransferApi.Transfer;
 import com.rincoltech.bms.retail.stock.internal.TransferApi.TransferPage;
 import com.rincoltech.bms.retail.stock.internal.TransferApi.TransferRequest;
@@ -39,7 +41,8 @@ class TransferController {
     @PostMapping("/transfers")
     @RequiresPermission("retail.stock.transfer")
     @Operation(
-            summary = "Move stock from one branch to another at cost, in one transaction (FR-RET-16); M",
+            summary = "Move stock from one branch to another at cost, in one transaction; with the transfer_receipt"
+                    + " capability on, dispatch it instead and leave it in transit until received (FR-RET-16); M",
             operationId = "createRetailTransfer")
     ResponseEntity<Transfer> create(
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
@@ -61,11 +64,12 @@ class TransferController {
     TransferPage list(
             @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
             @RequestParam(name = "product_id", required = false) UUID productId,
+            @RequestParam(name = "status", required = false) String status,
             @RequestParam(name = "from", required = false) LocalDate from,
             @RequestParam(name = "to", required = false) LocalDate to,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.list(branchIds, productId, from, to, limit, cursor);
+        return service.list(branchIds, productId, status, from, to, limit, cursor);
     }
 
     @GetMapping("/transfers/{transfer_id}")
@@ -82,5 +86,42 @@ class TransferController {
             operationId = "voidRetailTransfer")
     Transfer voidTransfer(@PathVariable("transfer_id") UUID id, @Valid @RequestBody VoidRequest request) {
         return service.voidTransfer(id, request);
+    }
+
+    @PostMapping("/transfers/{transfer_id}/receive")
+    @RequiresPermission("retail.stock.transfer")
+    @Operation(
+            summary = "The destination receives a dispatched transfer, all of it or less; the shortage is posted as"
+                    + " stock shrinkage at the source cost (capability transfer_receipt, FR-RET-16); M",
+            operationId = "receiveRetailTransfer")
+    ResponseEntity<Transfer> receive(
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @PathVariable("transfer_id") UUID id,
+            @Valid @RequestBody(required = false) ReceiveRequest request) {
+        Outcome<Transfer> outcome =
+                service.receive(idempotencyKey, id, request == null ? new ReceiveRequest(null, null) : request);
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok();
+        if (outcome.replayed()) {
+            response.header("Idempotent-Replayed", "true");
+        }
+        return response.body(outcome.body());
+    }
+
+    @PostMapping("/transfers/{transfer_id}/cancel")
+    @RequiresPermission("retail.stock.transfer")
+    @Operation(
+            summary = "The source takes a dispatched transfer back before it is received (capability"
+                    + " transfer_receipt, FR-RET-16); M",
+            operationId = "cancelRetailTransfer")
+    ResponseEntity<Transfer> cancel(
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @PathVariable("transfer_id") UUID id,
+            @Valid @RequestBody CancelRequest request) {
+        Outcome<Transfer> outcome = service.cancel(idempotencyKey, id, request);
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok();
+        if (outcome.replayed()) {
+            response.header("Idempotent-Replayed", "true");
+        }
+        return response.body(outcome.body());
     }
 }

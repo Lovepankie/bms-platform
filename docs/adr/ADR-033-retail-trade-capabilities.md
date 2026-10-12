@@ -81,3 +81,40 @@ capabilities inside retail.
 - Imported credit sales: do not post them from this work; wait for issue #96.
 - Migration numbers: assigned at merge time, above the highest on any open branch; each slice updates
   the migration order test (issue #172).
+
+## Amendment of 2026-10-12 (issue #193): the two-step transfer, as built
+
+Decision 9 is built in slice 3 (migration V38; `docs/specs/trade-capabilities.md` sections 9.3 and
+10). The choices it left open:
+
+1. **One route, no mode.** With `transfer_receipt` on, `POST /retail/transfers` dispatches (status
+   `in_transit`); with it off the transfer is one step as before. Existing rows are all `completed` or
+   `voided` and satisfy every replaced rule; nothing is switched on by the migration.
+2. **Five rules replaced, not three.** V22 tied the status, the entry pair, the void columns (two
+   checks) and the update guard to a two-status world. V38 replaces all five: the status check, the
+   entry-pair check, both void-column checks (`voided_at`, `voided_by` and `void_reason` now belong to
+   `cancelled` as well as `voided`) and the guard. Each new check is added `NOT VALID`, validated and
+   only then is the old one dropped; the transfer table holds a few rows a day, so validation is in the
+   same migration. The guard allows exactly `in_transit` to `received`, `in_transit` to `cancelled`,
+   `completed` to `voided` and `received` to `voided`, each once; the transfer itself never changes.
+   The lines gain `received_qty`, settable once while in transit.
+3. **A transfer on its way is cancelled, never voided.** Cancel returns the lines to the source at the
+   original cost (a movement that reverses the dispatch movement) and reverses the source entry; the
+   destination never booked anything. Void keeps its V22 meaning for `completed` and `received`
+   transfers; on a received transfer with a shortage it reverses the shortage entry too, so the
+   transfer is undone as a whole.
+4. **The shortage is its own entry at the destination, at the source cost.** Debit `stock_shrinkage`,
+   credit `interbranch_clearing`; the receipt entry carries what arrived. Together they clear what the
+   dispatch debited, so the clearing legs of a transfer net to zero whatever the product cost is by then.
+5. **In flight is built from the transfers.** Account 1190 is shared with lending, so its balance is
+   never the in-flight figure; the reconciliation reads the net of clearing over entries whose source is
+   a retail transfer (`LedgerAccounts.balanceBySource`) and compares it with the open dispatches.
+6. **Who acts.** The destination's scope receives, the source's scope cancels, both under
+   `retail.stock.transfer`; no permission is added. Switching the capability off is refused while any
+   transfer is in transit.
+
+**Better:** the wholesaler's store-to-shop flow can carry stock in flight with a clear owner for each
+step, and plain shops see nothing new. **Worse:** a shortage is visible in the ledger (stock
+shrinkage) but not yet in the daily profit report, which reads sales, usage and stock-take
+differences only. **Watch for:** any later change to the transfer table must extend the guard's list
+of transitions and its test (`RetailTransferGuardIT`) in the same migration.

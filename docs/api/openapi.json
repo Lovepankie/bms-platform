@@ -7121,6 +7121,238 @@
         },
         "required" : [ "amount_minor", "category_id", "item_id" ]
       },
+      "RetailInFlightTransfer" : {
+        "description" : "Dispatched and not received or cancelled, the longest wait first",
+        "properties" : {
+          "age_days" : {
+            "description" : "Days from the transfer date to today",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "cost_total_minor" : {
+            "description" : "Present only with retail.profit.read in either branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "dispatched_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "from_branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailTransferLine"
+            },
+            "type" : "array"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "to_branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "transfer_date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailLocationBalance" : {
+        "description" : "One entry per branch of the report, in its order",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "negative" : {
+            "description" : "Below zero in this branch",
+            "type" : "boolean"
+          },
+          "qty" : {
+            "type" : "string"
+          },
+          "value_minor" : {
+            "description" : "Quantity at the current cost; present only with retail.profit.read in this branch",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailLocationBranch" : {
+        "description" : "A column of the report; ordered stores, shops, then both",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "head_office" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "role" : {
+            "description" : "both for every branch while the branch_roles capability is off",
+            "enum" : [ "store", "shop", "both" ],
+            "type" : "string"
+          }
+        }
+      },
+      "RetailLocationBranchValue" : {
+        "description" : "Only the branches where the caller holds retail.profit.read",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "value_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailLocationRoleValue" : {
+        "description" : "Only the roles whose branches in the report all show cost",
+        "properties" : {
+          "role" : {
+            "type" : "string"
+          },
+          "value_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailLocationRow" : {
+        "description" : "One product: its balance in every branch, by role, and in transit",
+        "properties" : {
+          "balances" : {
+            "description" : "One entry per branch of the report, in its order",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailLocationBalance"
+            },
+            "type" : "array"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "combined_qty" : {
+            "description" : "All the branches' balances plus the quantity in transit",
+            "type" : "string"
+          },
+          "combined_value_minor" : {
+            "description" : "Present only with retail.profit.read in every branch of the report",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cost_minor" : {
+            "description" : "Present only with retail.profit.read in every branch of the report",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "in_transit_qty" : {
+            "description" : "Dispatched and not yet received, from or to a branch of the report; in neither balance",
+            "type" : "string"
+          },
+          "in_transit_value_minor" : {
+            "description" : "Present only with retail.profit.read in every branch of the report; the quantity in transit at the cost it was dispatched at",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "negative" : {
+            "description" : "True when any branch's balance is below zero",
+            "type" : "boolean"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sell_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "subtotals" : {
+            "description" : "The sum of the balances of each role present in the report",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailRoleQuantity"
+            },
+            "type" : "array"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "value_minor" : {
+            "description" : "Present only with retail.profit.read in every branch of the report; the balances at the current cost",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailLocationTotals" : {
+        "description" : "Over every product in the caller's branches, not only the page; cost fields as the rows",
+        "properties" : {
+          "by_branch" : {
+            "description" : "Only the branches where the caller holds retail.profit.read",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailLocationBranchValue"
+            },
+            "type" : "array"
+          },
+          "by_role" : {
+            "description" : "Only the roles whose branches in the report all show cost",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailLocationRoleValue"
+            },
+            "type" : "array"
+          },
+          "combined_value_minor" : {
+            "description" : "Present only with retail.profit.read in every branch of the report",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "in_transit_value_minor" : {
+            "description" : "Present only with retail.profit.read in every branch of the report; the value of the dispatches still on their way",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "inventory_ledger_minor" : {
+            "description" : "Present only with retail.profit.read in every branch of the report; the inventory account of those branches",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "revaluation_difference_minor" : {
+            "description" : "Present only with retail.profit.read in every branch of the report; value at cost less the inventory account, as in the valuation",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value_minor" : {
+            "description" : "Present only with retail.profit.read in every branch of the report",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "RetailMarginBelowTarget" : {
         "properties" : {
           "items" : {
@@ -8006,6 +8238,18 @@
         },
         "required" : [ "amount_minor", "method" ]
       },
+      "RetailRoleQuantity" : {
+        "description" : "The sum of the balances of each role present in the report",
+        "properties" : {
+          "qty" : {
+            "type" : "string"
+          },
+          "role" : {
+            "enum" : [ "store", "shop", "both" ],
+            "type" : "string"
+          }
+        }
+      },
       "RetailSale" : {
         "properties" : {
           "balance_minor" : {
@@ -8673,6 +8917,31 @@
           }
         }
       },
+      "RetailStockByLocation" : {
+        "properties" : {
+          "branches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailLocationBranch"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailLocationRow"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/RetailLocationTotals"
+          }
+        }
+      },
       "RetailStockHealth" : {
         "properties" : {
           "cover" : {
@@ -9097,8 +9366,22 @@
           "note" : {
             "type" : "string"
           },
+          "received_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "received_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "shortage_cost_minor" : {
+            "description" : "The source cost of what did not arrive; Present only with retail.profit.read in either branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "status" : {
-            "enum" : [ "completed", "voided" ],
+            "description" : "completed: a one-step transfer. in_transit, received, cancelled: the two-step transfer of the transfer_receipt capability. voided: undone after completion or receipt",
+            "enum" : [ "completed", "in_transit", "received", "cancelled", "voided" ],
             "type" : "string"
           },
           "to_branch_id" : {
@@ -9113,6 +9396,7 @@
             "type" : "string"
           },
           "voided_at" : {
+            "description" : "When the transfer was voided or cancelled",
             "format" : "date-time",
             "type" : "string"
           },
@@ -9121,6 +9405,16 @@
             "type" : "string"
           }
         }
+      },
+      "RetailTransferCancelRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
       },
       "RetailTransferLine" : {
         "properties" : {
@@ -9144,6 +9438,10 @@
             "type" : "string"
           },
           "qty" : {
+            "type" : "string"
+          },
+          "received_qty" : {
+            "description" : "What arrived, once the transfer was received (two-step transfers only)",
             "type" : "string"
           },
           "unit_cost_minor" : {
@@ -9175,6 +9473,39 @@
             "type" : "array"
           },
           "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailTransferReceiveLine" : {
+        "description" : "What arrived, one entry per line of the transfer; omit to receive everything as dispatched",
+        "properties" : {
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "description" : "What arrived; not more than was dispatched",
+            "example" : "2.5",
+            "type" : "string"
+          }
+        },
+        "required" : [ "product_id", "qty" ]
+      },
+      "RetailTransferReceiveRequest" : {
+        "properties" : {
+          "lines" : {
+            "description" : "What arrived, one entry per line of the transfer; omit to receive everything as dispatched",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailTransferReceiveLine"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "note" : {
+            "maxLength" : 300,
+            "minLength" : 0,
             "type" : "string"
           }
         }
@@ -9221,6 +9552,34 @@
           }
         },
         "required" : [ "reason" ]
+      },
+      "RetailTransfersInFlight" : {
+        "properties" : {
+          "clearing_minor" : {
+            "description" : "Tenant-wide net of inter-branch clearing over retail transfer entries only (account 1190 is shared with lending); present for a caller who reads every branch with cost",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "in_transit_value_minor" : {
+            "description" : "The sum of the open dispatches, built from the transfers (never read from the ledger)",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "items" : {
+            "description" : "Dispatched and not received or cancelled, the longest wait first",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailInFlightTransfer"
+            },
+            "type" : "array"
+          },
+          "reconciled" : {
+            "description" : "True when clearing_minor equals the value of every open dispatch",
+            "type" : "boolean"
+          }
+        }
       },
       "RetailUnit" : {
         "properties" : {
@@ -19218,6 +19577,64 @@
         "tags" : [ "retail-reports" ]
       }
     },
+    "/api/v1/retail/reports/stock-by-location" : {
+      "get" : {
+        "operationId" : "getRetailStockByLocation",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "category_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "negative_only",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailStockByLocation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every product's balance in each store and shop the caller may read, subtotals by role, stock in transit and the combined total (ADR-033)",
+        "tags" : [ "retail-stock" ]
+      }
+    },
     "/api/v1/retail/reports/stock-health" : {
       "get" : {
         "operationId" : "getRetailStockHealth",
@@ -19287,6 +19704,25 @@
         },
         "summary" : "Days of cover, reorder suggestions, dead stock and shrinkage by branch (issue #149)",
         "tags" : [ "retail-reports" ]
+      }
+    },
+    "/api/v1/retail/reports/transfers-in-flight" : {
+      "get" : {
+        "operationId" : "getRetailTransfersInFlight",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailTransfersInFlight"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Transfers dispatched and not yet received, with age and value; needs the transfer_receipt capability (ADR-033)",
+        "tags" : [ "retail-stock" ]
       }
     },
     "/api/v1/retail/reports/valuation" : {
@@ -20262,6 +20698,13 @@
           }
         }, {
           "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
           "name" : "from",
           "required" : false,
           "schema" : {
@@ -20339,7 +20782,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Move stock from one branch to another at cost, in one transaction (FR-RET-16); M",
+        "summary" : "Move stock from one branch to another at cost, in one transaction; with the transfer_receipt capability on, dispatch it instead and leave it in transit until received (FR-RET-16); M",
         "tags" : [ "retail-stock" ]
       }
     },
@@ -20368,6 +20811,95 @@
           }
         },
         "summary" : "A transfer with its lines",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/transfers/{transfer_id}/cancel" : {
+      "post" : {
+        "operationId" : "cancelRetailTransfer",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "transfer_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailTransferCancelRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailTransfer"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The source takes a dispatched transfer back before it is received (capability transfer_receipt, FR-RET-16); M",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/transfers/{transfer_id}/receive" : {
+      "post" : {
+        "operationId" : "receiveRetailTransfer",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "transfer_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailTransferReceiveRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailTransfer"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The destination receives a dispatched transfer, all of it or less; the shortage is posted as stock shrinkage at the source cost (capability transfer_receipt, FR-RET-16); M",
         "tags" : [ "retail-stock" ]
       }
     },

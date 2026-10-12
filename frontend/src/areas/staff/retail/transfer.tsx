@@ -7,7 +7,8 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { buildTransfer, transferLineHint, transferProblem, type TransferDraft } from './transfer-state';
-import { needsOf } from './permissions';
+import { milliOf } from './maths';
+import { TRANSFER_RECEIPT, capabilityOn, needsOf } from './permissions';
 import { BranchRequired, Gate, NoStockHere, ProductPicker, Problem, money, useProfitAccess, useSingleBranch } from './ui';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
@@ -41,6 +42,8 @@ export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; 
     setDraft((d) => (d.lines.some((l) => l.product.id === p.id) ? d : { ...d, lines: [...d.lines, { product: p, qty: '1' }] }));
   const destinations = (me.branches ?? []).filter((b) => b.id !== fromBranchId);
   const problem = transferProblem(fromBranchId, draft);
+  // With the two-step transfer on (ADR-033) the stock leaves now and is counted at the destination once received.
+  const sends = capabilityOn(me, 'retail', TRANSFER_RECEIPT);
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!problem && !save.isPending) save.mutate(); }}>
@@ -54,6 +57,7 @@ export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; 
         ))}
       </select>
       {destinations.length === 0 && <p>You have no other branch to move stock to.</p>}
+      {sends && <p className="hint">The stock leaves this branch now. The other branch counts it once they receive it.</p>}
 
       <ProductPicker id="transfer-search" branchId={fromBranchId} onAdd={add} />
 
@@ -82,7 +86,7 @@ export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; 
       {problem && draft.lines.length > 0 && <p>{problem}</p>}
       <Problem error={save.error} />
       <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending}>
-        {save.isPending ? 'Saving' : 'Move stock'}
+        {save.isPending ? 'Saving' : sends ? 'Send stock' : 'Move stock'}
       </button>
       {(draft.lines.length > 0 || draft.toBranchId !== '') && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this form</button>
@@ -91,21 +95,32 @@ export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; 
   );
 }
 
+const HEADING: Record<string, string> = { voided: 'Cancelled', in_transit: 'Stock sent', received: 'Stock received', cancelled: 'Taken back' };
+
 export function TransferSummary({ transfer, onNew }: { transfer: Transfer; onNew?: () => void }) {
   const label = useBranchLabel();
   const profit = useProfitAccess();
   return (
     <section aria-label="Saved">
-      <h2>{transfer.status === 'voided' ? 'Cancelled' : 'Stock moved'}</h2>
+      <h2>{HEADING[transfer.status ?? 'completed'] ?? 'Stock moved'}</h2>
       <p>From {label(transfer.from_branch_id)} to {label(transfer.to_branch_id)} on {transfer.transfer_date}.</p>
+      {transfer.status === 'in_transit' && <p>It is on its way. It is in neither branch's stock until the other branch receives it (see On the way).</p>}
       <ul>
-        {(transfer.lines ?? []).map((l) => (
-          <li key={l.line_no}>{l.description} ({l.code}): {showQty(l.qty ?? '0')}</li>
-        ))}
+        {(transfer.lines ?? []).map((l) => {
+          const short = l.received_qty !== undefined && milliOf(l.received_qty) < milliOf(l.qty ?? '0');
+          return (
+            <li key={l.line_no}>
+              {l.description} ({l.code}): {showQty(l.qty ?? '0')}
+              {short && <> sent, {showQty(l.received_qty ?? '0')} received</>}
+            </li>
+          );
+        })}
       </ul>
       {transfer.note && <p>Note: {transfer.note}</p>}
       {profit && transfer.cost_total_minor !== undefined && <p>Value at cost: {money(transfer.cost_total_minor)}</p>}
+      {profit && transfer.shortage_cost_minor !== undefined && transfer.shortage_cost_minor > 0 && <p>Lost on the way, at cost: {money(transfer.shortage_cost_minor)}</p>}
       {transfer.status === 'voided' && <p>Cancelled: {transfer.void_reason}</p>}
+      {transfer.status === 'cancelled' && <p>Taken back: {transfer.void_reason}</p>}
       {onNew && <button type="button" className="rt-primary" onClick={onNew}>Move more stock</button>}
     </section>
   );

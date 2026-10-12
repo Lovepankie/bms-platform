@@ -52,6 +52,14 @@ export type TransferRequest = S['RetailTransferRequest'];
 export type Transfer = S['RetailTransfer'];
 export type TransferLine = S['RetailTransferLine'];
 export type TransferPage = S['RetailTransferPage'];
+export type TransferStatus = 'completed' | 'in_transit' | 'received' | 'cancelled' | 'voided';
+export type ReceiveLine = S['RetailTransferReceiveLine'];
+export type StockByLocation = S['RetailStockByLocation'];
+export type LocationRow = S['RetailLocationRow'];
+export type LocationBranch = S['RetailLocationBranch'];
+export type LocationBalance = S['RetailLocationBalance'];
+export type InFlightReport = S['RetailTransfersInFlight'];
+export type InFlightTransfer = S['RetailInFlightTransfer'];
 export type Savings = S['RetailSavings'];
 export type SavingsRequest = S['RetailSavingsRequest'];
 export type SavingsSuggestion = S['RetailSavingsSuggestion'];
@@ -193,9 +201,17 @@ export interface RetailApi {
   changeCapabilities(body: CapabilityChange, version: number): Promise<CapabilitiesRead>;
   dailyProfit(q: { branchId?: string; from: string; to: string }): Promise<DailyProfit>;
   createTransfer(body: TransferRequest, idempotencyKey: string): Promise<Transfer>;
-  listTransfers(q: { branchId?: string; cursor?: string }): Promise<TransferPage>;
+  listTransfers(q: { branchId?: string; status?: TransferStatus; cursor?: string }): Promise<TransferPage>;
   getTransfer(id: string): Promise<Transfer>;
   voidTransfer(id: string, reason: string): Promise<Transfer>;
+  /** The destination receives a dispatched transfer: what arrived per line, or every line in full when `lines` is absent (ADR-033; capability transfer_receipt). */
+  receiveTransfer(id: string, lines: ReceiveLine[] | undefined, idempotencyKey: string): Promise<Transfer>;
+  /** The source takes a dispatched transfer back before it is received. */
+  cancelTransfer(id: string, reason: string, idempotencyKey: string): Promise<Transfer>;
+  /** Every product with its balance in each store and shop, by role, with stock on the way and a combined total (ADR-033). */
+  stockByLocation(q: { query?: string; categoryId?: string; negativeOnly?: boolean }): Promise<StockByLocation>;
+  /** Dispatched and not yet received transfers (capability transfer_receipt), the longest wait first. */
+  transfersInFlight(): Promise<InFlightReport>;
 
   // The cash book (FR-RET-17 to FR-RET-29, ADR-022). Every write takes the Idempotency-Key of its draft;
   // a void takes one too. Figures the schema marks "present only with retail.profit.read" are absent
@@ -470,9 +486,9 @@ const realRetail: RetailApi = {
     return unwrap(await api.POST('/api/v1/retail/transfers', { body, params: { header: { 'Idempotency-Key': key } } }));
   },
 
-  async listTransfers({ branchId, cursor }) {
+  async listTransfers({ branchId, status, cursor }) {
     return unwrap(
-      await api.GET('/api/v1/retail/transfers', { params: { query: { branch_id: branchId ? [branchId] : undefined, limit: 50, cursor } } }),
+      await api.GET('/api/v1/retail/transfers', { params: { query: { branch_id: branchId ? [branchId] : undefined, status, limit: 50, cursor } } }),
     );
   },
 
@@ -482,6 +498,45 @@ const realRetail: RetailApi = {
 
   async voidTransfer(id, reason) {
     return unwrap(await api.POST('/api/v1/retail/transfers/{transfer_id}/void', { params: { path: { transfer_id: id } }, body: { reason } }));
+  },
+
+  async receiveTransfer(id, lines, key) {
+    return unwrap(
+      await api.POST('/api/v1/retail/transfers/{transfer_id}/receive', {
+        params: { path: { transfer_id: id }, header: { 'Idempotency-Key': key } },
+        body: lines ? { lines } : {},
+      }),
+    );
+  },
+
+  async cancelTransfer(id, reason, key) {
+    return unwrap(
+      await api.POST('/api/v1/retail/transfers/{transfer_id}/cancel', {
+        params: { path: { transfer_id: id }, header: { 'Idempotency-Key': key } },
+        body: { reason },
+      }),
+    );
+  },
+
+  async stockByLocation({ query, categoryId, negativeOnly }) {
+    const items: LocationRow[] = [];
+    let report: StockByLocation = { branches: [], items: [] };
+    let cursor: string | undefined;
+    do {
+      const page = unwrap(
+        await api.GET('/api/v1/retail/reports/stock-by-location', {
+          params: { query: { query: query || undefined, category_id: categoryId || undefined, negative_only: negativeOnly || undefined, limit: PAGE, cursor } },
+        }),
+      );
+      report = page;
+      items.push(...(page.items ?? []));
+      cursor = page.next_cursor;
+    } while (cursor);
+    return { ...report, items };
+  },
+
+  async transfersInFlight() {
+    return unwrap(await api.GET('/api/v1/retail/reports/transfers-in-flight'));
   },
 
   // The cash book. Lists read every page of the window asked for (200 a page, the most the server allows).

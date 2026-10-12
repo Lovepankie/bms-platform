@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -58,7 +59,11 @@ final class TransferApi {
             Long unitCostMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)
-            Long lineCostMinor) {}
+            Long lineCostMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "What arrived, once the transfer was received (two-step transfers only)")
+            String receivedQty) {}
 
     @Schema(name = "RetailTransfer")
     record Transfer(
@@ -68,7 +73,11 @@ final class TransferApi {
             LocalDate transferDate,
             String note,
 
-            @Schema(allowableValues = {"completed", "voided"})
+            @Schema(
+                    allowableValues = {"completed", "in_transit", "received", "cancelled", "voided"},
+                    description =
+                            "completed: a one-step transfer. in_transit, received, cancelled: the two-step transfer"
+                                    + " of the transfer_receipt capability. voided: undone after completion or receipt")
             String status,
 
             String currency,
@@ -79,12 +88,44 @@ final class TransferApi {
             List<TransferLine> lines,
             Instant createdAt,
             UUID createdBy,
+
+            @Schema(description = "When the transfer was voided or cancelled")
             Instant voidedAt,
+
             UUID voidedBy,
-            String voidReason) {}
+            String voidReason,
+            Instant receivedAt,
+            UUID receivedBy,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The source cost of what did not arrive; " + COST_ONLY)
+            Long shortageCostMinor) {}
 
     @Schema(name = "RetailTransferVoidRequest")
     record VoidRequest(@NotBlank @Size(max = 300) String reason) {}
+
+    @Schema(name = "RetailTransferCancelRequest")
+    record CancelRequest(@NotBlank @Size(max = 300) String reason) {}
+
+    @Schema(name = "RetailTransferReceiveLine")
+    record ReceiveLine(
+            @NotNull UUID productId,
+
+            @NotNull
+            @PositiveOrZero
+            @Digits(integer = 11, fraction = 3)
+            @Schema(type = "string", example = "2.5", description = "What arrived; not more than was dispatched")
+            BigDecimal qty) {}
+
+    @Schema(name = "RetailTransferReceiveRequest")
+    record ReceiveRequest(
+            @Schema(
+                    description =
+                            "What arrived, one entry per line of the transfer; omit to receive everything as dispatched")
+            @Size(max = 200)
+            List<@Valid @NotNull ReceiveLine> lines,
+
+            @Size(max = 300) String note) {}
 
     @Schema(name = "RetailTransferPage")
     record TransferPage(List<Transfer> items, String nextCursor) {}

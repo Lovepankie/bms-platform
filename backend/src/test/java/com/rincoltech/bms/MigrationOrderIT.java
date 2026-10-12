@@ -1,6 +1,7 @@
 package com.rincoltech.bms;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -345,6 +346,112 @@ class MigrationOrderIT {
                             .query(String.class)
                             .single())
                     .isEqualTo("{fillfactor=80}");
+        }
+    }
+
+    /**
+     * #193: staging already holds transfers when the two-step transfer arrives. The migration replaces
+     * the status check, the entry-pair check, the void-column checks and the update guard of V22; every
+     * existing row (completed, voided) satisfies the new rules, all the new constraints end validated,
+     * and an existing completed transfer is still voided once by the same update and no more.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates transfers across V38.
+     */
+    @Test
+    void twoStepTransfersMigrationKeepsTheTransfersOfADatabaseAtV37() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            assertThat(flyway(postgres, "37").migrate().targetSchemaVersion).isEqualTo("37");
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            UUID hq = UUID.randomUUID();
+            UUID two = UUID.randomUUID();
+            UUID product = UUID.randomUUID();
+            UUID completed = UUID.randomUUID();
+            UUID voided = UUID.randomUUID();
+            owner.sql(
+                            "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v37', 'Test Tenant V37', '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            owner.sql(
+                            "INSERT INTO branches (id, tenant_id, code, name, is_head_office) VALUES (?, ?, 'HQ', 'Head Office', true)")
+                    .params(hq, tenant)
+                    .update();
+            owner.sql("INSERT INTO branches (id, tenant_id, code, name) VALUES (?, ?, 'BR2', 'Test Branch Two')")
+                    .params(two, tenant)
+                    .update();
+            owner.sql("SELECT platform_set_tenant_modules(?, ?::text[], NULL)")
+                    .params(tenant, "{retail}")
+                    .query((rs, n) -> 1)
+                    .single();
+            owner.sql("""
+                            WITH c AS (INSERT INTO retail_categories (id, tenant_id, name) VALUES (gen_random_uuid(), ?, 'Test')
+                                       RETURNING id),
+                                 u AS (INSERT INTO retail_units (id, tenant_id, name) VALUES (gen_random_uuid(), ?, 'pcs')
+                                       RETURNING id)
+                            INSERT INTO retail_products (id, tenant_id, code, description, category_id, unit_id, cost_minor,
+                                                         sell_minor, currency)
+                            SELECT ?, ?, 'T1', 'Test product', c.id, u.id, 100, 150, 'UGX' FROM c, u
+                            """).params(tenant, tenant, product, tenant).update();
+            for (UUID id : List.of(completed, voided)) {
+                boolean isVoided = id.equals(voided);
+                owner.sql("""
+                                INSERT INTO retail_transfers (id, tenant_id, from_branch_id, to_branch_id, transfer_date, currency,
+                                    cost_total_minor, status, created_by, voided_at, voided_by, void_reason)
+                                VALUES (?, ?, ?, ?, DATE '2026-01-15', 'UGX', 100, ?, gen_random_uuid(),
+                                    CASE WHEN ? THEN now() END, CASE WHEN ? THEN gen_random_uuid() END,
+                                    CASE WHEN ? THEN 'Test reason' END)
+                                """)
+                        .params(id, tenant, hq, two, isVoided ? "voided" : "completed", isVoided, isVoided, isVoided)
+                        .update();
+                owner.sql("""
+                                INSERT INTO retail_transfer_lines (id, tenant_id, transfer_id, line_no, product_id, qty,
+                                    unit_cost_minor, line_cost_minor)
+                                VALUES (gen_random_uuid(), ?, ?, 1, ?, 1, 100, 100)
+                                """).params(tenant, id, product).update();
+            }
+
+            MigrateResult result =
+                    DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+            assertThat(result.success).isTrue();
+            assertThat(result.migrations.stream().map(m -> m.version).toList())
+                    .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("38"), VERSIONS.size()));
+            assertThat(owner.sql("SELECT status FROM retail_transfers WHERE tenant_id = ? ORDER BY status")
+                            .param(tenant)
+                            .query(String.class)
+                            .list())
+                    .containsExactly("completed", "voided");
+            assertThat(owner.sql(
+                                    "SELECT count(*) FROM retail_transfer_lines WHERE tenant_id = ? AND received_qty IS NULL")
+                            .param(tenant)
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(2);
+            assertThat(owner.sql("""
+                                    SELECT count(*) FROM pg_constraint
+                                     WHERE conrelid IN ('retail_transfers'::regclass, 'retail_transfer_lines'::regclass)
+                                       AND contype = 'c' AND NOT convalidated
+                                    """).query(Long.class).single())
+                    .as("every check ends validated")
+                    .isZero();
+            assertThat(owner.sql("""
+                                    SELECT conname FROM pg_constraint
+                                     WHERE conrelid = 'retail_transfers'::regclass AND contype = 'c'
+                                       AND conname IN ('retail_transfers_status_check', 'retail_transfers_check1',
+                                                       'retail_transfers_check2', 'retail_transfers_check3')
+                                    """).query(String.class).list())
+                    .as("the replaced V22 checks are gone")
+                    .isEmpty();
+            assertThat(owner.sql("""
+                                    UPDATE retail_transfers SET status = 'voided', voided_at = now(), voided_by = gen_random_uuid(),
+                                        void_reason = 'Test reason' WHERE id = ?
+                                    """).param(completed).update()).isEqualTo(1);
+            assertThatThrownBy(() -> owner.sql("UPDATE retail_transfers SET void_reason = 'Other' WHERE id = ?")
+                            .param(completed)
+                            .update())
+                    .rootCause()
+                    .hasMessageContaining("voided to voided is not a transition");
         }
     }
 

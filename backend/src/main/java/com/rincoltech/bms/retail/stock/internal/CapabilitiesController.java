@@ -29,9 +29,11 @@ import org.springframework.web.bind.annotation.RestController;
 class CapabilitiesController {
 
     private final RetailCapabilities capabilities;
+    private final TransferService transfers;
 
-    CapabilitiesController(RetailCapabilities capabilities) {
+    CapabilitiesController(RetailCapabilities capabilities, TransferService transfers) {
         this.capabilities = capabilities;
+        this.transfers = transfers;
     }
 
     @Schema(name = "RetailCapabilities")
@@ -84,6 +86,7 @@ class CapabilitiesController {
         put(proposed, "purchasing", r.purchasing());
         put(proposed, "transfer_receipt", r.transferReceipt());
         put(proposed, "returns", r.returns());
+        transfers.guardSwitchOff(proposed);
         CapabilitiesResponse saved = response(capabilities.change(proposed, expected));
         return ResponseEntity.ok().eTag(String.valueOf(capabilities.version())).body(saved);
     }

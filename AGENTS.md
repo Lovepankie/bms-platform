@@ -57,7 +57,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   ADR-032) `V30`, the first-run preferences (issue #19, ADR-025) `V31`, and lending investments
   (issue #152, ADR-031) `V32`, and lending insights (issue #153, ADR-030) `V33`. Flyway runs with
   `outOfOrder` off, so a new migration takes a number above the highest one on any open branch
-  (`V34` is the retail cash book, issue #147; `V35` is claimed by lending, issue #176; `V36` is claimed by lending payment methods, issue #160; `V37` is retail branch roles, issue #191; `V38` next). The retail analytics pass (issue #149) is reports only on existing data: no migration; its
+  (`V34` is the retail cash book, issue #147; `V35` is claimed by lending, issue #176; `V36` is claimed by lending payment methods, issue #160; `V37` is retail branch roles, issue #191; `V38` is the retail two-step transfer, issue #193; `V39` next). The retail analytics pass (issue #149) is reports only on existing data: no migration; its
   queries are in `scripts/db-bench/queries` (k01 to k15).
 - **Built (trade 1 of 10, issue #191, ADR-033):** migration `V37` (`retail_branch_roles`, the permission
   `retail.branch_role.manage`, a backfill of role `both`); the tenant settings group `retail.capabilities`
@@ -73,6 +73,16 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   profile, the eight feature switches, a review before saving, `If-Match` on the settings version), the branch roles
   screen, `SCREEN_CAPABILITY` so a screen of a capability is offered only while `/me` lists it, and a tour per
   capability that starts once when first enabled (branch roles built; the others arrive with their screens).
+- **Built (trade 3 of 10, issue #193, ADR-033):** migration `V38` (the two-step transfer: it replaces the
+  `retail_transfers` status check, entry-pair check, void-column checks and update guard, adds the receipt
+  columns and `received_qty`, all expand only); with the `transfer_receipt` capability a transfer is
+  dispatched (`in_transit`), then received (a shortage is stock shrinkage at the destination valued at the
+  source cost) or cancelled; switching the capability off is refused while one is on its way; the reports
+  `stock-by-location` (stores then shops, subtotals, stock in transit, combined total) and
+  `transfers-in-flight` (built from the open dispatches, reconciled against retail transfer entries in
+  account 1190 only, since lending shares it); the staff screens for stock by store and shop, the in-transit
+  list and dispatch and receive (`docs/specs/retail-ui-notes.md`). One-step transfers are the default and
+  unchanged. Deferred: the shortage in the daily profit report, and the rest of the ten slices.
 - **Self-onboarding, build step 1 (issue #89, ADR-024):** migration `V23` with
   `onboarding_applications` and `notification_outbox`, reached only through definer functions;
   the public sign-up and applicant page; the operator portal on the platform host (operator
@@ -215,7 +225,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | Member area | Member self-service | MSS; chapter 11 | none | 7.11.18 |
 | `retail.manifest` | The retail vertical's registration with the core (ADR-020) | 3.28 | 6.11.1 chart | none |
 | `retail.catalogue` | Categories, units, products, append-only price history | RET-01, RET-02 | 6.11 | 7.11.20 |
-| `retail.stock` | Stock movements and balances, stock-takes, usage and damage, transfers between branches, reconciliation; retail posting helpers | RET-03, RET-07, RET-08, RET-11, RET-16 | 6.11 | 7.11.20 |
+| `retail.stock` | Stock movements and balances, stock-takes, usage and damage, transfers between branches (one step, or dispatch then receive or cancel), branch roles, the stock-by-location and transfers-in-flight reports, reconciliation; retail posting helpers | RET-03, RET-07, RET-08, RET-11, RET-16 | 6.11 | 7.11.20 |
 | `retail.sales` | Sales with snapshots, voids, credit buyers, payments | RET-04, RET-05, RET-11 | 6.11 | 7.11.20 |
 | `retail.purchasing` | Suppliers, restocks that set prices atomically | RET-06, RET-11 | 6.11 | 7.11.20 |
 | `retail.reports` | Valuation, revaluation difference, daily profit; the analytics reports of issue #149 (sales analysis, margins, stock health, credit control, business evaluation, owner dashboard), read only | RET-09, RET-10 | 6.11.3 | 7.11.20 |
@@ -388,8 +398,8 @@ Accepted (this list is the ADR index):
   the closed day, withdrawals checked again at execution, receipts queued as SMS that expire unsent
   (proposed, #151)
 - ADR-033 Wholesale support as optional per-tenant capabilities of the retail module: branch roles,
-  units, price lists, customer accounts, documents, purchasing; no second vertical (proposed, #190;
-  spec `docs/specs/trade-capabilities.md`)
+  units, price lists, customer accounts, documents, purchasing; no second vertical (accepted, #190;
+  amended by #193 for the two-step transfer; spec `docs/specs/trade-capabilities.md`)
 - ADR-034 Generated PDF documents: XHTML templates rendered with OpenHTMLtoPDF, on demand, stored once
   per version (accepted, #204)
 - ADR-035 Mobile money and card collections through Pesapal v3: hosted orders, the notification as a

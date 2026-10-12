@@ -73,7 +73,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
 
                 # ---------------- retail vertical (ADR-020) ----------------
                 retailCatalogue = component "Retail: Catalogue" "Categories, units, products with current cost and sell price; append-only price history written with every price change." "retail" "retail"
-                retailStock     = component "Retail: Stock" "Append-only stock movements and per-branch balances kept in the same transaction under a row lock; stock-takes; stock transfers between branches at cost, one entry per branch through inter-branch clearing; nightly reconciliation of balances against movements; retail posting rules; branch roles (store, shop, both) and the capability reads (ADR-033)." "retail" "retail"
+                retailStock     = component "Retail: Stock" "Append-only stock movements and per-branch balances kept in the same transaction under a row lock; stock-takes; stock transfers between branches at cost, one entry per branch through inter-branch clearing, optionally two-step (dispatched, then received or cancelled, a shortage valued at the source cost) behind the transfer_receipt capability; the stock-by-location and transfers-in-flight reports; nightly reconciliation of balances against movements; retail posting rules; branch roles (store, shop, both) and the capability reads (ADR-033)." "retail" "retail"
                 retailManifest  = component "Retail: Manifest" "The retail registration with the core: the module key and the retail.capabilities settings group (eight capability flags, shop or trade profile preset), validated here and stored by the core (ADR-033)." "retail" "retail"
                 retailSales     = component "Retail: Sales" "Sales with unit cost and price snapshots, credit buyers, payments against credit sales, voids by reversal; revenue and cost of goods sold posted per branch." "retail" "retail"
                 retailReports    = component "Retail: Reports" "Stock valuation at cost and expected sales at price per branch, the revaluation difference against the inventory account, daily profit per branch from the sale snapshots; the analytics reports (sales analysis, margins, stock health, credit control, business evaluation, owner dashboard); cost and profit only with retail.profit.read." "retail" "retail"
@@ -227,12 +227,12 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.retailCatalogue -> bms.api.audit "Writes audit rows"
         bms.api.retailCatalogue -> bms.api.tenancy "Reads the tenant currency"
         bms.api.retailCatalogue -> bms.db "Products and the append-only price history"
-        bms.web -> bms.api.retailStock "Stock by branch, movements, stock-takes, usage and damage reports, stock transfers"
+        bms.web -> bms.api.retailStock "Stock by branch, stock by store and shop, movements, stock-takes, usage and damage reports, stock transfers with receive and cancel, transfers in flight"
         bms.web -> bms.api.retailSales "POST /retail/sales with Idempotency-Key; voids; credit buyers"
         bms.api.retailSales -> bms.api.retailCatalogue "Reads the current cost and sell price to snapshot"
         bms.api.retailSales -> bms.api.retailStock "Moves stock; posts through the retail books"
         bms.api.retailStock -> bms.api.retailCatalogue "Reads the product cost for stock-take valuation"
-        bms.api.retailStock -> bms.api.ledger "Posts and reverses entries by system key, one per branch, in the same transaction"
+        bms.api.retailStock -> bms.api.ledger "Posts and reverses entries by system key, one per branch, in the same transaction; reads the inventory balance per branch and the inter-branch clearing balance of retail transfer entries only"
         bms.api.retailStock -> bms.api.tenancy "Resolves the branch; reads and writes the retail capability settings group; owns branch roles (store, shop, both) and the capability reads"
         bms.api.retailManifest -> bms.api.tenancy "Registers the module and supplies the retail.capabilities settings group the core validates through"
         bms.api.retailSales -> bms.api.tenancy "Reads the tenant profile and takes receipt and sale numbers from the tenant sequences"

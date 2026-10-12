@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 public class RetailCapabilities {
 
     public static final String BRANCH_ROLES = "branch_roles";
+    public static final String TRANSFER_RECEIPT = "transfer_receipt";
     private static final String MODULE = "retail";
 
     private final ModuleSettings settings;

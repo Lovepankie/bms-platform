@@ -300,7 +300,13 @@ Notes:
   on the source branch, for the transfer and for its void; the destination may be any active
   branch of the tenant. Listing and reading transfers needs `retail.stock.read` in the source or
   the destination branch, and the cost fields need `retail.profit.read` in either of them, because
-  the same cost is posted to both branches' inventory accounts.
+  the same cost is posted to both branches' inventory accounts. With the `transfer_receipt`
+  capability (issue #193, FR-RET-40) the same permission guards the two further steps, and the scope
+  follows who acts: the destination branch for a receipt, the source branch for a cancel (404
+  otherwise). The reports `stock-by-location` and `transfers-in-flight` need `retail.stock.read`
+  only; their cost and value fields need `retail.profit.read` in every branch of the report (a
+  per-branch value where the permission covers that branch). No permission is added by this slice,
+  so the matrix is unchanged.
 - `retail.price.below_cost` (issue #64, ADR-020 decision 5) lets a sale line be priced at or below
   the product's cost. It is in the catalogue (migration V13) but no default role holds it, not even
   the tenant admin: it is meant for a custom role, and roles are not yet tenant-editable, so today

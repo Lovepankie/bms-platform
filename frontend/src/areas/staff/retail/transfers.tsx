@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { retail, type Transfer } from '../../../api/retail';
 import { useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
+import { milliOf } from './maths';
 import { canUse } from './permissions';
 import { TransferSummary, useBranchLabel } from './transfer';
 import { Gate, Problem, useSingleBranch } from './ui';
@@ -29,6 +30,26 @@ export function whatMoved(t: Transfer): string {
   return `${n} ${n === 1 ? 'item' : 'items'}: ${names.slice(0, 2).join(', ')}${more}`;
 }
 
+/**
+ * The status in words. A void is shown as "cancelled" (the screen's word for it since the first
+ * transfers); a two-step transfer (ADR-033) is "on its way" until received, "taken back" when the
+ * source cancelled it before that, and "received, some short" when less arrived than was sent.
+ */
+export function statusBadge(t: Transfer): string | null {
+  switch (t.status) {
+    case 'voided':
+      return 'cancelled';
+    case 'in_transit':
+      return 'on its way';
+    case 'cancelled':
+      return 'taken back';
+    case 'received':
+      return (t.lines ?? []).some((l) => l.received_qty !== undefined && milliOf(l.received_qty) < milliOf(l.qty ?? '0')) ? 'received, some short' : 'received';
+    default:
+      return null;
+  }
+}
+
 // The API gives a transfer no number of its own yet, so a row shows the date, the route, what moved
 // and, for the user's own moves, "by you" (#112 item 1).
 export function TransferList({ items, onOpen }: { items: Transfer[]; onOpen: (id: string) => void }) {
@@ -42,7 +63,7 @@ export function TransferList({ items, onOpen }: { items: Transfer[]; onOpen: (id
           <button type="button" className="btn-ghost" style={{ width: '100%', textAlign: 'left', display: 'block' }} onClick={() => onOpen(t.id ?? '')}>
             <strong style={{ display: 'block', whiteSpace: 'nowrap' }}>
               {showDate(t.transfer_date)}
-              {t.status === 'voided' && <span className="badge badge-warning"> cancelled</span>}
+              {statusBadge(t) && <span className="badge badge-warning"> {statusBadge(t)}</span>}
             </strong>
             <span style={{ display: 'block' }}>From {label(t.from_branch_id)} to {label(t.to_branch_id)}</span>
             <span className="muted" style={{ display: 'block' }}>
@@ -67,7 +88,7 @@ function TransferDetail({ id, onClose }: { id: string; onClose: () => void }) {
   });
   const t = transfer.data;
   useCrumbTail(t ? `Move of ${t.transfer_date}` : undefined, onClose);
-  const mayCancel = canUse(me, 'transfer') && t?.status === 'completed';
+  const mayCancel = canUse(me, 'transfer') && (t?.status === 'completed' || t?.status === 'received');
   return (
     <section>
       <button type="button" onClick={onClose}>Back to the list</button>

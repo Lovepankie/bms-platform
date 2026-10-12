@@ -1403,8 +1403,16 @@ increment 5: schedule items, loan transactions and repayment allocations (sectio
 default. `V32__lending_investments.sql` (#152, ADR-031) is lending increment 10: the four investment
 tables of section 6.7, the two checker permissions of chapter 8 and account 4060 of section 6.6.2,
 added to `bms_seed_lending_chart` and to every tenant that already holds the lending chart. V24,
-V25 and V27 stay unused: with `outOfOrder` off a number below an applied one can never run. The
-next migration is V33 (`MigrationOrderIT`, chapter 15 section 15.4.3).
+V25 and V27 stay unused: with `outOfOrder` off a number below an applied one can never run.
+`V37__retail_branch_roles.sql` (#191, ADR-033) adds `retail_branch_roles`, the backfill of role
+`both` and `retail.branch_role.manage`. `V38__retail_two_step_transfers.sql` (#193, ADR-033) is the
+two-step transfer: three nullable columns on `retail_transfers`, `received_qty` on its lines, the
+replaced status check, entry-pair check, void-column checks and update guard (each new check added
+`NOT VALID`, validated, the old one dropped last, on a table of a few rows a day), a guard that
+lets one line column be set once, and a partial index on the transfers in transit. It changes no
+existing row and no existing behaviour; the flow is behind the `transfer_receipt` capability. The
+next migration takes the number above the highest on `main` (`MigrationOrderIT`, chapter 15
+section 15.4.3).
 
 ## 6.10 Open items
 
@@ -1503,13 +1511,26 @@ are all zero is not posted.
 | Stock-take gain | `inventory`, value of the surplus at cost | `stock_shrinkage` | (same entry as the loss) |
 | Transfer, at the source branch | `interbranch_clearing`, the lines at the source's cost | `inventory` | `retail.transfer_out:<id>` |
 | Transfer, at the destination branch | `inventory`, the same amount | `interbranch_clearing` | `retail.transfer_in:<id>` |
-| Transfer void | The reversal of each of the two entries, each in its own branch | | `retail.transfer_out_void:<id>`, `retail.transfer_in_void:<id>` |
+| Transfer void | The reversal of each of the entries of the transfer, each in its own branch | | `retail.transfer_out_void:<id>`, `retail.transfer_in_void:<id>`, `retail.transfer_shortage_void:<id>` |
+| Transfer dispatch (`transfer_receipt`), at the source branch | As the source entry above, posted alone; status `in_transit` | | `retail.transfer_out:<id>` |
+| Transfer receipt, at the destination branch | `inventory`, what arrived at the source's cost | `interbranch_clearing`, the same | `retail.transfer_in:<id>` |
+| Transfer shortage on receipt, at the destination branch | `stock_shrinkage`, what did not arrive at the SOURCE cost | `interbranch_clearing`, the same | `retail.transfer_shortage:<id>` |
+| Transfer cancel (`transfer_receipt`) | The reversal of the source entry | | `retail.transfer_out_cancel:<id>` |
 | Opening stock from the import, per branch | `inventory`, the branch's positive source balances at the product's current cost | `opening_balance_equity` | `retail.import_opening:<branch>` |
 
 A transfer moves stock at the source's current cost, the same amount on both sides, so it gains or
 loses nothing: the tenant's inventory and valuation at cost are unchanged, and in a consolidation the
 clearing account nets to zero (ADR-004). The retail chart has the clearing account since V22
 (code 1190, the lending chart's code and key, so a tenant with both verticals keeps one).
+
+With the two-step transfer the value in flight is the clearing balance of the dispatched, not yet
+received transfers: the source has credited inventory and debited clearing and the destination has
+not posted. Account 1190 is shared with lending, so its balance is never read as the in-flight
+figure. The in-flight report is the sum of the open dispatches' `cost_total_minor`, and the
+reconciliation compares it with the net of `interbranch_clearing` over the entries whose
+`source_module` is `retail` and `source_type` is `retail.transfer` (the dispatch, receipt, shortage,
+cancel and void entries and their reversals all carry that source), which equals it exactly: receipt
+plus shortage clear what the dispatch debited, and a reversal restores what it reversed.
 
 Imported history (sales, purchases, adjustments, returns, usage, legacy balances) posts nothing
 (ADR-020 decision 9); see section 6.11.4.
@@ -1549,11 +1570,14 @@ row here, so the table keeps free space on each page (`fillfactor = 80`) and has
 (V26 dropped the partial `qty < 0` index, which no query used and which made every update non-HOT):
 balance updates are HOT and do not grow the indexes (section 6.12).
 
-### `retail_transfers` (RLS; `bms_app` SELECT, INSERT, UPDATE of the void only)
+### `retail_transfers` (RLS; `bms_app` SELECT, INSERT, UPDATE of the transitions only)
 
-A stock transfer between branches (FR-RET-16, V22). The trigger `retail_transfers_guard_update` lets
-an UPDATE change only the status and the void columns, once, from `completed` to `voided`; DELETE is
-rejected for every role (`reject_mutation`).
+A stock transfer between branches (FR-RET-16, V22; the two-step transfer, FR-RET-40, V38). The
+trigger `retail_transfers_guard_update` lets an UPDATE make exactly four transitions, each once:
+`in_transit` to `received` (sets `in_entry_id`, `shortage_entry_id`, `received_at`, `received_by`),
+`in_transit` to `cancelled` and `completed` or `received` to `voided` (both set the void columns).
+Every other change, including any change to the transfer itself, is refused; DELETE is rejected for
+every role (`reject_mutation`). V22 allowed the void only; V38 replaced the trigger function.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -1562,16 +1586,22 @@ rejected for every role (`reject_mutation`).
 | `transfer_date` | date | The business date both entries and all four kinds of movement carry |
 | `note` | varchar(300) | Optional |
 | `currency`, `cost_total_minor` | | The lines at the source's cost (present in responses only with `retail.profit.read`) |
-| `out_entry_id`, `in_entry_id` | uuid | The source's and the destination's journal entries; both null when the cost is zero |
-| `status` | text | `completed` or `voided` |
-| `created_by`, `voided_at`, `voided_by`, `void_reason` | | CHECK a void has a time, a user and a reason |
+| `out_entry_id`, `in_entry_id` | uuid | The source's and the destination's journal entries. `completed`: both or neither (neither only at zero cost). `in_transit`: the source's only (none at zero cost). `cancelled`: the source's only, now reversed. `received`: the source's, unless zero cost; the destination's is null only when nothing of value arrived. CHECK `retail_transfers_entries_chk` (V38) |
+| `shortage_entry_id` | uuid | V38. The destination's shrinkage entry for what did not arrive, valued at the source cost; null when everything arrived. Composite FK to `journal_entries` |
+| `status` | text | `completed` (one step), `in_transit`, `received`, `cancelled`, `voided`. CHECK `retail_transfers_status_chk` (V38, replaces the V22 check) |
+| `received_at`, `received_by` | | V38. Set together, once, by the receipt (CHECK `retail_transfers_received_chk`); kept when a received transfer is later voided |
+| `created_by`, `voided_at`, `voided_by`, `void_reason` | | CHECK a void or a cancel has a time, a user and a reason (`retail_transfers_void_at_chk`, `retail_transfers_void_by_chk`, V38; V22's two checks tied them to `voided` alone) |
 
-### `retail_transfer_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
+### `retail_transfer_lines` (RLS; append-only except one column, `bms_app` SELECT, INSERT, UPDATE of `received_qty`)
 
 `transfer_id`, `line_no`, `product_id`, `qty numeric(14,3)` (positive), `unit_cost_minor` (the
 source's cost when moved, at most 10^13) and `line_cost_minor`. One line per product per transfer
 (`UNIQUE (transfer_id, product_id)`). The quantities that moved are the movements themselves
-(`source_line_id` the line).
+(`source_line_id` the line). `received_qty numeric(14,3)` (V38, null until a receipt, then at least
+zero and at most `qty`, CHECK `retail_transfer_lines_received_qty_chk`) is set once, by the receipt,
+while the transfer is in transit (trigger `retail_transfer_lines_guard_update`); null on a one-step
+transfer means all of it arrived with the transfer. Updates of any other column and every delete
+are refused.
 
 ### `retail_stocktakes`, `retail_stocktake_lines` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
@@ -1681,7 +1711,9 @@ SELECT, INSERT and UPDATE. A missing row means `both`. The migration backfills `
 of tenants that have the retail module, so a populated database changes in no way; correctness never
 depends on the backfill. The capability flags are not a table: they live in `tenant_settings.settings`
 under `module_groups.retail` (opaque to the core, validated by `retail.manifest`). Design only, no
-migration yet: everything else below.
+migration yet: everything else below, except the two-step transfer (issue #193, migration V38:
+`received_at`, `received_by` and `shortage_entry_id` on `retail_transfers`, `received_qty` on
+`retail_transfer_lines`, below).
 
 Optional tables and columns for the trade capabilities (FR-RET-33 to FR-RET-40): `retail_branch_roles`,
 `retail_product_units`, `retail_price_lists`, `retail_price_list_items`, `retail_customer_groups`,
@@ -1691,9 +1723,11 @@ Optional tables and columns for the trade capabilities (FR-RET-33 to FR-RET-40):
 `retail_sale_lines` and `retail_transfers`; the system accounts 2110, 4110, 5120 and 5130. Columns,
 indexes, RLS and postings are in `docs/specs/trade-capabilities.md` sections 10 and 12 and move
 into this chapter slice by slice as each is built. Most additions are expand only and default to
-the behaviour of this section; two replace constraints (the transfer status and entry-pair checks and
-update guard of `retail_transfers`, and the kind and sign checks of `retail_stock_movements`) and do
-it as `NOT VALID` first, `VALIDATE` in a later migration, old constraint dropped last.
+the behaviour of this section; two replace constraints (the transfer status, entry-pair and void-column
+checks and update guard of `retail_transfers`, built in V38, and the kind and sign checks of
+`retail_stock_movements`, not yet built) and do it as `NOT VALID` first, `VALIDATE`, old constraint
+dropped last; V38 validates in the same migration because `retail_transfers` gains a few rows a day,
+and the stock movement checks, on the largest table, validate in a later migration.
 
 ### 6.11.4 The pilot import (FR-RET-12; ADR-020 decision 9; #55)
 

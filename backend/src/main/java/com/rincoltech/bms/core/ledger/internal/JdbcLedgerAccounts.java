@@ -52,6 +52,21 @@ class JdbcLedgerAccounts implements LedgerAccounts {
 
     @Override
     @Transactional(readOnly = true)
+    public long balanceBySource(String systemKey, String sourceModule, String sourceType) {
+        return jdbc.sql("""
+                        SELECT coalesce(sum(l.debit - l.credit), 0)
+                          FROM journal_lines l
+                          JOIN journal_entries e ON e.id = l.entry_id
+                          JOIN gl_accounts a ON a.id = l.account_id
+                         WHERE a.system_key = ? AND e.source_module = ? AND e.source_type = ?
+                        """)
+                .params(systemKey, sourceModule, sourceType)
+                .query(Long.class)
+                .single();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<LocalDate, Long> movementByDay(String systemKey, UUID branchId, LocalDate from, LocalDate to) {
         Map<LocalDate, Long> movement = new LinkedHashMap<>();
         jdbc.sql("""
