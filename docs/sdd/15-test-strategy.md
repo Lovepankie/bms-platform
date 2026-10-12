@@ -287,6 +287,14 @@ Coverage gate for the lending calculation code: 95 percent lines (NFR-MNT-02).
 Updating a golden file is allowed only in a pull request that explains why the expected
 output changed.
 
+- **Client extras (issue #210, `docs/specs/client-extras.md` section 8).** Gateway callback tests use recorded fabricated
+  bodies and prove one booking under replay and under concurrent notification and poll; the SMS segment counter, cost parser
+  and every SMS template are golden tested; the AI `NumericValidator` has property tests and the evaluation set compares
+  answers with the metrics dictionary, with a planted-name leak test at the client boundary; report PDFs are compared by
+  extracted text and Excel files by cell values on fabricated datasets with hand-computed output, and the pack is cross
+  checked against the insights values. Real adapters have sandbox contract tests in a manually triggered CI job. Staging
+  refusal tests (SMS `live`, live Pesapal URL) run in `mvn verify`.
+
 ## 15.8 Test data policy
 
 - All fixtures are fabricated: names like "Test Borrower 01", phones in the range

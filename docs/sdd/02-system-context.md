@@ -39,8 +39,9 @@ Full permissions per role are in chapter 8.
 
 | System | Purpose | Status | Chapter |
 |---|---|---|---|
-| SMS and USSD aggregator | Outbound SMS (receipts, reminders, one-time codes), delivery reports, USSD sessions in phase 2 | Provider pending ADR-013; Africa's Talking is the working assumption | 12 |
-| Payment gateway | Mobile money collection (MTN MoMo, Airtel Money) and card payments, callbacks, settlement reports | Provider pending ADR-011; Pesapal and Interswitch are the candidates, and the pilot tenant has mentioned Interswitch | 12 |
+| SMS and USSD aggregator | Outbound SMS (receipts, reminders, one-time codes), delivery reports, USSD sessions in phase 2 | SMS: Africa's Talking first, ADR-036 (proposed); USSD pending ADR-013 | 12 |
+| Payment gateway | Mobile money collection (MTN MoMo, Airtel Money) and card payments, callbacks, settlement reports | Pesapal v3, ADR-035 (proposed) | 12 |
+| Language model provider | Aggregated, aliased portfolio figures for the advisory brief and question box (off by default, no personal data) | DeepSeek through an OpenAI-compatible API as a first test, ADR-037 (proposed) | 12 |
 | Mobile money operators | Hold the payer's wallet; reached only through the gateway | Via gateway | 12 |
 | Object storage | Cloudflare R2, S3 API: generated PDFs, uploads, encrypted backups | Decided in the product plan | 9, 12 |
 | Transactional email | Staff invitations, password resets, report-ready notices | Provider to be chosen with the infrastructure work | 12 |

@@ -46,7 +46,7 @@ spreadsheet for one agreed period is recommended.
 | 9 | Savings | FR-SAV-01 to FR-SAV-07, savings SMS events, savings reports. Built in #151 (ADR-032): the answers to open question 2 become product settings; the SMS are queued until an SMS sender exists | Open question 2 |
 | 10 | Investments | FR-INV-01 to FR-INV-07, investment reports | Open question 3 |
 | 11 | Member portal (PWA) | FR-IAM-09, FR-IAM-10, FR-MSS-01 to FR-MSS-03, FR-MSS-05, FR-MSS-06, FR-ORG-09, NFR-OFF-01 to NFR-OFF-06, NFR-PERF-06 | Increments 9 and 10 for the savings and investment screens |
-| 12 | Online payments | FR-PAY-01 to FR-PAY-06, FR-MSS-04 | Pending ADR-011; open question 6 |
+| 12 | Online payments | FR-PAY-01 to FR-PAY-06, FR-MSS-04 | ADR-035 (proposed): Pesapal v3; open question 6; design in `docs/specs/client-extras.md` |
 | 13 | Remaining P2 items | FR-REP-04a, FR-REP-07, FR-REP-08, FR-LCL-04, FR-DIS-05, FR-BR-06, FR-TEN-07, FR-MEM-12, FR-IMP-09, FR-DOC-05, FR-PRD-06 | |
 
 Later: USSD (FR-MSS-07, pending ADR-013), tenant data export and deletion (FR-TEN-09),
@@ -64,7 +64,7 @@ Until answered, the default stated in the chapter applies.
 | 3 | **Investment products.** Terms offered, how the return is agreed (per year or per term), paid monthly or at maturity, early withdrawal allowed and on what terms, rollover practice? | Fixed term, return at maturity, no early withdrawal | FR-INV-* |
 | 4 | **Branches and staff roles.** How many branches now and planned? How many staff per role? Who approves loans, disbursements and write-offs? What amount thresholds should skip the second approver? | One head office branch; every action needs a checker | FR-BR-*, FR-APR-04, chapter 8 |
 | 5 | **Regulator and compliance.** Which returns must be filed, to whom, how often, in what format? What record retention periods apply under the licence? | `lending.regulatory_summary` only; no automatic deletion | Chapter 14 section 14.7, NFR-DP-06 |
-| 6 | **Payments.** Which payment gateway account exists or is planned (Interswitch has been mentioned)? Which mobile money wallets and merchant codes does the tenant use today (MTN MoMo, Airtel Money)? | Cashier records mobile money receipts manually (chapter 12 section 12.4.3) | Pending ADR-011, FR-PAY-* |
+| 6 | **Payments.** Which payment gateway account exists or is planned (Interswitch has been mentioned)? Which mobile money wallets and merchant codes does the tenant use today (MTN MoMo, Airtel Money)? | Cashier records mobile money receipts manually (chapter 12 section 12.4.3). The product owner chose Pesapal v3 (ADR-035, proposed); the lender's own merchant account is still needed | ADR-035, FR-PAY-* |
 | 7 | **Loan products.** Are all current loans single-payment (bullet) with a rate for the whole term, as the register suggests? Are instalment loans offered or planned? Are any fees charged (application, processing)? Is the requested principal always disbursed in full? | Flat, per term, bullet; no fees; requested equals disbursed | FR-PRD-*, chapter 13 section 13.8 |
 | 8 | **Collateral handling.** Which items or documents does the tenant physically keep, where, and how are they released? Is a national ID card taken as collateral, and has the tenant confirmed that practice is lawful? | Type `national_id` enabled but can be disabled per tenant | FR-COL-*, FR-COL-05 |
 | 9 | **Next of kin contact.** May the tenant contact a borrower's next of kin about arrears, by SMS or otherwise? | No messages to next of kin | Chapter 11 section 11.3.2 |
@@ -77,3 +77,11 @@ Until answered, the default stated in the chapter applies.
 
 Member portal, online payments, USSD, savings, investments (phase 2); retail vertical;
 accrual accounting and provisioning; native apps; multi-currency operation; custom roles.
+
+## 5. Client extras (design, issue #210)
+
+Mobile money collections through Pesapal (ADR-035), SMS through Africa's Talking on the outbox (ADR-036), an advisory
+AI brief (ADR-037), the formal reports pack of increment 8 as PDF and Excel (ADR-038), and a note on credit bureaus are
+specified in `docs/specs/client-extras.md`, with the build slices as issues #211 to #233. They are additions to, not
+replacements of, the increments above: increment 8 is delivered by slices #214, #217, #222, #225 and #229; the real SMS
+adapter of increment 6 by slices #212 to #221 and #227; increment 12 by slices #211, #213, #216, #219, #224, #228 and #233.

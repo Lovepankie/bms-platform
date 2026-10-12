@@ -445,7 +445,9 @@ endpoint.
 | GET | `/notification-templates` | `core.notifications.read` | |
 | PUT | `/notification-templates/{event_key}/{channel}` | `core.notification_templates.manage` | FR-NTF-03 |
 | POST | `/notification-templates/{event_key}/{channel}/preview` | `core.notification_templates.manage` | Renders with fabricated sample data |
-| GET | `/notifications` | `core.notifications.read` | Send log with status |
+| GET | `/notifications` | `core.notifications.read` | Send log with status. For SMS it reads `sms_deliveries` (status, segments, recorded cost, masked recipient) (ADR-036) |
+| GET, PUT | `/settings/sms` | read / `core.settings.manage` | Sender name, window, `sms_include_balance`; the daily cap and `sms_sender_approved` are read only here (the operator sets them) |
+| PUT, DELETE | `/lending/members/{member_id}/sms-opt-out` | `lending.members.update` | `{scope: reminders \| all}`; audited. FR-NTF-14 |
 | GET | `/documents/{document_id}` | permission on the subject | Metadata. Declared "authenticated" (staff); the owning module's `DocumentAccess` decides, 403 `permission_denied` when it says no |
 | POST | `/documents/{document_id}/download-url` | permission on the subject | `{url, expires_at}`, 5 minutes; every issue is audited (`core.document.download_url_issued`). Member ID images (`id_front`, `id_back`) need `lending.members.verify_kyc` (chapter 8). FR-DOC-03 |
 
@@ -459,8 +461,9 @@ generic `POST /documents`. Built (#12): these two routes and the member document
 |---|---|---|---|
 | GET | `/reports` | authenticated staff | Catalogue filtered by permission. FR-RPT-01 |
 | GET | `/reports/{report_key}` | report's permission | Synchronous JSON for small reports; params as query |
-| POST | `/report-runs` | report's permission | `{report_key, params, format}`; async. FR-RPT-04 |
-| GET | `/report-runs/{run_id}` | requester or `core.audit.read` | Status and document id |
+| POST | `/report-runs` | report's permission (a pack needs all seven) | `{report_key \| pack, params, format}`; async, returns the run (an identical queued or running request returns the same run). FR-RPT-04, FR-RPT-06, ADR-038 |
+| GET | `/report-runs` | requester | Own runs with status, as-of date, expiry |
+| GET | `/report-runs/{run_id}` | requester or `core.audit.read` | Status and document ids; 422 codes `report_too_large`, `snapshot_unavailable`, `timeout` on `failed` runs. Download goes through `POST /documents/{id}/download-url`, 410 `report_expired` after 30 days |
 
 ### 7.11.9 Imports (`/imports`)
 
@@ -484,11 +487,15 @@ generic `POST /documents`. Built (#12): these two routes and the member document
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| POST | `/payments/intents` | `core.payments.collect` or `member.self.pay` | **M**. FR-PAY-01 |
+| POST | `/payments/intents` | `core.payments.collect` or `member.self.pay` | **M**. FR-PAY-01. `{purpose, subject_id, amount_minor, payer_phone}`; returns the intent with `redirect_url` once the order exists. 422 `collections_disabled`, `exceeds_payoff`, `subject_not_payable` (ADR-035) |
+| GET | `/payments/intents` | `core.payments.read` | List with status and flags (`paid_less`, `paid_more`, `late`, `reversed_pending_review`) |
 | GET | `/payments/intents/{intent_id}` | initiator or `core.payments.read` | Polled by the UI |
+| POST | `/payments/statements` | `core.payments.manage` | Multipart statement CSV; matches rows, posts fees once. FR-PAY-11 |
+| GET | `/payments/reconciliation` | `core.payments.read` | The latest nightly differences (ADR-035 decision 9) |
+| GET, PUT | `/payments/settings` | read / `core.settings.manage` | `collections_enabled`; 409 `merchant_not_bound_to_tenant` for any tenant but the one named by `BMS_PESAPAL_TENANT_ID`, 409 `gateway_method_unmapped` until the `gateway` payment method is mapped (ADR-035 decision 11) |
 | GET | `/payments/unallocated` | `core.payments.read` | FR-PAY-04 |
 | POST | `/payments/unallocated/{receipt_id}/allocate` | `core.payments.allocate` | **M** |
-| POST | `/payments/callbacks/{provider}` | public, signature verified | On the callback host. FR-PAY-02 |
+| POST, GET | `/payments/callbacks/{provider}/{token}` | public, path token; the body is never trusted | On the callback host. Identifies the intent, queues a status query, answers 200. FR-PAY-02, FR-PAY-08 |
 
 ### 7.11.11 Lending: members (`/lending/members`)
 
@@ -740,8 +747,8 @@ Codes (422 unless stated): `term_not_offered`, `amount_out_of_range`, `product_a
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/payments/callbacks/{provider}` | 7.11.10 |
-| POST | `/channels/sms/{provider}/delivery-reports` | FR-NTF-05 |
+| POST, GET | `/payments/callbacks/{provider}/{token}` | 7.11.10 |
+| POST | `/channels/sms/{provider}/delivery-reports/{token}` | FR-NTF-05; forward-only status; unknown ids ignored (ADR-036) |
 | POST | `/channels/ussd/{provider}` | Session callback. FR-MSS-07 (Later) |
 
 ### 7.11.20 Retail (`/retail`, ADR-020)
@@ -976,6 +983,19 @@ in `docs/specs/lending-insights-metrics.md`.
 | GET | `/lending/insights/digest` | `core.settings.manage` | The digest settings with an `ETag` |
 | PUT | `/lending/insights/digest` | `core.settings.manage` | `{enabled, email_recipients (max 5), telegram_chat_id, send_hour}` with `If-Match`; 422 `digest_needs_recipient` when on with no recipient; 412 `version_mismatch`; audited (FR-INS-08) |
 | GET | `/lending/insights/digest/preview` | `core.settings.manage` | `{as_of, subject, text}`: the text the digest would send now |
+
+### 7.11.24 Lending: AI assistant (`/lending/advisor`, ADR-037, off by default)
+
+Refused with 404 `advisor_disabled` unless the tenant has switched the assistant on. Responses carry
+`Cache-Control: no-store`. Every answer body has `advisory: true`, `as_of`, `source` (`model` or `fallback`), the text,
+and `facts` (keys with display values). Provider errors never reach the client; the fallback is returned instead.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/lending/advisor/brief` | `lending.advisor.use` | Today's brief; the model brief is returned only to a user whose scope covers every branch and who holds `lending.insights.all_officers`; otherwise (and when the model was not used) `source: fallback` with `reason` (`provider_down`, `cap`, `validation`, `off`, `scope`) |
+| POST | `/lending/advisor/questions` | `lending.advisor.use` | `{question}` up to 300 characters, answered from the caller's scope; 422 `question_refused` with a reason class (`too_long`, `digits`, `email`, `id_pattern`, `series_number`, `member_name`), 429 `daily_limit`. FR-AIA-07 |
+| GET, PUT | `/lending/advisor/settings` | `lending.advisor.configure` (read), `core.settings.manage` (switch on with `acknowledged: true`) | `enabled`, `daily_token_cap`, acknowledgement record; audited; 403 `advisor_not_available` when the tenant is not in `BMS_AI_ENABLED_TENANTS` |
+| GET | `/lending/advisor/calls` | `lending.advisor.configure` | The call log without personal data, 90 days |
 
 ## 7.12 Example: record a repayment
 

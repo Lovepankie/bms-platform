@@ -152,9 +152,12 @@ within one 160 character GSM-7 segment where possible:
 - Messages go to the member's primary phone; never to next of kin in the MVP (contacting
   next of kin about a debt raises privacy questions the tenant must decide; listed as an
   open question).
-- Sender ID: the tenant's approved sender name if registered with the aggregator, else the
-  aggregator's shared sender.
-- Cost: segments are counted per tenant (FR-NTF-07).
+- Sender ID: the tenant's approved sender name if registered with the provider, else the
+  provider's shared sender (ADR-036).
+- Cost: segments are counted per tenant (FR-NTF-07) and the provider's cost per message is recorded (FR-NTF-15).
+- Opt-out: a member can be opted out of reminders and arrears messages, or of all non-security SMS (FR-NTF-14).
+- Staging never sends a real SMS (FR-NTF-12). Receipts and payment links are not held by the sending window; reminders
+  and arrears notices are.
 
 ## 11.4 USSD (later)
 
@@ -192,7 +195,8 @@ intent, so the API and data model do not block it:
    `failed` or "still waiting, we will SMS you".
 5. On success the repayment or deposit is booked (FR-PAY-03) and the receipt SMS is sent.
 
-Gateway specifics are in chapter 12; the choice of gateway is pending ADR-011.
+Gateway specifics are in chapter 12; the gateway is Pesapal (ADR-035, proposed). Pesapal v3 gives a hosted payment page
+rather than a push prompt, so step 2 returns a link the member opens and step 3 happens on that page.
 
 ## 11.6 Staff in the field
 

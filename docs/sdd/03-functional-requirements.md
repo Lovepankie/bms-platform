@@ -365,7 +365,7 @@ is dismissed (`setup_dismissed`, tenant wide).
 | FR-NTF-02 | The system shall send SMS for: loan disbursed, repayment received (receipt), instalment due in 3 days, instalment due today, loan overdue at 1, 7 and 30 DPD, loan closed, savings deposit and withdrawal, investment funded, investment maturing in 7 days, investment paid out, portal one-time codes. | Each event has a default template per tenant; a test renders each with fabricated data within 160 GSM-7 characters or explicitly allows 2 segments. | MVP (loan events); P2 (one-time codes, savings and investment events) |
 | FR-NTF-03 | A tenant admin shall edit SMS templates using named placeholders (for example `{member_first_name}`, `{amount}`, `{due_date}`, `{loan_no}`, `{balance}`, `{tenant_name}`). Unknown placeholders are rejected at save. | Save with `{unknown}` fails with `unknown_placeholder`. | MVP |
 | FR-NTF-04 | Reminder and arrears messages shall be sent only inside the tenant's configured sending window (default 08:00 to 20:00 local time); messages due outside it wait for the next window. Receipts and one-time codes are sent immediately. | Tested with a clock at 21:00. | MVP |
-| FR-NTF-05 | The worker shall retry a failed send with backoff (1, 5, 30 minutes), then mark it `failed`. Delivery reports from the aggregator update status to `delivered` or `undelivered`. | Status history is visible per message. | MVP |
+| FR-NTF-05 | The worker shall retry a failed send with backoff (1 and 5 minutes, the attempts of FR-NTF-09; the 30 minute step is dropped for SMS, ADR-036), then mark it `failed`. Delivery reports from the aggregator update status to `delivered` or `undelivered`. | Status history is visible per message. | MVP |
 | FR-NTF-06 | The system shall not send the same reminder twice for the same schedule item and reminder type. | Idempotency key `(schedule_item_id, reminder_type)`; rerunning the reminder job sends nothing new. | MVP |
 | FR-NTF-07 | The system shall count SMS segments sent per tenant per month for plan reporting. | The count appears in the super admin tenant view. | MVP |
 | FR-NTF-08 | Email notifications (staff invitations, password reset, report ready) shall use the same outbox. | Tested with a fake provider. | MVP |
@@ -373,8 +373,19 @@ is dismissed (`setup_dismissed`, tenant wide).
 | FR-NTF-10 | Email shall be sent over SMTP with implicit TLS (default port 465) using `BMS_SMTP_HOST`, `BMS_SMTP_PORT`, `BMS_SMTP_USER`, `BMS_SMTP_PASSWORD` and `BMS_MAIL_FROM`. With any of them unset the email sender is off, its rows stay `pending` and nothing fails. Secrets, message texts, links and addresses are never logged. | `OutboxIT` with fake senders; the test profile sets none of the variables. | MVP |
 | FR-NTF-11 | Operator alerts shall go to Telegram through the Bot API `sendMessage` (`BMS_TELEGRAM_BOT_TOKEN`, `BMS_TELEGRAM_OPERATOR_CHAT_ID`) and to the email of every active platform operator. Unset, the Telegram sender is off as in FR-NTF-10. The WhatsApp relay is build step 3 of the spec. | `OnboardingIT`: a newly confirmed application writes one Telegram row and one email row per operator, once. | MVP |
 
-The SMS aggregator is not yet chosen (pending ADR-013). Chapter 12 defines the adapter
-interface so the choice does not change these requirements.
+The first SMS provider is Africa's Talking (ADR-036, proposed; USSD stays pending ADR-013). Chapter 12 defines the adapter
+interface so the choice does not change these requirements. FR-NTF-12 to FR-NTF-16 below add the tenant link, the modes, the
+delivery log, the opt-out and the cost record.
+
+| ID | Requirement | Acceptance criteria | Phase |
+|---|---|---|---|
+| FR-NTF-12 | An SMS shall be sent only according to `BMS_SMS_MODE`: `off` leaves rows pending, `sink` records them as `sunk` without a network call, `allowlist` sends only to allow-listed numbers, `live` sends. Staging refuses `live`; production refuses `sink` and the fake provider. | Startup tests per environment; a staging deposit writes a `sunk` row and no network call. | MVP |
+| FR-NTF-13 | An outbox row shall carry the tenant that caused it and a category (`transactional`, `reminder`, `arrears`), set from the bound tenant, and every SMS shall write a tenant-scoped delivery log row (masked recipient, keyed hash, provider message id, segments, status, failure reason). | Isolation test on the column and the log; the tenant never comes from a parameter. | MVP |
+| FR-NTF-14 | A member can be opted out of reminder and arrears SMS, or of all non-security SMS; an opted-out message is logged `blocked_optout` and not sent. Matching is by member and number hash. | Test with a reused number. | MVP |
+| FR-NTF-15 | The provider's cost for each message shall be recorded as integer minor units with the raw value, and the monthly total shall be available in `core.sms_usage`. | Cost parser golden test (`UGX 32.0000` gives 32); report equals a hand-computed month. | MVP |
+| FR-NTF-16 | A read timeout after an SMS request was written shall be recorded `unknown` and never retried automatically; delivery reports move status forward only; the SMS client's time per message stays under a quarter of the outbox lease. | Timeout test; out-of-order report test; lease test. | MVP |
+| FR-NTF-17 | A transactional SMS shall expire one hour after it is queued and a reminder at the end of its window day; rows queued before the channel moved from a non-sending mode to a sending one shall be dropped (`backlog_dropped`); the default savings receipt shall omit the balance unless the tenant setting `sms_include_balance` is on. | Clock tests; backlog test; template test. | MVP |
+| FR-NTF-18 | The outbox claim shall take transactional rows first and rows round-robin across tenants; SMS volume shall be limited by an operator-set per tenant daily cap (read only to the tenant) and a platform ceiling, with deferral rather than loss over a cap; staging shall refuse any non-sandbox SMS provider URL or account in every mode. | Claim order test; cap tests; startup refusal tests. | MVP |
 
 ## 3.12 Document generation (DOC)
 
@@ -415,8 +426,8 @@ Chapter 13 is the full specification.
 
 ## 3.15 Payment intake from gateways (PAY)
 
-The payment gateway is not yet chosen (pending ADR-011). These requirements are
-gateway-neutral; chapter 12 defines the adapter.
+The gateway is Pesapal v3 (ADR-035, proposed). The requirements below are gateway-neutral; chapter 12 defines the
+adapter. FR-PAY-07 to FR-PAY-11 add the rules that Pesapal's hosted order and unsigned notification make necessary.
 
 | ID | Requirement | Acceptance criteria | Phase |
 |---|---|---|---|
@@ -853,3 +864,38 @@ a golden test that recomputes it from raw rows (chapter 15 section 15.7).
 | FR-INS-07 | Today's numbers shall be live and refresh every 60 seconds without websockets; a past date shall read `lending_loan_daily_snapshots`, written nightly until increment 6 takes it over; the page shall render in under a second on the staging stack with the fabricated seed scaled 20 times. | Snapshot rows equal an independent replay on past dates; `InsightsPerformanceIT` records the timings. | MVP |
 | FR-INS-08 | A tenant admin shall be able to switch on a daily plain-text digest for the whole tenant to up to five email addresses and one Telegram chat at a chosen hour; it is off by default and goes once a day through the outbox. | Unit and integration tests of the text, the settings and the idempotent queue. | MVP |
 | FR-INS-09 | Savings and investments shall add their panels (balances, inflows, outflows, interest and returns, dormant accounts, maturity ladder) through the `InsightsPanel` registry, computed by those modules from their posted rows, for a tenant that holds their data. | A tenant with savings accounts and investments gets both panels with every key of the metrics dictionary and values equal to `SavingsMetrics` and `InvestmentMetrics`; a tenant with neither gets no panel; an officer-narrowed request gets no panel. | P2 |
+
+## 3.31 Gateway rules added by ADR-035 (PAY)
+
+| ID | Requirement | Acceptance criteria | Phase |
+|---|---|---|---|
+| FR-PAY-07 | A collection shall be a hosted order created server side by a single locked creator with a random merchant reference (`BMS-<env>-<32 hex>`, at most 50 characters, allowed characters only) bound to one intent, one purpose and one subject; the payer cannot change the amount or the subject; a reference is used for one creation attempt only, and a lost creation answer ends the intent `failed` (`creation_unknown`). | Reference format test; two concurrent creators make one order; a timeout never reuses the reference. | P2 |
+| FR-PAY-08 | A payment notification shall carry no authority: it only identifies an intent (an unknown identifier makes no outbound call), queues a throttled status query, and is answered 200. Money is booked only from a successful authenticated status query whose merchant reference and currency equal the intent's. | Forged, replayed and unknown notifications book nothing and call nothing. | P2 |
+| FR-PAY-09 | The booked amount shall be the amount the status query reports as paid, in the intent's currency; a different currency is never booked to the subject and a subject that cannot take the money turns it into an unallocated receipt. | Amount and currency table of the spec section 3.7 as tests. | P2 |
+| FR-PAY-10 | A completed payment found after the intent expired shall still be booked; a reversal reported after booking shall raise an alert and a maker-checker reversal request and shall never reverse automatically. | Late and reversed tests. | P2 |
+| FR-PAY-11 | An operator shall be able to upload the merchant statement; matched rows record the fee and settled amount and post the fee once to the gateway charges account; unmatched rows become unallocated receipts. | Statement golden test; second upload posts nothing. | P2 |
+| FR-PAY-12 | A completed payment the purpose handler refuses shall never be retried silently: `before_last_repayment` is retried once dated today, any other business refusal posts the amount to unallocated receipts in the same transaction and raises an alert, and five technical failures end in `needs_attention`. The servicing ports shall take an external reference and a receipt-notice flag, and a repeated reference shall return the first transaction. | Handler refusal tests; port idempotency test. | P2 |
+| FR-PAY-13 | While merchant credentials are environment-level, collections shall be switchable only for the tenant named by `BMS_PESAPAL_TENANT_ID` (409 `merchant_not_bound_to_tenant` otherwise) and only when the `gateway` payment method is mapped. A reversal found after booking shall raise one maker-checker request per intent made by the tenant's non-login system user; card payments shall be re-queried for 120 days. | Binding test; reversal request test; card window test. | P2 |
+
+## 3.32 AI portfolio assistant (AIA)
+
+Decision ADR-037 (proposed). Advisory only; off by default; specification `docs/specs/client-extras.md` section 5.
+
+| ID | Requirement | Acceptance criteria | Phase |
+|---|---|---|---|
+| FR-AIA-01 | A tenant admin shall be able to switch the assistant on, only for a tenant named in the platform's `BMS_AI_ENABLED_TENANTS` (403 `advisor_not_available` otherwise), after acknowledging what is sent and where; the acknowledgement (user, time, text version) is stored and audited; off is the default and stops all calls. | With the switch off no outgoing call happens. | P2 |
+| FR-AIA-02 | Only aggregated insights figures and aliases (branch, product) shall be sent to the model, with the officer dimension excluded and any group under five loans or members suppressed; no member name, phone, ID number, address, loan number or staff identity. | Canary test: planted fabricated names appear in no request or log. | P2 |
+| FR-AIA-03 | Every number in an AI text shall equal a figure supplied in the same request and cited by the same point; a response that fails is retried once, then replaced by the deterministic brief labelled as an automatic summary. | Validator property tests, including direction words against the delta sign and metric polarity; fallback test. | P2 |
+| FR-AIA-04 | The assistant shall be advisory: no tool use, no write path, no member message; every AI text shows an advisory label and the data's as-of time. | Label test; no write permission in the module. | P2 |
+| FR-AIA-05 | Usage shall be capped per tenant per day (tokens), per user per day (questions) and platform-wide; a call over a cap is refused before any network call. | Cap tests. | P2 |
+| FR-AIA-06 | Each call shall be logged without personal data (aliases and aggregates only), with model, tokens, estimated cost, latency, validation outcome and fallback reason, kept 90 days. | Log content test. | P2 |
+| FR-AIA-07 | A question shall be refused before any call if it exceeds 300 characters or contains a run of six or more digits after separators are removed, an email address, an ID number pattern, a loan or receipt number of the tenant's series, or a word matching a member's name that is not a common word (checked by an indexed query, not in memory). | Scrub tests with spaced numbers, short loan numbers, common-word surnames and fabricated names. | P2 |
+| FR-AIA-08 | The automatic daily brief shall be one per tenant and day over all branches and shown only to users whose branch scope covers every branch and who hold `lending.insights.all_officers`; other users shall get the deterministic brief for their scope, and questions shall be answered from facts computed under the caller's scope. | Scope tests with a branch manager. | P2 |
+
+## 3.33 Reports pack (RPT, continued)
+
+| ID | Requirement | Acceptance criteria | Phase |
+|---|---|---|---|
+| FR-RPT-06 | The reports pack shall produce, from one consistent snapshot, one combined PDF and one Excel workbook of the seven formal reports (portfolio, PAR, collections, disbursements, officer performance, collateral register, regulator summary), and each report shall also be runnable alone (ADR-038). | Pack run on the fabricated demo book; numbers agree across reports and with the insights page. | MVP |
+| FR-RPT-07 | Excel exports shall use numeric cells, real dates and explicit string cells for any text starting with `=`, `+`, `-` or `@`, and shall be refused above 200,000 rows per sheet with `report_too_large`. | Cell value and injection tests. | MVP |
+| FR-RPT-08 | A report run shall query in one read-only `REPEATABLE READ` transaction into a disk spool and commit before rendering, record its as-of date and snapshot time, time out after 10 minutes, run within the configured concurrency, PDF row cap and sheet cap (staging 1, 500 and 20,000), and its files shall be deleted after 30 days (download answers 410 `report_expired`). | Timeout, snapshot, expiry and `ReportMemoryIT` tests. | MVP |

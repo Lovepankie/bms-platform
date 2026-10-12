@@ -49,11 +49,12 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 platform      = component "Platform Console" "Tenant creation with head office, modules and first admin; module switching; subscriptions and suspension; tenant admin MFA reset. Served only on the platform host to platform operators (ADR-016, ADR-018)." "core" "core"
                 onboarding    = component "Onboarding" "Public sign-up and applicant page endpoints with rate limits and a honeypot; the applications queue with the possible-repeat warning; Verify, Needs info, Reject; Activate, which creates the tenant through the platform console's TenantProvisioning and queues the activation email in the same transaction; nightly expiry and 90 day deletion (ADR-024)." "core" "core"
                 ledger        = component "General Ledger" "Chart of accounts, periods, post_entry, reversals, trial balance, subledger reconciliation (ADR-004)." "core" "core"
-                notifications = component "Notifications" "Outgoing message port with a recording fake adapter, and the platform outbox (ADR-024): rows written in the cause's transaction, a sender job with SKIP LOCKED claims, SMTP email over implicit TLS and Telegram operator alerts, each off when unconfigured; failed rows for the operator portal. Later: tenant templates, SMS adapters, delivery reports." "core" "core"
+                notifications = component "Notifications" "Outgoing message port with a recording fake adapter, and the platform outbox (ADR-024): rows written in the cause's transaction, a sender job with SKIP LOCKED claims, SMTP email over implicit TLS and Telegram operator alerts, each off when unconfigured; failed rows for the operator portal. SMS is a channel of the outbox (ADR-036): the row carries its tenant and category, a tenant delivery log records status and cost, windows, opt-out, Africa's Talking adapter, modes that sink SMS outside production." "core" "core"
                 documents     = component "Documents" "PDF rendering, uploads, object storage keys, signed download URLs." "core" "core"
-                reporting     = component "Reporting" "Report catalogue, parameters, report runs, exports." "core" "core"
+                reporting     = component "Reporting" "Report catalogue, parameters, asynchronous report runs over one read-only REPEATABLE READ snapshot, PDF through the shared document templates and streamed Excel exports, 30 day file expiry (ADR-038)." "core" "core"
                 imports       = component "Imports" "Batches, rows, issues, review queue, preview, commit orchestration; templates are registered by modules." "core" "core"
-                payments      = component "Payments" "Payment intents, gateway adapter, verified callbacks, unallocated receipts; booking via registered purpose handlers." "core" "core"
+                payments      = component "Payments" "Payment intents, the Pesapal v3 gateway adapter (ADR-035): hosted orders with a random merchant reference, notifications as untrusted hints confirmed by an authenticated status query, idempotent booking through the registered purpose handlers (loan repayment, savings deposit, subscription payment), unallocated receipts, nightly reconciliation, merchant statement upload." "core" "core"
+                ai            = component "AI" "LlmClient port and one OpenAI-compatible adapter (ADR-037, off by default): per tenant and platform token caps, circuit breaker, call log without personal data. Depends on no vertical." "core" "core"
                 jobs          = component "Jobs" "The worker role: db-scheduler tasks with state in PostgreSQL, run one tenant per transaction (ADR-008). Drains the outbox; nightly arrears, interest, reminders, reconciliation, key purge." "core" "core"
                 operations    = component "Operations" "/healthz, /readyz (database and migrations at head), /version; refuses to start as an over-privileged database role; the one Idempotency-Key protocol (chapter 7 section 7.8) every money-moving retail and lending route claims its key through, inside the caller's transaction (issue #177)." "core" "core"
 
@@ -67,6 +68,8 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 lendingSeed   = component "Lending: Fabricated Seed" "The seed-lending command: fills one empty staging tenant with fabricated members, products, applications, serviced loans, savings accounts with a year of movements and investments with twelve months of history; refused in production and on a tenant holding data (ADR-026, ADR-032)." "lending" "lending"
                 insights      = component "Lending: Insights" "The insights read model (ADR-030): morning brief, portfolio, revenue from posted journal lines, member activity, drill-down tables with CSV export; the nightly per-loan snapshot until increment 6 owns it; the owner's plain-text daily digest; the panel registry savings and investments plug into." "lending" "lending"
                 collections   = component "Lending: Collections" "Due and arrears lists, officer assignment, collection actions, promises to pay." "lending" "lending"
+                advisor       = component "Lending: AI Advisor" "Advisory daily brief and question box over insights facts (ADR-037): aggregates and aliases only, number validator, fallback to the deterministic brief, off by default, advisory label." "lending" "lending"
+                lendingReports = component "Lending: Reports" "The definitions of the seven formal reports, built on the insights figures through a public port, (portfolio, PAR, collections, disbursements, officer performance, collateral register, regulator summary) and the monthly pack (ADR-038)." "lending" "lending"
 
                 # ---------------- retail vertical (ADR-020) ----------------
                 retailCatalogue = component "Retail: Catalogue" "Categories, units, products with current cost and sell price; append-only price history written with every price change." "retail" "retail"
@@ -89,11 +92,12 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         # ==================================================================
         # EXTERNAL SYSTEMS (SDD chapter 12)
         # ==================================================================
-        smsAggregator  = softwareSystem "SMS and USSD Aggregator" "Outbound SMS, delivery reports, USSD sessions in phase 2. Provider pending ADR-013." "external"
-        paymentGateway = softwareSystem "Payment Gateway" "Mobile money and card collections, callbacks, status queries, settlement reports. Provider pending ADR-011." "external"
+        smsAggregator  = softwareSystem "SMS Provider" "Outbound SMS and delivery reports through Africa's Talking (ADR-036); USSD sessions in phase 2 are pending ADR-013." "external"
+        paymentGateway = softwareSystem "Payment Gateway (Pesapal)" "Hosted mobile money and card collections in UGX, notifications, transaction status queries (ADR-035). No payouts, no settlement API." "external"
         mobileMoney    = softwareSystem "Mobile Money Operators" "MTN MoMo and Airtel Money wallets. Reached only through the payment gateway." "external"
         emailService   = softwareSystem "Transactional Email Service" "SMTP over implicit TLS (port 465): activation and applicant links, operator alerts; later staff invitations, password resets, report-ready notices (ADR-024)." "external"
         telegram       = softwareSystem "Telegram Bot API" "sendMessage to the operator chat: alerts for new applications (ADR-024)." "external"
+        llmProvider    = softwareSystem "Language Model Provider" "OpenAI-compatible chat API (DeepSeek as a first test, ADR-037). Receives aggregated, aliased portfolio figures only; off by default." "external"
 
         # ==================================================================
         # PEOPLE TO SYSTEM
@@ -198,7 +202,26 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.payments    -> bms.api.ledger "Posts unallocated receipts and gateway charges"
         bms.api.payments    -> paymentGateway "Queries transaction status before booking a callback" "HTTPS"
         paymentGateway      -> bms.api.payments "Sends payment callbacks" "HTTPS"
-        smsAggregator       -> bms.api.notifications "Sends delivery reports" "HTTPS"
+        smsAggregator       -> bms.api.notifications "Sends delivery reports to a tokenised callback path" "HTTPS"
+        bms.api.notifications -> smsAggregator "Sends SMS from the outbox: sink on staging, tenant window and opt-out applied (ADR-036)" "HTTPS"
+        bms.api.notifications -> bms.db "Writes the tenant SMS delivery log"
+        bms.api.payments    -> bms.api.savings "Books succeeded deposits through the registered purpose handler (registry, no code dependency)"
+        bms.api.payments    -> bms.api.notifications "Queues the payment link and receipts through the outbox"
+        bms.api.payments    -> bms.api.jobs "Creates orders, polls pending intents for 48 hours, reconciles nightly"
+        bms.api.payments    -> bms.db "Intents, notifications (identifiers only), statement rows"
+        bms.web -> bms.api.advisor "Insights card: advisory brief and question box"
+        bms.api.advisor -> bms.api.insights "Reads PortfolioFacts under the caller's scope: typed aggregates, small groups suppressed, no member rows"
+        bms.api.advisor -> bms.api.ai "Sends prompts of aliases and aggregates; receives validated text"
+        bms.api.advisor -> bms.api.jobs "Runs the daily brief per tenant with the assistant on"
+        bms.api.advisor -> bms.api.audit "Audits switching on and the acknowledgement"
+        bms.api.advisor -> bms.db "Reads and writes the stored brief"
+        bms.api.ai -> llmProvider "Chat completions with a 30 second budget and a circuit breaker" "HTTPS"
+        bms.api.ai -> bms.db "Call log without personal data, token counters"
+        bms.api.lendingReports -> bms.api.insights "Reads figures through the public InsightsFigures port with a public PortfolioScope (cross checked by test)"
+        bms.api.lendingReports -> bms.api.reporting "Registers the seven reports and the pack"
+        bms.api.lendingReports -> bms.db "Reads loans, schedules, transactions, collateral and snapshots under RLS"
+        bms.api.reporting -> bms.api.documents "Stores run files (PDF, Excel); expiry deletes the object"
+        bms.api.reporting -> bms.api.jobs "Runs the report runner and the nightly file expiry"
 
         bms.web -> bms.api.retailCatalogue "Manages categories, units and products; edits prices"
         bms.api.retailCatalogue -> bms.api.audit "Writes audit rows"
@@ -389,14 +412,14 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
             autoLayout lr
         }
 
-        dynamic bms.api "MobileMoneyRepayment" "A member pays an instalment by mobile money through the gateway (phase 2; pending ADR-011)." {
+        dynamic bms.api "MobileMoneyRepayment" "A member or a cashier collects an instalment by mobile money through a Pesapal hosted order (ADR-035)." {
             member -> bms.web "Chooses Pay, confirms amount and wallet phone"
             bms.web -> bms.api.payments "POST /member/payments with Idempotency-Key"
-            bms.api.jobs -> paymentGateway "Initiates the collection"
-            paymentGateway -> mobileMoney "Prompts the payer's phone"
+            bms.api.jobs -> paymentGateway "Creates the hosted order and gets the payment link"
+            paymentGateway -> mobileMoney "Hosted page: the payer picks MTN MoMo, Airtel Money or card"
             member -> mobileMoney "Approves with the wallet PIN"
-            paymentGateway -> bms.api.payments "Callback, signature verified"
-            bms.api.payments -> paymentGateway "Queries the transaction status before booking"
+            paymentGateway -> bms.api.payments "Notification: identifiers only, a hint"
+            bms.api.payments -> paymentGateway "Authenticated status query decides; nothing is booked on the notification alone"
             bms.api.payments -> bms.api.loans "Books the repayment once, keyed on the provider reference"
             bms.api.loans -> bms.api.ledger "Posts the repayment journal against gateway clearing"
             bms.api.jobs -> smsAggregator "Sends the receipt SMS"

@@ -120,6 +120,10 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   digest settings, indexes); the owner's daily digest through the outbox; `seed-lending
   --insights-demo [--scale N]` for a fabricated year. Metrics dictionary:
   `docs/specs/lending-insights-metrics.md`.
+- **Client extras, design only (issue #210):** `docs/specs/client-extras.md` specifies mobile money through Pesapal
+  (ADR-035), SMS through Africa's Talking on the outbox (ADR-036), the advisory AI brief (ADR-037) and the formal
+  reports pack as PDF and Excel (ADR-038), with a note on credit bureaus. Nothing is built; the build slices are issues
+  #211 to #233 in the order of the spec's section 10. The numbers 033 and 034 belong to open pull requests.
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
   Cloudflare Tunnel and pulls every green build of `main` from a `staging` pointer tag; hosts are
@@ -189,6 +193,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `core.reporting` | Report catalogue and runs | RPT; chapter 14 | 6.5 `report_runs` | 7.11.8 |
 | `core.imports` | Import batches, review queue, commit | IMP; chapter 13 | 13.4 | 7.11.9 |
 | `core.payments` | Payment intents, gateway, callbacks | PAY; chapter 12 | 6.5 | 7.11.10 |
+| `core.ai` (ADR-037, design) | The `LlmClient` port and one OpenAI-compatible adapter, token caps, call log, circuit breaker; depends on no vertical | FR-AIA | 6.13 `ai_calls` | none |
 | `core.jobs` | db-scheduler tasks, per-tenant job runner (ADR-008) | 5.4.4 | `scheduled_tasks` | none |
 | `core.operations` | `/version`, readiness, database role guard, the `Idempotency-Key` protocol | NFR-SEC-03 | none | 7.8, 7.11.1 |
 | `lending.manifest` | The vertical's registration with the core | 5.4.3 | none | none |
@@ -200,6 +205,8 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `lending.savings` | Savings products, accounts, movements, end of day and interest, statements, savings reports (ADR-032) | SAV | 6.7 | 7.11.15 |
 | `lending.investments` | Investment products, investments, returns job, maturity, rollover, early withdrawal, maturity ladder (ADR-031) | INV; 3.25.1 R-INV | 6.7 | 7.11.16 |
 | `lending.insights` | The insights read model, snapshots, daily digest, panel registry (ADR-030) | INS | 6.7 | 7.11.22 |
+| `lending.advisor` (ADR-037, design) | The advisory AI brief and question box over insights facts; aggregates and aliases only | FR-AIA | 6.13 `ai_briefs` | 7.11.24 |
+| `lending.reports` (ADR-038, design) | The definitions of the seven formal reports and the monthly pack, built on the insights figures through a public port | RPT; chapter 14 section 14.10 | 6.5 `report_runs` | 7.11.8 |
 | `lending` collections | Due lists, arrears, actions | CLN | 6.7 | 7.11.17 |
 | Member area | Member self-service | MSS; chapter 11 | none | 7.11.18 |
 | `retail.manifest` | The retail vertical's registration with the core (ADR-020) | 3.28 | 6.11.1 chart | none |
@@ -379,12 +386,23 @@ Accepted (this list is the ADR index):
 - ADR-033 Wholesale support as optional per-tenant capabilities of the retail module: branch roles,
   units, price lists, customer accounts, documents, purchasing; no second vertical (proposed, #190;
   spec `docs/specs/trade-capabilities.md`)
+- ADR-034 Generated PDF documents: XHTML templates rendered with OpenHTMLtoPDF, on demand, stored once
+  per version (accepted, #204)
+- ADR-035 Mobile money and card collections through Pesapal v3: hosted orders, the notification as a
+  hint, the status query as the truth, idempotent booking through purpose handlers (proposed, #210;
+  settles the question that was pending ADR-011)
+- ADR-036 SMS as a channel of the notification outbox: Africa's Talking first, tenant link and delivery
+  log, modes with a sink outside production, windows and opt-out (proposed, #210; settles the SMS half
+  of pending ADR-013)
+- ADR-037 AI portfolio monitoring: advisory, aggregates and aliases only, numbers validated in code,
+  off by default (proposed, #210)
+- ADR-038 The reports pack: asynchronous runs over one snapshot, PDF through the shared templates,
+  streamed Excel (proposed, #210)
 
 Pending (cite only as "pending ADR-NNN"):
 
-- ADR-011 Payment gateway (Pesapal or Interswitch)
 - ADR-012 Credit scoring model beyond the rules-based default
-- ADR-013 SMS and USSD aggregator
+- ADR-013 USSD aggregator (the SMS half is settled by ADR-036)
 - ADR-021 Weighted average cost for retail, per tenant (ADR-020 decision 6)
 - ADR-022 The cash book: expenses, banking and advances, likely partly core (ADR-020)
 

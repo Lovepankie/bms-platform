@@ -233,6 +233,18 @@ Notes:
   table as CSV, audited as `lending.insights.exported`; a member name in an export is reduced to
   initials unless the user holds `lending.members.read`, and no insights table carries a phone or
   an ID number. The daily digest settings need `core.settings.manage`.
+- Client extras (issue #210), **design only: the permissions `core.payments.manage`, `lending.advisor.use` and
+  `lending.advisor.configure` are not in the matrix above yet; the migration of the slice that needs each adds its row**
+  (`core.payments.manage` with #224, the two advisor permissions with #226), with the grants stated here: `core.payments.manage`
+  to the tenant admin and accountant, `lending.advisor.use` to the tenant admin, branch manager, accountant and auditor,
+  `lending.advisor.configure` to the tenant admin. `core.payments.collect` starts a gateway collection and `core.payments.manage` uploads the
+  merchant statement and reads the reconciliation (ADR-035); switching collections on needs `core.settings.manage`. The
+  AI assistant (ADR-037) needs `lending.advisor.use` to read the brief and ask, `lending.advisor.configure` to read the
+  call log and set caps, and `core.settings.manage` to switch it on after the acknowledgement. SMS sender name, window and
+  `sms_include_balance` need `core.settings.manage`, while the daily SMS cap and the sender approval are set by the
+  platform operator only; the assistant can be switched on only for tenants in `BMS_AI_ENABLED_TENANTS`; collections can be
+  switched on only for the tenant named by `BMS_PESAPAL_TENANT_ID`; a member's SMS opt-out needs `lending.members.update`. Running a report run needs
+  the report's own permission (a pack needs all seven); loan officers still see only their own loans.
 - Branch managers approve loans, but never one they submitted or appraised (FR-APR-03).
 - Member ID images (`id_front`, `id_back`) need `lending.members.verify_kyc` in the member's
   branch, so tenant admins and branch managers, the people who verify KYC; photos and other member
@@ -470,6 +482,9 @@ the lending module is switched on (runbook `docs/runbooks/`, onboarding a tenant
 | Object storage credentials | Host env file; bucket-scoped token | Yearly |
 | SMS aggregator and payment gateway credentials | Host env file | Per provider policy |
 | Outbox senders: `BMS_SMTP_PASSWORD` (with `BMS_SMTP_HOST`, `BMS_SMTP_PORT`, `BMS_SMTP_USER`, `BMS_MAIL_FROM`) and `BMS_TELEGRAM_BOT_TOKEN` (with `BMS_TELEGRAM_OPERATOR_CHAT_ID`) | Host env file; optional, a sender is off when unset | Per provider policy; the bot token through BotFather |
+| Pesapal merchant credentials (`BMS_PESAPAL_CONSUMER_KEY`, `BMS_PESAPAL_CONSUMER_SECRET`, the platform pair `BMS_PESAPAL_PLATFORM_*`) and the notification path token `BMS_PESAPAL_IPN_TOKEN` | Host env file; per-tenant credentials later, encrypted with `BMS_DATA_KEY` (ADR-035) | Yearly, on staff change, on suspected exposure; the token whenever the IPN URL is re-registered |
+| SMS provider key and callback token (`BMS_SMS_AT_API_KEY`, `BMS_SMS_AT_USERNAME`, `BMS_SMS_CALLBACK_TOKEN`, `BMS_SMS_ALLOWLIST`) | Host env file (ADR-036) | Yearly, on staff change |
+| Language model provider key (`BMS_AI_API_KEY`, with `BMS_AI_BASE_URL`, `BMS_AI_MODEL`) | Host env file (ADR-037) | Yearly, on staff change |
 | Backup encryption key | Host env file and an offline copy held by the dev lead | On staff change |
 
 No secret is ever committed. `.env.example` lists every variable with a placeholder.
@@ -565,6 +580,15 @@ Detailed requirements are NFR-DP-01 to NFR-DP-08 in chapter 4. Design consequenc
   class or a sender's own safe message, never a text. A Telegram bot token that is not in the
   token shape switches the sender off, so it cannot reach an error message. Senders log the row
   id, channel and template only.
+- Client extras (issue #210). **Payments:** the payer's phone number is held on the intent and masked everywhere else; a
+  notification stores identifiers only; the status response's masked payer account is kept as the provider gives it; no
+  card data ever reaches the platform (the hosted page takes it). **SMS:** the delivery log keeps the recipient masked to
+  the last four digits plus a keyed hash, never the message text; the platform outbox row keeps the full number and the
+  parameters only until sent (ADR-024) and the number until the 30 day purge; an opted-out member is never texted for
+  reminders. **AI:** only aggregates and aliases for branches and products leave the platform, with groups under five suppressed and no officer dimension; the call log holds no personal data by construction
+  and by test; the tenant acknowledges what is sent and where (ADR-037; spec section 5.11 lists the Data Protection and
+  Privacy Act considerations). **Reports:** files with member names and balances are deleted after 30 days; downloads
+  are audited.
 - Staff free text on a loan (purpose text, return, rejection and cancellation notes, visit notes)
   can hold personal data about the member or third parties. It is staff-only: the member area
   never returns it.
@@ -590,6 +614,12 @@ Detailed requirements are NFR-DP-01 to NFR-DP-08 in chapter 4. Design consequenc
 | Sign-up used to learn which emails are customers | Same answer for known and unknown emails; a known email gets the link by email only |
 | A leaked activation or applicant link | Hashed at rest in its own table, single purpose, 72 hours (activation) or 7 days (applicant), in the URL fragment only; in the outbox only until sent, at most 7 days |
 | The sign-up form used to send attacker-written text (phishing relay) | The confirmation email carries only the server's reference and link; volume bounded per mailbox and globally in the database |
+| A tenant admin switches on collections or the assistant ahead of the operator | The merchant is bound to one named tenant and the assistant needs the platform allow-list (ADR-035, ADR-037) |
+| Forged or replayed Pesapal notification | The notification carries no authority: only an authenticated status query books, once per provider reference (ADR-035, spec section 3.13) |
+| Staging sends real SMS or prompts a real payer | SMS sink by default and `live` refused on staging; the Pesapal live URL refused on staging; sandbox accounts only (ADR-036, ADR-035) |
+| Personal data reaches the language model provider | Typed aggregate facts and aliases only, question scrub, leak tests, tenant acknowledgement, off by default (ADR-037, spec section 5.12) |
+| The model states a number that is not in the data | Cited-fact validation in code, fallback to the deterministic brief, advisory label (ADR-037) |
+| A report run exposes another tenant's data or a formula in a name executes in Excel | Row-level security in the run transaction, explicit string cells for dangerous leading characters (ADR-038) |
 
 ## 8.11 Open items
 

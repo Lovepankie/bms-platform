@@ -26,7 +26,10 @@ Common rules for every report:
   "collected" and "disbursed" measures; ledger reports include both lines, which cancel.
 - **Permissions.** Each report names its permission (chapter 8). Loan officers see only
   loans where they are the responsible officer in collections reports.
-- **Exports.** CSV for every report; PDF for every report; XLSX for financial statements.
+- **Exports.** CSV for every report; PDF for every report; XLSX for financial statements and, under ADR-038, for the seven
+  formal reports of the pack (section 14.10).
+- **Runs.** Reports expected to take over five seconds run asynchronously in one read-only `REPEATABLE READ` snapshot
+  (section 14.10).
 
 Report keys below are the `report_key` values in the API (chapter 7 section 7.11.8).
 
@@ -329,6 +332,39 @@ the end of that period; the headline for the whole range counts what was paid by
 `docs/specs/lending-insights-metrics.md`; each has a golden test (chapter 15 section 15.7). Until
 the report runs of FR-RPT-04 exist, the insights drill-down tables are the CSV exports of these
 figures (FR-INS-06).
+
+## 14.10 The reports pack and report runs (ADR-038, issue #111)
+
+Design only. The seven formal reports are defined in sections 14.3, 14.4, 14.5 and 14.7 and are not redefined here:
+
+| Report | Key | Section |
+|---|---|---|
+| Portfolio | `lending.portfolio_outstanding` | 14.3 |
+| Portfolio at risk and ageing | `lending.par` | 14.3 |
+| Collections | `lending.expected_vs_collected`, `lending.arrears_list` | 14.4 |
+| Disbursements | `lending.disbursements` | 14.3 |
+| Officer performance | `lending.officer_performance` | 14.4 |
+| Collateral register | `lending.collateral_register` | 14.5 |
+| Regulator summary | `lending.regulatory_summary` | 14.7 |
+
+Rules added by the pack:
+
+- **One implementation per figure.** The reports reach the insights figures through the public read port `InsightsFigures`
+  of `lending.insights` (the insights queries and `Scope` stay internal to it), so the reports and the page share the metric
+  definitions of section 14.9; only the reports the page does not compute have their own queries. A
+  cross check test asserts PAR30, PAR90, principal outstanding, collection rate and disbursed equal the insights values for
+  the same range.
+- **One snapshot, then render.** A run queries in a single read-only `REPEATABLE READ` transaction into a disk spool and commits
+  before rendering; it records `as_of` and `snapshot_at`, and a pack's seven reports agree with each other. On staging (about
+  224 MB of heap) one run at a time, 500 PDF rows and 20,000 sheet rows, each report rendered to its own PDF and merged on disk.
+- **Outputs.** PDF through the shared document templates (landscape above seven columns, header repeated, a parameters box,
+  tables over 3,000 rows cut with a pointer to the Excel file) and Excel through a streaming writer (numeric cells, real
+  dates, explicit string cells for text starting with `=`, `+`, `-` or `@`, 200,000 row cap per sheet). Totals come from one
+  piece of code, so the files cannot differ.
+- **The pack** is a combined PDF (cover with parameters and a sign-off block, contents, the seven reports) and one workbook
+  (a sheet per report and a Parameters sheet) from one snapshot. It needs every report's permission.
+- **Regulator summary.** Labelled "Data summary. Not a filed return." until the client's return formats are known.
+- **Retention.** Run files are deleted after 30 days; downloads then answer 410 `report_expired`.
 
 ## 14.8 Test datasets
 

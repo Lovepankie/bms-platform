@@ -23,9 +23,9 @@
 
 | Integration | Direction | Decision | Adapter interface |
 |---|---|---|---|
-| SMS | Outbound, plus delivery report callbacks | Pending ADR-013 (Africa's Talking is the working assumption) | `SmsProvider` |
+| SMS | Outbound, plus delivery report callbacks | ADR-036 (proposed): Africa's Talking first, as a channel of the notification outbox | `SmsProvider` |
 | USSD | Inbound session callbacks | Pending ADR-013, later phase | `UssdProvider` |
-| Payment gateway (mobile money, cards) | Outbound collection requests, inbound callbacks, status queries, settlement reports | Pending ADR-011 (Pesapal or Interswitch) | `PaymentGateway` |
+| Payment gateway (mobile money, cards) | Outbound collection requests, inbound callbacks, status queries, settlement reports | ADR-035 (proposed): Pesapal v3 | `PaymentGateway` |
 | Object storage | Outbound | Cloudflare R2 over the S3 API (product plan) | `ObjectStorage` |
 | Transactional email | Outbound | Provider chosen with the infrastructure work; no ADR yet | `EmailProvider` |
 
@@ -54,16 +54,25 @@ accepted can be recognised.
    verify, look up by `provider_message_id`, update status to `delivered` or
    `undelivered`. Unknown ids are logged and ignored.
 
-### 12.3.3 What pending ADR-013 must settle
+### 12.3.3 What ADR-036 settles and what stays pending ADR-013
 
-Provider; sender ID registration per tenant or shared; delivery report authentication
-method; USSD code model (per tenant or shared); pricing model and whether SMS cost is
-passed to tenants (commercial, outside this repository); data residency of message
-content.
+ADR-036 (proposed) settles the SMS half: the provider (Africa's Talking first), the tenant link on the outbox row, the
+delivery log, modes that make a real send on staging impossible, sending windows, opt-out, the delivery report
+endpoint with a path token, and cost recording (spec `docs/specs/client-extras.md` section 4). Still pending ADR-013:
+the USSD code model (per tenant or shared) and USSD sessions. Commercial questions (whether SMS cost is passed on)
+stay outside this repository. The flow of section 12.3.2 changes in one way: the body is rendered at send time inside
+a short tenant transaction, because tenant template overrides and the opt-out need the tenant. The channel returns `Sent`,
+`Deferred(until)` or `Unknown` (a read timeout after the request was written) instead of only throwing; retries follow the outbox
+(attempts at once, after 1 and after 5 minutes) and the 30 minute step of FR-NTF-05 is dropped for SMS.
 
 ## 12.4 Payment gateway and mobile money
 
-### 12.4.1 Interface
+### 12.4.1 Interface (amended by ADR-035)
+
+Pesapal v3 collections are hosted orders, so `initiate_collection` becomes `create_order` and returns a redirect URL;
+`verify_callback` and `parse_callback` become `read_notification`, which extracts identifiers only, because the
+notification carries no signature. The listing below is the original shape; `docs/specs/client-extras.md` section 3.3 is
+the current one.
 
 ```
 PaymentGateway
@@ -110,13 +119,27 @@ the cashier records it) need no integration: the cashier records a repayment wit
 payment method `mtn_momo` or `airtel_money` and the wallet's transaction reference. This
 is the MVP path and works before any gateway is chosen.
 
-### 12.4.4 What pending ADR-011 must settle
+### 12.4.4 What ADR-035 settles
 
-Gateway (Pesapal or Interswitch; the pilot tenant has mentioned Interswitch); which
-account holds the merchant relationship (each tenant its own merchant account, or a
-platform account with sub-accounts; this has licensing implications); callback
-authentication (signature scheme, IP allow-list); sandbox availability; settlement report
-access; fee model (commercial terms stay outside this repository); refunds.
+The gateway is Pesapal v3. The merchant relationship is the lender's own account (bound to the one tenant named by `BMS_PESAPAL_TENANT_ID` while
+credentials are environment-level; per-tenant credentials, each with its own IPN id and token, in slice #233); the platform's own merchant account is used only for
+subscription payments. Notifications are untrusted hints, confirmed by an authenticated status query. The public
+reference documents no signature, no settlement report endpoint and no payout endpoint, so reconciliation re-queries
+intents and uses an uploaded merchant statement for fees, and payouts are out of scope. The fee model stays a
+commercial decision outside this repository; refunds are a manual back-office step for now. Detail: spec
+`docs/specs/client-extras.md` section 3.
+
+### 12.4.5 Language model provider (ADR-037)
+
+```
+LlmClient
+  complete(request{model, messages, max_tokens, response_format}) -> {text, input_tokens, output_tokens, finish_reason}
+```
+
+One OpenAI-compatible chat adapter reads `BMS_AI_BASE_URL`, `BMS_AI_MODEL` and `BMS_AI_API_KEY`, so another compatible
+provider is configuration. Total budget 30 seconds per request, the chapter 12 section 12.1 breaker, token accounting
+for the per tenant caps, provider error bodies never stored. Only the advisor module calls it, and only with the typed
+fact list and aliases (spec section 5.4).
 
 ## 12.5 Object storage (Cloudflare R2)
 
@@ -152,7 +175,8 @@ Each adapter reads its settings from environment variables documented in `.env.e
 (chapter 9 owns the file). Naming pattern: `SMS_PROVIDER`, `SMS_*`; `PAYMENT_GATEWAY`,
 `PAYMENT_*`; `R2_*`; `EMAIL_PROVIDER`, `EMAIL_*`. Setting a provider key to `fake` selects
 the recording fake adapter, which is the default in local and test environments and is
-refused in production.
+refused in production. The SMS adapter adds `BMS_SMS_MODE` (`off`, `sink`, `allowlist`, `live`; section 4.4 of the
+client extras spec) and the AI adapter `BMS_AI_*`; the complete list is in chapter 9 section 9.8.
 
 Object storage (#12): `OBJECT_STORAGE` is `r2` (default) or `fake`, and `fake` refuses to start
 outside the dev and test profiles. `r2` needs `R2_ENDPOINT`, `R2_DOCUMENTS_ACCESS_KEY_ID`,

@@ -169,6 +169,21 @@ migration) with status only, no details.
   SMTPS to the mail provider and HTTPS to `api.telegram.org`; nothing is opened inbound.
   `BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR` (default 30) and
   `BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR` (default 60) are the global sign-up caps.
+- Client extras (issue #210, design): Pesapal `BMS_PESAPAL_BASE_URL`, `BMS_PESAPAL_CONSUMER_KEY`,
+  `BMS_PESAPAL_CONSUMER_SECRET`, `BMS_PESAPAL_IPN_ID`, `BMS_PESAPAL_IPN_TOKEN`, `BMS_PESAPAL_TENANT_ID` (the one tenant the
+  merchant account is bound to), `BMS_PESAPAL_PLATFORM_CONSUMER_KEY`, `BMS_PESAPAL_PLATFORM_CONSUMER_SECRET`,
+  `BMS_PESAPAL_PLATFORM_IPN_ID`, `BMS_PESAPAL_PLATFORM_IPN_TOKEN` (an IPN registration belongs to one credential pair); SMS `BMS_SMS_PROVIDER`, `BMS_SMS_MODE` (`off` default, `sink` on staging),
+  `BMS_SMS_ALLOWLIST`, `BMS_SMS_AT_BASE_URL`, `BMS_SMS_AT_USERNAME`, `BMS_SMS_AT_API_KEY`, `BMS_SMS_CALLBACK_TOKEN`, `BMS_SMS_PLATFORM_DAILY_CAP`; AI
+  `BMS_AI_PROVIDER`, `BMS_AI_BASE_URL`, `BMS_AI_API_KEY`, `BMS_AI_MODEL`, `BMS_AI_PLATFORM_DAILY_TOKENS`, `BMS_AI_ENABLED_TENANTS`; reports `BMS_REPORTS_MAX_CONCURRENT_RUNS`,
+  `BMS_REPORTS_PDF_ROW_CAP`, `BMS_REPORTS_XLSX_ROW_CAP` (staging 1, 500 and 20,000, because the staging API has about 224 MB of
+  heap). Each adapter is off
+  when its values are unset. The API gets them and no other container does. Staging uses sandbox values only and the
+  startup guards of `docs/specs/client-extras.md` section 8 refuse a live Pesapal URL, SMS `live` mode and any non-sandbox SMS
+  provider URL or account in every SMS mode there. The staging
+  tunnel must expose the callback host for provider notifications (confirmed in the spike, issue #211). Edge rules: a
+  rate limit on `/api/v1/payments/callbacks/*` and `/api/v1/channels/*` on the callback host, and the provider's source
+  address allow-list for SMS delivery reports where the provider publishes one; the proxy redacts the path token from its
+  access log.
 - Edge rule for the public sign-up (ADR-024, chapter 7 section 7.10), added by the dev lead in the
   Cloudflare dashboard for the platform host: a rate limiting rule on `URI Path starts with
   /api/v1/platform/sign-up/`, counting by IP, 10 requests per minute, action block for 10 minutes.
@@ -189,6 +204,12 @@ migration) with status only, no details.
 db-scheduler runs inside the API process with its state in `scheduled_tasks` (ADR-008). No
 separate worker container exists yet; `BMS_SCHEDULER_ENABLED` lets one be split out later from
 the same image.
+
+Jobs added by the client extras design (issue #210, each with its slice): `core.payments.create-order` and
+`core.payments.poll-pending` (every 2 minutes, 48 hours per intent), `core.payments.reconcile` (nightly after the end of day),
+`core.reporting.report-runner` (every 15 seconds, one run per tenant, one at a time on staging and two elsewhere) and its nightly file expiry,
+`lending.advisor.daily-brief` (per tenant with the assistant on, idempotent by date), and a higher batch for the SMS
+channel of the outbox sender.
 
 Platform jobs (no tenant bound): `core.notifications.outbox-sender` every 30 seconds (at most 50
 rows a run), `core.notifications.outbox-purge` nightly at 03:15 (sent rows after 30 days) and
@@ -231,7 +252,9 @@ tenant host every minute; an alert when
 the newest R2 backup is older than 26 hours or the last restore drill failed or is older than 9 days
 (the watchdog of section 9.10); disk above 70 percent; failed db-scheduler
 executions (`scheduled_tasks.consecutive_failures > 0`); the nightly job failure alerts of
-chapter 5. The API logs JSON (ECS format) with the request id on every line in the `server`
+chapter 5; and, for the client extras (spec section 9.2), notifications per hour, unknown references and reconciliation
+differences for payments, failed and unknown SMS and the daily cap at 80 percent, AI fallbacks, validation failures and
+cap hits, and report run time and queue age. The API logs JSON (ECS format) with the request id on every line in the `server`
 profile.
 
 ## 9.12 Host layout
