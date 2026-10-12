@@ -1,0 +1,54 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createLazyRoute } from '@tanstack/react-router';
+import { retail, type BranchRole } from '../../../api/retail';
+import { SkeletonList } from '../../../components/states';
+import { Gate, Problem, changeFailureText } from './ui';
+
+// Branch roles (ADR-033, spec section 2): which branches are stores, which are shops and which are both.
+// Only a shop or a branch that is both sells to customers; every branch can be restocked and can send
+// or receive stock. The screen exists only while the branch_roles feature is on (see SCREEN_CAPABILITY).
+
+type Role = 'store' | 'shop' | 'both';
+
+const ROLES: { value: Role; label: string }[] = [
+  { value: 'store', label: 'Store: keeps stock, does not sell' },
+  { value: 'shop', label: 'Shop: sells to customers' },
+  { value: 'both', label: 'Both: keeps stock and sells' },
+];
+
+export function RoleRow({ row, busy, onChange }: { row: BranchRole; busy?: boolean; onChange: (role: Role) => void }) {
+  const id = `role-${row.branch_id}`;
+  return (
+    <li className="rt-card">
+      <label htmlFor={id}>{row.name ?? row.code}</label>
+      <select id={id} value={row.role ?? 'both'} disabled={busy} onChange={(e) => onChange(e.target.value as Role)}>
+        {ROLES.map((r) => (
+          <option key={r.value} value={r.value}>{r.label}</option>
+        ))}
+      </select>
+    </li>
+  );
+}
+
+export function BranchRoles() {
+  const queryClient = useQueryClient();
+  const roles = useQuery({ queryKey: ['retail', 'branch-roles'], queryFn: () => retail.branchRoles() });
+  const set = useMutation({
+    mutationFn: (v: { branchId: string; role: Role }) => retail.setBranchRole(v.branchId, v.role),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['retail', 'branch-roles'] }),
+  });
+  return (
+    <Gate screen="branchRoles" title="Branch roles">
+      <p>A store keeps stock and feeds the shop. Only a shop sells to customers.</p>
+      {roles.isPending && <SkeletonList label="Loading branches" />}
+      <Problem error={roles.error ?? (set.error && new Error(changeFailureText(set.error, queryClient)))} />
+      <ul className="stack" data-tour="retail-roles">
+        {(roles.data ?? []).map((r) => (
+          <RoleRow key={r.branch_id} row={r} busy={set.isPending} onChange={(role) => set.mutate({ branchId: r.branch_id ?? '', role })} />
+        ))}
+      </ul>
+    </Gate>
+  );
+}
+
+export const Route = createLazyRoute('/staff/retail/branch-roles')({ component: BranchRoles });

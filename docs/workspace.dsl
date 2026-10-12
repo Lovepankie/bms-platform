@@ -37,7 +37,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
 
             proxy = container "Reverse Proxy" "Routes /api to the API and everything else to the PWA for the single-label hosts under rincoltech.com: bms, <slug>-bms and bms-callbacks (ADR-018); security headers; request size limits. Production: terminates TLS with a DNS-01 wildcard certificate. Staging: the internal origin behind the Cloudflare Tunnel, plain HTTP." "Caddy with the Cloudflare DNS module (SDD chapter 9)" "edge"
 
-            web = container "Web App" "One installable PWA with a staff area, a member area and the platform console, split by route and lazily loaded (ADR-009). A step by step first run after an invitation, and role aware guided tours kept as data, replayable from Help (ADR-025). Static files served by Caddy." "React 18, TypeScript, Vite, vite-plugin-pwa" "client"
+            web = container "Web App" "One installable PWA with a staff area, a member area and the platform console, split by route and lazily loaded (ADR-009). A step by step first run after an invitation, and role aware guided tours kept as data, replayable from Help (ADR-025). Menus, tiles, routes and a tour per capability follow the modules and capabilities `/me` lists, with the administrator's Retail settings screen for the shop or trade profile (ADR-033). Static files served by Caddy." "React 18, TypeScript, Vite, vite-plugin-pwa" "client"
 
             api = container "API" "Modular monolith (ADR-002). REST under /api/v1; one database transaction per request, bound to the tenant (ADR-003). Also runs the worker role: db-scheduler jobs on PostgreSQL (ADR-008)." "Java 25, Spring Boot 4.1, Spring Modulith 2.1 (ADR-010)" "app" {
 

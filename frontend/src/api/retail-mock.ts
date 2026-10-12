@@ -1,5 +1,5 @@
 import type {
-  AllBranchesRow, Category, Customer, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockRow, Supplier, Transfer, Unit, Usage, Valuation,
+  AllBranchesRow, Category, CapabilitiesRead, Customer, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockRow, Supplier, Transfer, Unit, Usage, Valuation,
   ValuationRow,
 } from './retail';
 import { RetailError, businessToday, daysBefore } from './retail';
@@ -31,7 +31,7 @@ const SALES_PERMISSIONS = [
 const CASHIER_PERMISSIONS = SALES_PERMISSIONS;
 const ADMIN_PERMISSIONS = [
   ...SALES_PERMISSIONS, 'retail.catalogue.manage', 'retail.price.edit', 'retail.sale.void',
-  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage',
+  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage',
   'retail.savings.record', 'retail.savings.overwrite', 'retail.banking.record', 'retail.expense.record', 'retail.expense.manage',
   'retail.withdrawal.record', 'retail.advance.create', 'retail.advance.repay', 'retail.cashbook.read', 'retail.cashbook.void',
 ];
@@ -112,7 +112,14 @@ const refuse = (status: number, code: string, detail: string): never => {
   throw new RetailError(retailMessage({ code, detail }, status), status, code);
 };
 
+const MOCK_FLAGS = ['branch_roles', 'units', 'price_lists', 'customer_accounts', 'documents', 'purchasing', 'transfer_receipt', 'returns'] as const;
+const MOCK_TRADE_PRESET: readonly string[] = ['branch_roles', 'units', 'price_lists', 'customer_accounts', 'returns', 'transfer_receipt'];
+
 export function createMockRetail(): RetailApi {
+  // Branch roles and capabilities of this mock instance (ADR-033): every branch both, every capability off.
+  const roles = new Map<string, 'store' | 'shop' | 'both'>();
+  let caps: { value: Record<string, unknown>; version: number } = { value: { profile: 'shop' }, version: 1 };
+  const read = (): CapabilitiesRead => ({ capabilities: { ...caps.value, ...Object.fromEntries(MOCK_FLAGS.map((k) => [k, caps.value[k] === true])) }, version: caps.version });
   const balances = new Map<string, number>();
   PRODUCTS.forEach((p, i) => {
     balances.set(`${BRANCH_A}|${p.id}`, (i % 5 === 3 ? -2 : 4 + i * 3) * 1000);
@@ -544,11 +551,27 @@ export function createMockRetail(): RetailApi {
 
     stockedBranches: () => delay([BRANCH_A, BRANCH_B].filter((b) => [...products.values()].some((p) => bal(b, p.id) > 0))),
 
-    branchRoles: () => delay(MOCK_BRANCHES.map((b) => ({ branch_id: b.id, code: b.code, name: b.name, role: 'both', can_sell: true }))),
+    branchRoles: () => delay(MOCK_BRANCHES.map((b) => ({ branch_id: b.id, code: b.code, name: b.name, role: roles.get(b.id) ?? 'both', can_sell: (roles.get(b.id) ?? 'both') !== 'store' }))),
 
     setBranchRole: (branchId, role) => {
       const b = MOCK_BRANCHES.find((x) => x.id === branchId);
+      roles.set(branchId, role);
       return delay({ branch_id: branchId, code: b?.code, name: b?.name, role, can_sell: role !== 'store' });
+    },
+
+    capabilities: () => delay(read()),
+
+    // The server's rule (RetailCapabilityGroup): a profile writes its preset first, then the flags sent win.
+    changeCapabilities: (body, version) => {
+      if (version !== caps.version) return Promise.reject(new RetailError(retailMessage({ code: 'version_conflict' }, 409), 409, 'version_conflict'));
+      const next: Record<string, unknown> = { ...caps.value };
+      if (body.profile) {
+        next.profile = body.profile;
+        for (const key of MOCK_FLAGS) next[key] = body.profile === 'shop' ? false : MOCK_TRADE_PRESET.includes(key) ? true : next[key];
+      }
+      for (const key of MOCK_FLAGS) if (typeof body[key] === 'boolean') next[key] = body[key];
+      caps = { value: next, version: caps.version + 1 };
+      return delay(read());
     },
 
     dailyProfit: ({ branchId, from, to }) => {

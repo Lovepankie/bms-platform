@@ -18,6 +18,9 @@ export type StockBranch = S['RetailStockBranch'];
 export type AllBranchesStock = { branches: StockBranch[]; items: AllBranchesRow[] };
 export type BranchRole = S['RetailBranchRole'];
 export type RetailCapabilities = S['RetailCapabilities'];
+export type CapabilityChange = S['UpdateRetailCapabilitiesRequest'];
+/** The capabilities with the settings version they were read at, the If-Match of the next change. */
+export interface CapabilitiesRead { capabilities: RetailCapabilities; version: number }
 export type Category = S['RetailCategory'];
 export type Unit = S['RetailUnit'];
 export type ProductPage = S['RetailProductPage'];
@@ -184,6 +187,10 @@ export interface RetailApi {
   /** The branches in the caller's stock scope with their roles (ADR-033); 404 capability_not_enabled while branch_roles is off. */
   branchRoles(): Promise<BranchRole[]>;
   setBranchRole(branchId: string, role: 'store' | 'shop' | 'both'): Promise<BranchRole>;
+  /** The tenant's capabilities and profile (administrators only, ADR-033 section 1). */
+  capabilities(): Promise<CapabilitiesRead>;
+  /** Switches the profile or flags under If-Match; the server audits the old and new values. */
+  changeCapabilities(body: CapabilityChange, version: number): Promise<CapabilitiesRead>;
   dailyProfit(q: { branchId?: string; from: string; to: string }): Promise<DailyProfit>;
   createTransfer(body: TransferRequest, idempotencyKey: string): Promise<Transfer>;
   listTransfers(q: { branchId?: string; cursor?: string }): Promise<TransferPage>;
@@ -247,6 +254,11 @@ export function unwrap<T>(result: { data?: T; error?: unknown; response: Respons
     throw new RetailError(retailMessage(problem, result.response.status), result.response.status, problem.code, problem as Record<string, unknown>);
   }
   return result.data;
+}
+
+/** The settings version in an ETag (`"3"`), or 0 when the response carries none. */
+function versionOf(response: Response): number {
+  return Number.parseInt((response.headers.get('ETag') ?? '').replace(/\D/g, ''), 10) || 0;
 }
 
 const PAGE = 500;
@@ -438,6 +450,16 @@ const realRetail: RetailApi = {
 
   async setBranchRole(branchId, role) {
     return unwrap(await api.PUT('/api/v1/retail/branch-roles/{branch_id}', { params: { path: { branch_id: branchId } }, body: { role } }));
+  },
+
+  async capabilities() {
+    const result = await api.GET('/api/v1/retail/settings/capabilities');
+    return { capabilities: unwrap(result), version: versionOf(result.response) };
+  },
+
+  async changeCapabilities(body, version) {
+    const result = await api.PUT('/api/v1/retail/settings/capabilities', { params: { header: { 'If-Match': `"${version}"` } }, body });
+    return { capabilities: unwrap(result), version: versionOf(result.response) };
   },
 
   async dailyProfit({ branchId, from, to }) {

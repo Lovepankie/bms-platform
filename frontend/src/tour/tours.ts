@@ -518,7 +518,73 @@ export const stocktakePage: Tour = {
   ],
 };
 
+export const retailSettingsPage: Tour = {
+  id: 'page-retail-settings',
+  version: 1,
+  title: 'This page: retail settings',
+  audience: isTenantAdmin,
+  autoStart: false,
+  page: '/staff/retail/settings',
+  steps: [
+    {
+      id: 'profile',
+      target: 'retail-profile',
+      title: 'Shop or trade',
+      body: 'Pick Shop for a plain shop. Pick Trade if stores feed a shop and you sell in bulk. It switches on a set of features for you.',
+    },
+    {
+      id: 'features',
+      target: 'retail-capabilities',
+      title: 'Each feature',
+      body: 'Switch any feature on or off yourself. Switching one off hides it. What you recorded with it is kept.',
+    },
+    {
+      id: 'review',
+      target: 'retail-settings-save',
+      title: 'Check, then save',
+      body: 'Tap Review changes to read what will change. Nothing is saved until you tap Confirm.',
+    },
+  ],
+};
+
+// A tour per capability (ADR-033): it starts once, the first time a user it is for signs in with the
+// capability on. A capability whose screens are not released has none yet; the slice that releases its
+// screens adds the tour here and sets `ready` in capabilities-state.ts (tours.test.tsx checks both).
+export const branchRolesCapability: Tour = {
+  id: 'capability-branch-roles',
+  version: 1,
+  title: 'New: branch roles',
+  audience: (me) => held(me, 'retail.branch_role.manage'),
+  autoStart: true,
+  capability: { module: 'retail', key: 'branch_roles' },
+  steps: [
+    {
+      id: 'intro',
+      title: 'Branch roles are on',
+      body: 'Each branch can now be a store, a shop or both. Stores keep stock and feed the shop. Only shops sell to customers.',
+    },
+    {
+      id: 'tile',
+      route: '/staff/retail',
+      target: 'retail-branchRoles',
+      module: 'retail',
+      optional: true,
+      title: 'Set the roles',
+      body: 'Open Branch roles to say which branches are stores and which are shops.',
+    },
+    {
+      id: 'roles',
+      route: '/staff/retail/branch-roles',
+      target: 'retail-roles',
+      module: 'retail',
+      title: 'Pick a role for each branch',
+      body: 'Until you pick, every branch works as before. A store cannot record a sale.',
+    },
+  ],
+};
+
 /** Every tour, in the order the first matching auto tour is chosen. */
 export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
+  retailSettingsPage, branchRolesCapability,
 ];

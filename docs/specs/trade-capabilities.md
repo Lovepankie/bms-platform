@@ -91,6 +91,11 @@ tour, which starts the first time a user with the matching permission sees a new
 capability. The component test required by #185 (one per module combination) extends to one per
 capability, including "all off equals today".
 
+Built in slice 2 (issue #192, PWA only): the Retail settings screen with the review-then-confirm step, the
+branch roles screen, `SCREEN_CAPABILITY` (a screen of a capability is offered only while `/me` lists it) and
+tours with a `capability` that start once when it is first on. A capability whose pages are not released has
+no tour yet: the slice that releases its pages adds the tour and marks it `ready`, and a test fails otherwise.
+
 ## 2. Branch roles
 
 ### 2.1 Roles
@@ -722,7 +727,7 @@ capabilities off changing nothing. Order matters: **slice 1 alone unblocks the w
 | Slice | Issue | Delivers | Depends on |
 |---|---|---|---|
 | 1 | #191 | Branch roles, the capability settings group and the core module-settings hook; enforcement on sales only | none |
-| 2 | #192 | Administrator screen for the profile and the flags, capability-aware menus and tours for the other capabilities (with #185). The profile preset and `module_capabilities` in `/me` are built in slice 1 | 1 |
+| 2 | #192 | Administrator screen for the profile and the flags, capability-aware menus and tours for the other capabilities (with #185). The profile preset and `module_capabilities` in `/me` are built in slice 1. Built: no migration and no API change; PWA only (`docs/specs/retail-ui-notes.md`, "Retail settings and branch roles") | 1 |
 | 3 | #193 | Stock by store and shop report, combined total, and two-step transfers (replaced status check, entry-pair check, update guard) with the in-flight report | 1 |
 | 4 | #194 | Units of measure: packs, conversions, sale and restock in any unit, import columns | 1 |
 | 5 | #195 | Price lists, quantity breaks, effective dates, customer groups (adds the group and list columns to customers) | 4 |

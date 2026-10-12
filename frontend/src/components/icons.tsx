@@ -80,6 +80,20 @@ export const icons = {
       <path d="M12 13v8" />
     </Svg>
   ),
+  settings: (
+    <Svg>
+      <path d="M4 7h10M18 7h2M4 17h2M10 17h10" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="8" cy="17" r="2" />
+    </Svg>
+  ),
+  branchRoles: (
+    <Svg>
+      <path d="M3 10l2-5h14l2 5" />
+      <path d="M4 10v9h16v-9" />
+      <path d="M9 19v-5h6v5" />
+    </Svg>
+  ),
   stocktake: (
     <Svg>
       <path d="M9 4h6v3H9z" />

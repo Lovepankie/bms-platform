@@ -7,6 +7,7 @@ import {
   type Tour,
   type TourStatus,
   type TourStep,
+  capabilityTourFor,
   cardSide,
   keyAction,
   mainTourFor,
@@ -92,6 +93,14 @@ export function TourProvider({ me, saveProgress = true, children }: { me: Me; sa
     return () => window.clearTimeout(timer);
     // Only on sign-in: progress changes when the tour ends, and must not restart it.
   }, [mainTour]);
+
+  // A newly enabled capability: its tour starts once, after the first-run tour and never over another tour.
+  const capabilityTour = useMemo(() => capabilityTourFor(TOURS, me, progress), [me, progress]);
+  useEffect(() => {
+    if (!capabilityTour || active || closedThisLoad.has(capabilityTour.id)) return;
+    const timer = window.setTimeout(() => start(capabilityTour), 400);
+    return () => window.clearTimeout(timer);
+  }, [capabilityTour, active, start]);
 
   const record = useCallback(
     (tour: Tour, status: TourStatus) => {

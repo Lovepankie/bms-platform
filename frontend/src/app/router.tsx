@@ -82,6 +82,8 @@ const retailWithdrawalsRoute = retailScreen('/withdrawals', 'Cash withdrawals').
 const retailAdvancesRoute = retailScreen('/advances', 'Advances').lazy(() => import('../areas/staff/retail/advances').then((m) => m.Route));
 const retailCashSummaryRoute = retailScreen('/cash-summary', 'Cash summary').lazy(() => import('../areas/staff/retail/cash-summary').then((m) => m.Route));
 const retailSavingsRoute = retailScreen('/savings', 'Savings').lazy(() => import('../areas/staff/retail/savings').then((m) => m.Route));
+const retailSettingsRoute = retailScreen('/settings', 'Retail settings').lazy(() => import('../areas/staff/retail/settings').then((m) => m.Route));
+const retailBranchRolesRoute = retailScreen('/branch-roles', 'Branch roles').lazy(() => import('../areas/staff/retail/branch-roles').then((m) => m.Route));
 
 // The living style page (#106): every component and illustration, for development builds and the
 // platform host only (the page itself checks); a chunk of its own, so no tenant downloads it.
@@ -189,6 +191,8 @@ export const router = createRouter({
         retailExpensesRoute,
         retailExpensesReportRoute,
         retailExpenseListsRoute,
+        retailSettingsRoute,
+        retailBranchRolesRoute,
         retailBankingRoute,
         retailBankingReportRoute,
       ]), staffLendingRoute.addChildren([

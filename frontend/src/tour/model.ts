@@ -67,6 +67,11 @@ export interface Tour {
   autoStart: boolean;
   /** For a page tour: the page it explains. A `$name` segment matches any one segment. */
   page?: string;
+  /**
+   * For the tour of a capability (ADR-033): it starts by itself, once, the first time a user it is for
+   * signs in with the capability enabled, after the first-run tour is done. It is never the main tour.
+   */
+  capability?: { module: Module; key: string };
   steps: readonly TourStep[];
 }
 
@@ -102,7 +107,31 @@ export function stepsFor(tour: Tour, me: Me, features: Record<Feature, boolean> 
 
 /** The first-run tour for this user: the first auto tour of the registry whose audience matches. */
 export function mainTourFor(tours: readonly Tour[], me: Me): Tour | undefined {
-  return tours.find((tour) => tour.autoStart && tour.audience(me) && stepsFor(tour, me).length > 0);
+  return tours.find((tour) => tour.autoStart && !tour.capability && tour.audience(me) && stepsFor(tour, me).length > 0);
+}
+
+/** Whether /me lists the capability of a module among the enabled ones (absent means off). */
+export function capabilityEnabled(me: Me, capability: { module: Module; key: string }): boolean {
+  return (me.module_capabilities?.[capability.module] ?? []).includes(capability.key);
+}
+
+/**
+ * The tour of a newly enabled capability this user should be shown now: its capability is on, the user
+ * is in its audience, and they have not finished or dismissed it. Only when the first-run tour is not
+ * waiting, so a new user sees the welcome first.
+ */
+export function capabilityTourFor(tours: readonly Tour[], me: Me, progress: Progress | undefined): Tour | undefined {
+  const welcome = mainTourFor(tours, me);
+  if (welcome && shouldAutoStart(welcome, progress)) return undefined;
+  return tours.find(
+    (tour) =>
+      tour.capability !== undefined &&
+      capabilityEnabled(me, tour.capability) &&
+      tour.autoStart &&
+      tour.audience(me) &&
+      stepsFor(tour, me).length > 0 &&
+      shouldAutoStart(tour, progress),
+  );
 }
 
 /** The page tour for the page the user is on, if this user may see it. */

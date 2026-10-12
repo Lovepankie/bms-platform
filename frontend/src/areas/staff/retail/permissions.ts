@@ -12,7 +12,16 @@ export type RetailScreen =
   | 'sale' | 'creditSales' | 'salesHistory' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit' | 'salesAnalysis' | 'margins' | 'stockHealth' | 'creditControl' | 'evaluation'
   | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer'
   // The cash book (ADR-022, FR-RET-31).
-  | 'savings' | 'banking' | 'expenses' | 'withdrawals' | 'advances' | 'cashSummary' | 'bankingReport' | 'expensesReport' | 'expenseSetup';
+  | 'savings' | 'banking' | 'expenses' | 'withdrawals' | 'advances' | 'cashSummary' | 'bankingReport' | 'expensesReport' | 'expenseSetup'
+  // The administrator's retail settings (profile and capabilities) and the screens of a capability (ADR-033).
+  | 'settings' | 'branchRoles';
+
+/**
+ * The capability a screen belongs to (ADR-033): the screen is offered only while /me lists it, whatever
+ * permissions the user holds. A screen that is not listed here belongs to no capability and behaves as
+ * it did before capabilities existed. A later slice of the trade build plan adds its screens here.
+ */
+export const SCREEN_CAPABILITY: Partial<Record<RetailScreen, string>> = { branchRoles: 'branch_roles' };
 
 /** The catalogue management screens (#146); the Catalogue tile opens when any of them may be used. */
 export const CATALOGUE_SCREENS: RetailScreen[] = ['products', 'categories', 'units', 'suppliers', 'buyers'];
@@ -75,6 +84,9 @@ const NEEDS: Record<RetailScreen, string[]> = {
   bankingReport: [CASHBOOK_READ],
   expensesReport: [CASHBOOK_READ],
   expenseSetup: ['retail.expense.manage', CASHBOOK_READ],
+  // Profile and capabilities are the administrator's (core.settings.manage); roles need their own permission and the capability.
+  settings: ['core.settings.manage'],
+  branchRoles: ['retail.branch_role.manage', 'retail.stock.read'],
 };
 
 /** Screens that open with any one of these permissions, on top of the ones NEEDS lists. */
@@ -111,8 +123,10 @@ export function canSeeProfit(me: Pick<Me, 'permissions'>): boolean {
   return permissionsOf(me).includes(PROFIT);
 }
 
-export function canUse(me: Pick<Me, 'permissions'>, screen: RetailScreen): boolean {
+export function canUse(me: Pick<Me, 'permissions' | 'module_capabilities'>, screen: RetailScreen): boolean {
   if (screen === 'catalogue') return CATALOGUE_SCREENS.some((s) => canUse(me, s));
+  const capability = SCREEN_CAPABILITY[screen];
+  if (capability && !capabilityOn(me, 'retail', capability)) return false;
   const held = permissionsOf(me);
   const any = ANY_OF[screen];
   return NEEDS[screen].every((p) => held.includes(p)) && (!any || any.some((p) => held.includes(p)));
@@ -188,6 +202,8 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'bankingReport', path: '/staff/retail/banking-report', label: 'Banking report', hint: 'Expected, banked and unbanked' },
   { screen: 'expensesReport', path: '/staff/retail/expenses-report', label: 'Expenses report', hint: 'Spending by category and item' },
   { screen: 'expenseSetup', path: '/staff/retail/expense-lists', label: 'Expense lists', hint: 'Categories and items' },
+  { screen: 'branchRoles', path: '/staff/retail/branch-roles', label: 'Branch roles', hint: 'Which branches are stores and which are shops' },
+  { screen: 'settings', path: '/staff/retail/settings', label: 'Retail settings', hint: 'Shop or trade, and the features you use' },
 ];
 
 /** The screens under Catalogue, in the order the Catalogue home lists them. */
@@ -203,6 +219,6 @@ export const CATALOGUE_LINKS: { screen: RetailScreen; path: string; label: strin
  * The screens the session may use. With `sells` false (every branch it can sell at is a store) the
  * sales screen is left out, so a user whose branches are stores starts from the stock screens.
  */
-export function screensFor(me: Pick<Me, 'permissions'>, opts: { sells?: boolean } = {}) {
+export function screensFor(me: Pick<Me, 'permissions' | 'module_capabilities'>, opts: { sells?: boolean } = {}) {
   return SCREENS.filter((s) => canUse(me, s.screen) && (opts.sells !== false || s.screen !== 'sale'));
 }

@@ -15,7 +15,7 @@ const SHORTCUTS: Partial<Record<RetailScreen, string>> = {
 const MAX_SHORTCUTS = 5;
 
 /** The shortcuts the session may use, in the pilot's order, at most as many as the bar has room for. */
-export function shortcutsFor(me: Pick<Me, 'permissions'>, opts: { sells?: boolean } = {}) {
+export function shortcutsFor(me: Pick<Me, 'permissions' | 'module_capabilities'>, opts: { sells?: boolean } = {}) {
   const order = Object.keys(SHORTCUTS) as RetailScreen[];
   return SCREENS.filter((s) => canUse(me, s.screen) && s.screen in SHORTCUTS && (opts.sells !== false || s.screen !== 'sale'))
     .sort((a, b) => order.indexOf(a.screen) - order.indexOf(b.screen))

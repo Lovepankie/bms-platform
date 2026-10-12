@@ -26,7 +26,7 @@ capabilities inside retail.
 2. **A tenant profile (`shop` or `trade`) is a preset of the flags, not a mode.** The module reads
    flags only. `shop` is the default and switches nothing on. Changing flags needs
    `core.settings.manage` and is audited. The core gains one vertical-neutral hook, a module settings group contract that the retail manifest supplies (SDD 5.4.3 style registry), because settings and `/me` are core and core may not depend on retail. The enabled capabilities travel in `/me` so the PWA's
-   menus, tiles and tours follow them (issue #185).
+   menus, tiles and tours follow them (issue #185). The administrator switches the profile and the flags on a Retail settings screen that reads the change back before it is saved (issue #192).
 3. **A branch has a role, `store`, `shop` or `both`, in a retail table `retail_branch_roles`; a
    missing row means `both`.** A store never sells (the service refuses, 422
    `branch_role_forbids_sales`); a store and a shop both restock and transfer. There is no "can

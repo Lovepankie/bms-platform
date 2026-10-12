@@ -30,11 +30,14 @@ describe('retail permission gating', () => {
 
   it('offers everything to an admin', () => {
     expect(canSeeProfit(admin)).toBe(true);
+    // The one addition for the trade slices (#192) is the Retail settings tile, the administrator's way to switch
+    // features on. The tile of a capability (Branch roles) is absent while the capability is off.
     expect(screensFor(admin).map((s) => s.screen)).toEqual(
       [
         'sale', 'creditSales', 'salesHistory', 'restock', 'usage', 'stock', 'stocktake', 'transfer', 'transfers', 'valuation', 'profit',
         'salesAnalysis', 'margins', 'stockHealth', 'creditControl', 'evaluation', 'catalogue',
         'banking', 'savings', 'expenses', 'withdrawals', 'advances', 'cashSummary', 'bankingReport', 'expensesReport', 'expenseSetup',
+        'settings',
       ],
     );
   });
