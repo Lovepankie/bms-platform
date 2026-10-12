@@ -135,7 +135,7 @@ class RetailDashboardIT extends IntegrationTest {
         assertThat(AnalyticsData.hasKey(r, "cost")).isFalse();
         assertThat(AnalyticsData.hasKey(r, "gross")).isFalse();
         assertThat(AnalyticsData.hasKey(r, "profit_minor")).isFalse();
-        assertThat(r.toString()).doesNotContain("31100", "2500", "1200");
+        assertThat(AnalyticsData.figures(r)).doesNotContain("31100", "2500", "1200");
         assertThat(AnalyticsData.auditRows()).isEqualTo(audit);
     }
 
@@ -155,7 +155,7 @@ class RetailDashboardIT extends IntegrationTest {
     void permissionAndBranchScope() {
         ResponseEntity<JsonNode> denied = api.get("/reports/dashboard", "retail.stock.read,retail.profit.read");
         assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(denied.getBody().toString()).doesNotContain("3600", "47050");
+        assertThat(AnalyticsData.figures(denied.getBody())).doesNotContain("3600", "47050");
         ResponseEntity<JsonNode> scoped = api.call(
                 HttpMethod.GET,
                 "/reports/dashboard",

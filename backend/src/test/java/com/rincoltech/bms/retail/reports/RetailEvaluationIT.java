@@ -158,7 +158,7 @@ class RetailEvaluationIT extends IntegrationTest {
         for (String permissions : new String[] {SALES, "retail.stock.read", "retail.sale.read,retail.stock.read"}) {
             ResponseEntity<JsonNode> denied = api.get("/reports/business-evaluation", permissions);
             assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-            assertThat(denied.getBody().toString()).doesNotContain("48400", "16400", "32000");
+            assertThat(AnalyticsData.figures(denied.getBody())).doesNotContain("48400", "16400", "32000");
         }
         assertThat(AnalyticsData.auditRows()).isEqualTo(audit);
         ResponseEntity<JsonNode> only = api.get("/reports/business-evaluation", "retail.profit.read");

@@ -156,6 +156,7 @@ class RetailSalesAnalysisIT extends IntegrationTest {
         // digits in the response text, where an id or a date can hold the same digits (#237).
         assertThat(a.get("totals").has("gross_profit_minor")).isFalse();
         assertThat(a.get("totals").has("margin_bp")).isFalse();
+        assertThat(AnalyticsData.figures(a)).doesNotContain("3333", "1800");
         assertThat(AnalyticsData.auditRows()).isEqualTo(audit);
     }
 
@@ -192,6 +193,7 @@ class RetailSalesAnalysisIT extends IntegrationTest {
         for (String field : new String[] {"totals", "by_product", "by_branch", "series", "sales_minor"}) {
             assertThat(AnalyticsData.hasKey(denied.getBody(), field)).as(field).isFalse();
         }
+        assertThat(AnalyticsData.figures(denied.getBody())).doesNotContain("1800", "3600", "5400");
         assertThat(AnalyticsData.auditRows()).isEqualTo(audit);
         String today = AnalyticsData.today().toString();
         assertThat(api.get(
@@ -230,6 +232,7 @@ class RetailSalesAnalysisIT extends IntegrationTest {
         }
         assertThat(body.get("totals").has("gross_profit_minor")).isFalse();
         assertThat(body.get("totals").has("margin_bp")).isFalse();
+        assertThat(AnalyticsData.figures(body)).doesNotContain("1800");
 
         // Asking for head office alone is a report over a branch where the permission is held.
         ResponseEntity<JsonNode> one = api.call(

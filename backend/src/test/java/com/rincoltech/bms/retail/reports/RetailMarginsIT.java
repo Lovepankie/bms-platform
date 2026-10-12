@@ -129,7 +129,7 @@ class RetailMarginsIT extends IntegrationTest {
         long audit = AnalyticsData.auditRows();
         ResponseEntity<JsonNode> denied = api.get("/reports/margins", SALES);
         assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(denied.getBody().toString()).doesNotContain("6400", "4500", "1900", "2969");
+        assertThat(AnalyticsData.figures(denied.getBody())).doesNotContain("6400", "4500", "1900", "2969");
         assertThat(api.get("/reports/margins", "retail.stock.read").getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(AnalyticsData.auditRows()).isEqualTo(audit);

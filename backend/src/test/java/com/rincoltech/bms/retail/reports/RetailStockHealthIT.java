@@ -188,12 +188,15 @@ class RetailStockHealthIT extends IntegrationTest {
     @Test
     void aCallerWithoutProfitReadNeverSeesCostAnywhereAndAuditIsUntouched() {
         long audit = AnalyticsData.auditRows();
+        // Control: where profit may be read the scan does find these figures, the 27,200 as a number and the
+        // 255.0 cover as a string, so the absence below is a real result and not a scan that sees nothing.
+        assertThat(AnalyticsData.figures(report("", ADMIN))).contains("1450", "27200", "255.0");
         JsonNode r = report("", SALES);
         assertThat(r.get("profit_visible").asBoolean()).isFalse();
         assertThat(AnalyticsData.hasKey(r, "cost")).isFalse();
         assertThat(AnalyticsData.hasKey(r, "profit_minor")).isFalse();
         assertThat(AnalyticsData.hasKey(r, "net")).isFalse();
-        assertThat(r.toString()).doesNotContain("1450", "27200");
+        assertThat(AnalyticsData.figures(r)).doesNotContain("1450", "27200");
         assertThat(AnalyticsData.auditRows()).isEqualTo(audit);
     }
 
@@ -201,7 +204,7 @@ class RetailStockHealthIT extends IntegrationTest {
     void permissionBranchScopeAndInputRules() {
         ResponseEntity<JsonNode> denied = api.get("/reports/stock-health", "retail.sale.read");
         assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(denied.getBody().toString()).doesNotContain("1450", "255.0");
+        assertThat(AnalyticsData.figures(denied.getBody())).doesNotContain("1450", "255.0");
         ResponseEntity<JsonNode> scoped = api.call(
                 HttpMethod.GET,
                 "/reports/stock-health",

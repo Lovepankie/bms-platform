@@ -208,7 +208,8 @@ class RetailCreditControlIT extends IntegrationTest {
         assertThat(AnalyticsData.hasKey(r, "margin")).isFalse();
         ResponseEntity<JsonNode> denied = api.get("/reports/credit-control", "retail.stock.read");
         assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(denied.getBody().toString()).doesNotContain("11000", "Test Buyer");
+        assertThat(AnalyticsData.figures(denied.getBody())).doesNotContain("11000");
+        assertThat(denied.getBody().toString()).doesNotContain("Test Buyer");
         assertThat(AnalyticsData.auditRows()).isEqualTo(audit);
         assertThat(api.get("/reports/credit-control?sort=name", SALES).getStatusCode())
                 .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
