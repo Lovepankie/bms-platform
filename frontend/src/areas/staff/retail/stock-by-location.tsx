@@ -1,6 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type LocationBranch, type LocationRow, type StockByLocation } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
 import { EmptyState, SkeletonList } from '../../../components/states';
@@ -152,18 +154,20 @@ export function LocationTotals({ report }: { report: StockByLocation }) {
 export function StockByLocationPage() {
   const canProfit = useProfitAccess();
   const phone = useIsPhone();
-  const [query, setQuery] = useState('');
+  const search = useLiveSearch();
+  const query = search.term;
   const [negativeOnly, setNegativeOnly] = useState(false);
   const report = useQuery({
     queryKey: ['retail', 'stock-by-location', query, negativeOnly],
-    queryFn: () => retail.stockByLocation({ query, negativeOnly }),
+    queryFn: ({ signal }) => retail.stockByLocation({ query, negativeOnly, signal }),
+    placeholderData: keepPreviousData,
   });
+  const finding = report.isPlaceholderData || report.isFetching;
   return (
     <Gate screen="stockByLocation" title="Stores and shops" wide>
       <p className="hint">Every store and shop you can read, the stores first. Stock on its way is in neither count; it has its own column.</p>
       <div data-tour="location-search">
-        <label htmlFor="location-search">Search by name, code or category</label>
-        <input id="location-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
+        <SearchBox id="location-search" label="Search by name, code or category" search={search} fetching={finding} count={report.data?.items?.length} />
       </div>
       <label style={{ fontWeight: 400 }}>
         <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={negativeOnly} onChange={(e) => setNegativeOnly(e.target.checked)} />
@@ -172,7 +176,10 @@ export function StockByLocationPage() {
       <div data-tour="location-report">
         {report.isPending && <SkeletonList label="Loading stock" />}
         <Problem error={report.error} />
-        {report.data && (phone ? <LocationList report={report.data} /> : <LocationTable report={report.data} />)}
+        {report.data && report.data.items?.length === 0 && query && <NoResults term={query} onClear={search.clear} noun="items" />}
+        <SearchResults fetching={finding}>
+          {report.data && (phone ? <LocationList report={report.data} /> : <LocationTable report={report.data} />)}
+        </SearchResults>
         {report.data && canProfit && <LocationTotals report={report.data} />}
       </div>
     </Gate>

@@ -1,5 +1,6 @@
 package com.rincoltech.bms.lending.savings.internal;
 
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.lending.savings.internal.SavingsApi.BalanceRow;
 import com.rincoltech.bms.lending.savings.internal.SavingsApi.MovementRow;
 import com.rincoltech.bms.lending.savings.internal.SavingsApi.Product;
@@ -220,17 +221,33 @@ class SavingsRepository {
                 .optional();
     }
 
-    /** One page ordered by account number; {@code branchIds} already intersected with the scope. */
-    List<AccountRow> page(
+    /**
+     * One page ordered by account number, or by match rank and then account number when {@code q} is
+     * given; {@code branchIds} already intersected with the scope. A member's phone and national id match
+     * only in {@code memberBranches} (the caller's lending.members.read scope, null for every branch).
+     */
+    List<Search.Ranked<AccountRow>> page(
             List<UUID> branchIds,
             UUID memberId,
             List<String> statuses,
             UUID productId,
-            String q,
+            Search.Query q,
+            List<UUID> memberBranches,
+            int afterRank,
             String afterNo,
             int limit) {
-        StringBuilder sql = new StringBuilder(ACCOUNT).append(" WHERE true");
+        Search.Match match = q == null ? null : q.match(searchFields(memberBranches));
+        String select = match == null
+                ? ACCOUNT
+                : ACCOUNT.replace("SELECT a.*,", "SELECT a.*, " + match.rank() + " AS search_rank,");
+        StringBuilder sql = new StringBuilder(select).append(" WHERE true");
         Map<String, Object> p = new LinkedHashMap<>();
+        if (match != null) {
+            p.putAll(match.params());
+            if (memberBranches != null && !memberBranches.isEmpty()) {
+                p.put("memberBranches", memberBranches);
+            }
+        }
         if (branchIds != null) {
             if (branchIds.isEmpty()) {
                 return List.of();
@@ -250,22 +267,41 @@ class SavingsRepository {
             sql.append(" AND a.product_id = :productId");
             p.put("productId", productId);
         }
-        if (q != null) {
-            sql.append(" AND (a.account_no ILIKE :prefix OR m.member_no ILIKE :prefix OR m.full_name ILIKE :part)");
-            String escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
-            p.put("prefix", escaped + "%");
-            p.put("part", "%" + escaped + "%");
+        if (match != null) {
+            sql.append(" AND ").append(match.where());
         }
-        if (afterNo != null) {
-            sql.append(" AND a.account_no > :afterNo");
-            p.put("afterNo", afterNo);
+        String statement;
+        if (match == null) {
+            if (afterNo != null) {
+                sql.append(" AND a.account_no > :afterNo");
+                p.put("afterNo", afterNo);
+            }
+            statement = sql + " ORDER BY a.account_no LIMIT :limit";
+        } else {
+            String keyset = null;
+            if (afterNo != null) {
+                keyset = "(search_rank, account_no) > (:afterRank, :afterNo)";
+                p.put("afterRank", afterRank);
+                p.put("afterNo", afterNo);
+            }
+            statement = Search.page(sql.toString(), keyset, "search_rank, account_no");
         }
-        sql.append(" ORDER BY a.account_no LIMIT :limit");
         p.put("limit", limit);
-        return jdbc.sql(sql.toString())
+        return jdbc.sql(statement)
                 .params(p)
-                .query(SavingsRepository::account)
+                .query(Search.ranked(SavingsRepository::account, match != null))
                 .list();
+    }
+
+    /** What a savings search matches (ADR-039); the member's phone and national id only where the caller may read members. */
+    private static Search.Fields searchFields(List<UUID> memberBranches) {
+        Search.Fields fields = Search.Fields.of().names("m.full_name").codes("a.account_no", "m.member_no");
+        if (memberBranches != null && memberBranches.isEmpty()) {
+            return fields;
+        }
+        return fields.guarded(
+                memberBranches == null ? null : "m.branch_id IN (:memberBranches)",
+                Search.Fields.of().codes("m.national_id").phones("m.phone_e164", "m.alt_phone_e164"));
     }
 
     /** Accounts the nightly end of day still has days to write for, through {@code through}. */

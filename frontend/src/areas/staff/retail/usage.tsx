@@ -1,6 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type Product, type Usage, type UsageRequest } from '../../../api/retail';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
@@ -33,8 +35,13 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
   const setKind = (k: 'used' | 'damaged') => setDraft((d) => ({ ...d, kind: k }));
   const setReason = (r: string) => setDraft((d) => ({ ...d, reason: r }));
   const setLines = (f: (ls: Line[]) => Line[]) => setDraft((d) => ({ ...d, lines: f(d.lines) }));
-  const [search, setSearch] = useState('');
-  const products = useQuery({ queryKey: ['retail', 'products', branchId, search], queryFn: () => retail.listProducts({ query: search, branchId }) });
+  const search = useLiveSearch();
+  const products = useQuery({
+    queryKey: ['retail', 'products', branchId, search.term],
+    queryFn: ({ signal }) => retail.listProducts({ query: search.term, branchId, signal }),
+    placeholderData: keepPreviousData,
+  });
+  const finding = products.isPlaceholderData || products.isFetching;
   const save = useMutation({
     mutationFn: () => retail.createUsage(buildUsage({ branchId, kind, reason, lines }), key),
     onSuccess: (u) => {
@@ -59,8 +66,9 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
       <label htmlFor="usage-reason">Reason</label>
       <input id="usage-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
 
-      <label htmlFor="usage-search">Find an item by name, code or category</label>
-      <input id="usage-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
+      <SearchBox id="usage-search" label="Find an item by name, code or category" search={search} fetching={finding} count={products.data ? Math.min(products.data.length, 20) : undefined} more={(products.data?.length ?? 0) > 20} />
+      {products.data && products.data.length === 0 && search.term && <NoResults term={search.term} onClear={search.clear} noun="items" />}
+      <SearchResults fetching={finding}>
       <ul style={{ listStyle: 'none', padding: 0, maxHeight: 180, overflowY: 'auto' }}>
         {(products.data ?? []).slice(0, 20).map((p) => (
           <li key={p.id} className="rt-card rt-row">
@@ -69,6 +77,7 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
           </li>
         ))}
       </ul>
+      </SearchResults>
 
       <h2>Items</h2>
       {lines.length === 0 && <p className="empty-state">No items yet.</p>}

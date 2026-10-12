@@ -1985,7 +1985,9 @@ table.
   keyset list, so a page reads its rows and stops (`(tenant_id, created_at, id)` for the sales and
   loans lists).
 - Only leakproof predicates become index conditions under the policy (section 6.3.2). A search by
-  `ILIKE` or trigram similarity runs as a filter over the tenant's rows; that is fine at the sizes
+  `ILIKE` or trigram similarity runs as a filter over the tenant's rows (no text operator is leakproof, so
+  a trigram index is never used by `bms_app`; the shared search of ADR-039 and migration V40 is built on that
+  fact and adds the functions `bms_fold` and `bms_digits`, not an index); that is fine at the sizes
   measured (product search 4 to 6 ms, member search 19 ms, duplicate check 121 ms on the staging
   settings at 25 times the data) and is the first thing to revisit if a tenant grows far beyond.
 - Reports that aggregate many rows read a covering index (`INCLUDE`) instead of the heap: stock

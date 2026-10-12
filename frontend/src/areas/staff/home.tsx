@@ -1,5 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
+import { Highlight, NoResults, SearchBox, SearchResults } from '../../app/ui/SearchBox';
+import { useLiveSearch } from '../../app/ui/useLiveSearch';
 import { fetchHealth, listMembers } from '../../api/client';
 import { branchFilter } from '../../auth/branch';
 import { EmptyState, SkeletonList } from '../../components/states';
@@ -12,11 +14,15 @@ export function StaffHome() {
   const health = useQuery({ queryKey: ['health'], queryFn: fetchHealth });
   // The lending module's screens are offered only to a tenant that has it (issue #185).
   const canReadMembers = (me.permissions ?? []).includes('lending.members.read') && (!me.modules || me.modules.includes('lending'));
+  const search = useLiveSearch();
   const members = useQuery({
-    queryKey: ['members', branch],
-    queryFn: () => listMembers(branchFilter(branch), 50),
+    queryKey: ['members', branch, search.term],
+    queryFn: ({ signal }) => listMembers(branchFilter(branch), 50, search.term, signal),
     enabled: canReadMembers && branch !== null,
+    placeholderData: keepPreviousData,
   });
+  const fetching = members.isPlaceholderData || members.isFetching;
+  const found = members.data?.items ?? [];
 
   return (
     <main>
@@ -29,12 +35,15 @@ export function StaffHome() {
       {canReadMembers && (
         <section aria-labelledby="members-title" data-tour="lending-members">
           <h2 id="members-title">Members</h2>
+          <SearchBox id="member-search" label="Member number, name, phone or national ID" search={search} fetching={fetching} count={members.data ? found.length : undefined} more={!!members.data?.next_cursor} />
           {members.isPending && <SkeletonList label="Loading members" />}
           {members.isError && <p role="alert" className="alert alert-danger">Could not load members.</p>}
-          {members.data && (members.data.items ?? []).length === 0 && (
+          {members.data && found.length === 0 && search.term && <NoResults term={search.term} onClear={search.clear} noun="members" />}
+          {members.data && found.length === 0 && !search.term && (
             <EmptyState art="noApplications" title="No members yet.">Members of this branch appear here.</EmptyState>
           )}
-          {members.data && (members.data.items ?? []).length > 0 && (
+          {members.data && found.length > 0 && (
+            <SearchResults fetching={fetching}>
             <div className="table-wrap table-cards" tabIndex={0}>
               <table>
                 <thead>
@@ -46,10 +55,10 @@ export function StaffHome() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(members.data.items ?? []).map((m) => (
+                  {found.map((m) => (
                     <tr key={m.id}>
-                      <td data-label="Member no">{m.member_no}</td>
-                      <td data-label="Name">{m.full_name}</td>
+                      <td data-label="Member no"><Highlight text={m.member_no ?? ''} term={search.term} /></td>
+                      <td data-label="Name"><Highlight text={m.full_name ?? ''} term={search.term} /></td>
                       <td data-label="Phone">{m.phone_e164_masked}</td>
                       <td data-label="KYC">{m.kyc_status}</td>
                     </tr>
@@ -57,6 +66,7 @@ export function StaffHome() {
                 </tbody>
               </table>
             </div>
+            </SearchResults>
           )}
         </section>
       )}

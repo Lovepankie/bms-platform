@@ -5,6 +5,7 @@ import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.CategoryPatch;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.CategoryRequest;
@@ -188,16 +189,26 @@ class SetupService {
     @Transactional(readOnly = true)
     PartyPage parties(String query, String kind, Integer limit, String cursor) {
         int size = support.limit(limit);
-        Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
-        List<PartyRow> rows = repo.parties(
-                query, kind, after == null ? null : after.at(), after == null ? null : after.id(), size + 1);
+        Search.Query search = Search.parse(query);
+        Search.After position = Search.unwrap(search, cursor);
+        Cursor.Key after = Cursor.decodeKey(position.cursor()).orElse(null);
+        List<Search.Ranked<PartyRow>> rows = repo.parties(
+                search,
+                kind,
+                position.rank(),
+                after == null ? null : after.at(),
+                after == null ? null : after.id(),
+                size + 1);
         boolean more = rows.size() > size;
-        List<PartyRow> items = more ? rows.subList(0, size) : rows;
+        List<Search.Ranked<PartyRow>> items = more ? rows.subList(0, size) : rows;
         String next = more
-                ? Cursor.encode(
-                        items.getLast().createdAt() + "|" + items.getLast().id())
+                ? Search.wrap(
+                        search,
+                        items.getLast().rank(),
+                        Cursor.encode(items.getLast().row().createdAt() + "|"
+                                + items.getLast().row().id()))
                 : null;
-        return new PartyPage(items.stream().map(SetupService::view).toList(), next);
+        return new PartyPage(items.stream().map(r -> view(r.row())).toList(), next);
     }
 
     static Party view(PartyRow p) {

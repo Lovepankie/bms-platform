@@ -1,0 +1,81 @@
+/*
+ * The shared search box (frontend/src/app/ui/SearchBox.tsx, #241): the input with its clear button,
+ * the status line a screen reader announces, and the dimmed list while a new answer is on its way.
+ * Tokens only; no inline styles (the production CSP refuses them).
+ */
+
+.sb {
+  margin-bottom: var(--space-3);
+}
+
+.sb-field {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.sb-field input[type='search'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The box has its own Clear button, so the browser's built-in cross would be a second one. */
+.sb-field input[type='search']::-webkit-search-cancel-button {
+  display: none;
+}
+
+.sb-clear {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.sb-status {
+  min-height: 1.5em;
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.sb-searching::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: var(--space-2);
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: rt-spin 0.8s linear infinite;
+}
+
+.sb-results[aria-busy='true'] {
+  opacity: 0.55;
+  transition: opacity 0.15s ease-in;
+}
+
+.sb-mark {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: var(--color-warning-tint);
+  color: inherit;
+  font-weight: var(--weight-bold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-searching::before {
+    animation: none;
+  }
+
+  .sb-results[aria-busy='true'] {
+    transition: none;
+  }
+}

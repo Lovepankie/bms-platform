@@ -12,6 +12,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.PackUnit;
@@ -394,7 +395,7 @@ class SalesService {
                 customerId,
                 paymentMethod,
                 productId,
-                buyer == null || buyer.isBlank() ? null : buyer.trim(),
+                Search.parse(buyer),
                 status,
                 owing,
                 today,
@@ -606,16 +607,25 @@ class SalesService {
     @Transactional(readOnly = true)
     CustomerList customers(String query, Integer limit, String cursor) {
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
+        Search.Query search = Search.parse(query);
+        Search.After position = Search.unwrap(search, cursor);
         com.rincoltech.bms.kernel.Cursor.Key after =
-                com.rincoltech.bms.kernel.Cursor.decodeKey(cursor).orElse(null);
+                com.rincoltech.bms.kernel.Cursor.decodeKey(position.cursor()).orElse(null);
         List<SalesRepository.CustomerRow> rows = repo.customers(
-                blankToNull(query), size + 1, CurrentPrincipal.require().branchFilter("retail.sale.read", null), after);
+                search,
+                size + 1,
+                CurrentPrincipal.require().branchFilter("retail.sale.read", null),
+                position.rank(),
+                after);
         boolean more = rows.size() > size;
         List<SalesRepository.CustomerRow> page = more ? rows.subList(0, size) : rows;
         // The key is the database's own lower(name), so the cursor agrees with the ORDER BY.
         String next = more
-                ? com.rincoltech.bms.kernel.Cursor.encode(page.getLast().sortKey() + "|"
-                        + page.getLast().customer().id())
+                ? Search.wrap(
+                        search,
+                        page.getLast().rank(),
+                        com.rincoltech.bms.kernel.Cursor.encode(page.getLast().sortKey() + "|"
+                                + page.getLast().customer().id()))
                 : null;
         return new CustomerList(
                 page.stream().map(SalesRepository.CustomerRow::customer).toList(), next);

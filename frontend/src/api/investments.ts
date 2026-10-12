@@ -70,7 +70,7 @@ const key = (k: string) => ({ 'Idempotency-Key': k });
 const path = (id: string) => ({ investment_id: id });
 
 export const investments = {
-  async list(q: { q?: string; status?: string; memberId?: string; branchIds?: string[]; cursor?: string }): Promise<InvestmentPage> {
+  async list(q: { q?: string; status?: string; memberId?: string; branchIds?: string[]; cursor?: string; signal?: AbortSignal }): Promise<InvestmentPage> {
     return unwrap(
       await api.GET('/api/v1/lending/investments', {
         params: {
@@ -83,6 +83,7 @@ export const investments = {
             cursor: q.cursor,
           },
         },
+        signal: q.signal,
       }),
     );
   },
@@ -204,8 +205,8 @@ export const investments = {
     return unwrap(await api.POST('/api/v1/lending/investment-products/return-preview', { body }));
   },
 
-  async findMembers(q: string): Promise<MemberListItem[]> {
-    const page = unwrap(await api.GET('/api/v1/lending/members', { params: { query: { q, limit: 10 } } }));
+  async findMembers(q: string, signal?: AbortSignal): Promise<MemberListItem[]> {
+    const page = unwrap(await api.GET('/api/v1/lending/members', { params: { query: { q, limit: 10 } }, signal }));
     return page.items ?? [];
   },
 };

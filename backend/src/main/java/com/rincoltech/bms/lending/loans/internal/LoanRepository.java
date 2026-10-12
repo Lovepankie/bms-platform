@@ -1,5 +1,6 @@
 package com.rincoltech.bms.lending.loans.internal;
 
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.LoanListItem;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.StatusChange;
 import java.sql.ResultSet;
@@ -406,21 +407,35 @@ class LoanRepository {
                 rs.getInt("days_past_due"));
     }
 
-    /** One page ordered by creation; {@code branchIds} already intersected with the scope, null for every branch. */
-    List<LoanListItem> page(
+    /**
+     * One page ordered by creation, or by match rank and then creation when {@code q} is given.
+     * {@code branchIds} already intersected with the scope, null for every branch. A member's phone
+     * and national id match only in {@code memberBranches} (the caller's lending.members.read scope,
+     * null for every branch), so a search cannot confirm what the caller may not read.
+     */
+    List<Search.Ranked<LoanListItem>> page(
             List<UUID> branchIds,
             List<String> statuses,
             UUID memberId,
             UUID officerId,
             UUID productId,
-            String q,
+            Search.Query q,
+            List<UUID> memberBranches,
+            int afterRank,
             Instant afterCreated,
             UUID afterId,
             int limit) {
-        StringBuilder sql = new StringBuilder(
-                "SELECT l.*, m.member_no, m.full_name FROM lending_loans l JOIN lending_members m ON m.id = l.member_id"
-                        + " WHERE true");
+        Search.Match match = q == null ? null : q.match(searchFields(memberBranches));
+        StringBuilder sql = new StringBuilder("SELECT l.*, m.member_no, m.full_name"
+                + (match == null ? "" : ", " + match.rank() + " AS search_rank")
+                + " FROM lending_loans l JOIN lending_members m ON m.id = l.member_id WHERE true");
         Map<String, Object> p = new LinkedHashMap<>();
+        if (match != null) {
+            p.putAll(match.params());
+            if (memberBranches != null && !memberBranches.isEmpty()) {
+                p.put("memberBranches", memberBranches);
+            }
+        }
         if (branchIds != null) {
             if (branchIds.isEmpty()) {
                 return List.of();
@@ -445,45 +460,66 @@ class LoanRepository {
                     " AND l.product_version_id IN (SELECT id FROM lending_loan_product_versions WHERE product_id = :productId)");
             p.put("productId", productId);
         }
-        if (q != null) {
-            // Loan or member number by prefix, member name by any part (the trigram index serves it).
-            sql.append(" AND (l.loan_no ILIKE :prefix OR m.member_no ILIKE :prefix OR m.full_name ILIKE :part)");
-            String escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
-            p.put("prefix", escaped + "%");
-            p.put("part", "%" + escaped + "%");
+        if (match != null) {
+            sql.append(" AND ").append(match.where());
         }
-        if (afterCreated != null) {
-            sql.append(" AND (l.created_at, l.id) > (:afterCreated, :afterId)");
-            p.put("afterCreated", Timestamp.from(afterCreated));
-            p.put("afterId", afterId);
+        String statement;
+        if (match == null) {
+            if (afterCreated != null) {
+                sql.append(" AND (l.created_at, l.id) > (:afterCreated, :afterId)");
+                p.put("afterCreated", Timestamp.from(afterCreated));
+                p.put("afterId", afterId);
+            }
+            statement = sql + " ORDER BY l.created_at, l.id LIMIT :limit";
+        } else {
+            String keyset = null;
+            if (afterCreated != null) {
+                keyset = "(search_rank, created_at, id) > (:afterRank, :afterCreated, :afterId)";
+                p.put("afterRank", afterRank);
+                p.put("afterCreated", Timestamp.from(afterCreated));
+                p.put("afterId", afterId);
+            }
+            statement = Search.page(sql.toString(), keyset, "search_rank, created_at, id");
         }
-        sql.append(" ORDER BY l.created_at, l.id LIMIT :limit");
         p.put("limit", limit);
-        return jdbc.sql(sql.toString())
+        return jdbc.sql(statement)
                 .params(p)
-                .query((rs, n) -> new LoanListItem(
-                        rs.getObject("id", UUID.class),
-                        rs.getString("loan_no"),
-                        rs.getObject("branch_id", UUID.class),
-                        rs.getObject("member_id", UUID.class),
-                        rs.getString("member_no"),
-                        rs.getString("full_name"),
-                        rs.getString("status"),
-                        rs.getString("purpose_category"),
-                        rs.getLong("requested_principal_minor"),
-                        rs.getInt("requested_term_count"),
-                        rs.getObject("approved_principal_minor", Long.class),
-                        rs.getString("currency"),
-                        rs.getObject("officer_user_id", UUID.class),
-                        rs.getObject("disbursed_on", LocalDate.class),
-                        rs.getLong("principal_outstanding_minor")
-                                + rs.getLong("interest_outstanding_minor")
-                                + rs.getLong("fees_outstanding_minor")
-                                + rs.getLong("penalties_outstanding_minor"),
-                        rs.getInt("days_past_due"),
-                        rs.getObject("next_due_date", LocalDate.class),
-                        instant(rs.getTimestamp("created_at"))))
+                .query(Search.ranked(
+                        (rs, n) -> new LoanListItem(
+                                rs.getObject("id", UUID.class),
+                                rs.getString("loan_no"),
+                                rs.getObject("branch_id", UUID.class),
+                                rs.getObject("member_id", UUID.class),
+                                rs.getString("member_no"),
+                                rs.getString("full_name"),
+                                rs.getString("status"),
+                                rs.getString("purpose_category"),
+                                rs.getLong("requested_principal_minor"),
+                                rs.getInt("requested_term_count"),
+                                rs.getObject("approved_principal_minor", Long.class),
+                                rs.getString("currency"),
+                                rs.getObject("officer_user_id", UUID.class),
+                                rs.getObject("disbursed_on", LocalDate.class),
+                                rs.getLong("principal_outstanding_minor")
+                                        + rs.getLong("interest_outstanding_minor")
+                                        + rs.getLong("fees_outstanding_minor")
+                                        + rs.getLong("penalties_outstanding_minor"),
+                                rs.getInt("days_past_due"),
+                                rs.getObject("next_due_date", LocalDate.class),
+                                instant(rs.getTimestamp("created_at"))),
+                        match != null))
                 .list();
+    }
+
+    /** What a loan search matches (ADR-039); the member's phone and national id only where the caller may read members. */
+    private static Search.Fields searchFields(List<UUID> memberBranches) {
+        Search.Fields fields = Search.Fields.of().names("m.full_name").codes("l.loan_no", "m.member_no");
+        if (memberBranches != null && memberBranches.isEmpty()) {
+            return fields;
+        }
+        return fields.guarded(
+                memberBranches == null ? null : "m.branch_id IN (:memberBranches)",
+                Search.Fields.of().codes("m.national_id").phones("m.phone_e164", "m.alt_phone_e164"));
     }
 
     private static Loan map(ResultSet rs, int n) throws SQLException {

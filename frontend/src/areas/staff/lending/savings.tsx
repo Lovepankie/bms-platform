@@ -1,6 +1,8 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
+import { Highlight, NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { savings, type SavingsAccount } from '../../../api/savings';
 import { branchFilter } from '../../../auth/branch';
 import { useStaff } from '../context';
@@ -8,7 +10,7 @@ import { Problem } from '../retail/ui';
 import { money, words } from './loan-state';
 import { mayManageProducts, showSavings } from './savings-permissions';
 
-// Savings accounts (FR-SAV-02): find an account by its number, the member's number or name, filter
+// Savings accounts (FR-SAV-02): find an account by its number, the member's number, name or phone, filter
 // by status, and open it. The list follows the branch chosen at the top of the page and pages with
 // the server's cursor ("Load more"). Product set-up is one tap away for those who manage it.
 
@@ -49,7 +51,7 @@ export function SavingsGate({ title, children }: { title: string; children: Reac
   );
 }
 
-export function AccountRows({ items }: { items: SavingsAccount[] }) {
+export function AccountRows({ items, term = '' }: { items: SavingsAccount[]; term?: string }) {
   if (items.length === 0) return <p className="empty-state">No savings accounts match.</p>;
   return (
     <ul className="ln-list">
@@ -57,11 +59,11 @@ export function AccountRows({ items }: { items: SavingsAccount[] }) {
         <li key={a.id}>
           <Link className="ln-item" to="/staff/lending/savings/accounts/$accountId" params={{ accountId: a.id ?? '' }}>
             <span className="ln-item-head">
-              <strong>{a.account_no}</strong>
+              <strong><Highlight text={a.account_no ?? ''} term={term} /></strong>
               <span className={savingsBadge(a.status)}>{words(a.status)}</span>
             </span>
             <span>
-              {a.member_name} ({a.member_no})
+              <Highlight text={a.member_name ?? ''} term={term} /> (<Highlight text={a.member_no ?? ''} term={term} />)
             </span>
             <span className="ln-item-facts">
               <span>Balance {money(a.balance_minor ?? 0, a.currency)}</span>
@@ -76,25 +78,22 @@ export function AccountRows({ items }: { items: SavingsAccount[] }) {
 
 function Accounts() {
   const { branch } = useStaff();
-  const [typed, setTyped] = useState('');
-  const [q, setQ] = useState('');
+  const search = useLiveSearch();
   const [status, setStatus] = useState('');
   const pages = useInfiniteQuery({
-    queryKey: ['savings', 'accounts', branch, q, status],
-    queryFn: ({ pageParam }) => savings.listAccounts({ q, status, branchIds: branchFilter(branch), cursor: pageParam }),
+    queryKey: ['savings', 'accounts', branch, search.term, status],
+    queryFn: ({ pageParam, signal }) => savings.listAccounts({ q: search.term, status, branchIds: branchFilter(branch), cursor: pageParam, signal }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor || undefined,
     enabled: branch !== null,
+    placeholderData: keepPreviousData,
   });
   const items = (pages.data?.pages ?? []).flatMap((p) => p.items ?? []);
+  const fetching = pages.isPlaceholderData || (pages.isFetching && !pages.isFetchingNextPage);
   return (
     <SavingsGate title="Savings">
-      <form role="search" className="ln-search" onSubmit={(e) => { e.preventDefault(); setQ(typed.trim()); }}>
-        <label htmlFor="sv-q">Account number, member number or name</label>
-        <div className="rt-row">
-          <input id="sv-q" type="search" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
-          <button type="submit">Search</button>
-        </div>
+      <form role="search" className="ln-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
+        <SearchBox id="sv-q" label="Account number, member number, name or phone" search={search} fetching={fetching} count={pages.data ? items.length : undefined} more={pages.hasNextPage} />
         <label htmlFor="sv-status">Status</label>
         <select id="sv-status" value={status} onChange={(e) => setStatus(e.target.value)}>
           {SAVINGS_STATUSES.map((s) => (
@@ -106,9 +105,13 @@ function Accounts() {
       </form>
       {pages.isPending && branch !== null && <p className="loading">Loading savings accounts</p>}
       <Problem error={pages.error} />
-      {pages.data && <AccountRows items={items} />}
+      {pages.data && (
+        <SearchResults fetching={fetching}>
+          {items.length === 0 && search.term ? <NoResults term={search.term} onClear={search.clear} noun="savings accounts" /> : <AccountRows items={items} term={search.term} />}
+        </SearchResults>
+      )}
       {pages.hasNextPage && (
-        <button type="button" className="btn-block" disabled={pages.isFetchingNextPage} onClick={() => void pages.fetchNextPage()}>
+        <button type="button" className="btn-block" disabled={pages.isFetchingNextPage || pages.isPlaceholderData} onClick={() => void pages.fetchNextPage()}>
           {pages.isFetchingNextPage ? 'Loading' : 'Load more'}
         </button>
       )}

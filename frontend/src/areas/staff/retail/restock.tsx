@@ -1,6 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { RETAIL_CURRENCY, businessToday, retail, type Product, type Supplier, type Purchase, type PurchasePayment, type PurchaseRequest } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
 import { parseMinor } from '../../../components/money';
@@ -115,9 +117,14 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase, context: Rest
   const setPurchasedOn = field('purchasedOn');
   const setMethod = field('method');
   const setLines = (f: (ls: RestockLine[]) => RestockLine[]) => setDraft((d) => ({ ...d, lines: f(d.lines) }));
-  const [search, setSearch] = useState('');
+  const search = useLiveSearch();
 
-  const products = useQuery({ queryKey: ['retail', 'products', 'all', search], queryFn: () => retail.listProducts({ query: search }) });
+  const products = useQuery({
+    queryKey: ['retail', 'products', 'all', search.term],
+    queryFn: ({ signal }) => retail.listProducts({ query: search.term, signal }),
+    placeholderData: keepPreviousData,
+  });
+  const finding = products.isPlaceholderData || products.isFetching;
   const suppliers = useQuery({ queryKey: ['retail', 'suppliers'], queryFn: () => retail.listSuppliers() });
 
   const save = useMutation({
@@ -175,8 +182,9 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase, context: Rest
       <label htmlFor="bought-on">Bought on</label>
       <input id="bought-on" type="date" value={purchasedOn} onChange={(e) => setPurchasedOn(e.target.value)} />
 
-      <label htmlFor="restock-search">Find an item by name, code or category</label>
-      <input id="restock-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
+      <SearchBox id="restock-search" label="Find an item by name, code or category" search={search} fetching={finding} count={products.data ? Math.min(products.data.length, 20) : undefined} more={(products.data?.length ?? 0) > 20} />
+      {products.data && products.data.length === 0 && search.term && <NoResults term={search.term} onClear={search.clear} noun="items" />}
+      <SearchResults fetching={finding}>
       <ul style={{ listStyle: 'none', padding: 0, maxHeight: 180, overflowY: 'auto' }}>
         {(products.data ?? []).slice(0, 20).map((p) => (
           <li key={p.id} className="rt-card rt-row">
@@ -185,6 +193,7 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase, context: Rest
           </li>
         ))}
       </ul>
+      </SearchResults>
 
       <h2>Items</h2>
       {lines.length === 0 && <p className="empty-state">No items yet.</p>}

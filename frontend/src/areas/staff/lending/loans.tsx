@@ -1,6 +1,8 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
+import { Highlight, NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { lending, type LoanListItem } from '../../../api/lending';
 import { branchFilter } from '../../../auth/branch';
 import { useStaff } from '../context';
@@ -8,9 +10,9 @@ import { Problem } from '../retail/ui';
 import { money, statusBadge, words } from './loan-state';
 import { showLending } from './permissions';
 
-// Loans (FR-DIS, FR-REP): find a loan by its number, the member's number or name, filter by
-// status, and open it. The list follows the branch chosen at the top of the page and pages with
-// the server's cursor ("Load more").
+// Loans (FR-DIS, FR-REP): find a loan by its number, the member's number, name or phone, filter by
+// status, and open it. The search runs as you type (useLiveSearch, #241). The list follows the branch
+// chosen at the top of the page and pages with the server's cursor ("Load more").
 
 export const STATUSES = ['', 'approved', 'active', 'closed', 'written_off', 'submitted', 'appraised', 'draft', 'rejected', 'cancelled'];
 
@@ -25,7 +27,7 @@ export function LendingGate({ title, children }: { title: string; children: Reac
   );
 }
 
-export function LoanRows({ items }: { items: LoanListItem[] }) {
+export function LoanRows({ items, term = '' }: { items: LoanListItem[]; term?: string }) {
   if (items.length === 0) return <p className="empty-state">No loans match.</p>;
   return (
     <ul className="ln-list">
@@ -33,11 +35,11 @@ export function LoanRows({ items }: { items: LoanListItem[] }) {
         <li key={l.id}>
           <Link className="ln-item" to="/staff/lending/loans/$loanId" params={{ loanId: l.id ?? '' }}>
             <span className="ln-item-head">
-              <strong>{l.loan_no}</strong>
+              <strong><Highlight text={l.loan_no ?? ''} term={term} /></strong>
               <span className={statusBadge(l.status)}>{words(l.status)}</span>
             </span>
             <span>
-              {l.member_name} ({l.member_no})
+              <Highlight text={l.member_name ?? ''} term={term} /> (<Highlight text={l.member_no ?? ''} term={term} />)
             </span>
             <span className="ln-item-facts">
               <span>Outstanding {money(l.total_outstanding_minor ?? 0, l.currency)}</span>
@@ -53,26 +55,23 @@ export function LoanRows({ items }: { items: LoanListItem[] }) {
 
 export function Loans() {
   const { branch } = useStaff();
-  const [typed, setTyped] = useState('');
-  const [q, setQ] = useState('');
+  const search = useLiveSearch();
   const [status, setStatus] = useState('');
   const pages = useInfiniteQuery({
-    queryKey: ['lending', 'loans', branch, q, status],
-    queryFn: ({ pageParam }) => lending.listLoans({ q, status, branchIds: branchFilter(branch), cursor: pageParam }),
+    queryKey: ['lending', 'loans', branch, search.term, status],
+    queryFn: ({ pageParam, signal }) => lending.listLoans({ q: search.term, status, branchIds: branchFilter(branch), cursor: pageParam, signal }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor || undefined,
     enabled: branch !== null,
+    placeholderData: keepPreviousData,
   });
   const items = (pages.data?.pages ?? []).flatMap((p) => p.items ?? []);
+  const fetching = pages.isPlaceholderData || (pages.isFetching && !pages.isFetchingNextPage);
 
   return (
     <LendingGate title="Loans">
-      <form role="search" className="ln-search" data-tour="loan-search" onSubmit={(e) => { e.preventDefault(); setQ(typed.trim()); }}>
-        <label htmlFor="loan-q">Loan number, member number or name</label>
-        <div className="rt-row">
-          <input id="loan-q" type="search" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
-          <button type="submit">Search</button>
-        </div>
+      <form role="search" className="ln-search" data-tour="loan-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
+        <SearchBox id="loan-q" label="Loan number, member number, name or phone" search={search} fetching={fetching} count={pages.data ? items.length : undefined} more={pages.hasNextPage} />
         <label htmlFor="loan-status">Status</label>
         <select id="loan-status" data-tour="loan-status" value={status} onChange={(e) => setStatus(e.target.value)}>
           {STATUSES.map((s) => (
@@ -84,9 +83,13 @@ export function Loans() {
       </form>
       {pages.isPending && branch !== null && <p className="loading">Loading loans</p>}
       <Problem error={pages.error} />
-      {pages.data && <LoanRows items={items} />}
+      {pages.data && (
+        <SearchResults fetching={fetching}>
+          {items.length === 0 && search.term ? <NoResults term={search.term} onClear={search.clear} noun="loans" /> : <LoanRows items={items} term={search.term} />}
+        </SearchResults>
+      )}
       {pages.hasNextPage && (
-        <button type="button" className="btn-block" disabled={pages.isFetchingNextPage} onClick={() => void pages.fetchNextPage()}>
+        <button type="button" className="btn-block" disabled={pages.isFetchingNextPage || pages.isPlaceholderData} onClick={() => void pages.fetchNextPage()}>
           {pages.isFetchingNextPage ? 'Loading' : 'Load more'}
         </button>
       )}

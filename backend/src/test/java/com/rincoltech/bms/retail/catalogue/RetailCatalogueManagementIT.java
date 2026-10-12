@@ -464,8 +464,13 @@ class RetailCatalogueManagementIT extends IntegrationTest {
         assertThat(second.get("next_cursor") == null
                         || second.get("next_cursor").isNull())
                 .isTrue();
+        // several words are an AND of terms in any order (ADR-039), so "buyer b" also reaches A and C, whose
+        // "Buyer" starts with b; the row the person typed (the whole phrase) comes first
         JsonNode found = api.get("/customers?query=buyer b", ADMIN).getBody();
-        assertThat(found.get("items")).hasSize(1);
+        assertThat(found.get("items").get(0).get("name").asString()).isEqualTo("Test Buyer B");
+        JsonNode other = api.get("/customers?query=other test", ADMIN).getBody();
+        assertThat(other.get("items")).hasSize(1);
+        assertThat(other.get("items").get(0).get("name").asString()).isEqualTo("Test Other");
         assertThat(api.get("/customers?cursor=!!", ADMIN).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 }

@@ -10,6 +10,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
 import com.rincoltech.bms.retail.stock.Quantities;
@@ -115,18 +116,22 @@ class StockService {
             return new AllBranchesPage(columns, List.of(), Quantities.format(lowStock()), null);
         }
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
-        Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
-        List<ProductTotal> rows = repo.allBranches(
+        Search.Query search = Search.parse(query);
+        Search.After position = Search.unwrap(search, cursor);
+        Cursor.Key after = Cursor.decodeKey(position.cursor()).orElse(null);
+        List<Search.Ranked<ProductTotal>> rows = repo.allBranches(
                 ids,
-                blankToNull(query),
+                search,
                 categoryId,
                 negativeOnly,
                 atMost,
+                position.rank(),
                 after == null ? null : after.sortKey(),
                 after == null ? null : after.id(),
                 size + 1);
         boolean more = rows.size() > size;
-        List<ProductTotal> page = more ? rows.subList(0, size) : rows;
+        List<Search.Ranked<ProductTotal>> ranked = more ? rows.subList(0, size) : rows;
+        List<ProductTotal> page = ranked.stream().map(Search.Ranked::row).toList();
         Map<UUID, Map<UUID, BigDecimal>> held =
                 repo.balances(page.stream().map(ProductTotal::id).toList(), ids);
         boolean cost = ids.stream().allMatch(b -> principal.may(PROFIT_READ, b));
@@ -151,7 +156,11 @@ class StockService {
                                 .toList()))
                 .toList();
         String next = more
-                ? Cursor.encode(page.getLast().code() + "|" + page.getLast().id())
+                ? Search.wrap(
+                        search,
+                        ranked.getLast().rank(),
+                        Cursor.encode(
+                                page.getLast().code() + "|" + page.getLast().id()))
                 : null;
         return new AllBranchesPage(columns, items, Quantities.format(lowStock()), next);
     }
@@ -169,20 +178,28 @@ class StockService {
         Long atMost = atMostOf(level);
         UUID branch = branches.resolve("retail.stock.read", branchId);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
-        Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
-        List<StockRow> rows = repo.stock(
+        Search.Query search = Search.parse(query);
+        Search.After position = Search.unwrap(search, cursor);
+        Cursor.Key after = Cursor.decodeKey(position.cursor()).orElse(null);
+        List<Search.Ranked<StockRow>> rows = repo.stock(
                 branch,
-                query == null || query.isBlank() ? null : query.trim(),
+                search,
                 categoryId,
                 negativeOnly,
                 atMost,
+                position.rank(),
                 after == null ? null : after.sortKey(),
                 after == null ? null : after.id(),
                 size + 1);
         boolean more = rows.size() > size;
-        List<StockRow> items = more ? rows.subList(0, size) : rows;
+        List<Search.Ranked<StockRow>> ranked = more ? rows.subList(0, size) : rows;
+        List<StockRow> items = ranked.stream().map(Search.Ranked::row).toList();
         String next = more
-                ? Cursor.encode(items.getLast().code() + "|" + items.getLast().productId())
+                ? Search.wrap(
+                        search,
+                        ranked.getLast().rank(),
+                        Cursor.encode(
+                                items.getLast().code() + "|" + items.getLast().productId()))
                 : null;
         boolean cost = mayReadCost(branch);
         return new StockPage(

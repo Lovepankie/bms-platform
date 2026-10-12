@@ -156,9 +156,35 @@ for real; the stub is for curl and tests.
   and are refused with 400 `malformed_request`, so a client part-way through a sales list must restart the list.
 - Filters are query parameters named after fields: `status=active&status=closed`
   (repeatable means OR), ranges as `<field>_from` and `<field>_to` (inclusive), free
-  search as `q`.
+  search as `q` (the retail lists keep their `query`, and the sales list its `buyer`; section 7.6.1).
 - `branch_id` (repeatable) filters branch-owned lists. When omitted the list covers every
   branch in the principal's scope; the UI sends the active branch (FR-BR-03, FR-BR-04).
+
+### 7.6.1 Search text (ADR-039, `docs/specs/search.md`)
+
+Every list that takes a search text (`q` on `/lending/members`, `/lending/loans`, `/lending/savings-accounts`,
+`/lending/investments`; `query` on `/retail/products`, `/retail/stock`, `/retail/stock/all-branches`,
+`/retail/customers`, `/retail/cash-parties`; `buyer` on `/retail/sales`) matches it the same way, through the
+kernel's one matcher:
+
+- **Case and accent insensitive.** "jose" finds a name written with an accent on the e.
+- **Several words are an AND.** The text is split on white space (at most 6 words, at most 100 characters; the rest
+  is ignored) and a row must match every word somewhere in its name, number, code or reference columns, in any order.
+- **Phone numbers match in any written form.** A word of four or more typed digits, and a whole text that looks like a
+  phone number, also match the digits of a phone column, as typed and without a leading 256 or 0: "0700 000 111",
+  "+256 700 000 111", "256700000111" and "700000111" are one number, and "0772" or "+2567" is already a search. Fewer
+  than four typed digits is not a phone.
+- **`%`, `_` and `\` are ordinary characters.**
+- **Ranked.** A name or code that starts with the whole text comes first ("buyer b"), then one where the whole text starts
+  a word, then one where every word starts a word, then any other match; inside a rank the list's usual order holds.
+  The sales history is the exception and keeps its time order.
+- **Same scope, same permissions.** The match narrows the list the caller could already read; it adds no row. The
+  columns a list does not show are matched only for a caller who may read them (a member's phone and national id on a
+  loan, savings or investment list need `lending.members.read` at the member's branch).
+- **Cursor.** With a search text the cursor carries the rank of the last row and a fingerprint of the text; it is valid
+  only with the same text. A cursor from another text, from a list without a search text, or the reverse, is 400
+  `malformed_request` ("restart the list"). Change the text, restart the list.
+- A blank text is no search. Matching and paging never change the response shape.
 
 ## 7.7 Errors
 

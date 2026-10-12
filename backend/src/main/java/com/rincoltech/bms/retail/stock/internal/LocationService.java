@@ -7,6 +7,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.retail.stock.BranchRole;
 import com.rincoltech.bms.retail.stock.BranchRoles;
 import com.rincoltech.bms.retail.stock.Quantities;
@@ -118,18 +119,22 @@ class LocationService {
         }
         boolean cost = ids.stream().allMatch(b -> principal.may(PROFIT_READ, b));
         int size = limit == null ? StockService.DEFAULT_LIMIT : Math.clamp(limit, 1, StockService.MAX_LIMIT);
-        Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
-        List<ProductTotal> rows = stockRepo.allBranches(
+        Search.Query search = Search.parse(query);
+        Search.After position = Search.unwrap(search, cursor);
+        Cursor.Key after = Cursor.decodeKey(position.cursor()).orElse(null);
+        List<Search.Ranked<ProductTotal>> rows = stockRepo.allBranches(
                 ids,
-                query == null || query.isBlank() ? null : query.trim(),
+                search,
                 categoryId,
                 negativeOnly,
                 null,
+                position.rank(),
                 after == null ? null : after.sortKey(),
                 after == null ? null : after.id(),
                 size + 1);
         boolean more = rows.size() > size;
-        List<ProductTotal> page = more ? rows.subList(0, size) : rows;
+        List<Search.Ranked<ProductTotal>> ranked = more ? rows.subList(0, size) : rows;
+        List<ProductTotal> page = ranked.stream().map(Search.Ranked::row).toList();
         List<UUID> productIds = page.stream().map(ProductTotal::id).toList();
         Map<UUID, Map<UUID, BigDecimal>> held = stockRepo.balances(productIds, ids);
         Map<UUID, OnTheWay> way = repo.onTheWay(productIds, ids);
@@ -177,7 +182,11 @@ class LocationService {
                     cost ? Math.addExact(value, transitValue) : null));
         }
         String next = more
-                ? Cursor.encode(page.getLast().code() + "|" + page.getLast().id())
+                ? Search.wrap(
+                        search,
+                        ranked.getLast().rank(),
+                        Cursor.encode(
+                                page.getLast().code() + "|" + page.getLast().id()))
                 : null;
         return new LocationReport(currency, head, items, totals(principal, columns, role, ids, cost), next);
     }

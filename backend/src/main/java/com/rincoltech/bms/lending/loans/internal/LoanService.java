@@ -10,6 +10,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.lending.collateral.CollateralLookup;
 import com.rincoltech.bms.lending.collateral.CollateralLookup.CollateralSummary;
@@ -185,30 +186,37 @@ class LoanService {
             String cursor) {
         Principal principal = CurrentPrincipal.require();
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
+        Search.Query search = Search.parse(q);
+        Search.After position = Search.unwrap(search, cursor);
         Instant afterCreated = null;
         UUID afterId = null;
-        Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
+        Cursor.Key after = Cursor.decodeKey(position.cursor()).orElse(null);
         if (after != null) {
             afterCreated = after.at();
             afterId = after.id();
         }
-        List<LoanListItem> rows = repo.page(
+        List<Search.Ranked<LoanListItem>> rows = repo.page(
                 principal.branchFilter("lending.loans.read", branchIds),
                 statuses,
                 memberId,
                 officerId,
                 productId,
-                q == null || q.isBlank() ? null : q.trim(),
+                search,
+                principal.branchFilter("lending.members.read", null),
+                position.rank(),
                 afterCreated,
                 afterId,
                 size + 1);
         boolean more = rows.size() > size;
-        List<LoanListItem> items = more ? rows.subList(0, size) : rows;
+        List<Search.Ranked<LoanListItem>> items = more ? rows.subList(0, size) : rows;
         String next = more
-                ? Cursor.encode(
-                        items.getLast().createdAt() + "|" + items.getLast().id())
+                ? Search.wrap(
+                        search,
+                        items.getLast().rank(),
+                        Cursor.encode(items.getLast().row().createdAt() + "|"
+                                + items.getLast().row().id()))
                 : null;
-        return new LoanPage(List.copyOf(items), next);
+        return new LoanPage(items.stream().map(Search.Ranked::row).toList(), next);
     }
 
     /** Draft only; omitted fields are unchanged; the new terms are checked against the loan's product version. */

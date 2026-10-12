@@ -1,6 +1,7 @@
 package com.rincoltech.bms.lending.members.internal;
 
 import com.rincoltech.bms.kernel.Masking;
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.lending.members.internal.MemberApi.MemberListItem;
 import com.rincoltech.bms.lending.members.internal.MemberApi.MemberResponse;
 import java.sql.ResultSet;
@@ -209,13 +210,27 @@ class MemberRepository {
         return List.copyOf(reasons);
     }
 
+    /** The columns a member search matches (ADR-039): name, member number, national id and both phones. */
+    static final Search.Fields SEARCH = Search.Fields.of()
+            .names("full_name")
+            .codes("member_no", "national_id")
+            .phones("phone_e164", "alt_phone_e164");
+
     /**
-     * One page ordered by member number. {@code branchIds} is already intersected with the
-     * principal's branch scope; {@code null} means "every branch" for an all-branch principal.
+     * One page ordered by member number, or by match rank and then member number when {@code q} is
+     * given. {@code branchIds} is already intersected with the principal's branch scope; {@code null}
+     * means "every branch" for an all-branch principal.
      */
-    List<MemberListItem> page(List<UUID> branchIds, List<String> statuses, String q, String afterMemberNo, int limit) {
-        StringBuilder sql = new StringBuilder("SELECT " + COLUMNS + " FROM lending_members WHERE true");
+    List<Search.Ranked<MemberListItem>> page(
+            List<UUID> branchIds, List<String> statuses, Search.Query q, Search.After after, int limit) {
+        Search.Match match = q == null ? null : q.match(SEARCH);
+        StringBuilder sql = new StringBuilder("SELECT " + COLUMNS);
         Map<String, Object> params = new LinkedHashMap<>();
+        if (match != null) {
+            sql.append(", ").append(match.rank()).append(" AS search_rank");
+            params.putAll(match.params());
+        }
+        sql.append(" FROM lending_members WHERE true");
         if (branchIds != null) {
             if (branchIds.isEmpty()) {
                 return List.of();
@@ -227,28 +242,30 @@ class MemberRepository {
             sql.append(" AND status IN (:statuses)");
             params.put("statuses", statuses);
         }
-        if (q != null && !q.isBlank()) {
-            String term = q.trim();
-            String digits = term.replaceAll("\\D", "");
-            sql.append(" AND (member_no = :q OR national_id = upper(:q) OR full_name ILIKE :nameLike ESCAPE '\\'");
-            if (digits.length() >= 4) {
-                sql.append(" OR phone_e164 LIKE :phoneSuffix");
-                params.put("phoneSuffix", "%" + digits);
+        if (match != null) {
+            sql.append(" AND ").append(match.where());
+        }
+        String statement;
+        if (match == null) {
+            if (after.cursor() != null) {
+                sql.append(" AND member_no > :after");
+                params.put("after", after.cursor());
             }
-            sql.append(")");
-            params.put("q", term);
-            params.put(
-                    "nameLike",
-                    "%" + term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+            statement = sql + " ORDER BY member_no LIMIT :limit";
+        } else {
+            String keyset = null;
+            if (after.cursor() != null) {
+                keyset = "(search_rank, member_no) > (:afterRank, :after)";
+                params.put("afterRank", after.rank());
+                params.put("after", after.cursor());
+            }
+            statement = Search.page(sql.toString(), keyset, "search_rank, member_no");
         }
-        if (afterMemberNo != null) {
-            sql.append(" AND member_no > :after");
-            params.put("after", afterMemberNo);
-        }
-        sql.append(" ORDER BY member_no LIMIT :limit");
         params.put("limit", limit);
-        var statement = jdbc.sql(sql.toString()).params(params);
-        return statement.query(MemberRepository::mapListItem).list();
+        return jdbc.sql(statement)
+                .params(params)
+                .query(Search.ranked(MemberRepository::mapListItem, match != null))
+                .list();
     }
 
     /**

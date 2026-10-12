@@ -11,6 +11,7 @@ import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.ActionOutcome;
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.Certificate;
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.EarlyQuote;
@@ -115,23 +116,32 @@ class InvestmentService {
             String cursor) {
         Principal principal = CurrentPrincipal.require();
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
-        String after = Cursor.decode(cursor).orElse(null);
+        Search.Query search = Search.parse(q);
+        Search.After position = Search.unwrap(search, cursor);
+        String after = Cursor.decode(position.cursor()).orElse(null);
         LocalDate maturingBy =
                 maturingWithinDays == null ? null : servicer.today().plusDays(maturingWithinDays);
-        List<Inv> rows = repo.page(
+        List<Search.Ranked<Inv>> rows = repo.page(
                 principal.branchFilter("lending.investments.read", branchIds),
                 statuses,
                 memberId,
                 productId,
                 maturingBy,
-                q,
+                search,
+                principal.branchFilter("lending.members.read", null),
+                position.rank(),
                 after,
                 size + 1);
         boolean more = rows.size() > size;
-        List<Inv> page = more ? rows.subList(0, size) : rows;
+        List<Search.Ranked<Inv>> page = more ? rows.subList(0, size) : rows;
         return new InvestmentPage(
-                page.stream().map(this::view).toList(),
-                more ? Cursor.encode(page.getLast().accountNo()) : null);
+                page.stream().map(r -> view(r.row())).toList(),
+                more
+                        ? Search.wrap(
+                                search,
+                                page.getLast().rank(),
+                                Cursor.encode(page.getLast().row().accountNo()))
+                        : null);
     }
 
     @Transactional(readOnly = true)

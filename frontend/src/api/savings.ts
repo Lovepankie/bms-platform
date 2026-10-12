@@ -80,7 +80,7 @@ export const savings = {
     );
   },
 
-  async listAccounts(q: { q?: string; status?: string; memberId?: string; branchIds?: string[]; cursor?: string }): Promise<SavingsAccountPage> {
+  async listAccounts(q: { q?: string; status?: string; memberId?: string; branchIds?: string[]; cursor?: string; signal?: AbortSignal }): Promise<SavingsAccountPage> {
     return unwrap(
       await api.GET('/api/v1/lending/savings-accounts', {
         params: {
@@ -93,6 +93,7 @@ export const savings = {
             cursor: q.cursor,
           },
         },
+        signal: q.signal,
       }),
     );
   },

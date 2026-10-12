@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { NoResults, SearchBox } from '../../../app/ui/SearchBox';
+import { matchesSearch, useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type Stocktake, type StocktakeLine } from '../../../api/retail';
 import { milliOf, parseCount, showQty } from './maths';
 import { SkeletonList } from '../../../components/states';
@@ -58,7 +60,7 @@ export function StocktakeReview({ stocktake, onCommit, committing }: { stocktake
 
 function CountSheet({ branchId }: { branchId: string }) {
   const queryClient = useQueryClient();
-  const [query, setQuery] = useState('');
+  const search = useLiveSearch();
   const [counts, setCounts] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Stocktake | null>(null);
   const stock = useQuery({ queryKey: ['retail', 'stock', branchId, '', false], queryFn: () => retail.listStock({ branchId }) });
@@ -87,16 +89,17 @@ function CountSheet({ branchId }: { branchId: string }) {
       </>
     );
   }
-  const rows = (stock.data ?? []).filter((r) => !query.trim() || `${r.description ?? ''} ${r.code ?? ''} ${r.category ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()));
+  // The whole sheet is loaded, so the list narrows as you type, on the text, ignoring case and accents.
+  const rows = (stock.data ?? []).filter((r) => matchesSearch(`${r.description ?? ''} ${r.code ?? ''} ${r.category ?? ''}`, search.text));
   return (
     <>
       <Note>Type the counted quantity for each item you counted. Leave an item blank to skip it.</Note>
       <div data-tour="count-search">
-        <label htmlFor="count-search">Search by name, code or category</label>
-        <input id="count-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
+        <SearchBox id="count-search" label="Search by name, code or category" search={search} fetching={false} count={stock.data ? rows.length : undefined} />
       </div>
       {stock.isPending && <SkeletonList label="Loading stock" />}
       <Problem error={stock.error} />
+      {stock.data && rows.length === 0 && search.term && <NoResults term={search.term} onClear={search.clear} noun="items" />}
       {rows.map((r) => {
         const id = r.product_id ?? '';
         return (

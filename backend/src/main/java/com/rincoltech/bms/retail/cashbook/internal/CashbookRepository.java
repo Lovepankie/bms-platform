@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.cashbook.internal;
 
+import com.rincoltech.bms.kernel.Search;
 import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -177,28 +178,47 @@ class CashbookRepository {
                         """).params(name, requiresExplanation, active, id).update();
     }
 
-    List<PartyRow> parties(String query, String kind, Instant afterCreated, UUID afterId, int limit) {
-        StringBuilder sql = new StringBuilder("""
-                SELECT id, name, contact, kind, active, created_at FROM retail_cash_parties WHERE true""");
+    /** What a party search matches (ADR-039): the name and the contact, a phone in any written form. */
+    static final Search.Fields PARTY_SEARCH = Search.Fields.of().names("name").phones("contact");
+
+    /** Parties by creation, or by match rank and then creation when {@code query} is given. */
+    List<Search.Ranked<PartyRow>> parties(
+            Search.Query query, String kind, int afterRank, Instant afterCreated, UUID afterId, int limit) {
+        Search.Match match = query == null ? null : query.match(PARTY_SEARCH);
+        StringBuilder sql = new StringBuilder("SELECT id, name, contact, kind, active, created_at"
+                + (match == null ? "" : ", " + match.rank() + " AS search_rank")
+                + " FROM retail_cash_parties WHERE true");
         Map<String, Object> params = new LinkedHashMap<>();
-        if (query != null && !query.isBlank()) {
-            sql.append(" AND lower(name) LIKE :q");
-            params.put("q", "%" + query.trim().toLowerCase().replace("%", "").replace("_", "") + "%");
+        if (match != null) {
+            sql.append(" AND ").append(match.where());
+            params.putAll(match.params());
         }
         if (kind != null) {
             sql.append(" AND kind = :kind");
             params.put("kind", kind);
         }
-        if (afterCreated != null) {
-            sql.append(" AND (created_at, id) > (:afterCreated, :afterId)");
-            params.put("afterCreated", Timestamp.from(afterCreated));
-            params.put("afterId", afterId);
+        String statement;
+        if (match == null) {
+            if (afterCreated != null) {
+                sql.append(" AND (created_at, id) > (:afterCreated, :afterId)");
+                params.put("afterCreated", Timestamp.from(afterCreated));
+                params.put("afterId", afterId);
+            }
+            statement = sql + " ORDER BY created_at, id LIMIT :limit";
+        } else {
+            String keyset = null;
+            if (afterCreated != null) {
+                keyset = "(search_rank, created_at, id) > (:afterRank, :afterCreated, :afterId)";
+                params.put("afterRank", afterRank);
+                params.put("afterCreated", Timestamp.from(afterCreated));
+                params.put("afterId", afterId);
+            }
+            statement = Search.page(sql.toString(), keyset, "search_rank, created_at, id");
         }
-        sql.append(" ORDER BY created_at, id LIMIT :limit");
         params.put("limit", limit);
-        return jdbc.sql(sql.toString())
+        return jdbc.sql(statement)
                 .params(params)
-                .query((rs, n) -> party(rs))
+                .query(Search.ranked((rs, n) -> party(rs), match != null))
                 .list();
     }
 

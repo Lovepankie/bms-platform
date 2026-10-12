@@ -1,5 +1,6 @@
 package com.rincoltech.bms.lending.investments.internal;
 
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.InvestmentTransaction;
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.Product;
 import com.rincoltech.bms.lending.investments.internal.InvestmentApi.ProductTerms;
@@ -241,18 +242,35 @@ class InvestmentRepository {
         return find(id);
     }
 
-    /** A filtered page in account number order, newest first; {@code after} is the last account number seen. */
-    List<Inv> page(
+    /**
+     * A filtered page in account number order, newest first; {@code after} is the last account number
+     * seen. With {@code q} the order is match rank first, then newest first. A member's phone and
+     * national id match only in {@code memberBranches} (the caller's lending.members.read scope, null
+     * for every branch).
+     */
+    List<Search.Ranked<Inv>> page(
             List<UUID> branchIds,
             List<String> statuses,
             UUID memberId,
             UUID productId,
             LocalDate maturingBy,
-            String q,
+            Search.Query q,
+            List<UUID> memberBranches,
+            int afterRank,
             String after,
             int limit) {
-        StringBuilder sql = new StringBuilder(SELECT_INV).append(" WHERE true");
+        Search.Match match = q == null ? null : q.match(searchFields(memberBranches));
+        String select = match == null
+                ? SELECT_INV
+                : SELECT_INV.replace("SELECT i.*,", "SELECT i.*, " + match.rank() + " AS search_rank,");
+        StringBuilder sql = new StringBuilder(select).append(" WHERE true");
         Map<String, Object> params = new LinkedHashMap<>();
+        if (match != null) {
+            params.putAll(match.params());
+            if (memberBranches != null && !memberBranches.isEmpty()) {
+                params.put("memberBranches", memberBranches);
+            }
+        }
         if (branchIds != null) {
             if (branchIds.isEmpty()) {
                 return List.of();
@@ -276,20 +294,41 @@ class InvestmentRepository {
             sql.append(" AND i.maturity_date <= :maturingBy");
             params.put("maturingBy", maturingBy);
         }
-        if (q != null && !q.isBlank()) {
-            sql.append(" AND (i.account_no ILIKE :q OR m.member_no ILIKE :q OR m.full_name ILIKE :q)");
-            params.put("q", "%" + q.trim().replace("%", "\\%").replace("_", "\\_") + "%");
+        if (match != null) {
+            sql.append(" AND ").append(match.where());
         }
-        if (after != null) {
-            sql.append(" AND i.account_no < :after");
-            params.put("after", after);
+        String statement;
+        if (match == null) {
+            if (after != null) {
+                sql.append(" AND i.account_no < :after");
+                params.put("after", after);
+            }
+            statement = sql + " ORDER BY i.account_no DESC LIMIT :limit";
+        } else {
+            String keyset = null;
+            if (after != null) {
+                keyset = "(search_rank > :afterRank OR (search_rank = :afterRank AND account_no < :after))";
+                params.put("afterRank", afterRank);
+                params.put("after", after);
+            }
+            statement = Search.page(sql.toString(), keyset, "search_rank, account_no DESC");
         }
-        sql.append(" ORDER BY i.account_no DESC LIMIT :limit");
         params.put("limit", limit);
-        return jdbc.sql(sql.toString())
+        return jdbc.sql(statement)
                 .params(params)
-                .query(InvestmentRepository::inv)
+                .query(Search.ranked(InvestmentRepository::inv, match != null))
                 .list();
+    }
+
+    /** What an investment search matches (ADR-039); the member's phone and national id only where the caller may read members. */
+    private static Search.Fields searchFields(List<UUID> memberBranches) {
+        Search.Fields fields = Search.Fields.of().names("m.full_name").codes("i.account_no", "m.member_no");
+        if (memberBranches != null && memberBranches.isEmpty()) {
+            return fields;
+        }
+        return fields.guarded(
+                memberBranches == null ? null : "m.branch_id IN (:memberBranches)",
+                Search.Fields.of().codes("m.national_id").phones("m.phone_e164", "m.alt_phone_e164"));
     }
 
     void insert(

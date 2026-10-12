@@ -1,6 +1,8 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
+import { Highlight, NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { investments, type InvestmentProduct, type MemberListItem } from '../../../api/investments';
 import { Problem } from '../retail/ui';
 import { INVESTMENTS_OPEN, instructionWords, may, payoutWords, percent } from './investment-state';
@@ -13,31 +15,42 @@ import { useStaff } from '../context';
 // choice, and open the investment. It opens pending funding: the cashier records the money next.
 
 function MemberPicker({ onPick }: { onPick: (m: MemberListItem) => void }) {
-  const [typed, setTyped] = useState('');
-  const [q, setQ] = useState('');
-  const found = useQuery({ queryKey: ['lending', 'member-search', q], queryFn: () => investments.findMembers(q), enabled: q.length >= 2 });
+  const search = useLiveSearch({ minLength: 2 });
+  const found = useQuery({
+    queryKey: ['lending', 'member-search', search.term],
+    queryFn: ({ signal }) => investments.findMembers(search.term, signal),
+    enabled: search.term !== '',
+    placeholderData: keepPreviousData,
+  });
+  const fetching = found.isPlaceholderData || found.isFetching;
   return (
     <section aria-label="Member">
-      <form role="search" className="ln-search" onSubmit={(e) => { e.preventDefault(); setQ(typed.trim()); }}>
-        <label htmlFor="iv-member-q">Member number or name</label>
-        <div className="rt-row">
-          <input id="iv-member-q" type="search" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
-          <button type="submit">Find</button>
-        </div>
+      <form role="search" className="ln-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
+        <SearchBox
+          id="iv-member-q"
+          label="Member number, name or phone"
+          search={search}
+          fetching={fetching}
+          count={search.term !== '' && found.data ? found.data.length : undefined}
+          minLength={2}
+          hint="Type at least 2 characters."
+        />
       </form>
       <Problem error={found.error} />
-      {found.data && found.data.length === 0 && <p className="empty-state">No member matches.</p>}
-      {found.data && found.data.length > 0 && (
-        <ul className="ln-list">
-          {found.data.map((m) => (
-            <li key={m.id}>
-              <button type="button" className="ln-item" onClick={() => onPick(m)}>
-                <strong>{m.full_name}</strong>
-                <span className="ln-muted">{m.member_no}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+      {search.term !== '' && found.data && found.data.length === 0 && <NoResults term={search.term} onClear={search.clear} noun="members" />}
+      {search.term !== '' && found.data && found.data.length > 0 && (
+        <SearchResults fetching={fetching}>
+          <ul className="ln-list">
+            {found.data.map((m) => (
+              <li key={m.id}>
+                <button type="button" className="ln-item" onClick={() => onPick(m)}>
+                  <strong><Highlight text={m.full_name ?? ''} term={search.term} /></strong>
+                  <span className="ln-muted"><Highlight text={m.member_no ?? ''} term={search.term} /></span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </SearchResults>
       )}
     </section>
   );

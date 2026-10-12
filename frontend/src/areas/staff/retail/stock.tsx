@@ -1,6 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type AllBranchesStock, type StockLevel, type StockRow } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
 import { useCrumbTail } from '../../../components/breadcrumbs';
@@ -180,33 +182,37 @@ export function StockPage() {
   const { all, branchId, branchName: name } = useBranchView();
   const canProfit = useProfitAccess();
   const phone = useIsPhone();
-  const [query, setQuery] = useState('');
+  const search = useLiveSearch();
+  const query = search.term;
   const [negativeOnly, setNegativeOnly] = useState(false);
   const [categoryId, setCategoryId] = useState('');
   const [level, setLevel] = useState<StockLevel | ''>('');
   const categories = useQuery({ queryKey: ['retail', 'categories'], queryFn: () => retail.listCategories() });
   const one = useQuery({
     queryKey: ['retail', 'stock', branchId, query, categoryId, negativeOnly, level],
-    queryFn: () => retail.listStock({ branchId: branchId ?? '', query, categoryId, negativeOnly, level: level || undefined }),
+    queryFn: ({ signal }) => retail.listStock({ branchId: branchId ?? '', query, categoryId, negativeOnly, level: level || undefined, signal }),
     enabled: !all && branchId !== null,
+    placeholderData: keepPreviousData,
   });
   const many = useQuery({
     queryKey: ['retail', 'stock', 'all-branches', query, categoryId, negativeOnly, level],
-    queryFn: () => retail.listStockAllBranches({ query, categoryId, negativeOnly, level: level || undefined }),
+    queryFn: ({ signal }) => retail.listStockAllBranches({ query, categoryId, negativeOnly, level: level || undefined, signal }),
     enabled: all,
+    placeholderData: keepPreviousData,
   });
   const result = all ? many : one;
+  const finding = result.isPlaceholderData || (result.isFetching && result.fetchStatus !== 'idle');
+  const shown = all ? many.data?.items.length : one.data?.length;
   // The whole-business view is the stock "by location": a last crumb says so (components/breadcrumbs.tsx).
   useCrumbTail(all ? 'By location' : undefined);
-  const narrowing = { searching: query.trim() !== '', filterKey: [all ? 'all' : branchId, query, categoryId, negativeOnly, level].join('|') };
+  const narrowing = { searching: query !== '', filterKey: [all ? 'all' : branchId, query, categoryId, negativeOnly, level].join('|') };
   return (
     <Gate screen="stock" title="Stock">
       <p className="branch-line">Branch: <strong>{all ? 'All branches' : name}</strong></p>
       {!all && branchId !== null && <NoStockHere branchId={branchId} />}
       <StockLevelFilter level={level} onChange={setLevel} />
       <div data-tour="stock-search">
-        <label htmlFor="stock-search">Search by name, code or category</label>
-        <input id="stock-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
+        <SearchBox id="stock-search" label="Search by name, code or category" search={search} fetching={finding} count={shown} />
       </div>
       <label htmlFor="stock-category">Category</label>
       <select id="stock-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
@@ -222,8 +228,11 @@ export function StockPage() {
       {!all && branchId === null && <BranchRequired permissions={needsOf('stock')} />}
       {result.isPending && (all || branchId !== null) && <SkeletonList label="Loading stock" />}
       <Problem error={result.error} />
-      {!all && one.data && <StockTable rows={one.data} showCost={canProfit} {...narrowing} />}
-      {all && many.data && (phone ? <AllBranchesList data={many.data} showCost={canProfit} {...narrowing} /> : <AllBranchesTable data={many.data} showCost={canProfit} {...narrowing} />)}
+      {shown === 0 && query && <NoResults term={query} onClear={search.clear} noun="items" />}
+      <SearchResults fetching={finding}>
+        {!all && one.data && <StockTable rows={one.data} showCost={canProfit} {...narrowing} />}
+        {all && many.data && (phone ? <AllBranchesList data={many.data} showCost={canProfit} {...narrowing} /> : <AllBranchesTable data={many.data} showCost={canProfit} {...narrowing} />)}
+      </SearchResults>
     </Gate>
   );
 }

@@ -1,11 +1,13 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type Customer, type Supplier } from '../../../api/retail';
 import { useStaff } from '../context';
 import { AddPanel, BackToCatalogue } from './catalogue';
 import { canUse } from './permissions';
-import { Gate, Problem, Success, changeFailureText, money, requireVersion, useDebounced, useToast } from './ui';
+import { Gate, Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
 
 // Suppliers and Credit buyers (#146): a name and a contact, added and edited by the shop. A supplier
 // can be switched off (it stays on its past restocks); a credit buyer is never removed. The contact
@@ -76,7 +78,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   note?: string;
   plural: string;
   queryKey: string;
-  list: (q: { query: string; cursor?: string }) => Promise<PersonPage>;
+  list: (q: { query: string; cursor?: string; signal?: AbortSignal }) => Promise<PersonPage>;
   create: (b: { name: string; contact?: string }) => Promise<Person>;
   update: (id: string, version: number, b: PersonEdit & { active?: boolean }) => Promise<Person>;
   canAdd: boolean;
@@ -90,14 +92,16 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [adding, setAdding] = useState(false);
-  const [search, setSearch] = useState('');
-  const query = useDebounced(search);
+  const search = useLiveSearch();
+  const query = search.term;
   const rows = useInfiniteQuery({
     queryKey: ['retail', 'catalogue', queryKey, query],
-    queryFn: ({ pageParam }) => list({ query, ...(pageParam ? { cursor: pageParam } : {}) }),
+    queryFn: ({ pageParam, signal }) => list({ query, ...(pageParam ? { cursor: pageParam } : {}), signal }),
     initialPageParam: '',
     getNextPageParam: (last) => last.next_cursor || undefined,
+    placeholderData: keepPreviousData,
   });
+  const finding = rows.isPlaceholderData || (rows.isFetching && !rows.isFetchingNextPage);
   const people = (rows.data?.pages ?? []).flatMap((p) => p.items ?? []);
   const done = (text: string) => {
     setMessage(text);
@@ -136,12 +140,10 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
       {rows.isPending && <p className="loading">Loading</p>}
       <Problem error={rows.error} />
       {searchable && (
-        <>
-          <label htmlFor={`search-${queryKey}`}>Search by name</label>
-          <input id={`search-${queryKey}`} type="search" value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
-        </>
+        <SearchBox id={`search-${queryKey}`} label="Search by name or phone" search={search} fetching={finding} count={rows.data ? people.length : undefined} more={rows.hasNextPage} />
       )}
-      {rows.data && people.length === 0 && <p className="empty-state">{query ? `No ${plural} match that name.` : `No ${plural} yet.`}</p>}
+      {rows.data && people.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun={plural} /> : <p className="empty-state">{`No ${plural} yet.`}</p>)}
+      <SearchResults fetching={finding}>
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {people.map((r) => (
           <PersonRow
@@ -165,7 +167,8 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
           />
         ))}
       </ul>
-      {rows.hasNextPage && <button type="button" onClick={() => void rows.fetchNextPage()} disabled={rows.isFetchingNextPage}>{rows.isFetchingNextPage ? 'Loading' : `Show more ${plural}`}</button>}
+      </SearchResults>
+      {rows.hasNextPage && <button type="button" onClick={() => void rows.fetchNextPage()} disabled={rows.isFetchingNextPage || rows.isPlaceholderData}>{rows.isFetchingNextPage ? 'Loading' : `Show more ${plural}`}</button>}
       {toast}
     </>
   );

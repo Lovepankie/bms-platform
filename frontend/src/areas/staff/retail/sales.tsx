@@ -1,6 +1,8 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Highlight, NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { businessToday, daysBefore, retail, type Sale, type SalePayment, type SalesQuery } from '../../../api/retail';
 import { enteredPriceMinor, enteredQty } from './units-state';
 import { useCrumbTail } from '../../../components/breadcrumbs';
@@ -32,12 +34,14 @@ export function saleState(sale: Sale, today: string): SaleState {
 }
 
 /** One sale as a card: buyer, date, amount, and for credit the due date and what is still owed, with an Open button. */
-export function SaleList({ items, today, onOpen, credit, branchOf }: {
+export function SaleList({ items, today, onOpen, credit, branchOf, term = '' }: {
   items: Sale[];
   today: string;
   onOpen: (id: string) => void;
   credit?: boolean;
   branchOf?: (id: string | undefined) => string;
+  /** The words searched for, marked in the buyer's name. */
+  term?: string;
 }) {
   if (items.length === 0) return <p className="empty-state">{credit ? 'No credit sales found.' : 'No sales found.'}</p>;
   return (
@@ -48,7 +52,7 @@ export function SaleList({ items, today, onOpen, credit, branchOf }: {
         return (
           <li key={s.id} className="rt-card">
             <p>
-              <strong>{s.buyer_name || (isCredit ? 'No buyer name' : methodLabel(s.payment_method))}</strong>{' '}
+              <strong>{s.buyer_name ? <Highlight text={s.buyer_name} term={term} /> : isCredit ? 'No buyer name' : methodLabel(s.payment_method)}</strong>{' '}
               <span className={`badge badge-${state.tone}`}>{state.label}</span>
             </p>
             <p>{showDate(s.sale_date)}, <strong>{money(s.total_minor ?? 0)}</strong></p>
@@ -141,21 +145,23 @@ function OpenSale({ id, onClose }: { id: string; onClose: () => void }) {
 }
 
 /** Pages of sales for a filter, newest first, with a Show more button. */
-function useSales(filter: Omit<SalesQuery, 'cursor'>, enabled: boolean) {
+function useSales(filter: Omit<SalesQuery, 'cursor' | 'signal'>, enabled: boolean) {
   const query = useInfiniteQuery({
     queryKey: ['retail', 'sales', filter],
-    queryFn: ({ pageParam }) => retail.listSales({ ...filter, cursor: pageParam }),
+    queryFn: ({ pageParam, signal }) => retail.listSales({ ...filter, cursor: pageParam, signal }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor,
     enabled,
+    placeholderData: keepPreviousData,
   });
-  return { query, items: (query.data?.pages ?? []).flatMap((p) => p.items ?? []) };
+  const fetching = query.isPlaceholderData || (query.isFetching && !query.isFetchingNextPage && query.fetchStatus !== 'idle');
+  return { query, fetching, items: (query.data?.pages ?? []).flatMap((p) => p.items ?? []) };
 }
 
 function More({ query }: { query: ReturnType<typeof useSales>['query'] }) {
   if (!query.hasNextPage) return null;
   return (
-    <button type="button" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
+    <button type="button" disabled={query.isFetchingNextPage || query.isPlaceholderData} onClick={() => void query.fetchNextPage()}>
       {query.isFetchingNextPage ? 'Loading' : 'Show more'}
     </button>
   );
@@ -182,11 +188,11 @@ const OWING: { value: Owing; label: string }[] = [
 function CreditSales() {
   const { all, branchId, branchName } = useBranchView();
   const nameOf = useBranchName();
-  const [buyer, setBuyer] = useState('');
+  const search = useLiveSearch();
   const [owing, setOwing] = useState<Owing>('all');
   const [open, setOpen] = useOpenSale(all ? 'all' : (branchId ?? ''));
   const today = businessToday();
-  const { query, items } = useSales({ branchId: all ? undefined : (branchId ?? undefined), buyer, paymentMethod: 'credit', status: 'completed', owing: owing === 'all' ? undefined : owing }, all || branchId !== null);
+  const { query, items, fetching } = useSales({ branchId: all ? undefined : (branchId ?? undefined), buyer: search.term, paymentMethod: 'credit', status: 'completed', owing: owing === 'all' ? undefined : owing }, all || branchId !== null);
   return (
     <Gate screen="creditSales" title="Credit sales">
       {open ? (
@@ -194,15 +200,18 @@ function CreditSales() {
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
-          <label htmlFor="credit-buyer">Buyer</label>
-          <input id="credit-buyer" type="search" value={buyer} onChange={(e) => setBuyer(e.target.value)} autoComplete="off" />
+          <SearchBox id="credit-buyer" label="Buyer, phone or sale number" search={search} fetching={fetching} count={query.data ? items.length : undefined} more={query.hasNextPage} />
           <label htmlFor="credit-owing">Show</label>
           <select id="credit-owing" value={owing} onChange={(e) => setOwing(e.target.value as Owing)}>
             {OWING.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           {query.isPending && query.fetchStatus !== 'idle' && <p className="loading">Loading</p>}
           <Problem error={query.error} />
-          {query.data && <SaleList items={items} today={today} credit onOpen={setOpen} branchOf={all ? nameOf : undefined} />}
+          {query.data && (
+            <SearchResults fetching={fetching}>
+              {items.length === 0 && search.term ? <NoResults term={search.term} onClear={search.clear} noun="credit sales" /> : <SaleList items={items} today={today} credit onOpen={setOpen} branchOf={all ? nameOf : undefined} term={search.term} />}
+            </SearchResults>
+          )}
           <More query={query} />
         </>
       )}
@@ -216,14 +225,16 @@ function AllSales() {
   const today = businessToday();
   const [from, setFrom] = useState(() => daysBefore(today, 29));
   const [to, setTo] = useState(today);
-  const [buyer, setBuyer] = useState('');
+  const search = useLiveSearch();
   const [method, setMethod] = useState<SalePayment | ''>('');
-  const [itemSearch, setItemSearch] = useState('');
+  const itemBox = useLiveSearch();
+  const itemSearch = itemBox.term;
   const [productId, setProductId] = useState('');
+  useEffect(() => setProductId(''), [itemSearch]);
   const [open, setOpen] = useOpenSale(all ? 'all' : (branchId ?? ''));
-  const products = useQuery({ queryKey: ['retail', 'products', 'all', itemSearch], queryFn: () => retail.listProducts({ query: itemSearch }), enabled: itemSearch.trim() !== '' });
-  const { query, items } = useSales(
-    { branchId: all ? undefined : (branchId ?? undefined), from, to, buyer, paymentMethod: method || undefined, productId },
+  const products = useQuery({ queryKey: ['retail', 'products', 'all', itemSearch], queryFn: ({ signal }) => retail.listProducts({ query: itemSearch, signal }), enabled: itemSearch !== '', placeholderData: keepPreviousData });
+  const { query, items, fetching } = useSales(
+    { branchId: all ? undefined : (branchId ?? undefined), from, to, buyer: search.term, paymentMethod: method || undefined, productId },
     (all || branchId !== null) && from <= to,
   );
   return (
@@ -238,16 +249,14 @@ function AllSales() {
             <div><label htmlFor="sales-to">To</label><input id="sales-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
           </div>
           {from > to && <p role="alert" className="rt-flag">The start date must not be after the end date.</p>}
-          <label htmlFor="sales-buyer">Buyer</label>
-          <input id="sales-buyer" type="search" value={buyer} onChange={(e) => setBuyer(e.target.value)} autoComplete="off" />
+          <SearchBox id="sales-buyer" label="Buyer, phone or sale number" search={search} fetching={fetching} count={query.data ? items.length : undefined} more={query.hasNextPage} />
           <label htmlFor="sales-method">Paid by</label>
           <select id="sales-method" value={method} onChange={(e) => setMethod(e.target.value as SalePayment | '')}>
             <option value="">Any way</option>
             {METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
-          <label htmlFor="sales-item-search">Item (type part of its name or code)</label>
-          <input id="sales-item-search" type="search" value={itemSearch} onChange={(e) => { setItemSearch(e.target.value); setProductId(''); }} autoComplete="off" />
-          {itemSearch.trim() !== '' && (
+          <SearchBox id="sales-item-search" label="Item (type part of its name or code)" search={itemBox} fetching={products.isPlaceholderData || products.isFetching} count={itemSearch !== '' && products.data ? products.data.length : undefined} />
+          {itemSearch !== '' && (
             <>
               <label htmlFor="sales-item">Choose the item</label>
               <select id="sales-item" value={productId} onChange={(e) => setProductId(e.target.value)}>
@@ -258,7 +267,11 @@ function AllSales() {
           )}
           {query.isPending && query.fetchStatus !== 'idle' && <p className="loading">Loading</p>}
           <Problem error={query.error} />
-          {query.data && <SaleList items={items} today={today} onOpen={setOpen} branchOf={all ? nameOf : undefined} />}
+          {query.data && (
+            <SearchResults fetching={fetching}>
+              {items.length === 0 && search.term ? <NoResults term={search.term} onClear={search.clear} noun="sales" /> : <SaleList items={items} today={today} onOpen={setOpen} branchOf={all ? nameOf : undefined} term={search.term} />}
+            </SearchResults>
+          )}
           <More query={query} />
         </>
       )}

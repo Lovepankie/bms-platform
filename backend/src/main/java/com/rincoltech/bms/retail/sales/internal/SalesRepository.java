@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.sales.internal;
 
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Customer;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.OpenSale;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Payment;
@@ -42,7 +43,7 @@ class SalesRepository {
 
     /** A sale header with its journal entries, for the service. */
     /** A listed buyer with the key the list is ordered by, as the database computed it (for the cursor). */
-    record CustomerRow(Customer customer, String sortKey) {}
+    record CustomerRow(Customer customer, String sortKey, int rank) {}
 
     record Header(Sale sale, UUID saleEntryId, UUID costEntryId) {}
 
@@ -81,7 +82,7 @@ class SalesRepository {
             UUID customerId,
             String paymentMethod,
             UUID productId,
-            String buyer,
+            Search.Query buyer,
             String status,
             String owing,
             LocalDate today,
@@ -120,11 +121,9 @@ class SalesRepository {
             params.put("productId", productId);
         }
         if (buyer != null) {
-            sql.append(" AND (buyer_name ILIKE :buyer OR EXISTS (SELECT 1 FROM retail_customers c"
-                    + " WHERE c.id = retail_sales.customer_id AND c.name ILIKE :buyer))");
-            params.put(
-                    "buyer",
-                    "%" + buyer.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+            Search.Match match = buyer.match(BUYER_SEARCH);
+            sql.append(" AND ").append(match.where());
+            params.putAll(match.params());
         }
         if (status != null) {
             sql.append(" AND status = :status");
@@ -395,12 +394,41 @@ class SalesRepository {
                 .update();
     }
 
-    /** The list, each buyer with what they owe on credit sales in the given branches (null: every branch). */
+    /** What a credit buyer search matches (ADR-039): the name and the contact, a phone in any written form. */
+    static final Search.Fields CUSTOMER_SEARCH =
+            Search.Fields.of().names("c.name").phones("c.contact");
+
+    /**
+     * What a sales search matches (ADR-039): the buyer's name, the sale number and the buyer's contact,
+     * typed on the sale or held by the linked credit buyer. The sales list keeps its time order, so only
+     * the condition is used, not the rank.
+     */
+    static final Search.Fields BUYER_SEARCH = Search.Fields.of()
+            .names("retail_sales.buyer_name")
+            .codes("retail_sales.sale_no")
+            .phones("retail_sales.buyer_contact")
+            // The linked credit buyer is reached through an uncorrelated subquery, so it runs once per
+            // statement and not once per sale.
+            .related(
+                    "retail_sales.customer_id",
+                    "retail_customers c",
+                    "c.id",
+                    Search.Fields.of().names("c.name").phones("c.contact"));
+
+    /**
+     * The list, each buyer with what they owe on credit sales in the given branches (null: every
+     * branch). Ordered by name, or by match rank and then name when {@code query} is given.
+     */
     List<CustomerRow> customers(
-            String query, int limit, List<UUID> branchIds, com.rincoltech.bms.kernel.Cursor.Key after) {
+            Search.Query query,
+            int limit,
+            List<UUID> branchIds,
+            int afterRank,
+            com.rincoltech.bms.kernel.Cursor.Key after) {
         if (branchIds != null && branchIds.isEmpty()) {
-            return customers(query, limit, List.of(new UUID(0, 0)), after);
+            return customers(query, limit, List.of(new UUID(0, 0)), afterRank, after);
         }
+        Search.Match match = query == null ? null : query.match(CUSTOMER_SEARCH);
         Map<String, Object> params = new LinkedHashMap<>();
         StringBuilder sql = new StringBuilder("""
                 SELECT c.id, c.name, c.contact, c.created_at, c.version, lower(c.name) AS sort_key,
@@ -411,20 +439,35 @@ class SalesRepository {
             sql.append(" AND s.branch_id IN (:branchIds)");
             params.put("branchIds", branchIds);
         }
-        sql.append(") AS owed FROM retail_customers c WHERE true");
-        if (query != null) {
-            sql.append(" AND c.name ILIKE :q");
-            params.put(
-                    "q", "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+        sql.append(") AS owed");
+        if (match != null) {
+            sql.append(", ").append(match.rank()).append(" AS search_rank");
         }
-        if (after != null) {
-            sql.append(" AND (lower(c.name), c.id) > (:afterName, :afterId)");
-            params.put("afterName", after.sortKey());
-            params.put("afterId", after.id());
+        sql.append(" FROM retail_customers c WHERE true");
+        if (match != null) {
+            sql.append(" AND ").append(match.where());
+            params.putAll(match.params());
         }
-        sql.append(" ORDER BY lower(c.name), c.id LIMIT :limit");
+        String statement;
+        if (match == null) {
+            if (after != null) {
+                sql.append(" AND (lower(c.name), c.id) > (:afterName, :afterId)");
+                params.put("afterName", after.sortKey());
+                params.put("afterId", after.id());
+            }
+            statement = sql + " ORDER BY lower(c.name), c.id LIMIT :limit";
+        } else {
+            String keyset = null;
+            if (after != null) {
+                keyset = "(search_rank, sort_key, id) > (:afterRank, :afterName, :afterId)";
+                params.put("afterRank", afterRank);
+                params.put("afterName", after.sortKey());
+                params.put("afterId", after.id());
+            }
+            statement = Search.page(sql.toString(), keyset, "search_rank, sort_key, id");
+        }
         params.put("limit", limit);
-        return jdbc.sql(sql.toString())
+        return jdbc.sql(statement)
                 .params(params)
                 .query((rs, n) -> new CustomerRow(
                         new Customer(
@@ -434,7 +477,8 @@ class SalesRepository {
                                 instant(rs, "created_at"),
                                 rs.getLong("owed"),
                                 rs.getInt("version")),
-                        rs.getString("sort_key")))
+                        rs.getString("sort_key"),
+                        match == null ? 0 : rs.getInt("search_rank")))
                 .list();
     }
 

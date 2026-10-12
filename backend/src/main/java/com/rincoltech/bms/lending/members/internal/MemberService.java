@@ -13,6 +13,7 @@ import com.rincoltech.bms.kernel.Masking;
 import com.rincoltech.bms.kernel.NationalIds;
 import com.rincoltech.bms.kernel.PhoneNumbers;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.lending.members.MemberLookup;
 import com.rincoltech.bms.lending.members.internal.MemberApi.BlacklistRequest;
@@ -139,12 +140,19 @@ class MemberService implements MemberLookup {
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         // Branch scope is authorisation (ADR-003), applied per permission (chapter 8 section 8.3.1).
         List<UUID> branchFilter = principal.branchFilter("lending.members.read", requestedBranches);
-        String after = Cursor.decode(cursor).orElse(null);
-        List<MemberListItem> rows = members.page(branchFilter, statuses, q, after, size + 1);
+        Search.Query search = Search.parse(q);
+        Search.After after = Search.unwrap(search, cursor);
+        after = new Search.After(after.rank(), Cursor.decode(after.cursor()).orElse(null));
+        List<Search.Ranked<MemberListItem>> rows = members.page(branchFilter, statuses, search, after, size + 1);
         boolean more = rows.size() > size;
-        List<MemberListItem> items = more ? rows.subList(0, size) : rows;
-        String next = more ? Cursor.encode(items.getLast().memberNo()) : null;
-        return new MemberPage(List.copyOf(items), next);
+        List<Search.Ranked<MemberListItem>> items = more ? rows.subList(0, size) : rows;
+        String next = more
+                ? Search.wrap(
+                        search,
+                        items.getLast().rank(),
+                        Cursor.encode(items.getLast().row().memberNo()))
+                : null;
+        return new MemberPage(items.stream().map(Search.Ranked::row).toList(), next);
     }
 
     /** A member outside the principal's branch scope is indistinguishable from a missing one. */

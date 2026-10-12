@@ -118,6 +118,8 @@ export function daysBefore(date: string, days: number): string {
 export type StockLevel = 'out' | 'low';
 
 export interface SalesQuery {
+  /** Aborts the request when the search that asked for it has moved on. */
+  signal?: AbortSignal;
   /** One branch; absent means every branch the caller may read. */
   branchId?: string;
   from?: string;
@@ -156,10 +158,10 @@ export type SalePayment = 'cash' | 'mobile_money' | 'bank' | 'credit';
 export type PurchasePayment = 'cash' | 'bank' | 'credit';
 
 export interface RetailApi {
-  listProducts(q: { query?: string; branchId?: string }): Promise<Product[]>;
+  listProducts(q: { query?: string; branchId?: string; signal?: AbortSignal }): Promise<Product[]>;
   listCategories(): Promise<Category[]>;
   /** Catalogue management (#146): one page of products, with the filters of the Products screen. */
-  listCatalogue(q: { query?: string; categoryId?: string; active?: boolean; cursor?: string }): Promise<ProductPage>;
+  listCatalogue(q: { query?: string; categoryId?: string; active?: boolean; cursor?: string; signal?: AbortSignal }): Promise<ProductPage>;
   getProduct(id: string): Promise<Product>;
   createProduct(body: NewProduct): Promise<Product>;
   /** Non-price fields, under If-Match with the version read. */
@@ -179,13 +181,13 @@ export interface RetailApi {
   listUnits(): Promise<Unit[]>;
   createUnit(name: string): Promise<Unit>;
   updateUnit(id: string, version: number, body: { name?: string; active?: boolean }): Promise<Unit>;
-  listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel }): Promise<StockRow[]>;
+  listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel; signal?: AbortSignal }): Promise<StockRow[]>;
   /** One page of sales, newest first, narrowed by the filters (#145). */
   listSales(q: SalesQuery): Promise<SalePage>;
   getSale(id: string): Promise<Sale>;
   listCustomers(): Promise<Customer[]>;
   /** The credit buyers screen: server-side search and cursor paging. */
-  listCustomerPage(q: { query?: string; cursor?: string }): Promise<CustomerPage>;
+  listCustomerPage(q: { query?: string; cursor?: string; signal?: AbortSignal }): Promise<CustomerPage>;
   listSuppliers(): Promise<Supplier[]>;
   createSupplier(body: { name: string; contact?: string }): Promise<Supplier>;
   updateSupplier(id: string, version: number, body: { name?: string; contact?: string; active?: boolean }): Promise<Supplier>;
@@ -197,7 +199,7 @@ export interface RetailApi {
   createStocktake(body: StocktakeRequest): Promise<Stocktake>;
   commitStocktake(id: string): Promise<Stocktake>;
   /** Every product with its balance in each branch the caller may read (#144). */
-  listStockAllBranches(q: { query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel }): Promise<AllBranchesStock>;
+  listStockAllBranches(q: { query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel; signal?: AbortSignal }): Promise<AllBranchesStock>;
   /** One branch, or every branch in the caller's scope when `branchId` is absent (#144). */
   valuation(q: { branchId?: string; asOf?: string }): Promise<Valuation>;
   /** The branches in the caller's stock scope holding a quantity above zero of anything (#103). */
@@ -219,7 +221,7 @@ export interface RetailApi {
   /** The source takes a dispatched transfer back before it is received. */
   cancelTransfer(id: string, reason: string, idempotencyKey: string): Promise<Transfer>;
   /** Every product with its balance in each store and shop, by role, with stock on the way and a combined total (ADR-033). */
-  stockByLocation(q: { query?: string; categoryId?: string; negativeOnly?: boolean }): Promise<StockByLocation>;
+  stockByLocation(q: { query?: string; categoryId?: string; negativeOnly?: boolean; signal?: AbortSignal }): Promise<StockByLocation>;
   /** Dispatched and not yet received transfers (capability transfer_receipt), the longest wait first. */
   transfersInFlight(): Promise<InFlightReport>;
 
@@ -304,10 +306,11 @@ async function allPages<T>(
 }
 
 const realRetail: RetailApi = {
-  async listProducts({ query, branchId }) {
+  async listProducts({ query, branchId, signal }) {
     const page = unwrap(
       await api.GET('/api/v1/retail/products', {
         params: { query: { query: query || undefined, branch_id: branchId, active: true, limit: 50 } },
+        signal,
       }),
     );
     return page.items ?? [];
@@ -317,10 +320,11 @@ const realRetail: RetailApi = {
     return unwrap(await api.GET('/api/v1/retail/categories')).items ?? [];
   },
 
-  async listCatalogue({ query, categoryId, active, cursor }) {
+  async listCatalogue({ query, categoryId, active, cursor, signal }) {
     return unwrap(
       await api.GET('/api/v1/retail/products', {
         params: { query: { query: query || undefined, category_id: categoryId || undefined, active, limit: 50, cursor } },
+        signal,
       }),
     );
   },
@@ -390,13 +394,14 @@ const realRetail: RetailApi = {
     return unwrap(await api.PATCH('/api/v1/retail/units/{unit_id}', { params: { path: { unit_id: id }, header: { 'If-Match': `"${version}"` } }, body }));
   },
 
-  async listStock({ branchId, query, categoryId, negativeOnly, level }) {
+  async listStock({ branchId, query, categoryId, negativeOnly, level, signal }) {
     const rows: StockRow[] = [];
     let cursor: string | undefined;
     do {
       const page = unwrap(
         await api.GET('/api/v1/retail/stock', {
           params: { query: { branch_id: branchId, query: query || undefined, category_id: categoryId || undefined, negative_only: negativeOnly || undefined, stock_level: level, limit: PAGE, cursor } },
+          signal,
         }),
       );
       rows.push(...(page.items ?? []));
@@ -405,7 +410,7 @@ const realRetail: RetailApi = {
     return rows;
   },
 
-  async listStockAllBranches({ query, categoryId, negativeOnly, level }) {
+  async listStockAllBranches({ query, categoryId, negativeOnly, level, signal }) {
     const items: AllBranchesRow[] = [];
     let branches: StockBranch[] = [];
     let cursor: string | undefined;
@@ -413,6 +418,7 @@ const realRetail: RetailApi = {
       const page = unwrap(
         await api.GET('/api/v1/retail/stock/all-branches', {
           params: { query: { query: query || undefined, category_id: categoryId || undefined, negative_only: negativeOnly || undefined, stock_level: level, limit: PAGE, cursor } },
+          signal,
         }),
       );
       branches = page.branches ?? branches;
@@ -423,7 +429,7 @@ const realRetail: RetailApi = {
   },
 
   async listSales(q) {
-    return unwrap(await api.GET('/api/v1/retail/sales', { params: { query: salesParams(q) } }));
+    return unwrap(await api.GET('/api/v1/retail/sales', { params: { query: salesParams(q) }, signal: q.signal }));
   },
 
   async getSale(id) {
@@ -434,8 +440,8 @@ const realRetail: RetailApi = {
     return unwrap(await api.GET('/api/v1/retail/customers', { params: { query: {} } })).items ?? [];
   },
 
-  async listCustomerPage({ query, cursor }) {
-    return unwrap(await api.GET('/api/v1/retail/customers', { params: { query: { query: query || undefined, limit: 50, cursor } } }));
+  async listCustomerPage({ query, cursor, signal }) {
+    return unwrap(await api.GET('/api/v1/retail/customers', { params: { query: { query: query || undefined, limit: 50, cursor } }, signal }));
   },
 
   async listSuppliers() {
@@ -545,7 +551,7 @@ const realRetail: RetailApi = {
     );
   },
 
-  async stockByLocation({ query, categoryId, negativeOnly }) {
+  async stockByLocation({ query, categoryId, negativeOnly, signal }) {
     const items: LocationRow[] = [];
     let report: StockByLocation = { branches: [], items: [] };
     let cursor: string | undefined;
@@ -553,6 +559,7 @@ const realRetail: RetailApi = {
       const page = unwrap(
         await api.GET('/api/v1/retail/reports/stock-by-location', {
           params: { query: { query: query || undefined, category_id: categoryId || undefined, negative_only: negativeOnly || undefined, limit: PAGE, cursor } },
+          signal,
         }),
       );
       report = page;

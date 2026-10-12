@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.stock.internal;
 
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementRow;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockRow;
@@ -32,16 +33,25 @@ class StockRepository {
         this.jdbc = jdbc;
     }
 
-    /** Active products, and inactive ones still holding stock, with the branch balance; ordered by code. */
-    List<StockRow> stock(
+    /** What a stock search matches (ADR-039): the code, the description and the category name. */
+    static final Search.Fields SEARCH =
+            Search.Fields.of().names("p.description", "c.name").codes("p.code");
+
+    /**
+     * Active products, and inactive ones still holding stock, with the branch balance; ordered by code,
+     * or by match rank and then code when {@code query} is given.
+     */
+    List<Search.Ranked<StockRow>> stock(
             UUID branchId,
-            String query,
+            Search.Query query,
             UUID categoryId,
             boolean negativeOnly,
             Long atMostMilli,
+            int afterRank,
             String afterCode,
             UUID afterId,
             int limit) {
+        Search.Match match = query == null ? null : query.match(SEARCH);
         StringBuilder sql = new StringBuilder("""
                 SELECT p.id, p.code, p.description, p.category_id, c.name AS category, u.name AS unit, p.sell_minor,
                        p.cost_minor, coalesce(b.qty, 0) AS qty
@@ -53,10 +63,10 @@ class StockRepository {
                 """);
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("branch", branchId);
-        if (query != null) {
-            sql.append(" AND (p.code ILIKE :q OR p.description ILIKE :q OR c.name ILIKE :q)");
-            params.put(
-                    "q", "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+        if (match != null) {
+            sql.insert("SELECT ".length(), match.rank() + " AS search_rank, ");
+            sql.append(" AND ").append(match.where());
+            params.putAll(match.params());
         }
         if (categoryId != null) {
             sql.append(" AND p.category_id = :categoryId");
@@ -69,29 +79,43 @@ class StockRepository {
             sql.append(" AND coalesce(b.qty, 0) <= :atMost");
             params.put("atMost", java.math.BigDecimal.valueOf(atMostMilli, 3));
         }
-        if (afterCode != null) {
-            sql.append(" AND (p.code, p.id) > (:afterCode, :afterId)");
-            params.put("afterCode", afterCode);
-            params.put("afterId", afterId);
+        String statement;
+        if (match == null) {
+            if (afterCode != null) {
+                sql.append(" AND (p.code, p.id) > (:afterCode, :afterId)");
+                params.put("afterCode", afterCode);
+                params.put("afterId", afterId);
+            }
+            statement = sql + " ORDER BY p.code, p.id LIMIT :limit";
+        } else {
+            String keyset = null;
+            if (afterCode != null) {
+                keyset = "(search_rank, code, id) > (:afterRank, :afterCode, :afterId)";
+                params.put("afterRank", afterRank);
+                params.put("afterCode", afterCode);
+                params.put("afterId", afterId);
+            }
+            statement = Search.page(sql.toString(), keyset, "search_rank, code, id");
         }
-        sql.append(" ORDER BY p.code, p.id LIMIT :limit");
         params.put("limit", limit);
-        return jdbc.sql(sql.toString())
+        return jdbc.sql(statement)
                 .params(params)
-                .query((rs, n) -> {
-                    BigDecimal qty = rs.getBigDecimal("qty");
-                    return new StockRow(
-                            rs.getObject("id", UUID.class),
-                            rs.getString("code"),
-                            rs.getString("description"),
-                            rs.getObject("category_id", UUID.class),
-                            rs.getString("category"),
-                            rs.getString("unit"),
-                            Quantities.format(qty),
-                            qty.signum() < 0,
-                            rs.getLong("sell_minor"),
-                            rs.getLong("cost_minor"));
-                })
+                .query(Search.ranked(
+                        (rs, n) -> {
+                            BigDecimal qty = rs.getBigDecimal("qty");
+                            return new StockRow(
+                                    rs.getObject("id", UUID.class),
+                                    rs.getString("code"),
+                                    rs.getString("description"),
+                                    rs.getObject("category_id", UUID.class),
+                                    rs.getString("category"),
+                                    rs.getString("unit"),
+                                    Quantities.format(qty),
+                                    qty.signum() < 0,
+                                    rs.getLong("sell_minor"),
+                                    rs.getLong("cost_minor"));
+                        },
+                        match != null))
                 .list();
     }
 
@@ -111,15 +135,17 @@ class StockRepository {
      * Products with their quantity summed over {@code branchIds} (the caller's scope; never empty),
      * ordered by code. An inactive product shows only while it holds a quantity in those branches.
      */
-    List<ProductTotal> allBranches(
+    List<Search.Ranked<ProductTotal>> allBranches(
             List<UUID> branchIds,
-            String query,
+            Search.Query query,
             UUID categoryId,
             boolean negativeOnly,
             Long atMostMilli,
+            int afterRank,
             String afterCode,
             UUID afterId,
             int limit) {
+        Search.Match match = query == null ? null : query.match(SEARCH);
         StringBuilder sql = new StringBuilder("""
                 SELECT p.id, p.code, p.description, p.category_id, c.name AS category, u.name AS unit, p.sell_minor,
                        p.cost_minor, coalesce(t.total, 0) AS total, coalesce(t.negs, 0) > 0 AS negative
@@ -134,10 +160,10 @@ class StockRepository {
                 """);
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("branchIds", branchIds);
-        if (query != null) {
-            sql.append(" AND (p.code ILIKE :q OR p.description ILIKE :q OR c.name ILIKE :q)");
-            params.put(
-                    "q", "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+        if (match != null) {
+            sql.insert("SELECT ".length(), match.rank() + " AS search_rank, ");
+            sql.append(" AND ").append(match.where());
+            params.putAll(match.params());
         }
         if (categoryId != null) {
             sql.append(" AND p.category_id = :categoryId");
@@ -150,26 +176,40 @@ class StockRepository {
             sql.append(" AND coalesce(t.total, 0) <= :atMost");
             params.put("atMost", java.math.BigDecimal.valueOf(atMostMilli, 3));
         }
-        if (afterCode != null) {
-            sql.append(" AND (p.code, p.id) > (:afterCode, :afterId)");
-            params.put("afterCode", afterCode);
-            params.put("afterId", afterId);
+        String statement;
+        if (match == null) {
+            if (afterCode != null) {
+                sql.append(" AND (p.code, p.id) > (:afterCode, :afterId)");
+                params.put("afterCode", afterCode);
+                params.put("afterId", afterId);
+            }
+            statement = sql + " ORDER BY p.code, p.id LIMIT :limit";
+        } else {
+            String keyset = null;
+            if (afterCode != null) {
+                keyset = "(search_rank, code, id) > (:afterRank, :afterCode, :afterId)";
+                params.put("afterRank", afterRank);
+                params.put("afterCode", afterCode);
+                params.put("afterId", afterId);
+            }
+            statement = Search.page(sql.toString(), keyset, "search_rank, code, id");
         }
-        sql.append(" ORDER BY p.code, p.id LIMIT :limit");
         params.put("limit", limit);
-        return jdbc.sql(sql.toString())
+        return jdbc.sql(statement)
                 .params(params)
-                .query((rs, n) -> new ProductTotal(
-                        rs.getObject("id", UUID.class),
-                        rs.getString("code"),
-                        rs.getString("description"),
-                        rs.getObject("category_id", UUID.class),
-                        rs.getString("category"),
-                        rs.getString("unit"),
-                        rs.getLong("sell_minor"),
-                        rs.getLong("cost_minor"),
-                        rs.getBigDecimal("total"),
-                        rs.getBoolean("negative")))
+                .query(Search.ranked(
+                        (rs, n) -> new ProductTotal(
+                                rs.getObject("id", UUID.class),
+                                rs.getString("code"),
+                                rs.getString("description"),
+                                rs.getObject("category_id", UUID.class),
+                                rs.getString("category"),
+                                rs.getString("unit"),
+                                rs.getLong("sell_minor"),
+                                rs.getLong("cost_minor"),
+                                rs.getBigDecimal("total"),
+                                rs.getBoolean("negative")),
+                        match != null))
                 .list();
     }
 

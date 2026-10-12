@@ -66,9 +66,15 @@ export async function fetchMe(): Promise<Me> {
   return data;
 }
 
-export async function listMembers(branchIds: string[] | undefined, limit = 50): Promise<MemberPage> {
+export async function listMembers(
+  branchIds: string[] | undefined,
+  limit = 50,
+  q?: string,
+  signal?: AbortSignal,
+): Promise<MemberPage> {
   const { data, error } = await api.GET('/api/v1/lending/members', {
-    params: { query: { limit, branch_id: branchIds } },
+    params: { query: { limit, branch_id: branchIds, q: q || undefined } },
+    signal,
   });
   if (error || !data) throw new Error('Could not load members');
   return data;

@@ -1,6 +1,8 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import { Link, createLazyRoute, getRouteApi } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
+import { Highlight, NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { investments, type Investment } from '../../../api/investments';
 import { branchFilter } from '../../../auth/branch';
 import { useStaff } from '../context';
@@ -9,7 +11,7 @@ import { INVESTMENTS_OPEN, PRODUCTS_MANAGE, investmentBadge, may, percent, showI
 import { money, words } from './loan-state';
 
 // Investments (FR-INV-02, FR-INV-12): find an investment by its account number, the member's
-// number or name, filter by status, and open it; the member tab lists one member's investments.
+// number, name or phone, filter by status, and open it; the member tab lists one member's investments.
 // The list follows the branch chosen at the top of the page and pages with the server's cursor.
 
 export const STATUSES = ['', 'active', 'matured', 'pending_funding', 'paid_out', 'rolled_over', 'withdrawn_early', 'cancelled'];
@@ -39,7 +41,7 @@ export function InvestmentsGate({ title, children }: { title: string; children: 
   );
 }
 
-export function InvestmentRows({ items }: { items: Investment[] }) {
+export function InvestmentRows({ items, term = '' }: { items: Investment[]; term?: string }) {
   if (items.length === 0) return <p className="empty-state">No investments match.</p>;
   return (
     <ul className="ln-list">
@@ -47,11 +49,11 @@ export function InvestmentRows({ items }: { items: Investment[] }) {
         <li key={i.id}>
           <Link className="ln-item" to="/staff/lending/investments/$investmentId" params={{ investmentId: i.id ?? '' }}>
             <span className="ln-item-head">
-              <strong>{i.account_no}</strong>
+              <strong><Highlight text={i.account_no ?? ''} term={term} /></strong>
               <span className={investmentBadge(i.status)}>{words(i.status)}</span>
             </span>
             <span>
-              {i.member_name} ({i.member_no})
+              <Highlight text={i.member_name ?? ''} term={term} /> (<Highlight text={i.member_no ?? ''} term={term} />)
             </span>
             <span className="ln-item-facts">
               <span>{money(i.principal_minor, i.currency)}</span>
@@ -70,36 +72,37 @@ function useInvestmentPages(q: string, status: string, memberId?: string) {
   const { branch } = useStaff();
   const pages = useInfiniteQuery({
     queryKey: ['lending', 'investments', branch, q, status, memberId ?? ''],
-    queryFn: ({ pageParam }) => investments.list({ q, status, memberId, branchIds: branchFilter(branch), cursor: pageParam }),
+    queryFn: ({ pageParam, signal }) => investments.list({ q, status, memberId, branchIds: branchFilter(branch), cursor: pageParam, signal }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor || undefined,
     enabled: branch !== null,
+    placeholderData: keepPreviousData,
   });
-  return { pages, items: (pages.data?.pages ?? []).flatMap((p) => p.items ?? []), waiting: pages.isPending && branch !== null };
+  return {
+    pages,
+    items: (pages.data?.pages ?? []).flatMap((p) => p.items ?? []),
+    waiting: pages.isPending && branch !== null,
+    fetching: pages.isPlaceholderData || (pages.isFetching && !pages.isFetchingNextPage),
+  };
 }
 
 function MoreButton({ pages }: { pages: ReturnType<typeof useInvestmentPages>['pages'] }) {
   if (!pages.hasNextPage) return null;
   return (
-    <button type="button" className="btn-block" disabled={pages.isFetchingNextPage} onClick={() => void pages.fetchNextPage()}>
+    <button type="button" className="btn-block" disabled={pages.isFetchingNextPage || pages.isPlaceholderData} onClick={() => void pages.fetchNextPage()}>
       {pages.isFetchingNextPage ? 'Loading' : 'Load more'}
     </button>
   );
 }
 
 function Investments() {
-  const [typed, setTyped] = useState('');
-  const [q, setQ] = useState('');
+  const search = useLiveSearch();
   const [status, setStatus] = useState('');
-  const { pages, items, waiting } = useInvestmentPages(q, status);
+  const { pages, items, waiting, fetching } = useInvestmentPages(search.term, status);
   return (
     <InvestmentsGate title="Investments">
-      <form role="search" className="ln-search" onSubmit={(e) => { e.preventDefault(); setQ(typed.trim()); }}>
-        <label htmlFor="inv-q">Account number, member number or name</label>
-        <div className="rt-row">
-          <input id="inv-q" type="search" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
-          <button type="submit">Search</button>
-        </div>
+      <form role="search" className="ln-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
+        <SearchBox id="inv-q" label="Account number, member number, name or phone" search={search} fetching={fetching} count={pages.data ? items.length : undefined} more={pages.hasNextPage} />
         <label htmlFor="inv-status">Status</label>
         <select id="inv-status" value={status} onChange={(e) => setStatus(e.target.value)}>
           {STATUSES.map((s) => (
@@ -111,7 +114,11 @@ function Investments() {
       </form>
       {waiting && <p className="loading">Loading investments</p>}
       <Problem error={pages.error} />
-      {pages.data && <InvestmentRows items={items} />}
+      {pages.data && (
+        <SearchResults fetching={fetching}>
+          {items.length === 0 && search.term ? <NoResults term={search.term} onClear={search.clear} noun="investments" /> : <InvestmentRows items={items} term={search.term} />}
+        </SearchResults>
+      )}
       <MoreButton pages={pages} />
     </InvestmentsGate>
   );

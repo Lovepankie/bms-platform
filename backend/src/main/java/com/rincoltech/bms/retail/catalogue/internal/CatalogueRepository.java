@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.catalogue.internal;
 
+import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Category;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Pack;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceChange;
@@ -192,24 +193,41 @@ class CatalogueRepository {
         return jdbc.sql(LOCK).param(id).query(CatalogueRepository::product).optional();
     }
 
-    /** One page ordered by code; {@code query} matches the code, the description or the category name. */
-    List<Product> page(
-            String query, UUID categoryId, Boolean active, UUID branchId, String afterCode, UUID afterId, int limit) {
+    /** What a product search matches (ADR-039): the code, the description and the category name. */
+    static final Search.Fields SEARCH =
+            Search.Fields.of().names("p.description", "c.name").codes("p.code");
+
+    /**
+     * One page ordered by code, or by match rank and then code when {@code query} is given; the query
+     * matches the code, the description or the category name.
+     */
+    List<Search.Ranked<Product>> page(
+            Search.Query query,
+            UUID categoryId,
+            Boolean active,
+            UUID branchId,
+            int afterRank,
+            String afterCode,
+            UUID afterId,
+            int limit) {
+        Search.Match match = query == null ? null : query.match(SEARCH);
+        String select = match == null
+                ? SELECT_PRODUCT
+                : SELECT_PRODUCT.replace("SELECT p.id,", "SELECT " + match.rank() + " AS search_rank, p.id,");
         Map<String, Object> params = new LinkedHashMap<>();
         StringBuilder sql;
         if (branchId == null) {
-            sql = new StringBuilder(SELECT_PRODUCT + " WHERE true");
+            sql = new StringBuilder(select + " WHERE true");
         } else {
             // The balance of retail_stock_balances (the stock module's table), read for the search row.
             sql = new StringBuilder(
-                    SELECT_PRODUCT.replace(" FROM retail_products p", ", b.qty FROM retail_products p")
+                    select.replace(" FROM retail_products p", ", b.qty FROM retail_products p")
                             + " LEFT JOIN retail_stock_balances b ON b.product_id = p.id AND b.branch_id = :branchId WHERE true");
             params.put("branchId", branchId);
         }
-        if (query != null) {
-            sql.append(" AND (p.code ILIKE :q OR p.description ILIKE :q OR c.name ILIKE :q)");
-            params.put(
-                    "q", "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
+        if (match != null) {
+            sql.append(" AND ").append(match.where());
+            params.putAll(match.params());
         }
         if (categoryId != null) {
             sql.append(" AND p.category_id = :categoryId");
@@ -219,16 +237,30 @@ class CatalogueRepository {
             sql.append(" AND p.active = :active");
             params.put("active", active);
         }
-        if (afterCode != null) {
-            sql.append(" AND (p.code, p.id) > (:afterCode, :afterId)");
-            params.put("afterCode", afterCode);
-            params.put("afterId", afterId);
+        String statement;
+        if (match == null) {
+            if (afterCode != null) {
+                sql.append(" AND (p.code, p.id) > (:afterCode, :afterId)");
+                params.put("afterCode", afterCode);
+                params.put("afterId", afterId);
+            }
+            statement = sql + " ORDER BY p.code, p.id LIMIT :limit";
+        } else {
+            String keyset = null;
+            if (afterCode != null) {
+                keyset = "(search_rank, code, id) > (:afterRank, :afterCode, :afterId)";
+                params.put("afterRank", afterRank);
+                params.put("afterCode", afterCode);
+                params.put("afterId", afterId);
+            }
+            statement = Search.page(sql.toString(), keyset, "search_rank, code, id");
         }
-        sql.append(" ORDER BY p.code, p.id LIMIT :limit");
         params.put("limit", limit);
-        return jdbc.sql(sql.toString())
+        return jdbc.sql(statement)
                 .params(params)
-                .query(branchId == null ? CatalogueRepository::product : CatalogueRepository::productWithQty)
+                .query(Search.ranked(
+                        branchId == null ? CatalogueRepository::product : CatalogueRepository::productWithQty,
+                        match != null))
                 .list();
     }
 
