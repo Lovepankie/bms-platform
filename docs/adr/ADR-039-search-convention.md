@@ -27,9 +27,13 @@ matching lives, how a ranked order pages, and how a search stays inside what the
 2. **Matching rules, the same for every entity.** Case and accent insensitive; the text is split on white
    space and every term must match somewhere (AND) in a name, code, number or reference column; `%`, `_`
    and the backslash are literal; a term of four or more digits (and a whole text that looks like a phone
-   number) also matches the digits of a phone column, as typed and with a leading `256` or `0` removed (the length
-   is checked before anything is removed, so "0772", "0700" and "+2567" are searches), so "0700 000 111",
-   "+256700000111" and "700000111" are one number.
+   number) also matches the digits of a phone column: the typed digits anywhere in the number (so the last digits of
+   a number work), and, when the text starts with `256` or `0`, the rest of it at the start of the number written
+   with `256`, with `0` or with neither (a free-text contact is kept as typed). The length is checked before
+   anything is removed, so "0772", "0700" and "+2567" are searches; the rest is never matched in the middle of a
+   number, so a four digit term such as 0123 does not match every contact with 123 in it. Spaces in a phone-like
+   text are separators: "07 00" is the number 0700. A four digit term that is not a phone, a year or a receipt
+   number, keeps its text match and rank.
 3. **Folding in the database, not in Java.** Two immutable SQL functions (migration V40): `bms_fold(text)`
    lower-cases and removes Latin accents with a fixed `translate` table written in both cases (a text of one byte
    per character is only lower-cased); `bms_digits(text)` keeps the digits. Both the column and the text go
@@ -52,7 +56,9 @@ matching lives, how a ranked order pages, and how a search stays inside what the
    advice to restart the list, never a silently wrong page. The PWA cannot send one: the term is in the query
    key, and the Load more button is disabled while the list on screen is the previous answer. A searched page
    is a subquery that selects `search_rank`, with the keyset condition and the order outside it, so the rank is
-   worked out once per row.
+   worked out once per row; the inner query ends in `OFFSET 0`, which stops the planner flattening it
+   and putting the rank back into the keyset condition. The sales history, which keeps its time order and carries no
+   rank, ties its cursor to the text the same way.
 6. **Columns the list does not show are guarded.** The loan, savings and investment lists match the member's
    phone and national id only for a caller who holds `lending.members.read` at the member's branch (a `guarded`
    column group with the caller's member scope as its predicate). A caller with only `lending.loans.read` cannot
@@ -102,8 +108,8 @@ members will feel it.
 **Watch for:** a new list must use `Search` and its `Fields`, never a new `ILIKE`; a new searched column that is
 not shown on the list needs a guard (the members list matches a national id or phone in part for a caller who may
 read members, the same permission that opens the member; a caller without it does not match them); a change to the accent table of `bms_fold` is a new function, not an edit of
-V40, because an index built on the old one would go stale; the stock by location screen of #193 and the category
-groups screens (`stock.tsx`, `catalogue-products.tsx`) adopt the hook in a follow-up; if a table outgrows the
+V40, because an index built on the old one would go stale; a screen that groups its list by category must
+not decide the groups' default from a kept placeholder list (`useCategoryGroups` takes `pending`); if a table outgrows the
 filter scan, the ways out are a stored folded key searched with `starts_with` (the one leakproof pattern operator)
 for the prefix case, or reading through a role that may use the index with the tenant predicate written into the
 query, which is a decision of its own (ADR-003).

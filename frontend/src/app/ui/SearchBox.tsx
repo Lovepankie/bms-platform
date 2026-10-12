@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { highlightParts, searchStatus, type LiveSearch } from './useLiveSearch';
 
 // The one search box (#241): a label, the input with its clear button, and a status line that a screen
@@ -28,13 +28,14 @@ export function SearchBox({ id, label, search, fetching, count, more, minLength 
     more,
   });
   const searching = status === 'Searching';
+  const input = useRef<HTMLInputElement>(null);
   return (
     <div className="sb">
       <label htmlFor={id}>{label}</label>
       <div className="sb-field">
-        <input id={id} aria-describedby={`${id}-status`} {...search.inputProps} />
+        <input id={id} ref={input} aria-describedby={`${id}-status`} {...search.inputProps} />
         {search.text !== '' && (
-          <button type="button" className="sb-clear" aria-label="Clear search" onClick={search.clear}>
+          <button type="button" className="sb-clear" aria-label="Clear search" onClick={() => { search.clear(); input.current?.focus(); }}>
             Clear
           </button>
         )}

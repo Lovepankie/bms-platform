@@ -140,6 +140,22 @@ class SearchLendingIT extends LoanFixtures {
         assertThat(names("0772")).isEmpty();
         assertThat(names("+256 77")).isEmpty();
         assertThat(names("077")).isEmpty();
+        // spaces in a phone-like text are separators: "07 00" is the number 0700, so it finds all nine
+        assertThat(names("07 00")).hasSize(9);
+    }
+
+    /** A four digit term that is not a phone number keeps its text match and rank; it is not read as 123 anywhere. */
+    @Test
+    void aFourDigitTermThatIsNotAPhoneKeepsItsTextMatch() {
+        seedMembers();
+        member("Batch 2023 Traders", "0700000901", t.headOffice(), true);
+        member("Other Trader", "0702023111", t.headOffice(), true);
+        member("Digits Test", "0771239999", t.headOffice(), true);
+        // the name that says 2023 first, then the number that holds it
+        assertThat(names("2023")).containsExactly("Batch 2023 Traders", "Other Trader");
+        // 0123 is not 123 anywhere in a number: this one holds 123 and not 0123
+        assertThat(names("0123")).doesNotContain("Digits Test");
+        assertThat(names("1239")).containsExactly("Digits Test");
     }
 
     @Test

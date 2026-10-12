@@ -247,7 +247,7 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
   const finding = page.isPlaceholderData || (page.isFetching && !page.isFetchingNextPage);
   const items = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
   const canPrice = (me.permissions ?? []).includes(PRICE);
-  const g = useCategoryGroups({ screen: 'items', items, categoryOf: (p) => p.category, resetKey: [query, categoryId, activeFilter].join('|'), searching: query !== '' });
+  const g = useCategoryGroups({ screen: 'items', items, categoryOf: (p) => p.category, resetKey: [query, categoryId, activeFilter].join('|'), searching: query !== '', pending: page.isPlaceholderData });
   const card = (p: Product) => <ProductCard key={p.id} product={p} showCost={profit} canPrice={canPrice} onEdit={() => onEdit(p.id ?? '')} onPrice={() => onPrice(p.id ?? '')} />;
   return (
     <>

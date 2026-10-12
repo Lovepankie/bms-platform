@@ -17,7 +17,7 @@ import { needsOf } from './permissions';
 // sends no cost field to anyone else.
 
 /** Search and filters of a stock list, so its groups start again when they change (category-groups.tsx). */
-type Narrowing = { searching?: boolean; filterKey?: string };
+type Narrowing = { searching?: boolean; filterKey?: string; pending?: boolean };
 
 /** A category group's subtotal: its quantity when the items share a unit, and what it holds at the selling price. */
 function stockSubtotal(rows: { qty?: string; unit?: string; sell_minor?: number }[]): string {
@@ -25,10 +25,10 @@ function stockSubtotal(rows: { qty?: string; unit?: string; sell_minor?: number 
   return [sameUnitQty(rows), `${money(value)} at price`].filter(Boolean).join(', ');
 }
 
-export function StockTable({ rows, showCost, searching = false, filterKey = '' }: { rows: StockRow[]; showCost: boolean } & Narrowing) {
+export function StockTable({ rows, showCost, searching = false, filterKey = '', pending = false }: { rows: StockRow[]; showCost: boolean } & Narrowing) {
   // On a phone the category sits under the item's name, so the table keeps room for the quantity and price.
   const phone = useIsPhone();
-  const g = useCategoryGroups({ screen: 'stock', items: rows, categoryOf: (r) => r.category, subtotalOf: stockSubtotal, resetKey: filterKey, searching });
+  const g = useCategoryGroups({ screen: 'stock', items: rows, categoryOf: (r) => r.category, subtotalOf: stockSubtotal, resetKey: filterKey, searching, pending });
   if (rows.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
   const showCategory = !g.active && phone;
   const row = (r: StockRow) => (
@@ -78,9 +78,9 @@ const totalsSubtotal = (rows: AllBranchesStock['items']) => stockSubtotal(rows.m
 const branchName = (b: { code?: string; name?: string }) => branchLabel(b);
 
 /** All branches on a wide screen: a column per branch and a total, the negative flag on each cell. */
-export function AllBranchesTable({ data, showCost: mayCost, searching = false, filterKey = '' }: { data: AllBranchesStock; showCost: boolean } & Narrowing) {
+export function AllBranchesTable({ data, showCost: mayCost, searching = false, filterKey = '', pending = false }: { data: AllBranchesStock; showCost: boolean } & Narrowing) {
   const showCost = mayCost && data.items.some((r) => r.cost_minor !== undefined);
-  const g = useCategoryGroups({ screen: 'stock', items: data.items, categoryOf: (r) => r.category, subtotalOf: totalsSubtotal, resetKey: filterKey, searching });
+  const g = useCategoryGroups({ screen: 'stock', items: data.items, categoryOf: (r) => r.category, subtotalOf: totalsSubtotal, resetKey: filterKey, searching, pending });
   if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
   const row = (r: AllBranchesStock['items'][number]) => (
     <tr key={r.product_id}>
@@ -113,9 +113,9 @@ export function AllBranchesTable({ data, showCost: mayCost, searching = false, f
 }
 
 /** All branches on a phone: one card per product with the total, and a button that opens its branches. */
-export function AllBranchesList({ data, showCost, searching = false, filterKey = '' }: { data: AllBranchesStock; showCost: boolean } & Narrowing) {
+export function AllBranchesList({ data, showCost, searching = false, filterKey = '', pending = false }: { data: AllBranchesStock; showCost: boolean } & Narrowing) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const g = useCategoryGroups({ screen: 'stock', items: data.items, categoryOf: (r) => r.category, subtotalOf: totalsSubtotal, resetKey: filterKey, searching });
+  const g = useCategoryGroups({ screen: 'stock', items: data.items, categoryOf: (r) => r.category, subtotalOf: totalsSubtotal, resetKey: filterKey, searching, pending });
   if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
   const names = Object.fromEntries(data.branches.map((b) => [b.id ?? '', branchName(b)]));
   const card = (r: AllBranchesStock['items'][number]) => {
@@ -205,7 +205,7 @@ export function StockPage() {
   const shown = all ? many.data?.items.length : one.data?.length;
   // The whole-business view is the stock "by location": a last crumb says so (components/breadcrumbs.tsx).
   useCrumbTail(all ? 'By location' : undefined);
-  const narrowing = { searching: query !== '', filterKey: [all ? 'all' : branchId, query, categoryId, negativeOnly, level].join('|') };
+  const narrowing = { pending: result.isPlaceholderData, searching: query !== '', filterKey: [all ? 'all' : branchId, query, categoryId, negativeOnly, level].join('|') };
   return (
     <Gate screen="stock" title="Stock">
       <p className="branch-line">Branch: <strong>{all ? 'All branches' : name}</strong></p>

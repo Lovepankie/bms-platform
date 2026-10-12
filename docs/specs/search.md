@@ -20,13 +20,13 @@ the audit that started the work (part 1), then the convention the build follows 
 | `retail/sales.tsx` credit buyer | Buyer | Every keystroke | `GET /retail/sales?buyer=` | Keyed filter, page 1 | No debounce: one request per key; list vanishes between keys |
 | `retail/sales.tsx` all sales, buyer | Buyer | Every keystroke | `GET /retail/sales?buyer=` | As above | As above |
 | `retail/sales.tsx` all sales, item | Item (name or code) | Every keystroke | `GET /retail/products?query=` (first 50, no paging) | Not paged | No debounce |
-| `retail/stock.tsx` (also the All branches view, the by-location view of #193) | Name, code or category | Every keystroke | `GET /retail/stock?query=` and `/stock/all-branches?query=` | Keyed, page 1 | No debounce. **Left for the category-groups branch** |
+| `retail/stock.tsx` (also the All branches view, the by-location view of #193) | Name, code or category | Every keystroke | `GET /retail/stock?query=` and `/stock/all-branches?query=` | Keyed, page 1 | No debounce. Converted in #242 and its follow-up |
 | `retail/stocktake.tsx` | Name, code or category | Every keystroke, in the browser over the full stock list | none (filters `GET /retail/stock` rows in memory) | Not paged | Instant, but `toLowerCase().includes`: no accents, no multi-term |
 | `retail/usage.tsx` | Item | Every keystroke | `GET /retail/products?query=&branch_id=` (first 50) | Not paged | No debounce |
 | `retail/restock.tsx` | Item | Every keystroke | `GET /retail/products?query=` (first 50) | Not paged | No debounce |
 | `retail/ui.tsx` `ProductPicker` (sale, transfer) | Item | Every keystroke | `GET /retail/products?query=&branch_id=` (first 50, 20 shown) | Not paged | No debounce |
 | `retail/catalogue-people.tsx` (credit buyers, cash parties) | Name | Debounced 300 ms (local `useDebounced`) | `GET /retail/customers?query=`, `GET /retail/cash-parties?query=` | Cursor list keyed on text, page 1 | Debounce only; list vanishes while the next arrives |
-| `retail/catalogue-products.tsx` (Items) | Name, code or category | Every keystroke | `GET /retail/products?query=` | Keyed, page 1 | No debounce. **Left for the category-groups branch** |
+| `retail/catalogue-products.tsx` (Items) | Name, code or category | Every keystroke | `GET /retail/products?query=` | Keyed, page 1 | No debounce. Converted in #242 and its follow-up |
 | `insights/page.tsx` | none | none | none | n/a | No search box today (filters are dropdowns) |
 | `platform/application.tsx` | none | none | none | n/a | A sign-up form, no search |
 | `platform/applications.tsx` | none (status filter only) | n/a | `applications?status=` | n/a | n/a |
@@ -95,10 +95,9 @@ One hook and one box, in `frontend/src/app/ui/` (`useLiveSearch.ts`, `SearchBox.
 
 Screens converted: the members list on the staff home, loans, savings accounts, investments, the investment member picker, credit sales,
 all sales (buyer and item), credit buyers, the item pickers (sale and transfer through `ProductPicker`),
-usage, restock, and the stock-take sheet. Not converted, and why: `retail/stock.tsx` (and the stock by
-location view of #193) and `retail/catalogue-products.tsx` are being restructured into category groups on
-`feat/ui-breadcrumbs-categories`; they adopt the hook in a follow-up. The insights page and the platform
-sign-up form have no search box.
+usage, restock, the stock-take sheet, stock (with its All branches view), stock by location and the items
+list. Their category groups open for a search and keep their default while the previous list is still shown.
+The insights page and the platform sign-up form have no search box.
 
 ## 3. Backend convention
 
@@ -110,7 +109,7 @@ sign-up form have no search box.
 |---|---|
 | Fold | `bms_fold(column) LIKE bms_fold(pattern)`: lower case, Latin accents removed (V40). |
 | Terms | Split on white space, at most 6, text at most 100 characters; every term must match in some name or code column (AND). |
-| Phone | A term of four or more typed digits (digits, spaces, `+`, `-`, brackets only), and a whole text that looks like a phone number, match `bms_digits(phone)` as typed and, when three or more digits remain, without a leading `256` or `0`. The length is checked before anything is removed, so `0772`, `0700` and `+2567` are searches. |
+| Phone | A term of four or more typed digits (digits, spaces, `+`, `-`, brackets only), and a whole text that looks like a phone number, match `bms_digits(phone)`: the typed digits anywhere in the number, and, when the text starts with `256` or `0`, the rest at the start of the number written with `256`, with `0` or with neither (so a contact typed as `0772123456`, `+256 772 123456` or `772123456` is found by `+2567`, `0772` or `256772`). The length is checked before anything is removed, so `0772`, `0700` and `+2567` are searches. The rest is never matched in the middle of a number: `0123` does not match every contact with `123` in it. Spaces in a phone-like text are separators (`07 00` is 0700). |
 | Literals | `%`, `_` and the backslash are escaped. |
 | Rank | 0: a name or code starts with the whole text ("buyer b"), or a phone starts with its digits. 1: the whole text starts a word in it. 2: every term starts a word in it (several terms only). 3: any other match. |
 | Order | rank, then the list's usual key: member number, product code, credit buyer name, creation time, account number (investments: newest first). The sales history keeps its time order and takes the condition only. |
@@ -148,6 +147,5 @@ ADR-039 records the decisions. Tests: `SearchTest` (parsing, escaping, phone dig
 guarded columns, cursors tied to their text, the size of a busy tenant in `SearchScaleIT`), `useLiveSearch.test.tsx` (debounce, restart, trim,
 minimum length, paging reset, flush, clear, URL, status words, highlight, markup), `useLiveSearch.dom.test.tsx` (the hook in React: Escape, Enter, unmount clean-up, the URL mirror, a request that has moved on is aborted and its late answer never shown, the previous list stays) and `fold.test.ts` (the browser's folding table equals the one in V40).
 
-Left for follow-ups: `stock.tsx`, the stock by location screen and `catalogue-products.tsx` (hook);
-`LocationRepository` of #193 (the matcher); a data-volume pass over the loan, savings and investment
+Left for follow-ups: a data-volume pass over the loan, savings and investment
 registers (ADR-028) to decide whether they need an index; the cash party screens have no search box.

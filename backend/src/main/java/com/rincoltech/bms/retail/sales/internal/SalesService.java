@@ -373,7 +373,10 @@ class SalesService {
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         Instant afterCreated = null;
         UUID afterId = null;
-        Cursor.Key after = Cursor.decodeKey(cursor).orElse(null);
+        // The list keeps its time order, so no rank travels, but the cursor still belongs to its search text.
+        Search.Query search = Search.parse(buyer);
+        Cursor.Key after =
+                Cursor.decodeKey(Search.unwrap(search, cursor).cursor()).orElse(null);
         if (after != null) {
             String direction = newestFirst ? "desc:" : "asc:";
             if (!after.sortKey().startsWith("desc:") && !after.sortKey().startsWith("asc:")) {
@@ -395,7 +398,7 @@ class SalesService {
                 customerId,
                 paymentMethod,
                 productId,
-                Search.parse(buyer),
+                search,
                 status,
                 owing,
                 today,
@@ -406,8 +409,12 @@ class SalesService {
         boolean more = rows.size() > size;
         List<Sale> items = more ? rows.subList(0, size) : rows;
         String next = more
-                ? Cursor.encode((newestFirst ? "desc:" : "asc:")
-                        + items.getLast().createdAt() + "|" + items.getLast().id())
+                ? Search.wrap(
+                        search,
+                        0,
+                        Cursor.encode((newestFirst ? "desc:" : "asc:")
+                                + items.getLast().createdAt() + "|"
+                                + items.getLast().id()))
                 : null;
         return new SalePage(items.stream().map(SalesService::visible).toList(), next);
     }

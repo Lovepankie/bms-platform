@@ -84,7 +84,8 @@ export type CategoryGroups<T> = {
  * The grouping of one list. `resetKey` is the search and filters in one string: when it changes, the
  * groups start again from the default (open for a search or up to 30 items, closed above that). The
  * default is decided when results first arrive for a key and held while more are loaded, so "Show more"
- * does not open or close sections under the user's thumb.
+ * does not open or close sections under the user's thumb. While `pending` (the list on screen is the
+ * previous answer) nothing is decided, so clearing a search does not open every group of the whole list.
  */
 export function useCategoryGroups<T>(o: {
   screen: string;
@@ -93,11 +94,13 @@ export function useCategoryGroups<T>(o: {
   subtotalOf?: (items: T[]) => string | null;
   resetKey: string;
   searching: boolean;
+  /** The list shown is still the previous answer (a kept placeholder): the default is not decided from it. */
+  pending?: boolean;
   minGroups?: number;
 }): CategoryGroups<T> {
   const [grouped, setGroupedState] = useState(() => readGrouped(o.screen));
   const latch = useRef<{ key: string; open: boolean } | null>(null);
-  if (o.items.length > 0 && latch.current?.key !== o.resetKey) latch.current = { key: o.resetKey, open: defaultOpen(o.items.length, o.searching) };
+  if (o.items.length > 0 && !o.pending && latch.current?.key !== o.resetKey) latch.current = { key: o.resetKey, open: defaultOpen(o.items.length, o.searching) };
   const [opened, setOpened] = useState<Opened>({ key: o.resetKey, map: {} });
   const mine = opened.key === o.resetKey ? opened : { key: o.resetKey, map: {} };
   const base = mine.base ?? latch.current?.open ?? defaultOpen(o.items.length, o.searching);

@@ -265,6 +265,75 @@ class SearchRetailIT extends IntegrationTest {
         assertThat(buyers("john k")).containsExactly("John Kato", "Johnson Kimbugwe", "Kato John");
     }
 
+    /** A number kept as free text is found by any way of writing its start: +256, 256, 0 or none. */
+    @Test
+    void freeTextContactsAreFoundByAnyPrefixOfTheNumber() {
+        customer("Zed Zero", "0772123456");
+        customer("Zed Plus", "+256 772 123456");
+        customer("Zed Bare", "772123456");
+        customer("Zed Other", "0701999999");
+        List<String> all = List.of("Zed Bare", "Zed Plus", "Zed Zero");
+        // +2567 and 2567 are the start of every Uganda mobile number, Zed Other's included
+        for (String q : List.of("+2567", "2567")) {
+            assertThat(buyers(q))
+                    .as("customer %s", q)
+                    .containsExactlyInAnyOrder("Zed Bare", "Zed Plus", "Zed Zero", "Zed Other");
+        }
+        for (String q : List.of(
+                "+25677",
+                "256772",
+                "0772",
+                "07721",
+                "0772 123",
+                "+256 772 123",
+                "772123456",
+                "0772123456",
+                "+256772123456")) {
+            assertThat(buyers(q)).as("customer %s", q).containsExactlyInAnyOrderElementsOf(all);
+        }
+        assertThat(buyers("0701")).containsExactly("Zed Other");
+        // the middle of a number is not its start
+        assertThat(buyers("0712")).isEmpty();
+        assertThat(buyers("0212")).isEmpty();
+    }
+
+    @Test
+    void freeTextContactsOfPartiesAndSalesAreFoundByAnyPrefixToo() {
+        for (String[] p : new String[][] {
+            {"Party Zero", "0772123456"}, {"Party Plus", "+256 772 123456"}, {"Party Bare", "772123456"}
+        }) {
+            assertThat(api.post("/cash-parties", Map.of("name", p[0], "contact", p[1], "kind", "other"), BOOKKEEPER)
+                            .getStatusCode())
+                    .isEqualTo(HttpStatus.CREATED);
+        }
+        api.stockUp(t.headOffice(), ledBulb, "30");
+        String zero = creditSale(t.headOffice(), null, "Sale Zero", "0772123456")
+                .get("sale_no")
+                .asString();
+        String plus = creditSale(t.headOffice(), null, "Sale Plus", "+256 772 123456")
+                .get("sale_no")
+                .asString();
+        String bare = creditSale(t.headOffice(), null, "Sale Bare", "772123456")
+                .get("sale_no")
+                .asString();
+        for (String q : List.of("+2567", "2567", "+25677", "0772", "256772", "07721")) {
+            assertThat(list("/cash-parties", "query", q, "name", BOOKKEEPER, "*"))
+                    .as("party %s", q)
+                    .containsExactlyInAnyOrder("Party Zero", "Party Plus", "Party Bare");
+            assertThat(saleNumbers(q, RetailTestSupport.ADMIN, "*"))
+                    .as("sale %s", q)
+                    .containsExactlyInAnyOrder(zero, plus, bare);
+        }
+    }
+
+    /** A four digit term that is not a phone keeps its text match and ranks above the contact that holds the digits. */
+    @Test
+    void aFourDigitTermKeepsItsTextMatchAndRank() {
+        customer("Contact Holder", "0702023111");
+        customer("Order 2023 Batch", null);
+        assertThat(buyers("2023")).containsExactly("Order 2023 Batch", "Contact Holder");
+    }
+
     // ---- sales ------------------------------------------------------------------------------
 
     JsonNode creditSale(UUID branch, UUID customerId, String buyerName, String buyerContact) {
@@ -318,6 +387,28 @@ class SearchRetailIT extends IntegrationTest {
         assertThat(saleNumbers("kato", admin, hq)).containsExactlyInAnyOrder(walkIn, viaCustomer);
         assertThat(saleNumbers("secondbranch", admin, hq)).isEmpty();
         assertThat(saleNumbers("0700000888", admin, hq)).isEmpty();
+    }
+
+    // JUSTIFICATION-A3: a new test case for the sales cursor; no existing case pages the sales list with a search text.
+    @Test
+    void aSalesCursorIsTiedToTheSearchTextItWasIssuedFor() {
+        api.stockUp(t.headOffice(), ledBulb, "30");
+        for (int i = 0; i < 3; i++) {
+            creditSale(t.headOffice(), null, "Cursor Buyer " + i, null);
+        }
+        String admin = RetailTestSupport.ADMIN;
+        String cursor = page("/sales", "buyer", "cursor buyer", 1, null, admin, "*")
+                .getBody()
+                .get("next_cursor")
+                .asString();
+        assertThat(page("/sales", "buyer", "  CURSOR   buyer ", 1, cursor, admin, "*")
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> other = page("/sales", "buyer", "someone else", 1, cursor, admin, "*");
+        assertThat(other.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(other.getBody().get("detail").asString()).contains("different search text");
+        assertThat(page("/sales", "buyer", null, 1, cursor, admin, "*").getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
     // ---- cash parties -----------------------------------------------------------------------

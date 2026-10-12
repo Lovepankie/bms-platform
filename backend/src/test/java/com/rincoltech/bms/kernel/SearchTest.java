@@ -26,38 +26,68 @@ class SearchTest {
     }
 
     @Test
-    void everyWrittenFormOfAPhoneHasTheSameNationalDigits() {
-        for (String written : new String[] {"0700000111", "700000111", "256700000111", "+256700000111"}) {
-            String digits = written.replaceAll("\\D", "");
-            assertThat(Search.national(digits)).as(written).isEqualTo("700000111");
-        }
-        assertThat(Search.parse("+256 700 000 111").wholePhone()).containsExactly("256700000111", "700000111");
-        assertThat(Search.parse("0700 000 111").wholePhone()).containsExactly("0700000111", "700000111");
+    void aPhoneKeyIsTheTypedDigitsAndWhatFollowsA256OrA0() {
+        assertThat(Search.phoneKey("0700000111")).isEqualTo(new Search.PhoneKey("0700000111", "700000111"));
+        assertThat(Search.phoneKey("+256 700 000 111")).isEqualTo(new Search.PhoneKey("256700000111", "700000111"));
+        assertThat(Search.phoneKey("700000111")).isEqualTo(new Search.PhoneKey("700000111", ""));
+        assertThat(Search.parse("+256 700 000 111").wholePhone().rest()).isEqualTo("700000111");
+        assertThat(Search.parse("0700 000 111").wholePhone().rest()).isEqualTo("700000111");
     }
 
     /** The length is checked before the 256 or the 0 is taken off, so a typed prefix is already a search. */
     @Test
     void everyPrefixOfAPhoneNumberIsASearchFromFourTypedDigits() {
-        assertThat(Search.phoneKeys("0772")).containsExactly("0772", "772");
-        assertThat(Search.phoneKeys("0700")).containsExactly("0700", "700");
-        assertThat(Search.phoneKeys("+2567")).containsExactly("2567");
-        assertThat(Search.phoneKeys("2567")).containsExactly("2567");
-        assertThat(Search.phoneKeys("+25677")).containsExactly("25677");
-        assertThat(Search.phoneKeys("+256772")).containsExactly("256772", "772");
-        assertThat(Search.phoneKeys("0772 1")).containsExactly("07721", "7721");
-        assertThat(Search.phoneKeys("(0772)")).containsExactly("0772", "772");
+        assertThat(Search.phoneKey("0772")).isEqualTo(new Search.PhoneKey("0772", "772"));
+        assertThat(Search.phoneKey("0700")).isEqualTo(new Search.PhoneKey("0700", "700"));
+        assertThat(Search.phoneKey("+2567")).isEqualTo(new Search.PhoneKey("2567", "7"));
+        assertThat(Search.phoneKey("2567")).isEqualTo(new Search.PhoneKey("2567", "7"));
+        assertThat(Search.phoneKey("+25677")).isEqualTo(new Search.PhoneKey("25677", "77"));
+        assertThat(Search.phoneKey("0772 1")).isEqualTo(new Search.PhoneKey("07721", "7721"));
+        assertThat(Search.phoneKey("(0772)")).isEqualTo(new Search.PhoneKey("0772", "772"));
         // under four typed digits, or not phone-like at all, there is no phone search
-        assertThat(Search.phoneKeys("077")).isEmpty();
-        assertThat(Search.phoneKeys("+256")).isEmpty();
-        assertThat(Search.phoneKeys("M000123")).isEmpty();
-        assertThat(Search.phoneKeys("07a2")).isEmpty();
+        assertThat(Search.phoneKey("077")).isNull();
+        assertThat(Search.phoneKey("+256")).isNull();
+        assertThat(Search.phoneKey("M000123")).isNull();
+        assertThat(Search.phoneKey("07a2")).isNull();
+    }
+
+    /** The rest is found at the start of a number, in each way a number is written, and nowhere else. */
+    @Test
+    void theRestOfATypedNumberIsMatchedAtTheStartOfTheNumberOnly() {
+        assertThat(Search.phoneKey("+2567").starts()).containsExactly("7", "07", "2567");
+        assertThat(Search.phoneKey("0772").starts()).containsExactly("772", "0772", "256772");
+        assertThat(Search.phoneKey("700000111").starts()).isEmpty();
+        Search.Match m = Search.parse("0772").match(NAME_AND_PHONE);
+        assertThat(m.params())
+                .containsEntry("d0t", "%0772%")
+                .containsEntry("d0s0", "772%")
+                .containsEntry("d0s1", "0772%")
+                .containsEntry("d0s2", "256772%");
+        // never "%772%": a four digit term such as 0123 must not match every number that has 123 inside it
+        assertThat(m.params().values()).doesNotContain("%772%");
+        assertThat(Search.parse("0123").match(NAME_AND_PHONE).params().values()).doesNotContain("%123%");
     }
 
     @Test
     void aShortOrMixedTextIsNotAWholePhone() {
-        assertThat(Search.parse("07 0").wholePhone()).isEmpty();
-        assertThat(Search.parse("john 0700000111").wholePhone()).isEmpty();
-        assertThat(Search.parse("0700000111").wholePhone()).isEmpty();
+        assertThat(Search.parse("07 0").wholePhone()).isNull();
+        assertThat(Search.parse("john 0700000111").wholePhone()).isNull();
+        assertThat(Search.parse("0700000111").wholePhone()).isNull();
+    }
+
+    /** Spaces in a phone-like text are separators: "07 00" is the number 0700, four typed digits. */
+    @Test
+    void spacesInAPhoneLikeTextAreSeparators() {
+        assertThat(Search.parse("07 00").wholePhone()).isEqualTo(new Search.PhoneKey("0700", "700"));
+        assertThat(Search.parse("0700 000 111").wholePhone().typed()).isEqualTo("0700000111");
+    }
+
+    @Test
+    void aSearchedPageIsFencedSoTheRankIsWorkedOutOnce() {
+        String sql = Search.page("SELECT 1 AS search_rank", "(search_rank, id) > (:r, :i)", "search_rank, id");
+        assertThat(sql)
+                .isEqualTo("SELECT * FROM (SELECT 1 AS search_rank OFFSET 0) ranked WHERE (search_rank, id) > (:r, :i)"
+                        + " ORDER BY search_rank, id LIMIT :limit");
     }
 
     @Test
@@ -100,12 +130,11 @@ class SearchTest {
     @Test
     void aPhoneColumnIsMatchedByDigitsOnlyForALongEnoughNumber() {
         Search.Match number = Search.parse("0700 000 111").match(NAME_AND_PHONE);
-        assertThat(number.where()).contains("bms_digits(phone_e164) LIKE :dw0");
-        assertThat(number.params()).containsEntry("dw0", "%0700000111%").containsEntry("dw1", "%700000111%");
+        assertThat(number.where()).contains("bms_digits(phone_e164) LIKE :dwt").contains(":dws0");
+        assertThat(number.params()).containsEntry("dwt", "%0700000111%").containsEntry("dws0", "700000111%");
 
         Search.Match prefix = Search.parse("0772").match(NAME_AND_PHONE);
-        assertThat(prefix.where()).contains("bms_digits(phone_e164) LIKE :d00").contains(":d01");
-        assertThat(prefix.params()).containsEntry("d00", "%0772%").containsEntry("d01", "%772%");
+        assertThat(prefix.where()).contains("bms_digits(phone_e164) LIKE :d0t").contains(":d0s0");
 
         Search.Match shortText = Search.parse("700").match(NAME_AND_PHONE);
         assertThat(shortText.where()).doesNotContain("bms_digits");

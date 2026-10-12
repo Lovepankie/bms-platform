@@ -171,9 +171,11 @@ kernel's one matcher:
 - **Several words are an AND.** The text is split on white space (at most 6 words, at most 100 characters; the rest
   is ignored) and a row must match every word somewhere in its name, number, code or reference columns, in any order.
 - **Phone numbers match in any written form.** A word of four or more typed digits, and a whole text that looks like a
-  phone number, also match the digits of a phone column, as typed and without a leading 256 or 0: "0700 000 111",
-  "+256 700 000 111", "256700000111" and "700000111" are one number, and "0772" or "+2567" is already a search. Fewer
-  than four typed digits is not a phone.
+  phone number, also match the digits of a phone column: the typed digits anywhere in the number and, when the text starts with 256
+  or 0, the rest at the start of the number written with 256, with 0 or with neither. "0700 000 111", "+256 700 000 111",
+  "256700000111" and "700000111" are one number, and "0772" or "+2567" is already a search; a contact kept as free text
+  ("0772123456") is found as well as a stored +256 number. Fewer than four typed digits is not a phone, and the rest is
+  never matched in the middle of a number.
 - **`%`, `_` and `\` are ordinary characters.**
 - **Ranked.** A name or code that starts with the whole text comes first ("buyer b"), then one where the whole text starts
   a word, then one where every word starts a word, then any other match; inside a rank the list's usual order holds.
