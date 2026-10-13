@@ -117,6 +117,45 @@ class JdbcCashSales implements CashSales {
                     return 0;
                 })
                 .list();
+        // Cash refunded on customer returns (issue #201) leaves the till on the day it was paid, the return's own day
+        // and
+        // never the sale's: it counts with the day's cash sale voids. A return voided later gives the money back on the
+        // day of
+        // the void, like a voided cash sale takes it out, so the day it was paid is never rewritten.
+        jdbc.sql("""
+                        SELECT returned_on AS day, sum(refund_minor) AS refunded FROM retail_sale_returns
+                         WHERE refund_branch_id = :branch AND refund_method = 'cash' AND refund_minor > 0
+                           AND returned_on BETWEEN :from AND :to
+                         GROUP BY returned_on
+                        """)
+                .param("branch", branchId)
+                .param("from", java.sql.Date.valueOf(from))
+                .param("to", java.sql.Date.valueOf(to))
+                .query((rs, n) -> {
+                    acc.merge(
+                            rs.getDate("day").toLocalDate(),
+                            new Acc(0, rs.getLong("refunded"), 0, false),
+                            (a, b) -> a.plus(b.takings(), b.voids(), b.sold(), b.historical()));
+                    return 0;
+                })
+                .list();
+        jdbc.sql("""
+                        SELECT voided_on AS day, sum(refund_minor) AS returned FROM retail_sale_returns
+                         WHERE refund_branch_id = :branch AND refund_method = 'cash' AND refund_minor > 0 AND status = 'voided'
+                           AND voided_on BETWEEN :from AND :to
+                         GROUP BY voided_on
+                        """)
+                .param("branch", branchId)
+                .param("from", java.sql.Date.valueOf(from))
+                .param("to", java.sql.Date.valueOf(to))
+                .query((rs, n) -> {
+                    acc.merge(
+                            rs.getDate("day").toLocalDate(),
+                            new Acc(rs.getLong("returned"), 0, 0, false),
+                            (a, b) -> a.plus(b.takings(), b.voids(), b.sold(), b.historical()));
+                    return 0;
+                })
+                .list();
         Map<LocalDate, Day> out = new TreeMap<>();
         acc.forEach((d, a) -> out.put(d, new Day(a.takings(), a.voids(), a.sold(), a.historical())));
         return out;

@@ -30,7 +30,7 @@ export const CAPABILITIES: readonly CapabilityInfo[] = [
   { key: 'documents', label: 'Invoices and quotations', hint: 'Invoices, quotations and delivery notes from a sale. The till receipt stays the default.', ready: false },
   { key: 'purchasing', label: 'Purchase orders', hint: 'Purchase orders, goods received, supplier invoices and landed cost.', ready: false },
   { key: 'transfer_receipt', label: 'Receive transfers', hint: 'A stock move is sent first and received after, so stock can be on the way.', ready: true },
-  { key: 'returns', label: 'Customer returns', hint: 'Take goods back from a customer and give a credit note.', ready: false },
+  { key: 'returns', label: 'Customer returns', hint: 'Take goods back from a customer and give a credit note.', ready: true },
 ];
 
 export const KEYS: readonly CapabilityKey[] = CAPABILITIES.map((c) => c.key);

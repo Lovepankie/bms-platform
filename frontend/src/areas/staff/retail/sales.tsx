@@ -1,5 +1,5 @@
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
+import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { Highlight, NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
@@ -7,6 +7,9 @@ import { businessToday, daysBefore, retail, type Sale, type SalePayment, type Sa
 import { receiptNote } from './price-state';
 import { enteredPriceMinor, enteredQty } from './units-state';
 import { useCrumbTail } from '../../../components/breadcrumbs';
+import { useStaff } from '../context';
+import { SALE_RETURN, canUse, holdsAt } from './permissions';
+import { settledWords } from './returns-state';
 import { showDate } from './transfers';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone, useProfitAccess } from './ui';
 
@@ -137,7 +140,11 @@ export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: str
 
 function OpenSale({ id, onClose }: { id: string; onClose: () => void }) {
   const nameOf = useBranchName();
+  const { me } = useStaff();
   const sale = useQuery({ queryKey: ['retail', 'sale', id], queryFn: () => retail.getSale(id) });
+  // Customer returns (returns capability, issue #201): offered only while it is on, to whoever may take goods back at the branch.
+  const mayReturn = sale.data !== undefined && canUse(me, 'returns') && holdsAt(me, SALE_RETURN, sale.data.branch_id);
+  const returns = useQuery({ queryKey: ['retail', 'sale-returns', id], queryFn: () => retail.listSaleReturns(id), enabled: mayReturn });
   useCrumbTail(sale.data?.sale_no ? `Sale ${sale.data.sale_no}` : undefined, onClose);
   return (
     <>
@@ -145,6 +152,21 @@ function OpenSale({ id, onClose }: { id: string; onClose: () => void }) {
       {sale.isPending && <p className="loading">Loading</p>}
       <Problem error={sale.error} />
       {sale.data && <SaleDetail sale={sale.data} today={businessToday()} branchName={nameOf(sale.data.branch_id)} />}
+      {sale.data && mayReturn && sale.data.status === 'completed' && (
+        <p><Link className="btn-sm" to="/staff/retail/returns/new/$saleId" params={{ saleId: id }}>Return goods</Link></p>
+      )}
+      {mayReturn && (returns.data ?? []).length > 0 && (
+        <section aria-label="Returns of this sale" data-testid="sale-returns">
+          <h3>Returns of this sale</h3>
+          <ul>
+            {(returns.data ?? []).map((r) => (
+              <li key={r.id}>
+                <Link to="/staff/retail/returns/$returnId" params={{ returnId: r.id ?? '' }}>{r.credit_note_no}</Link>: {money(r.total_minor ?? 0)}, {settledWords(r)}{r.status === 'voided' ? ' (voided)' : ''}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </>
   );
 }

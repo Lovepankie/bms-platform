@@ -81,6 +81,7 @@ class AccountsService {
     private final BusinessClock clock;
     private final AuditLog audit;
     private final RetailCapabilities capabilities;
+    private final ReturnsRepository returns;
 
     AccountsService(
             AccountsRepository repo,
@@ -92,7 +93,8 @@ class AccountsService {
             CurrentTenant tenant,
             BusinessClock clock,
             AuditLog audit,
-            RetailCapabilities capabilities) {
+            RetailCapabilities capabilities,
+            ReturnsRepository returns) {
         this.repo = repo;
         this.sales = sales;
         this.books = books;
@@ -103,6 +105,7 @@ class AccountsService {
         this.clock = clock;
         this.audit = audit;
         this.capabilities = capabilities;
+        this.returns = returns;
     }
 
     /** True while the capability is on; off means a sale takes the path it took before accounts existed. */
@@ -671,6 +674,18 @@ class AccountsService {
                         "payment_not_reversible",
                         "Sale " + a.saleNo() + " no longer holds this payment, so it cannot be reversed.");
             }
+        }
+        // Money refunded on a return of these sales was paid out of what this receipt brought in; giving the full
+        // amount
+        // back to the sale would leave the buyer owing money that was refunded. Void the return first (issue #201).
+        // Read after
+        // the sales are locked: a return takes the sale's lock to refund, so one that is committing now has committed
+        // by here
+        // and is seen, and none can start until this reversal ends.
+        if (returns.hasRefundedMoney(parts.stream().map(AllocationRow::saleId).toList())) {
+            throw ApiException.rule(
+                    "payment_not_reversible",
+                    "A sale this payment paid has money refunded on a return, so it cannot be reversed. Void that return first.");
         }
         LocalDate today = clock.today(tenant.profile().timezone());
         PostedEntry reversal =

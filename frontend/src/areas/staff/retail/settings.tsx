@@ -119,6 +119,20 @@ function Editor({ read, onSaved, onEdit }: { read: CapabilitiesRead; onSaved: ()
   );
 }
 
+/**
+ * While customer returns are on and the business has set no approval threshold for them, one administrator can refund cash up to
+ * the whole of a sale with no second person. That is the default on purpose (the system invents no amount), so it is said here.
+ */
+export function ReturnsThresholdWarning({ capabilities }: { capabilities: CapabilitiesRead['capabilities'] }) {
+  if (capabilities.returns !== true || (capabilities.returns_approval_threshold_minor ?? 0) > 0) return null;
+  return (
+    <p role="note" className="alert alert-warning" data-testid="returns-no-threshold">
+      Customer returns have no approval limit. Any administrator can refund up to the whole of a sale, and void a return, with no second person. To ask for a second
+      administrator above an amount, set the approval limit for customer returns in the business settings.
+    </p>
+  );
+}
+
 export function RetailSettings() {
   const read = useQuery({ queryKey: ['retail', 'capabilities'], queryFn: () => retail.capabilities() });
   const [saved, setSaved] = useState(false);
@@ -130,6 +144,7 @@ export function RetailSettings() {
       <p>Choose what kind of business this is, and which features to use. Every feature starts off.</p>
       {read.isPending && <SkeletonList label="Loading settings" />}
       <Problem error={read.error} />
+      {read.data && <ReturnsThresholdWarning capabilities={read.data.capabilities} />}
       {/* Keyed by the version, so a fresh read after someone else's change starts from what is saved. */}
       {read.data && <Editor key={read.data.version} read={read.data} onSaved={() => { setSaved(true); show('Saved'); }} onEdit={() => setSaved(false)} />}
     </Gate>

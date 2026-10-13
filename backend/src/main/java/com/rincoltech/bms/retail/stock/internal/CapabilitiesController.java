@@ -1,5 +1,7 @@
 package com.rincoltech.bms.retail.stock.internal;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.retail.stock.RetailCapabilities;
@@ -30,10 +32,12 @@ class CapabilitiesController {
 
     private final RetailCapabilities capabilities;
     private final TransferService transfers;
+    private final TenantSettings settings;
 
-    CapabilitiesController(RetailCapabilities capabilities, TransferService transfers) {
+    CapabilitiesController(RetailCapabilities capabilities, TransferService transfers, TenantSettings settings) {
         this.capabilities = capabilities;
         this.transfers = transfers;
+        this.settings = settings;
     }
 
     @Schema(name = "RetailCapabilities")
@@ -46,7 +50,14 @@ class CapabilitiesController {
             boolean documents,
             boolean purchasing,
             boolean transferReceipt,
-            boolean returns) {}
+            boolean returns,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Read only: the tenant's approval threshold for customer returns (action retail_sale_return),"
+                                    + " present only when one is set; while it is absent a return needs no second administrator")
+            Long returnsApprovalThresholdMinor) {}
 
     /** Omitted fields are unchanged; choosing a profile first writes its preset of the flags. */
     @Schema(name = "UpdateRetailCapabilitiesRequest")
@@ -97,7 +108,8 @@ class CapabilitiesController {
         }
     }
 
-    private static CapabilitiesResponse response(Map<String, Object> g) {
+    private CapabilitiesResponse response(Map<String, Object> g) {
+        long threshold = settings.approvalThresholdMinor("retail_sale_return");
         return new CapabilitiesResponse(
                 (String) g.get("profile"),
                 flag(g, "branch_roles"),
@@ -107,7 +119,8 @@ class CapabilitiesController {
                 flag(g, "documents"),
                 flag(g, "purchasing"),
                 flag(g, "transfer_receipt"),
-                flag(g, "returns"));
+                flag(g, "returns"),
+                threshold > 0 ? threshold : null);
     }
 
     private static boolean flag(Map<String, Object> g, String key) {

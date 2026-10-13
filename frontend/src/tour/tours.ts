@@ -819,8 +819,67 @@ export const accountsPage: Tour = {
   ],
 };
 
+// The tour of the returns capability (issue #201): it starts once for whoever may take goods back, when first enabled.
+export const returnsCapability: Tour = {
+  id: 'capability-returns',
+  version: 1,
+  title: 'New: customer returns',
+  audience: (me) => held(me, 'retail.sale.return'),
+  autoStart: true,
+  capability: { module: 'retail', key: 'returns' },
+  steps: [
+    {
+      id: 'intro',
+      title: 'Customer returns are on',
+      body: 'You can take goods back against a sale, all of it or part. Each return is a numbered credit note. The customer is paid back, or the value comes off what they owe.',
+    },
+    {
+      id: 'tile',
+      route: '/staff/retail',
+      target: 'retail-returns',
+      module: 'retail',
+      optional: true,
+      title: 'Your credit notes',
+      body: 'Open Customer returns to see every credit note. To take goods back, open the sale in All sales and choose Return goods.',
+    },
+    {
+      id: 'list',
+      route: '/staff/retail/returns',
+      target: 'returns-list',
+      module: 'retail',
+      title: 'Find a credit note',
+      body: 'Type a credit note number, a sale number or a buyer\'s name. Open one to see the goods, where they went, and to void it if it was a mistake.',
+    },
+  ],
+};
+
+export const returnsPage: Tour = {
+  id: 'page-returns',
+  version: 1,
+  title: 'This page: customer returns',
+  audience: (me) => held(me, 'retail.sale.return') && capable(me, 'returns'),
+  autoStart: false,
+  page: '/staff/retail/returns',
+  steps: [
+    {
+      id: 'help',
+      target: 'returns-help',
+      module: 'retail',
+      title: 'How a return starts',
+      body: 'A return is made from a sale. Open the sale, choose Return goods, say how many came back and what happens to them. Damaged goods are written off and never go back into stock.',
+    },
+    {
+      id: 'list',
+      target: 'returns-list',
+      module: 'retail',
+      title: 'The credit notes',
+      body: 'Each credit note shows its number, the sale, what it came to and how it was paid back. Open one to see its lines.',
+    },
+  ],
+};
+
 export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
-  priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage,
+  priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage,
 ];

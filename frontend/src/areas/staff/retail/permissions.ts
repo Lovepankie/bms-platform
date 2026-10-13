@@ -12,7 +12,7 @@ export type RetailScreen =
   | 'sale' | 'creditSales' | 'salesHistory' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit' | 'salesAnalysis' | 'margins' | 'stockHealth' | 'creditControl' | 'evaluation'
   | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer'
   // The trade screens of ADR-033: offered only while their capability is on (SCREEN_CAPABILITY below).
-  | 'stockByLocation' | 'inTransit' | 'priceLists' | 'customerGroups' | 'customerAccounts' | 'customerAgeing'
+  | 'stockByLocation' | 'inTransit' | 'priceLists' | 'customerGroups' | 'customerAccounts' | 'customerAgeing' | 'returns'
   // The cash book (ADR-022, FR-RET-31).
   | 'savings' | 'banking' | 'expenses' | 'withdrawals' | 'advances' | 'cashSummary' | 'bankingReport' | 'expensesReport' | 'expenseSetup'
   // The administrator's retail settings (profile and capabilities) and the screens of a capability (ADR-033).
@@ -31,6 +31,7 @@ export const SCREEN_CAPABILITY: Partial<Record<RetailScreen, string>> = {
   customerGroups: 'price_lists',
   customerAccounts: 'customer_accounts',
   customerAgeing: 'customer_accounts',
+  returns: 'returns',
 };
 
 /** The catalogue management screens (#146); the Catalogue tile opens when any of them may be used. */
@@ -46,6 +47,8 @@ export const PRICE_OVERRIDE = 'retail.price.override';
 export const CREDIT_MANAGE = 'retail.credit.manage';
 /** Sell on credit above a buyer's limit, with a reason. */
 export const CREDIT_OVERRIDE = 'retail.credit.override';
+/** Take goods back against a sale, and void a return (administrators; consulted only while the returns capability is on). */
+export const SALE_RETURN = 'retail.sale.return';
 /** Reverse a payment on account (the permission that voids a sale). */
 export const SALE_VOID = 'retail.sale.void';
 export const SAVINGS_RECORD = 'retail.savings.record';
@@ -87,6 +90,9 @@ const NEEDS: Record<RetailScreen, string[]> = {
   // Customer ageing is a tile of the administrator's, like Customer accounts, so a seller's menu is the same with the feature on or
   // off; the report itself is a sales read on the server and agrees with Credit control.
   customerAgeing: [CREDIT_MANAGE, 'retail.sale.read'],
+  // Customer returns and their credit notes are the administrator's (retail.sale.return); the sale to take goods back from is found
+  // in the sales lists, which are a sales read.
+  returns: [SALE_RETURN, 'retail.sale.read'],
   // Stock value is a stock read; its cost columns and the profit report need retail.profit.read.
   valuation: ['retail.stock.read'],
   profit: [PROFIT],
@@ -200,6 +206,7 @@ export const BRANCH_ROLES = 'branch_roles';
 export const UNITS = 'units';
 export const PRICE_LISTS = 'price_lists';
 export const CUSTOMER_ACCOUNTS = 'customer_accounts';
+export const RETURNS = 'returns';
 export const BRANCH_ROLE_MANAGE = 'retail.branch_role.manage';
 export const TRANSFER_RECEIPT = 'transfer_receipt';
 
@@ -261,6 +268,7 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'customerGroups', path: '/staff/retail/customer-groups', label: 'Customer groups', hint: 'Group customers that share a price list' },
   { screen: 'customerAccounts', path: '/staff/retail/accounts', label: 'Customer accounts', hint: 'Credit limits, statements and payments from customers' },
   { screen: 'customerAgeing', path: '/staff/retail/customer-ageing', label: 'Customer ageing', hint: 'What each credit buyer owes, by how late it is' },
+  { screen: 'returns', path: '/staff/retail/returns', label: 'Customer returns', hint: 'Goods taken back from customers, and their credit notes' },
   { screen: 'branchRoles', path: '/staff/retail/branch-roles', label: 'Branch roles', hint: 'Which branches are stores and which are shops' },
   { screen: 'settings', path: '/staff/retail/settings', label: 'Retail settings', hint: 'Shop or trade, and the features you use' },
 ];

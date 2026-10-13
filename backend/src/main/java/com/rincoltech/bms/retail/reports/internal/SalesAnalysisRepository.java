@@ -52,10 +52,41 @@ class SalesAnalysisRepository {
 
     record Day(LocalDate day, long sales, long cost, long saleCount) {}
 
-    private static final String BASE = """
-              FROM retail_sales s
-              JOIN retail_sale_lines l ON l.tenant_id = s.tenant_id AND l.sale_id = s.id
+    /**
+     * The lines of completed sales, and the lines of customer returns that were not voided (issue #201) as negative lines on
+     * the day of the return, in the shape of {@code retail_sales s} joined to {@code retail_sale_lines l}, so a statement
+     * written for sales reads net of returns without another change. A return line has no sale id (it is not a sale, so
+     * {@code count(DISTINCT s.id)} still counts sales) and belongs to the seller of its sale. A line written off as damaged
+     * gives back its credit and not its cost: the goods are gone, so the cost of the sale stands. The date filter of the
+     * statement is pushed into both halves by the planner.
+     */
+    static final String NET_LINES = """
+              (SELECT s0.tenant_id, s0.id, s0.sale_date, s0.branch_id, s0.created_by, s0.status, s0.payment_method,
+                      l0.product_id, l0.qty, l0.line_total_minor, l0.line_cost_minor
+                 FROM retail_sales s0
+                 JOIN retail_sale_lines l0 ON l0.tenant_id = s0.tenant_id AND l0.sale_id = s0.id
+                WHERE s0.status = 'completed'
+               UNION ALL
+               SELECT s0.tenant_id, CAST(NULL AS uuid), r0.returned_on, r0.branch_id, s0.created_by, s0.status,
+                      s0.payment_method, rl0.product_id, -rl0.qty, -rl0.line_total_minor,
+                      CASE WHEN rl0.disposition = 'write_off' THEN 0 ELSE -rl0.line_cost_minor END
+                 FROM retail_sale_returns r0
+                 JOIN retail_sales s0 ON s0.tenant_id = r0.tenant_id AND s0.id = r0.sale_id
+                 JOIN retail_sale_return_lines rl0 ON rl0.tenant_id = r0.tenant_id AND rl0.return_id = r0.id
+                WHERE r0.status = 'completed' AND s0.status = 'completed') s
+              JOIN LATERAL (VALUES (s.tenant_id, s.product_id, s.qty, s.line_total_minor, s.line_cost_minor))
+                   AS l (tenant_id, product_id, qty, line_total_minor, line_cost_minor) ON true
             """;
+
+    private static final String BASE = " FROM " + NET_LINES;
+
+    /**
+     * The same lines with no returns: what "sold" means for the lists of items that did or did not sell in a window (slow
+     * movers, items with no sales). A return alone, in a window where an item was not sold, is not a sale, and the stock
+     * health report counts sales the same way, so the three agree.
+     */
+    private static final String GROSS_LINES =
+            " FROM retail_sales s JOIN retail_sale_lines l ON l.tenant_id = s.tenant_id AND l.sale_id = s.id";
 
     private static final String WHERE = " WHERE s.status = 'completed' AND s.sale_date BETWEEN :from AND :to";
 
@@ -210,7 +241,8 @@ class SalesAnalysisRepository {
         Map<String, Object> params = params(branchIds, since, today);
         params.put("limit", limit);
         String stockBranch = branchIds == null ? "" : " AND b.branch_id IN (:branchIds)";
-        return jdbc.sql("WITH sold AS (SELECT DISTINCT l.product_id" + BASE + WHERE + branchClause(branchIds) + ")"
+        return jdbc.sql("WITH sold AS (SELECT DISTINCT l.product_id" + GROSS_LINES + WHERE + branchClause(branchIds)
+                        + ")"
                         + " SELECT p.id, p.code, p.description, u.name AS unit, sum(b.qty) AS qty, p.sell_minor,"
                         + " count(*) OVER () AS total"
                         + "  FROM retail_stock_balances b"
@@ -233,7 +265,8 @@ class SalesAnalysisRepository {
         Map<String, Object> params = params(branchIds, from, to);
         params.put("limit", limit);
         String stockBranch = branchIds == null ? "" : " WHERE branch_id IN (:branchIds)";
-        return jdbc.sql("WITH sold AS (SELECT DISTINCT l.product_id" + BASE + WHERE + branchClause(branchIds) + ")"
+        return jdbc.sql("WITH sold AS (SELECT DISTINCT l.product_id" + GROSS_LINES + WHERE + branchClause(branchIds)
+                        + ")"
                         + " SELECT p.id, p.code, p.description, u.name AS unit, coalesce(st.qty, 0) AS qty, p.sell_minor,"
                         + " count(*) OVER () AS total"
                         + "  FROM retail_products p"

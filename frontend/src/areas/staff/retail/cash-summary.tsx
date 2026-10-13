@@ -33,7 +33,7 @@ export function DayCard({ row, shop }: { row: CashDailyRow; shop: string }) {
       )}
       <Line label="Opening cash" minor={row.opening_minor} />
       <Line label="Cash takings" minor={row.cash_takings_minor} />
-      <Line label="Cash sales voided" minor={row.cash_sale_voids_minor} />
+      <Line label="Cash sales voided or refunded" minor={row.cash_sale_voids_minor} />
       {voided('Expenses voided', row.expense_voids_minor)}
       {voided('Advances voided', row.advance_voids_minor)}
       {voided('Repayments voided', row.repayment_voids_minor)}

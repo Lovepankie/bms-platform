@@ -1,4 +1,4 @@
--- MarginRepository.priceChanges, a month (issue #149). The history is read by tenant and created_at;
+-- MarginRepository.priceChanges, a month (issue #149; net of customer returns, issue #201). The history is read by tenant and created_at;
 -- retail_price_history_product leads with the product, so this is a filter over the tenant's history
 -- (one row per price event), measured here before any index is considered.
 -- tenant: tenant
@@ -12,13 +12,23 @@ WITH changed AS (
        AND h.source <> 'initial' AND h.old_sell_minor IS DISTINCT FROM h.new_sell_minor
      GROUP BY h.product_id
 ), sold AS (
-    SELECT l.product_id, sum(l.qty) FILTER (WHERE s.sale_date < c.changed_on) AS qty_before,
-           sum(l.qty) FILTER (WHERE s.sale_date >= c.changed_on) AS qty_after
-      FROM retail_sales s
-      JOIN retail_sale_lines l ON l.tenant_id = s.tenant_id AND l.sale_id = s.id
-      JOIN changed c ON c.product_id = l.product_id
-     WHERE s.status = 'completed' AND s.sale_date BETWEEN '2026-09-01' AND '2026-09-30'
-     GROUP BY l.product_id
+    SELECT product_id, sum(qty_before) AS qty_before, sum(qty_after) AS qty_after FROM (
+        SELECT l.product_id, sum(l.qty) FILTER (WHERE s.sale_date < c.changed_on) AS qty_before,
+               sum(l.qty) FILTER (WHERE s.sale_date >= c.changed_on) AS qty_after
+          FROM retail_sales s
+          JOIN retail_sale_lines l ON l.tenant_id = s.tenant_id AND l.sale_id = s.id
+          JOIN changed c ON c.product_id = l.product_id
+         WHERE s.status = 'completed' AND s.sale_date BETWEEN '2026-09-01' AND '2026-09-30'
+         GROUP BY l.product_id
+        UNION ALL
+        SELECT rl.product_id, -sum(rl.qty) FILTER (WHERE r.returned_on < c.changed_on),
+               -sum(rl.qty) FILTER (WHERE r.returned_on >= c.changed_on)
+          FROM retail_sale_returns r
+          JOIN retail_sale_return_lines rl ON rl.tenant_id = r.tenant_id AND rl.return_id = r.id
+          JOIN changed c ON c.product_id = rl.product_id
+         WHERE r.status = 'completed' AND r.returned_on BETWEEN '2026-09-01' AND '2026-09-30'
+         GROUP BY rl.product_id
+    ) u GROUP BY product_id
 )
 SELECT c.product_id, p.code, c.changed_on, c.old_sell, c.new_sell, d.qty_before, d.qty_after, count(*) OVER () AS total
   FROM changed c JOIN retail_products p ON p.id = c.product_id LEFT JOIN sold d ON d.product_id = c.product_id

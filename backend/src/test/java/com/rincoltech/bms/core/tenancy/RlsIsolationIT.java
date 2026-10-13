@@ -346,6 +346,27 @@ class RlsIsolationIT {
                                                                         amount_minor)
                         SELECT gen_random_uuid(), ?, ?, p.sale_id, p.id, 50 FROM retail_sale_payments p WHERE p.id = ?
                         """).params(t.tenantId(), receipt, salePayment).update();
+        // A customer return and one of its lines (ADR-033, #201): a return of the fixture sale's first line.
+        // JUSTIFICATION-A3: a fixture row for each new table; the isolation test needs one row per tenant table.
+        UUID saleReturn = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_sale_returns (id, tenant_id, credit_note_no, branch_seq, sale_id, branch_id, refund_branch_id,
+                                                         returned_on, currency, total_minor, cost_minor, refund_minor,
+                                                         refund_method, refund_choice, journal_entry_id, created_by)
+                        SELECT ?, ?, 'CNRLS-000001', 1, s.id, s.branch_id, s.branch_id, DATE '2026-01-15', 'UGX', 10, 5, 10, 'cash', 'cash',
+                               ?, ?
+                          FROM retail_sales s WHERE s.tenant_id = ? LIMIT 1
+                        """)
+                .params(saleReturn, t.tenantId(), entry, user, t.tenantId())
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_sale_return_lines (id, tenant_id, return_id, line_no, sale_line_id, product_id, qty,
+                                                              unit_cost_minor, line_total_minor, line_cost_minor, reason,
+                                                              disposition, restock_branch_id)
+                        SELECT gen_random_uuid(), ?, ?, 1, l.id, l.product_id, 1, 5, 10, 5, 'other', 'restock', s.branch_id
+                          FROM retail_sale_lines l JOIN retail_sales s ON s.id = l.sale_id
+                         WHERE l.tenant_id = ? LIMIT 1
+                        """).params(t.tenantId(), saleReturn, t.tenantId()).update();
         // The retail import's source references (migration V20, #55).
         owner.sql("""
                         INSERT INTO retail_import_refs (tenant_id, source_file, source_ref, target_type, source_user)

@@ -6039,6 +6039,11 @@
           "returns" : {
             "type" : "boolean"
           },
+          "returns_approval_threshold_minor" : {
+            "description" : "Read only: the tenant's approval threshold for customer returns (action retail_sale_return), present only when one is set; while it is absent a return needs no second administrator",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "transfer_receipt" : {
             "type" : "boolean"
           },
@@ -9188,6 +9193,180 @@
         },
         "required" : [ "amount_minor", "method" ]
       },
+      "RetailReturnLine" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "disposition" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "line_cost_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "line_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "line_total_minor" : {
+            "description" : "The credit for this line: its share of what the sale line was charged",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "description" : "In base units",
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "restock_branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_line_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "unit_cost_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit_qty" : {
+            "description" : "In the unit it was entered in",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailReturnLineRequest" : {
+        "properties" : {
+          "disposition" : {
+            "description" : "restock puts the goods back on the shelf; write_off is for damaged goods, which never enter stock",
+            "minLength" : 1,
+            "pattern" : "restock|write_off",
+            "type" : "string"
+          },
+          "qty" : {
+            "example" : "2.0",
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "defective|damaged|wrong_item|not_as_described|unwanted|price_error|other",
+            "minLength" : 1,
+            "pattern" : "defective|damaged|wrong_item|not_as_described|unwanted|price_error|other",
+            "type" : "string"
+          },
+          "restock_branch_id" : {
+            "description" : "Where restocked goods go: any active branch or store in the caller's scope. Absent means the sale's branch",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_line_id" : {
+            "description" : "The line of the sale that comes back",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit_id" : {
+            "description" : "The unit qty is in: the line's own unit, the product's base unit or a pack unit of the product (units capability). Absent means the base unit. The quantity must convert to thousandths of the base unit exactly",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "disposition", "qty", "reason", "sale_line_id" ]
+      },
+      "RetailReturnList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSaleReturn"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailReturnOutcome" : {
+        "description" : "201 (200 for a void) with the return when it was done; 202 with approval_id when it waits for a checker (the tenant's approval threshold for retail_sale_return was reached by the returns on the sale)",
+        "properties" : {
+          "approval_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "executed" : {
+            "type" : "boolean"
+          },
+          "sale_return" : {
+            "$ref" : "#/components/schemas/RetailSaleReturn"
+          }
+        }
+      },
+      "RetailReturnRequest" : {
+        "properties" : {
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailReturnLineRequest"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "money_method" : {
+            "description" : "How any part that cannot be taken off the balance is paid out; required for it when refund_method is account",
+            "pattern" : "cash|mobile_money|bank",
+            "type" : "string"
+          },
+          "note" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "refund_branch_id" : {
+            "description" : "The branch whose till pays the money out, inside the caller's retail.sale.return scope; absent means the caller's own branch when their scope is one branch, else the sale's branch. Not used when nothing is paid out in money",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "refund_method" : {
+            "description" : "cash, mobile_money or bank pay the customer back out of the sale's branch. account takes the value off what the customer owes on this credit sale, never below zero; any rest is refunded in money_method",
+            "minLength" : 1,
+            "pattern" : "cash|mobile_money|bank|account",
+            "type" : "string"
+          }
+        },
+        "required" : [ "lines", "refund_method" ]
+      },
+      "RetailReturnVoidRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
       "RetailRoleQuantity" : {
         "description" : "The sum of the balances of each role present in the report",
         "properties" : {
@@ -9501,6 +9680,122 @@
           }
         },
         "required" : [ "lines", "payment_method" ]
+      },
+      "RetailSaleReturn" : {
+        "description" : "A customer return and its numbered credit note",
+        "properties" : {
+          "account_credit_minor" : {
+            "description" : "The part taken off what the customer owes on the credit sale",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "approval_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "approved_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cost_minor" : {
+            "description" : "Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "credit_note_no" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "customer_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "customer_name" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailReturnLine"
+            },
+            "type" : "array"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "refund_branch_id" : {
+            "description" : "The branch whose till paid the money out; present with refund_method",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "refund_choice" : {
+            "description" : "What the caller asked for: cash, mobile_money, bank or account",
+            "type" : "string"
+          },
+          "refund_method" : {
+            "type" : "string"
+          },
+          "refund_minor" : {
+            "description" : "The part paid out in money",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "returned_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_no" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "total_minor" : {
+            "description" : "What the customer is credited: the returned lines at the price they were charged",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "void_reason" : {
+            "type" : "string"
+          },
+          "voided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "voided_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "voided_on" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
       },
       "RetailSalesAnalysis" : {
         "properties" : {
@@ -21986,6 +22281,171 @@
         "tags" : [ "retail-reports" ]
       }
     },
+    "/api/v1/retail/returns" : {
+      "get" : {
+        "operationId" : "listRetailReturns",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "customer_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sale_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailReturnList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Credit notes in the caller's branch scope, newest first (issue #201)",
+        "tags" : [ "retail-returns" ]
+      }
+    },
+    "/api/v1/retail/returns/{return_id}" : {
+      "get" : {
+        "operationId" : "getRetailReturn",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "return_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSaleReturn"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One return, the credit note, with its lines (issue #201)",
+        "tags" : [ "retail-returns" ]
+      }
+    },
+    "/api/v1/retail/returns/{return_id}/void" : {
+      "post" : {
+        "operationId" : "voidRetailReturn",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "return_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailReturnVoidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailReturnOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Void a return as a whole by reversal (issue #201); M. 200 when voided, 202 when it waits for a checker",
+        "tags" : [ "retail-returns" ]
+      }
+    },
     "/api/v1/retail/sales" : {
       "get" : {
         "operationId" : "listRetailSales",
@@ -22232,6 +22692,80 @@
         },
         "summary" : "Record a payment against a credit sale, partial allowed (FR-RET-05); M",
         "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/sales/{sale_id}/returns" : {
+      "get" : {
+        "operationId" : "listRetailSaleReturns",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sale_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/RetailSaleReturn"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The returns made against a sale (issue #201)",
+        "tags" : [ "retail-returns" ]
+      },
+      "post" : {
+        "operationId" : "createRetailSaleReturn",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sale_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailReturnRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailReturnOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Take goods back against a sale: stock, entries and a numbered credit note (issue #201); M. 201 when recorded, 202 when it waits for a checker",
+        "tags" : [ "retail-returns" ]
       }
     },
     "/api/v1/retail/sales/{sale_id}/void" : {

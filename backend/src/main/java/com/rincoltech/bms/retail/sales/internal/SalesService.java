@@ -94,6 +94,7 @@ class SalesService {
     private final SalesPricing pricing;
     private final RetailPricing priceLists;
     private final AccountsService accounts;
+    private final ReturnsRepository returns;
 
     SalesService(
             SalesRepository repo,
@@ -110,7 +111,8 @@ class SalesService {
             RetailCapabilities capabilities,
             SalesPricing pricing,
             RetailPricing priceLists,
-            AccountsService accounts) {
+            AccountsService accounts,
+            ReturnsRepository returns) {
         this.repo = repo;
         this.catalogue = catalogue;
         this.stock = stock;
@@ -126,6 +128,7 @@ class SalesService {
         this.pricing = pricing;
         this.priceLists = priceLists;
         this.accounts = accounts;
+        this.returns = returns;
     }
 
     /** The general ledger account a payment method lands in (chapter 6 section 6.11.1). */
@@ -685,6 +688,13 @@ class SalesService {
         }
         if (s.paymentMethod().equals("credit") && s.paidMinor() > 0) {
             throw ApiException.rule("sale_has_payments", "A credit sale with payments against it cannot be voided.");
+        }
+        // Customer returns (issue #201) put part of the sale back already; a void would take it back a second time.
+        // Void the
+        // returns first.
+        if (returns.hasCompleted(id)) {
+            throw ApiException.rule(
+                    "sale_has_returns", "A sale with returns against it cannot be voided. Void its returns first.");
         }
         String reason = r.reason().trim();
         List<Recorded> moved = stock.bySource(SALE, id);

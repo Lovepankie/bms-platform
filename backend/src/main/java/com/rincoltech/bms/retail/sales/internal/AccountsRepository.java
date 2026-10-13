@@ -321,7 +321,9 @@ class AccountsRepository {
     /**
      * Every movement on a buyer's credit sales, as a debit or a credit, in the branches of the sales (null: every branch).
      * A sale and its void are a debit and a credit; a payment, or all of a receipt's allocations in scope, a credit; the
-     * reversal of a receipt a debit. Imported sales (historical) have no debit here, because the ledger never held one;
+     * reversal of a receipt a debit; the account credit of a return (issue #201) a credit on the day it was returned, and a
+     * voided return a debit on the day it was voided (a return that paid money out only is not listed: the ledger's trade
+     * debtors do not change for money that went back to a buyer who had paid, and the statement is of what is owed). Imported sales (historical) have no debit here, because the ledger never held one;
      * a payment that was recorded against one is still a credit, because the ledger did hold that.
      */
     private static String movements(boolean scoped) {
@@ -359,7 +361,21 @@ class AccountsRepository {
                        CAST(NULL AS uuid), CAST(NULL AS text), CAST(0 AS bigint), s.total_minor
                   FROM retail_sales s
                  WHERE s.customer_id = :customer AND s.payment_method = 'credit' AND s.status = 'voided'
-                   AND NOT s.historical""" + sb + "\n";
+                   AND NOT s.historical""" + sb + """
+
+                UNION ALL
+                SELECT r.returned_on, 5, r.created_at, r.id, 'return', r.credit_note_no, s.id, CAST(NULL AS uuid),
+                       CAST(NULL AS text), CAST(0 AS bigint), r.account_credit_minor
+                  FROM retail_sale_returns r JOIN retail_sales s ON s.id = r.sale_id
+                 WHERE s.customer_id = :customer AND s.payment_method = 'credit' AND NOT s.historical
+                   AND r.account_credit_minor > 0""" + sb + """
+
+                UNION ALL
+                SELECT r.voided_on, 6, r.voided_at, r.id, 'return_void', r.credit_note_no, s.id, CAST(NULL AS uuid),
+                       CAST(NULL AS text), r.account_credit_minor, CAST(0 AS bigint)
+                  FROM retail_sale_returns r JOIN retail_sales s ON s.id = r.sale_id
+                 WHERE s.customer_id = :customer AND s.payment_method = 'credit' AND NOT s.historical
+                   AND r.status = 'voided' AND r.account_credit_minor > 0""" + sb + "\n";
     }
 
     private static Map<String, Object> statementParams(UUID customerId, List<UUID> branchIds, String zone) {

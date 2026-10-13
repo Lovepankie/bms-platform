@@ -410,6 +410,23 @@ class SalesRepository {
                 .singleValue();
     }
 
+    /**
+     * Gives the account credit of a voided return back to the sale (V45): the sales guard lets paid_minor fall only while
+     * the transaction-local setting {@code bms.void_sale_return} holds the id of a voided return of this sale that gave
+     * exactly {@code amountMinor}. Raised for this one statement and cleared after it, like {@link #releasePaid}.
+     */
+    void releasePaidForReturn(UUID saleId, UUID returnId, long amountMinor) {
+        jdbc.sql("SELECT set_config('bms.void_sale_return', ?, true)")
+                .param(returnId.toString())
+                .query()
+                .singleValue();
+        jdbc.sql("""
+                        UPDATE retail_sales SET paid_minor = paid_minor - ?, updated_at = now(), version = version + 1
+                         WHERE id = ?
+                        """).params(amountMinor, saleId).update();
+        jdbc.sql("SELECT set_config('bms.void_sale_return', '', true)").query().singleValue();
+    }
+
     List<Payment> payments(UUID saleId) {
         return jdbc.sql("""
                         SELECT id, sale_id, amount_minor, currency, method, paid_on, journal_entry_id, created_at, created_by

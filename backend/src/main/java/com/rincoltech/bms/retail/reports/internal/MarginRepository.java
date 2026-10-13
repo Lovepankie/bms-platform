@@ -55,8 +55,10 @@ class MarginRepository {
         params.put("end", Timestamp.from(end));
         params.put("limit", limit);
         String branch = "";
+        String returnsBranch = "";
         if (branchIds != null) {
             branch = " AND s.branch_id IN (:branchIds)";
+            returnsBranch = " AND r.branch_id IN (:branchIds)";
             params.put("branchIds", branchIds);
         }
         return jdbc.sql("""
@@ -72,19 +74,44 @@ class MarginRepository {
                             HAVING (array_agg(h.old_sell_minor ORDER BY h.created_at, h.id))[1]
                                 IS DISTINCT FROM (array_agg(h.new_sell_minor ORDER BY h.created_at DESC, h.id DESC))[1]
                         ), sold AS (
-                            SELECT l.product_id,
-                                   coalesce(sum(l.qty) FILTER (WHERE s.sale_date < c.changed_on), 0) AS qty_before,
-                                   coalesce(sum(l.line_total_minor) FILTER (WHERE s.sale_date < c.changed_on), 0) AS sales_before,
-                                   coalesce(sum(l.line_cost_minor) FILTER (WHERE s.sale_date < c.changed_on), 0) AS cost_before,
-                                   coalesce(sum(l.qty) FILTER (WHERE s.sale_date >= c.changed_on), 0) AS qty_after,
-                                   coalesce(sum(l.line_total_minor) FILTER (WHERE s.sale_date >= c.changed_on), 0) AS sales_after,
-                                   coalesce(sum(l.line_cost_minor) FILTER (WHERE s.sale_date >= c.changed_on), 0) AS cost_after
-                              FROM retail_sales s
-                              JOIN retail_sale_lines l ON l.tenant_id = s.tenant_id AND l.sale_id = s.id
-                              JOIN changed c ON c.product_id = l.product_id
-                             WHERE s.status = 'completed' AND s.sale_date BETWEEN :from AND :to""" + branch + """
+                            SELECT product_id, sum(qty_before) AS qty_before, sum(sales_before) AS sales_before,
+                                   sum(cost_before) AS cost_before, sum(qty_after) AS qty_after,
+                                   sum(sales_after) AS sales_after, sum(cost_after) AS cost_after
+                              FROM (
+                                -- The sales, as they always were: the join to the changed items runs first, on the lines.
+                                SELECT l.product_id,
+                                       coalesce(sum(l.qty) FILTER (WHERE s.sale_date < c.changed_on), 0) AS qty_before,
+                                       coalesce(sum(l.line_total_minor) FILTER (WHERE s.sale_date < c.changed_on), 0) AS sales_before,
+                                       coalesce(sum(l.line_cost_minor) FILTER (WHERE s.sale_date < c.changed_on), 0) AS cost_before,
+                                       coalesce(sum(l.qty) FILTER (WHERE s.sale_date >= c.changed_on), 0) AS qty_after,
+                                       coalesce(sum(l.line_total_minor) FILTER (WHERE s.sale_date >= c.changed_on), 0) AS sales_after,
+                                       coalesce(sum(l.line_cost_minor) FILTER (WHERE s.sale_date >= c.changed_on), 0) AS cost_after
+                                  FROM retail_sales s
+                                  JOIN retail_sale_lines l ON l.tenant_id = s.tenant_id AND l.sale_id = s.id
+                                  JOIN changed c ON c.product_id = l.product_id
+                                 WHERE s.status = 'completed' AND s.sale_date BETWEEN :from AND :to""" + branch + """
 
-                             GROUP BY l.product_id
+                                 GROUP BY l.product_id
+                                UNION ALL
+                                -- The returns of issue #201 that were not voided, on the day of the return and off the sales (a line
+                                -- written off gives back its credit and not its cost). A small table beside the sales.
+                                SELECT rl.product_id,
+                                       -coalesce(sum(rl.qty) FILTER (WHERE r.returned_on < c.changed_on), 0),
+                                       -coalesce(sum(rl.line_total_minor) FILTER (WHERE r.returned_on < c.changed_on), 0),
+                                       -coalesce(sum(CASE WHEN rl.disposition = 'write_off' THEN 0 ELSE rl.line_cost_minor END)
+                                                 FILTER (WHERE r.returned_on < c.changed_on), 0),
+                                       -coalesce(sum(rl.qty) FILTER (WHERE r.returned_on >= c.changed_on), 0),
+                                       -coalesce(sum(rl.line_total_minor) FILTER (WHERE r.returned_on >= c.changed_on), 0),
+                                       -coalesce(sum(CASE WHEN rl.disposition = 'write_off' THEN 0 ELSE rl.line_cost_minor END)
+                                                 FILTER (WHERE r.returned_on >= c.changed_on), 0)
+                                  FROM retail_sale_returns r
+                                  JOIN retail_sale_return_lines rl ON rl.tenant_id = r.tenant_id AND rl.return_id = r.id
+                                  JOIN changed c ON c.product_id = rl.product_id
+                                 WHERE r.status = 'completed' AND r.returned_on BETWEEN :from AND :to""" + returnsBranch + """
+
+                                 GROUP BY rl.product_id
+                              ) u
+                             GROUP BY product_id
                         )
                         SELECT c.product_id, p.code, p.description, u.name AS unit, c.changed_on, c.old_sell, c.new_sell,
                                coalesce(d.qty_before, 0) AS qty_before, coalesce(d.sales_before, 0) AS sales_before,

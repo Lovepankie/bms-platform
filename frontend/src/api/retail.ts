@@ -45,6 +45,14 @@ export type OpenSale = S['RetailOpenSale'];
 export type AccountPayment = S['RetailAccountPayment'];
 export type AccountPaymentRequest = S['RetailAccountPaymentRequest'];
 export type AccountPaymentPage = S['RetailAccountPaymentList'];
+/** Customer returns and sales credit notes (the returns capability, ADR-033, issue #201). Money is integer minor units, quantities three places. */
+export type ReturnRequest = S['RetailReturnRequest'];
+export type ReturnLineRequest = S['RetailReturnLineRequest'];
+export type SaleReturn = S['RetailSaleReturn'];
+export type ReturnLine = S['RetailReturnLine'];
+/** 201 with the return when it was recorded; 202 with `approval_id` when it waits for a second administrator. */
+export type ReturnOutcome = S['RetailReturnOutcome'];
+export type ReturnPage = S['RetailReturnList'];
 export type Supplier = S['RetailSupplier'];
 export type SaleRequest = S['RetailSaleRequest'];
 export type Sale = S['RetailSale'];
@@ -244,6 +252,15 @@ export interface RetailApi {
   payOnAccount(id: string, body: AccountPaymentRequest, idempotencyKey: string): Promise<AccountPayment>;
   /** Undoes a payment on account as a whole (retail.sale.void); takes the Idempotency-Key of its form. */
   reverseAccountPayment(id: string, paymentId: string, reason: string, idempotencyKey: string): Promise<AccountPayment>;
+  /** Takes goods back against a sale (retail.sale.return); takes the Idempotency-Key of its form. 404 capability_not_enabled while returns are off. */
+  createSaleReturn(saleId: string, body: ReturnRequest, idempotencyKey: string): Promise<ReturnOutcome>;
+  /** The returns made against a sale, oldest first (voided ones included). */
+  listSaleReturns(saleId: string): Promise<SaleReturn[]>;
+  /** Credit notes in the caller's branch scope, newest first; `query` matches the credit note number, the sale number and the buyer's name. */
+  listReturns(q: { query?: string; status?: string; cursor?: string; signal?: AbortSignal }): Promise<ReturnPage>;
+  getReturn(id: string): Promise<SaleReturn>;
+  /** Voids a return as a whole by reversal (retail.sale.return); takes the Idempotency-Key of its form. 202 `executed: false` when it needs a second administrator. */
+  voidReturn(id: string, reason: string, idempotencyKey: string): Promise<ReturnOutcome>;
   updateCustomer(id: string, version: number, body: { name?: string; contact?: string }): Promise<Customer>;
   createSale(body: SaleRequest, idempotencyKey: string): Promise<Sale>;
   createPurchase(body: PurchaseRequest, idempotencyKey: string): Promise<Purchase>;
@@ -601,6 +618,26 @@ const realRetail: RetailApi = {
         body: { reason },
       }),
     );
+  },
+
+  async createSaleReturn(saleId, body, key) {
+    return unwrap(await api.POST('/api/v1/retail/sales/{sale_id}/returns', { params: { path: { sale_id: saleId }, header: { 'Idempotency-Key': key } }, body }));
+  },
+
+  async listSaleReturns(saleId) {
+    return unwrap(await api.GET('/api/v1/retail/sales/{sale_id}/returns', { params: { path: { sale_id: saleId } } }));
+  },
+
+  async listReturns({ query, status, cursor, signal }) {
+    return unwrap(await api.GET('/api/v1/retail/returns', { params: { query: { q: query || undefined, status: status || undefined, limit: 50, cursor } }, signal }));
+  },
+
+  async getReturn(id) {
+    return unwrap(await api.GET('/api/v1/retail/returns/{return_id}', { params: { path: { return_id: id } } }));
+  },
+
+  async voidReturn(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/returns/{return_id}/void', { params: { path: { return_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
   },
 
   async createSale(body, key) {

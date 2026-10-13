@@ -86,7 +86,10 @@ class ReportsRepository {
     /**
      * FR-RET-10 per branch and day: the append-only lines of completed (not voided) sales, their
      * totals and cost snapshots, by sale date (never the mutable sale header, review F10), and usage
-     * and damage at their cost snapshots by the day they happened.
+     * and damage at their cost snapshots by the day they happened. Customer returns (issue #201) that were not voided
+     * take their value and their cost off by the day of the return, and the cost of the goods they wrote off as damaged
+     * counts as usage, so the profit falls by the margin of goods that went back on the shelf and by the whole credit of
+     * goods that did not, and a day already reported keeps its sales.
      */
     List<DayFigures> daily(List<UUID> branchIds, LocalDate from, LocalDate to) {
         Map<String, Object> params = new LinkedHashMap<>();
@@ -94,12 +97,14 @@ class ReportsRepository {
         params.put("to", Date.valueOf(to));
         String salesFilter = "";
         String usageFilter = "";
+        String returnsFilter = "";
         if (branchIds != null) {
             if (branchIds.isEmpty()) {
                 return List.of();
             }
             salesFilter = " AND s.branch_id IN (:branchIds)";
             usageFilter = " AND branch_id IN (:branchIds)";
+            returnsFilter = " AND r.branch_id IN (:branchIds)";
             params.put("branchIds", branchIds);
         }
         return jdbc.sql("""
@@ -112,6 +117,13 @@ class ReportsRepository {
                             UNION ALL
                             SELECT branch_id, occurred_on, 0, 0, cost_total_minor FROM retail_usage_reports
                              WHERE occurred_on BETWEEN :from AND :to""" + usageFilter + """
+
+                            UNION ALL
+                            SELECT r.branch_id, r.returned_on, -r.total_minor, -r.cost_minor,
+                                   coalesce((SELECT sum(l.line_cost_minor) FROM retail_sale_return_lines l
+                                              WHERE l.return_id = r.id AND l.disposition = 'write_off'), 0)
+                              FROM retail_sale_returns r
+                             WHERE r.status = 'completed' AND r.returned_on BETWEEN :from AND :to""" + returnsFilter + """
 
                         ) f GROUP BY branch_id, day ORDER BY day, branch_id
                         """)

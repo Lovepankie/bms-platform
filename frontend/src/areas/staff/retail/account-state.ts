@@ -13,6 +13,8 @@ export const KIND_WORDS: Record<string, string> = {
   account_payment: 'Payment on account',
   reversal: 'Payment reversed',
   void: 'Sale cancelled',
+  return: 'Goods returned, credit note',
+  return_void: 'Credit note voided',
 };
 
 export const kindWords = (kind: string | undefined): string => KIND_WORDS[kind ?? ''] ?? kind ?? '';

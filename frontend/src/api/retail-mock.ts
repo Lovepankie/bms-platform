@@ -8,6 +8,7 @@ import type { Me } from './client';
 import { createCashbookMock } from './retail-cashbook-mock';
 import { createPricingMock } from './retail-pricing-mock';
 import { createAccountsMock } from './retail-accounts-mock';
+import { createReturnsMock } from './retail-returns-mock';
 
 // Fabricated retail data for VITE_RETAIL_MOCK and for tests: invented products, branches and
 // balances, held in memory, with the REAL snake_case shapes of docs/sdd/07-api-design.md section
@@ -33,7 +34,7 @@ const SALES_PERMISSIONS = [
 const CASHIER_PERMISSIONS = SALES_PERMISSIONS;
 const ADMIN_PERMISSIONS = [
   ...SALES_PERMISSIONS, 'retail.catalogue.manage', 'retail.price.edit', 'retail.sale.void',
-  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use', 'retail.credit.manage', 'retail.credit.override',
+  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use', 'retail.credit.manage', 'retail.credit.override', 'retail.sale.return',
   'retail.savings.record', 'retail.savings.overwrite', 'retail.banking.record', 'retail.expense.record', 'retail.expense.manage',
   'retail.withdrawal.record', 'retail.advance.create', 'retail.advance.repay', 'retail.cashbook.read', 'retail.cashbook.void',
 ];
@@ -227,9 +228,18 @@ export function createMockRetail(): RetailApi {
     sales: () => sales,
   });
 
+  // Customer returns (ADR-033, issue #201): credit notes against a sale; 404 while the capability is off.
+  const returnsApi = createReturnsMock({
+    on: () => caps.value['returns'] === true,
+    today, nextId, delay, run, once, refuse,
+    sales: () => sales,
+    branchCode: (id) => MOCK_BRANCHES.find((b) => b.id === id)?.code ?? '',
+  });
+
   return {
     ...pricingApi,
     ...accountsApi,
+    ...returnsApi,
     ...createCashbookMock({ profit: () => profitAccess, today, sold, branchIds: MOCK_BRANCHES.map((b) => b.id), delay, run, once, nextId }),
 
     listProducts: ({ query, branchId }) =>
