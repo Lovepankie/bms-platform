@@ -57,8 +57,10 @@ class SalesAnalysisRepository {
      * the day of the return, in the shape of {@code retail_sales s} joined to {@code retail_sale_lines l}, so a statement
      * written for sales reads net of returns without another change. A return line has no sale id (it is not a sale, so
      * {@code count(DISTINCT s.id)} still counts sales) and belongs to the seller of its sale. A line written off as damaged
-     * gives back its credit and not its cost: the goods are gone, so the cost of the sale stands. The date filter of the
-     * statement is pushed into both halves by the planner.
+     * gives back its credit and not its cost: the goods are gone, so the cost of the sale stands. The planner pushes the date filter into both halves, but the plans are
+     * NOT the plans of the sales alone: the returns half adds scans of two small tables and an index scan of retail_sales, and the
+     * lateral join is one more node. Measured on a HATS-sized scratch database (21,600 sales, 43,200 lines): +0 to +4 percent with no
+     * returns, +7 to +24 percent with 3,000 returns (ADR-033, the amendment on returns).
      */
     static final String NET_LINES = """
               (SELECT s0.tenant_id, s0.id, s0.sale_date, s0.branch_id, s0.created_by, s0.status, s0.payment_method,

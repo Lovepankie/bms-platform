@@ -646,6 +646,36 @@ class RetailReturnsIT extends IntegrationTest {
         assertThat(ok.get("total_minor").asLong()).isEqualTo(300);
     }
 
+    /** A weighed item: the stock movement is valued per kilogram from the same rounded share of the line's cost the journal took. */
+    @Test
+    void aFractionalQuantityReturnIsValuedFromTheSameRoundedShareOfTheLineCostAsTheJournal() {
+        UUID kg = api.product("RT-KG", 83, 120);
+        api.stockUp(hq, kg, "100");
+        // 2.5 kg at 120 is 300; its cost is 2.5 x 83 = 207.5, which the sale rounds to 208.
+        UUID s = sold(hq, "cash", null, kg, "2.500", null, null);
+        UUID l = lineOf(s, 0);
+        assertThat(sale(s).get("lines").get(0).get("line_cost_minor").asLong()).isEqualTo(208);
+        // 1.5 kg back: the credit is 180 and the cost 208 x 1.5 / 2.5 = 124.8, rounded once to 125.
+        JsonNode first = back(s, List.of(line(l, "1.500", "restock")), "cash");
+        UUID id = uuid(first, "id");
+        assertThat(first.get("total_minor").asLong()).isEqualTo(180);
+        assertThat(first.get("cost_minor").asLong()).isEqualTo(125);
+        assertThat(posted(id).get("inventory")).containsExactly(125, 0);
+        // The movement carries a whole price per kilogram (125 / 1.5 = 83.3, so 83): worth 124.5, within half a minor
+        // unit of
+        // the 125 the journal holds, and never further than that.
+        long perKg = movementUnitCost(id);
+        assertThat(perKg).isEqualTo(83);
+        assertThat(Math.abs(perKg * 1500 - 125 * 1000)).isLessThanOrEqualTo(500);
+        // The last kilogram takes the remainder, so the two returns add up to the line exactly.
+        JsonNode rest = back(s, List.of(line(l, "1.000", "restock")), "cash");
+        assertThat(first.get("cost_minor").asLong() + rest.get("cost_minor").asLong())
+                .isEqualTo(208);
+        assertThat(first.get("total_minor").asLong() + rest.get("total_minor").asLong())
+                .isEqualTo(300);
+        assertThat(movementUnitCost(uuid(rest, "id"))).isEqualTo(83);
+    }
+
     @Test
     void aReturnCreditsThePriceActuallyChargedNotThePriceNow() {
         UUID s = sold(hq, "cash", null, product, "10", 70L, null);
@@ -1259,6 +1289,13 @@ class RetailReturnsIT extends IntegrationTest {
             try (Statement st = conn.createStatement()) {
                 // Hold the sale, as a return that is refunding money would.
                 st.execute("SELECT 1 FROM retail_sales WHERE id = '" + s + "' FOR UPDATE");
+                // The transaction id the row lock belongs to: a backend waiting for the sale's row waits for exactly
+                // this one.
+                String holder;
+                try (java.sql.ResultSet rs = st.executeQuery("SELECT txid_current() % 4294967296")) {
+                    rs.next();
+                    holder = rs.getString(1);
+                }
                 Future<ResponseEntity<JsonNode>> reversal = pool.submit(() -> api.postKeyed(
                         "/customers/" + c + "/payments/"
                                 + paid.getBody().get("id").asString() + "/reverse",
@@ -1267,14 +1304,21 @@ class RetailReturnsIT extends IntegrationTest {
                         "*",
                         UUID.randomUUID().toString()));
                 long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
-                while (System.nanoTime() < until
-                        && TestDatabase.owner()
-                                        .sql("SELECT count(*) FROM pg_locks WHERE NOT granted")
-                                        .query(Long.class)
-                                        .single()
-                                == 0) {
-                    Thread.sleep(50);
+                long waiting = 0;
+                while (System.nanoTime() < until && waiting == 0) {
+                    waiting = TestDatabase.owner()
+                            .sql("SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'transactionid'"
+                                    + " AND transactionid::text = ?")
+                            .param(holder)
+                            .query(Long.class)
+                            .single();
+                    if (waiting == 0) {
+                        Thread.sleep(50);
+                    }
                 }
+                assertThat(waiting)
+                        .as("the reversal is waiting for the sale's row")
+                        .isEqualTo(1);
                 // The refund commits while the reversal waits: a completed return that paid 100 out.
                 st.execute("""
                         INSERT INTO retail_sale_returns (id, tenant_id, credit_note_no, branch_seq, sale_id, branch_id,

@@ -1,4 +1,4 @@
--- StockHealthRepository.pace, lowest cover first over 30 days of sales (issue #149)
+-- StockHealthRepository.pace, lowest cover first over 30 days of sales (issue #149) (sales only, no returns, by design: a return alone is not a sale, issue #201)
 -- tenant: tenant
 WITH sold AS (SELECT s.branch_id, l.product_id, sum(l.qty) AS sold
                 FROM retail_sales s JOIN retail_sale_lines l ON l.tenant_id = s.tenant_id AND l.sale_id = s.id

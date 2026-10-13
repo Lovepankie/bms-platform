@@ -1,4 +1,4 @@
--- StockHealthRepository.deadTotals, 90 days (issue #149); deadItems reads the same rows with a limit
+-- StockHealthRepository.deadTotals, 90 days (issue #149); deadItems reads the same rows with a limit (sales only, no returns, by design: a return alone is not a sale, issue #201)
 -- tenant: tenant
 WITH sold AS (SELECT DISTINCT s.branch_id, l.product_id
                 FROM retail_sales s JOIN retail_sale_lines l ON l.tenant_id = s.tenant_id AND l.sale_id = s.id

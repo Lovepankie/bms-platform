@@ -128,7 +128,8 @@ export function ReturnsThresholdWarning({ capabilities }: { capabilities: Capabi
   return (
     <p role="note" className="alert alert-warning" data-testid="returns-no-threshold">
       Customer returns have no approval limit. Any administrator can refund up to the whole of a sale, and void a return, with no second person. To ask for a second
-      administrator above an amount, set the approval limit for customer returns in the business settings.
+      administrator above an amount, set the approval limit for customer returns in the business settings. The limit counts the returns of one sale
+      together, not a person's returns across sales, so many small returns on different sales still need no second administrator.
     </p>
   );
 }
