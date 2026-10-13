@@ -1,3 +1,13 @@
+spring:
+  datasource:
+    hikari:
+      # Every distinct test context (a @Import, a spy bean) is cached with its own pool. A small
+      # pool that keeps no idle connections lets the cached contexts of the whole suite share the
+      # test database's connection slots.
+      maximum-pool-size: 5
+      minimum-idle: 0
+      idle-timeout: 10000
+
 bms:
   tenancy:
     # Hyphenated hosts under one zone, as on staging (ADR-018). TestRestTemplate calls localhost,

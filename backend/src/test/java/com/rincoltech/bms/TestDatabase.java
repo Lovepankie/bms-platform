@@ -26,6 +26,9 @@ public final class TestDatabase {
             .withPassword("test-superuser-password")
             .withEnv("BMS_OWNER_PASSWORD", OWNER_PASSWORD)
             .withEnv("BMS_APP_PASSWORD", APP_PASSWORD)
+            // Many cached Spring contexts each hold a pool, so the default 100 connections ran out
+            // ("remaining connection slots are reserved"). fsync=off is the container default.
+            .withCommand("postgres", "-c", "fsync=off", "-c", "max_connections=300", "-c", "shared_buffers=128MB")
             .withCopyFileToContainer(
                     MountableFile.forHostPath(Path.of("../deploy/postgres/initdb/01-roles.sh"), 0755),
                     "/docker-entrypoint-initdb.d/01-roles.sh");
