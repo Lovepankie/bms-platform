@@ -1,6 +1,6 @@
 # Developer entry points. Backend needs JDK 25 and Maven 3.9; frontend needs Node 20.19 or later;
 # both need Docker (the backend integration tests start PostgreSQL 16 with Testcontainers).
-.PHONY: dev down seed seed-lending test test-backend test-frontend lint fmt migrate build openapi clean psql
+.PHONY: dev down seed seed-lending test test-backend test-frontend lint fmt migrate build openapi document-samples clean psql
 
 -include .env
 export
@@ -65,6 +65,12 @@ build:
 openapi:
 	cd backend && UPDATE_OPENAPI_SNAPSHOT=true mvn -B verify -Dit.test=OpenApiSnapshotIT -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false
 	cd frontend && npm run gen:api
+
+## ADR-034 quality bar item 8: render every document template with fabricated data to PDF and to a
+## PNG per page in backend/target/document-samples, for the visual check before merging.
+document-samples:
+	cd backend && mvn -B verify -Dit.test='LoanServicingIT#frDoc01*' -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false -Dbms.documents.samples=true
+	@echo "Samples: backend/target/document-samples (a PDF and a PNG per page for each document)"
 
 psql:
 	$(COMPOSE) exec postgres psql -U bms_owner -d bms

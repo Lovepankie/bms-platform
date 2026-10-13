@@ -1,0 +1,19 @@
+Test Lending Ltd
+Head Office
+Plot 1, Test Road, Kampala
+SCH-HQ-LN000001-{YYYYMMDD}
+{DATE}
+Test Lending Ltd, Plot 1 Test Road. Keep this document safe. SCH-HQ-LN000001-{YYYYMMDD}, page 1 of 1
+LOAN SCHEDULE
+Member Test Borrower 82 (M000001)
+Loan LN000001, DOCS2
+Terms 3 months, flat interest at 10.00% per month, monthly instalments
+Disbursed {DATE}
+As at {DATE}
+Instalments (UGX)
+No Due date Principal Interest Fees Total due Paid Outstanding Status
+1 {DATE} 400,000 120,000 0 520,000 300,000 220,000 partially paid
+2 {DATE} 400,000 120,000 0 520,000 0 520,000 pending
+3 {DATE} 400,000 120,000 0 520,000 0 520,000 pending
+Totals 1,200,000 360,000 0 1,560,000 300,000 1,260,000
+Outstanding: One million, two hundred and sixty thousand Uganda shillings only

@@ -1045,4 +1045,739 @@ class LoanServicingIT extends LoanFixtures {
                         .get("items"))
                 .isEmpty();
     }
+
+    // ---- Documents (FR-DOC-01, ADR-034) ---------------------------------------------------
+
+    /** The fixture's staff as real users, so the signature blocks carry names. */
+    void namedStaff() {
+        String[][] staff = {
+            {cashier.toString(), "Test Cashier"}, {manager.toString(), "Test Manager"}, {admin.toString(), "Test Admin"}
+        };
+        for (String[] u : staff) {
+            TestDatabase.owner()
+                    .sql("INSERT INTO users (id, tenant_id, kind, full_name, email, status)"
+                            + " VALUES (?::uuid, ?, 'staff', ?, ?, 'active') ON CONFLICT DO NOTHING")
+                    .params(u[0], t.tenantId(), u[1], u[1].toLowerCase().replace(' ', '.') + "@example.test")
+                    .update();
+        }
+        TestDatabase.owner()
+                .sql("UPDATE branches SET location = 'Plot 1, Test Road, Kampala' WHERE id = ?")
+                .param(t.headOffice())
+                .update();
+        // A fixed name, footer, brand colour and logo, so the golden text is stable and the letterhead is complete.
+        String settingsPerms = "core.settings.read,core.settings.manage";
+        int version = send(HttpMethod.GET, "/api/v1/settings", as(admin, settingsPerms, "*", null), null)
+                .getBody()
+                .get("version")
+                .asInt();
+        assertThat(send(
+                                HttpMethod.PATCH,
+                                "/api/v1/settings",
+                                as(admin, settingsPerms, "*", "\"" + version + "\""),
+                                Map.of(
+                                        "display_name", "Test Lending Ltd",
+                                        "receipt_footer",
+                                                "Test Lending Ltd, Plot 1 Test Road. Keep this document safe.",
+                                        "theme_primary", "#1E5631"))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        org.springframework.util.LinkedMultiValueMap<String, Object> form =
+                new org.springframework.util.LinkedMultiValueMap<>();
+        form.add("file", new org.springframework.core.io.ByteArrayResource(logoPng()) {
+            @Override
+            public String getFilename() {
+                return "logo.png";
+            }
+        });
+        HttpHeaders h = as(admin, settingsPerms, "*", null);
+        h.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
+        assertThat(http.exchange(
+                                "/api/v1/settings/logo",
+                                HttpMethod.PUT,
+                                new org.springframework.http.HttpEntity<>(form, h),
+                                JsonNode.class)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    /** A fabricated logo: a green square with a white bar, 256 by 128 pixels. */
+    static byte[] logoPng() {
+        java.awt.image.BufferedImage img =
+                new java.awt.image.BufferedImage(256, 128, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D g = img.createGraphics();
+        g.setColor(new java.awt.Color(0x1E, 0x56, 0x31));
+        g.fillRect(0, 0, 256, 128);
+        g.setColor(java.awt.Color.WHITE);
+        g.fillRect(32, 52, 192, 24);
+        g.dispose();
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try {
+            javax.imageio.ImageIO.write(img, "png", out);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+        return out.toByteArray();
+    }
+
+    /** The text of a PDF with every printed date replaced, so a golden file does not move with the calendar. */
+    static String text(byte[] pdf) throws Exception {
+        try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            String raw = new org.apache.pdfbox.text.PDFTextStripper().getText(d);
+            return raw.replaceAll("\\b\\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \\d{4}\\b", "{DATE}")
+                    .replaceAll("-\\d{8}\\b", "-{YYYYMMDD}")
+                    .replace("\r", "")
+                    .strip();
+        }
+    }
+
+    /** With {@code -Dbms.documents.samples}: the PDF and a PNG of each page, for the visual check (ADR-034 item 8). */
+    static void sample(String name, byte[] pdf) throws Exception {
+        if (System.getProperty("bms.documents.samples") == null) {
+            return;
+        }
+        java.nio.file.Path dir = java.nio.file.Path.of("target/document-samples");
+        java.nio.file.Files.createDirectories(dir);
+        java.nio.file.Files.write(dir.resolve(name + ".pdf"), pdf);
+        try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            org.apache.pdfbox.rendering.PDFRenderer r = new org.apache.pdfbox.rendering.PDFRenderer(d);
+            for (int i = 0; i < d.getNumberOfPages(); i++) {
+                javax.imageio.ImageIO.write(
+                        r.renderImageWithDPI(i, 110),
+                        "png",
+                        dir.resolve(name + "-p" + (i + 1) + ".png").toFile());
+            }
+        }
+    }
+
+    /**
+     * Compares with {@code golden/documents/<name>.txt}. With {@code -Dbms.golden.record=true} it
+     * writes the file instead (review it before committing). With {@code -Dbms.documents.samples}
+     * it also writes the PDF and a PNG of each page to {@code target/document-samples} for the
+     * visual check of the ADR-034 quality bar.
+     */
+    static void golden(String name, byte[] pdf) throws Exception {
+        sample(name, pdf);
+        java.nio.file.Path file = java.nio.file.Path.of("src/test/resources/golden/documents/" + name + ".txt");
+        String actual = text(pdf) + "\n";
+        if (Boolean.getBoolean("bms.golden.record")) {
+            java.nio.file.Files.createDirectories(file.getParent());
+            java.nio.file.Files.writeString(file, actual);
+            return;
+        }
+        assertThat(actual).as("golden text of %s", name).isEqualTo(java.nio.file.Files.readString(file));
+    }
+
+    ResponseEntity<JsonNode> issue(String loan, String txn) {
+        return send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/transactions/" + txn + "/document",
+                as(cashier, cashierPerms, "*", null),
+                null);
+    }
+
+    byte[] stored(String documentId) {
+        ResponseEntity<JsonNode> url = send(
+                HttpMethod.POST,
+                "/api/v1/documents/" + documentId + "/download-url",
+                as(cashier, cashierPerms, "*", null),
+                null);
+        assertThat(url.getStatusCode()).as("%s", url.getBody()).isEqualTo(HttpStatus.OK);
+        HttpHeaders h = new HttpHeaders();
+        h.add("X-Tenant", t.slug());
+        return http.exchange(
+                        java.net.URI.create(
+                                http.getRootUri() + url.getBody().get("url").asString()),
+                        HttpMethod.GET,
+                        new org.springframework.http.HttpEntity<>(h),
+                        byte[].class)
+                .getBody();
+    }
+
+    /**
+     * FR-DOC-01 and FR-DOC-02: the voucher and the receipt are rendered on first request, stored
+     * once and downloaded through a signed URL; their text matches the golden files, with names,
+     * amounts in words, the allocation and the signature blocks.
+     */
+    @Test
+    void frDoc01_theVoucherAndReceiptAreIssuedOnce() throws Exception {
+        namedStaff();
+        String product = product("DOCS", Map.of(), List.of(fee("deducted_at_disbursement", null, 200)));
+        String loan = approved(product, 1_200_000, 3, 81);
+        disburse(loan, today);
+        String receiptTxn =
+                repaid(loan, 300_000, today).get("transaction").get("id").asString();
+        String disbursement = null;
+        for (JsonNode t : get(loan, "/transactions").get("items")) {
+            if (t.get("txn_type").asString().equals("disbursement")) {
+                disbursement = t.get("id").asString();
+            }
+        }
+
+        JsonNode voucher = issue(loan, disbursement).getBody();
+        assertThat(voucher.get("doc_type").asString()).isEqualTo("voucher");
+        assertThat(voucher.get("doc_number").asString()).isEqualTo("VC-HQ-000001");
+        assertThat(voucher.get("created").asBoolean()).isTrue();
+        JsonNode again = issue(loan, disbursement).getBody();
+        assertThat(again.get("created").asBoolean()).as("stored once").isFalse();
+        assertThat(again.get("document_id").asString())
+                .isEqualTo(voucher.get("document_id").asString());
+        byte[] voucherPdf = stored(voucher.get("document_id").asString());
+        golden("voucher", voucherPdf);
+
+        JsonNode receipt = issue(loan, receiptTxn).getBody();
+        assertThat(receipt.get("doc_number").asString()).isEqualTo("RC-HQ-000001");
+        byte[] receiptPdf = stored(receipt.get("document_id").asString());
+        try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(receiptPdf)) {
+            assertThat(d.getNumberOfPages()).as("a receipt is one page").isEqualTo(1);
+        }
+        golden("receipt", receiptPdf);
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT count(*) FROM documents WHERE tenant_id = ? AND doc_type IN ('receipt', 'voucher')")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(2);
+    }
+
+    /** FR-DOC-01: the schedule and the statement are rendered as at today, never stored. */
+    @Test
+    void frDoc01_theScheduleAndStatementAreRenderedAsAtToday() throws Exception {
+        namedStaff();
+        String loan = approved(exampleB("DOCS2"), 1_200_000, 3, 82);
+        disburse(loan, today);
+        String paid = repaid(loan, 300_000, today).get("transaction").get("id").asString();
+        ResponseEntity<byte[]> schedule = http.exchange(
+                LOANS + "/" + loan + "/documents/schedule",
+                HttpMethod.POST,
+                new org.springframework.http.HttpEntity<>(as(cashier, cashierPerms, "*", null)),
+                byte[].class);
+        assertThat(schedule.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(schedule.getHeaders().getContentType().toString()).isEqualTo("application/pdf");
+        golden("schedule", schedule.getBody());
+        byte[] statement = http.exchange(
+                        LOANS + "/" + loan + "/documents/loan_statement",
+                        HttpMethod.POST,
+                        new org.springframework.http.HttpEntity<>(as(cashier, cashierPerms, "*", null)),
+                        byte[].class)
+                .getBody();
+        golden("loan_statement", statement);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM documents WHERE tenant_id = ? AND doc_type <> 'upload'")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .as("schedules and statements are not stored")
+                .isZero();
+
+        // A reversal has no receipt; a loan not yet disbursed has no schedule; another branch sees nothing.
+        String approval = requestReversal(loan, paid);
+        decide(approval, manager, managerPerms);
+        String reversal =
+                get(loan, "/transactions").get("items").get(0).get("id").asString();
+        assertThat(issue(loan, reversal).getBody().get("code").asString()).isEqualTo("no_document");
+        String notYet = approved(exampleB("DOCS3"), 1_200_000, 3, 83);
+        assertThat(send(
+                                HttpMethod.POST,
+                                LOANS + "/" + notYet + "/documents/schedule",
+                                as(cashier, cashierPerms, "*", null),
+                                null)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+        assertThat(send(
+                                HttpMethod.POST,
+                                LOANS + "/" + loan + "/transactions/" + paid + "/document",
+                                as(cashier, cashierPerms, t.secondBranch().toString(), null),
+                                null)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    // ---- Documents, review findings (ADR-034) ---------------------------------------------
+
+    /** The text of one page of a PDF in reading order, dates left as printed. */
+    static String pageText(byte[] pdf, int page) throws Exception {
+        try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            org.apache.pdfbox.text.PDFTextStripper s = new org.apache.pdfbox.text.PDFTextStripper();
+            s.setSortByPosition(true);
+            s.setStartPage(page);
+            s.setEndPage(page);
+            return s.getText(d).replace("\r", "");
+        }
+    }
+
+    static int pages(byte[] pdf) throws Exception {
+        try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            return d.getNumberOfPages();
+        }
+    }
+
+    /** The raster images drawn on a page: the tenant logo, when the tenant has one. */
+    static int images(byte[] pdf, int pageIndex) throws Exception {
+        try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            org.apache.pdfbox.pdmodel.PDResources res = d.getPage(pageIndex).getResources();
+            int n = 0;
+            for (org.apache.pdfbox.cos.COSName name : res.getXObjectNames()) {
+                if (res.getXObject(name) instanceof org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject) {
+                    n++;
+                }
+            }
+            return n;
+        }
+    }
+
+    ResponseEntity<byte[]> render(String loan, String docType) {
+        return http.exchange(
+                LOANS + "/" + loan + "/documents/" + docType,
+                HttpMethod.POST,
+                new org.springframework.http.HttpEntity<>(as(cashier, cashierPerms, "*", null)),
+                byte[].class);
+    }
+
+    /** The statement rows: date, then three amounts at the end of the line ("-" for none). */
+    record Row(String line, long charged, long credited, long balance) {}
+
+    static List<Row> statementRows(byte[] pdf) throws Exception {
+        java.util.regex.Pattern row = java.util.regex.Pattern.compile(
+                "^(\\d{1,2} [A-Z][a-z]{2} \\d{4}) .*?(-|[\\d,]+) (-|[\\d,]+) ([\\d,]+)$");
+        List<Row> rows = new ArrayList<>();
+        for (int p = 1; p <= pages(pdf); p++) {
+            for (String line : pageText(pdf, p).split("\n")) {
+                java.util.regex.Matcher m = row.matcher(line.strip().replaceAll("\\s+", " "));
+                if (m.matches()) {
+                    rows.add(new Row(line.strip(), amount(m.group(2)), amount(m.group(3)), amount(m.group(4))));
+                }
+            }
+        }
+        return rows;
+    }
+
+    static long amount(String s) {
+        return s.equals("-") ? 0 : Long.parseLong(s.replace(",", ""));
+    }
+
+    static long closing(byte[] pdf) throws Exception {
+        for (int p = 1; p <= pages(pdf); p++) {
+            java.util.regex.Matcher m =
+                    java.util.regex.Pattern.compile("Closing balance ([\\d,]+)").matcher(pageText(pdf, p));
+            if (m.find()) {
+                return amount(m.group(1));
+            }
+        }
+        throw new AssertionError("no closing balance row");
+    }
+
+    /** Charged less credited over every line is the printed closing balance, and every balance follows its line. */
+    static void assertReconciles(byte[] pdf, long outstanding) throws Exception {
+        List<Row> rows = statementRows(pdf);
+        assertThat(rows).isNotEmpty();
+        long running = 0;
+        for (Row r : rows) {
+            running += r.charged() - r.credited();
+            assertThat(r.balance()).as(r.line()).isEqualTo(running);
+        }
+        assertThat(closing(pdf)).as("closing balance").isEqualTo(running).isEqualTo(outstanding);
+    }
+
+    /**
+     * The review's HIGH finding: "Loan after this payment" is the loan right after that payment, not
+     * as it is when the receipt is first opened. The first payment's receipt is opened only after two
+     * later payments and still shows the loan as the first payment left it.
+     */
+    @Test
+    void frDoc01_aReceiptFirstOpenedLaterShowsTheLoanAfterThatPayment() throws Exception {
+        namedStaff();
+        String loan = approved(exampleB("DOCS4"), 1_200_000, 3, 84);
+        disburse(loan, today);
+        String first = repaid(loan, 300_000, today).get("transaction").get("id").asString();
+        String second =
+                repaid(loan, 200_000, today).get("transaction").get("id").asString();
+        String third = repaid(loan, 100_000, today).get("transaction").get("id").asString();
+
+        // Opened last, first payment: 1,560,000 owed in all, 300,000 paid; not the 960,000 owed now.
+        String text =
+                text(stored(issue(loan, first).getBody().get("document_id").asString()));
+        assertThat(text).contains("Loan after this payment").contains("Outstanding 1,260,000 UGX");
+        assertThat(text).doesNotContain("960,000").doesNotContain("as at");
+        assertThat(text(stored(issue(loan, third).getBody().get("document_id").asString())))
+                .contains("Outstanding 960,000 UGX");
+        assertThat(text(stored(issue(loan, second).getBody().get("document_id").asString())))
+                .contains("Outstanding 1,060,000 UGX");
+
+        // Opened while it was the latest payment, or a month later, a receipt reads the same.
+        String again =
+                text(stored(issue(loan, first).getBody().get("document_id").asString()));
+        assertThat(again).isEqualTo(text);
+        // The logo is on the page (ADR-034).
+        assertThat(images(stored(issue(loan, first).getBody().get("document_id").asString()), 0))
+                .isEqualTo(1);
+    }
+
+    /**
+     * The review's second HIGH finding. A repayment reversed before any receipt was requested has none
+     * (422); a receipt issued first stays as issued, byte for byte, and the response and the list of
+     * the loan's documents show it as reversed.
+     */
+    @Test
+    void frDoc01_aReversedRepaymentHasNoNewReceiptAndAnIssuedOneIsMarkedReversed() {
+        namedStaff();
+        String loan = approved(exampleB("DOCS5"), 1_200_000, 3, 85);
+        disburse(loan, today);
+        String receipted =
+                repaid(loan, 300_000, today).get("transaction").get("id").asString();
+        String unreceipted =
+                repaid(loan, 200_000, today).get("transaction").get("id").asString();
+        JsonNode issued = issue(loan, receipted).getBody();
+        assertThat(issued.get("reversed").asBoolean()).isFalse();
+        byte[] before = stored(issued.get("document_id").asString());
+
+        decide(requestReversal(loan, unreceipted), manager, managerPerms);
+        decide(requestReversal(loan, receipted), manager, managerPerms);
+
+        ResponseEntity<JsonNode> refused = issue(loan, unreceipted);
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("transaction_reversed");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM documents WHERE tenant_id = ? AND doc_type = 'receipt'")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .as("no receipt was stored for the reversed payment")
+                .isEqualTo(1);
+
+        JsonNode again = issue(loan, receipted).getBody();
+        assertThat(again.get("document_id").asString())
+                .isEqualTo(issued.get("document_id").asString());
+        assertThat(again.get("created").asBoolean()).isFalse();
+        assertThat(again.get("reversed").asBoolean()).isTrue();
+        assertThat(again.get("reversed_on").asString()).isEqualTo(today.toString());
+        assertThat(stored(again.get("document_id").asString()))
+                .as("the stored receipt is immutable")
+                .isEqualTo(before);
+
+        JsonNode list = send(
+                        HttpMethod.GET, LOANS + "/" + loan + "/documents", as(cashier, cashierPerms, "*", null), null)
+                .getBody()
+                .get("items");
+        assertThat(list).hasSize(1);
+        assertThat(list.get(0).get("doc_number").asString())
+                .isEqualTo(issued.get("doc_number").asString());
+        assertThat(list.get(0).get("reversed").asBoolean()).isTrue();
+    }
+
+    /**
+     * The review's statement finding: a running balance, interest and fee charges, the net paid out at
+     * disbursement, a reversal that re-allocates a later payment, a write-off and a recovery; the lines
+     * add up to the closing balance, which is what the loan's own record says is outstanding.
+     */
+    @Test
+    void frDoc01_theStatementReconcilesToTheLoansOutstanding() throws Exception {
+        namedStaff();
+        String product = product(
+                "RECON",
+                Map.of(),
+                List.of(
+                        fee("deducted_at_disbursement", null, 200),
+                        fee("added_to_loan", 30_000L, null),
+                        fee("paid_upfront", 10_000L, null)));
+        String loan = approved(product, 1_200_000, 3, 86);
+        disburse(loan, today.minusDays(5));
+        String first = repaid(loan, 300_000, today).get("transaction").get("id").asString();
+        repaid(loan, 200_000, today);
+        decide(requestReversal(loan, first), manager, managerPerms);
+        repaid(loan, 150_000, today);
+
+        // 1,200,000 + 360,000 interest + 30,000 fee added, less 200,000 and 150,000 paid; the first payment was
+        // reversed.
+        long outstanding =
+                loan(loan).get("balances").get("total_outstanding_minor").asLong();
+        assertThat(outstanding).isEqualTo(1_240_000);
+        byte[] open = render(loan, "loan_statement").getBody();
+        assertReconciles(open, outstanding);
+        String text = pageText(open, 1);
+        assertThat(text)
+                .contains("Disbursement (gross) 1,200,000")
+                .contains("Less Test fee deducted_at_disbursement deducted from the proceeds: 24,000")
+                .contains("Net paid to the member: 1,176,000")
+                .contains("Interest charged (schedule) 360,000")
+                .contains("Fees added (schedule) 30,000")
+                .contains("Fee paid before disbursement: 10,000")
+                .contains("Reversal of RC-HQ-000002 300,000");
+        golden("loan_statement_reconciled", open);
+
+        // Write-off, then a recovery: the account closes at nothing and the recovery is a note.
+        ResponseEntity<JsonNode> w = send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/write-off",
+                withKey(as(accountant, accountantPerms, "*", null), key()),
+                Map.of("reason", "Test borrower unreachable"));
+        assertThat(decide(w.getBody().get("approval_request_id").asString(), admin, adminPerms)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        repaid(loan, 50_000, today);
+        byte[] closed = render(loan, "loan_statement").getBody();
+        assertThat(loan(loan).get("balances").get("total_outstanding_minor").asLong())
+                .isZero();
+        assertReconciles(closed, 0);
+        sample("loan_statement_written_off", closed);
+        assertThat(pageText(closed, pages(closed)))
+                .contains("Written off")
+                .contains("Recovery received after the write-off: 50,000");
+    }
+
+    /**
+     * ADR-034 item 6: a long table repeats its header on every page and the footer carries real page
+     * numbers. Seventy payments make a statement of several pages.
+     */
+    @Test
+    void frDoc01_aLongStatementRepeatsItsHeaderAndNumbersItsPages() throws Exception {
+        namedStaff();
+        String loan = approved(exampleB("DOCS6"), 1_200_000, 3, 87);
+        disburse(loan, today.minusDays(3));
+        for (int i = 0; i < 70; i++) {
+            repaid(loan, 1_000, today);
+        }
+        byte[] pdf = render(loan, "loan_statement").getBody();
+        sample("loan_statement_long", pdf);
+        int pages = pages(pdf);
+        assertThat(pages).as("a long statement runs onto more pages").isGreaterThanOrEqualTo(2);
+        for (int p = 1; p <= pages; p++) {
+            String text = pageText(pdf, p);
+            assertThat(text)
+                    .as("page %d repeats the table header", p)
+                    .contains("Date Number Description Charged Credited Balance");
+            assertThat(text).as("page %d footer", p).contains("page " + p + " of " + pages);
+        }
+        assertReconciles(
+                pdf, loan(loan).get("balances").get("total_outstanding_minor").asLong());
+        // No letterhead is lost or cut off on later pages: the business name is on each.
+        for (int p = 1; p <= pages; p++) {
+            assertThat(pageText(pdf, p)).contains("Test Lending Ltd");
+        }
+    }
+
+    /**
+     * The review's lock finding, and the question of a unique constraint: the loan's row lock, taken only
+     * to record after looking again, is enough. Concurrent first requests all render, one records, and
+     * every caller gets the same stored document.
+     */
+    @Test
+    void frDoc02_concurrentFirstRequestsStoreOneReceipt() throws Exception {
+        namedStaff();
+        String loan = approved(exampleB("DOCS7"), 1_200_000, 3, 88);
+        disburse(loan, today);
+        String txn = repaid(loan, 300_000, today).get("transaction").get("id").asString();
+        int callers = 4;
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(callers);
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        List<java.util.concurrent.Future<ResponseEntity<JsonNode>>> calls = new ArrayList<>();
+        for (int i = 0; i < callers; i++) {
+            calls.add(pool.submit(() -> {
+                go.await();
+                return issue(loan, txn);
+            }));
+        }
+        go.countDown();
+        List<ResponseEntity<JsonNode>> results = new ArrayList<>();
+        for (java.util.concurrent.Future<ResponseEntity<JsonNode>> f : calls) {
+            results.add(f.get(60, java.util.concurrent.TimeUnit.SECONDS));
+        }
+        pool.shutdown();
+        assertThat(results)
+                .allSatisfy(
+                        r -> assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK));
+        assertThat(results.stream()
+                        .map(r -> r.getBody().get("document_id").asString())
+                        .distinct())
+                .as("everyone gets the same document")
+                .hasSize(1);
+        assertThat(results.stream()
+                        .filter(r -> r.getBody().get("created").asBoolean())
+                        .count())
+                .as("exactly one request stored it")
+                .isEqualTo(1);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM documents WHERE tenant_id = ? AND doc_type = 'receipt'")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+    }
+
+    /**
+     * The fees a voucher shows as deducted are the ones the disbursement posted to the ledger, not what
+     * the product says now: with the product's fee changed to 100 percent afterwards (arranged directly,
+     * since versions are never edited through the API) the voucher still shows 24,000 off and 1,176,000
+     * paid, and does not fail in the amount in words.
+     */
+    @Test
+    void frDoc01_aVouchersDeductedFeesAreTheOnesTheLedgerPosted() throws Exception {
+        namedStaff();
+        String product = product("DOCS8", Map.of(), List.of(fee("deducted_at_disbursement", null, 200)));
+        String loan = approved(product, 1_200_000, 3, 89);
+        disburse(loan, today);
+        String disbursement = null;
+        for (JsonNode t : get(loan, "/transactions").get("items")) {
+            if (t.get("txn_type").asString().equals("disbursement")) {
+                disbursement = t.get("id").asString();
+            }
+        }
+        TestDatabase.owner()
+                .sql("UPDATE lending_loan_product_fees SET rate_bp = 10000 WHERE tenant_id = ?"
+                        + " AND timing = 'deducted_at_disbursement'")
+                .param(t.tenantId())
+                .update();
+        ResponseEntity<JsonNode> r = issue(loan, disbursement);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+        String text =
+                pageText(stored(r.getBody().get("document_id").asString()), 1).replaceAll("\\s+", " ");
+        assertThat(text).contains("Fees (deducted) -24,000").contains("Net paid to the member 1,176,000");
+    }
+
+    // ---- Documents, second review (ADR-034) -----------------------------------------------
+
+    static void assertNoStore(ResponseEntity<?> r) {
+        assertThat(r.getHeaders().getCacheControl()).as("Cache-Control").isEqualTo("no-store");
+        assertThat(r.getHeaders().getFirst(HttpHeaders.PRAGMA)).as("Pragma").isEqualTo("no-cache");
+    }
+
+    /** A signed link and a member's financial document are never kept by a browser or a proxy. */
+    @Test
+    void frDoc03_everyDocumentResponseIsNoStore() {
+        namedStaff();
+        String loan = approved(exampleB("DOCS9"), 1_200_000, 3, 90);
+        disburse(loan, today);
+        String txn = repaid(loan, 300_000, today).get("transaction").get("id").asString();
+        ResponseEntity<JsonNode> issued = issue(loan, txn);
+        assertNoStore(issued);
+        HttpHeaders staff = as(cashier, cashierPerms, "*", null);
+        assertNoStore(send(HttpMethod.GET, LOANS + "/" + loan + "/documents", staff, null));
+        assertNoStore(render(loan, "loan_statement"));
+        assertNoStore(render(loan, "schedule"));
+        String id = issued.getBody().get("document_id").asString();
+        assertNoStore(send(HttpMethod.GET, "/api/v1/documents/" + id, staff, null));
+        assertNoStore(send(HttpMethod.POST, "/api/v1/documents/" + id + "/download-url", staff, null));
+    }
+
+    /**
+     * Another branch and another tenant see nothing of a loan's documents: 404 on the loan routes (the
+     * loan is out of scope), and on the core document routes 404 across tenants (row level security)
+     * and 403 across branches (the owning module's rule, chapter 7 section 7.11.7).
+     */
+    @Test
+    void frDoc03_otherBranchAndOtherTenantAreRefused() {
+        namedStaff();
+        String loan = approved(exampleB("DOCS10"), 1_200_000, 3, 91);
+        disburse(loan, today);
+        String txn = repaid(loan, 300_000, today).get("transaction").get("id").asString();
+        String id = issue(loan, txn).getBody().get("document_id").asString();
+
+        HttpHeaders otherBranch = as(cashier, cashierPerms, t.secondBranch().toString(), null);
+        assertThat(send(HttpMethod.GET, LOANS + "/" + loan + "/documents", otherBranch, null)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        for (String type : List.of("schedule", "loan_statement")) {
+            assertThat(http.exchange(
+                                    LOANS + "/" + loan + "/documents/" + type,
+                                    HttpMethod.POST,
+                                    new org.springframework.http.HttpEntity<>(otherBranch),
+                                    JsonNode.class)
+                            .getStatusCode())
+                    .as(type)
+                    .isEqualTo(HttpStatus.NOT_FOUND);
+        }
+        assertThat(send(HttpMethod.POST, LOANS + "/" + loan + "/transactions/" + txn + "/document", otherBranch, null)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(send(HttpMethod.GET, "/api/v1/documents/" + id, otherBranch, null)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+
+        TestDatabase.Fixture other = TestDatabase.tenant("other", true);
+        HttpHeaders stranger = new HttpHeaders();
+        stranger.add("X-Tenant", other.slug());
+        stranger.add("X-Dev-User-Id", UUID.randomUUID().toString());
+        stranger.add("X-Dev-Permissions", cashierPerms);
+        stranger.add("X-Dev-Branch-Ids", "*");
+        assertThat(send(HttpMethod.GET, LOANS + "/" + loan + "/documents", stranger, null)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(http.exchange(
+                                LOANS + "/" + loan + "/documents/loan_statement",
+                                HttpMethod.POST,
+                                new org.springframework.http.HttpEntity<>(stranger),
+                                JsonNode.class)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(send(HttpMethod.GET, "/api/v1/documents/" + id, stranger, null)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    /** Characters that break markup, control characters and scripts the font lacks never break or blank a document. */
+    @Test
+    void frDoc03_awkwardTextIsPrintedAsTypedOrAsAQuestionMark() throws Exception {
+        namedStaff();
+        String awkward = "Tom & Jerry <Ltd> \"Keep\" it safe";
+        String settingsPerms = "core.settings.read,core.settings.manage";
+        int version = send(HttpMethod.GET, "/api/v1/settings", as(admin, settingsPerms, "*", null), null)
+                .getBody()
+                .get("version")
+                .asInt();
+        assertThat(send(
+                                HttpMethod.PATCH,
+                                "/api/v1/settings",
+                                as(admin, settingsPerms, "*", "\"" + version + "\""),
+                                Map.of("receipt_footer", awkward))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        TestDatabase.owner()
+                .sql("UPDATE branches SET name = 'Zoë & <Main> Branch' WHERE id = ?")
+                .param(t.headOffice())
+                .update();
+        String loan = approved(exampleB("DOCS12"), 1_200_000, 3, 93);
+        TestDatabase.owner()
+                .sql("UPDATE lending_members SET full_name = ? WHERE tenant_id = ?")
+                .params("Amélie Ωμέγα Привет & <b>Bold</b> \u0001\u0007 日本語 العربية", t.tenantId())
+                .update();
+        disburse(loan, today);
+        String txn = repaid(loan, 300_000, today).get("transaction").get("id").asString();
+        byte[] receipt = stored(issue(loan, txn).getBody().get("document_id").asString());
+        String text = pageText(receipt, 1).replaceAll("\\s+", " ");
+        assertThat(text).contains(awkward).contains("Zoë & <Main> Branch");
+        assertThat(text)
+                .contains("Amélie Ωμέγα Привет & <b>Bold</b>")
+                .doesNotContain("\u0001")
+                .doesNotContain("日")
+                .contains("???");
+        byte[] statement = render(loan, "loan_statement").getBody();
+        assertThat(pageText(statement, 1)).contains("Amélie Ωμέγα Привет & <b>Bold</b>");
+    }
+
+    /** When the checker's user record is gone the voucher says so, not "no checker needed". */
+    @Test
+    void frDoc01_aVoucherNamesAFormerUserAsTheApprover() throws Exception {
+        namedStaff();
+        String product = product("DOCS13", Map.of(), List.of(fee("deducted_at_disbursement", null, 200)));
+        String loan = approved(product, 1_200_000, 3, 94);
+        disburse(loan, today);
+        String disbursement = null;
+        for (JsonNode t : get(loan, "/transactions").get("items")) {
+            if (t.get("txn_type").asString().equals("disbursement")) {
+                disbursement = t.get("id").asString();
+            }
+        }
+        TestDatabase.owner()
+                .sql("DELETE FROM users WHERE id = ?")
+                .param(manager)
+                .update();
+        String text = pageText(
+                        stored(issue(loan, disbursement)
+                                .getBody()
+                                .get("document_id")
+                                .asString()),
+                        1)
+                .replaceAll("\\s+", " ");
+        assertThat(text).contains("Approved by a former user").doesNotContain("no checker needed");
+    }
 }

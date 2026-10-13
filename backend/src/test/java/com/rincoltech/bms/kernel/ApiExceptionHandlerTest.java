@@ -30,6 +30,18 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
+    void aBusyOrRateLimitedAnswerSaysWhenToComeBack() {
+        for (HttpStatus status : new HttpStatus[] {HttpStatus.SERVICE_UNAVAILABLE, HttpStatus.TOO_MANY_REQUESTS}) {
+            ResponseEntity<ProblemDetail> response =
+                    handler.handleApi(new ApiException(status, "busy", "Busy", "Later."));
+            assertThat(response.getStatusCode()).isEqualTo(status);
+            assertThat(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("2");
+        }
+        assertThat(handler.handleApi(ApiException.notFound()).getHeaders().getFirst(HttpHeaders.RETRY_AFTER))
+                .isNull();
+    }
+
+    @Test
     void anyOtherFailureStaysAnInternalError() {
         ResponseEntity<ProblemDetail> response =
                 handler.handleUnexpected(new IllegalStateException("x", new SQLException("boom", "XX000")));

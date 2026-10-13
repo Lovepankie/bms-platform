@@ -1,6 +1,8 @@
 package com.rincoltech.bms.core.documents;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -54,6 +56,47 @@ public interface Documents {
     record Prepared(byte[] bytes, String contentType, String extension, String sha256) {}
 
     Optional<StoredDocument> find(UUID documentId);
+
+    /**
+     * ADR-034: renders {@code templates/documents/<template>.html} (Thymeleaf, XML mode, every value
+     * escaped) to an A4 PDF with the embedded Open Sans. No transaction and no storage: the caller
+     * stores it with {@link #putGenerated} and {@link #recordGenerated}, or streams it. Only
+     * {@code data:} URIs are ever loaded, so a template value can never make the renderer read a file
+     * or fetch a URL.
+     */
+    byte[] renderPdf(String template, Map<String, Object> model);
+
+    /**
+     * First half of storing a generated PDF: writes the bytes to object storage under a fresh key.
+     * No transaction and no database, so a caller can keep its row lock for {@link #recordGenerated}
+     * alone and never hold it across a render or an upload. The object is unreferenced until recorded;
+     * give it up with {@link #discardGenerated} when the record is not written.
+     */
+    GeneratedObject putGenerated(byte[] pdf, String docType);
+
+    /**
+     * Second half: records the object as {@code docType} with its {@code docNumber} (FR-DOC-02), in
+     * the caller's transaction, which serialises concurrent issues of the same document (for example
+     * under its subject's row lock) and has looked for it with {@link #findGenerated} first. A
+     * rollback removes the object again.
+     */
+    StoredDocument recordGenerated(
+            GeneratedObject object, String docNumber, String subjectType, UUID subjectId, UUID branchId);
+
+    /** Removes an object that {@link #putGenerated} wrote and nothing recorded. Never throws. */
+    void discardGenerated(GeneratedObject object);
+
+    /** An uploaded generated PDF waiting to be recorded. */
+    record GeneratedObject(UUID id, String key, String docType, String sha256, int sizeBytes) {}
+
+    /** Every generated document of the subject in one query, newest first. */
+    List<GeneratedDocument> listGenerated(String subjectType, UUID subjectId);
+
+    /** A stored generated document with the number it was issued under. */
+    record GeneratedDocument(StoredDocument document, String docNumber) {}
+
+    /** The generated document of this type and number for the subject, if one was stored. */
+    Optional<StoredDocument> findGenerated(String subjectType, UUID subjectId, String docType, String docNumber);
 
     /** @param subjectType the owning module's key, for example {@code lending.member} */
     record Upload(String subjectType, UUID subjectId, UUID branchId, byte[] bytes) {}

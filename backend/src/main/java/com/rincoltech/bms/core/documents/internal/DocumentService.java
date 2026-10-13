@@ -46,6 +46,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -131,13 +132,17 @@ class DocumentService implements Documents {
     /** Writes a denial's audit row in its own transaction, so it survives the refused request. */
     private final TransactionTemplate ownTransaction;
 
+    private final PdfRenderer pdf;
+
     DocumentService(
             JdbcClient jdbc,
             ObjectStorage storage,
             List<DocumentAccess> access,
             AuditLog audit,
             BusinessClock clock,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            PdfRenderer pdf) {
+        this.pdf = pdf;
         this.ownTransaction = new TransactionTemplate(transactionManager);
         this.ownTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.jdbc = jdbc;
@@ -271,6 +276,84 @@ class DocumentService implements Documents {
     public Optional<StoredDocument> find(UUID documentId) {
         return jdbc.sql("SELECT " + COLUMNS + " FROM documents WHERE id = ?")
                 .param(documentId)
+                .query(DocumentService::map)
+                .optional();
+    }
+
+    @Override
+    public byte[] renderPdf(String template, Map<String, Object> model) {
+        return pdf.render(template, model);
+    }
+
+    @Override
+    public GeneratedObject putGenerated(byte[] bytes, String docType) {
+        UUID id = UUID.randomUUID();
+        ZonedDateTime at = clock.now().atZone(ZoneOffset.UTC);
+        String key = "tenants/%s/%s/%04d/%02d/%s.pdf"
+                .formatted(TenantContext.require(), docType, at.getYear(), at.getMonthValue(), id);
+        storage.put(key, bytes, "application/pdf");
+        return new GeneratedObject(id, key, docType, sha256(bytes), bytes.length);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public StoredDocument recordGenerated(
+            GeneratedObject object, String docNumber, String subjectType, UUID subjectId, UUID branchId) {
+        deleteIfRolledBack(object.key());
+        jdbc.sql("""
+                        INSERT INTO documents (id, tenant_id, branch_id, doc_type, doc_number, subject_type, subject_id,
+                                               object_key, content_type, size_bytes, sha256, created_by)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, 'application/pdf', ?, ?, ?)
+                        """)
+                .params(
+                        object.id(),
+                        branchId,
+                        object.docType(),
+                        docNumber,
+                        subjectType,
+                        subjectId,
+                        object.key(),
+                        object.sizeBytes(),
+                        object.sha256(),
+                        CurrentPrincipal.require().userId())
+                .update();
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("doc_type", object.docType());
+        after.put("doc_number", docNumber);
+        after.put("subject_type", subjectType);
+        after.put("subject_id", subjectId);
+        after.put("size_bytes", object.sizeBytes());
+        after.put("sha256", object.sha256());
+        audit.record(AuditLog.Entry.created("core.document.generated", "core.document", object.id(), branchId, after));
+        return find(object.id()).orElseThrow();
+    }
+
+    @Override
+    public void discardGenerated(GeneratedObject object) {
+        try {
+            storage.delete(object.key());
+        } catch (RuntimeException e) {
+            log.warn("could not delete the unused generated object {}", object.key(), e);
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GeneratedDocument> listGenerated(String subjectType, UUID subjectId) {
+        return jdbc.sql("SELECT " + COLUMNS + ", doc_number FROM documents WHERE subject_type = ? AND subject_id = ?"
+                        + " AND doc_number IS NOT NULL ORDER BY created_at DESC, id")
+                .params(subjectType, subjectId)
+                .query((rs, n) -> new GeneratedDocument(map(rs, n), rs.getString("doc_number")))
+                .list();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<StoredDocument> findGenerated(
+            String subjectType, UUID subjectId, String docType, String docNumber) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM documents WHERE subject_type = ? AND subject_id = ?"
+                        + " AND doc_type = ? AND doc_number = ? ORDER BY created_at LIMIT 1")
+                .params(subjectType, subjectId, docType, docNumber)
                 .query(DocumentService::map)
                 .optional();
     }

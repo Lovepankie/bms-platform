@@ -149,6 +149,18 @@
             <artifactId>imageio-webp</artifactId>
             <version>${twelvemonkeys.version}</version>
         </dependency>
+        <!-- Generated PDF documents (ADR-034): XHTML and CSS laid out by OpenHTMLtoPDF on Apache PDFBox
+             (LGPL 2.1 and Apache 2.0, used unmodified as libraries), from Thymeleaf templates that
+             escape every value. -->
+        <dependency>
+            <groupId>io.github.openhtmltopdf</groupId>
+            <artifactId>openhtmltopdf-pdfbox</artifactId>
+            <version>1.1.97</version>
+        </dependency>
+        <dependency>
+            <groupId>org.thymeleaf</groupId>
+            <artifactId>thymeleaf</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

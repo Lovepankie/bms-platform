@@ -1,0 +1,25 @@
+Test Lending Ltd
+Head Office
+Plot 1, Test Road, Kampala
+VC-HQ-000001
+{DATE}
+Test Lending Ltd, Plot 1 Test Road. Keep this document safe. VC-HQ-000001, page 1 of 1
+VOUCHER
+Paid to Test Borrower 81 (M000001)
+Loan LN000001, DOCS
+Disbursement date {DATE}
+Payment method Cash
+Reference TEST-DISB-01
+Terms 3 months, flat interest at 10.00% per month, monthly instalments
+Disbursement
+Item Amount (UGX)
+Principal approved 1,200,000
+Test fee deducted_at_disbursement (deducted) -24,000
+Net paid to the member 1,176,000
+One million, one hundred and seventy-six thousand Uganda shillings only
+Prepared by Test Cashier
+{DATE}
+Approved by Test Manager
+{DATE}
+Received by Test Borrower 81
+Signature and date

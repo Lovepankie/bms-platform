@@ -1,0 +1,46 @@
+<!-- FR-DOC-01 loan statement as at the business date: the loan account from disbursement to now with a running balance, a closing balance that equals the loan's outstanding, and the position now. -->
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head}"></head>
+<body>
+  <div th:replace="~{layout :: letterhead}"></div>
+  <div th:replace="~{layout :: pagefoot}"></div>
+  <h1 th:text="${doc.title}">STATEMENT</h1>
+
+  <table class="facts">
+    <tr><td class="k">Member</td><td th:text="${member.name + ' (' + member.number + ')'}">Member</td></tr>
+    <tr><td class="k">Loan</td><td th:text="${loan.number + ', ' + loan.product}">Loan</td></tr>
+    <tr><td class="k">Terms</td><td th:text="${loan.terms}">Terms</td></tr>
+    <tr><td class="k">Status</td><td th:text="${loan.status}">active</td></tr>
+    <tr><td class="k">As at</td><td th:text="${doc.date}">Date</td></tr>
+  </table>
+
+  <h2 th:text="${'Loan account (' + loan.currency + ')'}">Loan account</h2>
+  <table class="grid">
+    <thead><tr><th style="width: 15%;">Date</th><th style="width: 17%;">Number</th><th>Description</th><th class="num" style="width: 14%;">Charged</th><th class="num" style="width: 14%;">Credited</th><th class="num" style="width: 14%;">Balance</th></tr></thead>
+    <tbody>
+      <tr th:each="t : ${txns}" th:class="${t.note} ? 'note' : null">
+        <td th:text="${t.date}">date</td><td th:text="${t.number}">RC</td>
+        <td th:if="${t.note}" colspan="4" class="muted" th:text="${t.description}">note</td>
+        <th:block th:unless="${t.note}">
+          <td th:text="${t.description}">Repayment</td><td class="num" th:text="${t.charged}">-</td><td class="num" th:text="${t.credited}">-</td><td class="num" th:text="${t.balance}">0</td>
+        </th:block>
+      </tr>
+    </tbody>
+    <tbody>
+      <tr class="total"><td colspan="3">Totals</td><td class="num" th:text="${totals.charged}">0</td><td class="num" th:text="${totals.credited}">0</td><td></td></tr>
+      <tr class="total"><td colspan="5">Closing balance</td><td class="num" th:text="${totals.closing}">0</td></tr>
+    </tbody>
+  </table>
+  <div class="words" th:text="${totals.closingWords}">words</div>
+
+  <h2 th:text="${'Position (' + loan.currency + ')'}">Position</h2>
+  <table class="facts">
+    <tr><td class="k">Principal outstanding</td><td th:text="${position.principal}">0</td></tr>
+    <tr><td class="k">Interest outstanding</td><td th:text="${position.interest}">0</td></tr>
+    <tr><td class="k">Fees outstanding</td><td th:text="${position.fees}">0</td></tr>
+    <tr th:if="${position.penalties != null}"><td class="k">Penalties outstanding</td><td th:text="${position.penalties}">0</td></tr>
+    <tr th:if="${position.credit != null}"><td class="k">Credit held for the member</td><td th:text="${position.credit}">0</td></tr>
+    <tr><td class="k">Days past due</td><td th:text="${position.dpd}">0</td></tr>
+  </table>
+</body>
+</html>

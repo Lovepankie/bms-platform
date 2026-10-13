@@ -1,0 +1,25 @@
+Test Lending Ltd
+Head Office
+Plot 1, Test Road, Kampala
+RC-HQ-000001
+{DATE}
+Test Lending Ltd, Plot 1 Test Road. Keep this document safe. RC-HQ-000001, page 1 of 1
+RECEIPT
+Received from Test Borrower 81 (M000001)
+Loan LN000001, DOCS
+Value date {DATE}
+Payment method Cash
+Reference TEST-REF
+Amount received (UGX)
+300,000
+Three hundred thousand Uganda shillings only
+Applied to
+Instalment Due date Component Amount (UGX)
+1 {DATE} Interest 120,000
+1 {DATE} Principal 180,000
+Total 300,000
+Loan after this payment
+Outstanding 1,260,000 UGX
+Next due date {DATE}
+Received by Test Cashier
+{DATE}

@@ -154,7 +154,8 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.loans       -> bms.api.approvals "Raises disbursement, reversal, waiver and write-off requests"
         bms.api.loans       -> bms.api.ledger "Posts disbursement, repayment and write-off journals in the same transaction"
         bms.api.loans       -> bms.api.notifications "Queues SMS through the outbox"
-        bms.api.loans       -> bms.api.documents "Queues receipts, vouchers and schedules"
+        bms.api.loans       -> bms.api.documents "Renders receipts, vouchers, schedules and statements as PDF, synchronously on request (ADR-034): a receipt or voucher is stored once, a schedule or statement never; no render or upload runs under the loan's row lock"
+        bms.api.loans       -> bms.api.tenancy "Reads the tenant's letterhead (name, logo, brand colour, receipt footer) for generated documents"
         bms.api.loans       -> bms.api.audit "Writes audit rows"
         bms.api.loans       -> bms.db "Reads and writes loans, schedule items, transactions and allocations"
         bms.api.approvals   -> bms.api.loans "Executes approved loan_disbursement, repayment_reversal and loan_write_off through the action registry (ADR-015, ADR-026)"
@@ -406,8 +407,9 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
             cashier -> bms.web "Records a partial repayment"
             bms.web -> bms.api.loans "POST /lending/loans/{id}/repayments with Idempotency-Key"
             bms.api.loans -> bms.api.ledger "Posts the repayment journal, split by allocation"
-            bms.api.loans -> bms.api.documents "Queues the receipt PDF"
-            bms.api.jobs -> bms.storage "Stores the receipt PDF"
+            bms.web -> bms.api.loans "POST /lending/loans/{id}/transactions/{txn}/document when the receipt is first opened"
+            bms.api.loans -> bms.api.documents "Renders the receipt PDF in the request, from the payment's own allocation rows (ADR-034)"
+            bms.api.documents -> bms.storage "Stores the receipt PDF once"
             bms.api.jobs -> smsAggregator "Sends the receipt SMS"
             autoLayout lr
         }

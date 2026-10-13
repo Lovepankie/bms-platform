@@ -3,6 +3,7 @@ package com.rincoltech.bms.core.tenancy.internal;
 import com.rincoltech.bms.core.documents.Documents;
 import com.rincoltech.bms.core.documents.Documents.AssetMeta;
 import com.rincoltech.bms.core.documents.Documents.ImagePolicy;
+import com.rincoltech.bms.core.tenancy.Letterheads;
 import com.rincoltech.bms.core.tenancy.TenantModules;
 import com.rincoltech.bms.core.tenancy.internal.SettingsController.SettingsResponse;
 import com.rincoltech.bms.kernel.ApiException;
@@ -25,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
  * it is the one the request host resolved.
  */
 @Service
-class BrandingService {
+class BrandingService implements Letterheads {
 
     private static final Logger log = LoggerFactory.getLogger(BrandingService.class);
 
@@ -79,6 +80,34 @@ class BrandingService {
                 text.orElse(null),
                 s.logoDocumentId() == null ? null : "/api/v1/branding/logo?v=" + s.logoDocumentId(),
                 modules.enabledKeys());
+    }
+
+    /** The platform's own colour (the PWA's default {@code --brand}), for a tenant without a readable one. */
+    static final String DEFAULT_BRAND = "#0D5C75";
+
+    @Override
+    @Transactional(readOnly = true)
+    public Letterhead current() {
+        SettingsResponse s = settings.current();
+        String colour = s.themePrimary() != null
+                        && BrandColour.readableText(s.themePrimary()).isPresent()
+                ? s.themePrimary().toUpperCase()
+                : DEFAULT_BRAND;
+        Optional<Letterheads.Logo> logo;
+        try {
+            logo = logo().flatMap(
+                            l -> bytes(l).map(b -> new Letterheads.Logo(l.meta().contentType(), b)));
+        } catch (ApiException e) {
+            // A document without its logo is better than no document; the header keeps the name.
+            log.warn("the tenant logo is unavailable for a generated document: {}", e.code());
+            logo = Optional.empty();
+        }
+        return new Letterhead(
+                s.displayName(),
+                colour,
+                BrandColour.readableText(colour).orElse(BrandColour.LIGHT_TEXT),
+                s.receiptFooter() == null ? "" : s.receiptFooter(),
+                logo);
     }
 
     /** The current logo's id and checksum, from the database only: a conditional request reads no storage. */

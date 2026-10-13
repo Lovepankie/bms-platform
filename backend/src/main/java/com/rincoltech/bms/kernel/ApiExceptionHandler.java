@@ -28,7 +28,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ProblemDetail> handleApi(ApiException e) {
-        return ResponseEntity.status(e.status()).body(Problems.of(e));
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(e.status());
+        if (e.status() == HttpStatus.SERVICE_UNAVAILABLE || e.status() == HttpStatus.TOO_MANY_REQUESTS) {
+            response.header(HttpHeaders.RETRY_AFTER, "2");
+        }
+        return response.body(Problems.of(e));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)

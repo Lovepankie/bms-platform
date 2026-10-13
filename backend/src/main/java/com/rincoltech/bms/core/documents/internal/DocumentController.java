@@ -3,8 +3,10 @@ package com.rincoltech.bms.core.documents.internal;
 import com.rincoltech.bms.core.documents.Documents.StoredDocument;
 import com.rincoltech.bms.core.documents.internal.DocumentService.DownloadUrl;
 import com.rincoltech.bms.kernel.AuthenticatedEndpoint;
+import com.rincoltech.bms.kernel.NoStore;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,14 +34,16 @@ class DocumentController {
     @GetMapping("/{document_id}")
     @AuthenticatedEndpoint(kind = "staff")
     @Operation(summary = "Document metadata (permission on the subject)", operationId = "getDocument")
-    StoredDocument get(@PathVariable("document_id") UUID documentId) {
+    StoredDocument get(@PathVariable("document_id") UUID documentId, HttpServletResponse response) {
+        NoStore.apply(response);
         return service.metadata(documentId);
     }
 
     @PostMapping("/{document_id}/download-url")
     @AuthenticatedEndpoint(kind = "staff")
     @Operation(summary = "A 5 minute signed download URL (FR-DOC-03)", operationId = "createDocumentDownloadUrl")
-    DownloadUrl downloadUrl(@PathVariable("document_id") UUID documentId) {
+    DownloadUrl downloadUrl(@PathVariable("document_id") UUID documentId, HttpServletResponse response) {
+        NoStore.apply(response);
         return service.downloadUrl(documentId);
     }
 }

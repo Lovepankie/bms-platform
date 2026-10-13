@@ -1,0 +1,55 @@
+<!-- FR-DOC-01 repayment receipt: one page, amount in figures and words, the allocation, the loan after it, room for a verification code. -->
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head}"></head>
+<body>
+  <div th:replace="~{layout :: letterhead}"></div>
+  <div th:replace="~{layout :: pagefoot}"></div>
+  <h1 th:text="${doc.title}">RECEIPT</h1>
+
+  <table class="facts">
+    <tr>
+      <td style="width: 70%;">
+        <table class="facts">
+          <tr><td class="k">Received from</td><td th:text="${member.name + ' (' + member.number + ')'}">Member</td></tr>
+          <tr><td class="k">Loan</td><td th:text="${loan.number + ', ' + loan.product}">Loan</td></tr>
+          <tr><td class="k">Value date</td><td th:text="${txn.valueDate}">Date</td></tr>
+          <tr><td class="k">Payment method</td><td th:text="${txn.method}">Cash</td></tr>
+          <tr th:if="${txn.reference != null}"><td class="k">Reference</td><td th:text="${txn.reference}">Ref</td></tr>
+        </table>
+      </td>
+      <td style="text-align: right;"><div class="verify"></div></td>
+    </tr>
+  </table>
+
+  <div class="box">
+    <div class="muted" th:text="${'Amount received (' + txn.currency + ')'}">Amount received</div>
+    <div class="amount" th:text="${txn.amount}">600,000</div>
+    <div class="words" th:text="${txn.words}">Six hundred thousand Uganda shillings only</div>
+  </div>
+
+  <h2 th:if="${!allocations.isEmpty()}">Applied to</h2>
+  <table class="grid" th:if="${!allocations.isEmpty()}">
+    <thead><tr><th>Instalment</th><th>Due date</th><th>Component</th><th class="num" th:text="${'Amount (' + txn.currency + ')'}">Amount</th></tr></thead>
+    <tbody>
+      <tr th:each="a : ${allocations}">
+        <td th:text="${a.item}">1</td><td th:text="${a.dueDate}">16 Apr 2026</td><td th:text="${a.component}">Interest</td><td class="num" th:text="${a.amount}">100,000</td>
+      </tr>
+    </tbody>
+    <tbody><tr class="total"><td colspan="3">Total</td><td class="num" th:text="${txn.amount}">600,000</td></tr></tbody>
+  </table>
+
+  <h2>Loan after this payment</h2>
+  <table class="facts">
+    <tr><td class="k">Outstanding</td><td th:text="${after.outstanding}">0</td></tr>
+    <tr th:if="${after.credit != null}"><td class="k">Credit held for the member</td><td th:text="${after.credit}">50,000</td></tr>
+    <tr><td class="k">Next due date</td><td th:text="${after.nextDue}">None</td></tr>
+  </table>
+
+  <table class="signs">
+    <tr>
+      <td><div class="signline"><span th:text="${'Received by ' + txn.recordedBy}">Received by</span><br/><span class="muted" th:text="${txn.recordedOn}">16 Mar 2026</span></div></td>
+      <td></td><td></td>
+    </tr>
+  </table>
+</body>
+</html>

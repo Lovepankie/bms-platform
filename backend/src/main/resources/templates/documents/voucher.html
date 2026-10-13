@@ -1,0 +1,39 @@
+<!-- FR-DOC-01 disbursement voucher: principal, fees, the net paid out in figures and words, and the prepared, approved and received signature blocks. -->
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head}"></head>
+<body>
+  <div th:replace="~{layout :: letterhead}"></div>
+  <div th:replace="~{layout :: pagefoot}"></div>
+  <h1 th:text="${doc.title}">VOUCHER</h1>
+
+  <table class="facts">
+    <tr><td class="k">Paid to</td><td th:text="${member.name + ' (' + member.number + ')'}">Member</td></tr>
+    <tr><td class="k">Loan</td><td th:text="${loan.number + ', ' + loan.product}">Loan</td></tr>
+    <tr><td class="k">Disbursement date</td><td th:text="${txn.valueDate}">Date</td></tr>
+    <tr><td class="k">Payment method</td><td th:text="${txn.method}">Cash</td></tr>
+    <tr th:if="${txn.reference != null}"><td class="k">Reference</td><td th:text="${txn.reference}">Ref</td></tr>
+    <tr><td class="k">Terms</td><td th:text="${loan.terms}">Terms</td></tr>
+  </table>
+
+  <h2>Disbursement</h2>
+  <table class="grid">
+    <thead><tr><th>Item</th><th class="num" th:text="${'Amount (' + txn.currency + ')'}">Amount</th></tr></thead>
+    <tbody>
+      <tr><td>Principal approved</td><td class="num" th:text="${voucher.principal}">1,200,000</td></tr>
+      <tr th:each="f : ${voucher.deductions}"><td th:text="${f.name}">Fee</td><td class="num" th:text="${f.amount}">-24,000</td></tr>
+    </tbody>
+    <tbody><tr class="total"><td>Net paid to the member</td><td class="num" th:text="${voucher.net}">1,176,000</td></tr></tbody>
+  </table>
+  <div class="words" th:text="${voucher.netWords}">One million ... only</div>
+  <div class="muted" style="margin-top: 2mm;" th:if="${voucher.upfront != null}" th:text="${'Fees collected before disbursement: ' + voucher.upfront + ' (receipted separately)'}">Upfront</div>
+  <div class="muted" style="margin-top: 1mm;" th:if="${voucher.added != null}" th:text="${'Fees added to the loan and spread over the schedule: ' + voucher.added}">Added</div>
+
+  <table class="signs">
+    <tr>
+      <td><div class="signline"><span th:text="${'Prepared by ' + signs.preparedBy}">Prepared by</span><br/><span class="muted" th:text="${signs.preparedOn}">date</span></div></td>
+      <td><div class="signline"><span th:text="${'Approved by ' + signs.approvedBy}">Approved by</span><br/><span class="muted" th:text="${signs.approvedOn}">date</span></div></td>
+      <td class="last"><div class="signline"><span th:text="${'Received by ' + member.name}">Received by</span><br/><span class="muted">Signature and date</span></div></td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -1,0 +1,26 @@
+Test Lending Ltd
+Head Office
+Plot 1, Test Road, Kampala
+ST-HQ-LN000001-{YYYYMMDD}
+{DATE}
+Test Lending Ltd, Plot 1 Test Road. Keep this document safe. ST-HQ-LN000001-{YYYYMMDD}, page 1 of 1
+STATEMENT
+Member Test Borrower 82 (M000001)
+Loan LN000001, DOCS2
+Terms 3 months, flat interest at 10.00% per month, monthly instalments
+Status active
+As at {DATE}
+Loan account (UGX)
+Date Number Description Charged Credited Balance
+{DATE} VC-HQ-000001 Disbursement (gross) 1,200,000 - 1,200,000
+{DATE} Net paid to the member: 1,200,000
+{DATE} Interest charged (schedule) 360,000 - 1,560,000
+{DATE} RC-HQ-000001 Repayment - 300,000 1,260,000
+Totals 1,560,000 300,000
+Closing balance 1,260,000
+One million, two hundred and sixty thousand Uganda shillings only
+Position (UGX)
+Principal outstanding 1,020,000
+Interest outstanding 240,000
+Fees outstanding 0
+Days past due 0

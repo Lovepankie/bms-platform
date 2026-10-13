@@ -41,16 +41,75 @@ Four questions are open:
    - **Receipt and voucher.** These are fixed once the transaction exists. The first download
      renders the document in the request (well under a second for one page), stores it under
      FR-DOC-02 and records it in `documents`. Every later download returns a signed URL to the
-     stored copy. A reversal does not change the stored receipt; the reversal shows on the
-     statement.
+     stored copy. What a receipt shows must therefore be what was true when the payment was
+     recorded and nothing later: what the payment was applied to is the transaction's own
+     allocation rows, and "Loan after this payment" (outstanding, credit held, next due date) is
+     computed from the transactions recorded up to and including that payment (`LoanLedger.after`),
+     never from the loan's balances today, and carries no "as at today" date. A receipt first opened
+     a month later is identical to one opened at once.
+   - **Reversals.** A receipt is never first issued for a transaction that was reversed (422
+     `transaction_reversed`: the repayment no longer stands, and the reversal shows on the
+     statement). A receipt issued before the reversal stays byte for byte as issued, since a
+     stored document is immutable, and the way a client shows it as reversed is the response of
+     `POST /lending/loans/{loan_id}/transactions/{txn_id}/document` and the list
+     `GET /lending/loans/{loan_id}/documents`, which carry `reversed` and `reversed_on`. The core
+     `GET /documents/{id}` and download URL serve the stored copy and know nothing of the loan.
    - **Schedule and statement.** These change with every repayment, so they are rendered on each
      request "as at" the business date and are not stored. Storing them would mean invalidating
-     them on every money event.
+     them on every money event. The statement is the loan account: the disbursement at its gross
+     amount (with the fees deducted from the proceeds and the net paid out as notes), the interest
+     and fees of the schedule as charges, each repayment, rebate, reversal and write-off as a credit
+     or a charge with a running balance, and a closing balance that is the loan's outstanding (a
+     difference the ledger cannot explain shows as an explicit adjustment line, never as a closing
+     balance that disagrees with the loan). Money that does not move the balance (an upfront fee, a
+     recovery after a write-off, credit held from an overpayment) is a note.
+   - **No render under a lock.** A repayment waits on the loan's row lock, so no document work
+     happens while it is held, and none inside a transaction. The data is read in a short read-only
+     transaction; the PDF is rendered and uploaded with no database connection held
+     (`Documents.putGenerated`); the loan's row lock is then taken only to look again, and record
+     (`Documents.recordGenerated`). Two concurrent first requests both render, one records and the
+     other gets that document back and deletes its own upload. That lock is the guarantee of one
+     stored document per transaction, so no unique constraint on `documents` was added (a migration
+     would add nothing the only writer does not already enforce); `frDoc02_concurrentFirstRequests`
+     proves it.
+   - **One snapshot.** A statement is built from several queries (transactions with their allocation
+     rows, schedule items, balances, fees). Everything one document reads runs in one read-only
+     REPEATABLE READ transaction, so a repayment that commits between two of those queries cannot make
+     the lines disagree with the balance (a false "Other adjustments" line).
+     `LoanDocumentsIsolationIT` proves it deterministically: the documents' template sees the same
+     rows at its second query although another connection committed after its first, and a
+     READ COMMITTED control sees the change.
+   - **A cap on concurrent renders.** Each render holds a document in memory, and the smallest host
+     has a heap of about 224 MB, so renders take a slot from a fair semaphore (default two,
+     `bms.documents.max-concurrent-renders`). A request that finds no slot for three seconds
+     (`bms.documents.render-wait-ms`) is answered 503 `documents_busy` with `Retry-After`; the slot is
+     released however the render ends (`PdfRendererTest`). The statement is not paged: its lines are
+     a few hundred rows of short strings, and `StatementMemoryTest` renders a five hundred line
+     statement three times in a child JVM capped at 224 MB.
+   - **Not cached.** Every response that carries a document, a list of them or a signed link is
+     `Cache-Control: no-store` with `Pragma: no-cache`.
+   - **Numbers.** A receipt or voucher has its own gap-free number. A schedule or statement is
+     numbered `SCH-` or `ST-`, the branch code, the loan number and the statement date
+     (`ST-HQ-LN000001-20261013`), so two statements of different days never share a number.
    - **The worker.** The outbox path stays for what is slow or not interactive, such as report
      exports and documents attached to SMS or email. Nothing in the MVP four needs it.
 4. **Golden files compare text, not bytes.** Tests render with a fixed creation date and document
    id. They extract the text with PDFBox and compare it with a checked-in `.txt` golden file per
-   document. A second check asserts the page count and that the logo image is present.
+   document. A second check asserts the page count and that the logo image is present. Every golden
+   file is one page, so a separate test renders a statement of several pages and asserts that the
+   table header repeats on each page and that the footer reads "page x of y" with the real numbers.
+5. **The renderer loads only `data:` URIs.** The logo is passed as a `data:` URI; an access rule on
+   the renderer (checked before any URI is resolved) refuses every other address, so a value in a
+   template can never make it read a file or fetch a URL (`PdfRendererTest`).
+6. **Text is made printable first.** Every string handed to a template has the characters XML cannot
+   hold (control characters) removed, and a character Open Sans has no glyph for is printed as `?`
+   instead of an empty box. Open Sans covers Latin (with its extensions), Greek and Cyrillic, so
+   names such as Amélie, Zoë and Привет print as typed; Chinese, Japanese, Korean, Arabic, Hebrew and
+   emoji do not. A fallback font was not added: a CJK or Arabic face is 5 to 20 MB (the image would
+   grow by more than the whole renderer), and Arabic needs shaping the renderer does not do, so a
+   fallback would still misprint. A tenant whose members use those scripts needs a decision of its own
+   (a font per tenant, or Latin transliteration of names at entry). Markup characters are escaped by
+   the template engine and print as typed.
 
 ## Alternatives considered
 
@@ -90,8 +149,27 @@ request.
    Long tables repeat their header on each page, and a receipt fits on one page.
 7. Leave room in the receipt layout for an optional QR or short verification code later.
 8. Visual check: each template is rendered to PNG by a documented script (or in CI), and a sample
-   sheet is reviewed before merging. Golden text tests alone do not catch an ugly layout.
+   sheet is reviewed before merging. Golden text tests alone do not catch an ugly layout. The script
+   is `make document-samples` (#120): a PDF and a PNG per page for each document, in
+   `backend/target/document-samples`.
 
 **Watch for:** the logo must stay PNG, JPEG or WebP (FR-TEN-08); SVG is never passed to the
-renderer. A template change does not alter receipts already stored; that is intended, and the
-stored copy is the one issued.
+renderer. A deducted fee that equals or exceeds the principal is refused (422 `fees_exceed_principal`)
+instead of failing in the amount in words. The fees a voucher shows as deducted are the credit to
+fee income on the disbursement's own journal entry, not a recomputation from the product.
+
+**Penalties are not dated yet, and this is a known limit.** Nothing writes
+`lending_schedule_items.penalties_due_minor` today (it is zero on every item), so the statement,
+which charges the schedule's penalties on the disbursement date, and the receipt's "loan after this
+payment", which starts from the schedule's amounts, are exact. Increment 6 will accrue penalties
+later. The data model has no dated penalty record, so neither document can place a penalty in time
+yet: a receipt for an earlier payment first opened after a penalty accrued would include it, and the
+statement would show it charged at disbursement. The honest computation (penalties as of the payment
+date) needs each penalty charge recorded with its date, as a loan transaction or a ledger row.
+Increment 6 must add that and make `LoanLedger` read it. So that this cannot ship unnoticed,
+`PenaltyDatingGuardTest` fails as soon as any source file other than the two reads in
+`ServicingRepository` mentions `penalties_due_minor`; whoever adds penalties updates `LoanLedger` and
+then that test.
+
+A template change does not alter receipts already stored; that is intended, and the stored copy is the
+one issued.

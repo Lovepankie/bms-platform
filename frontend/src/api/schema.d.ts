@@ -1173,6 +1173,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/loans/{loan_id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The receipts and vouchers stored for a loan, each marked when its transaction was reversed */
+        get: operations["listLoanDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/documents/{doc_type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The repayment schedule (schedule) or loan statement (loan_statement) as a PDF, as at today */
+        post: operations["renderLoanDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/loans/{loan_id}/guarantors": {
         parameters: {
             query?: never;
@@ -1303,6 +1337,23 @@ export interface paths {
         get: operations["listLoanTransactions"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/transactions/{txn_id}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The receipt or voucher of a loan transaction, stored on first request (FR-DOC-01) */
+        post: operations["issueLoanTransactionDocument"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5262,6 +5313,27 @@ export interface components {
             decision: string;
             /** @description Required on reject */
             note?: string;
+        };
+        LoanDocumentIssued: {
+            /** @description True when this request rendered and stored it */
+            created?: boolean;
+            /** @description The transaction's RC- or VC- number */
+            doc_number?: string;
+            /** @description receipt or voucher */
+            doc_type?: string;
+            /** Format: uuid */
+            document_id?: string;
+            /** @description The transaction was reversed. The stored copy is as issued and unchanged; show the document as reversed */
+            reversed?: boolean;
+            /**
+             * Format: date
+             * @description The value date of the reversal; null when not reversed
+             */
+            reversed_on?: string;
+        };
+        /** @description The receipts and vouchers stored for a loan, newest first */
+        LoanDocumentList: {
+            items?: components["schemas"]["LoanDocumentIssued"][];
         };
         LoanGuarantor: {
             /** Format: int64 */
@@ -11441,6 +11513,78 @@ export interface operations {
             };
         };
     };
+    listLoanDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanDocumentList"];
+                };
+            };
+        };
+    };
+    renderLoanDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+                doc_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description No such loan in the caller's branches, or no such document type */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description The loan is not disbursed yet (invalid_status_transition) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Too many documents are being produced; see Retry-After */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     setLoanGuarantors: {
         parameters: {
             query?: never;
@@ -11635,6 +11779,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LoanTransactionList"];
+                };
+            };
+        };
+    };
+    issueLoanTransactionDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+                txn_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanDocumentIssued"];
                 };
             };
         };
