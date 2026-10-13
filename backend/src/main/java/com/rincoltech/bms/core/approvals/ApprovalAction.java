@@ -42,6 +42,15 @@ public interface ApprovalAction {
     }
 
     /**
+     * A permission the checker needs besides {@link #checkerPermission} for a request with this
+     * payload, in the request's branch: for a payload that carries a riskier outcome. A checker
+     * without it is refused up front and is not offered the decision. Empty by default.
+     */
+    default Optional<String> extraCheckerPermission(Map<String, Object> payload) {
+        return Optional.empty();
+    }
+
+    /**
      * Performs the action with exactly the stored payload, inside the approval transaction. A
      * failure leaves the request pending with the error recorded (FR-APR-06).
      */

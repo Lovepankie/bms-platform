@@ -34,10 +34,16 @@ import org.testcontainers.utility.MountableFile;
  */
 class MigrationOrderIT {
 
-    /** The migrations already merged and deployed: their numbers never change and none is removed. */
+    /**
+     * The migrations already merged and deployed: their numbers never change and none is removed.
+     * Merge order matters because {@code outOfOrder} is off: V41 (the retail price lists, #247, merged)
+     * came before V42 (the loan pledge guard, #176), which must merge before V43 (payment methods,
+     * #160). MERGED lists 42 only because it is queued next; nothing here enforces the order, merge
+     * order does.
+     */
     static final List<String> MERGED = List.of(
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26",
-            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41");
+            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41", "42");
 
     /** Every migration file on the classpath in numeric order: a new migration only adds its file. */
     static final List<String> VERSIONS = discoveredVersions();

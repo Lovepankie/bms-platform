@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,14 @@ import org.springframework.stereotype.Repository;
 /** SQL for loans and their guarantors, pledges and history. Row-level security supplies the tenant predicate. */
 @Repository
 class LoanRepository {
+
+    /**
+     * The one order in which collateral items are locked, by pledging and by a reopening reversal
+     * alike (#176). It is the order of the UUID's text, which is also the order PostgreSQL gives
+     * {@code ORDER BY collateral_id}; {@code UUID.compareTo} is not (it compares signed longs), so no
+     * caller may use it for locking.
+     */
+    static final Comparator<UUID> ITEM_LOCK_ORDER = Comparator.comparing(UUID::toString);
 
     /**
      * Statuses that end a loan's hold on its collateral (FR-COL-04): the pledges are released when
@@ -214,6 +223,37 @@ class LoanRepository {
                 .query((rs, n) ->
                         new PledgeRow(rs.getObject("collateral_id", UUID.class), rs.getLong("pledged_value_minor")))
                 .list();
+    }
+
+    /** The pledges a closed loan released at closure (FR-COL-04), unordered: lock them in {@link #ITEM_LOCK_ORDER}. */
+    List<PledgeRow> releasedPledges(UUID loanId) {
+        return jdbc.sql("""
+                        SELECT collateral_id, pledged_value_minor FROM lending_loan_collateral
+                         WHERE loan_id = ? AND released_at IS NOT NULL
+                        """)
+                .param(loanId)
+                .query((rs, n) ->
+                        new PledgeRow(rs.getObject("collateral_id", UUID.class), rs.getLong("pledged_value_minor")))
+                .list();
+    }
+
+    /**
+     * #176: a reopened loan takes its released pledges back. The guard (V42) allows exactly this
+     * change, for the loan named in the transaction-local {@code bms.restore_pledges_loan}.
+     */
+    void restorePledges(UUID loanId, List<UUID> collateralIds) {
+        jdbc.sql("SELECT set_config('bms.restore_pledges_loan', ?, true)")
+                .param(loanId.toString())
+                .query(String.class)
+                .single();
+        jdbc.sql("UPDATE lending_loan_collateral SET released_at = NULL, updated_at = now(), version = version + 1"
+                        + " WHERE loan_id = :loan AND released_at IS NOT NULL AND collateral_id IN (:items)")
+                .param("loan", loanId)
+                .param("items", collateralIds)
+                .update();
+        jdbc.sql("SELECT set_config('bms.restore_pledges_loan', '', true)")
+                .query(String.class)
+                .single();
     }
 
     void replacePledges(UUID loanId, List<PledgeRow> rows) {

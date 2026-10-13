@@ -1,5 +1,6 @@
 package com.rincoltech.bms.lending.loans.internal;
 
+import com.rincoltech.bms.core.approvals.RequestSupersededException;
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.ledger.LedgerPosting.PostedEntry;
 import com.rincoltech.bms.core.tenancy.Branches;
@@ -7,6 +8,7 @@ import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.TenantSequences;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.BusinessClock;
+import com.rincoltech.bms.lending.collateral.CollateralLookup;
 import com.rincoltech.bms.lending.loans.LoanServicing;
 import com.rincoltech.bms.lending.loans.internal.LoanBooks.Leg;
 import com.rincoltech.bms.lending.loans.internal.LoanRepository.Loan;
@@ -55,6 +57,7 @@ class LoanServicer implements LoanServicing {
     private final CurrentTenant currentTenant;
     private final BusinessClock clock;
     private final AuditLog audit;
+    private final CollateralLookup collateral;
 
     LoanServicer(
             LoanRepository loans,
@@ -65,7 +68,8 @@ class LoanServicer implements LoanServicing {
             TenantSequences sequences,
             CurrentTenant currentTenant,
             BusinessClock clock,
-            AuditLog audit) {
+            AuditLog audit,
+            CollateralLookup collateral) {
         this.loans = loans;
         this.repo = repo;
         this.products = products;
@@ -75,6 +79,7 @@ class LoanServicer implements LoanServicing {
         this.currentTenant = currentTenant;
         this.clock = clock;
         this.audit = audit;
+        this.collateral = collateral;
     }
 
     LocalDate today() {
@@ -388,11 +393,128 @@ class LoanServicer implements LoanServicing {
     }
 
     /**
+     * #176: the reopened loan takes back the pledges its closure released, when the item is still
+     * held and secures no other loan. Items are locked in the order pledging uses
+     * ({@link LoanRepository#ITEM_LOCK_ORDER}), so a reversal and a pledge of the same items cannot deadlock. An item
+     * handed back or pledged elsewhere is not restored and the loan reopens without it: the checker
+     * saw that on the request ({@link #unrestorable}), and the audit row names it.
+     */
+    private void restorePledges(Loan loan, UUID by, Set<String> listedOnRequest) {
+        List<LoanRepository.PledgeRow> released = new ArrayList<>(loans.releasedPledges(loan.id()));
+        if (released.isEmpty()) {
+            return;
+        }
+        released.sort(
+                java.util.Comparator.comparing(LoanRepository.PledgeRow::collateralId, LoanRepository.ITEM_LOCK_ORDER));
+        List<UUID> restore = new ArrayList<>();
+        List<UUID> notRestored = new ArrayList<>();
+        for (LoanRepository.PledgeRow p : released) {
+            boolean held = collateral
+                    .lockForPledge(p.collateralId())
+                    .map(i -> Set.of("pledged", "in_custody").contains(i.custodyStatus()))
+                    .orElse(false);
+            (held && !loans.pledgedElsewhere(p.collateralId(), loan.id()) ? restore : notRestored)
+                    .add(p.collateralId());
+        }
+        List<String> unlisted = notRestored.stream()
+                .map(UUID::toString)
+                .filter(id -> !listedOnRequest.contains(id))
+                .toList();
+        if (!unlisted.isEmpty()) {
+            // Handing an item back does not change the loan, so the checker may have approved on older
+            // facts: nothing is written, the maker asks again and the checker sees the current list.
+            // The request ends as stale (the maker may ask again at once) and the error carries every
+            // item that cannot come back now, not only the unlisted ones.
+            throw new RequestSupersededException(
+                    "collateral_facts_changed",
+                    "Collateral changed since the request",
+                    "The reopened loan would also go without " + unlisted
+                            + ", which the request did not list. This request is closed; request the reversal"
+                            + " again to approve the current list.",
+                    Map.of(
+                            "collateral_not_restored_on_reopen",
+                            notRestored.stream().map(UUID::toString).toList()));
+        }
+        if (!restore.isEmpty()) {
+            loans.restorePledges(loan.id(), restore);
+        }
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("restored_collateral_ids", restore);
+        after.put("not_restored_collateral_ids", notRestored);
+        after.put("restored_by", by);
+        after.put("unsecured_reopen", !notRestored.isEmpty());
+        audit.record(AuditLog.Entry.created(
+                notRestored.isEmpty() ? "lending.loan.pledges_restored" : "lending.loan.reopened_partly_unsecured",
+                SUBJECT,
+                loan.id(),
+                loan.branchId(),
+                after));
+    }
+
+    /**
+     * For the reversal request on a closed loan, when reversing this repayment would reopen it: the
+     * released items that could not be restored now (handed back, seized, disposed or pledged
+     * elsewhere). Shown to the checker in the request payload; a read, not a lock, because it only
+     * informs the decision (the run re-checks it under the locks, {@link #restorePledges}).
+     */
+    List<String> unrestorable(Loan loan, Txn txn) {
+        if (!loan.status().equals("closed") || !wouldReopen(loan, txn)) {
+            return List.of();
+        }
+        List<String> gone = new ArrayList<>();
+        for (LoanRepository.PledgeRow p : loans.releasedPledges(loan.id())) {
+            boolean held = collateral
+                    .find(p.collateralId())
+                    .map(i -> Set.of("pledged", "in_custody").contains(i.custodyStatus()))
+                    .orElse(false);
+            if (!held || loans.pledgedElsewhere(p.collateralId(), loan.id())) {
+                gone.add(p.collateralId().toString());
+            }
+        }
+        return gone;
+    }
+
+    /** The schedule replayed without this repayment: what the loan would owe once it is reversed. */
+    private Replay replayWithout(Loan loan, Txn txn, List<Txn> survivors) {
+        ProductTerms product = terms(loan);
+        return Servicing.replay(
+                repo.items(loan.id()),
+                survivors.stream()
+                        .map(t -> new Payment(t.id(), t.amountMinor(), t.valueDate()))
+                        .toList(),
+                loan.interestMethod(),
+                product.flatEarlySettlementRebate(),
+                product.allocationOrder());
+    }
+
+    private List<Txn> survivorsOf(Loan loan, Txn txn) {
+        return repo.activeRepayments(loan.id()).stream()
+                .filter(t -> !t.id().equals(txn.id()))
+                .toList();
+    }
+
+    /** True when reversing this repayment leaves a closed loan owing money, so it reopens (FR-REP-05). */
+    private boolean wouldReopen(Loan loan, Txn txn) {
+        if (!txn.txnType().equals("repayment")) {
+            return false;
+        }
+        return !Servicing.position(
+                        replayWithout(loan, txn, survivorsOf(loan, txn)).items(), today())
+                .settled();
+    }
+
+    /**
      * FR-REP-05: takes the repayment's money out and re-applies the later repayments in value
      * date order. When nothing else moves, the journal is the mirror of the original entry;
      * otherwise one entry posts the net difference.
      */
-    void reverse(UUID txnId, String reason, UUID approvalId, UUID makerId, UUID checkerId) {
+    void reverse(
+            UUID txnId,
+            String reason,
+            UUID approvalId,
+            UUID makerId,
+            UUID checkerId,
+            Set<String> unsecuredItemsListedOnRequest) {
         Txn txn = repo.txn(txnId).orElseThrow(ApiException::notFound);
         Loan loan = loans.lock(txn.loanId()).orElseThrow(ApiException::notFound);
         checkReversible(loan, txn);
@@ -405,18 +527,8 @@ class LoanServicer implements LoanServicing {
         if (txn.txnType().equals("recovery")) {
             entry = books.reverse(txn.journalEntryId(), today, txn.receiptNo(), key);
         } else {
-            ProductTerms product = terms(loan);
-            List<Txn> survivors = repo.activeRepayments(loan.id()).stream()
-                    .filter(t -> !t.id().equals(txn.id()))
-                    .toList();
-            replay = Servicing.replay(
-                    repo.items(loan.id()),
-                    survivors.stream()
-                            .map(t -> new Payment(t.id(), t.amountMinor(), t.valueDate()))
-                            .toList(),
-                    loan.interestMethod(),
-                    product.flatEarlySettlementRebate(),
-                    product.allocationOrder());
+            List<Txn> survivors = survivorsOf(loan, txn);
+            replay = replayWithout(loan, txn, survivors);
             Map<UUID, List<Allocation>> before = repo.allocationsByRepayment(loan.id());
             deltas.put(txn.id(), Servicing.difference(before.getOrDefault(txn.id(), List.of()), List.of()));
             boolean othersMoved = false;
@@ -495,6 +607,7 @@ class LoanServicer implements LoanServicing {
             if (loan.status().equals("closed") && !position.settled()) {
                 loans.move(loan.id(), "closed", "active", by, "repayment_reversed", Map.of());
                 repo.closedOn(loan.id(), null);
+                restorePledges(loan, by, unsecuredItemsListedOnRequest);
             } else if (loan.status().equals("active") && position.settled()) {
                 close(loan, today, by);
             }

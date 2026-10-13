@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.approvals.internal;
 
 import com.rincoltech.bms.core.approvals.ApprovalAction;
 import com.rincoltech.bms.core.approvals.Approvals;
+import com.rincoltech.bms.core.approvals.RequestSupersededException;
 import com.rincoltech.bms.core.approvals.internal.ApprovalController.ApprovalPage;
 import com.rincoltech.bms.core.approvals.internal.ApprovalController.ApprovalResponse;
 import com.rincoltech.bms.core.audit.AuditLog;
@@ -189,6 +190,9 @@ class ApprovalService implements Approvals {
         Decided decided;
         try {
             decided = transactions.execute(status -> decide(checker, approvalId, note));
+        } catch (RequestSupersededException e) {
+            transactions.executeWithoutResult(status -> supersede(checker, approvalId, e));
+            throw e;
         } catch (ExecutionFailed e) {
             transactions.executeWithoutResult(status -> {
                 jdbc.sql("UPDATE approval_requests SET execution_error = ?, updated_at = now() WHERE id = ?")
@@ -215,10 +219,32 @@ class ApprovalService implements Approvals {
         };
     }
 
+    /** The action found the facts changed: the request ends as stale, with the reason, so the maker can ask again. */
+    private void supersede(Principal checker, UUID approvalId, RequestSupersededException e) {
+        Row row = lockVisible(checker, approvalId);
+        if (!"pending".equals(row.status())) {
+            return;
+        }
+        setStatus(row, "stale", null, e.getMessage(), clock.now());
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("status", "stale");
+        after.put("action_type", row.actionType());
+        after.put("subject_id", row.subjectId());
+        after.put("reason", e.code());
+        after.put("note", e.getMessage());
+        audit.record(new AuditLog.Entry(
+                "core.approval.stale",
+                "core.approval_request",
+                row.id(),
+                row.branchId(),
+                Map.of("status", row.status()),
+                after));
+    }
+
     private Decided decide(Principal checker, UUID approvalId, String note) {
         Row row = lockVisible(checker, approvalId);
         ApprovalAction action = action(row.actionType());
-        if (!checker.may(action.checkerPermission(), row.branchId())) {
+        if (!checker.may(action.checkerPermission(), row.branchId()) || missingExtraPermission(checker, action, row)) {
             throw denied();
         }
         if (!"pending".equals(row.status())) {
@@ -240,6 +266,8 @@ class ApprovalService implements Approvals {
         try {
             action.execute(new ApprovalAction.Execution(
                     row.id(), row.branchId(), row.subjectId(), row.payload(), row.requestedBy(), checker.userId()));
+        } catch (RequestSupersededException e) {
+            throw e;
         } catch (ApiException e) {
             throw new ExecutionFailed(e.code() + ": " + e.getMessage(), e);
         } catch (RuntimeException e) {
@@ -397,7 +425,8 @@ class ApprovalService implements Approvals {
         boolean canDecide = pending
                 && action != null
                 && !r.requestedBy().equals(principal.userId())
-                && principal.may(action.checkerPermission(), r.branchId());
+                && principal.may(action.checkerPermission(), r.branchId())
+                && !missingExtraPermission(principal, action, r);
         boolean canCancel = pending && r.requestedBy().equals(principal.userId());
         return new ApprovalResponse(
                 r.id(),
@@ -465,6 +494,12 @@ class ApprovalService implements Approvals {
         if (!clock.now().isBefore(row.expiresAt())) {
             throw ApiException.rule("approval_expired", "The request expired.");
         }
+    }
+
+    private static boolean missingExtraPermission(Principal checker, ApprovalAction action, Row row) {
+        return action.extraCheckerPermission(row.payload())
+                .filter(p -> !checker.may(p, row.branchId()))
+                .isPresent();
     }
 
     private void setStatus(Row row, String status, UUID decidedBy, String note, Instant at) {

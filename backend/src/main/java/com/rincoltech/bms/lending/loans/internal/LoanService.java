@@ -376,7 +376,7 @@ class LoanService {
         Map<UUID, CollateralSummary> items = new LinkedHashMap<>();
         ids.stream()
                 .distinct()
-                .sorted()
+                .sorted(LoanRepository.ITEM_LOCK_ORDER)
                 .forEach(cid -> collateral.lockForPledge(cid).ifPresent(item -> items.put(cid, item)));
         return items;
     }

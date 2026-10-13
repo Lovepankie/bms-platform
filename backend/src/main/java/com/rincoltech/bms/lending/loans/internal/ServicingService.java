@@ -115,9 +115,24 @@ class ServicingService {
                             loan.version(),
                             txn.amountMinor(),
                             txn.currency(),
-                            Map.of(ReversalAction.REASON, r.reason().trim())));
+                            reversalPayload(loan, txn, r)));
                     return outcome(id, o);
                 });
+    }
+
+    /**
+     * The reason, and for a closed loan the items that would not come back if the reversal reopens
+     * it (#176): the checker approves an unsecured reopen knowingly.
+     */
+    private Map<String, Object> reversalPayload(Loan loan, Txn txn, ReasonRequest r) {
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put(ReversalAction.REASON, r.reason().trim());
+        List<String> unrestorable = servicer.unrestorable(loan, txn);
+        if (!unrestorable.isEmpty()) {
+            payload.put(ReversalAction.UNSECURED_REOPEN, true);
+            payload.put(ReversalAction.NOT_RESTORED, unrestorable);
+        }
+        return payload;
     }
 
     /** FR-LCL-02: always waits for a checker. */

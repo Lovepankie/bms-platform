@@ -103,8 +103,18 @@ Also decided here, within the rules of chapter 3:
 
 **Watch for:**
 
-- A closed loan releases its pledges (FR-COL-04); a reversal that reopens it does not re-pledge
-  them, because pledges change only on a draft. Staff see the loan active with no collateral.
+- A closed loan releases its pledges (FR-COL-04); a reversal that reopens it did not re-pledge
+  them, because pledges changed only on a draft. Done in #176 (V42): the reopened loan takes back
+  each item still held and free; an item handed back or pledged elsewhere is not restored, the
+  reversal request shows it to the checker, and the reopen is audited as partly unsecured. A
+  reversal is never refused for collateral, because handing the item back after payoff is normal.
+  The unsecured reopen is approved by a checker who holds `lending.collateral.release_approve` (the
+  existing seeded permission for letting collateral go; tenant administrator and branch manager),
+  not by the accountant who approves other reversals; and the run refuses, writing nothing, when the
+  reopen would leave out an item the request did not list: 409 `collateral_facts_changed` with the full
+  current list, the request ends as stale (audited) and the maker requests again. The approvals SPI
+  gained `extraCheckerPermission(payload)` for this, which also hides the decision from approvers
+  who lack it, and `RequestSupersededException` for the stale ending.
 - Penalty charges and waivers arrive in increment 6; the replay starts from the contracted
   schedule and must then add penalty charges and charge waivers before re-applying repayments.
 - When FR-GL-08's `payment_methods` arrives, the default mapping must stay as the fallback or be

@@ -70,3 +70,15 @@ most one open loan.**
   registering the same asset twice, which the one-open-loan rule does not cover.
 
 A two-thread test pledges one item to two drafts at once and expects one 200 and one 409.
+
+Addendum (2026-10-10, issue #176): a repayment reversal that reopens a closed loan restores that
+loan's released pledges under the same item locks (in pledging's order: the text order of the UUID,
+which is PostgreSQL's, never `UUID.compareTo`), for each item still held
+and securing no other loan. An item handed back or pledged elsewhere stays where it is: the reversal
+request lists it for the checker, and the reopen is audited as partly unsecured. The reversal is
+never refused for collateral. A request that reopens a loan without some items says so
+(`reopen_would_be_unsecured`) and needs a checker who holds `lending.collateral.release_approve`, an
+existing seeded permission, so the accountant who approves other reversals cannot approve it; no new
+permission was added. The run refuses (409 `collateral_facts_changed`, nothing written, the request ends as stale
+with the reason so the maker can ask again) if it would leave out an item the request did not list, because handing an item back does not bump the loan version. The one-open-pledge index stays the backstop; V42 narrows the guard
+exception to the reopened loan alone.
