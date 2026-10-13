@@ -226,7 +226,7 @@ class InvestmentServicer implements InvestmentServicing {
         if (valueDate.isAfter(today())) {
             throw ApiException.rule("value_date_in_future", "The value date is today or earlier.");
         }
-        books.methodAccount(paymentMethodKey);
+        books.methodAccount(paymentMethodKey, inv.branchId());
     }
 
     /**
@@ -246,7 +246,7 @@ class InvestmentServicer implements InvestmentServicing {
         List<Period> periods = InvestmentReturns.schedule(terms(inv, inv.principalMinor()), valueDate);
         long agreed = InvestmentReturns.total(periods);
         LocalDate maturity = periods.getLast().end();
-        String method = books.methodAccount(paymentMethodKey);
+        String method = books.methodAccount(paymentMethodKey, inv.branchId());
         String receipt = number("RC", "receipt", inv.branchId());
         String certificate = "IC%06d".formatted(sequences.next("investment_certificate"));
         UUID txnId = UUID.randomUUID();
@@ -458,7 +458,7 @@ class InvestmentServicer implements InvestmentServicing {
         if (amount <= 0) {
             throw ApiException.rule("no_return_due", "No return is due for payout on this investment.");
         }
-        String method = books.methodAccount(paymentMethodKey);
+        String method = books.methodAccount(paymentMethodKey, inv.branchId());
         String voucher = number("VC", "voucher", inv.branchId());
         UUID txnId = UUID.randomUUID();
         PostedEntry entry = books.post(
@@ -526,7 +526,7 @@ class InvestmentServicer implements InvestmentServicing {
         long principal = inv.principalHeldMinor();
         long ret = inv.returnPayableMinor();
         long total = principal + ret;
-        String method = books.methodAccount(paymentMethodKey);
+        String method = books.methodAccount(paymentMethodKey, inv.branchId());
         String voucher = number("VC", "voucher", inv.branchId());
         UUID txnId = UUID.randomUUID();
         PostedEntry entry = books.post(
@@ -777,7 +777,7 @@ class InvestmentServicer implements InvestmentServicing {
         accrueDue(locked, today);
         Inv inv = repo.find(investmentId).orElseThrow();
         EarlySettlement s = earlyQuote(inv, today);
-        String method = books.methodAccount(paymentMethodKey);
+        String method = books.methodAccount(paymentMethodKey, inv.branchId());
         String voucher = number("VC", "voucher", inv.branchId());
         UUID txnId = UUID.randomUUID();
         long accrued = s.accruedMinor();
@@ -958,9 +958,9 @@ class InvestmentServicer implements InvestmentServicing {
 
     // ---- Shared ---------------------------------------------------------------------------
 
-    /** FR-GL-08: the payment method maps to an active account. */
-    void checkMethod(String paymentMethodKey) {
-        books.methodAccount(paymentMethodKey);
+    /** FR-GL-08: the payment method maps to an active account at this branch. */
+    void checkMethod(String paymentMethodKey, UUID branchId) {
+        books.methodAccount(paymentMethodKey, branchId);
     }
 
     static InvestmentReturns.Terms terms(Inv inv, long principal) {

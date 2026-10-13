@@ -61,6 +61,38 @@ public abstract class LoanFixtures extends IntegrationTest {
         return http.exchange(path, method, new HttpEntity<>(body, h), JsonNode.class);
     }
 
+    /** A fabricated postable asset account that no module controls; returns its id. */
+    protected String assetAccount(String code, String name) {
+        UUID id = UUID.randomUUID();
+        TestDatabase.owner().sql("""
+                        INSERT INTO gl_accounts (id, tenant_id, code, name, account_type, normal_balance, currency,
+                            is_postable, is_system_controlled)
+                        VALUES (?, ?, ?, ?, 'asset', 'debit', 'UGX', true, false)
+                        """).params(id, t.tenantId(), code, name).update();
+        return id.toString();
+    }
+
+    /** FR-GL-08: maps a payment method as a tenant administrator; a null branch is the tenant's mapping. */
+    protected ResponseEntity<JsonNode> mapMethod(String method, UUID branch, String account, Boolean active) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("method_key", method);
+        body.put("branch_id", branch);
+        body.put("gl_account_id", account);
+        body.put("is_active", active);
+        return send(
+                HttpMethod.PUT, "/api/v1/ledger/payment-methods", as(UUID.randomUUID(), adminPerms, "*", null), body);
+    }
+
+    /** The lines of a journal entry as {@code account code:debit:credit}, in line order. */
+    protected static java.util.List<String> codedLines(String entryId) {
+        return TestDatabase.owner()
+                .sql("SELECT a.code || ':' || l.debit || ':' || l.credit FROM journal_lines l"
+                        + " JOIN gl_accounts a ON a.id = l.account_id WHERE l.entry_id = ?::uuid ORDER BY l.line_no")
+                .param(entryId)
+                .query(String.class)
+                .list();
+    }
+
     protected ResponseEntity<JsonNode> asOfficer(HttpMethod method, String path, String ifMatch, Object body) {
         return send(method, path, as(officer, officerPerms, "*", ifMatch), body);
     }

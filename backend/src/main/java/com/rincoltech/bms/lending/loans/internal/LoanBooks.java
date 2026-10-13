@@ -6,6 +6,7 @@ import com.rincoltech.bms.core.ledger.LedgerPosting.EntryRequest;
 import com.rincoltech.bms.core.ledger.LedgerPosting.Line;
 import com.rincoltech.bms.core.ledger.LedgerPosting.PostedEntry;
 import com.rincoltech.bms.core.ledger.LedgerPosting.ReversalRequest;
+import com.rincoltech.bms.core.ledger.PaymentMethods;
 import com.rincoltech.bms.kernel.ApiException;
 import java.time.LocalDate;
 import java.util.List;
@@ -34,16 +35,6 @@ class LoanBooks {
     static final String WRITE_OFF_EXPENSE = "loan_write_off_expense";
     static final String BAD_DEBT_RECOVERED = "bad_debt_recovered";
 
-    /**
-     * ADR-026: until the payment method mapping of FR-GL-08 is built, each method posts to the
-     * seeded account with this system key (chapter 6 section 6.6.2).
-     */
-    static final Map<String, String> METHOD_ACCOUNTS = Map.of(
-            "cash", "cash_on_hand",
-            "bank", "bank",
-            "mtn_momo", "mobile_money_mtn",
-            "airtel_money", "mobile_money_airtel");
-
     /** The account each allocation component credits on a repayment. */
     static final Map<String, String> COMPONENT_ACCOUNTS = Map.of(
             "principal", LOANS_RECEIVABLE,
@@ -54,10 +45,12 @@ class LoanBooks {
 
     private final LedgerPosting ledger;
     private final LedgerAccounts accounts;
+    private final PaymentMethods paymentMethods;
 
-    LoanBooks(LedgerPosting ledger, LedgerAccounts accounts) {
+    LoanBooks(LedgerPosting ledger, LedgerAccounts accounts, PaymentMethods paymentMethods) {
         this.ledger = ledger;
         this.accounts = accounts;
+        this.paymentMethods = paymentMethods;
     }
 
     /** One leg by system key; {@code loanId} is set on lines of system-controlled accounts. */
@@ -76,15 +69,18 @@ class LoanBooks {
         }
     }
 
-    /** FR-GL-08: refused with {@code payment_method_unmapped} before anything is written. */
-    String methodAccount(String paymentMethodKey) {
-        String key = METHOD_ACCOUNTS.get(paymentMethodKey);
-        if (key == null || accounts.bySystemKey(key).isEmpty()) {
-            throw ApiException.rule(
-                    "payment_method_unmapped",
-                    "The payment method " + paymentMethodKey + " has no active ledger account.");
-        }
-        return key;
+    /**
+     * FR-GL-08: the account a payment by this method posts to at this branch (the branch's
+     * mapping, else the tenant's, else the seeded default); {@code payment_method_unmapped} first.
+     */
+    String methodAccount(String paymentMethodKey, UUID branchId) {
+        return paymentMethods.accountRef(paymentMethodKey, branchId);
+    }
+
+    /** Where the payment of this entry went in (its one debit line), for a correction of it. */
+    String paidThrough(UUID entryId) {
+        return accounts.debitedAccountRef(entryId)
+                .orElseThrow(() -> new IllegalStateException("entry " + entryId + " has no single debit line"));
     }
 
     /** Posts one balanced entry; legs of zero are left out. */
@@ -113,7 +109,7 @@ class LoanBooks {
         if (leg.amountMinor() < 0) {
             throw new IllegalArgumentException("a leg is never negative");
         }
-        LedgerAccounts.Account account = accounts.bySystemKey(leg.systemKey())
+        LedgerAccounts.Account account = accounts.byRef(leg.systemKey())
                 .orElseThrow(() -> ApiException.rule(
                         "lending_chart_missing",
                         "The tenant has no active account with system key " + leg.systemKey() + "."));

@@ -319,6 +319,9 @@ class RlsIsolationIT {
                         t.tenantId(),
                         t.account("cash_on_hand"))
                 .update();
+        owner.sql("INSERT INTO payment_methods (id, tenant_id, method_key, gl_account_id) VALUES (?, ?, 'cash', ?)")
+                .params(UUID.randomUUID(), t.tenantId(), t.account("cash_on_hand"))
+                .update();
         owner.sql("""
                         INSERT INTO retail_sale_payments (id, tenant_id, sale_id, amount_minor, currency, method, paid_on,
                                                           journal_entry_id, created_by)

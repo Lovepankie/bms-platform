@@ -301,6 +301,358 @@ class LoanServicingIT extends LoanFixtures {
         booksAgree();
     }
 
+    /** A postable asset account under the fixture tenant, as a payment method target would be. */
+    ResponseEntity<JsonNode> setMethod(String method, UUID branch, String account, Boolean active, String perms) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("method_key", method);
+        body.put("branch_id", branch);
+        body.put("gl_account_id", account);
+        body.put("is_active", active);
+        return send(HttpMethod.PUT, "/api/v1/ledger/payment-methods", as(admin, perms, "*", null), body);
+    }
+
+    /**
+     * FR-GL-08: a branch's mapping wins over the tenant's, an unmapped method keeps its seeded
+     * account, and a method switched off is refused with payment_method_unmapped.
+     */
+    @Test
+    void frGl08_paymentMethodsDecideTheAccount() {
+        String perms = permissionsOf("tenant_admin");
+        JsonNode defaults = send(HttpMethod.GET, "/api/v1/ledger/payment-methods", as(admin, perms, "*", null), null)
+                .getBody()
+                .get("items");
+        assertThat(defaults.findValuesAsString("source")).containsOnly("default");
+        assertThat(defaults.findValuesAsString("method_key"))
+                .containsExactlyInAnyOrder("airtel_money", "bank", "cash", "mtn_momo");
+
+        String tenantTill = assetAccount("1011", "Test till");
+        String headOfficeTill = assetAccount("1012", "Test head office till");
+        assertThat(setMethod("cash", null, tenantTill, null, perms).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        JsonNode mapped =
+                setMethod("cash", t.headOffice(), headOfficeTill, null, perms).getBody();
+        assertThat(mapped.get("items").findValuesAsString("source")).contains("mapped", "default");
+
+        String loan = approved(exampleB("PMMAP"), 1_200_000, 3, 71);
+        disburse(loan, today);
+        JsonNode txn = get(loan, "/transactions").get("items").get(0);
+        assertThat(TestDatabase.owner()
+                        .sql("""
+                                SELECT a.code FROM journal_lines l JOIN gl_accounts a ON a.id = l.account_id
+                                 WHERE l.entry_id = ?::uuid AND l.credit > 0
+                                """)
+                        .param(txn.get("journal_entry_id").asString())
+                        .query(String.class)
+                        .list())
+                .as("the head office mapping wins over the tenant's")
+                .containsExactly("1012");
+
+        assertThat(setMethod("cash", t.headOffice(), headOfficeTill, false, perms)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> off = repay(loan, 100_000, today, key());
+        assertThat(off.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(off.getBody().get("code").asString()).isEqualTo("payment_method_unmapped");
+        booksAgree();
+    }
+
+    /** The account codes on the credit side of a journal entry. */
+    static List<String> creditCodes(String entryId) {
+        return TestDatabase.owner()
+                .sql("SELECT a.code FROM journal_lines l JOIN gl_accounts a ON a.id = l.account_id"
+                        + " WHERE l.entry_id = ?::uuid AND l.credit > 0 AND a.system_key IS DISTINCT FROM 'loans_receivable'"
+                        + " AND a.system_key IS DISTINCT FROM 'loan_interest_income'")
+                .param(entryId)
+                .query(String.class)
+                .list();
+    }
+
+    /**
+     * Review of #206: cash remapped between a repayment and its reversal. The re-allocating
+     * reversal credits the till the repayment debited, not the till cash maps to now.
+     */
+    @Test
+    void frGl08_aReversalCreditsTheAccountTheRepaymentDebited() {
+        String perms = permissionsOf("tenant_admin");
+        String tillA = assetAccount("1014", "Test till A");
+        String tillB = assetAccount("1015", "Test till B");
+        setMethod("cash", null, tillA, null, perms);
+        String loan = approved(exampleB("REMAP"), 1_200_000, 3, 72);
+        LocalDate disbursed = today.minusMonths(2).minusDays(5);
+        disburse(loan, disbursed);
+        String first = repaid(loan, 300_000, disbursed.plusMonths(1))
+                .get("transaction")
+                .get("id")
+                .asString();
+        repaid(loan, 520_000, disbursed.plusMonths(2));
+        setMethod("cash", null, tillB, null, perms);
+
+        decide(requestReversal(loan, first), manager, managerPerms);
+        JsonNode reversal = get(loan, "/transactions").get("items").get(0);
+        assertThat(reversal.get("txn_type").asString()).isEqualTo("reversal");
+        assertThat(creditCodes(reversal.get("journal_entry_id").asString()))
+                .as("the money goes back out of the till it came into")
+                .containsExactly("1014");
+        booksAgree();
+    }
+
+    /**
+     * Review of #206: a method mapped only for a branch is accepted when requested at that branch,
+     * and a method switched off for that branch is refused at the request, not later at approval.
+     */
+    @Test
+    void frGl08_theBranchMappingDecidesAtRequestToo() {
+        String perms = permissionsOf("tenant_admin");
+        String headOfficeTill = assetAccount("1016", "Test head office till");
+        setMethod("mtn_momo", t.headOffice(), headOfficeTill, null, perms);
+        String loan = approved(exampleB("BRANCHMAP"), 1_200_000, 3, 73);
+        disburse(loan, today);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("amount_minor", 100_000);
+        body.put("value_date", today.toString());
+        body.put("payment_method_key", "mtn_momo");
+        ResponseEntity<JsonNode> paid = send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/repayments",
+                withKey(as(cashier, cashierPerms, "*", null), key()),
+                body);
+        assertThat(paid.getStatusCode()).as("%s", paid.getBody()).isEqualTo(HttpStatus.CREATED);
+
+        setMethod("cash", t.headOffice(), headOfficeTill, false, perms);
+        ResponseEntity<JsonNode> off =
+                requestDisbursement(approved(exampleB("BRANCHOFF"), 1_200_000, 3, 74), today, key());
+        assertThat(off.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(off.getBody().get("code").asString()).isEqualTo("payment_method_unmapped");
+    }
+
+    /**
+     * Review of #206: retail posts its cash and bank to the seeded accounts and reads them for its
+     * cash book, so with the retail module on cash and bank cannot be mapped elsewhere (it would take
+     * lending cash out of the retail cash book). Other methods, and switching a method off, stay free.
+     */
+    @Test
+    void frGl08_withRetailOnCashAndBankStayOnTheSeededAccounts() {
+        String perms = permissionsOf("tenant_admin");
+        String till = assetAccount("1017", "Test till");
+        TestDatabase.owner()
+                .sql("SELECT platform_set_tenant_modules(?, ?::text[], NULL)")
+                .params(t.tenantId(), "{lending,retail}")
+                .query((rs, n) -> 1)
+                .single();
+
+        for (String method : List.of("cash", "bank")) {
+            ResponseEntity<JsonNode> refused = setMethod(method, null, till, null, perms);
+            assertThat(refused.getStatusCode().value())
+                    .as("%s", refused.getBody())
+                    .isEqualTo(422);
+            assertThat(refused.getBody().get("errors").findValuesAsString("code"))
+                    .containsExactly("account_used_by_retail");
+            assertThat(setMethod(method, t.headOffice(), till, null, perms)
+                            .getBody()
+                            .get("errors")
+                            .findValuesAsString("code"))
+                    .as("a branch mapping is refused too")
+                    .containsExactly("account_used_by_retail");
+        }
+        assertThat(setMethod("mtn_momo", null, till, null, perms).getStatusCode())
+                .as("mobile money is not retail's")
+                .isEqualTo(HttpStatus.OK);
+        assertThat(setMethod("cash", t.headOffice(), till, false, perms).getStatusCode())
+                .as("switching lending cash off at a branch leaves retail alone")
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    /**
+     * Review of #206: two first saves of one method at once. The unique index decides; the loser is
+     * told 409 payment_method_changed, never a 500, and exactly one row exists.
+     */
+    @Test
+    void frGl08_twoFirstSavesAtOnceAreOneRowAndNoServerError() throws Exception {
+        String perms = permissionsOf("tenant_admin");
+        String tillA = assetAccount("1018", "Test till A");
+        String tillB = assetAccount("1019", "Test till B");
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
+            List<Future<ResponseEntity<JsonNode>>> results = List.of(tillA, tillB).stream()
+                    .map(till -> pool.submit(() -> {
+                        start.await();
+                        return setMethod("airtel_money", null, till, null, perms);
+                    }))
+                    .toList();
+            start.countDown();
+            List<Integer> statuses = new ArrayList<>();
+            for (Future<ResponseEntity<JsonNode>> r : results) {
+                ResponseEntity<JsonNode> response = r.get(30, TimeUnit.SECONDS);
+                statuses.add(response.getStatusCode().value());
+                if (response.getStatusCode().value() == 409) {
+                    assertThat(response.getBody().get("code").asString()).isEqualTo("payment_method_changed");
+                }
+            }
+            assertThat(statuses).allMatch(s -> s == 200 || s == 409).contains(200);
+        }
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM payment_methods WHERE tenant_id = ? AND method_key = 'airtel_money'")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+    }
+
+    ResponseEntity<JsonNode> clearMethod(String method, UUID branch, String perms) {
+        return send(
+                HttpMethod.DELETE,
+                "/api/v1/ledger/payment-methods/" + method + (branch == null ? "" : "?branch_id=" + branch),
+                as(admin, perms, "*", null),
+                null);
+    }
+
+    static List<String> sourcesOf(JsonNode list, String method) {
+        List<String> sources = new ArrayList<>();
+        for (JsonNode item : list.get("items")) {
+            if (item.get("method_key").asString().equals(method)) {
+                sources.add(item.get("source").asString());
+            }
+        }
+        return sources;
+    }
+
+    /**
+     * Review of #206: a mapping can be removed. The branch row goes first (the tenant's applies
+     * again), then the tenant's (the method is back on its seeded account and GET says default); a
+     * second delete is 404, the permission and the key are checked, and each removal is audited.
+     */
+    @Test
+    void frGl08_aMappingIsRemovedAndTheMethodReturnsToItsDefault() {
+        String perms = permissionsOf("tenant_admin");
+        String tenantTill = assetAccount("1024", "Test tenant till");
+        String branchTill = assetAccount("1025", "Test branch till");
+        setMethod("cash", null, tenantTill, null, perms);
+        setMethod("cash", t.headOffice(), branchTill, null, perms);
+
+        assertThat(clearMethod("cash", t.headOffice(), cashierPerms).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(clearMethod("petty_cash", null, perms).getStatusCode().value())
+                .isEqualTo(422);
+        ResponseEntity<JsonNode> branchGone = clearMethod("cash", t.headOffice(), perms);
+        assertThat(branchGone.getStatusCode()).as("%s", branchGone.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(sourcesOf(branchGone.getBody(), "cash")).containsExactly("mapped");
+        assertThat(clearMethod("cash", t.headOffice(), perms).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+        ResponseEntity<JsonNode> tenantGone = clearMethod("cash", null, perms);
+        assertThat(tenantGone.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(sourcesOf(tenantGone.getBody(), "cash")).containsExactly("default");
+        assertThat(clearMethod("cash", null, perms).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+        String loan = approved(exampleB("PMCLEAR"), 1_200_000, 3, 75);
+        disburse(loan, today);
+        String entry = get(loan, "/transactions")
+                .get("items")
+                .get(0)
+                .get("journal_entry_id")
+                .asString();
+        assertThat(creditCodes(entry)).as("back on the seeded cash account").containsExactly("1010");
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'core.payment_method.cleared'")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(2);
+    }
+
+    ResponseEntity<JsonNode> asScoped(HttpMethod method, String path, UUID branch, Object body) {
+        return send(method, path, as(UUID.randomUUID(), permissionsOf("accountant"), branch.toString(), null), body);
+    }
+
+    /**
+     * Third review of #206: the manage permission is branch scoped. A caller scoped to one branch
+     * maps and removes that branch's rows only; the tenant-wide row, or another branch's, is refused
+     * with 403 and left as it was.
+     */
+    @Test
+    void frGl08_aBranchScopedManagerCannotTouchTheTenantOrAnotherBranch() {
+        String perms = permissionsOf("tenant_admin");
+        String till = assetAccount("1026", "Test scope till");
+        setMethod("cash", null, till, null, perms);
+        setMethod("cash", t.secondBranch(), till, null, perms);
+        String path = "/api/v1/ledger/payment-methods";
+        Map<String, Object> tenantWide = new LinkedHashMap<>();
+        tenantWide.put("method_key", "bank");
+        tenantWide.put("gl_account_id", till);
+        Map<String, Object> other = new LinkedHashMap<>(tenantWide);
+        other.put("branch_id", t.secondBranch());
+        Map<String, Object> own = new LinkedHashMap<>(tenantWide);
+        own.put("branch_id", t.headOffice());
+
+        assertThat(asScoped(HttpMethod.PUT, path, t.headOffice(), tenantWide).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(asScoped(HttpMethod.PUT, path, t.headOffice(), other).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(asScoped(HttpMethod.PUT, path, t.headOffice(), own).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        assertThat(asScoped(HttpMethod.DELETE, path + "/cash", t.headOffice(), null)
+                        .getStatusCode())
+                .as("the tenant-wide row")
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(asScoped(HttpMethod.DELETE, path + "/cash?branch_id=" + t.secondBranch(), t.headOffice(), null)
+                        .getStatusCode())
+                .as("another branch's row")
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM payment_methods WHERE tenant_id = ? AND method_key = 'cash'")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .as("both cash rows are still there")
+                .isEqualTo(2);
+        assertThat(asScoped(HttpMethod.DELETE, path + "/bank?branch_id=" + t.headOffice(), t.headOffice(), null)
+                        .getStatusCode())
+                .as("its own branch's row")
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    /** FR-GL-08: only a postable, active asset account that no module controls, a real branch, and the permission. */
+    @Test
+    void frGl08_aMappingIsValidated() {
+        String perms = permissionsOf("tenant_admin");
+        String liability = TestDatabase.owner()
+                .sql("SELECT id FROM gl_accounts WHERE tenant_id = ? AND system_key = 'member_savings'")
+                .param(t.tenantId())
+                .query(UUID.class)
+                .single()
+                .toString();
+        String controlled = TestDatabase.owner()
+                .sql("SELECT id FROM gl_accounts WHERE tenant_id = ? AND system_key = 'loans_receivable'")
+                .param(t.tenantId())
+                .query(UUID.class)
+                .single()
+                .toString();
+        for (String account : List.of(liability, controlled)) {
+            assertThat(setMethod("bank", null, account, null, perms)
+                            .getBody()
+                            .get("errors")
+                            .findValuesAsString("code"))
+                    .containsExactly("invalid_payment_account");
+        }
+        String till = assetAccount("1013", "Test bank two");
+        assertThat(setMethod("bank", UUID.randomUUID(), till, null, perms)
+                        .getBody()
+                        .get("errors")
+                        .findValuesAsString("code"))
+                .containsExactly("unknown_branch");
+        assertThat(setMethod("bank", null, till, null, cashierPerms).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(setMethod("bank", null, till, null, perms).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'core.payment_method.set'")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+    }
+
     /**
      * FR-APR-04 and FR-PRD-02 (upfront and added fees): below the threshold the disbursement runs at
      * once; the upfront fee posts its own entry and the added fee is spread over the schedule.

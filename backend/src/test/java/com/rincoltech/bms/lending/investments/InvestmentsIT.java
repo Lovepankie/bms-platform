@@ -726,6 +726,45 @@ class InvestmentsIT extends LoanFixtures {
         booksAgree();
     }
 
+    /**
+     * FR-GL-08 (review of #206): a funding posts to the account cash maps to, and its reversal after
+     * a remap leaves the till the funding went into, not the one cash maps to now. A funding after
+     * the remap uses the new till.
+     */
+    @Test
+    void frGl08_aFundingPostsToTheMappedAccountAndItsReversalMirrorsAfterARemap() {
+        String tillA = assetAccount("1051", "Test investment till A");
+        String tillB = assetAccount("1052", "Test investment till B");
+        assertThat(mapMethod("cash", null, tillA, null).getStatusCode()).isEqualTo(HttpStatus.OK);
+        String p = product("FDMAP", Map.of());
+        String id = open(p, 1_000_000, 6);
+        fund(id, today);
+        assertThat(codedLines(entryOf(id, "funding"))).containsExactly("1051:1000000:0", "2020:0:1000000");
+
+        assertThat(mapMethod("cash", null, tillB, null).getStatusCode()).isEqualTo(HttpStatus.OK);
+        String funding = TestDatabase.owner()
+                .sql("SELECT id::text FROM lending_investment_transactions WHERE investment_id = ?::uuid")
+                .param(id)
+                .query(String.class)
+                .single();
+        ResponseEntity<JsonNode> r = send(
+                HttpMethod.POST,
+                INV + "/" + id + "/transactions/" + funding + "/reverse",
+                withKey(as(cashier, cashierPerms, "*", null), key()),
+                Map.of("reason", "Test counterfeit notes"));
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        decide(r.getBody().get("approval_request_id").asString(), manager, managerPerms);
+        assertThat(inv(id).get("status").asString()).isEqualTo("cancelled");
+        assertThat(codedLines(entryOf(id, "reversal")))
+                .as("the money leaves till A, where the funding put it")
+                .containsExactlyInAnyOrder("2020:1000000:0", "1051:0:1000000");
+
+        String next = open(p, 500_000, 6);
+        fund(next, today);
+        assertThat(codedLines(entryOf(next, "funding"))).containsExactly("1052:500000:0", "2020:0:500000");
+        booksAgree();
+    }
+
     @Test
     void anInvestmentOutsideTheCallersBranchesIsNotFound() {
         String p = product("FD09", Map.of());

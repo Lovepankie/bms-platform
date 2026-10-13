@@ -559,7 +559,18 @@ then and the `documents` row stays).
 (std) `method_key text NOT NULL` [`cash`, `bank`, `mtn_momo`, `airtel_money`, `gateway`,
 `savings_transfer`], `branch_id uuid` (NULL = tenant default),
 `gl_account_id uuid NOT NULL`, `is_active boolean NOT NULL DEFAULT true`.
-Unique `(tenant_id, method_key, coalesce(branch_id, zero uuid))`. FR-GL-08.
+Unique `(tenant_id, method_key, coalesce(branch_id, zero uuid))`. FR-GL-08. Built in
+`V43__payment_methods.sql` (#160). A branch row wins over the tenant row; a method with no row
+posts to its seeded account (`cash` to `cash_on_hand`, `bank` to `bank`, `mtn_momo` to
+`mobile_money_mtn`, `airtel_money` to `mobile_money_airtel`, ADR-026), and a row with
+`is_active = false` switches the method off. `core.ledger`'s `PaymentMethods` is the one lookup;
+lending's loans, savings and investments post through it, at the branch of the loan, account or
+investment (request checks included). A correction credits the account its original entry debited.
+Retail postings and the cash book do not use it yet (#236), so while the retail module is on `cash`
+and `bank` can be mapped only to `cash_on_hand` and `bank` (`account_used_by_retail`, ADR-026), and
+`platform_set_tenant_modules` (replaced in V43) refuses to switch retail on while an active cash or
+bank mapping points elsewhere. `bms_app` holds SELECT, INSERT, UPDATE and DELETE on the table (a
+mapping is removed to return the method to its default).
 
 ### `payment_intents` (RLS)
 
@@ -1416,7 +1427,8 @@ replaced status check, entry-pair check, void-column checks and update guard (ea
 lets one line column be set once, and a partial index on the transfers in transit. It changes no
 existing row and no existing behaviour; the flow is behind the `transfer_receipt` capability.
 `V42__loan_reopen_restores_pledges.sql` (#176) replaces `lending_loan_collateral_guard` so a
-reversal that reopens a closed loan can restore that loan's own pledges (section 6.7). The next
+reversal that reopens a closed loan can restore that loan's own pledges (section 6.7).
+`V43__payment_methods.sql` (#160, ADR-026) adds the `payment_methods` table (section 6.5). The next
 migration takes the number above the highest on `main` (`MigrationOrderIT`, chapter 15 section
 15.4.3).
 

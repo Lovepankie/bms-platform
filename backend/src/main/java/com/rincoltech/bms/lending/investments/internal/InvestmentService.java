@@ -260,7 +260,7 @@ class InvestmentService {
         return idempotency.once(key, "POST", BASE + id + "/early-withdrawal", r, ActionOutcome.class, () -> {
             Inv inv = lock(id, "lending.investments.payout");
             EarlySettlement s = servicer.earlyQuote(inv, servicer.today());
-            servicer.checkMethod(r.paymentMethodKey());
+            servicer.checkMethod(r.paymentMethodKey(), inv.branchId());
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put(EarlyWithdrawalAction.METHOD, r.paymentMethodKey());
             payload.put(EarlyWithdrawalAction.REFERENCE, blankToNull(r.externalReference()));

@@ -34,6 +34,30 @@ class JdbcLedgerAccounts implements LedgerAccounts {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Account> byRef(String ref) {
+        if (!ref.startsWith(ACCOUNT_REF)) {
+            return bySystemKey(ref);
+        }
+        return jdbc.sql("SELECT id, code, currency FROM gl_accounts WHERE id = ? AND is_postable AND is_active")
+                .param(UUID.fromString(ref.substring(ACCOUNT_REF.length())))
+                .query((rs, n) -> new Account(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3)))
+                .optional();
+    }
+
+    static final String ACCOUNT_REF = "gl:";
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> debitedAccountRef(UUID entryId) {
+        java.util.List<UUID> debited = jdbc.sql("SELECT account_id FROM journal_lines WHERE entry_id = ? AND debit > 0")
+                .param(entryId)
+                .query(UUID.class)
+                .list();
+        return debited.size() == 1 ? Optional.of(ACCOUNT_REF + debited.getFirst()) : Optional.empty();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<UUID, Long> balanceByBranch(String systemKey, LocalDate asOf) {
         Map<UUID, Long> balances = new LinkedHashMap<>();
         jdbc.sql("""

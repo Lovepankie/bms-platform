@@ -6,10 +6,10 @@ import com.rincoltech.bms.core.ledger.LedgerPosting.EntryRequest;
 import com.rincoltech.bms.core.ledger.LedgerPosting.Line;
 import com.rincoltech.bms.core.ledger.LedgerPosting.PostedEntry;
 import com.rincoltech.bms.core.ledger.LedgerPosting.ReversalRequest;
+import com.rincoltech.bms.core.ledger.PaymentMethods;
 import com.rincoltech.bms.kernel.ApiException;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -38,30 +38,22 @@ class SavingsBooks {
     static final String FEE_INCOME = "savings_fee_income";
     static final String INTEREST_EXPENSE = "savings_interest_expense";
 
-    /** ADR-026: until the payment method mapping of FR-GL-08 is built, each method posts to this account. */
-    static final Map<String, String> METHOD_ACCOUNTS = Map.of(
-            "cash", "cash_on_hand",
-            "bank", "bank",
-            "mtn_momo", "mobile_money_mtn",
-            "airtel_money", "mobile_money_airtel");
-
     private final LedgerPosting ledger;
     private final LedgerAccounts accounts;
+    private final PaymentMethods paymentMethods;
 
-    SavingsBooks(LedgerPosting ledger, LedgerAccounts accounts) {
+    SavingsBooks(LedgerPosting ledger, LedgerAccounts accounts, PaymentMethods paymentMethods) {
         this.ledger = ledger;
         this.accounts = accounts;
+        this.paymentMethods = paymentMethods;
     }
 
-    /** FR-GL-08: refused with {@code payment_method_unmapped} before anything is written. */
-    String methodAccount(String paymentMethodKey) {
-        String key = METHOD_ACCOUNTS.get(paymentMethodKey);
-        if (key == null || accounts.bySystemKey(key).isEmpty()) {
-            throw ApiException.rule(
-                    "payment_method_unmapped",
-                    "The payment method " + paymentMethodKey + " has no active ledger account.");
-        }
-        return key;
+    /**
+     * FR-GL-08: the account a payment by this method posts to at this branch (the branch's
+     * mapping, else the tenant's, else the seeded default); {@code payment_method_unmapped} first.
+     */
+    String methodAccount(String paymentMethodKey, UUID branchId) {
+        return paymentMethods.accountRef(paymentMethodKey, branchId);
     }
 
     /**
@@ -102,7 +94,7 @@ class SavingsBooks {
     }
 
     private Line line(String systemKey, boolean debit, long amountMinor, UUID accountId) {
-        LedgerAccounts.Account account = accounts.bySystemKey(systemKey)
+        LedgerAccounts.Account account = accounts.byRef(systemKey)
                 .orElseThrow(() -> ApiException.rule(
                         "lending_chart_missing",
                         "The tenant has no active account with system key " + systemKey + "."));

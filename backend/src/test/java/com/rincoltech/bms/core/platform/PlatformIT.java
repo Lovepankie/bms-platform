@@ -231,6 +231,111 @@ class PlatformIT extends IntegrationTest {
                 .isEqualTo(2);
     }
 
+    /**
+     * Review of #206: retail posts cash and bank to the seeded accounts, so it is not switched on for
+     * a tenant whose cash or bank is mapped elsewhere (the lending cash would leave the balance the
+     * retail cash book reads). Clearing the mapping, or an inactive one, lets it through.
+     */
+    @Test
+    void retailIsNotSwitchedOnWhileCashOrBankIsRemapped() {
+        ResponseEntity<JsonNode> created = create(slug(), List.of("lending"));
+        UUID tenantId =
+                UUID.fromString(created.getBody().get("tenant").get("id").asString());
+        UUID till = UUID.randomUUID();
+        TestDatabase.owner().sql("""
+                        INSERT INTO gl_accounts (id, tenant_id, code, name, account_type, normal_balance, currency,
+                            is_postable, is_system_controlled)
+                        VALUES (?, ?, '1090', 'Test till', 'asset', 'debit', 'UGX', true, false)
+                        """).params(till, tenantId).update();
+        UUID mapping = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql("INSERT INTO payment_methods (id, tenant_id, method_key, gl_account_id) VALUES (?, ?, 'cash', ?)")
+                .params(mapping, tenantId, till)
+                .update();
+        String path = "/api/v1/platform/tenants/" + tenantId + "/modules";
+        Map<String, Object> both = Map.of("modules", List.of("lending", "retail"));
+
+        ResponseEntity<JsonNode> refused = platform.call(HttpMethod.PUT, path, both, operator.accessToken());
+        assertThat(refused.getStatusCode().value()).as("%s", refused.getBody()).isEqualTo(422);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("payment_methods_remap_blocks_retail");
+        assertThat(JdbcCheck.moduleTenants("retail")).doesNotContain(tenantId);
+
+        TestDatabase.owner()
+                .sql("UPDATE payment_methods SET is_active = false WHERE id = ?")
+                .param(mapping)
+                .update();
+        assertThat(platform.call(HttpMethod.PUT, path, both, operator.accessToken())
+                        .getStatusCode())
+                .as("an inactive mapping does not move any cash")
+                .isEqualTo(HttpStatus.OK);
+        assertThat(JdbcCheck.moduleTenants("retail")).contains(tenantId);
+    }
+
+    /**
+     * Third review of #206: saving a cash mapping and switching retail on at the same moment. Both
+     * take one advisory lock per tenant, so whichever runs second sees the other: afterwards retail
+     * is never on together with an active cash mapping to another account.
+     */
+    @Test
+    void aCashMappingAndSwitchingRetailOnAtOnceNeverEndUpTogether() throws Exception {
+        for (int round = 0; round < 4; round++) {
+            ResponseEntity<JsonNode> created = create(slug(), List.of("lending"));
+            UUID tenantId =
+                    UUID.fromString(created.getBody().get("tenant").get("id").asString());
+            String slug = created.getBody().get("tenant").get("slug").asString();
+            UUID till = UUID.randomUUID();
+            TestDatabase.owner().sql("""
+                            INSERT INTO gl_accounts (id, tenant_id, code, name, account_type, normal_balance, currency,
+                                is_postable, is_system_controlled)
+                            VALUES (?, ?, '1091', 'Test till', 'asset', 'debit', 'UGX', true, false)
+                            """).params(till, tenantId).update();
+            Map<String, String> dev = Map.of(
+                    "X-Dev-User-Id", UUID.randomUUID().toString(),
+                    "X-Dev-Permissions", "core.payment_methods.manage,core.ledger.read",
+                    "X-Dev-Branch-Ids", "*");
+            Api tenant = Api.tenant(http, slug);
+            java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+            try (java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+                var mapping = pool.submit(() -> {
+                    start.await();
+                    return tenant.call(
+                            HttpMethod.PUT,
+                            "/api/v1/ledger/payment-methods",
+                            Map.of("method_key", "cash", "gl_account_id", till.toString()),
+                            null,
+                            dev);
+                });
+                var retail = pool.submit(() -> {
+                    start.await();
+                    return platform.call(
+                            HttpMethod.PUT,
+                            "/api/v1/platform/tenants/" + tenantId + "/modules",
+                            Map.of("modules", List.of("lending", "retail")),
+                            operator.accessToken());
+                });
+                start.countDown();
+                assertThat(mapping.get(30, java.util.concurrent.TimeUnit.SECONDS)
+                                .getStatusCode()
+                                .value())
+                        .isIn(200, 422);
+                assertThat(retail.get(30, java.util.concurrent.TimeUnit.SECONDS)
+                                .getStatusCode()
+                                .value())
+                        .isIn(200, 422);
+            }
+            boolean retailOn = JdbcCheck.moduleTenants("retail").contains(tenantId);
+            long activeCashRemaps = TestDatabase.owner()
+                    .sql(
+                            "SELECT count(*) FROM payment_methods WHERE tenant_id = ? AND method_key = 'cash' AND is_active")
+                    .param(tenantId)
+                    .query(Long.class)
+                    .single();
+            assertThat(retailOn && activeCashRemaps > 0)
+                    .as("round %d: retail on with an active cash remap", round)
+                    .isFalse();
+        }
+    }
+
     /** FR-TEN-05, FR-TEN-06: subscription moves are audited; suspension makes the tenant read only. */
     @Test
     void subscriptionMovesAndSuspension() {

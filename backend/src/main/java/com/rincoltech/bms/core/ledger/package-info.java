@@ -5,7 +5,7 @@
 @ApplicationModule(
         id = "core.ledger",
         displayName = "Core: General Ledger",
-        allowedDependencies = {"kernel", "core.tenancy", "core.identity"})
+        allowedDependencies = {"kernel", "core.tenancy", "core.identity", "core.audit"})
 package com.rincoltech.bms.core.ledger;
 
 import org.springframework.modulith.ApplicationModule;

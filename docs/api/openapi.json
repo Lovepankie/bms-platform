@@ -4885,6 +4885,42 @@
           }
         }
       },
+      "PaymentMethodMapping" : {
+        "properties" : {
+          "account_code" : {
+            "type" : "string"
+          },
+          "branch_id" : {
+            "description" : "Null for the tenant's mapping",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "gl_account_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "is_active" : {
+            "type" : "boolean"
+          },
+          "method_key" : {
+            "type" : "string"
+          },
+          "source" : {
+            "description" : "mapped (a row) or default (the seeded account, ADR-026)",
+            "type" : "string"
+          }
+        }
+      },
+      "PaymentMethodMappingList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PaymentMethodMapping"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "PayoffQuote" : {
         "description" : "R-PAYOFF as at value_date; rebate is interest not charged",
         "properties" : {
@@ -11578,6 +11614,28 @@
         },
         "required" : [ "guarantors" ]
       },
+      "SetPaymentMethodRequest" : {
+        "properties" : {
+          "branch_id" : {
+            "description" : "Omit for the tenant's mapping",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "gl_account_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "is_active" : {
+            "description" : "Default true; false switches the method off for this scope",
+            "type" : "boolean"
+          },
+          "method_key" : {
+            "pattern" : "cash|bank|mtn_momo|airtel_money|gateway|savings_transfer",
+            "type" : "string"
+          }
+        },
+        "required" : [ "gl_account_id", "method_key" ]
+      },
       "SetRetailBranchRoleRequest" : {
         "properties" : {
           "role" : {
@@ -13137,6 +13195,127 @@
         },
         "summary" : "A 5 minute signed download URL (FR-DOC-03)",
         "tags" : [ "documents" ]
+      }
+    },
+    "/api/v1/ledger/payment-methods" : {
+      "get" : {
+        "operationId" : "listPaymentMethods",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentMethodMappingList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Each payment method's account: the mapped rows, then the defaults still in use",
+        "tags" : [ "ledger" ]
+      },
+      "put" : {
+        "operationId" : "setPaymentMethod",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SetPaymentMethodRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentMethodMappingList"
+                }
+              }
+            },
+            "description" : "Not in the caller's branch scope (permission_denied)"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentMethodMappingList"
+                }
+              }
+            },
+            "description" : "Another first save of the same method and scope won (payment_method_changed)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentMethodMappingList"
+                }
+              }
+            },
+            "description" : "invalid_payment_account, unknown_branch, account_used_by_retail (cash and bank with retail on)"
+          }
+        },
+        "summary" : "Map a payment method to an asset account (FR-GL-08)",
+        "tags" : [ "ledger" ]
+      }
+    },
+    "/api/v1/ledger/payment-methods/{method_key}" : {
+      "delete" : {
+        "operationId" : "clearPaymentMethod",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "method_key",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentMethodMappingList"
+                }
+              }
+            },
+            "description" : "Not in the caller's branch scope (permission_denied)"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentMethodMappingList"
+                }
+              }
+            },
+            "description" : "That scope has no mapping for the method (not_found)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentMethodMappingList"
+                }
+              }
+            },
+            "description" : "Not a payment method key (validation_failed)"
+          }
+        },
+        "summary" : "Return a payment method to its default account for the tenant or a branch (FR-GL-08)",
+        "tags" : [ "ledger" ]
       }
     },
     "/api/v1/lending/collateral" : {

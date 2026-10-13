@@ -463,7 +463,7 @@ endpoint.
 | POST | `/ledger/journal-entries/{entry_id}/reverse` | `core.journals.create` | **M A** |
 | GET | `/ledger/periods` | `core.ledger.read` | |
 | POST | `/ledger/periods/{period_id}/close` | `core.periods.close` | **A**. FR-GL-06 |
-| GET, PUT | `/ledger/payment-methods` | read / `core.payment_methods.manage` | FR-GL-08 |
+| GET, PUT, DELETE | `/ledger/payment-methods` | `core.ledger.read` / `core.payment_methods.manage` | FR-GL-08. Built (#160): GET lists the mapped rows and the defaults still in use (`source` `mapped` or `default`); PUT sets one method's account for the tenant or a `branch_id` (`is_active` false switches it off). The account must be a postable, active asset account no module controls (`invalid_payment_account`); `unknown_branch`; with the retail module on, `cash` and `bank` stay on their seeded accounts (`account_used_by_retail`). The permission is branch scoped: a branch's row needs that branch in the caller's scope and the tenant-wide row needs authority over every branch (403 `permission_denied` otherwise), for PUT and DELETE alike. Two first saves at once: the loser gets 409 `payment_method_changed`. Audited as `core.payment_method.set`. `DELETE /ledger/payment-methods/{method_key}` (optional `branch_id`) removes that scope's row, so the method posts to its seeded account again (404 when there is no row; audited as `core.payment_method.cleared`). The platform console refuses to switch retail on while cash or bank is mapped elsewhere (`payment_methods_remap_blocks_retail`). |
 | GET | `/ledger/reconciliation` | `core.ledger.read` | Latest subledger reconciliation. FR-GL-10 |
 
 ### 7.11.7 Notifications and documents

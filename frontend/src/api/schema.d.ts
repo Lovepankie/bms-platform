@@ -380,6 +380,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ledger/payment-methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Each payment method's account: the mapped rows, then the defaults still in use */
+        get: operations["listPaymentMethods"];
+        /** Map a payment method to an asset account (FR-GL-08) */
+        put: operations["setPaymentMethod"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/payment-methods/{method_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Return a payment method to its default account for the tenant or a branch (FR-GL-08) */
+        delete: operations["clearPaymentMethod"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/collateral": {
         parameters: {
             query?: never;
@@ -5858,6 +5893,23 @@ export interface components {
             enabled_channels?: string[];
             failures?: components["schemas"]["OutboxFailure"][];
         };
+        PaymentMethodMapping: {
+            account_code?: string;
+            /**
+             * Format: uuid
+             * @description Null for the tenant's mapping
+             */
+            branch_id?: string;
+            /** Format: uuid */
+            gl_account_id?: string;
+            is_active?: boolean;
+            method_key?: string;
+            /** @description mapped (a row) or default (the seeded account, ADR-026) */
+            source?: string;
+        };
+        PaymentMethodMappingList: {
+            items?: components["schemas"]["PaymentMethodMapping"][];
+        };
         /** @description R-PAYOFF as at value_date; rebate is interest not charged */
         PayoffQuote: {
             currency?: string;
@@ -9199,6 +9251,18 @@ export interface components {
         SetLoanGuarantorsRequest: {
             guarantors: components["schemas"]["LoanGuarantorInput"][];
         };
+        SetPaymentMethodRequest: {
+            /**
+             * Format: uuid
+             * @description Omit for the tenant's mapping
+             */
+            branch_id?: string;
+            /** Format: uuid */
+            gl_account_id: string;
+            /** @description Default true; false switches the method off for this scope */
+            is_active?: boolean;
+            method_key: string;
+        };
         SetRetailBranchRoleRequest: {
             /** @enum {string} */
             role: "store" | "shop" | "both";
@@ -10060,6 +10124,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DownloadUrl"];
+                };
+            };
+        };
+    };
+    listPaymentMethods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodMappingList"];
+                };
+            };
+        };
+    };
+    setPaymentMethod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPaymentMethodRequest"];
+            };
+        };
+        responses: {
+            /** @description Not in the caller's branch scope (permission_denied) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodMappingList"];
+                };
+            };
+            /** @description Another first save of the same method and scope won (payment_method_changed) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodMappingList"];
+                };
+            };
+            /** @description invalid_payment_account, unknown_branch, account_used_by_retail (cash and bank with retail on) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodMappingList"];
+                };
+            };
+        };
+    };
+    clearPaymentMethod: {
+        parameters: {
+            query?: {
+                branch_id?: string;
+            };
+            header?: never;
+            path: {
+                method_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Not in the caller's branch scope (permission_denied) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodMappingList"];
+                };
+            };
+            /** @description That scope has no mapping for the method (not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodMappingList"];
+                };
+            };
+            /** @description Not a payment method key (validation_failed) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodMappingList"];
                 };
             };
         };

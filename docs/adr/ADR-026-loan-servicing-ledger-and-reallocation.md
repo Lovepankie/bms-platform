@@ -118,4 +118,24 @@ Also decided here, within the rules of chapter 3:
 - Penalty charges and waivers arrive in increment 6; the replay starts from the contracted
   schedule and must then add penalty charges and charge waivers before re-applying repayments.
 - When FR-GL-08's `payment_methods` arrives, the default mapping must stay as the fallback or be
-  seeded as rows, so existing tenants keep posting.
+  seeded as rows, so existing tenants keep posting. Done in #160 (V43): the defaults stay the
+  fallback, in one place (`core.ledger`'s `PaymentMethods`), and the three lending copies of the
+  default table are gone. That is lending only. Retail still hard-codes its accounts: sales,
+  purchases, the cash book postings and the cash figures use `cash_on_hand` and `bank` by system key
+  and do not read the mapping (#236). On a tenant with both verticals those two accounts are shared,
+  so remapping lending's `cash` or `bank` would take lending money out of the retail cash book. The
+  mapping therefore refuses it: while the retail module is on, `cash` and `bank` can be mapped only
+  to those two seeded accounts (`account_used_by_retail`), at the tenant or a branch; mobile money,
+  the gateway and savings transfer stay free, and so does switching a method off. The other
+  direction is closed too: `platform_set_tenant_modules` (replaced in V43, body as in V10 plus the
+  check) refuses to switch retail on for a tenant that has an active cash or bank mapping to any
+  other account (`payment_methods_remap_blocks_retail`, 422 on the platform console); the operator
+  clears the mapping first. A save and the module switch take one advisory lock per tenant
+  (`payment_methods:<tenant id>`), so they run one after the other and cannot both pass their check.
+  The platform console is the only way retail is switched on, and the function is the only place it
+  is done. Saving or removing a mapping needs the manage permission in the branch concerned, and
+  authority over every branch for the tenant-wide row. A mapping can be removed (`DELETE /ledger/payment-methods/{method_key}`,
+  optional `branch_id`), which returns the method to its seeded account. Lifting the restrictions
+  needs retail to post and read through `PaymentMethods` (#236). A correction credits the account the original entry
+  debited, never the method's mapping at the time of the correction. A request is checked at the
+  branch of the loan, account or investment, the same row that execution resolves.

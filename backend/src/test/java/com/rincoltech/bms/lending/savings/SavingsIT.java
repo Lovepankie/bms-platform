@@ -485,6 +485,73 @@ class SavingsIT extends LoanFixtures {
         booksAgree();
     }
 
+    String entryOf(String txnId) {
+        return TestDatabase.owner()
+                .sql("SELECT journal_entry_id::text FROM lending_savings_transactions WHERE id = ?::uuid")
+                .param(txnId)
+                .query(String.class)
+                .single();
+    }
+
+    /**
+     * FR-GL-08 (review of #206): savings deposits and withdrawals post to the mapped accounts (the
+     * tenant's for cash, the branch's for mobile money), and a reversal after a remap mirrors the
+     * original entry, so it leaves the till the deposit went into.
+     */
+    @Test
+    void frGl08_savingsPostToTheMappedAccountsAndAReversalMirrorsAfterARemap() {
+        threshold(10_000_000);
+        String tillA = assetAccount("1021", "Test savings till A");
+        String tillB = assetAccount("1022", "Test savings till B");
+        String momo = assetAccount("1023", "Test head office momo");
+        assertThat(mapMethod("cash", null, tillA, null).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(mapMethod("mtn_momo", t.headOffice(), momo, null).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        String account = account(product("MAPPED", Map.of()));
+
+        String deposit = deposit(account, 80_000, key())
+                .getBody()
+                .get("transaction")
+                .get("id")
+                .asString();
+        assertThat(codedLines(entryOf(deposit))).containsExactly("1021:80000:0", "2010:0:80000");
+        String withdrawal = withdraw(account, 30_000, key())
+                .getBody()
+                .get("transaction")
+                .get("id")
+                .asString();
+        assertThat(codedLines(entryOf(withdrawal))).containsExactly("2010:30000:0", "1023:0:30000");
+
+        assertThat(mapMethod("cash", null, tillB, null).getStatusCode()).isEqualTo(HttpStatus.OK);
+        String later = deposit(account, 50_000, key())
+                .getBody()
+                .get("transaction")
+                .get("id")
+                .asString();
+        assertThat(codedLines(entryOf(later)))
+                .as("new money follows the new mapping")
+                .containsExactly("1022:50000:0", "2010:0:50000");
+
+        ResponseEntity<JsonNode> r = send(
+                HttpMethod.POST,
+                ACCOUNTS + "/" + account + "/transactions/" + deposit + "/reverse",
+                withKey(asCashier(), key()),
+                Map.of("reason", "Counterfeit notes"));
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(decide(r.getBody().get("approval_request_id").asString(), manager, managerPerms)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        String reversal = TestDatabase.owner()
+                .sql("SELECT journal_entry_id::text FROM lending_savings_transactions WHERE reverses_txn_id = ?::uuid")
+                .param(deposit)
+                .query(String.class)
+                .single();
+        assertThat(codedLines(reversal))
+                .as("the reversal takes the money out of till A, where the deposit put it")
+                .containsExactlyInAnyOrder("2010:80000:0", "1021:0:80000");
+        booksAgree();
+    }
+
     // ---- Status: freeze, dormancy, reactivation (FR-SAV-06) ---------------------------------
 
     @Test

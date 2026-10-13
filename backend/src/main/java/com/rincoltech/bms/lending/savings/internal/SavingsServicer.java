@@ -159,7 +159,7 @@ class SavingsServicer implements SavingsServicing {
                     "The first deposit must be at least the product's minimum opening balance ("
                             + a.minOpeningBalanceMinor() + ").");
         }
-        books.methodAccount(paymentMethodKey);
+        books.methodAccount(paymentMethodKey, a.branchId());
     }
 
     UUID deposit(
@@ -170,7 +170,7 @@ class SavingsServicer implements SavingsServicing {
             String externalReference,
             UUID by,
             String source) {
-        String method = books.methodAccount(paymentMethodKey);
+        String method = books.methodAccount(paymentMethodKey, a.branchId());
         String receipt = number("RC", "receipt", a.branchId());
         UUID txnId = UUID.randomUUID();
         PostedEntry entry = books.post(
@@ -242,7 +242,7 @@ class SavingsServicer implements SavingsServicing {
                     "The most this account can pay out now is " + available
                             + " (balance less any hold, the minimum balance and the withdrawal fee).");
         }
-        books.methodAccount(paymentMethodKey);
+        books.methodAccount(paymentMethodKey, a.branchId());
     }
 
     /** Balance less hold, minimum balance and the fee: the largest withdrawal allowed now. */
@@ -325,7 +325,7 @@ class SavingsServicer implements SavingsServicing {
             UUID approvalId,
             UUID by,
             String source) {
-        String method = books.methodAccount(paymentMethodKey);
+        String method = books.methodAccount(paymentMethodKey, a.branchId());
         String voucher = number("VC", "voucher", a.branchId());
         UUID txnId = UUID.randomUUID();
         PostedEntry entry = books.post(
@@ -504,7 +504,7 @@ class SavingsServicer implements SavingsServicing {
             throw ApiException.rule(
                     "account_on_hold", "The account has a hold of " + a.holdMinor() + "; it cannot be closed.");
         }
-        books.methodAccount(paymentMethodKey);
+        books.methodAccount(paymentMethodKey, a.branchId());
         return a.balanceMinor();
     }
 
