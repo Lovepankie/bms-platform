@@ -53,11 +53,17 @@ class JdbcCashSales implements CashSales {
                     return 0;
                 })
                 .list();
-        // Cash payments on credit sales by the day they were received.
+        // Cash payments on credit sales by the day they were received. A payment on account (issue #196) was received
+        // in
+        // the branch named on its receipt, which may not be the branch of the sale it paid; any other payment is the
+        // sale's branch's.
         jdbc.sql("""
                         SELECT p.paid_on AS day, sum(p.amount_minor) AS cash, bool_or(p.historical) AS hist
                           FROM retail_sale_payments p JOIN retail_sales s ON s.id = p.sale_id
-                         WHERE s.branch_id = :branch AND p.method = 'cash' AND p.paid_on BETWEEN :from AND :to
+                          LEFT JOIN retail_account_payment_allocations a ON a.sale_payment_id = p.id
+                          LEFT JOIN retail_account_payments r ON r.id = a.receipt_id
+                         WHERE coalesce(r.branch_id, s.branch_id) = :branch AND p.method = 'cash'
+                           AND p.paid_on BETWEEN :from AND :to
                          GROUP BY p.paid_on
                         """)
                 .param("branch", branchId)
@@ -88,6 +94,25 @@ class JdbcCashSales implements CashSales {
                     acc.merge(
                             rs.getDate("day").toLocalDate(),
                             new Acc(0, rs.getLong("voided"), 0, false),
+                            (a, b) -> a.plus(b.takings(), b.voids(), b.sold(), b.historical()));
+                    return 0;
+                })
+                .list();
+        // Payments on account reversed in the window, by the day of the reversal: like a voided cash sale, the payment
+        // stays on the day it was received and the reversal takes the money out on the day it was undone.
+        jdbc.sql("""
+                        SELECT reversed_on AS day, sum(amount_minor) AS reversed FROM retail_account_payments
+                         WHERE branch_id = :branch AND method = 'cash' AND status = 'reversed'
+                           AND reversed_on BETWEEN :from AND :to
+                         GROUP BY reversed_on
+                        """)
+                .param("branch", branchId)
+                .param("from", java.sql.Date.valueOf(from))
+                .param("to", java.sql.Date.valueOf(to))
+                .query((rs, n) -> {
+                    acc.merge(
+                            rs.getDate("day").toLocalDate(),
+                            new Acc(0, rs.getLong("reversed"), 0, false),
                             (a, b) -> a.plus(b.takings(), b.voids(), b.sold(), b.historical()));
                     return 0;
                 })

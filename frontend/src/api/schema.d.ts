@@ -2668,6 +2668,24 @@ export interface paths {
         patch: operations["updateRetailCustomer"];
         trace?: never;
     };
+    "/api/v1/retail/customers/{customer_id}/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A credit buyer's account: limit, terms and what is owed (issue #196) */
+        get: operations["getRetailCustomerAccount"];
+        /** Set a credit buyer's limit and payment terms under If-Match (issue #196) */
+        put: operations["setRetailCustomerAccount"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/customers/{customer_id}/balance": {
         parameters: {
             query?: never;
@@ -2685,6 +2703,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/customers/{customer_id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Payments on account of a credit buyer, newest first (issue #196) */
+        get: operations["listRetailCustomerAccountPayments"];
+        put?: never;
+        /** Payment on account: money from a credit buyer allocated to their open sales (issue #196); M */
+        post: operations["payRetailCustomerAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/customers/{customer_id}/payments/{payment_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reverse a payment on account as a whole (issue #196); M */
+        post: operations["reverseRetailCustomerAccountPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/customers/{customer_id}/pricing": {
         parameters: {
             query?: never;
@@ -2695,6 +2748,23 @@ export interface paths {
         get?: never;
         /** Set a credit buyer's customer group and own price list under If-Match (issue #195) */
         put: operations["setRetailCustomerPricing"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/customers/{customer_id}/statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Statement: opening balance, lines with a running balance, closing balance (issue #196) */
+        get: operations["getRetailCustomerStatement"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -3145,6 +3215,23 @@ export interface paths {
         };
         /** Outstanding credit by buyer with ageing, the overdue list and payments received (issue #149) */
         get: operations["getRetailCreditControl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/reports/customer-ageing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ageing per credit buyer with a record: buckets, credit limit and terms (issue #196) */
+        get: operations["getRetailCustomerAgeing"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6018,6 +6105,79 @@ export interface components {
             loan_status?: string;
             transaction?: components["schemas"]["LoanTransaction"];
         };
+        RetailAccountAllocation: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: uuid */
+            sale_id?: string;
+            sale_no?: string;
+            /** Format: uuid */
+            sale_payment_id?: string;
+        };
+        /** @description Absent: the amount is allocated to the oldest open credit sales first. Present: exactly these sales and amounts, which must add up to amount_minor */
+        RetailAccountAllocationRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            /** Format: uuid */
+            sale_id: string;
+        };
+        RetailAccountPayment: {
+            /** @description oldest_first or manual */
+            allocation?: string;
+            allocations?: components["schemas"]["RetailAccountAllocation"][];
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: uuid */
+            customer_id?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            journal_entry_id?: string;
+            method?: string;
+            /** Format: date */
+            paid_on?: string;
+            receipt_no?: string;
+            reverse_reason?: string;
+            /** Format: date-time */
+            reversed_at?: string;
+            /** Format: uuid */
+            reversed_by?: string;
+            /** @description posted or reversed */
+            status?: string;
+        };
+        RetailAccountPaymentList: {
+            items?: components["schemas"]["RetailAccountPayment"][];
+            next_cursor?: string;
+        };
+        RetailAccountPaymentRequest: {
+            /** @description Absent: the amount is allocated to the oldest open credit sales first. Present: exactly these sales and amounts, which must add up to amount_minor */
+            allocations?: components["schemas"]["RetailAccountAllocationRequest"][];
+            /** Format: int64 */
+            amount_minor: number;
+            /**
+             * Format: uuid
+             * @description The branch that received the money; defaults to the caller's one branch
+             */
+            branch_id?: string;
+            method: string;
+            /**
+             * Format: date
+             * @description Defaults to today; not in the future
+             */
+            paid_on?: string;
+        };
+        RetailAccountPaymentReverseRequest: {
+            reason: string;
+        };
         RetailAdvance: {
             advance_no?: string;
             /** Format: date-time */
@@ -6565,6 +6725,11 @@ export interface components {
         RetailCreditBuyer: {
             ageing?: components["schemas"]["RetailAgeing"];
             /**
+             * Format: int64
+             * @description The buyer's credit limit; present only while the customer_accounts capability is on and the buyer has a record with a limit
+             */
+            credit_limit_minor?: number;
+            /**
              * Format: uuid
              * @description The credit buyer's id; absent for a buyer who was typed in by name
              */
@@ -6575,6 +6740,8 @@ export interface components {
              * @description Days past the due date of the oldest overdue sale; absent when none is overdue
              */
             oldest_overdue_days?: number;
+            /** @description Owed is above the limit. Present only with a limit and only when the report covers every branch, because the limit is measured across all of them */
+            over_limit?: boolean;
             /** Format: int32 */
             sale_count?: number;
         };
@@ -6614,6 +6781,11 @@ export interface components {
             /** Format: date-time */
             created_at?: string;
             /**
+             * Format: int64
+             * @description The credit limit, when the buyer has one; present only while the customer_accounts capability is on
+             */
+            credit_limit_minor?: number;
+            /**
              * Format: uuid
              * @description The customer group; present only while the price_lists capability is on
              */
@@ -6628,9 +6800,102 @@ export interface components {
             price_list_id?: string;
             /**
              * Format: int32
+             * @description The payment terms in days, when the buyer has them; present only while the customer_accounts capability is on
+             */
+            terms_days?: number;
+            /**
+             * Format: int32
              * @description Send as If-Match when updating
              */
             version?: number;
+        };
+        RetailCustomerAccount: {
+            /**
+             * Format: int64
+             * @description The limit less the exposure, never below zero; present with a limit and exposure_minor
+             */
+            available_minor?: number;
+            /**
+             * Format: int64
+             * @description Owed on credit sales in the caller's branch scope, historical imports included
+             */
+            balance_minor?: number;
+            /**
+             * Format: int64
+             * @description Absent means no limit
+             */
+            credit_limit_minor?: number;
+            currency?: string;
+            /** Format: uuid */
+            customer_id?: string;
+            /**
+             * Format: int64
+             * @description What the limit is measured against: owed on credit sales in every branch. Present only when the caller's scope covers every branch, so no other branch's sales leak
+             */
+            exposure_minor?: number;
+            name?: string;
+            /** @description The exposure is above the limit; present with a limit and exposure_minor */
+            over_limit?: boolean;
+            /**
+             * Format: int32
+             * @description Absent means no terms
+             */
+            terms_days?: number;
+            /**
+             * Format: int32
+             * @description Send as If-Match when updating the account
+             */
+            version?: number;
+        };
+        /** @description Replaces the credit limit and the payment terms, sent under If-Match with the customer's version. Each of the two is either given or cleared on purpose: a value, or its clear flag set to true, never neither and never both (422), so a body of {} changes nothing */
+        RetailCustomerAccountRequest: {
+            /** @description true removes the limit; do not send it with credit_limit_minor */
+            clear_credit_limit?: boolean;
+            /** @description true removes the terms; do not send it with terms_days */
+            clear_terms_days?: boolean;
+            /**
+             * Format: int64
+             * @description The most the buyer may owe on credit sales, all branches together
+             */
+            credit_limit_minor?: number;
+            /**
+             * Format: int32
+             * @description Days after the sale a credit sale falls due; 0 is the day of the sale
+             */
+            terms_days?: number;
+        };
+        /** @description Ageing per credit buyer with a record, as of today in the business time zone; a sale with no due date counts as not yet due. No cost or profit appears */
+        RetailCustomerAgeing: {
+            /** Format: date */
+            as_of?: string;
+            currency?: string;
+            /** Format: int32 */
+            customer_count?: number;
+            /** @description Buyers owing the most first */
+            customers?: components["schemas"]["RetailCustomerAgeingRow"][];
+            /** Format: int32 */
+            top?: number;
+            totals?: components["schemas"]["RetailAgeing"];
+        };
+        /** @description A credit buyer with a record: what is owed, by days past the due date, with limit and terms */
+        RetailCustomerAgeingRow: {
+            ageing?: components["schemas"]["RetailAgeing"];
+            /** Format: int64 */
+            credit_limit_minor?: number;
+            /** Format: uuid */
+            customer_id?: string;
+            name?: string;
+            /**
+             * Format: int32
+             * @description Days past the due date of the oldest overdue sale; absent when none is overdue
+             */
+            oldest_overdue_days?: number;
+            /** @description Owed is above the limit. Present only with a limit and only when the caller's scope covers every branch, because the limit is measured across all of them */
+            over_limit?: boolean;
+            /** Format: int32 */
+            sale_count?: number;
+            /** Format: int32 */
+            terms_days?: number;
         };
         /** @description Credit sales in the caller's branch scope */
         RetailCustomerBalance: {
@@ -6692,6 +6957,33 @@ export interface components {
         RetailCustomerRequest: {
             contact?: string;
             name: string;
+        };
+        RetailCustomerStatement: {
+            /**
+             * Format: int64
+             * @description closing_minor plus the imported credit sales before system start: equals GET /customers/{id}/balance in the caller's branch scope when to is today or later
+             */
+            balance_minor?: number;
+            before_system_start?: components["schemas"]["RetailStatementBeforeSystemStart"];
+            /**
+             * Format: int64
+             * @description Opening plus the lines: what the ledger holds for the buyer's sales in the caller's branch scope (trade debtors by sale), as of the end of to
+             */
+            closing_minor?: number;
+            currency?: string;
+            /** Format: uuid */
+            customer_id?: string;
+            /** Format: date */
+            from?: string;
+            lines?: components["schemas"]["RetailStatementLine"][];
+            name?: string;
+            /**
+             * Format: int64
+             * @description Owed at the start of from, on the sales and payments the ledger holds
+             */
+            opening_minor?: number;
+            /** Format: date */
+            to?: string;
         };
         /** @description Omitted fields are unchanged; an empty contact clears it */
         RetailCustomerUpdate: {
@@ -7284,6 +7576,8 @@ export interface components {
             branch_id?: string;
             /** Format: date */
             due_date?: string;
+            /** @description True for an imported credit sale (never posted to the ledger, skipped by payment on account); present only while the customer_accounts capability is on, and only when true */
+            historical?: boolean;
             /** Format: int64 */
             paid_minor?: number;
             /** Format: date */
@@ -7366,7 +7660,7 @@ export interface components {
             /** Format: uuid */
             sale_id?: string;
         };
-        /** @description Payments on credit sales received in the range, by day and method */
+        /** @description Payments received on a day by method. A reversed payment on account stays on the day it was received; its reversal is a row of its own on the day it was undone, with a negative count and amount */
         RetailPaymentDay: {
             /** Format: int64 */
             amount_minor?: number;
@@ -8003,6 +8297,8 @@ export interface components {
             branch_id?: string;
             buyer_contact?: string;
             buyer_name?: string;
+            /** @description Why a credit sale above the buyer's credit limit goes ahead; needed (at least five characters) from a user who holds retail.credit.override, ignored when the sale is within the limit or the customer_accounts capability is off */
+            credit_override_reason?: string;
             /** Format: uuid */
             customer_id?: string;
             /**
@@ -8270,6 +8566,41 @@ export interface components {
             used_cost_minor?: number;
             /** Format: int32 */
             used_reports?: number;
+        };
+        /** @description Imported credit sales. They were never posted to the ledger (issue #96), so the statement lists them apart and the ledger-supported closing balance leaves them out */
+        RetailStatementBeforeSystemStart: {
+            sales?: components["schemas"]["RetailStatementHistoricalSale"][];
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailStatementHistoricalSale: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            sale_date?: string;
+            /** Format: uuid */
+            sale_id?: string;
+            sale_no?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        /** @description kind is sale, payment (against one sale), account_payment (a receipt, one line for all its allocations in scope), reversal (of a receipt) or void (of a sale) */
+        RetailStatementLine: {
+            /** Format: int64 */
+            balance_minor?: number;
+            /** Format: int64 */
+            credit_minor?: number;
+            /** Format: date */
+            date?: string;
+            /** Format: int64 */
+            debit_minor?: number;
+            kind?: string;
+            method?: string;
+            /** Format: uuid */
+            receipt_id?: string;
+            reference?: string;
+            /** Format: uuid */
+            sale_id?: string;
         };
         RetailStockBranch: {
             code?: string;
@@ -14155,6 +14486,56 @@ export interface operations {
             };
         };
     };
+    getRetailCustomerAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomerAccount"];
+                };
+            };
+        };
+    };
+    setRetailCustomerAccount: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailCustomerAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomerAccount"];
+                };
+            };
+        };
+    };
     getRetailCustomerBalance: {
         parameters: {
             query?: never;
@@ -14173,6 +14554,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailCustomerBalance"];
+                };
+            };
+        };
+    };
+    listRetailCustomerAccountPayments: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAccountPaymentList"];
+                };
+            };
+        };
+    };
+    payRetailCustomerAccount: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailAccountPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAccountPayment"];
+                };
+            };
+        };
+    };
+    reverseRetailCustomerAccountPayment: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                customer_id: string;
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailAccountPaymentReverseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAccountPayment"];
                 };
             };
         };
@@ -14201,6 +14664,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailCustomer"];
+                };
+            };
+        };
+    };
+    getRetailCustomerStatement: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomerStatement"];
                 };
             };
         };
@@ -15090,6 +15578,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailCreditControl"];
+                };
+            };
+        };
+    };
+    getRetailCustomerAgeing: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                top?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCustomerAgeing"];
                 };
             };
         };

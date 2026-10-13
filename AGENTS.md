@@ -57,7 +57,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   ADR-032) `V30`, the first-run preferences (issue #19, ADR-025) `V31`, and lending investments
   (issue #152, ADR-031) `V32`, and lending insights (issue #153, ADR-030) `V33`. Flyway runs with
   `outOfOrder` off, so a new migration takes a number above the highest one on any open branch
-  (`V34` is the retail cash book, issue #147; `V35` is claimed by lending, issue #176; `V36` is claimed by lending payment methods, issue #160; `V37` is retail branch roles, issue #191; `V38` is the retail two-step transfer, issue #193; `V39` is units of measure, issue #194; `V40` is search, issue #241; `V41` is price lists, issue #195; `V42` next). The retail analytics pass (issue #149) is reports only on existing data: no migration; its
+  (`V34` is the retail cash book, issue #147; `V35` is claimed by lending, issue #176; `V36` is claimed by lending payment methods, issue #160; `V37` is retail branch roles, issue #191; `V38` is the retail two-step transfer, issue #193; `V39` is units of measure, issue #194; `V40` is search, issue #241; `V41` is price lists, issue #195; `V42` is the loan reopen pledge guard, issue #176; `V43` is payment methods, issue #160; `V44` is customer accounts, issue #196). The retail analytics pass (issue #149) is reports only on existing data: no migration; its
   queries are in `scripts/db-bench/queries` (k01 to k15).
 - **Built (trade 1 of 10, issue #191, ADR-033):** migration `V37` (`retail_branch_roles`, the permission
   `retail.branch_role.manage`, a backfill of role `both`); the tenant settings group `retail.capabilities`
@@ -99,6 +99,16 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   lists refuse) and stores the resolved price, so a later list change never touches a sale; a typed price that differs is an override
   with a reason. The Price lists and Customer groups screens, the Credit buyers assignment and the sale screen's price notes show while
   `module_capabilities` lists `price_lists`, which is marked ready with its own tour (`capability-price-lists`).
+- **Built (trade 6 of 10, issue #196, ADR-033):** migration `V44` (customer accounts): `credit_limit_minor` and `terms_days` on
+  `retail_customers`, `retail_account_payments` (the receipt of a payment on account, reversed once, as a whole) and its append-only
+  allocations to ordinary sale payments; permissions `retail.credit.manage` and `retail.credit.override` (administrators); routes
+  `/retail/customers/{id}/account`, `/statement`, `/payments` and `/payments/{id}/reverse`, and `/retail/reports/customer-ageing`;
+  a credit sale locks the buyer's row, refuses above the limit (or takes a reason from a holder of the override), needs a customer
+  record, and takes its due date from the terms; the credit control report carries the limit; the cash book takes a payment on
+  account in the receiving branch; the V14 guard of `retail_sales` lets `paid_minor` fall only inside the reversal of one named receipt and only by exactly what it allocated to the sale; a payment on account posts to the seeded retail accounts by system key (`cash_on_hand`, `mobile_money`, `bank`), like every retail posting (ADR-026, #236). The Customer
+  accounts page, the Customer ageing page, the account page (summary, take a payment, payments taken, statement), the Credit buyers and Credit control links
+  and the sale screen's limit handling show while `module_capabilities` lists `customer_accounts`, which is marked ready with its own
+  tour (`capability-customer-accounts`). The statement as a PDF is the documents slice.
 - **Self-onboarding, build step 1 (issue #89, ADR-024):** migration `V23` with
   `onboarding_applications` and `notification_outbox`, reached only through definer functions;
   the public sign-up and applicant page; the operator portal on the platform host (operator

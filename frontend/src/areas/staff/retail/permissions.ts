@@ -12,7 +12,7 @@ export type RetailScreen =
   | 'sale' | 'creditSales' | 'salesHistory' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit' | 'salesAnalysis' | 'margins' | 'stockHealth' | 'creditControl' | 'evaluation'
   | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer'
   // The trade screens of ADR-033: offered only while their capability is on (SCREEN_CAPABILITY below).
-  | 'stockByLocation' | 'inTransit' | 'priceLists' | 'customerGroups'
+  | 'stockByLocation' | 'inTransit' | 'priceLists' | 'customerGroups' | 'customerAccounts' | 'customerAgeing'
   // The cash book (ADR-022, FR-RET-31).
   | 'savings' | 'banking' | 'expenses' | 'withdrawals' | 'advances' | 'cashSummary' | 'bankingReport' | 'expensesReport' | 'expenseSetup'
   // The administrator's retail settings (profile and capabilities) and the screens of a capability (ADR-033).
@@ -29,6 +29,8 @@ export const SCREEN_CAPABILITY: Partial<Record<RetailScreen, string>> = {
   inTransit: 'transfer_receipt',
   priceLists: 'price_lists',
   customerGroups: 'price_lists',
+  customerAccounts: 'customer_accounts',
+  customerAgeing: 'customer_accounts',
 };
 
 /** The catalogue management screens (#146); the Catalogue tile opens when any of them may be used. */
@@ -40,6 +42,12 @@ export const PRICELIST_MANAGE = 'retail.pricelist.manage';
 export const PRICELIST_USE = 'retail.pricelist.use';
 /** Charge a price other than the one a price list resolved, with a reason. */
 export const PRICE_OVERRIDE = 'retail.price.override';
+/** Set a credit buyer's limit and payment terms (administrators; the sales role edits name and contact only). */
+export const CREDIT_MANAGE = 'retail.credit.manage';
+/** Sell on credit above a buyer's limit, with a reason. */
+export const CREDIT_OVERRIDE = 'retail.credit.override';
+/** Reverse a payment on account (the permission that voids a sale). */
+export const SALE_VOID = 'retail.sale.void';
 export const SAVINGS_RECORD = 'retail.savings.record';
 export const SAVINGS_OVERWRITE = 'retail.savings.overwrite';
 export const CASHBOOK_READ = 'retail.cashbook.read';
@@ -73,6 +81,12 @@ const NEEDS: Record<RetailScreen, string[]> = {
   // Price lists and customer groups are the administrator's (retail.pricelist.manage); the editor finds items by the stock read.
   priceLists: [PRICELIST_MANAGE, 'retail.stock.read'],
   customerGroups: [PRICELIST_MANAGE],
+  // The Customer accounts tile is the administrator's (limits and terms are retail.credit.manage); a seller opens one buyer's
+  // account from Credit buyers or Credit control, which the account page allows with a sales read (canOpenAccount).
+  customerAccounts: [CREDIT_MANAGE, 'retail.sale.read'],
+  // Customer ageing is a tile of the administrator's, like Customer accounts, so a seller's menu is the same with the feature on or
+  // off; the report itself is a sales read on the server and agrees with Credit control.
+  customerAgeing: [CREDIT_MANAGE, 'retail.sale.read'],
   // Stock value is a stock read; its cost columns and the profit report need retail.profit.read.
   valuation: ['retail.stock.read'],
   profit: [PROFIT],
@@ -185,8 +199,14 @@ export function showRetail(me: Pick<Me, 'permissions'> & { modules?: string[] })
 export const BRANCH_ROLES = 'branch_roles';
 export const UNITS = 'units';
 export const PRICE_LISTS = 'price_lists';
+export const CUSTOMER_ACCOUNTS = 'customer_accounts';
 export const BRANCH_ROLE_MANAGE = 'retail.branch_role.manage';
 export const TRANSFER_RECEIPT = 'transfer_receipt';
+
+/** A buyer's account page (customer_accounts): open to whoever reads sales while the feature is on; its forms check their own permissions. */
+export function canOpenAccount(me: Pick<Me, 'permissions' | 'module_capabilities'>): boolean {
+  return capabilityOn(me, 'retail', CUSTOMER_ACCOUNTS) && permissionsOf(me).includes('retail.sale.read');
+}
 
 /** True when /me lists `capability` among the enabled capabilities of `module` (absent means off). */
 export function capabilityOn(me: Pick<Me, 'module_capabilities'>, module: string, capability: string): boolean {
@@ -239,6 +259,8 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'expenseSetup', path: '/staff/retail/expense-lists', label: 'Expense lists', hint: 'Categories and items' },
   { screen: 'priceLists', path: '/staff/retail/price-lists', label: 'Price lists', hint: 'Different prices for different customers, with quantity discounts' },
   { screen: 'customerGroups', path: '/staff/retail/customer-groups', label: 'Customer groups', hint: 'Group customers that share a price list' },
+  { screen: 'customerAccounts', path: '/staff/retail/accounts', label: 'Customer accounts', hint: 'Credit limits, statements and payments from customers' },
+  { screen: 'customerAgeing', path: '/staff/retail/customer-ageing', label: 'Customer ageing', hint: 'What each credit buyer owes, by how late it is' },
   { screen: 'branchRoles', path: '/staff/retail/branch-roles', label: 'Branch roles', hint: 'Which branches are stores and which are shops' },
   { screen: 'settings', path: '/staff/retail/settings', label: 'Retail settings', hint: 'Shop or trade, and the features you use' },
 ];

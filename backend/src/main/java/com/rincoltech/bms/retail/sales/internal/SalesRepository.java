@@ -390,10 +390,35 @@ class SalesRepository {
                         """).params(amountMinor, saleId).update();
     }
 
+    /**
+     * Gives a reversed payment on account back to the sale (V44): the sales guard lets paid_minor fall only while the
+     * transaction-local setting {@code bms.reverse_account_payment} holds the id of the reversed receipt that allocated
+     * {@code amountMinor} to this sale, and only by exactly that amount. The setting is raised for this one statement and
+     * cleared after it; when the statement throws the transaction is aborted and the setting dies with it.
+     */
+    void releasePaid(UUID saleId, UUID receiptId, long amountMinor) {
+        jdbc.sql("SELECT set_config('bms.reverse_account_payment', ?, true)")
+                .param(receiptId.toString())
+                .query()
+                .singleValue();
+        jdbc.sql("""
+                        UPDATE retail_sales SET paid_minor = paid_minor - ?, updated_at = now(), version = version + 1
+                         WHERE id = ?
+                        """).params(amountMinor, saleId).update();
+        jdbc.sql("SELECT set_config('bms.reverse_account_payment', '', true)")
+                .query()
+                .singleValue();
+    }
+
     List<Payment> payments(UUID saleId) {
         return jdbc.sql("""
                         SELECT id, sale_id, amount_minor, currency, method, paid_on, journal_entry_id, created_at, created_by
-                          FROM retail_sale_payments WHERE sale_id = ? ORDER BY paid_on, created_at, id
+                          FROM retail_sale_payments p
+                         WHERE sale_id = ?
+                           AND NOT EXISTS (SELECT 1 FROM retail_account_payment_allocations a
+                                             JOIN retail_account_payments r ON r.id = a.receipt_id
+                                            WHERE a.sale_payment_id = p.id AND r.status = 'reversed')
+                         ORDER BY paid_on, created_at, id
                         """)
                 .param(saleId)
                 .query((rs, n) -> new Payment(
@@ -420,7 +445,7 @@ class SalesRepository {
 
     Optional<Customer> customer(UUID id) {
         return jdbc.sql(
-                        "SELECT id, name, contact, created_at, version, customer_group_id, price_list_id FROM retail_customers WHERE id = ?")
+                        "SELECT id, name, contact, created_at, version, customer_group_id, price_list_id, credit_limit_minor, terms_days FROM retail_customers WHERE id = ?")
                 .param(id)
                 .query(SalesRepository::customer)
                 .optional();
@@ -483,7 +508,7 @@ class SalesRepository {
         Map<String, Object> params = new LinkedHashMap<>();
         StringBuilder sql = new StringBuilder("""
                 SELECT c.id, c.name, c.contact, c.created_at, c.version, c.customer_group_id, c.price_list_id,
-                       lower(c.name) AS sort_key,
+                       c.credit_limit_minor, c.terms_days, lower(c.name) AS sort_key,
                        (SELECT coalesce(sum(s.total_minor - s.paid_minor), 0) FROM retail_sales s
                          WHERE s.customer_id = c.id AND s.payment_method = 'credit' AND s.status = 'completed'
                            AND s.paid_minor < s.total_minor""");
@@ -530,6 +555,8 @@ class SalesRepository {
                                 rs.getLong("owed"),
                                 rs.getObject("customer_group_id", UUID.class),
                                 rs.getObject("price_list_id", UUID.class),
+                                rs.getObject("credit_limit_minor", Long.class),
+                                rs.getObject("terms_days", Integer.class),
                                 rs.getInt("version")),
                         rs.getString("sort_key"),
                         match == null ? 0 : rs.getInt("search_rank")))
@@ -549,7 +576,8 @@ class SalesRepository {
             params.put("branchIds", branchIds);
         }
         return jdbc.sql("""
-                        SELECT id, sale_no, branch_id, sale_date, due_date, total_minor, paid_minor FROM retail_sales
+                        SELECT id, sale_no, branch_id, sale_date, due_date, total_minor, paid_minor, historical
+                          FROM retail_sales
                          WHERE customer_id = :customer AND payment_method = 'credit' AND status = 'completed'
                            AND paid_minor < total_minor""" + branchFilter + " ORDER BY sale_date, created_at, id")
                 .params(params)
@@ -563,7 +591,8 @@ class SalesRepository {
                             due == null ? null : due.toLocalDate(),
                             rs.getLong("total_minor"),
                             rs.getLong("paid_minor"),
-                            rs.getLong("total_minor") - rs.getLong("paid_minor"));
+                            rs.getLong("total_minor") - rs.getLong("paid_minor"),
+                            rs.getBoolean("historical") ? Boolean.TRUE : null);
                 })
                 .list();
     }
@@ -577,6 +606,8 @@ class SalesRepository {
                 null,
                 rs.getObject("customer_group_id", UUID.class),
                 rs.getObject("price_list_id", UUID.class),
+                rs.getObject("credit_limit_minor", Long.class),
+                rs.getObject("terms_days", Integer.class),
                 rs.getInt("version"));
     }
 

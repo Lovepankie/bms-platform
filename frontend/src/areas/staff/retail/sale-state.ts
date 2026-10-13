@@ -44,7 +44,19 @@ export interface Draft {
   dueDate: string;
   /** A price list chosen for the sale (retail.pricelist.use), instead of the customer's own or the group's. */
   priceListId?: string;
+  /** Why a credit sale goes above the buyer's credit limit (customer accounts; retail.credit.override); sent when filled in. */
+  creditReason?: string;
   lines: DraftLine[];
+}
+
+/**
+ * What customer accounts add to the form (the customer_accounts capability, ADR-033, issue #196): a credit sale names a buyer
+ * from the list (a typed name is refused by the server), and the buyer's terms give the date it falls due when none is typed.
+ * Absent while the capability is off, and then the form is exactly what it was.
+ */
+export interface Accounts {
+  /** The chosen buyer's payment terms in days, when they have terms. */
+  termsDays?: number;
 }
 
 /**
@@ -92,7 +104,7 @@ export function draftTotal(lines: DraftLine[]): number {
 }
 
 /** What stops the sale being saved, in plain words, or null when it can be saved. */
-export function draftProblem(draft: Draft, pricing?: Pricing): string | null {
+export function draftProblem(draft: Draft, pricing?: Pricing, accounts?: Accounts): string | null {
   if (draft.lines.length === 0) return 'Add at least one item.';
   if (draft.lines.some((l) => lineFigures(l) === null)) return 'Check the quantity and price on each item.';
   if (draft.lines.some((l) => lineHint(l) !== null)) return 'Fix the items marked above.';
@@ -103,6 +115,12 @@ export function draftProblem(draft: Draft, pricing?: Pricing): string | null {
     if (draft.lines.some((l, i) => isOverride(l, pricing.resolved?.[i]) && !reasonOk(l.reason))) return 'Give a reason for each changed price.';
   }
   if (draft.method === 'credit') {
+    if (accounts) {
+      // Customer accounts: a buyer from the list, and a date unless the buyer's terms give one.
+      if (draft.customerId === '') return 'Choose the credit buyer from the list, or add them first.';
+      if (draft.dueDate === '' && accounts.termsDays === undefined) return 'Enter the date the buyer will pay.';
+      return null;
+    }
     if (draft.customerId === '' && draft.newBuyerName.trim() === '') return 'Choose or add the buyer for a credit sale.';
     if (draft.dueDate === '') return 'Enter the date the buyer will pay.';
   }
@@ -125,7 +143,7 @@ export function resolveRequestOf(draft: Draft): ResolveRequest | null {
   return { branch_id: draft.branchId, ...(draft.customerId ? { customer_id: draft.customerId } : {}), ...(draft.priceListId ? { price_list_id: draft.priceListId } : {}), lines };
 }
 
-export function buildSaleRequest(draft: Draft, pricing?: Pricing): SaleRequest {
+export function buildSaleRequest(draft: Draft, pricing?: Pricing, accounts?: Accounts): SaleRequest {
   const credit = draft.method === 'credit';
   return {
     branch_id: draft.branchId,
@@ -135,7 +153,9 @@ export function buildSaleRequest(draft: Draft, pricing?: Pricing): SaleRequest {
     ...(pricing && draft.priceListId ? { price_list_id: draft.priceListId } : {}),
     ...(credit && !draft.customerId ? { buyer_name: draft.newBuyerName.trim() } : {}),
     ...(credit && !draft.customerId && draft.newBuyerContact.trim() ? { buyer_contact: draft.newBuyerContact.trim() } : {}),
-    ...(credit ? { due_date: draft.dueDate } : {}),
+    // With customer accounts on and no date typed, the server dates the sale from the buyer's terms.
+    ...(credit && (draft.dueDate !== '' || !accounts) ? { due_date: draft.dueDate } : {}),
+    ...(credit && accounts && draft.creditReason?.trim() ? { credit_override_reason: draft.creditReason.trim() } : {}),
     lines: draft.lines.map((l, i) => {
       const f = lineFigures(l);
       if (!f) throw new Error('invalid line');

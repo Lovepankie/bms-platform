@@ -116,6 +116,17 @@ export const icons = {
       <path d="M16 5.2a3 3 0 0 1 0 5.6M18 14.3a5 5 0 0 1 3 4.7v1" />
     </Svg>
   ),
+  customerAccounts: (
+    <Svg>
+      <path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" />
+      <path d="M9 8h6M9 12h6" />
+    </Svg>
+  ),
+  customerAgeing: (
+    <Svg>
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+    </Svg>
+  ),
   branchRoles: (
     <Svg>
       <path d="M3 10l2-5h14l2 5" />

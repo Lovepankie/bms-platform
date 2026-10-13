@@ -34,6 +34,17 @@ export type ImportResult = S['RetailProductImportResult'];
 export type ImportRow = S['RetailProductImportRow'];
 export type Customer = S['RetailCustomer'];
 export type CustomerPage = S['RetailCustomerList'];
+/** Customer accounts (ADR-033, issue #196): the credit limit and terms, the statement, payment on account. Money is integer minor units. */
+export type CustomerAccount = S['RetailCustomerAccount'];
+export type AccountEdit = S['RetailCustomerAccountRequest'];
+export type Statement = S['RetailCustomerStatement'];
+export type StatementLine = S['RetailStatementLine'];
+export type CustomerBalance = S['RetailCustomerBalance'];
+/** A credit sale that still owes; `historical` (an imported sale) is skipped by payment on account. */
+export type OpenSale = S['RetailOpenSale'];
+export type AccountPayment = S['RetailAccountPayment'];
+export type AccountPaymentRequest = S['RetailAccountPaymentRequest'];
+export type AccountPaymentPage = S['RetailAccountPaymentList'];
 export type Supplier = S['RetailSupplier'];
 export type SaleRequest = S['RetailSaleRequest'];
 export type Sale = S['RetailSale'];
@@ -220,6 +231,19 @@ export interface RetailApi {
   setCustomerPricing(id: string, version: number, body: { customer_group_id?: string; price_list_id?: string }): Promise<Customer>;
   /** The price and its source for each line as a sale would take them, without making one (never the cost). */
   resolvePrices(body: ResolveRequest): Promise<PriceResolution>;
+  /** A buyer's account (the customer_accounts capability, issue #196); 404 capability_not_enabled while it is off. */
+  customerAccount(id: string): Promise<CustomerAccount>;
+  /** The limit and the terms, replaced under If-Match; an absent field clears it (retail.credit.manage). */
+  setCustomerAccount(id: string, version: number, body: AccountEdit): Promise<CustomerAccount>;
+  /** Opening balance, lines with a running balance and closing balance over the caller's branch scope. */
+  customerStatement(id: string, q: { from?: string; to?: string }): Promise<Statement>;
+  /** What a buyer owes on credit sales in the caller's branch scope, sale by sale. */
+  customerBalance(id: string): Promise<CustomerBalance>;
+  listAccountPayments(id: string, q?: { cursor?: string }): Promise<AccountPaymentPage>;
+  /** Money from a buyer that is not tied to one sale, allocated oldest first or as chosen; takes the Idempotency-Key of its form. */
+  payOnAccount(id: string, body: AccountPaymentRequest, idempotencyKey: string): Promise<AccountPayment>;
+  /** Undoes a payment on account as a whole (retail.sale.void); takes the Idempotency-Key of its form. */
+  reverseAccountPayment(id: string, paymentId: string, reason: string, idempotencyKey: string): Promise<AccountPayment>;
   updateCustomer(id: string, version: number, body: { name?: string; contact?: string }): Promise<Customer>;
   createSale(body: SaleRequest, idempotencyKey: string): Promise<Sale>;
   createPurchase(body: PurchaseRequest, idempotencyKey: string): Promise<Purchase>;
@@ -544,6 +568,39 @@ const realRetail: RetailApi = {
 
   async resolvePrices(body) {
     return unwrap(await api.POST('/api/v1/retail/prices/resolve', { body }));
+  },
+
+  async customerAccount(id) {
+    return unwrap(await api.GET('/api/v1/retail/customers/{customer_id}/account', { params: { path: { customer_id: id } } }));
+  },
+
+  async setCustomerAccount(id, version, body) {
+    return unwrap(await api.PUT('/api/v1/retail/customers/{customer_id}/account', { params: { path: { customer_id: id }, header: { 'If-Match': `"${version}"` } }, body }));
+  },
+
+  async customerStatement(id, { from, to }) {
+    return unwrap(await api.GET('/api/v1/retail/customers/{customer_id}/statement', { params: { path: { customer_id: id }, query: { from: from || undefined, to: to || undefined } } }));
+  },
+
+  async customerBalance(id) {
+    return unwrap(await api.GET('/api/v1/retail/customers/{customer_id}/balance', { params: { path: { customer_id: id } } }));
+  },
+
+  async listAccountPayments(id, q) {
+    return unwrap(await api.GET('/api/v1/retail/customers/{customer_id}/payments', { params: { path: { customer_id: id }, query: { limit: 50, cursor: q?.cursor } } }));
+  },
+
+  async payOnAccount(id, body, key) {
+    return unwrap(await api.POST('/api/v1/retail/customers/{customer_id}/payments', { params: { path: { customer_id: id }, header: { 'Idempotency-Key': key } }, body }));
+  },
+
+  async reverseAccountPayment(id, paymentId, reason, key) {
+    return unwrap(
+      await api.POST('/api/v1/retail/customers/{customer_id}/payments/{payment_id}/reverse', {
+        params: { path: { customer_id: id, payment_id: paymentId }, header: { 'Idempotency-Key': key } },
+        body: { reason },
+      }),
+    );
   },
 
   async createSale(body, key) {

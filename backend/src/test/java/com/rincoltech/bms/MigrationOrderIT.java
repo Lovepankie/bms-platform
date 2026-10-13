@@ -37,13 +37,12 @@ class MigrationOrderIT {
     /**
      * The migrations already merged and deployed: their numbers never change and none is removed.
      * Merge order matters because {@code outOfOrder} is off: V41 (the retail price lists, #247, merged)
-     * came before V42 (the loan pledge guard, #176, merged), which came before V43 (payment methods,
-     * #160). MERGED lists 43 only because it is queued next; nothing here enforces the order, merge
-     * order does.
+     * came before V42 (the loan pledge guard, #176, merged), then V43 (payment methods, #160, merged),
+     * then V44 (the retail customer accounts, #196). Nothing here enforces the order, merge order does.
      */
     static final List<String> MERGED = List.of(
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26",
-            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41", "42", "43");
+            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41", "42", "43", "44");
 
     /** Every migration file on the classpath in numeric order: a new migration only adds its file. */
     static final List<String> VERSIONS = discoveredVersions();
@@ -681,6 +680,116 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * #196: staging already holds credit buyers and credit sales when customer accounts arrive. The migration adds two nullable
+     * columns, two tables and two permissions and touches none of the sales tables: every buyer keeps a null limit and null
+     * terms, every sale and payment is as it was, the column lists of the sales tables are unchanged, every new check and
+     * foreign key ends validated, only the administrator gets the credit permissions, and a limit below zero or terms of more
+     * than a year are refused by the database.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates credit buyers across V44 (V42 and V43 are merged by then, so the case also applies them).
+     */
+    @Test
+    void customerAccountsMigrationKeepsTheBuyersAndSalesOfADatabaseAtV41() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            verifyCustomerAccountsMigration(postgres.getJdbcUrl());
+        }
+    }
+
+    /** The body of the case above, on any empty database that has the roles of {@code 01-roles.sh}. */
+    static void verifyCustomerAccountsMigration(String url) {
+        assertThat(flyway(url, "41").migrate().targetSchemaVersion).isEqualTo("41");
+        JdbcClient owner =
+                JdbcClient.create(new DriverManagerDataSource(url, "bms_owner", TestDatabase.OWNER_PASSWORD));
+        UUID tenant = UUID.randomUUID();
+        UUID branch = UUID.randomUUID();
+        UUID customer = UUID.randomUUID();
+        UUID sale = UUID.randomUUID();
+        owner.sql(
+                        "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v41a', 'Test Tenant V41A', '00000000-0000-4000-8000-000000000001')")
+                .param(tenant)
+                .update();
+        owner.sql(
+                        "INSERT INTO branches (id, tenant_id, code, name, is_head_office) VALUES (?, ?, 'HQ', 'Head Office', true)")
+                .params(branch, tenant)
+                .update();
+        owner.sql("SELECT platform_set_tenant_modules(?, ?::text[], NULL)")
+                .params(tenant, "{retail}")
+                .query((rs, n) -> 1)
+                .single();
+        owner.sql("INSERT INTO retail_customers (id, tenant_id, name) VALUES (?, ?, 'Test Buyer 01')")
+                .params(customer, tenant)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_sales (id, tenant_id, branch_id, sale_no, sale_date, payment_method, customer_id,
+                            due_date, currency, total_minor, cost_total_minor, paid_minor, status, created_by)
+                        VALUES (?, ?, ?, 'RS00000001', DATE '2026-01-15', 'credit', ?, DATE '2026-02-15', 'UGX', 300, 249, 100,
+                            'completed', gen_random_uuid())
+                        """).params(sale, tenant, branch, customer).update();
+        String sales = "('retail_sales', 'retail_sale_lines', 'retail_sale_payments')";
+        String columns =
+                "SELECT string_agg(table_name || '.' || column_name || ':' || data_type, ',' ORDER BY table_name,"
+                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN "
+                        + sales;
+        String before = owner.sql(columns).query(String.class).single();
+
+        MigrateResult result = DatabaseMigrator.migrate(url, "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+        assertThat(result.success).isTrue();
+        assertThat(result.migrations.stream().map(m -> m.version).toList())
+                .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("41") + 1, VERSIONS.size()));
+        assertThat(owner.sql(columns).query(String.class).single())
+                .as("the sales tables keep their shape")
+                .isEqualTo(before);
+        assertThat(owner.sql("""
+                                SELECT count(*) FROM retail_customers
+                                 WHERE tenant_id = ? AND credit_limit_minor IS NULL AND terms_days IS NULL
+                                """).param(tenant).query(Long.class).single()).isEqualTo(1);
+        assertThat(owner.sql("SELECT paid_minor FROM retail_sales WHERE id = ?")
+                        .param(sale)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(100);
+        assertThat(owner.sql("""
+                                SELECT count(*) FROM pg_constraint
+                                 WHERE conrelid IN ('retail_customers'::regclass, 'retail_account_payments'::regclass,
+                                                    'retail_account_payment_allocations'::regclass)
+                                   AND NOT convalidated
+                                """).query(Long.class).single())
+                .as("every constraint ends validated")
+                .isZero();
+        assertThat(owner.sql("""
+                                SELECT string_agg(role_key || ':' || permission_key, ',' ORDER BY permission_key) FROM role_permissions
+                                 WHERE permission_key IN ('retail.credit.manage', 'retail.credit.override')
+                                """).query(String.class).single())
+                .isEqualTo("tenant_admin:retail.credit.manage,tenant_admin:retail.credit.override");
+        // The database refuses a limit below zero, an absurd limit and terms of more than a year.
+        assertThatThrownBy(() -> owner.sql("UPDATE retail_customers SET credit_limit_minor = -1 WHERE id = ?")
+                        .param(customer)
+                        .update())
+                .hasMessageContaining("retail_customers_credit_limit_chk");
+        assertThatThrownBy(() -> owner.sql("UPDATE retail_customers SET terms_days = 366 WHERE id = ?")
+                        .param(customer)
+                        .update())
+                .hasMessageContaining("retail_customers_terms_chk");
+        // The sales guard still refuses to lower a paid amount outside the reversal of a payment on account, even when
+        // no
+        // payment row backs it (this sale was written with 100 paid and none): V44 does not weaken it.
+        assertThatThrownBy(() -> owner.sql("UPDATE retail_sales SET paid_minor = 40 WHERE id = ?")
+                        .param(sale)
+                        .update())
+                .hasStackTraceContaining("only the paid amount");
+        assertThatThrownBy(() -> owner.sql("UPDATE retail_sales SET paid_minor = 0 WHERE id = ?")
+                        .param(sale)
+                        .update())
+                .hasStackTraceContaining("only the paid amount");
+        // A receipt of a payment on account is reached only through the application.
+        assertThat(owner.sql("SELECT count(*) FROM retail_account_payments")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     @Test
     void noTwoMigrationsShareAVersion() {
         try (PostgreSQLContainer postgres = database()) {
@@ -706,8 +815,12 @@ class MigrationOrderIT {
 
     /** The migrator's settings, optionally stopped at a target version. */
     private static Flyway flyway(PostgreSQLContainer postgres, String target) {
+        return flyway(postgres.getJdbcUrl(), target);
+    }
+
+    private static Flyway flyway(String url, String target) {
         var config = Flyway.configure()
-                .dataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                .dataSource(url, "bms_owner", TestDatabase.OWNER_PASSWORD)
                 .locations("classpath:db/migration")
                 .validateMigrationNaming(true)
                 .cleanDisabled(true);

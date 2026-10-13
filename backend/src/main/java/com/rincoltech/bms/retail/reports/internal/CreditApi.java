@@ -35,7 +35,19 @@ final class CreditApi {
             Ageing ageing,
 
             @Schema(description = "Days past the due date of the oldest overdue sale; absent when none is overdue")
-            Integer oldestOverdueDays) {}
+            Integer oldestOverdueDays,
+
+            @Schema(
+                    description =
+                            "The buyer's credit limit; present only while the customer_accounts capability is on and"
+                                    + " the buyer has a record with a limit")
+            Long creditLimitMinor,
+
+            @Schema(
+                    description =
+                            "Owed is above the limit. Present only with a limit and only when the report covers every"
+                                    + " branch, because the limit is measured across all of them")
+            Boolean overLimit) {}
 
     @Schema(name = "RetailOverdueSale")
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -51,7 +63,50 @@ final class CreditApi {
             long totalMinor,
             long outstandingMinor) {}
 
-    @Schema(name = "RetailPaymentDay")
+    @Schema(
+            name = "RetailCustomerAgeingRow",
+            description = "A credit buyer with a record: what is owed, by days past the due date, with limit and terms")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record AgeingCustomer(
+            UUID customerId,
+            String name,
+            Long creditLimitMinor,
+            Integer termsDays,
+            int saleCount,
+            Ageing ageing,
+
+            @Schema(description = "Days past the due date of the oldest overdue sale; absent when none is overdue")
+            Integer oldestOverdueDays,
+
+            @Schema(
+                    description =
+                            "Owed is above the limit. Present only with a limit and only when the caller's scope covers"
+                                    + " every branch, because the limit is measured across all of them")
+            Boolean overLimit) {}
+
+    @Schema(
+            name = "RetailCustomerAgeing",
+            description =
+                    "Ageing per credit buyer with a record, as of today in the business time zone; a sale with no due"
+                            + " date counts as not yet due. No cost or profit appears")
+    record CustomerReport(
+            LocalDate asOf,
+            String currency,
+            int top,
+
+            @Schema(description = "Every buyer with a record in scope, whatever the row limit")
+            Ageing totals,
+
+            int customerCount,
+
+            @Schema(description = "Buyers owing the most first")
+            List<AgeingCustomer> customers) {}
+
+    @Schema(
+            name = "RetailPaymentDay",
+            description =
+                    "Payments received on a day by method. A reversed payment on account stays on the day it was received;"
+                            + " its reversal is a row of its own on the day it was undone, with a negative count and amount")
     record PaymentDay(LocalDate date, String method, int count, long amountMinor) {}
 
     @Schema(name = "RetailPaymentMethodTotal")

@@ -5,6 +5,7 @@ import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type Customer, type Supplier } from '../../../api/retail';
 import { useStaff } from '../context';
+import { BuyerAccount } from './buyer-account';
 import { BuyerPricing } from './buyer-pricing';
 import { AddPanel, BackToCatalogue } from './catalogue';
 import { canUse } from './permissions';
@@ -154,7 +155,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
             key={r.id}
             row={r}
             busy={change.isPending}
-            extra={'balance_minor' in r ? <BuyerPricing row={r} /> : undefined}
+            extra={'balance_minor' in r ? <><BuyerPricing row={r} /><BuyerAccount row={r} /></> : undefined}
             onSave={(edit) => change.mutate({ id: r.id ?? '', version: r.version, body: edit, text: (x) => `Saved the changes to "${x.name}".` })}
             {...(canSwitch
               ? {

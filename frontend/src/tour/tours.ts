@@ -759,8 +759,68 @@ export const priceListsPage: Tour = {
   ],
 };
 
+// The tour of the customer accounts capability (issue #196): it starts once for whoever sets credit limits, when first
+// enabled. A seller meets the same feature on Credit buyers (a limit refuses a credit sale), which the intro says.
+export const customerAccountsCapability: Tour = {
+  id: 'capability-customer-accounts',
+  version: 1,
+  title: 'New: customer accounts',
+  audience: (me) => held(me, 'retail.credit.manage'),
+  autoStart: true,
+  capability: { module: 'retail', key: 'customer_accounts' },
+  steps: [
+    {
+      id: 'intro',
+      title: 'Customer accounts are on',
+      body: 'Each credit buyer can now have a credit limit and payment terms. A credit sale needs a buyer from the list. It is refused above their limit, unless someone you allow gives a reason.',
+    },
+    {
+      id: 'tile',
+      route: '/staff/retail',
+      target: 'retail-customerAccounts',
+      module: 'retail',
+      optional: true,
+      title: 'Open an account',
+      body: 'Open Customer accounts to set a buyer\'s limit and terms. You can also take a payment that is not for one sale, and read their statement.',
+    },
+    {
+      id: 'list',
+      route: '/staff/retail/accounts',
+      target: 'accounts-list',
+      module: 'retail',
+      title: 'Your credit buyers',
+      body: 'Each buyer shows what they owe, their limit and their terms. Tap Open account to work on one. Sellers reach this page from Credit buyers.',
+    },
+  ],
+};
+
+export const accountsPage: Tour = {
+  id: 'page-accounts',
+  version: 1,
+  title: 'This page: customer accounts',
+  audience: (me) => held(me, 'retail.credit.manage') && capable(me, 'customer_accounts'),
+  autoStart: false,
+  page: '/staff/retail/accounts',
+  steps: [
+    {
+      id: 'help',
+      target: 'accounts-help',
+      module: 'retail',
+      title: 'What an account holds',
+      body: 'The limit is the most a buyer may owe over all your branches. The terms set the date a credit sale falls due. A payment goes to the oldest sales first, unless you choose.',
+    },
+    {
+      id: 'list',
+      target: 'accounts-list',
+      module: 'retail',
+      title: 'Find a buyer',
+      body: 'Type a name or a phone number to find a buyer. Tap Open account to see their payments and statement.',
+    },
+  ],
+};
+
 export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
-  priceListsCapability, priceListsPage,
+  priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage,
 ];

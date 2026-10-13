@@ -319,6 +319,7 @@ class RlsIsolationIT {
                         t.tenantId(),
                         t.account("cash_on_hand"))
                 .update();
+        UUID salePayment = UUID.randomUUID();
         owner.sql("INSERT INTO payment_methods (id, tenant_id, method_key, gl_account_id) VALUES (?, ?, 'cash', ?)")
                 .params(UUID.randomUUID(), t.tenantId(), t.account("cash_on_hand"))
                 .update();
@@ -328,8 +329,23 @@ class RlsIsolationIT {
                         SELECT ?, ?, id, 50, 'UGX', 'cash', DATE '2026-01-15', ?, ?
                           FROM retail_sales WHERE tenant_id = ? LIMIT 1
                         """)
-                .params(UUID.randomUUID(), t.tenantId(), entry, user, t.tenantId())
+                .params(salePayment, t.tenantId(), entry, user, t.tenantId())
                 .update();
+        // A payment on account and its allocation (ADR-033, #196): the receipt of the fixture payment above.
+        // JUSTIFICATION-A3: a fixture row for each new table; the isolation test needs one row per tenant table.
+        UUID receipt = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_account_payments (id, tenant_id, receipt_no, customer_id, branch_id, amount_minor,
+                                                             currency, method, paid_on, allocation, journal_entry_id, created_by)
+                        SELECT ?, ?, 'RC99999999', s.customer_id, s.branch_id, 50, 'UGX', 'cash', DATE '2026-01-15',
+                               'oldest_first', ?, ?
+                          FROM retail_sales s WHERE s.tenant_id = ? AND s.customer_id IS NOT NULL LIMIT 1
+                        """).params(receipt, t.tenantId(), entry, user, t.tenantId()).update();
+        owner.sql("""
+                        INSERT INTO retail_account_payment_allocations (id, tenant_id, receipt_id, sale_id, sale_payment_id,
+                                                                        amount_minor)
+                        SELECT gen_random_uuid(), ?, ?, p.sale_id, p.id, 50 FROM retail_sale_payments p WHERE p.id = ?
+                        """).params(t.tenantId(), receipt, salePayment).update();
         // The retail import's source references (migration V20, #55).
         owner.sql("""
                         INSERT INTO retail_import_refs (tenant_id, source_file, source_ref, target_type, source_user)

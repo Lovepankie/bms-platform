@@ -26,7 +26,7 @@ export const CAPABILITIES: readonly CapabilityInfo[] = [
   { key: 'branch_roles', label: 'Branch roles', hint: 'Mark each branch as a store, a shop or both. Only shops sell to customers.', ready: true },
   { key: 'units', label: 'Pack sizes', hint: 'Sell and buy in packs, like a box or a roll, as well as single pieces.', ready: true },
   { key: 'price_lists', label: 'Price lists', hint: 'Different prices for different customers, with discounts for larger quantities.', ready: true },
-  { key: 'customer_accounts', label: 'Customer accounts', hint: 'Credit limits, payment terms, ageing and a statement for each customer.', ready: false },
+  { key: 'customer_accounts', label: 'Customer accounts', hint: 'Credit limits, payment terms, ageing and a statement for each customer.', ready: true },
   { key: 'documents', label: 'Invoices and quotations', hint: 'Invoices, quotations and delivery notes from a sale. The till receipt stays the default.', ready: false },
   { key: 'purchasing', label: 'Purchase orders', hint: 'Purchase orders, goods received, supplier invoices and landed cost.', ready: false },
   { key: 'transfer_receipt', label: 'Receive transfers', hint: 'A stock move is sent first and received after, so stock can be on the way.', ready: true },

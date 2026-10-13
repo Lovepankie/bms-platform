@@ -124,6 +124,17 @@ class ReportsController {
         return credit.report(branchIds, from, to, top, sort);
     }
 
+    @GetMapping("/customer-ageing")
+    @RequiresPermission("retail.sale.read")
+    @Operation(
+            summary = "Ageing per credit buyer with a record: buckets, credit limit and terms (issue #196)",
+            operationId = "getRetailCustomerAgeing")
+    CreditApi.CustomerReport customerAgeing(
+            @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
+            @RequestParam(name = "top", required = false) Integer top) {
+        return credit.customerAgeing(branchIds, top);
+    }
+
     @GetMapping("/business-evaluation")
     @RequiresPermission("retail.profit.read")
     @Operation(

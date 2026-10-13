@@ -40,7 +40,15 @@ class CreditRepository {
 
     record Buckets(long owed, long notDue, long d30, long d60, long d90, long over90) {}
 
-    record BuyerRow(UUID customerId, String name, int sales, Buckets buckets, Integer oldestDays, int buyers) {}
+    record BuyerRow(
+            UUID customerId,
+            String name,
+            int sales,
+            Buckets buckets,
+            Integer oldestDays,
+            int buyers,
+            Long creditLimitMinor,
+            Integer termsDays) {}
 
     record OverdueRow(
             UUID saleId,
@@ -83,12 +91,13 @@ class CreditRepository {
     /** Everything owed in scope as one row, and how many buyers owe it. */
     BuyerRow totals(List<UUID> branchIds, LocalDate today) {
         if (branchIds != null && branchIds.isEmpty()) {
-            return new BuyerRow(null, null, 0, new Buckets(0, 0, 0, 0, 0, 0), null, 0);
+            return new BuyerRow(null, null, 0, new Buckets(0, 0, 0, 0, 0, 0), null, 0, null, null);
         }
         return jdbc.sql("SELECT " + BUCKETS + ", count(*) AS sales, count(DISTINCT " + key() + ") AS buyers"
                         + " FROM retail_sales s" + OPEN + branch(branchIds))
                 .params(params(branchIds, today))
-                .query((rs, n) -> new BuyerRow(null, null, rs.getInt("sales"), buckets(rs), null, rs.getInt("buyers")))
+                .query((rs, n) -> new BuyerRow(
+                        null, null, rs.getInt("sales"), buckets(rs), null, rs.getInt("buyers"), null, null))
                 .single();
     }
 
@@ -105,7 +114,8 @@ class CreditRepository {
         params.put("limit", limit);
         return jdbc.sql("SELECT max(s.customer_id::text)::uuid AS customer_id,"
                         + " coalesce(max(c.name), min(s.buyer_name)) AS name, count(*) AS sales, " + BUCKETS + ","
-                        + " max(CASE WHEN " + DAYS + " > 0 THEN " + DAYS + " END) AS oldest"
+                        + " max(CASE WHEN " + DAYS + " > 0 THEN " + DAYS + " END) AS oldest,"
+                        + " max(c.credit_limit_minor) AS credit_limit, max(c.terms_days) AS terms_days"
                         + " FROM retail_sales s LEFT JOIN retail_customers c ON c.tenant_id = s.tenant_id AND c.id = s.customer_id"
                         + OPEN + branch(branchIds) + " GROUP BY " + key()
                         + " ORDER BY sum(" + OWED + ") DESC, 2, 1 LIMIT :limit")
@@ -116,7 +126,48 @@ class CreditRepository {
                         rs.getInt("sales"),
                         buckets(rs),
                         (Integer) rs.getObject("oldest"),
-                        0))
+                        0,
+                        rs.getObject("credit_limit", Long.class),
+                        rs.getObject("terms_days", Integer.class)))
+                .list();
+    }
+
+    /** What the credit buyers with a record owe, as one row (the total row of the customer ageing). */
+    BuyerRow customerTotals(List<UUID> branchIds, LocalDate today) {
+        if (branchIds != null && branchIds.isEmpty()) {
+            return new BuyerRow(null, null, 0, new Buckets(0, 0, 0, 0, 0, 0), null, 0, null, null);
+        }
+        return jdbc.sql("SELECT " + BUCKETS + ", count(*) AS sales, count(DISTINCT s.customer_id) AS buyers"
+                        + " FROM retail_sales s" + OPEN + " AND s.customer_id IS NOT NULL" + branch(branchIds))
+                .params(params(branchIds, today))
+                .query((rs, n) -> new BuyerRow(
+                        null, null, rs.getInt("sales"), buckets(rs), null, rs.getInt("buyers"), null, null))
+                .single();
+    }
+
+    /** The credit buyers with a record that owe, the most first: owed, ageing, limit and terms (customer ageing). */
+    List<BuyerRow> customers(List<UUID> branchIds, LocalDate today, int limit) {
+        if (branchIds != null && branchIds.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Object> params = params(branchIds, today);
+        params.put("limit", limit);
+        return jdbc.sql("SELECT s.customer_id, max(c.name) AS name, count(*) AS sales, " + BUCKETS + ","
+                        + " max(CASE WHEN " + DAYS + " > 0 THEN " + DAYS + " END) AS oldest,"
+                        + " max(c.credit_limit_minor) AS credit_limit, max(c.terms_days) AS terms_days"
+                        + " FROM retail_sales s JOIN retail_customers c ON c.tenant_id = s.tenant_id AND c.id = s.customer_id"
+                        + OPEN + branch(branchIds) + " GROUP BY s.customer_id"
+                        + " ORDER BY sum(" + OWED + ") DESC, 2, 1 LIMIT :limit")
+                .params(params)
+                .query((rs, n) -> new BuyerRow(
+                        rs.getObject("customer_id", UUID.class),
+                        rs.getString("name"),
+                        rs.getInt("sales"),
+                        buckets(rs),
+                        (Integer) rs.getObject("oldest"),
+                        0,
+                        rs.getObject("credit_limit", Long.class),
+                        rs.getObject("terms_days", Integer.class)))
                 .list();
     }
 
@@ -149,7 +200,13 @@ class CreditRepository {
                 .list();
     }
 
-    /** Payments on credit sales dated in the range, by day and method, in the branches of the sales they paid. */
+    /**
+     * Payments on credit sales in the range, by day and method. A payment on account (issue #196) counts in the branch that
+     * received it, as the ledger and the cash book post it; any other payment in the branch of its sale. A reversed payment on
+     * account is not removed from the day it was received, so a day already reported never changes: it stays on that day and
+     * the reversal is its own negative row on the day it was reversed, as in the cash book. A day and method where the two
+     * cancel is left out.
+     */
     List<Payment> payments(List<UUID> branchIds, LocalDate from, LocalDate to) {
         if (branchIds != null && branchIds.isEmpty()) {
             return List.of();
@@ -160,10 +217,23 @@ class CreditRepository {
         if (branchIds != null) {
             params.put("branchIds", branchIds);
         }
-        return jdbc.sql("SELECT p.paid_on, p.method, count(*) AS payments, sum(p.amount_minor) AS amount"
+        String receivedIn = branchIds == null ? "" : " AND coalesce(ap.branch_id, s.branch_id) IN (:branchIds)";
+        String reversedIn = branchIds == null ? "" : " AND ap.branch_id IN (:branchIds)";
+        return jdbc.sql("SELECT m.d AS paid_on, m.method, sum(m.n) AS payments, sum(m.amt) AS amount FROM ("
+                        + " SELECT p.paid_on AS d, p.method, 1 AS n, p.amount_minor AS amt"
                         + " FROM retail_sale_payments p JOIN retail_sales s ON s.tenant_id = p.tenant_id AND s.id = p.sale_id"
-                        + " WHERE p.paid_on BETWEEN :from AND :to AND s.status = 'completed'" + branch(branchIds)
-                        + " GROUP BY p.paid_on, p.method ORDER BY p.paid_on, p.method")
+                        + " LEFT JOIN retail_account_payment_allocations al ON al.tenant_id = p.tenant_id AND al.sale_payment_id = p.id"
+                        + " LEFT JOIN retail_account_payments ap ON ap.tenant_id = al.tenant_id AND ap.id = al.receipt_id"
+                        + " WHERE p.paid_on BETWEEN :from AND :to AND s.status = 'completed'" + receivedIn
+                        + " UNION ALL"
+                        + " SELECT ap.reversed_on, p.method, -1, -p.amount_minor"
+                        + " FROM retail_account_payments ap"
+                        + " JOIN retail_account_payment_allocations al ON al.tenant_id = ap.tenant_id AND al.receipt_id = ap.id"
+                        + " JOIN retail_sale_payments p ON p.tenant_id = al.tenant_id AND p.id = al.sale_payment_id"
+                        + " JOIN retail_sales s ON s.tenant_id = p.tenant_id AND s.id = p.sale_id"
+                        + " WHERE ap.status = 'reversed' AND ap.reversed_on BETWEEN :from AND :to AND s.status = 'completed'"
+                        + reversedIn
+                        + ") m GROUP BY m.d, m.method HAVING sum(m.n) <> 0 OR sum(m.amt) <> 0 ORDER BY m.d, m.method")
                 .params(params)
                 .query((rs, n) -> new Payment(
                         rs.getDate("paid_on").toLocalDate(),

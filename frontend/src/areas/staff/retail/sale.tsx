@@ -6,14 +6,15 @@ import { retail, type Product, type ResolvedLine, type Sale, type SalePayment } 
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
-import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, resolveRequestOf, withUnit, type Draft, type DraftLine, type Pricing } from './sale-state';
+import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, resolveRequestOf, withUnit, type Accounts, type Draft, type DraftLine, type Pricing } from './sale-state';
 import { MIN_REASON, hasNoPrice, isOverride, pricedLines, receiptNote, reasonOk, sourceNote } from './price-state';
 import { activePacks, chosenPack, enteredPriceMinor, enteredQty } from './units-state';
 import { EmptyState } from '../../../components/states';
 import { BranchRequired, Gate, NoStockHere, Note, ProductPicker, Problem, money, useBranchRoles, useProfitAccess, useSingleBranch } from './ui';
 import { branchLabel } from '../../../auth/branch';
 import type { BranchRole } from '../../../api/retail';
-import { BRANCH_ROLES, PRICELIST_MANAGE, PRICELIST_USE, PRICE_LISTS, PRICE_OVERRIDE, UNITS, branchesWhere, capabilityOn, holds, holdsAt, needsOf, sellingBranches } from './permissions';
+import { BRANCH_ROLES, CREDIT_OVERRIDE, CUSTOMER_ACCOUNTS, PRICELIST_MANAGE, PRICELIST_USE, PRICE_LISTS, PRICE_OVERRIDE, UNITS, branchesWhere, capabilityOn, holds, holdsAt, needsOf, sellingBranches } from './permissions';
+import { exceededBy, isLimitRefusal, limitWords, termsWords } from './account-state';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -184,9 +185,13 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
   const resolved = pricesOn && asked !== 'null' && !checking ? resolution.data?.lines : undefined;
   const pricing: Pricing | undefined = pricesOn ? { resolved, checking } : undefined;
   const shown: Draft = { ...draft, lines: pricedLines(draft.lines, resolved) };
+  // Customer accounts on: a credit sale names a buyer from the list; the buyer's terms date it when no date is typed.
+  const accountsOn = capabilityOn(me, 'retail', CUSTOMER_ACCOUNTS);
+  const buyerRow = (customers.data ?? []).find((c) => c.id === draft.customerId);
+  const accounts: Accounts | undefined = accountsOn ? { termsDays: buyerRow?.terms_days } : undefined;
 
   const save = useMutation({
-    mutationFn: () => retail.createSale(buildSaleRequest(shown, pricing), key),
+    mutationFn: () => retail.createSale(buildSaleRequest(shown, pricing, accounts), key),
     onSuccess: (sale) => {
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail', 'products'] });
@@ -195,6 +200,14 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
     },
   });
 
+  const addBuyer = useMutation({
+    mutationFn: () => retail.createCustomer({ name: draft.newBuyerName.trim(), ...(draft.newBuyerContact.trim() ? { contact: draft.newBuyerContact.trim() } : {}) }),
+    onSuccess: (c) => {
+      void queryClient.invalidateQueries({ queryKey: ['retail', 'customers'] });
+      setDraft((d) => ({ ...d, customerId: c.id ?? '', newBuyerName: '', newBuyerContact: '' }));
+      setAddingBuyer(false);
+    },
+  });
   const update = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const setLine = (i: number, patch: { qty?: string; price?: string; typed?: boolean; reason?: string }) =>
     setDraft((d) => ({ ...d, lines: d.lines.map((l, n) => (n === i ? { ...l, ...patch } : l)) }));
@@ -205,8 +218,11 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
   const add = (p: Product) =>
     setDraft((d) => (d.lines.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0) ? d : { ...d, lines: [...d.lines, newLine(p)] }));
 
-  const problem = draftProblem(shown, pricing);
+  const problem = draftProblem(shown, pricing, accounts);
   const total = draftTotal(shown.lines);
+  // A credit sale refused for the buyer's limit: say by how much, and offer the override to whoever holds it.
+  const overBy = accountsOn && draft.method === 'credit' ? exceededBy(save.error) : null;
+  const canOverride = holdsAt(me, CREDIT_OVERRIDE, branchId);
 
   return (
     <form
@@ -291,6 +307,9 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
                   </option>
                 ))}
               </select>
+              {accountsOn && buyerRow && (
+                <p className="hint" data-testid="buyer-account-note">{limitWords({ credit_limit_minor: buyerRow.credit_limit_minor }, money)} {termsWords(buyerRow.terms_days)}</p>
+              )}
               <button type="button" onClick={() => { setAddingBuyer(true); update({ customerId: '' }); }}>
                 Add a new buyer
               </button>
@@ -302,12 +321,20 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
               <input id="buyer-name" value={draft.newBuyerName} onChange={(e) => update({ newBuyerName: e.target.value })} />
               <label htmlFor="buyer-contact">Phone (optional)</label>
               <input id="buyer-contact" inputMode="tel" value={draft.newBuyerContact} onChange={(e) => update({ newBuyerContact: e.target.value })} />
+              {accountsOn && (
+                <>
+                  <button type="button" className="rt-primary" disabled={draft.newBuyerName.trim() === '' || addBuyer.isPending} onClick={() => addBuyer.mutate()}>
+                    {addBuyer.isPending ? 'Adding' : 'Add this buyer'}
+                  </button>
+                  <Problem error={addBuyer.error} />
+                </>
+              )}
               <button type="button" onClick={() => { setAddingBuyer(false); update({ newBuyerName: '', newBuyerContact: '' }); }}>
                 Pick an existing buyer
               </button>
             </>
           )}
-          <label htmlFor="due">Buyer will pay by</label>
+          <label htmlFor="due">Buyer will pay by{accountsOn && buyerRow?.terms_days !== undefined ? ' (leave empty to use their terms)' : ''}</label>
           <input id="due" type="date" value={draft.dueDate} onChange={(e) => update({ dueDate: e.target.value })} />
         </fieldset>
       )}
@@ -316,7 +343,23 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
         Total {money(total)}
       </p>
       {problem && draft.lines.length > 0 && <Note>{problem}</Note>}
-      <Problem error={save.error} />
+      {overBy !== null && (
+        <div role="alert" className="alert alert-danger" data-testid="limit-refusal">
+          <p>
+            This sale takes {buyerRow?.name ?? 'the buyer'} {money(overBy)} above their credit limit{isLimitRefusal(save.error) ? '' : ', and a reason is needed'}.
+          </p>
+          {canOverride ? (
+            <>
+              <label htmlFor="credit-reason">Why is this sale allowed? (at least 5 characters)</label>
+              <input id="credit-reason" value={draft.creditReason ?? ''} maxLength={300} onChange={(e) => update({ creditReason: e.target.value })} />
+              <p className="hint">Save the sale again to sell above the limit. The reason is kept with the sale.</p>
+            </>
+          ) : (
+            <p>Ask someone who may allow it, take a payment first, or sell for less.</p>
+          )}
+        </div>
+      )}
+      {overBy === null && <Problem error={save.error} />}
       <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending} data-tour="sale-save">
         {save.isPending ? 'Saving' : 'Save sale'}
       </button>

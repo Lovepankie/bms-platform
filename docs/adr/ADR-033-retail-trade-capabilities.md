@@ -220,3 +220,53 @@ override with a reason, because an item takes no other change; a promotion insid
 **Watch for:** an item prices one unit, so a product's base unit cannot change while a list prices it (422
 `unit_in_use_by_price_list`); a pack switched off leaves its items in the list, unused; documents (slice 8) must read the line's
 stored price and never resolve again; and quotations (slice 8) re-price through the normal sale path.
+
+## Amendment of 2026-10-13 (issue #196): customer accounts, as built
+
+Decision 6 is built in slice 6 (migration V44; `docs/specs/trade-capabilities.md` sections 5 and 11). The choices it left open:
+
+1. **The limit is checked under the buyer's row lock, before any stock lock.** A credit sale with the capability on locks the
+   customer row (`SELECT ... FOR UPDATE`) first, then compares exposure with the limit, then inserts the sale and moves stock,
+   so two shops selling to one buyer queue on the row and the second sees the first one's sale. Exposure is the tenant-wide
+   balance of completed credit sales, imported ones included, plus the sale. Equal to the limit is allowed. The refusal names
+   the amount over the limit and nothing else, so no other branch's sales leak. A holder of `retail.credit.override` at the
+   sale's branch goes ahead with a reason of at least five characters, which is written to the audit trail with the exposure
+   and the amount over. A credit sale names a customer record (422 `customer_required`); a typed buyer name alone is refused.
+2. **Limit and terms are columns of the buyer, set by `retail.credit.manage` only.** `credit_limit_minor` and `terms_days`, both
+   nullable (null is no limit and no terms), under `If-Match`; `retail.customer.manage` still edits name and contact only. Terms
+   default a credit sale's due date when none is typed. A buyer in the list carries the two only while the capability is on, so
+   with it off no response changes.
+3. **Payment on account is a receipt with allocations, built on ordinary sale payments.** `retail_account_payments` holds the
+   receipt (the receiving branch, the amount, the method, `oldest_first` or `manual`, the ledger entry); each allocation is an
+   ordinary `retail_sale_payments` row, linked from `retail_account_payment_allocations`, so every reader of sale payments
+   keeps working and no ALTER touches the large sales tables. The allocation skips imported sales and sales outside the caller's
+   scope, refuses what cannot be placed (422 `payment_exceeds_allocatable`, with how much can) and holds nothing as a deposit.
+   One ledger entry posts in the receiving branch with a credit to trade debtors for each sale, so cash lands where it is held. It debits the seeded retail account of the method by system key (`cash_on_hand`, `mobile_money`, `bank`) as every retail posting does, and does not read the `payment_methods` mapping (ADR-026: retail keeps its accounts until #236); the mapping already refuses to move `cash` or `bank` elsewhere while retail is on.
+4. **Reversible as a whole.** `POST .../payments/{id}/reverse` (`retail.sale.void`, a reason) reverses the entry on the business
+   day and gives each sale its paid amount back; there is no partial reversal. The V14 guard on `retail_sales` allowed
+   `paid_minor` only to rise; it is replaced (a function body, no table lock) so that it may fall only inside the reversal, by exactly that
+   allocation. The reversal sets a transaction-local setting
+   (`bms.reverse_account_payment`, `set_config(..., true)`) to the id of the receipt for the one statement that gives the amount back, and the guard
+   accepts a lowering only for a reversed receipt that allocated to that sale, by exactly its allocation, so a plain UPDATE is refused as it was before V44. The receipt is changed once, `posted` to
+   `reversed`, by a guard trigger. The reason is at least five characters once trimmed, on the screen and on the server alike.
+5. **The cash book follows the receiving branch.** A cash payment on account is takings of the branch that received it, on the day
+   it was received; a reversal is taken back on the day of the reversal, as a voided cash sale is.
+6. **The statement does not claim a ledger figure it cannot support.** It is built from sales, sale payments and receipts in the
+   caller's branch scope: `closing_minor` is what the ledger holds as trade debtors for those sales, imported credit sales are listed
+   apart as "before system start", and `balance_minor` adds them, so it equals the customer balance in the same scope. Nothing
+   is posted for imported sales (issue #96 stays the business's decision). The statement as a PDF is part of the documents slice.
+7. **Ageing is the credit control report's ageing.** The same completed credit sales and the same buckets (not yet due, 1 to 30,
+   31 to 60, 61 to 90, over 90 days past the due date, on the business day), per buyer with a record, with the limit and terms;
+   the credit control report and screen carry the limit while the capability is on.
+8. **Expand only, and the lock is honest.** Two nullable columns and two checks on `retail_customers` (one row per buyer, so the
+   access exclusive lock is brief), two new tables with forced RLS, two permissions. Creating the tables takes share row
+   exclusive on the tables they reference until the commit, which blocks writes, not reads, for the length of the file. Flyway runs
+   one transaction, so every lock is held to the commit.
+
+**Better:** a wholesaler can sell on credit within a limit it controls, take money that is not tied to one sale, undo a mistake,
+and read a statement that agrees with the books. **Worse:** a change of allocation is a reversal and a new payment, not an edit; the
+paid amount of a sale can now fall, under a database rule that ties it to the reversal path and to the unreversed payments. **Watch for:** any new reader
+of `retail_sale_payments` must leave out the payments of a reversed receipt (join the allocations and the receipt status), and
+take cash by the receiving branch of an account payment; a later returns slice that refunds against the balance must go through the
+same statement lines.
+

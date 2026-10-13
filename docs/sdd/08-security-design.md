@@ -224,6 +224,8 @@ platform API and holds no tenant permissions.
 | `retail.pricelist.manage` | Y | | | | | | | |
 | `retail.pricelist.use` | Y | | | | | | | |
 | `retail.price.override` | Y | | | | | | | Y |
+| `retail.credit.manage` | Y | | | | | | | |
+| `retail.credit.override` | Y | | | | | | | |
 
 Notes:
 
@@ -292,8 +294,12 @@ Notes:
   customer's own or the customer group's), both administrators only, and `retail.price.override`, which
   guards behaviour the sales role already has (a typed unit price), so the migration grants it to every role
   that holds `retail.sale.create`; it is consulted only while the `price_lists` capability is on, and then
-  also needs a reason on the line (the changed price is written to the audit entry of the sale). Reading a price list, its items or the customer groups, and seeing a buyer's group and list, needs `retail.pricelist.manage` too, because they are negotiated prices; the sales role asks `POST /retail/prices/resolve` for what it needs. Design only: five more permissions, `retail.credit.manage`,
-  `retail.credit.override`, `retail.sale.return`, `retail.document.issue` and `retail.payable.manage`.
+  also needs a reason on the line (the changed price is written to the audit entry of the sale). Reading a price list, its items or the customer groups, and seeing a buyer's group and list, needs `retail.pricelist.manage` too, because they are negotiated prices; the sales role asks `POST /retail/prices/resolve` for what it needs. Built with the customer accounts (issue #196, migration V44):
+  `retail.credit.manage` (set a buyer's credit limit and payment terms) and `retail.credit.override` (sell on credit above a
+  buyer's limit, with a reason of at least five characters, written to the audit trail), both administrators only; payment on
+  account needs `retail.sale.create` at the receiving branch and its reversal `retail.sale.void`, so no permission is added for
+  them. Both are consulted only while the `customer_accounts` capability is on. Design only: three more permissions,
+  `retail.sale.return`, `retail.document.issue` and `retail.payable.manage`.
   Each becomes a row of the matrix in the slice that seeds it, because `PermissionMatrixIT` compares
   the seeded permissions with the matrix; all of them go to administrators only.
   `retail.credit.manage` alone sets credit limits and terms: `retail.customer.manage`, which the sales

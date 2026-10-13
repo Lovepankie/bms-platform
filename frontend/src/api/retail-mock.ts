@@ -7,6 +7,7 @@ import { retailMessage } from './retail-errors';
 import type { Me } from './client';
 import { createCashbookMock } from './retail-cashbook-mock';
 import { createPricingMock } from './retail-pricing-mock';
+import { createAccountsMock } from './retail-accounts-mock';
 
 // Fabricated retail data for VITE_RETAIL_MOCK and for tests: invented products, branches and
 // balances, held in memory, with the REAL snake_case shapes of docs/sdd/07-api-design.md section
@@ -32,7 +33,7 @@ const SALES_PERMISSIONS = [
 const CASHIER_PERMISSIONS = SALES_PERMISSIONS;
 const ADMIN_PERMISSIONS = [
   ...SALES_PERMISSIONS, 'retail.catalogue.manage', 'retail.price.edit', 'retail.sale.void',
-  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use',
+  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use', 'retail.credit.manage', 'retail.credit.override',
   'retail.savings.record', 'retail.savings.overwrite', 'retail.banking.record', 'retail.expense.record', 'retail.expense.manage',
   'retail.withdrawal.record', 'retail.advance.create', 'retail.advance.repay', 'retail.cashbook.read', 'retail.cashbook.void',
 ];
@@ -218,8 +219,17 @@ export function createMockRetail(): RetailApi {
     },
   });
 
+  // Customer accounts (ADR-033, issue #196): limits, terms, statements and payment on account; 404 while the capability is off.
+  const { forSale, figures, ...accountsApi } = createAccountsMock({
+    on: () => caps.value['customer_accounts'] === true,
+    today, nextId, delay, run, once, refuse,
+    customers: () => customers,
+    sales: () => sales,
+  });
+
   return {
     ...pricingApi,
+    ...accountsApi,
     ...createCashbookMock({ profit: () => profitAccess, today, sold, branchIds: MOCK_BRANCHES.map((b) => b.id), delay, run, once, nextId }),
 
     listProducts: ({ query, branchId }) =>
@@ -442,14 +452,17 @@ export function createMockRetail(): RetailApi {
     },
 
     listCustomers: () =>
-      delay(customers.map((c) => ({ ...c, balance_minor: sales.filter((x) => x.payment_method === 'credit' && x.status === 'completed' && x.buyer_name === c.name).reduce((sum, x) => sum + (x.balance_minor ?? 0), 0) }))),
+      delay(customers.map((c) => ({ ...c, ...figures(c.id), balance_minor: sales.filter((x) => x.payment_method === 'credit' && x.status === 'completed' && x.buyer_name === c.name).reduce((sum, x) => sum + (x.balance_minor ?? 0), 0) }))),
     listCustomerPage: ({ query, cursor }) => {
       const q = (query ?? '').trim().toLowerCase();
       const all = customers
         .filter((c) => !q || (c.name ?? '').toLowerCase().includes(q))
         .sort((a, b) => (a.name ?? '').toLowerCase().localeCompare((b.name ?? '').toLowerCase()));
       const start = cursor ? Number(cursor) : 0;
-      const items = all.slice(start, start + CUSTOMER_PAGE);
+      const items = all.slice(start, start + CUSTOMER_PAGE).map((c) => ({
+        ...c, ...figures(c.id),
+        balance_minor: sales.filter((x) => x.payment_method === 'credit' && x.status === 'completed' && x.customer_id === c.id).reduce((sum, x) => sum + (x.balance_minor ?? 0), 0),
+      }));
       return delay({ items, ...(start + CUSTOMER_PAGE < all.length ? { next_cursor: String(start + CUSTOMER_PAGE) } : {}) });
     },
     listSuppliers: () => delay([...suppliers]),
@@ -510,6 +523,10 @@ export function createMockRetail(): RetailApi {
       run(() => once(`sale|${key}`, body, (): Sale => {
       const branchId = body.branch_id ?? BRANCH_A;
       body.lines.forEach((l) => guard(branchId, l.product_id, toMilli(l.qty)));
+      // Customer accounts on: a credit sale names a buyer from the list and stays within the buyer's limit. The mock judges the
+      // limit on the typed or retail prices; the server judges the resolved total.
+      const estimate = body.lines.reduce((sum, l) => sum + lineTotal(l.unit_price_minor ?? find(l.product_id).sellMinor, toMilli(l.qty)), 0);
+      const { dueDate } = forSale(body, estimate, body.sale_date ?? today());
       let costTotal = 0;
       const priced = caps.value['price_lists'] === true;
       const lines: SaleLine[] = body.lines.map((l, n) => {
@@ -534,7 +551,7 @@ export function createMockRetail(): RetailApi {
       const sale = cost({
         id: nextId('5'), sale_no: `S-${String(seq).padStart(6, '0')}`, branch_id: branchId, sale_date: body.sale_date ?? today(),
         payment_method: body.payment_method, status: 'completed', currency: 'UGX',
-        ...(buyer ? { buyer_name: buyer } : {}), ...(body.due_date ? { due_date: body.due_date } : {}),
+        ...(buyer ? { buyer_name: buyer } : {}), ...(body.customer_id ? { customer_id: body.customer_id } : {}), ...((dueDate ?? body.due_date) ? { due_date: dueDate ?? body.due_date } : {}),
         lines, total_minor: total, paid_minor: credit ? 0 : total, balance_minor: credit ? total : 0,
       }, { cost_total_minor: costTotal, profit_minor: total - costTotal });
       sales.push({ ...sale, costTotal });

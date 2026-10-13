@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mockMe } from '../../../api/retail-mock';
 import { shortcutsFor } from './nav';
-import { canSeeProfit, canUse, holdsAt, screensFor, showRetail } from './permissions';
+import { canOpenAccount, canSeeProfit, canUse, holdsAt, screensFor, showRetail } from './permissions';
 
 describe('retail permission gating', () => {
   const sales = mockMe('sales');
@@ -117,5 +117,22 @@ describe('a permission held at a branch (issue #195)', () => {
     expect(holdsAt(me, 'retail.price.override', 'b2')).toBe(false);
     expect(holdsAt(me, 'retail.price.override', undefined)).toBe(true);
     expect(holdsAt(me, 'retail.pricelist.use', 'b1')).toBe(false);
+  });
+});
+
+describe('customer accounts (issue #196)', () => {
+  const caps = (me: ReturnType<typeof mockMe>, on: boolean) => ({ ...me, module_capabilities: { retail: on ? ['customer_accounts'] : [] } });
+
+  it('shows the Customer accounts tile to the administrator who sets limits, and only while the feature is on', () => {
+    expect(canUse(caps(mockMe('admin'), true), 'customerAccounts')).toBe(true);
+    expect(canUse(caps(mockMe('admin'), false), 'customerAccounts')).toBe(false);
+    expect(canUse(caps(mockMe('sales'), true), 'customerAccounts')).toBe(false);
+    expect(screensFor(caps(mockMe('sales'), true)).map((s) => s.screen)).toEqual(screensFor(caps(mockMe('sales'), false)).map((s) => s.screen));
+  });
+
+  it('opens a buyer\'s account to whoever reads sales, while the feature is on', () => {
+    expect(canOpenAccount(caps(mockMe('sales'), true))).toBe(true);
+    expect(canOpenAccount(caps(mockMe('sales'), false))).toBe(false);
+    expect(canOpenAccount({ permissions: ['retail.stock.read'], module_capabilities: { retail: ['customer_accounts'] } })).toBe(false);
   });
 });

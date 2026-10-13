@@ -14,6 +14,9 @@ export type StockHealth = S['RetailStockHealth'];
 export type CoverRow = S['RetailCoverRow'];
 export type CreditControl = S['RetailCreditControl'];
 export type Ageing = S['RetailAgeing'];
+/** Customer accounts (issue #196): ageing per credit buyer with a record, with the limit and the terms. */
+export type CustomerAgeing = S['RetailCustomerAgeing'];
+export type AgeingCustomer = S['RetailCustomerAgeingRow'];
 export type Evaluation = S['RetailBusinessEvaluation'];
 export type EvaluationBranch = S['RetailEvaluationBranch'];
 export type Dashboard = S['RetailDashboard'];
@@ -57,6 +60,13 @@ export const retailAnalytics = {
     return unwrap(
       await api.GET('/api/v1/retail/reports/credit-control', {
         params: { query: { branch_id: branchId ? [branchId] : undefined, from, to, top, sort } },
+      }),
+    );
+  },
+  async customerAgeing({ branchId, top }: { branchId?: string; top: number }): Promise<CustomerAgeing> {
+    return unwrap(
+      await api.GET('/api/v1/retail/reports/customer-ageing', {
+        params: { query: { branch_id: branchId ? [branchId] : undefined, top } },
       }),
     );
   },

@@ -77,6 +77,13 @@ final class SalesApi {
                             + " needs retail.pricelist.use unless it is one of those (price_lists capability)")
             UUID priceListId,
 
+            @Size(max = 300)
+            @Schema(
+                    description = "Why a credit sale above the buyer's credit limit goes ahead; needed (at least five"
+                            + " characters) from a user who holds retail.credit.override, ignored when the sale is"
+                            + " within the limit or the customer_accounts capability is off")
+            String creditOverrideReason,
+
             @NotEmpty @Size(max = 200) List<@Valid @NotNull SaleLineRequest> lines) {}
 
     @Schema(
@@ -215,6 +222,18 @@ final class SalesApi {
             @Schema(description = "The customer's own price list; present only while the price_lists capability is on")
             UUID priceListId,
 
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "The credit limit, when the buyer has one; present only while the customer_accounts capability is on")
+            Long creditLimitMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "The payment terms in days, when the buyer has them; present only while the customer_accounts capability is on")
+            Integer termsDays,
+
             @Schema(description = "Send as If-Match when updating")
             int version) {}
 
@@ -230,7 +249,14 @@ final class SalesApi {
             LocalDate dueDate,
             long totalMinor,
             long paidMinor,
-            long balanceMinor) {}
+            long balanceMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "True for an imported credit sale (never posted to the ledger, skipped by payment on account);"
+                                    + " present only while the customer_accounts capability is on, and only when true")
+            Boolean historical) {}
 
     @Schema(name = "RetailCustomerBalance", description = "Credit sales in the caller's branch scope")
     record CustomerBalance(UUID customerId, String currency, long balanceMinor, List<OpenSale> openSales) {}

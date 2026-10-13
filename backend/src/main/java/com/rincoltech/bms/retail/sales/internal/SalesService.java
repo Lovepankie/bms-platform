@@ -93,6 +93,7 @@ class SalesService {
     private final RetailCapabilities capabilities;
     private final SalesPricing pricing;
     private final RetailPricing priceLists;
+    private final AccountsService accounts;
 
     SalesService(
             SalesRepository repo,
@@ -108,7 +109,8 @@ class SalesService {
             BranchRoles roles,
             RetailCapabilities capabilities,
             SalesPricing pricing,
-            RetailPricing priceLists) {
+            RetailPricing priceLists,
+            AccountsService accounts) {
         this.repo = repo;
         this.catalogue = catalogue;
         this.stock = stock;
@@ -123,6 +125,7 @@ class SalesService {
         this.capabilities = capabilities;
         this.pricing = pricing;
         this.priceLists = priceLists;
+        this.accounts = accounts;
     }
 
     /** The general ledger account a payment method lands in (chapter 6 section 6.11.1). */
@@ -160,6 +163,15 @@ class SalesService {
         if (r.customerId() != null && buyer == null) {
             problems.add(new FieldProblem("customer_id", "unknown_customer", "No such customer."));
         }
+        // ADR-033, issue #196: with customer accounts on, a credit sale names a customer record. A typed name alone
+        // would
+        // dodge every limit (V11 allowed it), so it is refused.
+        boolean accountsOn = credit && accounts.on();
+        if (accountsOn && r.customerId() == null) {
+            throw ApiException.rule(
+                    "customer_required",
+                    "A credit sale names a credit buyer from the list; a typed name is not enough.");
+        }
         if (credit && r.customerId() == null && buyerName == null) {
             problems.add(new FieldProblem("customer_id", "required", "A credit sale names its buyer."));
         }
@@ -169,6 +181,11 @@ class SalesService {
         if (r.dueDate() != null && r.dueDate().isBefore(saleDate)) {
             problems.add(new FieldProblem("due_date", "invalid", "The payment date cannot be before the sale."));
         }
+        // The buyer's row is locked before any stock balance is (spec 5.2), so that two shops selling to one buyer
+        // queue
+        // here and the limit is checked against what the first one sold.
+        AccountsService.SaleAccount account = accountsOn && buyer != null ? accounts.lockForSale(buyer.id()) : null;
+        LocalDate dueDate = r.dueDate() != null || account == null ? r.dueDate() : account.dueDate(saleDate);
         String currency = tenant.profile().currency();
         Principal principal = CurrentPrincipal.require();
         boolean priced = pricing.on();
@@ -299,6 +316,9 @@ class SalesService {
         }
         long total = lines.stream().mapToLong(NewLine::lineTotalMinor).reduce(0, Math::addExact);
         long cost = lines.stream().mapToLong(NewLine::lineCostMinor).reduce(0, Math::addExact);
+        AccountsService.Override creditOverride = account == null
+                ? null
+                : accounts.enforceLimit(buyer.id(), account, total, branch, r.creditOverrideReason());
         UUID id = UUID.randomUUID();
         UUID by = principal.userId();
         String saleNo = "RS%08d".formatted(sequences.next("retail_sale_no"));
@@ -311,7 +331,7 @@ class SalesService {
                 r.customerId(),
                 buyerName,
                 blankToNull(r.buyerContact()),
-                r.dueDate(),
+                dueDate,
                 "completed",
                 currency,
                 total,
@@ -399,6 +419,13 @@ class SalesService {
                 .toList();
         if (!overrides.isEmpty()) {
             after.put("price_overrides", overrides);
+        }
+        if (creditOverride != null) {
+            // The sale went above the buyer's limit with a reason, by someone who may: said in the sale's own entry and
+            // in an entry of its own that a search for overrides finds.
+            after.put("credit_override", creditOverride.asMap());
+            audit.record(
+                    AuditLog.Entry.created("retail.credit.limit_overridden", SALE, id, branch, creditOverride.asMap()));
         }
         audit.record(AuditLog.Entry.created("retail.sale.created", SALE, id, branch, after));
         return visible(repo.find(id, false).orElseThrow().sale());
@@ -539,13 +566,13 @@ class SalesService {
             now.put("price_list_id", r.priceListId());
         }
         if (now.isEmpty()) {
-            return before;
+            return forCaller(before);
         }
         if (repo.updateCustomerPricing(id, r.customerGroupId(), r.priceListId(), expected) == 0) {
             throw repo.customer(id).map(c -> Versions.conflict(c.version())).orElseGet(ApiException::notFound);
         }
         audit.record(new AuditLog.Entry("retail.customer.pricing_changed", "retail.customer", id, null, was, now));
-        return repo.customer(id).orElseThrow();
+        return forCaller(repo.customer(id).orElseThrow());
     }
 
     private static final java.util.Set<String> OWING_FILTERS = java.util.Set.of("owing", "overdue", "paid");
@@ -782,8 +809,8 @@ class SalesService {
 
     @Transactional
     Customer createCustomer(CustomerRequest r) {
-        Customer c =
-                new Customer(UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), null, null, null, null, 1);
+        Customer c = new Customer(
+                UUID.randomUUID(), r.name().trim(), blankToNull(r.contact()), null, null, null, null, null, null, 1);
         repo.insertCustomer(c, CurrentPrincipal.require().userId());
         audit.record(AuditLog.Entry.created(
                 "retail.customer.created", "retail.customer", c.id(), null, Map.of("name", c.name())));
@@ -795,11 +822,26 @@ class SalesService {
      * say what the buyer pays); otherwise the buyer reads as before price lists.
      */
     private Customer forCaller(Customer c) {
-        if (c.customerGroupId() == null && c.priceListId() == null
-                || pricing.on() && CurrentPrincipal.require().hasPermission("retail.pricelist.manage")) {
+        // The credit limit and the terms travel only while customer accounts are on (issue #196); off, the buyer reads
+        // exactly as it did before them.
+        boolean accountsOn = accounts.on();
+        boolean showPricing = c.customerGroupId() == null && c.priceListId() == null
+                || pricing.on() && CurrentPrincipal.require().hasPermission("retail.pricelist.manage");
+        boolean showAccount = accountsOn || c.creditLimitMinor() == null && c.termsDays() == null;
+        if (showPricing && showAccount) {
             return c;
         }
-        return new Customer(c.id(), c.name(), c.contact(), c.createdAt(), c.balanceMinor(), null, null, c.version());
+        return new Customer(
+                c.id(),
+                c.name(),
+                c.contact(),
+                c.createdAt(),
+                c.balanceMinor(),
+                showPricing ? c.customerGroupId() : null,
+                showPricing ? c.priceListId() : null,
+                accountsOn ? c.creditLimitMinor() : null,
+                accountsOn ? c.termsDays() : null,
+                c.version());
     }
 
     /** #146: edit a credit buyer's name or contact. Nothing else about a buyer changes, and none is deleted. */
@@ -873,6 +915,22 @@ class SalesService {
         List<UUID> filter = CurrentPrincipal.require().branchFilter("retail.sale.read", null);
         List<OpenSale> open = repo.openSales(customerId, filter);
         long owed = open.stream().mapToLong(OpenSale::balanceMinor).reduce(0, Math::addExact);
+        // Which sales are imported is said only while customer accounts are on (issue #196); off, the answer is as
+        // before.
+        if (!accounts.on()) {
+            open = open.stream()
+                    .map(s -> new OpenSale(
+                            s.saleId(),
+                            s.saleNo(),
+                            s.branchId(),
+                            s.saleDate(),
+                            s.dueDate(),
+                            s.totalMinor(),
+                            s.paidMinor(),
+                            s.balanceMinor(),
+                            null))
+                    .toList();
+        }
         return new CustomerBalance(customerId, tenant.profile().currency(), owed, open);
     }
 

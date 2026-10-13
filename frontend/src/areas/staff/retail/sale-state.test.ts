@@ -90,3 +90,37 @@ describe('sale form', () => {
     expect(loadDraft(null, 'sale:u1:b1', draft()).key).toMatch(/^[0-9a-f-]{36}$/);
   });
 });
+
+describe('a credit sale with customer accounts on (ADR-033, issue #196)', () => {
+  const accounts = { termsDays: undefined as number | undefined };
+  const credit = (over: Partial<Draft> = {}): Draft => draft({ method: 'credit', customerId: 'c1', dueDate: '2026-11-01', ...over });
+
+  it('is exactly the old form while the feature is off', () => {
+    const typed = draft({ method: 'credit', newBuyerName: ' Test Buyer 02 ', dueDate: '2026-11-01' });
+    expect(draftProblem(typed)).toBeNull();
+    expect(buildSaleRequest(typed)).toMatchObject({ buyer_name: 'Test Buyer 02', due_date: '2026-11-01' });
+    expect(buildSaleRequest(typed)).not.toHaveProperty('credit_override_reason');
+  });
+
+  it('names a buyer from the list: a typed name is not enough', () => {
+    expect(draftProblem(draft({ method: 'credit', newBuyerName: 'Test Buyer 02', dueDate: '2026-11-01' }), undefined, accounts)).toMatch(/from the list/i);
+    expect(draftProblem(credit(), undefined, accounts)).toBeNull();
+  });
+
+  it('asks for a date only when the buyer has no terms to give one', () => {
+    expect(draftProblem(credit({ dueDate: '' }), undefined, accounts)).toMatch(/date/i);
+    expect(draftProblem(credit({ dueDate: '' }), undefined, { termsDays: 30 })).toBeNull();
+    expect(draftProblem(credit({ dueDate: '' }), undefined, { termsDays: 0 })).toBeNull();
+  });
+
+  it('leaves the due date out when none is typed, so the server dates it from the terms', () => {
+    expect(buildSaleRequest(credit({ dueDate: '' }), undefined, { termsDays: 30 })).not.toHaveProperty('due_date');
+    expect(buildSaleRequest(credit(), undefined, { termsDays: 30 })).toMatchObject({ due_date: '2026-11-01' });
+  });
+
+  it('sends the reason for going above the limit only when one is typed, and never for a cash sale', () => {
+    expect(buildSaleRequest(credit(), undefined, accounts)).not.toHaveProperty('credit_override_reason');
+    expect(buildSaleRequest(credit({ creditReason: '  Standing arrangement ' }), undefined, accounts)).toMatchObject({ credit_override_reason: 'Standing arrangement' });
+    expect(buildSaleRequest(draft({ creditReason: 'Standing arrangement' }), undefined, accounts)).not.toHaveProperty('credit_override_reason');
+  });
+});

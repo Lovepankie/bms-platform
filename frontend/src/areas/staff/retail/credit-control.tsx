@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
+import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retailAnalytics, type Ageing, type CreditControl } from '../../../api/retail-analytics';
 import { SkeletonList } from '../../../components/states';
+import { useStaff } from '../context';
 import { Bars, Choice, DateRange, Empty, Section, defaultRange, rangeProblem } from './analytics-ui';
+import { canOpenAccount } from './permissions';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 
 // Credit control (issue #149, step 4): what credit buyers owe, how late it is, and what was paid in a
@@ -24,7 +26,12 @@ const BUCKETS: { key: keyof Ageing; label: string }[] = [
 const METHODS: Record<string, string> = { cash: 'Cash', mobile_money: 'Mobile money', bank: 'Bank' };
 const methodName = (m?: string) => METHODS[m ?? ''] ?? m ?? '';
 
-export function CreditControlView({ data, nameOf, sort }: { data: CreditControl; nameOf: (id: string | undefined) => string; sort: 'amount' | 'age' }) {
+/**
+ * `accounts` is true while customer accounts are on (ADR-033, issue #196): a buyer with a record then links to their account and,
+ * with a limit, shows it, and says so when the server says what they owe is above it (`over_limit`, sent only for a report
+ * over every branch: the limit is measured across all of them, so a branch's share is never compared with it). Off, the table is what it was.
+ */
+export function CreditControlView({ data, nameOf, sort, accounts = false }: { data: CreditControl; nameOf: (id: string | undefined) => string; sort: 'amount' | 'age'; accounts?: boolean }) {
   const phone = useIsPhone();
   const totals = data.totals ?? { owed_minor: 0 };
   const buyers = data.buyers ?? [];
@@ -46,6 +53,7 @@ export function CreditControlView({ data, nameOf, sort }: { data: CreditControl;
                 <tr>
                   <th>Buyer</th>
                   <th className="num">Owes</th>
+                  {accounts && !phone && <th className="num">Limit</th>}
                   {!phone && BUCKETS.map((b) => <th key={b.key} className="num">{b.label}</th>)}
                   {phone && <th className="num">Oldest late</th>}
                 </tr>
@@ -53,8 +61,13 @@ export function CreditControlView({ data, nameOf, sort }: { data: CreditControl;
               <tbody>
                 {buyers.map((b) => (
                   <tr key={b.customer_id ?? b.name}>
-                    <td>{b.name}<br /><span className="hint">{b.sale_count} {b.sale_count === 1 ? 'sale' : 'sales'}</span></td>
+                    <td>
+                      {accounts && b.customer_id ? <Link to="/staff/retail/accounts/$customerId" params={{ customerId: b.customer_id }} aria-label={`Open the account of ${b.name}`}>{b.name}</Link> : b.name}
+                      <br /><span className="hint">{b.sale_count} {b.sale_count === 1 ? 'sale' : 'sales'}</span>
+                      {accounts && b.over_limit === true && <><br /><span className="rt-flag">Above the credit limit</span></>}
+                    </td>
                     <td className="num">{money(b.ageing?.owed_minor ?? 0)}</td>
+                    {accounts && !phone && <td className="num">{b.credit_limit_minor !== undefined ? money(b.credit_limit_minor) : ''}</td>}
                     {!phone && BUCKETS.map((x) => <td key={x.key} className="num">{b.ageing?.[x.key] ? money(b.ageing[x.key] ?? 0) : ''}</td>)}
                     {phone && <td className="num">{b.oldest_overdue_days !== undefined ? `${b.oldest_overdue_days} days` : ''}</td>}
                   </tr>
@@ -87,7 +100,7 @@ export function CreditControlView({ data, nameOf, sort }: { data: CreditControl;
         )}
       </Section>
 
-      <Section title="Payments received" hint={`Payments on credit sales from ${data.from} to ${data.to}.`}>
+      <Section title="Payments received" hint={`Payments on credit sales from ${data.from} to ${data.to}. A payment that was reversed stays on the day it was received; the reversal is a minus row on the day it was undone.`}>
         {payments.length === 0 ? <Empty>No payment was received in this range.</Empty> : (
           <>
             <p className="rt-total">Received {money(data.payments_minor ?? 0)}</p>
@@ -116,6 +129,7 @@ export function CreditControlView({ data, nameOf, sort }: { data: CreditControl;
 }
 
 function CreditControlPage() {
+  const { me } = useStaff();
   const { all, branchId, branchName } = useBranchView();
   const nameOf = useBranchName();
   const initial = defaultRange();
@@ -140,7 +154,7 @@ function CreditControlPage() {
       </div>
       {report.isPending && !problem && <SkeletonList label="Loading credit control" />}
       <Problem error={report.error} />
-      {report.data && <CreditControlView data={report.data} nameOf={nameOf} sort={sort} />}
+      {report.data && <CreditControlView data={report.data} nameOf={nameOf} sort={sort} accounts={canOpenAccount(me)} />}
     </Gate>
   );
 }
