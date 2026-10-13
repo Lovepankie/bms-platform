@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { retail, type Transfer } from '../../../api/retail';
 import { useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
-import { milliOf } from './maths';
+import { milliOf, showDate } from './maths';
 import { canUse } from './permissions';
+import { TransferDocument } from './documents-ui';
 import { TransferSummary, useBranchLabel } from './transfer';
 import { Gate, Problem, useSingleBranch } from './ui';
 
@@ -14,13 +15,7 @@ import { Gate, Problem, useSingleBranch } from './ui';
 // a user who may move stock from its source branch can cancel it while the destination still holds
 // what arrived; the server refuses otherwise, in plain words.
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** "6 Oct 2026" from "2026-10-06": no hyphen for a narrow row to break at, and no timezone shift. */
-export function showDate(iso: string | undefined): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? '');
-  return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1] ?? m[2]} ${m[1]}` : (iso ?? '');
-}
+export { showDate };
 
 /** "2 items: LED bulb 9W screw, Socket" with at most two names, then how many more. */
 export function whatMoved(t: Transfer): string {
@@ -94,6 +89,7 @@ function TransferDetail({ id, onClose }: { id: string; onClose: () => void }) {
       <button type="button" onClick={onClose}>Back to the list</button>
       {transfer.isError && <Problem error={transfer.error} />}
       {t && <TransferSummary transfer={t} />}
+      {t?.id && <TransferDocument transferId={t.id} branchId={t.from_branch_id} status={t.status} />}
       {mayCancel && (
         <form onSubmit={(e) => { e.preventDefault(); if (reason.trim() !== '' && !cancel.isPending) cancel.mutate(); }}>
           <label htmlFor="transfer-void-reason">Reason to cancel this move</label>

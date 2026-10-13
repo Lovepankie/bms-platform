@@ -1,0 +1,27 @@
+Test Trading Ltd
+Head Office
+Plot 1, Test Road, Kampala
+DN-HQ-000001
+{DATE}
+Test Trading Ltd, Plot 1 Test Road. Thank you for your business. DN-HQ-000001, page 1 of 1
+DELIVERY NOTE
+Deliver to
+Test Branch Two
+Stock move Between branches
+Date {DATE}
+From Head Office
+Goods delivered
+No Item Quantity Checked
+1
+Test Product DC-1
+DC-1
+4 u-dc-1
+1 line
+The receiver confirms the goods above were received in good order, except as written below.
+Remarks
+Delivered by Test Cashier
+{DATE}
+Vehicle or driver
+Name
+Received by Test Branch Two
+Name, signature and date

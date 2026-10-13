@@ -283,3 +283,69 @@ Decision 6's neighbour, the returns capability, is built in slice 7 (migration V
 
 **Better:** goods can come back against a sale in any pack, to any branch or to the bin, the customer is repaid in money or off their balance, and the books, the cash book and the reports agree on the day. **Worse:** `paid_minor` now means settled, by money or by a credit note, so a reader that wants only money must use the payment rows; a return of a sale cannot be edited, only voided. The reports that net returns were measured on a scratch PostgreSQL 17 (one tenant, 1.2 million sale lines, 8,000 returns; not the 25 times data of db-bench, which needs Docker): the month statements of the sales analysis took 243 and 234 ms before and 225 and 247 ms after, and the price change impact statement 512 ms before (as on main, the changed items read twice) and 560 ms after; sale lines have no index on the product, before or after. The returns are a separate arm joined to a small table (`NET_LINES` for the statements that scan a window, a second arm beside the unchanged sales arm for the margin join), and the db-bench copies (`f03` to `f06`, `k01`, `k02`, `k05`, `k06`) are updated; they have not been run on the 25 times data. **Watch for:** any new reader of sale lines that reports sales must join the returns (the shared `NET_LINES` of `SalesAnalysisRepository`), and any new writer of `paid_minor` must keep it between `retail_sale_settled_minor` and the total.
 
+## Amendment of 2026-10-13 (issue #197): optional documents, as built
+
+Decision 7 is built in slice 8 (migration V46; `docs/specs/trade-capabilities.md` sections 6 and 10). The product owner's rule
+sets the shape: a sale is a till receipt, and a wholesaler needs a quotation, an invoice and a delivery note but not always (his
+buyer buys into its own shops from a wholesaler whose system never had waybills), so documents are optional, off by default and
+never in the sale's path. The choices the design left open:
+
+1. **Series per tenant, type and branch, prefix configurable.** The spec said one series per tenant and type; the owner asked for the
+   branch in the number, as ADR-034's quality bar item 5 already does for receipts. A number is `<prefix>-<branch code>-<six digit
+   counter>` (`INV-HQ-000001`). The counter row is `retail_document_series (tenant, type, branch)`, locked with `SELECT ... FOR UPDATE`
+   in the same transaction that writes the document, so a failed issue rolls the counter back and a series has no gap (ADR-034's rule
+   for receipts, not the rule for statements, which are numbered by date). A guard trigger makes the counter rise by exactly one and
+   never fall or disappear. The prefix is per tenant and type (`retail_document_prefixes`, default QT, INV, DN), changed by
+   `core.settings.manage` and audited; it changes later numbers only.
+2. **One snapshot, immutable, void by derivation.** `retail_documents` is append-only for every role and holds the snapshot JSON
+   everything the document shows (business, branch, buyer, lines as sold with the pack unit and the base units it came to, the price
+   list, totals, the user who issued it). Nothing updates a document: it reads as void when its sale is voided, its stock move
+   cancelled or voided, or its quotation cancelled, so the void path of a sale does not touch documents at all and the number stays.
+   A void document is never printed clean (review of #252): no new copy of the issued PDF is made for it, the copy stored before the
+   void is no longer served (the document access refuses it, 403), and the first request after the void renders and stores a second
+   immutable version with a VOID banner on every page (stored under the number with ` VOID`, said in words: its sale was voided, its
+   stock move cancelled, the quotation cancelled). The list and the document carry only that version's `pdf_document_id`.
+3. **Two steps, so nothing slow runs under a lock.** The first is a short write transaction (series lock, a second look because
+   issuing is idempotent by sale and type, the number, the row). The second renders the PDF from the snapshot with no connection
+   held, uploads it, and under an advisory lock on the document only looks again and records it, using the same `core.documents`
+   calls as the loan documents. A render that fails (503 `documents_busy` or any other failure) leaves a numbered document with no
+   PDF; the same request, or `POST /retail/documents/{id}/pdf`, renders it from the same snapshot. A sale never waits for any of it.
+   Issuing takes a share lock on the sale's row first, so a void that has not committed yet finishes before the invoice looks at the
+   sale, and a void that starts after waits for the document: no invoice is numbered for a sale that is being voided.
+4. **Quotation.** Priced by the sale's own pricing code (units, price lists, the override rules, the price floor), so an offer is what
+   a sale would charge. It reserves nothing and posts nothing, cannot be edited (a change is a new quotation), is cancelled once or
+   converted once. Conversion runs the ordinary sale path in one transaction, so every rule of a sale holds; the prices are
+   today's unless the quoted ones are kept, and a kept price that differs is a typed price on a sale (needs `retail.price.override`
+   and a reason while price lists are on). The invoice of the new sale is optional and names the quotation. A capability switched
+   off since the quotation was made is not an error (spec 14.1): with price lists off the lines are priced at the product's price and
+   no list is sent, with pack sizes off a line quoted in cartons is sold in single units (at the price per unit the carton came to
+   when the quoted prices are kept), and the answer says so in `note`.
+5. **Delivery note.** Quantities in the unit sold (with the base units a pack came to), prices off unless the issuer asks, a checked
+   column and a signature block for the receiver. Also issued for a stock move (source branch, to the destination, never prices),
+   which is what a wholesaler sends with a van between a store and a shop.
+6. **Customer statement PDF is the fourth document and is not stored.** It changes with every payment, so ADR-034 applies as for the loan
+   statement: rendered on each request as at the business date, never stored, numbered by date (`ST-20261008-0F07DE94`), capped at 800
+   lines so a render fits the 224 MB heap (`StatementMemoryTest`), and in the caller's branch scope like the screen. Its lines are
+   the buyer's sales in the caller's scope of `retail.sale.read`, so the route needs that permission as well as
+   `retail.document.issue` (403 otherwise). It shows the buyer's payment terms and credit limit, the opening balance, each movement
+   with its running balance, the closing balance in figures and words, and imported credit sales apart.
+7. **A credit note has one number: the return's.** Issue #201 (V45) numbers the credit note itself, per tenant and branch
+   (`retail_sale_returns.credit_note_no`, for example `CNHQ-000001`), so there is no credit note series or prefix here (an earlier draft
+   had a second one, `CN-HQ-000001`; it was removed). `POST /retail/returns/{return_id}/document` renders the return as the credit
+   note PDF (`credit_note.html`, with the lines returned, the invoice or sale they were sold on, the way the buyer is repaid and the
+   amount in figures and words) under that number and stores it once, immutable, in the documents store (subject type
+   `retail.credit_note`, `doc_type` `credit_note`); the return's own rows are the record, so no snapshot table is needed. A voided return
+   reads as void and is served only as a second version with the VOID banner, like every document; the banner says when it was voided, by whom
+   and why, and the copy keeps the issuer, the issue day and the buyer's name of the original issue (`retail_credit_note_issues`, one append-only row
+   per return written with the first PDF), not those of whoever asks after the void. A void that lands while a copy is being recorded is seen under
+   a lock on the return (and the sale, for an invoice), and the copy is made again as the void one. It needs the `documents` and
+   `returns` capabilities and both `retail.document.issue` and `retail.sale.return` in the return's branch.
+8. **Permission.** One, `retail.document.issue`, administrators only (the spec's rule: the sales role only if an administrator chooses,
+   and there is no per-role switch yet), consulted only while the capability is on, in the branch scope of the document. Everything
+   else is an existing permission: converting also needs `retail.sale.create`, a prefix needs `core.settings.manage`.
+
+**Better:** a wholesaler gets the three trade documents and a statement at the DSN quality bar without a screen of a plain shop changing;
+a number can be trusted to have no gap; a document reprints identically. **Worse:** a document of a sale that is later voided still
+prints as it was issued (the client shows it void, as with a loan receipt); VAT or tax is still not modelled (spec section 16).
+**Watch for:** any screen that makes a document a step of the sale; a second place that allocates a number outside the series lock;
+any change to `retail_documents` that would update a row (the snapshot is the record).

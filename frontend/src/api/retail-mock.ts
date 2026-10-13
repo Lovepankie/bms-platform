@@ -8,6 +8,7 @@ import type { Me } from './client';
 import { createCashbookMock } from './retail-cashbook-mock';
 import { createPricingMock } from './retail-pricing-mock';
 import { createAccountsMock } from './retail-accounts-mock';
+import { createDocumentsMock } from './retail-documents-mock';
 import { createReturnsMock } from './retail-returns-mock';
 
 // Fabricated retail data for VITE_RETAIL_MOCK and for tests: invented products, branches and
@@ -34,7 +35,7 @@ const SALES_PERMISSIONS = [
 const CASHIER_PERMISSIONS = SALES_PERMISSIONS;
 const ADMIN_PERMISSIONS = [
   ...SALES_PERMISSIONS, 'retail.catalogue.manage', 'retail.price.edit', 'retail.sale.void',
-  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use', 'retail.credit.manage', 'retail.credit.override', 'retail.sale.return',
+  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use', 'retail.credit.manage', 'retail.credit.override', 'retail.document.issue', 'retail.sale.return',
   'retail.savings.record', 'retail.savings.overwrite', 'retail.banking.record', 'retail.expense.record', 'retail.expense.manage',
   'retail.withdrawal.record', 'retail.advance.create', 'retail.advance.repay', 'retail.cashbook.read', 'retail.cashbook.void',
 ];
@@ -228,6 +229,21 @@ export function createMockRetail(): RetailApi {
     sales: () => sales,
   });
 
+  // Optional documents (ADR-033, issue #197): numbered quotations, invoices and delivery notes; 404 while the capability is off.
+  let self: RetailApi | undefined;
+  const documentsApi = createDocumentsMock({
+    on: () => caps.value['documents'] === true,
+    today, nextId, delay, run, once, refuse,
+    sales: () => sales,
+    branches: () => MOCK_BRANCHES.map((b) => ({ id: b.id, code: b.code ?? 'BR', name: b.name ?? '' })),
+    product: (id) => {
+      const p = products.get(id);
+      return p && { code: p.code, description: p.description, unit: p.unit, sellMinor: p.sellMinor };
+    },
+    customer: (id) => customers.find((c) => c.id === id),
+    makeSale: (body, key) => (self ?? refuse(500, 'not_ready', 'The mock is not ready.')).createSale(body, key),
+  });
+
   // Customer returns (ADR-033, issue #201): credit notes against a sale; 404 while the capability is off.
   const returnsApi = createReturnsMock({
     on: () => caps.value['returns'] === true,
@@ -236,9 +252,10 @@ export function createMockRetail(): RetailApi {
     branchCode: (id) => MOCK_BRANCHES.find((b) => b.id === id)?.code ?? '',
   });
 
-  return {
+  const mock: RetailApi = {
     ...pricingApi,
     ...accountsApi,
+    ...documentsApi,
     ...returnsApi,
     ...createCashbookMock({ profit: () => profitAccess, today, sold, branchIds: MOCK_BRANCHES.map((b) => b.id), delay, run, once, nextId }),
 
@@ -830,6 +847,8 @@ export function createMockRetail(): RetailApi {
       return delay(report);
     },
   };
+  self = mock;
+  return mock;
 }
 
 /** A sale as the session may see it: cost and profit only with retail.profit.read. */

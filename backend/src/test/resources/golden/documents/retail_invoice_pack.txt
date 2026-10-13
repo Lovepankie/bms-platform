@@ -1,0 +1,28 @@
+Test Trading Ltd
+Head Office
+Plot 1, Test Road, Kampala
+INV-HQ-000001
+{DATE}
+Test Trading Ltd, Plot 1 Test Road. Thank you for your business. INV-HQ-000001, page 1 of 1
+INVOICE
+Bill to
+Cash customer
+Sale RS{N}
+Sale date {DATE}
+Payment Cash
+Price list Wholesale
+Items
+No Item Quantity Unit price (UGX) Amount (UGX)
+1
+Test Product DC-1
+DC-1
+3 carton
+= 36 u-dc-1
+1,100 3,300
+Total (UGX) 3,300
+Three thousand, three hundred Uganda shillings only
+Paid in full by Cash.
+Issued by Test Cashier
+{DATE}
+Received by Cash customer
+Signature and date

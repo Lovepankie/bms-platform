@@ -149,7 +149,7 @@ class SalesService {
     }
 
     /** FR-RET-04, FR-RET-05, FR-RET-11. */
-    private Sale record(SaleRequest r) {
+    Sale record(SaleRequest r) {
         UUID branch = branches.resolve("retail.sale.create", r.branchId());
         // ADR-033: a store never sells; with branch_roles off every branch acts as both.
         roles.requireMaySell(branch);
@@ -191,15 +191,152 @@ class SalesService {
         LocalDate dueDate = r.dueDate() != null || account == null ? r.dueDate() : account.dueDate(saleDate);
         String currency = tenant.profile().currency();
         Principal principal = CurrentPrincipal.require();
+        Priced priced = priceLines(branch, saleDate, buyer, r.priceListId(), r.lines(), problems);
+        Chosen list = priced.list();
+        List<NewLine> lines = priced.lines();
+        long total = lines.stream().mapToLong(NewLine::lineTotalMinor).reduce(0, Math::addExact);
+        long cost = lines.stream().mapToLong(NewLine::lineCostMinor).reduce(0, Math::addExact);
+        AccountsService.Override creditOverride = account == null
+                ? null
+                : accounts.enforceLimit(buyer.id(), account, total, branch, r.creditOverrideReason());
+        UUID id = UUID.randomUUID();
+        UUID by = principal.userId();
+        String saleNo = "RS%08d".formatted(sequences.next("retail_sale_no"));
+        Sale header = new Sale(
+                id,
+                saleNo,
+                branch,
+                saleDate,
+                r.paymentMethod(),
+                r.customerId(),
+                buyerName,
+                blankToNull(r.buyerContact()),
+                dueDate,
+                "completed",
+                currency,
+                total,
+                credit ? 0 : total,
+                credit ? total : 0,
+                cost,
+                total - cost,
+                list == null ? null : list.id(),
+                list == null ? null : list.name(),
+                List.of(),
+                false,
+                null,
+                by,
+                null,
+                null,
+                null,
+                1);
+        repo.insert(header);
+        lines.forEach(l -> repo.insertLine(id, l));
+        stock.record(
+                saleDate,
+                lines.stream()
+                        .map(l -> new Movement(
+                                branch,
+                                l.productId(),
+                                "sale",
+                                l.qty().negate(),
+                                l.unitCostMinor(),
+                                SALE,
+                                id,
+                                l.id(),
+                                null,
+                                null))
+                        .toList());
+        Leg receivable = Leg.debit(accountFor(r.paymentMethod()), total);
+        if (credit) {
+            receivable = receivable.withSubledger(SALE, id);
+        }
+        UUID saleEntry = books.post(new Posting(
+                        branch,
+                        saleDate,
+                        saleNo,
+                        "Sale " + saleNo,
+                        SALE,
+                        id,
+                        "retail.sale:" + id,
+                        List.of(receivable, Leg.credit("sales_revenue", total))))
+                .map(PostedEntry::entryId)
+                .orElse(null);
+        UUID costEntry = books.post(new Posting(
+                        branch,
+                        saleDate,
+                        saleNo,
+                        "Cost of sale " + saleNo,
+                        SALE,
+                        id,
+                        "retail.sale_cost:" + id,
+                        List.of(Leg.debit("cost_of_goods_sold", cost), Leg.credit("inventory", cost))))
+                .map(PostedEntry::entryId)
+                .orElse(null);
+        repo.setEntries(id, saleEntry, costEntry);
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("sale_no", saleNo);
+        after.put("payment_method", r.paymentMethod());
+        after.put("total_minor", total);
+        after.put("lines", lines.size());
+        if (list != null) {
+            after.put("price_list_id", list.id());
+        }
+        // Issue #195: every changed price is in the audit entry of the sale, with the price the list resolved and why.
+        List<Map<String, Object>> overrides = lines.stream()
+                .filter(l -> l.pricing() != null && l.pricing().source().equals("override"))
+                .map(l -> {
+                    Map<String, Object> o = new LinkedHashMap<>();
+                    o.put("line_no", l.lineNo());
+                    o.put("product_id", l.productId());
+                    if (l.pricing().priceListId() != null) {
+                        o.put("price_list_id", l.pricing().priceListId());
+                    }
+                    o.put("resolved_unit_price_minor", l.pricing().resolvedUnitPriceMinor());
+                    o.put("unit_price_minor", l.saleUnitId() == null ? l.unitPriceMinor() : l.saleUnitPriceMinor());
+                    o.put("reason", l.pricing().overrideReason());
+                    return o;
+                })
+                .toList();
+        if (!overrides.isEmpty()) {
+            after.put("price_overrides", overrides);
+        }
+        if (creditOverride != null) {
+            // The sale went above the buyer's limit with a reason, by someone who may: said in the sale's own entry and
+            // in an entry of its own that a search for overrides finds.
+            after.put("credit_override", creditOverride.asMap());
+            audit.record(
+                    AuditLog.Entry.created("retail.credit.limit_overridden", SALE, id, branch, creditOverride.asMap()));
+        }
+        audit.record(AuditLog.Entry.created("retail.sale.created", SALE, id, branch, after));
+        return visible(repo.find(id, false).orElseThrow().sale());
+    }
+
+    /** The lines of a sale or a quotation, priced and checked, and the list that priced them (null when none applied). */
+    record Priced(Chosen list, List<NewLine> lines) {}
+
+    /**
+     * The server side of pricing a set of lines for {@code buyer} (ADR-033, issues #194 and #195): pack units, the
+     * resolved price and any override, the price floor. A sale takes this before it moves stock; a quotation takes it
+     * to offer the same prices a sale would take. Field problems are thrown as one validation error.
+     */
+    Priced priceLines(
+            UUID branch,
+            LocalDate saleDate,
+            Customer buyer,
+            UUID priceListId,
+            List<SaleLineRequest> requests,
+            List<FieldProblem> problems) {
+        String currency = tenant.profile().currency();
+        Principal principal = CurrentPrincipal.require();
         boolean priced = pricing.on();
-        if (!priced && r.priceListId() != null) {
+        if (!priced && priceListId != null) {
             problems.add(new FieldProblem(
                     "price_list_id", "capability_not_enabled", "Price lists are not enabled for this business."));
         }
-        Chosen list = priced ? pricing.choose(branch, r.priceListId(), buyer, problems) : null;
+        Chosen list = priced ? pricing.choose(branch, priceListId, buyer, problems) : null;
         List<NewLine> lines = new ArrayList<>();
-        for (int i = 0; i < r.lines().size(); i++) {
-            SaleLineRequest l = r.lines().get(i);
+        for (int i = 0; i < requests.size(); i++) {
+            SaleLineRequest l = requests.get(i);
             String field = "lines[" + i + "]";
             ProductSnapshot p = catalogue.find(l.productId()).orElse(null);
             if (p == null) {
@@ -317,121 +454,7 @@ class SalesService {
                 }
             }
         }
-        long total = lines.stream().mapToLong(NewLine::lineTotalMinor).reduce(0, Math::addExact);
-        long cost = lines.stream().mapToLong(NewLine::lineCostMinor).reduce(0, Math::addExact);
-        AccountsService.Override creditOverride = account == null
-                ? null
-                : accounts.enforceLimit(buyer.id(), account, total, branch, r.creditOverrideReason());
-        UUID id = UUID.randomUUID();
-        UUID by = principal.userId();
-        String saleNo = "RS%08d".formatted(sequences.next("retail_sale_no"));
-        Sale header = new Sale(
-                id,
-                saleNo,
-                branch,
-                saleDate,
-                r.paymentMethod(),
-                r.customerId(),
-                buyerName,
-                blankToNull(r.buyerContact()),
-                dueDate,
-                "completed",
-                currency,
-                total,
-                credit ? 0 : total,
-                credit ? total : 0,
-                cost,
-                total - cost,
-                list == null ? null : list.id(),
-                list == null ? null : list.name(),
-                List.of(),
-                false,
-                null,
-                by,
-                null,
-                null,
-                null,
-                1);
-        repo.insert(header);
-        lines.forEach(l -> repo.insertLine(id, l));
-        stock.record(
-                saleDate,
-                lines.stream()
-                        .map(l -> new Movement(
-                                branch,
-                                l.productId(),
-                                "sale",
-                                l.qty().negate(),
-                                l.unitCostMinor(),
-                                SALE,
-                                id,
-                                l.id(),
-                                null,
-                                null))
-                        .toList());
-        Leg receivable = Leg.debit(accountFor(r.paymentMethod()), total);
-        if (credit) {
-            receivable = receivable.withSubledger(SALE, id);
-        }
-        UUID saleEntry = books.post(new Posting(
-                        branch,
-                        saleDate,
-                        saleNo,
-                        "Sale " + saleNo,
-                        SALE,
-                        id,
-                        "retail.sale:" + id,
-                        List.of(receivable, Leg.credit("sales_revenue", total))))
-                .map(PostedEntry::entryId)
-                .orElse(null);
-        UUID costEntry = books.post(new Posting(
-                        branch,
-                        saleDate,
-                        saleNo,
-                        "Cost of sale " + saleNo,
-                        SALE,
-                        id,
-                        "retail.sale_cost:" + id,
-                        List.of(Leg.debit("cost_of_goods_sold", cost), Leg.credit("inventory", cost))))
-                .map(PostedEntry::entryId)
-                .orElse(null);
-        repo.setEntries(id, saleEntry, costEntry);
-        Map<String, Object> after = new LinkedHashMap<>();
-        after.put("sale_no", saleNo);
-        after.put("payment_method", r.paymentMethod());
-        after.put("total_minor", total);
-        after.put("lines", lines.size());
-        if (list != null) {
-            after.put("price_list_id", list.id());
-        }
-        // Issue #195: every changed price is in the audit entry of the sale, with the price the list resolved and why.
-        List<Map<String, Object>> overrides = lines.stream()
-                .filter(l -> l.pricing() != null && l.pricing().source().equals("override"))
-                .map(l -> {
-                    Map<String, Object> o = new LinkedHashMap<>();
-                    o.put("line_no", l.lineNo());
-                    o.put("product_id", l.productId());
-                    if (l.pricing().priceListId() != null) {
-                        o.put("price_list_id", l.pricing().priceListId());
-                    }
-                    o.put("resolved_unit_price_minor", l.pricing().resolvedUnitPriceMinor());
-                    o.put("unit_price_minor", l.saleUnitId() == null ? l.unitPriceMinor() : l.saleUnitPriceMinor());
-                    o.put("reason", l.pricing().overrideReason());
-                    return o;
-                })
-                .toList();
-        if (!overrides.isEmpty()) {
-            after.put("price_overrides", overrides);
-        }
-        if (creditOverride != null) {
-            // The sale went above the buyer's limit with a reason, by someone who may: said in the sale's own entry and
-            // in an entry of its own that a search for overrides finds.
-            after.put("credit_override", creditOverride.asMap());
-            audit.record(
-                    AuditLog.Entry.created("retail.credit.limit_overridden", SALE, id, branch, creditOverride.asMap()));
-        }
-        audit.record(AuditLog.Entry.created("retail.sale.created", SALE, id, branch, after));
-        return visible(repo.find(id, false).orElseThrow().sale());
+        return new Priced(list, lines);
     }
 
     /** What a sale line's unit comes to: the pack (null for the base unit) and the quantity in base units. */

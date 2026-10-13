@@ -45,6 +45,20 @@ export type OpenSale = S['RetailOpenSale'];
 export type AccountPayment = S['RetailAccountPayment'];
 export type AccountPaymentRequest = S['RetailAccountPaymentRequest'];
 export type AccountPaymentPage = S['RetailAccountPaymentList'];
+/** Optional documents (documents capability, ADR-033, issue #197): quotations, invoices and delivery notes, numbered per branch. */
+export type RetailDocument = S['RetailDocument'];
+export type DocumentPage = S['RetailDocumentPage'];
+export type DocumentRequest = S['RetailDocumentRequest'];
+export type DocumentSeries = S['RetailDocumentSeries'];
+export type Quotation = S['RetailQuotation'];
+export type QuotationLine = S['RetailQuotationLine'];
+export type QuotationPage = S['RetailQuotationPage'];
+export type QuotationRequest = S['RetailQuotationRequest'];
+export type ConvertRequest = S['RetailQuotationConvertRequest'];
+export type Converted = S['RetailQuotationConverted'];
+export type DocumentType = 'quotation' | 'invoice' | 'delivery_note';
+/** The credit note PDF of a return, under the return's own number (documents and returns capabilities). */
+export type CreditNoteDocument = S['RetailCreditNoteDocument'];
 /** Customer returns and sales credit notes (the returns capability, ADR-033, issue #201). Money is integer minor units, quantities three places. */
 export type ReturnRequest = S['RetailReturnRequest'];
 export type ReturnLineRequest = S['RetailReturnLineRequest'];
@@ -252,6 +266,27 @@ export interface RetailApi {
   payOnAccount(id: string, body: AccountPaymentRequest, idempotencyKey: string): Promise<AccountPayment>;
   /** Undoes a payment on account as a whole (retail.sale.void); takes the Idempotency-Key of its form. */
   reverseAccountPayment(id: string, paymentId: string, reason: string, idempotencyKey: string): Promise<AccountPayment>;
+  /** The customer statement as a PDF (documents and customer_accounts), as at today and never stored. */
+  customerStatementPdf(id: string, q: { from?: string; to?: string }): Promise<Blob>;
+  /** Optional documents (the documents capability, issue #197); 404 capability_not_enabled while it is off. */
+  listSaleDocuments(saleId: string): Promise<RetailDocument[]>;
+  /** The invoice or delivery note of a sale, issued once; takes the Idempotency-Key of its button. */
+  issueSaleDocument(saleId: string, body: DocumentRequest, idempotencyKey: string): Promise<RetailDocument>;
+  /** The delivery note of a stock move (quantities only). */
+  issueTransferDocument(transferId: string, idempotencyKey: string): Promise<RetailDocument>;
+  listDocuments(q: { branchId?: string; type?: DocumentType; from?: string; to?: string; query?: string; cursor?: string; signal?: AbortSignal }): Promise<DocumentPage>;
+  /** The document with its stored PDF, rendered now from its snapshot when none was stored. */
+  renderDocument(id: string): Promise<RetailDocument>;
+  /** A short-lived signed link to a stored PDF (FR-DOC-03). */
+  documentUrl(pdfDocumentId: string): Promise<string>;
+  documentSeries(): Promise<DocumentSeries[]>;
+  /** Changes the prefix of later numbers (core.settings.manage); issued numbers never change. */
+  setDocumentPrefix(type: DocumentType, prefix: string): Promise<DocumentSeries[]>;
+  listQuotations(q: { branchId?: string; status?: 'open' | 'converted' | 'cancelled'; query?: string; cursor?: string; signal?: AbortSignal }): Promise<QuotationPage>;
+  getQuotation(id: string): Promise<Quotation>;
+  createQuotation(body: QuotationRequest, idempotencyKey: string): Promise<Quotation>;
+  cancelQuotation(id: string, reason: string): Promise<Quotation>;
+  convertQuotation(id: string, body: ConvertRequest, idempotencyKey: string): Promise<Converted>;
   /** Takes goods back against a sale (retail.sale.return); takes the Idempotency-Key of its form. 404 capability_not_enabled while returns are off. */
   createSaleReturn(saleId: string, body: ReturnRequest, idempotencyKey: string): Promise<ReturnOutcome>;
   /** The returns made against a sale, oldest first (voided ones included). */
@@ -261,6 +296,8 @@ export interface RetailApi {
   getReturn(id: string): Promise<SaleReturn>;
   /** Voids a return as a whole by reversal (retail.sale.return); takes the Idempotency-Key of its form. 202 `executed: false` when it needs a second administrator. */
   voidReturn(id: string, reason: string, idempotencyKey: string): Promise<ReturnOutcome>;
+  /** The credit note of a return as a stored PDF (retail.document.issue), rendered once; a voided return is served marked void. */
+  renderCreditNote(returnId: string): Promise<CreditNoteDocument>;
   updateCustomer(id: string, version: number, body: { name?: string; contact?: string }): Promise<Customer>;
   createSale(body: SaleRequest, idempotencyKey: string): Promise<Sale>;
   createPurchase(body: PurchaseRequest, idempotencyKey: string): Promise<Purchase>;
@@ -620,6 +657,71 @@ const realRetail: RetailApi = {
     );
   },
 
+  async customerStatementPdf(id, { from, to }) {
+    const result = await api.GET('/api/v1/retail/customers/{customer_id}/statement/pdf', {
+      params: { path: { customer_id: id }, query: { from: from || undefined, to: to || undefined } },
+      parseAs: 'blob',
+    });
+    return unwrap(result as { data?: Blob; error?: unknown; response: Response });
+  },
+
+  async listSaleDocuments(saleId) {
+    return unwrap(await api.GET('/api/v1/retail/sales/{sale_id}/documents', { params: { path: { sale_id: saleId } } })).items ?? [];
+  },
+
+  async issueSaleDocument(saleId, body, key) {
+    return unwrap(await api.POST('/api/v1/retail/sales/{sale_id}/documents', { params: { path: { sale_id: saleId }, header: { 'Idempotency-Key': key } }, body }));
+  },
+
+  async issueTransferDocument(transferId, key) {
+    return unwrap(await api.POST('/api/v1/retail/transfers/{transfer_id}/documents', { params: { path: { transfer_id: transferId }, header: { 'Idempotency-Key': key } }, body: { type: 'delivery_note' } }));
+  },
+
+  async listDocuments({ branchId, type, from, to, query, cursor, signal }) {
+    return unwrap(
+      await api.GET('/api/v1/retail/documents', {
+        params: { query: { branch_id: branchId ? [branchId] : undefined, type: type || undefined, from: from || undefined, to: to || undefined, query: query || undefined, limit: 50, cursor } },
+        signal,
+      }),
+    );
+  },
+
+  async renderDocument(id) {
+    return unwrap(await api.POST('/api/v1/retail/documents/{document_id}/pdf', { params: { path: { document_id: id } } }));
+  },
+
+  async documentUrl(pdfDocumentId) {
+    return unwrap(await api.POST('/api/v1/documents/{document_id}/download-url', { params: { path: { document_id: pdfDocumentId } } })).url ?? '';
+  },
+
+  async documentSeries() {
+    return unwrap(await api.GET('/api/v1/retail/document-series')).items ?? [];
+  },
+
+  async setDocumentPrefix(type, prefix) {
+    return unwrap(await api.PUT('/api/v1/retail/document-series/{type}', { params: { path: { type } }, body: { prefix } })).items ?? [];
+  },
+
+  async listQuotations({ branchId, status, query, cursor, signal }) {
+    return unwrap(await api.GET('/api/v1/retail/quotations', { params: { query: { branch_id: branchId ? [branchId] : undefined, status, query: query || undefined, limit: 50, cursor } }, signal }));
+  },
+
+  async getQuotation(id) {
+    return unwrap(await api.GET('/api/v1/retail/quotations/{quotation_id}', { params: { path: { quotation_id: id } } }));
+  },
+
+  async createQuotation(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/quotations', { body, params: { header: { 'Idempotency-Key': key } } }));
+  },
+
+  async cancelQuotation(id, reason) {
+    return unwrap(await api.POST('/api/v1/retail/quotations/{quotation_id}/cancel', { params: { path: { quotation_id: id } }, body: { reason } }));
+  },
+
+  async convertQuotation(id, body, key) {
+    return unwrap(await api.POST('/api/v1/retail/quotations/{quotation_id}/convert', { params: { path: { quotation_id: id }, header: { 'Idempotency-Key': key } }, body }));
+  },
+
   async createSaleReturn(saleId, body, key) {
     return unwrap(await api.POST('/api/v1/retail/sales/{sale_id}/returns', { params: { path: { sale_id: saleId }, header: { 'Idempotency-Key': key } }, body }));
   },
@@ -638,6 +740,10 @@ const realRetail: RetailApi = {
 
   async voidReturn(id, reason, key) {
     return unwrap(await api.POST('/api/v1/retail/returns/{return_id}/void', { params: { path: { return_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  async renderCreditNote(returnId) {
+    return unwrap(await api.POST('/api/v1/retail/returns/{return_id}/document', { params: { path: { return_id: returnId } } }));
   },
 
   async createSale(body, key) {

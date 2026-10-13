@@ -1,0 +1,65 @@
+<!-- Retail customer statement (ADR-033, issue #197; ADR-034): the account of one credit buyer over a date range, as at the business date, never stored. The closing balance is what the ledger holds for the buyer's sales in the caller's branches; imported credit sales are listed apart. -->
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head}"></head>
+<body>
+  <div th:replace="~{layout :: letterhead}"></div>
+  <div th:replace="~{layout :: pagefoot}"></div>
+  <h1 th:text="${doc.title}">STATEMENT OF ACCOUNT</h1>
+
+  <table class="facts">
+    <tr>
+      <td style="width: 50%; padding-right: 6mm;">
+        <div class="muted">Account of</div>
+        <div class="party" th:text="${buyer.name}">Buyer</div>
+        <div class="muted" th:if="${buyer.contact != null}" th:text="${buyer.contact}">Contact</div>
+      </td>
+      <td>
+        <table class="facts">
+          <tr><td class="k">From</td><td th:text="${period.from}">1 Jan 2026</td></tr>
+          <tr><td class="k">To</td><td th:text="${period.to}">31 Mar 2026</td></tr>
+          <tr th:if="${terms != null}"><td class="k">Payment terms</td><td th:text="${terms}">30 days</td></tr>
+          <tr th:if="${limit != null}"><td class="k">Credit limit</td><td th:text="${limit}">5,000,000</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <h2 th:text="${'Account (' + currency + ')'}">Account</h2>
+  <table class="grid">
+    <thead>
+      <tr>
+        <th style="width: 13%;">Date</th><th style="width: 17%;">Reference</th><th>Description</th>
+        <th class="num" style="width: 14%;">Charged</th><th class="num" style="width: 14%;">Paid</th><th class="num" style="width: 14%;">Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="note"><td th:text="${period.from}">1 Jan 2026</td><td></td><td colspan="3">Opening balance</td><td class="num" th:text="${totals.opening}">0</td></tr>
+      <tr th:each="l : ${lines}">
+        <td th:text="${l.date}">date</td><td th:text="${l.reference}">RS00000001</td><td th:text="${l.description}">Sale on credit</td>
+        <td class="num" th:text="${l.charged}">-</td><td class="num" th:text="${l.paid}">-</td><td class="num" th:text="${l.balance}">0</td>
+      </tr>
+    </tbody>
+    <tbody>
+      <tr class="total"><td colspan="3">Totals for the period</td><td class="num" th:text="${totals.charged}">0</td><td class="num" th:text="${totals.paid}">0</td><td></td></tr>
+      <tr class="total"><td colspan="5">Closing balance</td><td class="num" th:text="${totals.closing}">0</td></tr>
+    </tbody>
+  </table>
+  <div class="words" th:text="${totals.closingWords}">words</div>
+
+  <th:block th:if="${imported != null}">
+    <h2 th:text="${'Credit sales before the system started (' + currency + ')'}">Before system start</h2>
+    <p class="muted">These sales were brought in from the earlier records. They are listed here and are not in the account above.</p>
+    <table class="grid">
+      <thead><tr><th style="width: 15%;">Date</th><th>Sale</th><th class="num" style="width: 20%;">Amount</th></tr></thead>
+      <tbody>
+        <tr th:each="s : ${imported.sales}"><td th:text="${s.date}">date</td><td th:text="${s.reference}">RS00000001</td><td class="num" th:text="${s.amount}">1,000</td></tr>
+      </tbody>
+      <tbody><tr class="total"><td colspan="2">Total</td><td class="num" th:text="${imported.total}">1,000</td></tr></tbody>
+    </table>
+    <div class="box">
+      <div th:text="${'Total owed, with the sales above: ' + imported.balance}">Total owed</div>
+    </div>
+  </th:block>
+  <p class="muted" style="margin-top: 5mm;" th:text="${scope}">All branches</p>
+</body>
+</html>

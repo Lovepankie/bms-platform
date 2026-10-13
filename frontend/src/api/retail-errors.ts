@@ -40,6 +40,11 @@ const BY_CODE: Record<string, string> = {
   payment_not_reversible: 'A sale no longer holds this payment, so it cannot be reversed.',
   too_many_sales: 'This payment would settle too many sales at once. Record it in parts.',
   statement_too_long: 'That range has too many lines. Choose a shorter range.',
+  // Optional documents (ADR-033, issue #197).
+  quotation_expired: 'This quotation is past its last day. Make a new one with today\'s prices.',
+  quotation_not_open: 'This quotation was already made into a sale or cancelled. Reload the page.',
+  transfer_not_active: 'This stock move was cancelled, so it takes no new document.',
+  documents_busy: 'Too many documents are being made right now. Wait a moment and try again.',
   // Customer returns (ADR-033, issue #201).
   return_exceeds_sold: 'More of this item is being returned than was sold and not yet returned.',
   sale_has_returns: 'This sale has returns against it. Void the returns first.',

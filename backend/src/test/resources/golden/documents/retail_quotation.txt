@@ -1,0 +1,26 @@
+Test Trading Ltd
+Head Office
+Plot 1, Test Road, Kampala
+QT-HQ-000001
+{DATE}
+Test Trading Ltd, Plot 1 Test Road. Thank you for your business. QT-HQ-000001, page 1 of 1
+QUOTATION
+Prepared for
+Test Buyer 01
++256700000001
+Quotation date {DATE}
+Valid until {DATE}
+Items
+No Item Quantity Unit price (UGX) Amount (UGX)
+1
+Test Product DC-1
+DC-1
+10 u-dc-1 120 1,200
+Total (UGX) 1,200
+One thousand, two hundred Uganda shillings only
+These prices are offered until {DATE}. Stock is not reserved and the prices may change after that date.
+Delivery within three days of the order.
+Prepared by Test Cashier
+{DATE}
+Accepted by Test Buyer 01
+Signature and date

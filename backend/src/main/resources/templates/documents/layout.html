@@ -10,7 +10,7 @@
   <style th:inline="text">
     @page {
       size: A4;
-      margin: 37mm 15mm 22mm 15mm;
+      margin: [[${doc['voided'] != null ? '45mm' : '37mm'}]] 15mm 22mm 15mm;
       @top-center { content: element(letterhead); }
       @bottom-center { content: element(pagefoot); }
     }
@@ -49,6 +49,11 @@
     table.signs td.last { padding-right: 0; }
     .signline { border-top: 0.3mm solid #555555; padding-top: 1mm; font-size: 8.5pt; }
     .verify { width: 26mm; height: 26mm; }
+    .void { border: 0.8mm solid #B00020; color: #B00020; font-weight: 700; font-size: 10pt; text-align: center; padding: 1.2mm 2mm; margin-top: 2mm; }
+    .party { font-weight: 700; font-size: 11pt; color: #222222; }
+    .strong { font-weight: 700; color: #222222; }
+    .tick { width: 4mm; height: 4mm; border: 0.3mm solid #888888; margin: 0 auto; }
+    .remarks { height: 14mm; border-bottom: 0.3mm solid #999999; margin-bottom: 2mm; }
     .foot { width: 100%; border-collapse: collapse; font-size: 7.5pt; color: #777777; border-top: 0.3mm solid #DDDDDD; }
     .foot td { padding-top: 1.5mm; vertical-align: top; }
     .pageinfo:before { content: "page " counter(page) " of " counter(pages); }
@@ -71,6 +76,7 @@
       </tr>
     </table>
     <div class="rule"></div>
+    <div th:if="${doc['voided'] != null}" class="void" th:text="${doc['voided']}">VOID</div>
   </div>
   <div th:fragment="pagefoot" id="pagefoot">
     <table class="foot">

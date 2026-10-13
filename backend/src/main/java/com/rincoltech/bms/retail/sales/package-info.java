@@ -3,7 +3,9 @@
  * {@code retail_customers}, {@code retail_sales}, {@code retail_sale_lines}; chapter 7 section
  * 7.11.20). A sale snapshots each line's unit cost and unit price, moves stock through
  * {@code StockLedger} and posts its revenue and its cost of goods sold as two entries for its
- * branch, all in one transaction; a void reverses the movements and both entries.
+ * branch, all in one transaction; a void reverses the movements and both entries. With the documents
+ * capability (issue #197) it also issues numbered quotations, invoices and delivery notes after the fact
+ * and renders them through {@code core.documents}; a sale never depends on one.
  */
 @ApplicationModule(
         id = "retail.sales",
@@ -14,6 +16,7 @@
             "core.approvals",
             "core.audit",
             "core.ledger",
+            "core.documents",
             "core.operations",
             "retail.catalogue",
             "retail.stock"

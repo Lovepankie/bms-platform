@@ -878,8 +878,93 @@ export const returnsPage: Tour = {
   ],
 };
 
+// The tour of the documents capability (issue #197): it starts once for whoever may issue documents, when first enabled. A
+// sale never needs a document, which the intro says; the buttons are on the sale, the list and the series on the Documents page.
+export const documentsCapability: Tour = {
+  id: 'capability-documents',
+  version: 1,
+  title: 'New: invoices and quotations',
+  audience: (me) => held(me, 'retail.document.issue'),
+  autoStart: true,
+  capability: { module: 'retail', key: 'documents' },
+  steps: [
+    {
+      id: 'intro',
+      title: 'Documents are on',
+      body: 'You can now make an invoice or a delivery note from a sale, and a quotation before it. The till receipt is still the default: a sale never needs a document.',
+    },
+    {
+      id: 'tile',
+      route: '/staff/retail',
+      target: 'retail-documents',
+      module: 'retail',
+      optional: true,
+      title: 'Find your documents',
+      body: 'Open Documents to see every invoice, delivery note and quotation, and to open its PDF. Each has a number for its branch.',
+    },
+    {
+      id: 'help',
+      route: '/staff/retail/documents',
+      target: 'documents-help',
+      module: 'retail',
+      title: 'Where documents are made',
+      body: 'Open a sale from All sales and tap Make invoice or Make delivery note. Make a quotation from Quotations.',
+    },
+  ],
+};
+
+export const documentsPage: Tour = {
+  id: 'page-documents',
+  version: 1,
+  title: 'This page: documents',
+  audience: (me) => held(me, 'retail.document.issue') && capable(me, 'documents'),
+  autoStart: false,
+  page: '/staff/retail/documents',
+  steps: [
+    {
+      id: 'list',
+      target: 'documents-list',
+      module: 'retail',
+      title: 'Every document, newest first',
+      body: 'Type a number or a buyer\'s name to find one. Tap Open PDF to see it. A document stays as it was issued; a cancelled sale shows its documents as void.',
+    },
+    {
+      id: 'help',
+      target: 'documents-help',
+      module: 'retail',
+      title: 'Make one from a sale',
+      body: 'A sale is made first. Then open it and make the invoice or the delivery note. The number never skips and never repeats.',
+    },
+  ],
+};
+
+export const quotationsPage: Tour = {
+  id: 'page-quotations',
+  version: 1,
+  title: 'This page: quotations',
+  audience: (me) => held(me, 'retail.document.issue') && capable(me, 'documents'),
+  autoStart: false,
+  page: '/staff/retail/quotations',
+  steps: [
+    {
+      id: 'new',
+      target: 'quotation-new',
+      module: 'retail',
+      title: 'Offer prices until a date',
+      body: 'Choose one branch, tap New quotation, pick the buyer, the last day and the items. Nothing is taken out of stock.',
+    },
+    {
+      id: 'list',
+      target: 'quotations-list',
+      module: 'retail',
+      title: 'When the buyer says yes',
+      body: 'Tap Make it a sale on an open quotation. You can keep the quoted prices and make the invoice at the same time. A quotation can be made into a sale once.',
+    },
+  ],
+};
+
 export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
-  priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage,
+  priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
 ];

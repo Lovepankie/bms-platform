@@ -6,6 +6,7 @@ import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { SkeletonList } from '../../../components/states';
 import { useStaff } from '../context';
 import { MIN_REASON, reasonOf, reversalKeys } from './account-state';
+import { CreditNotePdf } from './documents-ui';
 import { newIdempotencyKey } from './idempotency';
 import { SALE_RETURN, canUse, holdsAt } from './permissions';
 import { DISPOSITION_WORDS, reasonWords, returnedWords, settledWords, type Disposition } from './returns-state';
@@ -13,7 +14,7 @@ import { showDate } from './transfers';
 import { Problem, Success, money, useBranchName, useToast } from './ui';
 
 // One credit note (returns capability, ADR-033, issue #201), on screen: the goods that came back, what each was credited,
-// where they went, and how the credit was settled. The printable credit note arrives with the documents capability. A
+// where they went, and how the credit was settled. The printable credit note (a PDF under this number) shows while the documents capability is on. A
 // return is voided as a whole, with a reason, by whoever holds retail.sale.return at its branch; the server decides again.
 
 /** The credit note: facts, lines and totals. Cost shows only when the server sent it (retail.profit.read). */
@@ -133,6 +134,7 @@ export function CreditNotePage() {
       <Problem error={note.error} />
       {message && <Success>{message}</Success>}
       {note.data && <CreditNoteView note={note.data} nameOf={nameOf} />}
+      {note.data && <CreditNotePdf returnId={returnId} branchId={note.data.branch_id} />}
       {note.data && note.data.status === 'completed' && holdsAt(me, SALE_RETURN, note.data.branch_id) && (
         <VoidPanel busy={voided.isPending} error={voided.error} onVoid={(reason) => voided.mutate(reason)} />
       )}

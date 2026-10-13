@@ -38,11 +38,11 @@ class MigrationOrderIT {
      * The migrations already merged and deployed: their numbers never change and none is removed.
      * Merge order matters because {@code outOfOrder} is off: V41 (the retail price lists, #247, merged)
      * came before V42 (the loan pledge guard, #176, merged), then V43 (payment methods, #160, merged),
-     * then V44 (the retail customer accounts, #196). Nothing here enforces the order, merge order does.
+     * then V44 (the retail customer accounts, #196), then V45 (customer returns, #201, merged). Nothing here enforces the order, merge order does.
      */
     static final List<String> MERGED = List.of(
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26",
-            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41", "42", "43", "44");
+            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41", "42", "43", "44", "45");
 
     /** Every migration file on the classpath in numeric order: a new migration only adds its file. */
     static final List<String> VERSIONS = discoveredVersions();
@@ -897,6 +897,219 @@ class MigrationOrderIT {
                         .param(sale)
                         .update())
                 .isEqualTo(1);
+    }
+
+    /**
+     * #197: staging already holds sales, transfers, customer returns and stored receipts when the optional documents arrive. The migration
+     * adds six tables and one permission and replaces one CHECK on documents: every sale, transfer and stored file is as
+     * it was, the sales tables keep their shape, every new check ends validated, the old stored kinds are still accepted
+     * and the new ones are too (an unknown one is not), only the administrator gets the permission, and the database
+     * itself refuses a counter that skips, a deleted counter, an edited document and a second change of a quotation.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates a database across V46 (V45, the returns slice, is merged by then).
+     */
+    @Test
+    void documentsMigrationKeepsTheSalesReturnsAndFilesOfADatabaseAtV45() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            verifyDocumentsMigration(postgres.getJdbcUrl());
+        }
+    }
+
+    /** The body of the case above, on any empty database that has the roles of {@code 01-roles.sh}. */
+    static void verifyDocumentsMigration(String url) {
+        assertThat(flyway(url, "45").migrate().targetSchemaVersion).isEqualTo("45");
+        JdbcClient owner =
+                JdbcClient.create(new DriverManagerDataSource(url, "bms_owner", TestDatabase.OWNER_PASSWORD));
+        UUID tenant = UUID.randomUUID();
+        UUID branch = UUID.randomUUID();
+        UUID sale = UUID.randomUUID();
+        UUID saleReturn = UUID.randomUUID();
+        owner.sql(
+                        "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v44d', 'Test Tenant V44D', '00000000-0000-4000-8000-000000000001')")
+                .param(tenant)
+                .update();
+        owner.sql(
+                        "INSERT INTO branches (id, tenant_id, code, name, is_head_office) VALUES (?, ?, 'HQ', 'Head Office', true)")
+                .params(branch, tenant)
+                .update();
+        owner.sql("SELECT platform_set_tenant_modules(?, ?::text[], NULL)")
+                .params(tenant, "{retail}")
+                .query((rs, n) -> 1)
+                .single();
+        owner.sql("""
+                        INSERT INTO retail_sales (id, tenant_id, branch_id, sale_no, sale_date, payment_method, buyer_name,
+                            currency, total_minor, cost_total_minor, paid_minor, status, created_by)
+                        VALUES (?, ?, ?, 'RS00000001', DATE '2026-01-15', 'cash', 'Test Buyer 01', 'UGX', 300, 249, 300,
+                            'completed', gen_random_uuid())
+                        """).params(sale, tenant, branch).update();
+        // A customer return of V45 (the credit note), whose number V46 must leave alone.
+        owner.sql("""
+                        INSERT INTO retail_sale_returns (id, tenant_id, credit_note_no, branch_seq, sale_id, branch_id,
+                            refund_branch_id, returned_on, currency, total_minor, cost_minor, refund_minor, refund_method,
+                            refund_choice, created_by)
+                        VALUES (?, ?, 'CNHQ-000001', 1, ?, ?, ?, DATE '2026-01-16', 'UGX', 100, 60, 100, 'cash', 'cash',
+                            gen_random_uuid())
+                        """).params(saleReturn, tenant, sale, branch, branch).update();
+        owner.sql("""
+                        INSERT INTO documents (id, tenant_id, doc_type, object_key, content_type, size_bytes, sha256)
+                        VALUES (gen_random_uuid(), ?, 'receipt', 'tenants/' || ?::text || '/receipt/x.pdf', 'application/pdf', 1,
+                                repeat('a', 64))
+                        """).params(tenant, tenant).update();
+        String sales = "('retail_sales', 'retail_sale_lines', 'retail_sale_payments', 'retail_transfers')";
+        String columns =
+                "SELECT string_agg(table_name || '.' || column_name || ':' || data_type, ',' ORDER BY table_name,"
+                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN "
+                        + sales;
+        String before = owner.sql(columns).query(String.class).single();
+
+        MigrateResult result = DatabaseMigrator.migrate(url, "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+        assertThat(result.success).isTrue();
+        assertThat(result.migrations.stream().map(m -> m.version).toList())
+                .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("45") + 1, VERSIONS.size()));
+        assertThat(owner.sql(columns).query(String.class).single())
+                .as("the sales and transfer tables keep their shape")
+                .isEqualTo(before);
+        assertThat(owner.sql("SELECT credit_note_no || ':' || total_minor FROM retail_sale_returns WHERE id = ?")
+                        .param(saleReturn)
+                        .query(String.class)
+                        .single())
+                .as("the return and its credit note number are as V45 left them")
+                .isEqualTo("CNHQ-000001:100");
+        assertThat(owner.sql("SELECT count(*) FROM retail_credit_note_issues")
+                        .query(Long.class)
+                        .single())
+                .as("a credit note PDF is made only when asked")
+                .isZero();
+        assertThat(owner.sql("SELECT paid_minor FROM retail_sales WHERE id = ?")
+                        .param(sale)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(300);
+        assertThat(owner.sql("SELECT count(*) FROM documents WHERE tenant_id = ?")
+                        .param(tenant)
+                        .query(Long.class)
+                        .single())
+                .as("the stored receipt satisfies the replaced check")
+                .isEqualTo(1);
+        assertThat(owner.sql("""
+                                SELECT count(*) FROM pg_constraint
+                                 WHERE conrelid IN ('documents'::regclass, 'retail_document_prefixes'::regclass,
+                                                    'retail_document_series'::regclass, 'retail_quotations'::regclass,
+                                                    'retail_quotation_lines'::regclass, 'retail_documents'::regclass,
+                                                    'retail_credit_note_issues'::regclass)
+                                   AND NOT convalidated
+                                """).query(Long.class).single())
+                .as("every constraint ends validated")
+                .isZero();
+        assertThat(owner.sql("SELECT count(*) FROM pg_constraint WHERE conname = 'documents_doc_type_check'")
+                        .query(Long.class)
+                        .single())
+                .as("the old check is gone and the new one stands")
+                .isZero();
+        assertThat(owner.sql("""
+                                SELECT string_agg(role_key || ':' || permission_key, ',' ORDER BY permission_key) FROM role_permissions
+                                 WHERE permission_key = 'retail.document.issue'
+                                """).query(String.class).single()).isEqualTo("tenant_admin:retail.document.issue");
+        String insert = "INSERT INTO documents (id, tenant_id, doc_type, object_key, content_type, size_bytes, sha256)"
+                + " VALUES (gen_random_uuid(), ?, ?, 'tenants/' || ?::text || '/' || gen_random_uuid()::text, 'application/pdf', 1,"
+                + " repeat('b', 64))";
+        for (String kind : List.of("invoice", "delivery_note", "quotation", "credit_note", "voucher")) {
+            assertThat(owner.sql(insert).params(tenant, kind, tenant).update())
+                    .as(kind)
+                    .isEqualTo(1);
+        }
+        assertThatThrownBy(() -> owner.sql(insert)
+                        .params(tenant, "statement_of_account", tenant)
+                        .update())
+                .hasMessageContaining("documents_doc_type_trade_chk");
+
+        // The counter goes up by one and never down, skips or disappears; a document is never edited or deleted.
+        owner.sql(
+                        "INSERT INTO retail_document_series (tenant_id, type, branch_id, last_no) VALUES (?, 'invoice', ?, 0)")
+                .params(tenant, branch)
+                .update();
+        assertThat(owner.sql("UPDATE retail_document_series SET last_no = last_no + 1 WHERE tenant_id = ?")
+                        .param(tenant)
+                        .update())
+                .isEqualTo(1);
+        assertThatThrownBy(() -> owner.sql("UPDATE retail_document_series SET last_no = 5 WHERE tenant_id = ?")
+                        .param(tenant)
+                        .update())
+                .hasStackTraceContaining("only goes up by one");
+        assertThatThrownBy(() -> owner.sql("UPDATE retail_document_series SET last_no = 0 WHERE tenant_id = ?")
+                        .param(tenant)
+                        .update())
+                .hasStackTraceContaining("only goes up by one");
+        assertThatThrownBy(() -> owner.sql("DELETE FROM retail_document_series WHERE tenant_id = ?")
+                        .param(tenant)
+                        .update())
+                .hasStackTraceContaining("append-only");
+        UUID document = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_documents (id, tenant_id, created_by, type, number, seq_no, branch_id, issue_date,
+                            sale_id, buyer_name, currency, total_minor, snapshot)
+                        VALUES (?, ?, gen_random_uuid(), 'invoice', 'INV-HQ-000001', 1, ?, DATE '2026-01-16', ?,
+                            'Test Buyer 01', 'UGX', 300, '{"v": 1}')
+                        """).params(document, tenant, branch, sale).update();
+        assertThatThrownBy(() -> owner.sql("UPDATE retail_documents SET buyer_name = 'x' WHERE id = ?")
+                        .param(document)
+                        .update())
+                .hasStackTraceContaining("append-only");
+        assertThatThrownBy(() -> owner.sql("DELETE FROM retail_documents WHERE id = ?")
+                        .param(document)
+                        .update())
+                .hasStackTraceContaining("append-only");
+        // One invoice per sale, one number per series, a document with no source is refused.
+        assertThatThrownBy(() -> owner.sql("""
+                                INSERT INTO retail_documents (id, tenant_id, created_by, type, number, seq_no, branch_id, issue_date,
+                                    sale_id, currency, snapshot)
+                                VALUES (gen_random_uuid(), ?, gen_random_uuid(), 'invoice', 'INV-HQ-000002', 2, ?, DATE '2026-01-16', ?,
+                                    'UGX', '{}')
+                                """).params(tenant, branch, sale).update())
+                .hasMessageContaining("retail_documents_sale");
+        assertThatThrownBy(() -> owner.sql("""
+                                INSERT INTO retail_documents (id, tenant_id, created_by, type, number, seq_no, branch_id, issue_date,
+                                    currency, snapshot)
+                                VALUES (gen_random_uuid(), ?, gen_random_uuid(), 'invoice', 'INV-HQ-000003', 3, ?, DATE '2026-01-16',
+                                    'UGX', '{}')
+                                """).params(tenant, branch).update())
+                .hasMessageContaining("retail_documents_check");
+        // The facts of a credit note PDF: one per return, never edited, and only for a return that exists.
+        owner.sql("""
+                        INSERT INTO retail_credit_note_issues (tenant_id, return_id, issued_by, issued_on, buyer_name)
+                        VALUES (?, ?, gen_random_uuid(), DATE '2026-01-17', 'Test Buyer 01')
+                        """).params(tenant, saleReturn).update();
+        assertThatThrownBy(() -> owner.sql("UPDATE retail_credit_note_issues SET buyer_name = 'x' WHERE return_id = ?")
+                        .param(saleReturn)
+                        .update())
+                .hasStackTraceContaining("append-only");
+        assertThatThrownBy(() -> owner.sql("""
+                                INSERT INTO retail_credit_note_issues (tenant_id, return_id, issued_by, issued_on, buyer_name)
+                                VALUES (?, gen_random_uuid(), gen_random_uuid(), DATE '2026-01-17', 'Test Buyer 01')
+                                """).param(tenant).update())
+                .hasMessageContaining("retail_credit_note_issues");
+        // A quotation changes once, from open to converted or cancelled, and its lines never.
+        UUID quotation = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_quotations (id, tenant_id, created_by, branch_id, quote_date, valid_until, buyer_name,
+                            currency, total_minor)
+                        VALUES (?, ?, gen_random_uuid(), ?, DATE '2026-01-15', DATE '2026-02-15', 'Test Buyer 01', 'UGX', 0)
+                        """).params(quotation, tenant, branch).update();
+        assertThatThrownBy(() -> owner.sql("UPDATE retail_quotations SET total_minor = 5 WHERE id = ?")
+                        .param(quotation)
+                        .update())
+                .hasStackTraceContaining("can only be converted or cancelled");
+        assertThat(owner.sql("""
+                                UPDATE retail_quotations SET status = 'cancelled', cancelled_at = now(), cancelled_by = gen_random_uuid(),
+                                       cancel_reason = 'Test reason', version = version + 1 WHERE id = ?
+                                """).param(quotation).update()).isEqualTo(1);
+        assertThatThrownBy(() -> owner.sql("""
+                                UPDATE retail_quotations SET status = 'converted', converted_sale_id = ?, converted_at = now(),
+                                       converted_by = gen_random_uuid(), cancelled_at = NULL, cancelled_by = NULL, cancel_reason = NULL,
+                                       version = version + 1 WHERE id = ?
+                                """).params(sale, quotation).update())
+                .hasStackTraceContaining("can only be converted or cancelled");
     }
 
     @Test

@@ -2772,6 +2772,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/customers/{customer_id}/statement/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A credit buyer's statement as a PDF, as at today and never stored (issue #197) */
+        get: operations["renderRetailCustomerStatement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/document-series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The numbered series: prefix per document type and the next number in each branch (issue #197) */
+        get: operations["listRetailDocumentSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/document-series/{type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change the prefix of a document type; later documents take it, issued numbers never change (issue #197) */
+        put: operations["setRetailDocumentPrefix"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Issued documents in the caller's branch scope, newest first (issue #197) */
+        get: operations["listRetailDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/documents/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An issued document (issue #197) */
+        get: operations["getRetailDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/documents/{document_id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The stored PDF of an issued document, rendered from its snapshot now if it was never stored (issue #197) */
+        post: operations["renderRetailDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/expense-categories": {
         parameters: {
             query?: never;
@@ -3104,6 +3206,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/quotations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quotations in the caller's branch scope, newest first (issue #197) */
+        get: operations["listRetailQuotations"];
+        put?: never;
+        /** Make a quotation: priced like a sale, numbered, its PDF stored; reserves no stock; M (issue #197) */
+        post: operations["createRetailQuotation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/quotations/{quotation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A quotation with its lines (issue #197) */
+        get: operations["getRetailQuotation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/quotations/{quotation_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel an open quotation (issue #197) */
+        post: operations["cancelRetailQuotation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/quotations/{quotation_id}/convert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Convert an open, unexpired quotation to a sale through the ordinary sale path, and optionally to its invoice; M (issue #197) */
+        post: operations["convertRetailQuotation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/reports/business-evaluation": {
         parameters: {
             query?: never;
@@ -3410,6 +3581,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/returns/{return_id}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The credit note PDF of a return, under the return's number, stored once; a voided return is marked void (issue #197) */
+        post: operations["renderRetailCreditNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/returns/{return_id}/void": {
         parameters: {
             query?: never;
@@ -3456,6 +3644,24 @@ export interface paths {
         get: operations["getRetailSale"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/sales/{sale_id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The documents issued for a sale (issue #197) */
+        get: operations["listRetailSaleDocuments"];
+        put?: never;
+        /** Issue the invoice or delivery note of a sale, numbered in its branch's series; idempotent by sale and type; M (issue #197) */
+        post: operations["issueRetailSaleDocument"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3768,6 +3974,23 @@ export interface paths {
         put?: never;
         /** The source takes a dispatched transfer back before it is received (capability transfer_receipt, FR-RET-16); M */
         post: operations["cancelRetailTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/transfers/{transfer_id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue the delivery note of a stock move: quantities only, never prices; idempotent; M (issue #197) */
+        post: operations["issueRetailTransferDocument"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6845,6 +7068,21 @@ export interface components {
             top?: number;
             totals?: components["schemas"]["RetailAgeing"];
         };
+        RetailCreditNoteDocument: {
+            /** @description True when this request stored the PDF */
+            created?: boolean;
+            /** @description The return's own number: one credit note, one number */
+            credit_note_no?: string;
+            /**
+             * Format: uuid
+             * @description The stored PDF; download it with POST /documents/{id}/download-url
+             */
+            pdf_document_id?: string;
+            /** Format: uuid */
+            return_id?: string;
+            /** @description issued, or void when the return was voided: only a copy with the VOID banner is served */
+            status?: string;
+        };
         RetailCustomer: {
             /**
              * Format: int64
@@ -7277,6 +7515,85 @@ export interface components {
             value_at_cost_minor?: number;
             /** Format: int64 */
             value_at_price_minor?: number;
+        };
+        RetailDocument: {
+            /** Format: uuid */
+            branch_id?: string;
+            buyer_name?: string;
+            /** @description True when this request issued the document; false when it had been issued already */
+            created?: boolean;
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: date */
+            issue_date?: string;
+            number?: string;
+            /**
+             * Format: uuid
+             * @description The stored PDF; download it with POST /documents/{id}/download-url. Absent until rendered
+             */
+            pdf_document_id?: string;
+            /** Format: uuid */
+            quotation_id?: string;
+            /** @description A quotation: open, converted, cancelled or expired (open past its valid-until date) */
+            quotation_status?: string;
+            /** Format: uuid */
+            sale_id?: string;
+            /**
+             * Format: uuid
+             * @description The quotation document an invoice was made from
+             */
+            source_document_id?: string;
+            /** @description issued, or void when its sale was voided, its transfer cancelled or voided, or its quotation cancelled. The stored PDF is as issued and never changes; show it as void */
+            status?: string;
+            /** Format: int64 */
+            total_minor?: number;
+            /** Format: uuid */
+            transfer_id?: string;
+            /** @description quotation|invoice|delivery_note */
+            type?: string;
+            /** Format: date */
+            valid_until?: string;
+        };
+        RetailDocumentList: {
+            items?: components["schemas"]["RetailDocument"][];
+        };
+        RetailDocumentPage: {
+            items?: components["schemas"]["RetailDocument"][];
+            next_cursor?: string;
+        };
+        RetailDocumentRequest: {
+            /** @description Delivery note only: print the unit prices and amounts. Off by default; a delivery note of a transfer never shows prices */
+            show_prices?: boolean;
+            type: string;
+        };
+        RetailDocumentSeries: {
+            branches?: components["schemas"]["RetailDocumentSeriesBranch"][];
+            /** @description The prefix a type has until an administrator changes it */
+            default_prefix?: string;
+            prefix?: string;
+            type?: string;
+        };
+        RetailDocumentSeriesBranch: {
+            branch_code?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /**
+             * Format: int32
+             * @description Documents issued in this series so far
+             */
+            issued?: number;
+            /** @description The number the next document of this series takes */
+            next?: string;
+        };
+        RetailDocumentSeriesList: {
+            items?: components["schemas"]["RetailDocumentSeries"][];
+        };
+        RetailDocumentSeriesRequest: {
+            /** @description One to eight capital letters or digits, starting with a letter */
+            prefix: string;
         };
         RetailEvaluationBranch: {
             /** Format: uuid */
@@ -8178,6 +8495,133 @@ export interface components {
              * @description Required for a credit purchase
              */
             supplier_id?: string;
+        };
+        RetailQuotation: {
+            /** Format: uuid */
+            branch_id?: string;
+            buyer_contact?: string;
+            buyer_name?: string;
+            cancel_reason?: string;
+            /** Format: uuid */
+            converted_sale_id?: string;
+            converted_sale_no?: string;
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            /** Format: uuid */
+            customer_id?: string;
+            /** Format: uuid */
+            document_id?: string;
+            /** @description Open and past its valid-until date: it can no longer be converted */
+            expired?: boolean;
+            /** Format: uuid */
+            id?: string;
+            lines?: components["schemas"]["RetailQuotationLine"][];
+            notes?: string;
+            number?: string;
+            /** Format: uuid */
+            pdf_document_id?: string;
+            price_list?: string;
+            /** Format: uuid */
+            price_list_id?: string;
+            /** Format: date */
+            quote_date?: string;
+            /** @description open, converted or cancelled */
+            status?: string;
+            /** Format: int64 */
+            total_minor?: number;
+            /** Format: date */
+            valid_until?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        RetailQuotationCancelRequest: {
+            reason: string;
+        };
+        RetailQuotationConvertRequest: {
+            credit_override_reason?: string;
+            /**
+             * Format: date
+             * @description Proposed payment date of a credit sale
+             */
+            due_date?: string;
+            /** @description Also issue the invoice of the new sale, linked to this quotation */
+            issue_invoice?: boolean;
+            /** @description Charge the quoted prices instead of pricing the lines again today. A quoted price that differs from today's resolves like a typed price on a sale: it needs retail.price.override while price lists are on */
+            keep_quoted_prices?: boolean;
+            payment_method: string;
+        };
+        RetailQuotationConverted: {
+            invoice?: components["schemas"]["RetailDocument"];
+            /** @description Said plainly when a feature switched off since the quotation was made changed how it was sold */
+            note?: string;
+            /** Format: uuid */
+            quotation_id?: string;
+            /** Format: uuid */
+            sale_id?: string;
+            sale_no?: string;
+        };
+        RetailQuotationLine: {
+            base_qty?: string;
+            base_unit?: string;
+            code?: string;
+            description?: string;
+            /** Format: int32 */
+            line_no?: number;
+            /** Format: int64 */
+            line_total_minor?: number;
+            /** Format: uuid */
+            product_id?: string;
+            /** @description In the unit the line was quoted in */
+            qty?: string;
+            unit?: string;
+            /** Format: int64 */
+            unit_price_minor?: number;
+        };
+        RetailQuotationLineRequest: {
+            /** @description Why the price differs from the one the price list resolved; as on a sale */
+            price_override_reason?: string;
+            /** Format: uuid */
+            product_id: string;
+            /** @example 2.5 */
+            qty: string;
+            /**
+             * Format: uuid
+             * @description A pack unit of the product (units capability); absent or the base unit means the base unit
+             */
+            unit_id?: string;
+            /**
+             * Format: int64
+             * @description Per unit_id when one is given, otherwise per base unit. Defaults to the price a sale would take
+             */
+            unit_price_minor?: number;
+        };
+        RetailQuotationPage: {
+            items?: components["schemas"]["RetailQuotation"][];
+            next_cursor?: string;
+        };
+        RetailQuotationRequest: {
+            /**
+             * Format: uuid
+             * @description Defaults to the caller's one branch
+             */
+            branch_id?: string;
+            buyer_contact?: string;
+            buyer_name?: string;
+            /** Format: uuid */
+            customer_id?: string;
+            lines: components["schemas"]["RetailQuotationLineRequest"][];
+            notes?: string;
+            /**
+             * Format: uuid
+             * @description Price the lines from this list; as on a sale (price_lists capability)
+             */
+            price_list_id?: string;
+            /**
+             * Format: date
+             * @description Not before the quotation date
+             */
+            valid_until: string;
         };
         RetailRepayment: {
             /** Format: uuid */
@@ -14920,6 +15364,167 @@ export interface operations {
             };
         };
     };
+    renderRetailCustomerStatement: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description No such buyer in the caller's scope, or a capability is off */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Too many documents are being produced; see Retry-After */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listRetailDocumentSeries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailDocumentSeriesList"];
+                };
+            };
+        };
+    };
+    setRetailDocumentPrefix: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailDocumentSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailDocumentSeriesList"];
+                };
+            };
+        };
+    };
+    listRetailDocuments: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                type?: string;
+                from?: string;
+                to?: string;
+                query?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailDocumentPage"];
+                };
+            };
+        };
+    };
+    getRetailDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailDocument"];
+                };
+            };
+        };
+    };
+    renderRetailDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailDocument"];
+                };
+            };
+        };
+    };
     listRetailExpenseCategories: {
         parameters: {
             query?: {
@@ -15637,6 +16242,134 @@ export interface operations {
             };
         };
     };
+    listRetailQuotations: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                status?: string;
+                query?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailQuotationPage"];
+                };
+            };
+        };
+    };
+    createRetailQuotation: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailQuotationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailQuotation"];
+                };
+            };
+        };
+    };
+    getRetailQuotation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                quotation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailQuotation"];
+                };
+            };
+        };
+    };
+    cancelRetailQuotation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                quotation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailQuotationCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailQuotation"];
+                };
+            };
+        };
+    };
+    convertRetailQuotation: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                quotation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailQuotationConvertRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailQuotationConverted"];
+                };
+            };
+        };
+    };
     getRetailBusinessEvaluation: {
         parameters: {
             query?: {
@@ -16079,6 +16812,28 @@ export interface operations {
             };
         };
     };
+    renderRetailCreditNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                return_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCreditNoteDocument"];
+                };
+            };
+        };
+    };
     voidRetailReturn: {
         parameters: {
             query?: never;
@@ -16184,6 +16939,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSale"];
+                };
+            };
+        };
+    };
+    listRetailSaleDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailDocumentList"];
+                };
+            };
+        };
+    };
+    issueRetailSaleDocument: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailDocumentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailDocument"];
                 };
             };
         };
@@ -16786,6 +17591,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailTransfer"];
+                };
+            };
+        };
+    };
+    issueRetailTransferDocument: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                transfer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailDocumentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailDocument"];
                 };
             };
         };

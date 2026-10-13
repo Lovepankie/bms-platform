@@ -1,0 +1,59 @@
+<!-- Retail credit note (ADR-033, issue #197, designed here): the goods taken back from a buyer, the invoice or sale they were sold on, the way the buyer is repaid, and the amount credited in figures and words. Rendered from a return (issue #201), which numbers it; the credit is each line's share of what the sale line was charged. -->
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head}"></head>
+<body>
+  <div th:replace="~{layout :: letterhead}"></div>
+  <div th:replace="~{layout :: pagefoot}"></div>
+  <h1 th:text="${doc.title}">CREDIT NOTE</h1>
+
+  <table class="facts">
+    <tr>
+      <td style="width: 50%; padding-right: 6mm;">
+        <div class="muted">Credited to</div>
+        <div class="party" th:text="${buyer.name}">Buyer</div>
+        <div class="muted" th:if="${buyer.contact != null}" th:text="${buyer.contact}">Contact</div>
+      </td>
+      <td>
+        <table class="facts">
+          <tr th:if="${ref.invoice != null}"><td class="k">Against invoice</td><td th:text="${ref.invoice}">INV-HQ-000001</td></tr>
+          <tr><td class="k">Sale</td><td th:text="${ref.saleNo}">RS00000001</td></tr>
+          <tr><td class="k">Return date</td><td th:text="${ref.date}">16 Mar 2026</td></tr>
+          <tr><td class="k">Repaid</td><td th:text="${ref.refund}">Cash</td></tr>
+          <tr th:if="${ref.note != null}"><td class="k">Note</td><td th:text="${ref.note}">Note</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <h2>Goods returned</h2>
+  <table class="grid">
+    <thead>
+      <tr>
+        <th style="width: 6%;">No</th><th>Item</th><th class="num" style="width: 16%;">Quantity</th>
+        <th style="width: 22%;">Reason</th>
+        <th class="num" style="width: 17%;" th:text="${'Credit (' + currency + ')'}">Credit</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="l : ${lines}">
+        <td th:text="${l.no}">1</td>
+        <td><span th:text="${l.description}">Item</span><br/><span class="muted" th:text="${l.code}">CODE</span></td>
+        <td class="num"><span th:text="${l.qty + ' ' + l.unit}">1 carton</span><br th:if="${l.pack != null}"/><span class="muted" th:if="${l.pack != null}" th:text="${l.pack}">12 pieces</span></td>
+        <td th:text="${l.reason}">Damaged</td>
+        <td class="num" th:text="${l.total}">1,000</td>
+      </tr>
+    </tbody>
+    <tbody><tr class="total"><td colspan="4" th:text="${'Total credited (' + currency + ')'}">Total credited</td><td class="num" th:text="${totals.total}">1,000</td></tr></tbody>
+  </table>
+  <div class="words" th:text="${totals.words}">One thousand Uganda shillings only</div>
+  <div class="muted" th:if="${notes != null}" th:text="${notes}">Notes</div>
+
+  <table class="signs">
+    <tr>
+      <td><div class="signline"><span th:text="${'Issued by ' + signs.issuedBy}">Issued by</span><br/><span class="muted" th:text="${signs.issuedOn}">date</span></div></td>
+      <td></td>
+      <td class="last"><div class="signline"><span th:text="${'Received by ' + buyer.name}">Received by</span><br/><span class="muted">Signature and date</span></div></td>
+    </tr>
+  </table>
+</body>
+</html>

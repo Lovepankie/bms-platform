@@ -18,6 +18,16 @@ class StatementMemoryTest {
 
     @Test
     void aFiveHundredLineStatementRendersOnA224MegabyteHeap() throws Exception {
+        renderInChild("loan_statement", 10);
+    }
+
+    /** Issue #197: the customer statement PDF, at the 800 lines the API allows, on the same heap. */
+    @Test
+    void anEightHundredLineCustomerStatementRendersOnA224MegabyteHeap() throws Exception {
+        renderInChild("customer_statement", 15);
+    }
+
+    private void renderInChild(String template, int minPages) throws Exception {
         String javaBin = Path.of(System.getProperty("java.home"), "bin", "java").toString();
         Process child = new ProcessBuilder(List.of(
                         javaBin,
@@ -25,7 +35,8 @@ class StatementMemoryTest {
                         "-Djava.awt.headless=true",
                         "-cp",
                         System.getProperty("java.class.path"),
-                        StatementMemoryMain.class.getName()))
+                        StatementMemoryMain.class.getName(),
+                        template))
                 .redirectErrorStream(true)
                 .start();
         String output = new String(child.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
@@ -38,7 +49,7 @@ class StatementMemoryTest {
                 java.util.regex.Pattern.compile("pages=(\\d+)").matcher(output);
         assertThat(m.find()).as(output).isTrue();
         assertThat(Integer.parseInt(m.group(1)))
-                .as("five hundred lines run to many pages")
-                .isGreaterThanOrEqualTo(10);
+                .as("hundreds of lines run to many pages")
+                .isGreaterThanOrEqualTo(minPages);
     }
 }

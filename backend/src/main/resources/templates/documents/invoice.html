@@ -1,0 +1,65 @@
+<!-- Retail invoice (ADR-033, issue #197): bill to, the sale, the lines as sold in the unit they were sold in, the total in figures and words, the payment, and the issued and received signature blocks. -->
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head}"></head>
+<body>
+  <div th:replace="~{layout :: letterhead}"></div>
+  <div th:replace="~{layout :: pagefoot}"></div>
+  <h1 th:text="${doc.title}">INVOICE</h1>
+
+  <table class="facts">
+    <tr>
+      <td style="width: 50%; padding-right: 6mm;">
+        <div class="muted">Bill to</div>
+        <div class="party" th:text="${buyer.name}">Buyer</div>
+        <div class="muted" th:if="${buyer.contact != null}" th:text="${buyer.contact}">Contact</div>
+      </td>
+      <td>
+        <table class="facts">
+          <tr><td class="k">Sale</td><td th:text="${ref.saleNo}">RS00000001</td></tr>
+          <tr><td class="k">Sale date</td><td th:text="${ref.saleDate}">16 Mar 2026</td></tr>
+          <tr><td class="k">Payment</td><td th:text="${ref.payment}">Cash</td></tr>
+          <tr th:if="${ref.dueDate != null}"><td class="k">Due date</td><td th:text="${ref.dueDate}">15 Apr 2026</td></tr>
+          <tr th:if="${ref.priceList != null}"><td class="k">Price list</td><td th:text="${ref.priceList}">Wholesale</td></tr>
+          <tr th:if="${ref.quotation != null}"><td class="k">Quotation</td><td th:text="${ref.quotation}">QT-HQ-000001</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <h2>Items</h2>
+  <table class="grid">
+    <thead>
+      <tr>
+        <th style="width: 6%;">No</th><th>Item</th><th class="num" style="width: 16%;">Quantity</th>
+        <th class="num" style="width: 17%;" th:text="${'Unit price (' + currency + ')'}">Unit price</th>
+        <th class="num" style="width: 17%;" th:text="${'Amount (' + currency + ')'}">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="l : ${lines}">
+        <td th:text="${l.no}">1</td>
+        <td><span th:text="${l.description}">Item</span><br/><span class="muted" th:text="${l.code}">CODE</span><span class="muted" th:if="${l.priceList != null}" th:text="${'  |  ' + l.priceList}"></span></td>
+        <td class="num"><span th:text="${l.qty + ' ' + l.unit}">5 carton</span><br th:if="${l.pack != null}"/><span class="muted" th:if="${l.pack != null}" th:text="${l.pack}">60 pieces</span></td>
+        <td class="num" th:text="${l.unitPrice}">1,000</td>
+        <td class="num" th:text="${l.total}">5,000</td>
+      </tr>
+    </tbody>
+    <tbody><tr class="total"><td colspan="4" th:text="${'Total (' + currency + ')'}">Total</td><td class="num" th:text="${totals.total}">5,000</td></tr></tbody>
+  </table>
+  <div class="words" th:text="${totals.words}">Five thousand Uganda shillings only</div>
+
+  <div class="box" th:if="${totals.status != null}">
+    <div th:text="${totals.status}">Paid in full</div>
+    <div class="muted" th:if="${totals.due != null}" th:text="${totals.due}">Balance due at issue 5,000</div>
+  </div>
+  <div class="muted" th:if="${notes != null}" th:text="${notes}">Notes</div>
+
+  <table class="signs">
+    <tr>
+      <td><div class="signline"><span th:text="${'Issued by ' + signs.issuedBy}">Issued by</span><br/><span class="muted" th:text="${signs.issuedOn}">date</span></div></td>
+      <td></td>
+      <td class="last"><div class="signline"><span th:text="${'Received by ' + buyer.name}">Received by</span><br/><span class="muted">Signature and date</span></div></td>
+    </tr>
+  </table>
+</body>
+</html>

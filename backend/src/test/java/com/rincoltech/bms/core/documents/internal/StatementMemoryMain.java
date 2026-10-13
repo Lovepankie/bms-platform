@@ -84,11 +84,53 @@ public final class StatementMemoryMain {
         return model;
     }
 
+    /** The customer statement of the optional retail documents (issue #197), at the cap the API allows (800 lines). */
+    static Map<String, Object> customerModel(int lines) throws Exception {
+        Map<String, Object> model = model(0);
+        model.remove("member");
+        model.remove("loan");
+        model.remove("txns");
+        model.remove("totals");
+        model.remove("position");
+        model.put(
+                "doc",
+                Map.of("title", "STATEMENT OF ACCOUNT", "number", "ST-20261013-0F07DE94", "date", "13 Oct 2026"));
+        model.put("currency", "UGX");
+        model.put("buyer", Map.of("name", "Test Buyer 01", "contact", "+256700000001"));
+        model.put("period", Map.of("from", "1 Jan 2026", "to", "13 Oct 2026"));
+        model.put("scope", "All branches");
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (int i = 0; i < lines; i++) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("date", "12 Oct 2026");
+            row.put("reference", "RS" + String.format("%08d", i + 1));
+            row.put("description", "Sale on credit");
+            row.put("charged", "1,000");
+            row.put("paid", "-");
+            row.put("balance", String.format("%,d", (i + 1) * 1_000L));
+            rows.add(row);
+        }
+        model.put("lines", rows);
+        model.put(
+                "totals",
+                Map.of(
+                        "opening", "0",
+                        "charged", String.format("%,d", lines * 1_000L),
+                        "paid", "0",
+                        "closing", String.format("%,d", lines * 1_000L),
+                        "closingWords", "Eight hundred thousand Uganda shillings only"));
+        model.put("imported", null);
+        return model;
+    }
+
     public static void main(String[] args) throws Exception {
         PdfRenderer renderer = new PdfRenderer();
         int pages = 0;
+        boolean customer = args.length > 0 && args[0].equals("customer_statement");
         for (int round = 0; round < 3; round++) {
-            byte[] pdf = renderer.render("loan_statement", model(500));
+            byte[] pdf = customer
+                    ? renderer.render("customer_statement", customerModel(800))
+                    : renderer.render("loan_statement", model(500));
             try (PDDocument d = Loader.loadPDF(pdf)) {
                 pages = d.getNumberOfPages();
             }

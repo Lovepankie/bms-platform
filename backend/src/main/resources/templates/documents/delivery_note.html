@@ -1,0 +1,66 @@
+<!-- Retail delivery note (ADR-033, issue #197): what was delivered and to whom, quantities in the unit sold, prices only when the issuer chose to show them, and the delivered and received signature blocks. -->
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head}"></head>
+<body>
+  <div th:replace="~{layout :: letterhead}"></div>
+  <div th:replace="~{layout :: pagefoot}"></div>
+  <h1 th:text="${doc.title}">DELIVERY NOTE</h1>
+
+  <table class="facts">
+    <tr>
+      <td style="width: 50%; padding-right: 6mm;">
+        <div class="muted">Deliver to</div>
+        <div class="party" th:text="${to.name}">Buyer</div>
+        <div class="muted" th:if="${to.detail != null}" th:text="${to.detail}">Contact</div>
+      </td>
+      <td>
+        <table class="facts">
+          <tr><td class="k" th:text="${ref.kind}">Sale</td><td th:text="${ref.number}">RS00000001</td></tr>
+          <tr><td class="k">Date</td><td th:text="${ref.date}">16 Mar 2026</td></tr>
+          <tr><td class="k">From</td><td th:text="${ref.from}">Head Office</td></tr>
+          <tr th:if="${ref.note != null}"><td class="k">Note</td><td th:text="${ref.note}">Note</td></tr>
+          <tr th:if="${ref.invoice != null}"><td class="k">Invoice</td><td th:text="${ref.invoice}">INV-HQ-000001</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <h2>Goods delivered</h2>
+  <table class="grid">
+    <thead>
+      <tr>
+        <th style="width: 6%;">No</th><th>Item</th><th class="num" style="width: 20%;">Quantity</th>
+        <th class="num" style="width: 17%;" th:if="${prices}" th:text="${'Unit price (' + currency + ')'}">Unit price</th>
+        <th class="num" style="width: 17%;" th:if="${prices}" th:text="${'Amount (' + currency + ')'}">Amount</th>
+        <th style="width: 14%;">Checked</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="l : ${lines}">
+        <td th:text="${l.no}">1</td>
+        <td><span th:text="${l.description}">Item</span><br/><span class="muted" th:text="${l.code}">CODE</span></td>
+        <td class="num"><span th:text="${l.qty + ' ' + l.unit}">5 carton</span><br th:if="${l.pack != null}"/><span class="muted" th:if="${l.pack != null}" th:text="${l.pack}">60 pieces</span></td>
+        <td class="num" th:if="${prices}" th:text="${l.unitPrice}">1,000</td>
+        <td class="num" th:if="${prices}" th:text="${l.total}">5,000</td>
+        <td><div class="tick"></div></td>
+      </tr>
+    </tbody>
+    <tbody th:if="${prices}"><tr class="total"><td colspan="4" th:text="${'Total (' + currency + ')'}">Total</td><td class="num" th:text="${totals.total}">5,000</td><td></td></tr></tbody>
+  </table>
+  <div class="muted" style="margin-top: 2mm;" th:text="${totals.count}">2 lines</div>
+  <div class="words" th:if="${prices}" th:text="${totals.words}">Five thousand Uganda shillings only</div>
+  <div class="muted" th:if="${notes != null}" th:text="${notes}">Notes</div>
+
+  <p class="muted" style="margin-top: 6mm;">The receiver confirms the goods above were received in good order, except as written below.</p>
+  <div class="muted">Remarks</div>
+  <div class="remarks"></div>
+
+  <table class="signs">
+    <tr>
+      <td><div class="signline"><span th:text="${'Delivered by ' + signs.issuedBy}">Delivered by</span><br/><span class="muted" th:text="${signs.issuedOn}">date</span></div></td>
+      <td><div class="signline"><span>Vehicle or driver</span><br/><span class="muted">Name</span></div></td>
+      <td class="last"><div class="signline"><span th:text="${'Received by ' + to.name}">Received by</span><br/><span class="muted">Name, signature and date</span></div></td>
+    </tr>
+  </table>
+</body>
+</html>

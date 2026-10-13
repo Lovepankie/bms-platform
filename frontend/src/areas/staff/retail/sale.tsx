@@ -15,6 +15,7 @@ import { branchLabel } from '../../../auth/branch';
 import type { BranchRole } from '../../../api/retail';
 import { BRANCH_ROLES, CREDIT_OVERRIDE, CUSTOMER_ACCOUNTS, PRICELIST_MANAGE, PRICELIST_USE, PRICE_LISTS, PRICE_OVERRIDE, UNITS, branchesWhere, capabilityOn, holds, holdsAt, needsOf, sellingBranches } from './permissions';
 import { exceededBy, isLimitRefusal, limitWords, termsWords } from './account-state';
+import { SaleDocuments } from './documents-ui';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -415,7 +416,10 @@ export function RecordSale() {
       ) : store && roles ? (
         <StoreBranch branchName={branchName} roles={roles} />
       ) : sale ? (
-        <Receipt sale={sale} onNew={() => { setSale(null); setRound((n) => n + 1); }} />
+        <>
+          <Receipt sale={sale} onNew={() => { setSale(null); setRound((n) => n + 1); }} />
+          {sale.id && <SaleDocuments saleId={sale.id} status={sale.status} branchId={sale.branch_id} />}
+        </>
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>

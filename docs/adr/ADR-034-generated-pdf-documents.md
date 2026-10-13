@@ -173,3 +173,15 @@ then that test.
 
 A template change does not alter receipts already stored; that is intended, and the stored copy is the
 one issued.
+
+## Addendum of 2026-10-13 (issue #197): the retail documents use the same renderer
+
+The optional retail documents (ADR-033 amendment of the same date) reuse this infrastructure and add no renderer: the invoice, the
+delivery note and the quotation are Thymeleaf templates under `templates/documents/` that use `layout.html`, rendered by
+`Documents.renderPdf` in the request with no connection held, stored once through `putGenerated` and `recordGenerated` under a lock on the
+document only, and read back through the signed URL after the owning module's `DocumentAccess` allows it (subject type `retail.document`).
+They differ from a receipt in one respect: the number is allocated before the PDF is rendered, in its own short transaction, because the
+number is printed on the page and a render must never run under the series lock. So the document row (with its snapshot) is the record
+and the PDF is a rendering of it; a render that fails leaves a numbered document that renders from the same snapshot on the next
+request. The customer statement follows the schedule and statement rule: rendered on each request, never stored, numbered by date and a
+short customer code. `make document-samples` renders them too.

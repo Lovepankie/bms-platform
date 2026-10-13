@@ -122,6 +122,18 @@ export const icons = {
       <path d="M9 8h6M9 12h6" />
     </Svg>
   ),
+  documents: (
+    <Svg>
+      <path d="M7 3h8l4 4v14H7z" />
+      <path d="M15 3v4h4M10 12h6M10 16h6" />
+    </Svg>
+  ),
+  quotations: (
+    <Svg>
+      <path d="M5 4h14v16l-3-2-2 2-2-2-2 2-2-2-3 2z" />
+      <path d="M9 9h6M9 13h3" />
+    </Svg>
+  ),
   returns: (
     <Svg>
       <path d="M9 14L4 9l5-5" />

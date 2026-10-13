@@ -560,6 +560,26 @@ reason of at least five characters and says what voiding does (the goods come of
 documents slice. The customer statement names a return "Goods returned, credit note" and its void "Credit note voided". `returns` is marked ready in
 `capabilities-state.ts` with its tour (`capability-returns`: an introduction, the tile, the list) and a Help page tour (`page-returns`). The mock
 (`retail-returns-mock.ts`) holds the server's rules in small for development and tests.
+## Optional documents (#197, ADR-033)
+
+Four places show it while `/me` lists `documents` (`SCREEN_CAPABILITY`, `canIssueDocuments`), and only to a user holding `retail.document.issue` (the
+administrator's), so a seller's menu is the same with the feature on and off and a sale never needs any of it. **Documents** (`/staff/retail/documents`, crumb
+"Documents", tile `retail-documents`) lists every invoice, delivery note and quotation in the branches the session may read, newest first, with the shared live
+search (the number or the buyer), a type filter, Show more, and an Open PDF button on each card (a document whose PDF was never stored is rendered from its snapshot
+first, in a tab opened before the waiting so it is not taken for a pop-up); a document whose sale or quotation was cancelled is marked Void and its PDF is said to stay
+as issued. Under the list **Document numbers** shows each series (the prefix, and per branch the next number and how many were issued); whoever holds
+`core.settings.manage` changes a prefix (capitals and digits, starting with a letter, as the server checks) and later numbers take it; a credit note has no
+series (the return numbers it). **Quotations** (`/staff/retail/quotations`, crumb "Quotations", tile `retail-quotations`) lists them with a status filter and the same search;
+New quotation (one branch chosen at the top; a store is refused by the server) takes the buyer (a credit buyer from the list or a typed name and phone), the last day (thirty
+days ahead by default, never before today), notes and items added with the same picker and line cards as the sale (pack units, a typed price, no stock check because a quotation
+reserves nothing), with one idempotency key per draft kept in the tab like a sale. An open quotation can be cancelled with a reason, or made into a sale (how it is paid, a
+date for credit unless the buyer has terms, keep the quoted prices, also make the invoice) by a user who holds `retail.sale.create` at its branch; an expired one says it cannot be
+converted. **A sale** shows a Documents panel under the saved receipt and under an opened sale (All sales, Credit sales): the documents it has, and Make invoice and Make
+delivery note for those it lacks (a checkbox shows the prices on the delivery note, off by default); a voided sale offers none. **A stock move** shows Make delivery note on its
+detail (quantities only). **A credit note** (Customer returns, #201) shows "Open the credit note as a PDF" while `documents` is also on, for a user who may issue documents at its branch; the PDF carries the return's own number. **A buyer's account** shows "Open the statement as a PDF" under the on-screen statement while `customer_accounts` is also on. `documents` is marked
+ready in `capabilities-state.ts` with its tour (`capability-documents`: an introduction, the tile, where documents are made) and Help page tours (`page-documents`,
+`page-quotations`). The pure rules (the words and state of a document, the documents a sale may still be given, the prefix rule, the quotation form and its request, the
+conversion choices) are in `documents-state.ts`; `retail-documents-mock.ts` is the fabricated server for `VITE_RETAIL_MOCK` and the tests.
 
 ## Left to do
 

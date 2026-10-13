@@ -1,0 +1,20 @@
+Test Trading Ltd
+All branches
+ST-{YYYYMMDD}-{ID}
+{DATE}
+Test Trading Ltd, Plot 1 Test Road. Thank you for your business. ST-{YYYYMMDD}-{ID}, page 1 of 1
+STATEMENT OF ACCOUNT
+Account of
+Test Buyer 02
++256700000002
+From {DATE}
+To {DATE}
+Account (UGX)
+Date Reference Description Charged Paid Balance
+{DATE} Opening balance 0
+{DATE} RS{N} Sale on credit 5,000 - 5,000
+{DATE} RC00000001 Payment on account (Cash) - 2,000 3,000
+Totals for the period 5,000 2,000
+Closing balance 3,000
+Three thousand Uganda shillings only
+All branches

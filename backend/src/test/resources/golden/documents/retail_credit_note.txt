@@ -1,0 +1,26 @@
+Test Trading Ltd
+Head Office
+Plot 1, Test Road, Kampala
+CNHQ-000001
+{DATE}
+Test Trading Ltd, Plot 1 Test Road. Thank you for your business. CNHQ-000001, page 1 of 1
+CREDIT NOTE
+Credited to
+Cash customer
+Against invoice INV-HQ-000001
+Sale RS{N}
+Return date {DATE}
+Repaid Cash
+Note Two arrived wet
+Goods returned
+No Item Quantity Reason Credit (UGX)
+1
+Test Product DC-1
+DC-1
+2 u-dc-1 Damaged 200
+Total credited (UGX) 200
+Two hundred Uganda shillings only
+Issued by Test Cashier
+{DATE}
+Received by Cash customer
+Signature and date

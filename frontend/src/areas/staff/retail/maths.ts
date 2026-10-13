@@ -48,3 +48,11 @@ export function showPercent(bp: number | null | undefined): string {
   const frac = String(abs % 100).padStart(2, '0').replace(/0+$/, '');
   return `${bp < 0 ? '-' : ''}${whole}${frac ? `.${frac}` : ''}%`;
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "6 Oct 2026" from "2026-10-06": no hyphen for a narrow row to break at, and no timezone shift. */
+export function showDate(iso: string | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? '');
+  return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1] ?? m[2]} ${m[1]}` : (iso ?? '');
+}

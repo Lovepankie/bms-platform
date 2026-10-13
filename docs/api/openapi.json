@@ -6597,6 +6597,31 @@
           }
         }
       },
+      "RetailCreditNoteDocument" : {
+        "properties" : {
+          "created" : {
+            "description" : "True when this request stored the PDF",
+            "type" : "boolean"
+          },
+          "credit_note_no" : {
+            "description" : "The return's own number: one credit note, one number",
+            "type" : "string"
+          },
+          "pdf_document_id" : {
+            "description" : "The stored PDF; download it with POST /documents/{id}/download-url",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "return_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "issued, or void when the return was voided: only a copy with the VOID banner is served",
+            "type" : "string"
+          }
+        }
+      },
       "RetailCustomer" : {
         "properties" : {
           "balance_minor" : {
@@ -7324,6 +7349,177 @@
             "type" : "integer"
           }
         }
+      },
+      "RetailDocument" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "buyer_name" : {
+            "type" : "string"
+          },
+          "created" : {
+            "description" : "True when this request issued the document; false when it had been issued already",
+            "type" : "boolean"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "issue_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "number" : {
+            "type" : "string"
+          },
+          "pdf_document_id" : {
+            "description" : "The stored PDF; download it with POST /documents/{id}/download-url. Absent until rendered",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "quotation_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "quotation_status" : {
+            "description" : "A quotation: open, converted, cancelled or expired (open past its valid-until date)",
+            "type" : "string"
+          },
+          "sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "source_document_id" : {
+            "description" : "The quotation document an invoice was made from",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "issued, or void when its sale was voided, its transfer cancelled or voided, or its quotation cancelled. The stored PDF is as issued and never changes; show it as void",
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "transfer_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "type" : {
+            "description" : "quotation|invoice|delivery_note",
+            "type" : "string"
+          },
+          "valid_until" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailDocumentList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDocument"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailDocumentPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDocument"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailDocumentRequest" : {
+        "properties" : {
+          "show_prices" : {
+            "description" : "Delivery note only: print the unit prices and amounts. Off by default; a delivery note of a transfer never shows prices",
+            "type" : "boolean"
+          },
+          "type" : {
+            "pattern" : "invoice|delivery_note",
+            "type" : "string"
+          }
+        },
+        "required" : [ "type" ]
+      },
+      "RetailDocumentSeries" : {
+        "properties" : {
+          "branches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDocumentSeriesBranch"
+            },
+            "type" : "array"
+          },
+          "default_prefix" : {
+            "description" : "The prefix a type has until an administrator changes it",
+            "type" : "string"
+          },
+          "prefix" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailDocumentSeriesBranch" : {
+        "properties" : {
+          "branch_code" : {
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "issued" : {
+            "description" : "Documents issued in this series so far",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "next" : {
+            "description" : "The number the next document of this series takes",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailDocumentSeriesList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDocumentSeries"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailDocumentSeriesRequest" : {
+        "properties" : {
+          "prefix" : {
+            "description" : "One to eight capital letters or digits, starting with a letter",
+            "pattern" : "[A-Z][A-Z0-9]{0,7}",
+            "type" : "string"
+          }
+        },
+        "required" : [ "prefix" ]
       },
       "RetailEvaluationBranch" : {
         "properties" : {
@@ -9108,6 +9304,285 @@
           }
         },
         "required" : [ "lines", "payment_method", "purchased_on" ]
+      },
+      "RetailQuotation" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "buyer_contact" : {
+            "type" : "string"
+          },
+          "buyer_name" : {
+            "type" : "string"
+          },
+          "cancel_reason" : {
+            "type" : "string"
+          },
+          "converted_sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "converted_sale_no" : {
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "customer_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "document_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "expired" : {
+            "description" : "Open and past its valid-until date: it can no longer be converted",
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailQuotationLine"
+            },
+            "type" : "array"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "number" : {
+            "type" : "string"
+          },
+          "pdf_document_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "price_list" : {
+            "type" : "string"
+          },
+          "price_list_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "quote_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "open, converted or cancelled",
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "valid_until" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailQuotationCancelRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "RetailQuotationConvertRequest" : {
+        "properties" : {
+          "credit_override_reason" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "due_date" : {
+            "description" : "Proposed payment date of a credit sale",
+            "format" : "date",
+            "type" : "string"
+          },
+          "issue_invoice" : {
+            "description" : "Also issue the invoice of the new sale, linked to this quotation",
+            "type" : "boolean"
+          },
+          "keep_quoted_prices" : {
+            "description" : "Charge the quoted prices instead of pricing the lines again today. A quoted price that differs from today's resolves like a typed price on a sale: it needs retail.price.override while price lists are on",
+            "type" : "boolean"
+          },
+          "payment_method" : {
+            "pattern" : "cash|mobile_money|bank|credit",
+            "type" : "string"
+          }
+        },
+        "required" : [ "payment_method" ]
+      },
+      "RetailQuotationConverted" : {
+        "properties" : {
+          "invoice" : {
+            "$ref" : "#/components/schemas/RetailDocument"
+          },
+          "note" : {
+            "description" : "Said plainly when a feature switched off since the quotation was made changed how it was sold",
+            "type" : "string"
+          },
+          "quotation_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_no" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailQuotationLine" : {
+        "properties" : {
+          "base_qty" : {
+            "type" : "string"
+          },
+          "base_unit" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "line_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "line_total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "description" : "In the unit the line was quoted in",
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "unit_price_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailQuotationLineRequest" : {
+        "properties" : {
+          "price_override_reason" : {
+            "description" : "Why the price differs from the one the price list resolved; as on a sale",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "example" : "2.5",
+            "type" : "string"
+          },
+          "unit_id" : {
+            "description" : "A pack unit of the product (units capability); absent or the base unit means the base unit",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit_price_minor" : {
+            "description" : "Per unit_id when one is given, otherwise per base unit. Defaults to the price a sale would take",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "product_id", "qty" ]
+      },
+      "RetailQuotationPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailQuotation"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailQuotationRequest" : {
+        "properties" : {
+          "branch_id" : {
+            "description" : "Defaults to the caller's one branch",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "buyer_contact" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "buyer_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "customer_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailQuotationLineRequest"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "notes" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "price_list_id" : {
+            "description" : "Price the lines from this list; as on a sale (price_lists capability)",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "valid_until" : {
+            "description" : "Not before the quotation date",
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "lines", "valid_until" ]
       },
       "RetailRepayment" : {
         "properties" : {
@@ -20352,6 +20827,259 @@
         "tags" : [ "retail-customer-accounts" ]
       }
     },
+    "/api/v1/retail/customers/{customer_id}/statement/pdf" : {
+      "get" : {
+        "operationId" : "renderRetailCustomerStatement",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "customer_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/pdf" : {
+                "schema" : {
+                  "format" : "binary",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "The PDF"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "No such buyer in the caller's scope, or a capability is off"
+          },
+          "503" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "Too many documents are being produced; see Retry-After"
+          }
+        },
+        "summary" : "A credit buyer's statement as a PDF, as at today and never stored (issue #197)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
+    "/api/v1/retail/document-series" : {
+      "get" : {
+        "operationId" : "listRetailDocumentSeries",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailDocumentSeriesList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The numbered series: prefix per document type and the next number in each branch (issue #197)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
+    "/api/v1/retail/document-series/{type}" : {
+      "put" : {
+        "operationId" : "setRetailDocumentPrefix",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "type",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailDocumentSeriesRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailDocumentSeriesList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change the prefix of a document type; later documents take it, issued numbers never change (issue #197)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
+    "/api/v1/retail/documents" : {
+      "get" : {
+        "operationId" : "listRetailDocuments",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailDocumentPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Issued documents in the caller's branch scope, newest first (issue #197)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
+    "/api/v1/retail/documents/{document_id}" : {
+      "get" : {
+        "operationId" : "getRetailDocument",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "document_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailDocument"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "An issued document (issue #197)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
+    "/api/v1/retail/documents/{document_id}/pdf" : {
+      "post" : {
+        "operationId" : "renderRetailDocument",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "document_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailDocument"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The stored PDF of an issued document, rendered from its snapshot now if it was never stored (issue #197)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
     "/api/v1/retail/expense-categories" : {
       "get" : {
         "operationId" : "listRetailExpenseCategories",
@@ -21486,6 +22214,212 @@
         "tags" : [ "retail-purchasing" ]
       }
     },
+    "/api/v1/retail/quotations" : {
+      "get" : {
+        "operationId" : "listRetailQuotations",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailQuotationPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Quotations in the caller's branch scope, newest first (issue #197)",
+        "tags" : [ "retail-documents" ]
+      },
+      "post" : {
+        "operationId" : "createRetailQuotation",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailQuotationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailQuotation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Make a quotation: priced like a sale, numbered, its PDF stored; reserves no stock; M (issue #197)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
+    "/api/v1/retail/quotations/{quotation_id}" : {
+      "get" : {
+        "operationId" : "getRetailQuotation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "quotation_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailQuotation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A quotation with its lines (issue #197)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
+    "/api/v1/retail/quotations/{quotation_id}/cancel" : {
+      "post" : {
+        "operationId" : "cancelRetailQuotation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "quotation_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailQuotationCancelRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailQuotation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cancel an open quotation (issue #197)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
+    "/api/v1/retail/quotations/{quotation_id}/convert" : {
+      "post" : {
+        "operationId" : "convertRetailQuotation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "quotation_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailQuotationConvertRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailQuotationConverted"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Convert an open, unexpired quotation to a sale through the ordinary sale path, and optionally to its invoice; M (issue #197)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
     "/api/v1/retail/reports/business-evaluation" : {
       "get" : {
         "operationId" : "getRetailBusinessEvaluation",
@@ -22401,6 +23335,34 @@
         "tags" : [ "retail-returns" ]
       }
     },
+    "/api/v1/retail/returns/{return_id}/document" : {
+      "post" : {
+        "operationId" : "renderRetailCreditNote",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "return_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCreditNoteDocument"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The credit note PDF of a return, under the return's number, stored once; a voided return is marked void (issue #197)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
     "/api/v1/retail/returns/{return_id}/void" : {
       "post" : {
         "operationId" : "voidRetailReturn",
@@ -22621,6 +23583,77 @@
         },
         "summary" : "A sale with its lines",
         "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/sales/{sale_id}/documents" : {
+      "get" : {
+        "operationId" : "listRetailSaleDocuments",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sale_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailDocumentList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The documents issued for a sale (issue #197)",
+        "tags" : [ "retail-documents" ]
+      },
+      "post" : {
+        "operationId" : "issueRetailSaleDocument",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sale_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailDocumentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailDocument"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Issue the invoice or delivery note of a sale, numbered in its branch's series; idempotent by sale and type; M (issue #197)",
+        "tags" : [ "retail-documents" ]
       }
     },
     "/api/v1/retail/sales/{sale_id}/payments" : {
@@ -23613,6 +24646,51 @@
         },
         "summary" : "The source takes a dispatched transfer back before it is received (capability transfer_receipt, FR-RET-16); M",
         "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/transfers/{transfer_id}/documents" : {
+      "post" : {
+        "operationId" : "issueRetailTransferDocument",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "transfer_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailDocumentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailDocument"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Issue the delivery note of a stock move: quantities only, never prices; idempotent; M (issue #197)",
+        "tags" : [ "retail-documents" ]
       }
     },
     "/api/v1/retail/transfers/{transfer_id}/receive" : {

@@ -14,6 +14,8 @@ import { Loans } from '../areas/staff/lending/loans';
 import { BranchRoles } from '../areas/staff/retail/branch-roles';
 import { PriceLists } from '../areas/staff/retail/price-lists';
 import { AccountsPage } from '../areas/staff/retail/accounts';
+import { DocumentsPage } from '../areas/staff/retail/documents';
+import { QuotationsPage } from '../areas/staff/retail/quotations';
 import { ReturnsPage } from '../areas/staff/retail/returns';
 import { CataloguePage } from '../areas/staff/retail/catalogue';
 import { RetailHome } from '../areas/staff/retail/home';
@@ -90,6 +92,10 @@ function screen(path: string | undefined): ReactElement {
       return <PriceLists />;
     case '/staff/retail/accounts':
       return <AccountsPage />;
+    case '/staff/retail/documents':
+      return <DocumentsPage />;
+    case '/staff/retail/quotations':
+      return <QuotationsPage />;
     case '/staff/retail/returns':
       return <ReturnsPage />;
     case '/staff/lending':
@@ -178,6 +184,8 @@ const PRICER: Me = { ...ADMIN, full_name: 'Test Pricer 01', module_capabilities:
 // An administrator of a business that switched customer accounts on (ADR-033, issue #196).
 const LENDER: Me = { ...ADMIN, full_name: 'Test Lender 01', module_capabilities: { retail: ['branch_roles', 'customer_accounts'] } };
 
+// An administrator of a business that switched documents on (ADR-033, issue #197).
+const DOCUMENTER: Me = { ...ADMIN, full_name: 'Test Documenter 01', module_capabilities: { retail: ['branch_roles', 'documents'] } };
 // An administrator of a business that switched customer returns on (ADR-033, issue #201).
 const RETURNER: Me = { ...ADMIN, full_name: 'Test Returner 01', module_capabilities: { retail: ['branch_roles', 'returns'] } };
 
@@ -202,6 +210,9 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-price-lists': [PRICER],
   'capability-customer-accounts': [LENDER],
   'page-accounts': [LENDER],
+  'capability-documents': [DOCUMENTER],
+  'page-documents': [DOCUMENTER],
+  'page-quotations': [DOCUMENTER],
   'capability-returns': [RETURNER],
   'page-returns': [RETURNER],
 };

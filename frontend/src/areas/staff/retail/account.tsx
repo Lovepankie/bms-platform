@@ -11,7 +11,8 @@ import {
   payableSales, paymentProblem, reasonOf, reversalKeys, termsWords, type AccountForm, type ManualRow, type PaymentForm,
 } from './account-state';
 import { usePersistedDraft, newIdempotencyKey } from './idempotency';
-import { CREDIT_MANAGE, SALE_VOID, branchesWhere, canOpenAccount, holds, holdsAt } from './permissions';
+import { CREDIT_MANAGE, DOCUMENT_ISSUE, SALE_VOID, branchesWhere, canIssueDocuments, canOpenAccount, holds, holdsAt } from './permissions';
+import { openMadePdf } from './documents-ui';
 import { Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
 
 // One credit buyer's account (customer_accounts capability, ADR-033, issue #196): the limit and the terms, what is owed,
@@ -279,6 +280,8 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
     mutationFn: (v: { receipt: AccountPayment; reason: string }) => retail.reverseAccountPayment(customerId, v.receipt.id ?? '', v.reason, reverseKeys.current.keyFor(v.receipt.id ?? '', v.reason)),
     onSuccess: (r, v) => { reverseKeys.current.done(v.receipt.id ?? ''); done(`Reversed ${r.receipt_no}.`); },
   });
+  // The statement as a PDF (documents capability, issue #197): rendered as at today for the dates chosen, never stored.
+  const statementPdf = useMutation({ mutationFn: () => openMadePdf(() => retail.customerStatementPdf(customerId, { from, to })) });
   const nameOf = (id: string | undefined) => branchLabel((me.branches ?? []).find((b) => b.id === id));
   if (!allowed) {
     return (
@@ -337,6 +340,14 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
         {statement.isPending && ranged && <SkeletonList label="Loading the statement" />}
         <Problem error={statement.error} />
         {statement.data && <StatementView statement={statement.data} />}
+        {canIssueDocuments(me) && holds(me, DOCUMENT_ISSUE) && (
+          <p>
+            <button type="button" disabled={!ranged || statementPdf.isPending} data-tour="account-statement-pdf" onClick={() => statementPdf.mutate()}>
+              {statementPdf.isPending ? 'Making the PDF' : 'Open the statement as a PDF'}
+            </button>
+            <Problem error={statementPdf.error} />
+          </p>
+        )}
       </section>
       {toast}
     </main>
