@@ -11,6 +11,7 @@
         allowedDependencies = {
             "kernel",
             "core.tenancy",
+            "core.approvals",
             "core.audit",
             "core.ledger",
             "core.operations",

@@ -14,6 +14,11 @@ import {
 import { shortcutsFor } from './nav';
 import { SCREEN_CAPABILITY, canUse, screensFor } from './permissions';
 import { ChangeReview, RetailSettings } from './settings';
+import { GoodsReceivedPage } from './goods-received';
+import { PurchaseOrdersPage } from './purchase-orders';
+import { SupplierBillsPage } from './supplier-bills';
+import { SupplierPaymentsPage } from './supplier-payments';
+import { SupplierPayablesPage } from './supplier-payables';
 
 // Trade slice 2 (issue #192, ADR-033): the profile preset, the administrator's screen, and menus, screens
 // and tours that follow the capabilities. Static markup tests, as the other staff screen tests are.
@@ -151,8 +156,10 @@ describe('the administrator screen', () => {
     expect(html).toMatch(/checked=""[^>]*\/?><span><strong>Branch roles/);
   });
 
-  it('says plainly when the pages of a feature are not released', () => {
-    expect(settings(admin([]))).toContain('not released yet');
+  it('says plainly when the pages of a feature are not released, and only then', () => {
+    // Every feature has its pages now (the last, purchasing, with #198), so the note is shown for none; it returns with a feature
+    // that is added before its pages.
+    expect(settings(admin([])).includes('not released yet')).toBe(CAPABILITIES.some((c) => !c.ready));
   });
 
   it('is closed to anyone without core.settings.manage', () => {
@@ -202,5 +209,81 @@ describe('a tour per capability starts once when first enabled', () => {
     const seller: Me = { ...mockMe('sales'), modules: ['retail'], module_capabilities: { retail: ['branch_roles'] } };
     expect(capabilityTourFor(TOURS, seller, { 'retail-sales': { status: 'completed', version: 9 } })).toBeUndefined();
     expect(mainTourFor(TOURS, admins(['branch_roles']))?.id).toBe(adminWelcome.id);
+  });
+});
+
+// Optional purchasing (issue #198, ADR-033): everything is off by default, and "off" is today's menu and today's Restock.
+describe('purchasing follows its capability', () => {
+  const NEW_SCREENS = ['purchaseOrders', 'goodsReceived', 'supplierBills', 'supplierPayments', 'supplierPayables'];
+  const screens = (me: Me) => screensFor(me).map((s) => s.screen);
+
+  it('offers none of the purchasing screens or shortcuts while purchasing is absent, and leaves Restock where it was', () => {
+    for (const me of [admin(undefined), admin([]), admin(['branch_roles', 'units', 'returns'])]) {
+      const offered = screens(me);
+      for (const screen of NEW_SCREENS) expect(offered, screen).not.toContain(screen);
+      expect(offered).toContain('restock');
+      for (const screen of NEW_SCREENS) expect(shortcutsFor(me).map((s) => s.screen), screen).not.toContain(screen);
+    }
+  });
+
+  it('adds exactly the five screens when it is on, and changes nothing else', () => {
+    const off = screens(admin([]));
+    const on = screens(admin(['purchasing']));
+    expect(on.filter((s) => !off.includes(s)).sort()).toEqual([...NEW_SCREENS].sort());
+    expect(off.filter((s) => !on.includes(s))).toEqual([]);
+    expect(shortcutsFor(admin(['purchasing'])).map((s) => s.screen)).toEqual(shortcutsFor(admin([])).map((s) => s.screen));
+  });
+
+  it('gives orders and goods received to the restock permission, and the money screens to administrators only', () => {
+    const withPermissions = (permissions: string[]): Me => ({ ...admin(['purchasing']), permissions });
+    const buyer = withPermissions(['retail.purchase.create', 'retail.stock.read']);
+    expect(canUse(buyer, 'purchaseOrders')).toBe(true);
+    expect(canUse(buyer, 'goodsReceived')).toBe(true);
+    for (const screen of ['supplierBills', 'supplierPayments', 'supplierPayables'] as const) expect(canUse(buyer, screen), screen).toBe(false);
+    const clerk = withPermissions(['retail.payable.manage']);
+    for (const screen of ['supplierBills', 'supplierPayments', 'supplierPayables'] as const) expect(canUse(clerk, screen), screen).toBe(true);
+    expect(canUse(clerk, 'purchaseOrders')).toBe(false);
+    expect(canUse(admin(['purchasing']), 'supplierPayables')).toBe(true);
+    // The seeded sales role holds neither, so it sees no new screen with the capability on.
+    expect(canUse({ ...mockMe('sales'), module_capabilities: { retail: ['purchasing'] } }, 'purchaseOrders')).toBe(false);
+  });
+
+  it('refuses every purchasing page by address while the capability is off', () => {
+    const client = new QueryClient();
+    const page = (me: Me, node: ReactElement) =>
+      renderToString(
+        <QueryClientProvider client={client}>
+          <StaffContext.Provider value={{ me, branch: null }}>{node}</StaffContext.Provider>
+        </QueryClientProvider>,
+      );
+    for (const node of [<PurchaseOrdersPage key="o" />, <GoodsReceivedPage key="g" />, <SupplierBillsPage key="b" />, <SupplierPaymentsPage key="p" />, <SupplierPayablesPage key="r" />]) {
+      expect(page(admin([]), node)).toContain('You do not have access');
+      expect(page(admin(undefined), node)).toContain('You do not have access');
+    }
+  });
+
+  it('shows the purchasing block of the settings only while it is on', () => {
+    const client = new QueryClient();
+    client.setQueryData(['retail', 'capabilities'], { capabilities: { profile: 'shop' }, version: 1 });
+    client.setQueryData(['retail', 'purchasing-settings'], { bill_tolerance_bp: 100, over_receipt_bp: 0, version: 1 });
+    const settings = (me: Me) =>
+      renderToString(
+        <QueryClientProvider client={client}>
+          <StaffContext.Provider value={{ me, branch: null }}>
+            <RetailSettings />
+          </StaffContext.Provider>
+        </QueryClientProvider>,
+      );
+    expect(settings(admin([]))).not.toContain('Purchasing');
+    expect(settings(admin(['purchasing']))).toContain('Save purchasing settings');
+    const noSettingsPermission = { ...admin(['purchasing']), permissions: (admin().permissions ?? []).filter((p) => p !== 'core.settings.manage') };
+    expect(settings(noSettingsPermission)).not.toContain('Save purchasing settings');
+  });
+
+  it('starts its tour once when first enabled, for whoever may order', () => {
+    const progress: Progress = { [adminWelcome.id]: { status: 'completed', version: adminWelcome.version } };
+    const tour = capabilityTourFor(TOURS, { ...admin(['purchasing']), tours: {} } as Me, progress);
+    expect(tour?.id).toBe('capability-purchasing');
+    expect(capabilityTourFor(TOURS, { ...admin([]), tours: {} } as Me, progress)).toBeUndefined();
   });
 });

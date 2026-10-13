@@ -10,6 +10,7 @@ import { createPricingMock } from './retail-pricing-mock';
 import { createAccountsMock } from './retail-accounts-mock';
 import { createDocumentsMock } from './retail-documents-mock';
 import { createReturnsMock } from './retail-returns-mock';
+import { createPurchasingMock } from './retail-purchasing-mock';
 
 // Fabricated retail data for VITE_RETAIL_MOCK and for tests: invented products, branches and
 // balances, held in memory, with the REAL snake_case shapes of docs/sdd/07-api-design.md section
@@ -37,7 +38,7 @@ const ADMIN_PERMISSIONS = [
   ...SALES_PERMISSIONS, 'retail.catalogue.manage', 'retail.price.edit', 'retail.sale.void',
   'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use', 'retail.credit.manage', 'retail.credit.override', 'retail.document.issue', 'retail.sale.return',
   'retail.savings.record', 'retail.savings.overwrite', 'retail.banking.record', 'retail.expense.record', 'retail.expense.manage',
-  'retail.withdrawal.record', 'retail.advance.create', 'retail.advance.repay', 'retail.cashbook.read', 'retail.cashbook.void',
+  'retail.withdrawal.record', 'retail.advance.create', 'retail.advance.repay', 'retail.cashbook.read', 'retail.cashbook.void', 'retail.payable.manage',
 ];
 
 /** A fake signed-in user for the mock session, so the app runs without a backend. */
@@ -252,11 +253,35 @@ export function createMockRetail(): RetailApi {
     branchCode: (id) => MOCK_BRANCHES.find((b) => b.id === id)?.code ?? '',
   });
 
+  // Optional purchasing (ADR-033, issue #198): orders, goods received, supplier invoices and payments; 404 while the capability is off.
+  const purchasingApi = createPurchasingMock({
+    on: () => caps.value['purchasing'] === true,
+    today, nextId, delay, run, once, refuse,
+    suppliers: () => suppliers,
+    branchCode: (id) => MOCK_BRANCHES.find((b) => b.id === id)?.code ?? '',
+    product: (id) => {
+      const p = products.get(id);
+      return p && { code: p.code, description: p.description, unit: p.unit, sellMinor: p.sellMinor };
+    },
+    pack: (productId, unitId) => {
+      const k = (packs.get(productId) ?? []).find((x) => x.unit_id === unitId);
+      return k && { unit: k.unit ?? '', factor: k.factor ?? '1.000' };
+    },
+    move: (branchId, productId, baseMilli, costMinor, sellMinor) => {
+      move(branchId, productId, baseMilli);
+      const p = products.get(productId);
+      if (p && costMinor !== undefined) p.costMinor = costMinor;
+      if (p && sellMinor !== undefined) p.sellMinor = sellMinor;
+    },
+    balance: bal,
+  });
+
   const mock: RetailApi = {
     ...pricingApi,
     ...accountsApi,
     ...documentsApi,
     ...returnsApi,
+    ...purchasingApi,
     ...createCashbookMock({ profit: () => profitAccess, today, sold, branchIds: MOCK_BRANCHES.map((b) => b.id), delay, run, once, nextId }),
 
     listProducts: ({ query, branchId }) =>

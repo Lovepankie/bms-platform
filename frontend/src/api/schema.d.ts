@@ -2978,6 +2978,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/goods-receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Goods received notes in the caller's branch scope, newest first, without lines (issue #198) */
+        get: operations["listRetailGoodsReceipts"];
+        put?: never;
+        /** Receive goods into a branch or store, against an order or blind: stock, cost, price and goods received not invoiced in one transaction (issue #198); M */
+        post: operations["createRetailGoodsReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/goods-receipts/{receipt_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One goods received note with its lines (issue #198) */
+        get: operations["getRetailGoodsReceipt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/goods-receipts/{receipt_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a receipt as a whole by reversal, once; refused while an invoice bills it or its stock has moved (issue #198); M */
+        post: operations["voidRetailGoodsReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/price-lists": {
         parameters: {
             query?: never;
@@ -3188,6 +3240,76 @@ export interface paths {
         patch: operations["updateRetailProductUnit"];
         trace?: never;
     };
+    "/api/v1/retail/purchase-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Purchase orders in the caller's branch scope, newest first, without lines (issue #198) */
+        get: operations["listRetailPurchaseOrders"];
+        put?: never;
+        /** Raise a purchase order as a draft (issue #198); M */
+        post: operations["createRetailPurchaseOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/purchase-orders/{order_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One purchase order with its lines, what was received and billed, and its receipts (issue #198) */
+        get: operations["getRetailPurchaseOrder"];
+        /** Replace a draft order's supplier, dates, note and lines under If-Match (issue #198); a sent order is not edited */
+        put: operations["updateRetailPurchaseOrder"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/purchase-orders/{order_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a draft, sent or partly received order, with a reason (issue #198); M */
+        post: operations["cancelRetailPurchaseOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/purchase-orders/{order_id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a draft order to the supplier (issue #198); M. 200 when sent, 202 when it waits for a checker */
+        post: operations["sendRetailPurchaseOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/purchases": {
         parameters: {
             query?: never;
@@ -3200,6 +3322,24 @@ export interface paths {
         put?: never;
         /** Record a restock: prices, history, movements and journals in one transaction (FR-RET-06); M */
         post: operations["createRetailPurchase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/purchasing/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The purchasing tolerances (issue #198) */
+        get: operations["getRetailPurchasingSettings"];
+        /** Change the purchasing tolerances under If-Match; audited with old and new values (issue #198) */
+        put: operations["updateRetailPurchasingSettings"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3505,6 +3645,23 @@ export interface paths {
         };
         /** Days of cover, reorder suggestions, dead stock and shrinkage by branch (issue #149) */
         get: operations["getRetailStockHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/reports/supplier-payables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Supplier balance and ageing as of today, with goods received and not yet invoiced (issue #198) */
+        get: operations["getRetailSupplierPayables"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3893,6 +4050,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/supplier-bills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Supplier invoices in the caller's branch scope, newest first, without lines (issue #198) */
+        get: operations["listRetailSupplierBills"];
+        put?: never;
+        /** Record a supplier invoice matched to received lines: clears goods received not invoiced into trade creditors and posts the price variance (issue #198); M */
+        post: operations["createRetailSupplierBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/supplier-bills/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What an invoice comes to against the receipts it bills, and whether it needs a reason, without recording it (issue #198) */
+        post: operations["matchRetailSupplierBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/supplier-bills/{bill_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One supplier invoice with its lines (issue #198) */
+        get: operations["getRetailSupplierBill"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/supplier-bills/{bill_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void an invoice as a whole by reversal, once; refused while a payment stands against it (issue #198); M */
+        post: operations["voidRetailSupplierBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/supplier-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Supplier payments in the caller's branch scope, newest first, without allocations (issue #198) */
+        get: operations["listRetailSupplierPayments"];
+        put?: never;
+        /** Pay a supplier in cash, mobile money or bank, allocated to open invoices and credit restocks (issue #198); M */
+        post: operations["createRetailSupplierPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/supplier-payments/{payment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One supplier payment with its allocations (issue #198) */
+        get: operations["getRetailSupplierPayment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/supplier-payments/{payment_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reverse a payment as a whole, once, with a reason; its allocations stop counting (issue #198); M */
+        post: operations["reverseRetailSupplierPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/suppliers": {
         parameters: {
             query?: never;
@@ -3926,6 +4204,40 @@ export interface paths {
         head?: never;
         /** Edit or deactivate a supplier (#146); never deleted */
         patch: operations["updateRetailSupplier"];
+        trace?: never;
+    };
+    "/api/v1/retail/suppliers/{supplier_id}/open-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What a supplier is owed on invoices and credit restocks in the caller's scope, oldest due first (issue #198) */
+        get: operations["listRetailSupplierOpenItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/suppliers/{supplier_id}/unbilled-receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The received lines of a supplier that no invoice bills in full, which a new invoice is built from (issue #198) */
+        get: operations["listRetailUnbilledReceipts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/retail/transfers": {
@@ -7760,6 +8072,148 @@ export interface components {
             /** Format: uuid */
             receipt_document_id?: string;
         };
+        RetailGoodsReceipt: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            delivery_ref?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int32 */
+            line_count?: number;
+            /** @description A list carries no lines */
+            lines?: components["schemas"]["RetailGoodsReceiptLine"][];
+            note?: string;
+            /** Format: uuid */
+            order_id?: string;
+            order_no?: string;
+            receipt_no?: string;
+            /** Format: date */
+            received_on?: string;
+            /** @enum {string} */
+            status?: "posted" | "voided";
+            /** Format: uuid */
+            supplier_id?: string;
+            supplier_name?: string;
+            /** Format: int64 */
+            total_minor?: number;
+            /**
+             * Format: int32
+             * @description Send as If-Match where a route takes it
+             */
+            version?: number;
+            void_reason?: string;
+            /** Format: date-time */
+            voided_at?: string;
+            /** Format: uuid */
+            voided_by?: string;
+            /** Format: date */
+            voided_on?: string;
+        };
+        /** @description A list carries no lines */
+        RetailGoodsReceiptLine: {
+            /** @description Billed so far on supplier invoices that stand, in base units; present with retail.payable.manage */
+            billed_qty?: string;
+            code?: string;
+            /**
+             * Format: int64
+             * @description Cost of one base unit, which the stock movement carries
+             */
+            cost_minor?: number;
+            description?: string;
+            /**
+             * Format: int64
+             * @description Cost of one unit as entered
+             */
+            entered_cost_minor?: number;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int32 */
+            line_no?: number;
+            /**
+             * Format: int64
+             * @description The value as entered: what goes to goods received not invoiced
+             */
+            line_total_minor?: number;
+            /** Format: uuid */
+            order_line_id?: string;
+            /** Format: uuid */
+            product_id?: string;
+            /** @description Received, in base units */
+            qty?: string;
+            /** Format: int64 */
+            sell_minor?: number;
+            unit?: string;
+            /** @description Base units in one pack of the line's unit */
+            unit_factor?: string;
+            /** Format: uuid */
+            unit_id?: string;
+            /** @description Received, in the unit it was entered in */
+            unit_qty?: string;
+        };
+        RetailGoodsReceiptLineRequest: {
+            /**
+             * Format: int64
+             * @description The cost of one unit as entered. Absent on an order line in its own unit means the ordered cost; required otherwise
+             */
+            cost_minor?: number;
+            /**
+             * Format: uuid
+             * @description The order line this receives. Required on a receipt against an order; absent on a blind receipt
+             */
+            order_line_id?: string;
+            /**
+             * Format: uuid
+             * @description Required on a blind receipt; on an order line it is the line's own product
+             */
+            product_id?: string;
+            /** @example 10 */
+            qty: string;
+            /**
+             * Format: int64
+             * @description A new selling price per base unit, set on the product with this receipt; absent keeps it
+             */
+            sell_minor?: number;
+            /**
+             * Format: uuid
+             * @description The unit qty and cost are in. On an order line, absent means the unit the line was ordered in; on a blind receipt absent means the base unit. Naming the base unit is the base unit
+             */
+            unit_id?: string;
+        };
+        RetailGoodsReceiptList: {
+            items?: components["schemas"]["RetailGoodsReceipt"][];
+            next_cursor?: string;
+        };
+        RetailGoodsReceiptRequest: {
+            /**
+             * Format: uuid
+             * @description The branch or store the goods go into; absent means the one branch the caller's scope covers
+             */
+            branch_id?: string;
+            /** @description The supplier's delivery note number */
+            delivery_ref?: string;
+            lines: components["schemas"]["RetailGoodsReceiptLineRequest"][];
+            note?: string;
+            /**
+             * Format: uuid
+             * @description The order received against; absent for a blind receipt, which then needs supplier_id
+             */
+            order_id?: string;
+            /**
+             * Format: date
+             * @description Absent means today in the business time zone
+             */
+            received_on?: string;
+            /** Format: uuid */
+            supplier_id?: string;
+        };
+        RetailGoodsReceiptVoidRequest: {
+            reason: string;
+        };
         /** @description Dispatched and not received or cancelled, the longest wait first */
         RetailInFlightTransfer: {
             /**
@@ -8477,6 +8931,161 @@ export interface components {
              */
             unit_id?: string;
         };
+        /** @description A purchase order. A list carries no lines */
+        RetailPurchaseOrder: {
+            /** Format: uuid */
+            approval_id?: string;
+            /** Format: uuid */
+            approved_by?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            cancel_reason?: string;
+            /** Format: date-time */
+            cancelled_at?: string;
+            /** Format: uuid */
+            cancelled_by?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: date */
+            expected_on?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int32 */
+            line_count?: number;
+            lines?: components["schemas"]["RetailPurchaseOrderLine"][];
+            note?: string;
+            order_no?: string;
+            /** Format: date */
+            ordered_on?: string;
+            receipts?: components["schemas"]["RetailPurchaseOrderReceiptRef"][];
+            /** Format: date-time */
+            sent_at?: string;
+            /** Format: uuid */
+            sent_by?: string;
+            /** @enum {string} */
+            status?: "draft" | "sent" | "partly_received" | "received" | "cancelled";
+            /** Format: uuid */
+            supplier_id?: string;
+            supplier_name?: string;
+            /** Format: int64 */
+            total_minor?: number;
+            /**
+             * Format: uuid
+             * @description Who last changed the draft; absent if it was never edited
+             */
+            updated_by?: string;
+            /**
+             * Format: int32
+             * @description Send as If-Match when editing
+             */
+            version?: number;
+        };
+        RetailPurchaseOrderCancelRequest: {
+            reason: string;
+        };
+        RetailPurchaseOrderLine: {
+            /**
+             * Format: int64
+             * @description What the supplier billed for it; present with retail.payable.manage
+             */
+            billed_minor?: number;
+            /** @description Billed so far on supplier invoices that stand, in base units; present with retail.payable.manage */
+            billed_qty?: string;
+            code?: string;
+            /**
+             * Format: int64
+             * @description Cost of one base unit
+             */
+            cost_minor?: number;
+            description?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int32 */
+            line_no?: number;
+            /** Format: int64 */
+            line_total_minor?: number;
+            /** Format: uuid */
+            product_id?: string;
+            /** @description Ordered, in base units */
+            qty?: string;
+            /**
+             * Format: int64
+             * @description The value of what was received, as entered
+             */
+            received_minor?: number;
+            /** @description Received so far on receipts that stand, in base units; present on one order only */
+            received_qty?: string;
+            unit?: string;
+            /**
+             * Format: int64
+             * @description Cost of one unit as entered
+             */
+            unit_cost_minor?: number;
+            /** @description Base units in one pack of the line's unit */
+            unit_factor?: string;
+            /** Format: uuid */
+            unit_id?: string;
+            /** @description Ordered, in the unit it was entered in */
+            unit_qty?: string;
+        };
+        RetailPurchaseOrderLineRequest: {
+            /**
+             * Format: int64
+             * @description Cost of one unit as entered (one pack for a pack line)
+             */
+            cost_minor: number;
+            /** Format: uuid */
+            product_id: string;
+            /** @example 10 */
+            qty: string;
+            /**
+             * Format: uuid
+             * @description The unit qty and cost are in: a pack unit of the product (units capability) or the base unit. Absent means the base unit
+             */
+            unit_id?: string;
+        };
+        RetailPurchaseOrderList: {
+            items?: components["schemas"]["RetailPurchaseOrder"][];
+            next_cursor?: string;
+        };
+        /** @description 200 with the order when it was sent; 202 with approval_id when its value reached the tenant's approval threshold for retail_purchase_order and it waits for a checker (retail.purchase.approve) */
+        RetailPurchaseOrderOutcome: {
+            /** Format: uuid */
+            approval_id?: string;
+            executed?: boolean;
+            order?: components["schemas"]["RetailPurchaseOrder"];
+        };
+        RetailPurchaseOrderReceiptRef: {
+            /** Format: uuid */
+            id?: string;
+            receipt_no?: string;
+            /** Format: date */
+            received_on?: string;
+            status?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailPurchaseOrderRequest: {
+            /**
+             * Format: uuid
+             * @description The branch that expects the goods and whose series numbers the order; absent means the one branch the caller's scope covers. Fixed once the order exists
+             */
+            branch_id?: string;
+            /** Format: date */
+            expected_on?: string;
+            lines: components["schemas"]["RetailPurchaseOrderLineRequest"][];
+            note?: string;
+            /**
+             * Format: date
+             * @description Absent means today in the business time zone
+             */
+            ordered_on?: string;
+            /** Format: uuid */
+            supplier_id: string;
+        };
         RetailPurchasePage: {
             items?: components["schemas"]["RetailPurchase"][];
             next_cursor?: string;
@@ -8495,6 +9104,32 @@ export interface components {
              * @description Required for a credit purchase
              */
             supplier_id?: string;
+        };
+        RetailPurchasingSettings: {
+            /**
+             * Format: int32
+             * @description How far a supplier invoice may differ in value from the receipts it clears, in basis points of the value cleared, before it needs a reason. 0 means any difference needs one
+             */
+            bill_tolerance_bp?: number;
+            /**
+             * Format: int64
+             * @description Read only: the approval threshold for sending a purchase order (action retail_purchase_order), present only when one is set; while it is absent an order needs no second administrator
+             */
+            order_approval_threshold_minor?: number;
+            /**
+             * Format: int32
+             * @description How far above the ordered quantity a receipt line may go, in basis points of the ordered quantity. 0 means a receipt never exceeds its order
+             */
+            over_receipt_bp?: number;
+            /** Format: int32 */
+            version?: number;
+        };
+        /** @description Omitted fields are unchanged */
+        RetailPurchasingSettingsUpdate: {
+            /** Format: int32 */
+            bill_tolerance_bp?: number;
+            /** Format: int32 */
+            over_receipt_bp?: number;
         };
         RetailQuotation: {
             /** Format: uuid */
@@ -9448,8 +10083,328 @@ export interface components {
              */
             version?: number;
         };
+        RetailSupplierBill: {
+            /** Format: date */
+            bill_date?: string;
+            bill_no?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: int64 */
+            cleared_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: date */
+            due_date?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @enum {string} */
+            kind?: "goods" | "landed_cost";
+            /** Format: int32 */
+            line_count?: number;
+            /** @description A list carries no lines */
+            lines?: components["schemas"]["RetailSupplierBillLine"][];
+            note?: string;
+            /**
+             * Format: int64
+             * @description Total less paid; zero once voided
+             */
+            open_minor?: number;
+            /**
+             * Format: int64
+             * @description Paid by payments that stand
+             */
+            paid_minor?: number;
+            /** @enum {string} */
+            status?: "posted" | "voided";
+            /** Format: uuid */
+            supplier_id?: string;
+            supplier_name?: string;
+            supplier_ref?: string;
+            /** Format: int64 */
+            total_minor?: number;
+            /** Format: int64 */
+            variance_minor?: number;
+            variance_reason?: string;
+            /** Format: int32 */
+            version?: number;
+            void_reason?: string;
+            /** Format: date-time */
+            voided_at?: string;
+            /** Format: uuid */
+            voided_by?: string;
+            /** Format: date */
+            voided_on?: string;
+        };
+        /** @description A list carries no lines */
+        RetailSupplierBillLine: {
+            /**
+             * Format: int64
+             * @description The part of the receipt line's value this quantity clears
+             */
+            cleared_minor?: number;
+            code?: string;
+            description?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int32 */
+            line_no?: number;
+            /**
+             * Format: int64
+             * @description What the supplier billed for the line
+             */
+            line_total_minor?: number;
+            /** Format: uuid */
+            product_id?: string;
+            /** @description Billed, in base units */
+            qty?: string;
+            /** Format: uuid */
+            receipt_id?: string;
+            /** Format: uuid */
+            receipt_line_id?: string;
+            receipt_no?: string;
+            unit?: string;
+            /** Format: uuid */
+            unit_id?: string;
+            /** Format: int64 */
+            unit_price_minor?: number;
+            /** @description Billed, in the unit it was received in */
+            unit_qty?: string;
+            /**
+             * Format: int64
+             * @description Billed less cleared: the price difference, posted to purchase price variance
+             */
+            variance_minor?: number;
+        };
+        RetailSupplierBillLineRequest: {
+            /**
+             * @description The quantity billed, in the unit the receipt line was received in (a pack for a pack line); at most what was received and not yet billed
+             * @example 10
+             */
+            qty: string;
+            /**
+             * Format: uuid
+             * @description The receipt line this bills
+             */
+            receipt_line_id: string;
+            /**
+             * Format: int64
+             * @description The supplier's price for one unit as entered (one pack for a pack line)
+             */
+            unit_price_minor: number;
+        };
+        RetailSupplierBillList: {
+            items?: components["schemas"]["RetailSupplierBill"][];
+            next_cursor?: string;
+        };
+        /** @description What a supplier invoice comes to against the receipts it bills, worked out without recording anything: the three-way view of ordered, received and billed */
+        RetailSupplierBillMatch: {
+            /** Format: int64 */
+            cleared_minor?: number;
+            lines?: components["schemas"]["RetailSupplierBillLine"][];
+            /** @description True when the difference is above the tolerance, so a reason is required */
+            reason_required?: boolean;
+            /**
+             * Format: int64
+             * @description The difference the tenant's tolerance allows without a reason, in minor units
+             */
+            tolerance_minor?: number;
+            /** Format: int64 */
+            total_minor?: number;
+            /** @description True when the typed invoice total differs from the lines */
+            total_mismatch?: boolean;
+            /** Format: int64 */
+            variance_minor?: number;
+        };
+        RetailSupplierBillRequest: {
+            /** Format: date */
+            bill_date: string;
+            /** Format: date */
+            due_date: string;
+            lines: components["schemas"]["RetailSupplierBillLineRequest"][];
+            note?: string;
+            /** Format: uuid */
+            supplier_id: string;
+            /** @description The supplier's own invoice number; unique per supplier */
+            supplier_ref: string;
+            /**
+             * Format: int64
+             * @description The invoice total as printed. It must equal the sum of the lines: a typing check
+             */
+            total_minor: number;
+            /** @description Why the invoice differs from the receipts it bills. Required, at least 5 characters, when the difference is above the tenant's tolerance */
+            variance_reason?: string;
+        };
+        RetailSupplierBillVoidRequest: {
+            reason: string;
+        };
         RetailSupplierList: {
             items?: components["schemas"]["RetailSupplier"][];
+        };
+        /** @description A supplier invoice or a credit restock that still owes something */
+        RetailSupplierOpenItem: {
+            /** Format: date */
+            date?: string;
+            /**
+             * Format: int32
+             * @description Days past the due date in the business time zone; 0 or less is not yet due
+             */
+            days_past_due?: number;
+            /**
+             * Format: date
+             * @description A restock has no terms: it falls due the day it was bought
+             */
+            due_date?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @enum {string} */
+            kind?: "bill" | "restock";
+            /** @description Our number: the invoice number or the restock number */
+            number?: string;
+            /** Format: int64 */
+            open_minor?: number;
+            /** Format: int64 */
+            paid_minor?: number;
+            /** @description The supplier's own invoice number; absent on a restock */
+            supplier_ref?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailSupplierOpenItems: {
+            /** Format: date */
+            as_of?: string;
+            items?: components["schemas"]["RetailSupplierOpenItem"][];
+            /** Format: uuid */
+            supplier_id?: string;
+            supplier_name?: string;
+            /** Format: int64 */
+            total_open_minor?: number;
+        };
+        /** @description What is owed to each supplier as of today in the business time zone (Africa/Kampala unless the tenant has another), by days past the due date, with the goods received and not yet invoiced beside it. The ageing buckets are those of the customer ageing */
+        RetailSupplierPayables: {
+            /** Format: date */
+            as_of?: string;
+            currency?: string;
+            suppliers?: components["schemas"]["RetailSupplierPayablesRow"][];
+            totals?: components["schemas"]["RetailSupplierPayablesRow"];
+        };
+        RetailSupplierPayablesRow: {
+            /** Format: int64 */
+            days1_to30_minor?: number;
+            /** Format: int64 */
+            days31_to60_minor?: number;
+            /** Format: int64 */
+            days61_to90_minor?: number;
+            /**
+             * Format: int64
+             * @description Owed on invoices and credit restocks, not yet due
+             */
+            not_due_minor?: number;
+            /** Format: int64 */
+            over90_minor?: number;
+            /**
+             * Format: int64
+             * @description Everything owed on invoices and credit restocks that stand
+             */
+            owed_minor?: number;
+            /** Format: uuid */
+            supplier_id?: string;
+            supplier_name?: string;
+            /**
+             * Format: int64
+             * @description Received and not yet invoiced: what sits in goods received not invoiced
+             */
+            unbilled_receipts_minor?: number;
+        };
+        RetailSupplierPayment: {
+            allocation?: string;
+            /** @description A list carries no allocations */
+            allocations?: components["schemas"]["RetailSupplierPaymentAllocation"][];
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            method?: string;
+            note?: string;
+            /** Format: date */
+            paid_on?: string;
+            payment_no?: string;
+            reference?: string;
+            reverse_reason?: string;
+            /** Format: date-time */
+            reversed_at?: string;
+            /** Format: uuid */
+            reversed_by?: string;
+            /** Format: date */
+            reversed_on?: string;
+            /** @enum {string} */
+            status?: "posted" | "reversed";
+            /** Format: uuid */
+            supplier_id?: string;
+            supplier_name?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        /** @description A list carries no allocations */
+        RetailSupplierPaymentAllocation: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: uuid */
+            bill_id?: string;
+            bill_no?: string;
+            /** Format: uuid */
+            purchase_id?: string;
+            purchase_no?: string;
+            supplier_ref?: string;
+        };
+        RetailSupplierPaymentAllocationRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            /**
+             * Format: uuid
+             * @description A supplier invoice. Exactly one of bill_id and purchase_id
+             */
+            bill_id?: string;
+            /**
+             * Format: uuid
+             * @description A credit restock of the supplier, which until now only raised trade creditors
+             */
+            purchase_id?: string;
+        };
+        RetailSupplierPaymentList: {
+            items?: components["schemas"]["RetailSupplierPayment"][];
+            next_cursor?: string;
+        };
+        RetailSupplierPaymentRequest: {
+            /** @description oldest_first (the default) pays the supplier's open items by due date, oldest first; manual pays the allocations given. Either way the whole amount is allocated: nothing is held as a deposit */
+            allocation?: string;
+            allocations?: components["schemas"]["RetailSupplierPaymentAllocationRequest"][];
+            /** Format: int64 */
+            amount_minor: number;
+            /**
+             * Format: uuid
+             * @description The branch whose till, mobile money or bank pays, inside the caller's retail.payable.manage scope; absent means the one branch the scope covers
+             */
+            branch_id?: string;
+            /** @description cash|mobile_money|bank */
+            method: string;
+            note?: string;
+            /** @description A bank or mobile money reference */
+            reference?: string;
+            /** Format: uuid */
+            supplier_id: string;
+        };
+        RetailSupplierPaymentReverseRequest: {
+            reason: string;
         };
         RetailSupplierRequest: {
             contact?: string;
@@ -9592,6 +10547,46 @@ export interface components {
             items?: components["schemas"]["RetailInFlightTransfer"][];
             /** @description True when clearing_minor equals the value of every open dispatch */
             reconciled?: boolean;
+        };
+        /** @description A received line that a supplier invoice has not billed in full */
+        RetailUnbilledReceiptLine: {
+            /** Format: uuid */
+            branch_id?: string;
+            code?: string;
+            description?: string;
+            order_no?: string;
+            /** Format: uuid */
+            product_id?: string;
+            /** Format: uuid */
+            receipt_id?: string;
+            /** Format: uuid */
+            receipt_line_id?: string;
+            receipt_no?: string;
+            /** Format: date */
+            received_on?: string;
+            /**
+             * Format: int64
+             * @description The value of what is unbilled, as entered: what sits in goods received not invoiced
+             */
+            unbilled_minor?: number;
+            /** @description Received and not yet billed, in the unit it was received in */
+            unbilled_qty?: string;
+            unit?: string;
+            /**
+             * Format: int64
+             * @description The cost of one unit as received, which a matching invoice repeats
+             */
+            unit_cost_minor?: number;
+            /** Format: uuid */
+            unit_id?: string;
+        };
+        RetailUnbilledReceiptList: {
+            items?: components["schemas"]["RetailUnbilledReceiptLine"][];
+            /** Format: uuid */
+            supplier_id?: string;
+            supplier_name?: string;
+            /** Format: int64 */
+            total_minor?: number;
         };
         RetailUnit: {
             active?: boolean;
@@ -15737,6 +16732,112 @@ export interface operations {
             };
         };
     };
+    listRetailGoodsReceipts: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                supplier_id?: string;
+                order_id?: string;
+                status?: string;
+                from?: string;
+                to?: string;
+                q?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailGoodsReceiptList"];
+                };
+            };
+        };
+    };
+    createRetailGoodsReceipt: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailGoodsReceiptRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailGoodsReceipt"];
+                };
+            };
+        };
+    };
+    getRetailGoodsReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailGoodsReceipt"];
+                };
+            };
+        };
+    };
+    voidRetailGoodsReceipt: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                receipt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailGoodsReceiptVoidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailGoodsReceipt"];
+                };
+            };
+        };
+    };
     listRetailPriceLists: {
         parameters: {
             query?: never;
@@ -16190,6 +17291,163 @@ export interface operations {
             };
         };
     };
+    listRetailPurchaseOrders: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                supplier_id?: string;
+                status?: string;
+                from?: string;
+                to?: string;
+                q?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchaseOrderList"];
+                };
+            };
+        };
+    };
+    createRetailPurchaseOrder: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPurchaseOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchaseOrder"];
+                };
+            };
+        };
+    };
+    getRetailPurchaseOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                order_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchaseOrder"];
+                };
+            };
+        };
+    };
+    updateRetailPurchaseOrder: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                order_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPurchaseOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchaseOrder"];
+                };
+            };
+        };
+    };
+    cancelRetailPurchaseOrder: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                order_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPurchaseOrderCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchaseOrder"];
+                };
+            };
+        };
+    };
+    sendRetailPurchaseOrder: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                order_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchaseOrderOutcome"];
+                };
+            };
+        };
+    };
     listRetailPurchases: {
         parameters: {
             query?: {
@@ -16238,6 +17496,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailPurchase"];
+                };
+            };
+        };
+    };
+    getRetailPurchasingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchasingSettings"];
+                };
+            };
+        };
+    };
+    updateRetailPurchasingSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPurchasingSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchasingSettings"];
                 };
             };
         };
@@ -16713,6 +18017,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailStockHealth"];
+                };
+            };
+        };
+    };
+    getRetailSupplierPayables: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                supplier_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierPayables"];
                 };
             };
         };
@@ -17419,6 +18746,241 @@ export interface operations {
             };
         };
     };
+    listRetailSupplierBills: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                supplier_id?: string;
+                status?: string;
+                open?: boolean;
+                from?: string;
+                to?: string;
+                q?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierBillList"];
+                };
+            };
+        };
+    };
+    createRetailSupplierBill: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSupplierBillRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierBill"];
+                };
+            };
+        };
+    };
+    matchRetailSupplierBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSupplierBillRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierBillMatch"];
+                };
+            };
+        };
+    };
+    getRetailSupplierBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierBill"];
+                };
+            };
+        };
+    };
+    voidRetailSupplierBill: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                bill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSupplierBillVoidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierBill"];
+                };
+            };
+        };
+    };
+    listRetailSupplierPayments: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                supplier_id?: string;
+                status?: string;
+                from?: string;
+                to?: string;
+                q?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierPaymentList"];
+                };
+            };
+        };
+    };
+    createRetailSupplierPayment: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSupplierPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierPayment"];
+                };
+            };
+        };
+    };
+    getRetailSupplierPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierPayment"];
+                };
+            };
+        };
+    };
+    reverseRetailSupplierPayment: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSupplierPaymentReverseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierPayment"];
+                };
+            };
+        };
+    };
     listRetailSuppliers: {
         parameters: {
             query?: never;
@@ -17487,6 +19049,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSupplier"];
+                };
+            };
+        };
+    };
+    listRetailSupplierOpenItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                supplier_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierOpenItems"];
+                };
+            };
+        };
+    };
+    listRetailUnbilledReceipts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                supplier_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailUnbilledReceiptList"];
                 };
             };
         };

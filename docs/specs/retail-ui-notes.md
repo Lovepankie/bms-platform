@@ -581,6 +581,39 @@ ready in `capabilities-state.ts` with its tour (`capability-documents`: an intro
 `page-quotations`). The pure rules (the words and state of a document, the documents a sale may still be given, the prefix rule, the quotation form and its request, the
 conversion choices) are in `documents-state.ts`; `retail-documents-mock.ts` is the fabricated server for `VITE_RETAIL_MOCK` and the tests.
 
+## Optional purchasing (#198, ADR-033)
+
+Everything here is offered only while `module_capabilities` lists `purchasing` (`SCREEN_CAPABILITY`), and the Restock screen is untouched. Orders and
+receipts need `retail.purchase.create`; invoices, payments and the payables report need `retail.payable.manage` (administrators); the tolerances
+need `core.settings.manage`. Each page has a breadcrumb and a live search where it lists (the shared search; the term is never in the address).
+
+- **Purchase orders** (`/staff/retail/purchase-orders`): status chips (draft, sent, partly received, received, cancelled), search by order number or
+  supplier, New purchase order. **New purchase order** and **Change order** (`/purchase-orders/new`, `/purchase-orders/$orderId/edit`, a draft only,
+  saved under `If-Match`) take the supplier, the expected date, a note and lines (item, unit when pack sizes are on, quantity, cost per unit as entered)
+  with the totals worked out as the server rounds them. **The order** (`/purchase-orders/$orderId`, crumb "Purchase order") shows each line as ordered,
+  received and, for `retail.payable.manage`, billed, the receipts against it, and the actions Send (a 202 says it waits for a second administrator
+  holding `retail.purchase.approve`, decided in the approvals inbox), Change, Cancel (a reason of at least five characters) and Receive goods.
+- **Receive goods** (`/purchase-orders/$orderId/receive`) and **Receive without an order** (`/goods-received/new`) are one form: the branch or store
+  the goods go into (only branches in scope), the quantity of each line (pre-filled with what is still to come), its cost (pre-filled from the order)
+  and an optional new selling price, the delivery note number and a note. The server's refusals are shown in plain words (more than ordered, not a
+  whole number of base units). **Goods received** (`/goods-received`) lists the deliveries; a delivery (`/goods-received/$receiptId`, crumb "Delivery")
+  shows its lines and what is billed, and voids with a reason, with the two refusals (an invoice bills it; some of it is sold) explained.
+- **Supplier invoices** (`/supplier-bills`, open-only toggle) and **New supplier invoice** (`/supplier-bills/new`): choose the supplier, tick the goods
+  received and not yet invoiced that the invoice is for, type the invoice number, dates, the supplier's price and the total as printed. The page asks
+  the server to match it (`POST /retail/supplier-bills/match`) as the form changes and shows each line as invoice says, received at and difference,
+  the tolerance, a warning when the total is not the sum of the lines and, when the difference is above the tolerance, a required reason. **A supplier
+  invoice** (`/supplier-bills/$billId`) shows the lines, paid and open, and voids with a reason (refused while a payment stands).
+- **Supplier payments** (`/supplier-payments`) and **Pay a supplier** (`/supplier-payments/new`): supplier, paying branch, cash, mobile money or
+  bank, amount, reference and note, paid oldest first or by choosing what to pay (an amount against each open invoice or credit restock, the sum
+  checked against the payment before saving). **A payment** (`/supplier-payments/$paymentId`) lists what it paid and reverses with a reason.
+  **What you owe suppliers** (`/supplier-payables`) is the report: per supplier what is owed by days past due, the total, and the goods received
+  and not yet invoiced beside it; a row starts a payment for that supplier.
+- **Retail settings** gains the two tolerances in percent (stored as basis points, shown to two decimals) under `If-Match`, and says when no
+  order approval limit is set that any administrator can send any order.
+- `purchasing` is marked ready in `capabilities-state.ts` with its tour (`capability-purchasing`) and a Help page tour (`page-purchase-orders`). The
+  mock (`retail-purchasing-mock.ts`) holds the server's rules in small for development and tests.
+- Follow-up, marked: the purchase order as a PDF to send to the supplier. It reuses the ADR-034 renderer once the documents slice (#197) is on main.
+
 ## Left to do
 
 - Void a sale and pay a credit sale screens; see `docs/specs/retail-ui-parity.md`.

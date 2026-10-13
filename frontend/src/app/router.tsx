@@ -96,6 +96,22 @@ const retailReturnsRoute = retailScreen('/returns', 'Customer returns').lazy(() 
 const retailReturnNewRoute = retailScreen('/returns/new/$saleId', 'Take goods back').lazy(() => import('../areas/staff/retail/return-new').then((m) => m.Route));
 const retailReturnRoute = retailScreen('/returns/$returnId', 'Credit note').lazy(() => import('../areas/staff/retail/credit-note').then((m) => m.Route));
 const retailAccountRoute = retailScreen('/accounts/$customerId', 'Account').lazy(() => import('../areas/staff/retail/account').then((m) => m.Route));
+// Optional purchasing (ADR-033, issue #198): each route is lazy-loaded and shown only while the purchasing capability is on.
+const retailPurchaseOrdersRoute = retailScreen('/purchase-orders', 'Purchase orders').lazy(() => import('../areas/staff/retail/purchase-orders').then((m) => m.Route));
+const retailPurchaseOrderNewRoute = retailScreen('/purchase-orders/new', 'New purchase order').lazy(() => import('../areas/staff/retail/purchase-order-form').then((m) => m.NewRoute));
+const retailPurchaseOrderRoute = retailScreen('/purchase-orders/$orderId', 'Purchase order').lazy(() => import('../areas/staff/retail/purchase-order').then((m) => m.Route));
+const retailPurchaseOrderEditRoute = retailScreen('/purchase-orders/$orderId/edit', 'Change order').lazy(() => import('../areas/staff/retail/purchase-order-form').then((m) => m.EditRoute));
+const retailPurchaseOrderReceiveRoute = retailScreen('/purchase-orders/$orderId/receive', 'Receive goods').lazy(() => import('../areas/staff/retail/goods-receive').then((m) => m.OrderReceiveRoute));
+const retailGoodsReceivedRoute = retailScreen('/goods-received', 'Goods received').lazy(() => import('../areas/staff/retail/goods-received').then((m) => m.Route));
+const retailGoodsReceivedNewRoute = retailScreen('/goods-received/new', 'Receive without an order').lazy(() => import('../areas/staff/retail/goods-receive').then((m) => m.BlindRoute));
+const retailGoodsReceiptRoute = retailScreen('/goods-received/$receiptId', 'Delivery').lazy(() => import('../areas/staff/retail/goods-received').then((m) => m.DetailRoute));
+const retailSupplierBillsRoute = retailScreen('/supplier-bills', 'Supplier invoices').lazy(() => import('../areas/staff/retail/supplier-bills').then((m) => m.Route));
+const retailSupplierBillNewRoute = retailScreen('/supplier-bills/new', 'New supplier invoice').lazy(() => import('../areas/staff/retail/supplier-bill-new').then((m) => m.Route));
+const retailSupplierBillRoute = retailScreen('/supplier-bills/$billId', 'Supplier invoice').lazy(() => import('../areas/staff/retail/supplier-bills').then((m) => m.DetailRoute));
+const retailSupplierPaymentsRoute = retailScreen('/supplier-payments', 'Supplier payments').lazy(() => import('../areas/staff/retail/supplier-payments').then((m) => m.Route));
+const retailSupplierPaymentNewRoute = retailScreen('/supplier-payments/new', 'Pay a supplier').lazy(() => import('../areas/staff/retail/supplier-payment-new').then((m) => m.Route));
+const retailSupplierPaymentRoute = retailScreen('/supplier-payments/$paymentId', 'Supplier payment').lazy(() => import('../areas/staff/retail/supplier-payments').then((m) => m.DetailRoute));
+const retailSupplierPayablesRoute = retailScreen('/supplier-payables', 'What you owe suppliers').lazy(() => import('../areas/staff/retail/supplier-payables').then((m) => m.Route));
 
 // The living style page (#106): every component and illustration, for development builds and the
 // platform host only (the page itself checks); a chunk of its own, so no tenant downloads it.
@@ -217,6 +233,21 @@ export const router = createRouter({
         retailReturnsRoute,
         retailReturnNewRoute,
         retailReturnRoute,
+        retailPurchaseOrdersRoute,
+        retailPurchaseOrderNewRoute,
+        retailPurchaseOrderRoute,
+        retailPurchaseOrderEditRoute,
+        retailPurchaseOrderReceiveRoute,
+        retailGoodsReceivedRoute,
+        retailGoodsReceivedNewRoute,
+        retailGoodsReceiptRoute,
+        retailSupplierBillsRoute,
+        retailSupplierBillNewRoute,
+        retailSupplierBillRoute,
+        retailSupplierPaymentsRoute,
+        retailSupplierPaymentNewRoute,
+        retailSupplierPaymentRoute,
+        retailSupplierPayablesRoute,
         retailBankingRoute,
         retailBankingReportRoute,
       ]), staffLendingRoute.addChildren([

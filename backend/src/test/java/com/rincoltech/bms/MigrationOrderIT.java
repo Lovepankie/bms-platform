@@ -42,7 +42,7 @@ class MigrationOrderIT {
      */
     static final List<String> MERGED = List.of(
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26",
-            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41", "42", "43", "44", "45");
+            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46");
 
     /** Every migration file on the classpath in numeric order: a new migration only adds its file. */
     static final List<String> VERSIONS = discoveredVersions();
@@ -1110,6 +1110,117 @@ class MigrationOrderIT {
                                        version = version + 1 WHERE id = ?
                                 """).params(sale, quotation).update())
                 .hasStackTraceContaining("can only be converted or cancelled");
+    }
+
+    /**
+     * Optional purchasing (#198, V47): a database a server already migrated to V46, holding
+     * a retail tenant with a supplier and a credit restock, takes the migration without touching any existing table: the
+     * column lists of the plain restock, the stock movements and the journal are unchanged, the restock row is as it was, every
+     * new table is empty with its constraints validated, the retail tenant gets the two chart accounts with their normal
+     * balances, only the administrator gets the two permissions, and the plain restock still inserts.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates a retail restock across the purchasing migration (V46, the documents slice, is merged by then).
+     */
+    @Test
+    void optionalPurchasingMigrationLeavesTheRestockOfADatabaseAtV46AsItWas() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            verifyPurchasingMigration(postgres.getJdbcUrl());
+        }
+    }
+
+    /** The body of the case above, on any empty database that has the roles of {@code 01-roles.sh}. */
+    static void verifyPurchasingMigration(String url) {
+        assertThat(flyway(url, "46").migrate().targetSchemaVersion).isEqualTo("46");
+        JdbcClient owner =
+                JdbcClient.create(new DriverManagerDataSource(url, "bms_owner", TestDatabase.OWNER_PASSWORD));
+        UUID tenant = UUID.randomUUID();
+        UUID branch = UUID.randomUUID();
+        UUID supplier = UUID.randomUUID();
+        UUID purchase = UUID.randomUUID();
+        owner.sql(
+                        "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v46p', 'Test Tenant V46P', '00000000-0000-4000-8000-000000000001')")
+                .param(tenant)
+                .update();
+        owner.sql(
+                        "INSERT INTO branches (id, tenant_id, code, name, is_head_office) VALUES (?, ?, 'HQ', 'Head Office', true)")
+                .params(branch, tenant)
+                .update();
+        owner.sql("SELECT platform_set_tenant_modules(?, ?::text[], NULL)")
+                .params(tenant, "{retail}")
+                .query((rs, n) -> 1)
+                .single();
+        owner.sql("INSERT INTO retail_suppliers (id, tenant_id, name) VALUES (?, ?, 'Test Supplier 01')")
+                .params(supplier, tenant)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_purchases (id, tenant_id, purchase_no, supplier_id, purchased_on, payment_method,
+                            currency, total_minor, created_by)
+                        VALUES (?, ?, 'RP00000001', ?, DATE '2026-01-15', 'credit', 'UGX', 500, gen_random_uuid())
+                        """).params(purchase, tenant, supplier).update();
+        String existing = "('retail_purchases', 'retail_purchase_lines', 'retail_suppliers', 'retail_stock_movements',"
+                + " 'journal_entries', 'journal_lines', 'gl_accounts')";
+        String columns =
+                "SELECT string_agg(table_name || '.' || column_name || ':' || data_type, ',' ORDER BY table_name,"
+                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN "
+                        + existing;
+        String before = owner.sql(columns).query(String.class).single();
+
+        MigrateResult result = DatabaseMigrator.migrate(url, "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+        assertThat(result.success).isTrue();
+        assertThat(result.migrations.stream().map(m -> m.version).toList())
+                .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("46") + 1, VERSIONS.size()));
+        assertThat(owner.sql(columns).query(String.class).single())
+                .as("the existing tables keep their shape")
+                .isEqualTo(before);
+        assertThat(owner.sql("SELECT payment_method || ':' || total_minor FROM retail_purchases WHERE id = ?")
+                        .param(purchase)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("credit:500");
+        String created = "('retail_purchasing_settings', 'retail_purchase_orders', 'retail_purchase_order_lines',"
+                + " 'retail_goods_receipts', 'retail_goods_receipt_lines', 'retail_supplier_bills',"
+                + " 'retail_supplier_bill_lines', 'retail_supplier_bill_entries', 'retail_supplier_payments',"
+                + " 'retail_supplier_payment_allocations', 'retail_supplier_payment_entries')";
+        assertThat(owner.sql("SELECT count(*) FROM pg_class WHERE relname IN " + created + " AND relkind = 'r'")
+                        .query(Long.class)
+                        .single())
+                .as("eleven new tables")
+                .isEqualTo(11);
+        assertThat(owner.sql("""
+                                SELECT (SELECT count(*) FROM retail_purchasing_settings) + (SELECT count(*) FROM retail_purchase_orders)
+                                     + (SELECT count(*) FROM retail_purchase_order_lines) + (SELECT count(*) FROM retail_goods_receipts)
+                                     + (SELECT count(*) FROM retail_goods_receipt_lines) + (SELECT count(*) FROM retail_supplier_bills)
+                                     + (SELECT count(*) FROM retail_supplier_bill_lines) + (SELECT count(*) FROM retail_supplier_bill_entries)
+                                     + (SELECT count(*) FROM retail_supplier_payments)
+                                     + (SELECT count(*) FROM retail_supplier_payment_allocations)
+                                     + (SELECT count(*) FROM retail_supplier_payment_entries)
+                                """).query(Long.class).single())
+                .as("a tenant that never turns the capability on writes nothing")
+                .isZero();
+        assertThat(owner.sql("""
+                                SELECT count(*) FROM pg_constraint
+                                 WHERE conrelid IN (SELECT oid FROM pg_class WHERE relname IN %s) AND NOT convalidated
+                                """.formatted(created)).query(Long.class).single())
+                .as("every constraint ends validated")
+                .isZero();
+        assertThat(owner.sql("""
+                                SELECT string_agg(system_key || '=' || account_type || ':' || normal_balance, ',' ORDER BY system_key)
+                                  FROM gl_accounts WHERE tenant_id = ?
+                                   AND system_key IN ('goods_received_not_invoiced', 'purchase_price_variance')
+                                """).param(tenant).query(String.class).single())
+                .isEqualTo("goods_received_not_invoiced=liability:credit,purchase_price_variance=expense:debit");
+        assertThat(owner.sql("""
+                                SELECT string_agg(permission_key || '>' || role_key, ',' ORDER BY permission_key, role_key)
+                                  FROM role_permissions WHERE permission_key IN ('retail.payable.manage', 'retail.purchase.approve')
+                                """).query(String.class).single())
+                .isEqualTo("retail.payable.manage>tenant_admin,retail.purchase.approve>tenant_admin");
+        // The plain restock path is unchanged: another restock row inserts as before.
+        assertThat(owner.sql("""
+                                INSERT INTO retail_purchases (id, tenant_id, purchase_no, supplier_id, purchased_on, payment_method,
+                                    currency, total_minor, created_by)
+                                VALUES (gen_random_uuid(), ?, 'RP00000002', ?, DATE '2026-01-16', 'credit', 'UGX', 100, gen_random_uuid())
+                                """).params(tenant, supplier).update()).isEqualTo(1);
     }
 
     @Test

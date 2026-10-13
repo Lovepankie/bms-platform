@@ -47,6 +47,36 @@ class JdbcCashPurchases implements CashPurchases {
                     return 0;
                 })
                 .list();
+        // A cash payment to a supplier (purchasing capability, issue #198) is a cash-out of the paying branch's till on
+        // the
+        // day it was paid, so the expected-to-bank amount never makes the till look short; its reversal puts the cash
+        // back on
+        // the day it was reversed. Mobile money and bank payments do not touch the cash book.
+        jdbc.sql("""
+                        SELECT paid_on AS day, sum(amount_minor) AS amount FROM retail_supplier_payments
+                         WHERE branch_id = :branch AND method = 'cash' AND paid_on BETWEEN :from AND :to GROUP BY paid_on
+                        """)
+                .param("branch", branchId)
+                .param("from", Date.valueOf(from))
+                .param("to", Date.valueOf(to))
+                .query((rs, n) -> {
+                    out.merge(rs.getDate("day").toLocalDate(), rs.getLong("amount"), Math::addExact);
+                    return 0;
+                })
+                .list();
+        jdbc.sql("""
+                        SELECT reversed_on AS day, sum(amount_minor) AS amount FROM retail_supplier_payments
+                         WHERE branch_id = :branch AND method = 'cash' AND status = 'reversed'
+                           AND reversed_on BETWEEN :from AND :to GROUP BY reversed_on
+                        """)
+                .param("branch", branchId)
+                .param("from", Date.valueOf(from))
+                .param("to", Date.valueOf(to))
+                .query((rs, n) -> {
+                    out.merge(rs.getDate("day").toLocalDate(), -rs.getLong("amount"), Math::addExact);
+                    return 0;
+                })
+                .list();
         return out;
     }
 

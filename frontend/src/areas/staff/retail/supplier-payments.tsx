@@ -1,0 +1,176 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, createLazyRoute, getRouteApi } from '@tanstack/react-router';
+import { useState } from 'react';
+import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { useLiveSearch } from '../../../app/ui/useLiveSearch';
+import { retail, type SupplierPayment } from '../../../api/retail';
+import { useCrumbLabel } from '../../../components/breadcrumbs';
+import { SkeletonList } from '../../../components/states';
+import { useStaff } from '../context';
+import { PAYABLE_MANAGE, canUse, holdsAt } from './permissions';
+import { methodWords } from './payables-state';
+import { Facts, MoreButton, ReasonPanel, StatusBadge, useActionKeys, useCursorList } from './purchasing-ui';
+import { showDate } from './transfers';
+import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
+
+// Supplier payments (the purchasing capability, ADR-033, issue #198): the money paid to suppliers, newest first, and one payment with
+// what it cleared. A payment pays supplier invoices and credit restocks (stock bought on credit in Restock), oldest first or as
+// chosen. A payment is undone as a whole by reversing it, with a reason.
+
+const PAYMENT_STATUS: Record<string, string> = { posted: 'Paid', reversed: 'Reversed' };
+
+export function PaymentRow({ row, branchName }: { row: SupplierPayment; branchName?: string }) {
+  return (
+    <li className="rt-card" data-testid={`payment-${row.payment_no}`}>
+      <p>
+        <strong>{row.payment_no}</strong> <StatusBadge words={PAYMENT_STATUS[row.status ?? ''] ?? (row.status ?? '')} warn={row.status === 'reversed'} />
+        <br />
+        {row.supplier_name}, {showDate(row.paid_on)}, <strong>{money(row.amount_minor ?? 0)}</strong>
+      </p>
+      <p className="hint">
+        By {methodWords(row.method).toLowerCase()}{row.reference ? `, reference ${row.reference}` : ''}{branchName ? `, from ${branchName}` : ''}.
+      </p>
+      <p>
+        <Link className="btn-sm" to="/staff/retail/supplier-payments/$paymentId" params={{ paymentId: row.id ?? '' }} aria-label={`Open supplier payment ${row.payment_no}`}>Open</Link>
+      </p>
+    </li>
+  );
+}
+
+export function SupplierPaymentsPage() {
+  const search = useLiveSearch();
+  const query = search.term;
+  const nameOf = useBranchName();
+  const [status, setStatus] = useState('');
+  const list = useCursorList(['retail', 'supplier-payments', query, status], (cursor, signal) => retail.listSupplierPayments({ query, status, cursor, signal }));
+  return (
+    <Gate screen="supplierPayments" title="Supplier payments">
+      <p className="hint" data-tour="payments-help">
+        Money paid to suppliers. A payment clears the oldest supplier invoices and credit restocks first, unless you choose what it pays.
+      </p>
+      <p className="cluster">
+        <Link className="btn rt-primary" to="/staff/retail/supplier-payments/new">Pay a supplier</Link>
+        <Link className="btn-sm" to="/staff/retail/supplier-payables">What you owe suppliers</Link>
+      </p>
+      {list.query.isPending && <p className="loading">Loading</p>}
+      <Problem error={list.query.error} />
+      <SearchBox id="search-payments" label="Search by payment number, reference or supplier" search={search} fetching={list.finding} count={list.query.data ? list.rows.length : undefined} more={list.query.hasNextPage} />
+      <label htmlFor="payments-status">Show</label>
+      <select id="payments-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <option value="">All payments</option>
+        <option value="posted">Paid</option>
+        <option value="reversed">Reversed</option>
+      </select>
+      {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="payments" /> : <p className="empty-state">No payments to suppliers yet.</p>)}
+      <SearchResults fetching={list.finding}>
+        <ul style={{ listStyle: 'none', padding: 0 }}>
+          {list.rows.map((r) => <PaymentRow key={r.id} row={r} branchName={nameOf(r.branch_id)} />)}
+        </ul>
+      </SearchResults>
+      <MoreButton list={list} noun="payments" />
+    </Gate>
+  );
+}
+
+/** One payment: facts and what it cleared, invoice by invoice. */
+export function SupplierPaymentView({ payment, nameOf }: { payment: SupplierPayment; nameOf: (branchId: string | undefined) => string }) {
+  return (
+    <section aria-label="Supplier payment" data-testid="supplier-payment">
+      <h2>{payment.payment_no} <StatusBadge words={PAYMENT_STATUS[payment.status ?? ''] ?? (payment.status ?? '')} warn={payment.status === 'reversed'} /></h2>
+      <Facts
+        rows={[
+          ['Supplier', payment.supplier_name ?? ''],
+          ['Paid on', showDate(payment.paid_on)],
+          ['Amount', money(payment.amount_minor ?? 0)],
+          ['Paid by', methodWords(payment.method)],
+          ['From the till or bank of', nameOf(payment.branch_id)],
+          ['What it paid', payment.allocation === 'manual' ? 'What was chosen' : 'The oldest first'],
+          ...(payment.reference ? [['Reference', payment.reference] as [string, string]] : []),
+          ...(payment.note ? [['Note', payment.note] as [string, string]] : []),
+          ...(payment.status === 'reversed' ? [['Reversed because', payment.reverse_reason ?? ''] as [string, string]] : []),
+        ]}
+      />
+      <div className="table-wrap" tabIndex={0}>
+        <table>
+          <thead>
+            <tr><th>Paid</th><th>Supplier&apos;s invoice</th><th className="num">Amount</th></tr>
+          </thead>
+          <tbody>
+            {(payment.allocations ?? []).map((a, i) => (
+              <tr key={a.bill_id ?? a.purchase_id ?? i}>
+                <td>
+                  {a.bill_id ? (
+                    <Link to="/staff/retail/supplier-bills/$billId" params={{ billId: a.bill_id }}>{a.bill_no}</Link>
+                  ) : (
+                    <>Credit restock {a.purchase_no}</>
+                  )}
+                </td>
+                <td>{a.supplier_ref ?? ''}</td>
+                <td className="num">{money(a.amount_minor ?? 0)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+const route = getRouteApi('/staff/retail/supplier-payments/$paymentId');
+
+export function SupplierPaymentPage() {
+  const { paymentId } = route.useParams();
+  const { me } = useStaff();
+  const queryClient = useQueryClient();
+  const { show, toast } = useToast();
+  const nameOf = useBranchName();
+  const keys = useActionKeys();
+  const [message, setMessage] = useState<string | null>(null);
+  const allowed = canUse(me, 'supplierPayments');
+  const payment = useQuery({ queryKey: ['retail', 'supplier-payment', paymentId], queryFn: () => retail.getSupplierPayment(paymentId), enabled: allowed });
+  useCrumbLabel(payment.data?.payment_no);
+  const reversed = useMutation({
+    mutationFn: (reason: string) => retail.reverseSupplierPayment(paymentId, reason, keys.keyFor(paymentId, reason)),
+    onSuccess: (p) => {
+      keys.done(paymentId);
+      const text = `Reversed ${p.payment_no ?? 'the payment'}. What it paid is owed again.`;
+      setMessage(text);
+      show(text);
+      void queryClient.invalidateQueries({ queryKey: ['retail'] });
+    },
+  });
+  if (!allowed) {
+    return (
+      <main className="rt">
+        <h1>Supplier payment</h1>
+        <p className="empty-state">You do not have access to this page.</p>
+      </main>
+    );
+  }
+  const p = payment.data;
+  return (
+    <main className="rt rt-wide">
+      <h1>{p?.payment_no ?? 'Supplier payment'}</h1>
+      <p><Link to="/staff/retail/supplier-payments">Back to supplier payments</Link></p>
+      {payment.isPending && <SkeletonList label="Loading the payment" />}
+      <Problem error={payment.error} />
+      {message && <Success>{message}</Success>}
+      {p && <SupplierPaymentView payment={p} nameOf={nameOf} />}
+      {p && p.status === 'posted' && holdsAt(me, PAYABLE_MANAGE, p.branch_id) && (
+        <ReasonPanel
+          openLabel="Reverse this payment"
+          question="Why is it reversed?"
+          hint="The whole payment is undone: the money goes back to the till or bank, and the invoices it paid are owed again."
+          confirmLabel="Reverse the payment"
+          busy={reversed.isPending}
+          error={reversed.error}
+          onSubmit={(reason) => reversed.mutate(reason)}
+        />
+      )}
+      {toast}
+    </main>
+  );
+}
+
+export const Route = createLazyRoute('/staff/retail/supplier-payments')({ component: SupplierPaymentsPage });
+export const DetailRoute = createLazyRoute('/staff/retail/supplier-payments/$paymentId')({ component: SupplierPaymentPage });

@@ -7867,6 +7867,268 @@
         },
         "required" : [ "amount_minor", "category_id", "item_id" ]
       },
+      "RetailGoodsReceipt" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "delivery_ref" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "line_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lines" : {
+            "description" : "A list carries no lines",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailGoodsReceiptLine"
+            },
+            "type" : "array"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "order_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "order_no" : {
+            "type" : "string"
+          },
+          "receipt_no" : {
+            "type" : "string"
+          },
+          "received_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "posted", "voided" ],
+            "type" : "string"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "supplier_name" : {
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "description" : "Send as If-Match where a route takes it",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "void_reason" : {
+            "type" : "string"
+          },
+          "voided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "voided_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "voided_on" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailGoodsReceiptLine" : {
+        "description" : "A list carries no lines",
+        "properties" : {
+          "billed_qty" : {
+            "description" : "Billed so far on supplier invoices that stand, in base units; present with retail.payable.manage",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "cost_minor" : {
+            "description" : "Cost of one base unit, which the stock movement carries",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "entered_cost_minor" : {
+            "description" : "Cost of one unit as entered",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "line_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "line_total_minor" : {
+            "description" : "The value as entered: what goes to goods received not invoiced",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "order_line_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "description" : "Received, in base units",
+            "type" : "string"
+          },
+          "sell_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "unit_factor" : {
+            "description" : "Base units in one pack of the line's unit",
+            "type" : "string"
+          },
+          "unit_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit_qty" : {
+            "description" : "Received, in the unit it was entered in",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailGoodsReceiptLineRequest" : {
+        "properties" : {
+          "cost_minor" : {
+            "description" : "The cost of one unit as entered. Absent on an order line in its own unit means the ordered cost; required otherwise",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "order_line_id" : {
+            "description" : "The order line this receives. Required on a receipt against an order; absent on a blind receipt",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "product_id" : {
+            "description" : "Required on a blind receipt; on an order line it is the line's own product",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "example" : "10",
+            "type" : "string"
+          },
+          "sell_minor" : {
+            "description" : "A new selling price per base unit, set on the product with this receipt; absent keeps it",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "unit_id" : {
+            "description" : "The unit qty and cost are in. On an order line, absent means the unit the line was ordered in; on a blind receipt absent means the base unit. Naming the base unit is the base unit",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "qty" ]
+      },
+      "RetailGoodsReceiptList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailGoodsReceipt"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailGoodsReceiptRequest" : {
+        "properties" : {
+          "branch_id" : {
+            "description" : "The branch or store the goods go into; absent means the one branch the caller's scope covers",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "delivery_ref" : {
+            "description" : "The supplier's delivery note number",
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailGoodsReceiptLineRequest"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "note" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "order_id" : {
+            "description" : "The order received against; absent for a blind receipt, which then needs supplier_id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "received_on" : {
+            "description" : "Absent means today in the business time zone",
+            "format" : "date",
+            "type" : "string"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "lines" ]
+      },
+      "RetailGoodsReceiptVoidRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
       "RetailInFlightTransfer" : {
         "description" : "Dispatched and not received or cancelled, the longest wait first",
         "properties" : {
@@ -9260,6 +9522,306 @@
         },
         "required" : [ "cost_minor", "product_id", "qty_by_branch" ]
       },
+      "RetailPurchaseOrder" : {
+        "description" : "A purchase order. A list carries no lines",
+        "properties" : {
+          "approval_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "approved_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cancel_reason" : {
+            "type" : "string"
+          },
+          "cancelled_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "cancelled_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "expected_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "line_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPurchaseOrderLine"
+            },
+            "type" : "array"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "order_no" : {
+            "type" : "string"
+          },
+          "ordered_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "receipts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPurchaseOrderReceiptRef"
+            },
+            "type" : "array"
+          },
+          "sent_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "sent_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "draft", "sent", "partly_received", "received", "cancelled" ],
+            "type" : "string"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "supplier_name" : {
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "updated_by" : {
+            "description" : "Who last changed the draft; absent if it was never edited",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "Send as If-Match when editing",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailPurchaseOrderCancelRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "RetailPurchaseOrderLine" : {
+        "properties" : {
+          "billed_minor" : {
+            "description" : "What the supplier billed for it; present with retail.payable.manage",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "billed_qty" : {
+            "description" : "Billed so far on supplier invoices that stand, in base units; present with retail.payable.manage",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "cost_minor" : {
+            "description" : "Cost of one base unit",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "line_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "line_total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "description" : "Ordered, in base units",
+            "type" : "string"
+          },
+          "received_minor" : {
+            "description" : "The value of what was received, as entered",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "received_qty" : {
+            "description" : "Received so far on receipts that stand, in base units; present on one order only",
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "unit_cost_minor" : {
+            "description" : "Cost of one unit as entered",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit_factor" : {
+            "description" : "Base units in one pack of the line's unit",
+            "type" : "string"
+          },
+          "unit_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit_qty" : {
+            "description" : "Ordered, in the unit it was entered in",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailPurchaseOrderLineRequest" : {
+        "properties" : {
+          "cost_minor" : {
+            "description" : "Cost of one unit as entered (one pack for a pack line)",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "example" : "10",
+            "type" : "string"
+          },
+          "unit_id" : {
+            "description" : "The unit qty and cost are in: a pack unit of the product (units capability) or the base unit. Absent means the base unit",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "cost_minor", "product_id", "qty" ]
+      },
+      "RetailPurchaseOrderList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPurchaseOrder"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailPurchaseOrderOutcome" : {
+        "description" : "200 with the order when it was sent; 202 with approval_id when its value reached the tenant's approval threshold for retail_purchase_order and it waits for a checker (retail.purchase.approve)",
+        "properties" : {
+          "approval_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "executed" : {
+            "type" : "boolean"
+          },
+          "order" : {
+            "$ref" : "#/components/schemas/RetailPurchaseOrder"
+          }
+        }
+      },
+      "RetailPurchaseOrderReceiptRef" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "receipt_no" : {
+            "type" : "string"
+          },
+          "received_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailPurchaseOrderRequest" : {
+        "properties" : {
+          "branch_id" : {
+            "description" : "The branch that expects the goods and whose series numbers the order; absent means the one branch the caller's scope covers. Fixed once the order exists",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "expected_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPurchaseOrderLineRequest"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "note" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "ordered_on" : {
+            "description" : "Absent means today in the business time zone",
+            "format" : "date",
+            "type" : "string"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "lines", "supplier_id" ]
+      },
       "RetailPurchasePage" : {
         "properties" : {
           "items" : {
@@ -9304,6 +9866,46 @@
           }
         },
         "required" : [ "lines", "payment_method", "purchased_on" ]
+      },
+      "RetailPurchasingSettings" : {
+        "properties" : {
+          "bill_tolerance_bp" : {
+            "description" : "How far a supplier invoice may differ in value from the receipts it clears, in basis points of the value cleared, before it needs a reason. 0 means any difference needs one",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "order_approval_threshold_minor" : {
+            "description" : "Read only: the approval threshold for sending a purchase order (action retail_purchase_order), present only when one is set; while it is absent an order needs no second administrator",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "over_receipt_bp" : {
+            "description" : "How far above the ordered quantity a receipt line may go, in basis points of the ordered quantity. 0 means a receipt never exceeds its order",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailPurchasingSettingsUpdate" : {
+        "description" : "Omitted fields are unchanged",
+        "properties" : {
+          "bill_tolerance_bp" : {
+            "format" : "int32",
+            "maximum" : 10000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "over_receipt_bp" : {
+            "format" : "int32",
+            "maximum" : 10000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }
       },
       "RetailQuotation" : {
         "properties" : {
@@ -11168,6 +11770,314 @@
           }
         }
       },
+      "RetailSupplierBill" : {
+        "properties" : {
+          "bill_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "bill_no" : {
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cleared_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "due_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "enum" : [ "goods", "landed_cost" ],
+            "type" : "string"
+          },
+          "line_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lines" : {
+            "description" : "A list carries no lines",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierBillLine"
+            },
+            "type" : "array"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "open_minor" : {
+            "description" : "Total less paid; zero once voided",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "paid_minor" : {
+            "description" : "Paid by payments that stand",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "enum" : [ "posted", "voided" ],
+            "type" : "string"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "supplier_name" : {
+            "type" : "string"
+          },
+          "supplier_ref" : {
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "variance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "variance_reason" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "void_reason" : {
+            "type" : "string"
+          },
+          "voided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "voided_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "voided_on" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSupplierBillLine" : {
+        "description" : "A list carries no lines",
+        "properties" : {
+          "cleared_minor" : {
+            "description" : "The part of the receipt line's value this quantity clears",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "line_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "line_total_minor" : {
+            "description" : "What the supplier billed for the line",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "description" : "Billed, in base units",
+            "type" : "string"
+          },
+          "receipt_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "receipt_line_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "receipt_no" : {
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "unit_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit_price_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit_qty" : {
+            "description" : "Billed, in the unit it was received in",
+            "type" : "string"
+          },
+          "variance_minor" : {
+            "description" : "Billed less cleared: the price difference, posted to purchase price variance",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailSupplierBillLineRequest" : {
+        "properties" : {
+          "qty" : {
+            "description" : "The quantity billed, in the unit the receipt line was received in (a pack for a pack line); at most what was received and not yet billed",
+            "example" : "10",
+            "type" : "string"
+          },
+          "receipt_line_id" : {
+            "description" : "The receipt line this bills",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit_price_minor" : {
+            "description" : "The supplier's price for one unit as entered (one pack for a pack line)",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "qty", "receipt_line_id", "unit_price_minor" ]
+      },
+      "RetailSupplierBillList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierBill"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSupplierBillMatch" : {
+        "description" : "What a supplier invoice comes to against the receipts it bills, worked out without recording anything: the three-way view of ordered, received and billed",
+        "properties" : {
+          "cleared_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierBillLine"
+            },
+            "type" : "array"
+          },
+          "reason_required" : {
+            "description" : "True when the difference is above the tolerance, so a reason is required",
+            "type" : "boolean"
+          },
+          "tolerance_minor" : {
+            "description" : "The difference the tenant's tolerance allows without a reason, in minor units",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_mismatch" : {
+            "description" : "True when the typed invoice total differs from the lines",
+            "type" : "boolean"
+          },
+          "variance_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailSupplierBillRequest" : {
+        "properties" : {
+          "bill_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "due_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierBillLineRequest"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "note" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "supplier_ref" : {
+            "description" : "The supplier's own invoice number; unique per supplier",
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "total_minor" : {
+            "description" : "The invoice total as printed. It must equal the sum of the lines: a typing check",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "variance_reason" : {
+            "description" : "Why the invoice differs from the receipts it bills. Required, at least 5 characters, when the difference is above the tenant's tolerance",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "bill_date", "due_date", "lines", "supplier_id", "supplier_ref", "total_minor" ]
+      },
+      "RetailSupplierBillVoidRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
       "RetailSupplierList" : {
         "properties" : {
           "items" : {
@@ -11177,6 +12087,344 @@
             "type" : "array"
           }
         }
+      },
+      "RetailSupplierOpenItem" : {
+        "description" : "A supplier invoice or a credit restock that still owes something",
+        "properties" : {
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "days_past_due" : {
+            "description" : "Days past the due date in the business time zone; 0 or less is not yet due",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "due_date" : {
+            "description" : "A restock has no terms: it falls due the day it was bought",
+            "format" : "date",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "enum" : [ "bill", "restock" ],
+            "type" : "string"
+          },
+          "number" : {
+            "description" : "Our number: the invoice number or the restock number",
+            "type" : "string"
+          },
+          "open_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "supplier_ref" : {
+            "description" : "The supplier's own invoice number; absent on a restock",
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailSupplierOpenItems" : {
+        "properties" : {
+          "as_of" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierOpenItem"
+            },
+            "type" : "array"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "supplier_name" : {
+            "type" : "string"
+          },
+          "total_open_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailSupplierPayables" : {
+        "description" : "What is owed to each supplier as of today in the business time zone (Africa/Kampala unless the tenant has another), by days past the due date, with the goods received and not yet invoiced beside it. The ageing buckets are those of the customer ageing",
+        "properties" : {
+          "as_of" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "suppliers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierPayablesRow"
+            },
+            "type" : "array"
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/RetailSupplierPayablesRow"
+          }
+        }
+      },
+      "RetailSupplierPayablesRow" : {
+        "properties" : {
+          "days1_to30_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "days31_to60_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "days61_to90_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "not_due_minor" : {
+            "description" : "Owed on invoices and credit restocks, not yet due",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "over90_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "owed_minor" : {
+            "description" : "Everything owed on invoices and credit restocks that stand",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "supplier_name" : {
+            "type" : "string"
+          },
+          "unbilled_receipts_minor" : {
+            "description" : "Received and not yet invoiced: what sits in goods received not invoiced",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailSupplierPayment" : {
+        "properties" : {
+          "allocation" : {
+            "type" : "string"
+          },
+          "allocations" : {
+            "description" : "A list carries no allocations",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierPaymentAllocation"
+            },
+            "type" : "array"
+          },
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "method" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "paid_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "payment_no" : {
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "reverse_reason" : {
+            "type" : "string"
+          },
+          "reversed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reversed_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reversed_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "posted", "reversed" ],
+            "type" : "string"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "supplier_name" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailSupplierPaymentAllocation" : {
+        "description" : "A list carries no allocations",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "bill_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "bill_no" : {
+            "type" : "string"
+          },
+          "purchase_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "purchase_no" : {
+            "type" : "string"
+          },
+          "supplier_ref" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSupplierPaymentAllocationRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "bill_id" : {
+            "description" : "A supplier invoice. Exactly one of bill_id and purchase_id",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "purchase_id" : {
+            "description" : "A credit restock of the supplier, which until now only raised trade creditors",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor" ]
+      },
+      "RetailSupplierPaymentList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierPayment"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSupplierPaymentRequest" : {
+        "properties" : {
+          "allocation" : {
+            "description" : "oldest_first (the default) pays the supplier's open items by due date, oldest first; manual pays the allocations given. Either way the whole amount is allocated: nothing is held as a deposit",
+            "pattern" : "oldest_first|manual",
+            "type" : "string"
+          },
+          "allocations" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierPaymentAllocationRequest"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "description" : "The branch whose till, mobile money or bank pays, inside the caller's retail.payable.manage scope; absent means the one branch the scope covers",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "method" : {
+            "description" : "cash|mobile_money|bank",
+            "minLength" : 1,
+            "pattern" : "cash|mobile_money|bank",
+            "type" : "string"
+          },
+          "note" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reference" : {
+            "description" : "A bank or mobile money reference",
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor", "method", "supplier_id" ]
+      },
+      "RetailSupplierPaymentReverseRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
       },
       "RetailSupplierRequest" : {
         "properties" : {
@@ -11458,6 +12706,85 @@
           "reconciled" : {
             "description" : "True when clearing_minor equals the value of every open dispatch",
             "type" : "boolean"
+          }
+        }
+      },
+      "RetailUnbilledReceiptLine" : {
+        "description" : "A received line that a supplier invoice has not billed in full",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "order_no" : {
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "receipt_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "receipt_line_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "receipt_no" : {
+            "type" : "string"
+          },
+          "received_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "unbilled_minor" : {
+            "description" : "The value of what is unbilled, as entered: what sits in goods received not invoiced",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unbilled_qty" : {
+            "description" : "Received and not yet billed, in the unit it was received in",
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "unit_cost_minor" : {
+            "description" : "The cost of one unit as received, which a matching invoice repeats",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailUnbilledReceiptList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailUnbilledReceiptLine"
+            },
+            "type" : "array"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "supplier_name" : {
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         }
       },
@@ -21436,6 +22763,206 @@
         "tags" : [ "retail-cashbook" ]
       }
     },
+    "/api/v1/retail/goods-receipts" : {
+      "get" : {
+        "operationId" : "listRetailGoodsReceipts",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "supplier_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "order_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailGoodsReceiptList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Goods received notes in the caller's branch scope, newest first, without lines (issue #198)",
+        "tags" : [ "retail-purchasing" ]
+      },
+      "post" : {
+        "operationId" : "createRetailGoodsReceipt",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailGoodsReceiptRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailGoodsReceipt"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Receive goods into a branch or store, against an order or blind: stock, cost, price and goods received not invoiced in one transaction (issue #198); M",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/goods-receipts/{receipt_id}" : {
+      "get" : {
+        "operationId" : "getRetailGoodsReceipt",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "receipt_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailGoodsReceipt"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One goods received note with its lines (issue #198)",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/goods-receipts/{receipt_id}/void" : {
+      "post" : {
+        "operationId" : "voidRetailGoodsReceipt",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "receipt_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailGoodsReceiptVoidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailGoodsReceipt"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Void a receipt as a whole by reversal, once; refused while an invoice bills it or its stock has moved (issue #198); M",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
     "/api/v1/retail/price-lists" : {
       "get" : {
         "operationId" : "listRetailPriceLists",
@@ -22120,6 +23647,276 @@
         "tags" : [ "retail-catalogue" ]
       }
     },
+    "/api/v1/retail/purchase-orders" : {
+      "get" : {
+        "operationId" : "listRetailPurchaseOrders",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "supplier_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchaseOrderList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Purchase orders in the caller's branch scope, newest first, without lines (issue #198)",
+        "tags" : [ "retail-purchasing" ]
+      },
+      "post" : {
+        "operationId" : "createRetailPurchaseOrder",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailPurchaseOrderRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchaseOrder"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Raise a purchase order as a draft (issue #198); M",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/purchase-orders/{order_id}" : {
+      "get" : {
+        "operationId" : "getRetailPurchaseOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "order_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchaseOrder"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One purchase order with its lines, what was received and billed, and its receipts (issue #198)",
+        "tags" : [ "retail-purchasing" ]
+      },
+      "put" : {
+        "operationId" : "updateRetailPurchaseOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "order_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailPurchaseOrderRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchaseOrder"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace a draft order's supplier, dates, note and lines under If-Match (issue #198); a sent order is not edited",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/purchase-orders/{order_id}/cancel" : {
+      "post" : {
+        "operationId" : "cancelRetailPurchaseOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "order_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailPurchaseOrderCancelRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchaseOrder"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cancel a draft, sent or partly received order, with a reason (issue #198); M",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/purchase-orders/{order_id}/send" : {
+      "post" : {
+        "operationId" : "sendRetailPurchaseOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "order_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchaseOrderOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Send a draft order to the supplier (issue #198); M. 200 when sent, 202 when it waits for a checker",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
     "/api/v1/retail/purchases" : {
       "get" : {
         "operationId" : "listRetailPurchases",
@@ -22212,6 +24009,60 @@
         },
         "summary" : "Record a restock: prices, history, movements and journals in one transaction (FR-RET-06); M",
         "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/purchasing/settings" : {
+      "get" : {
+        "operationId" : "getRetailPurchasingSettings",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchasingSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The purchasing tolerances (issue #198)",
+        "tags" : [ "retail-payables" ]
+      },
+      "put" : {
+        "operationId" : "updateRetailPurchasingSettings",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailPurchasingSettingsUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchasingSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change the purchasing tolerances under If-Match; audited with old and new values (issue #198)",
+        "tags" : [ "retail-payables" ]
       }
     },
     "/api/v1/retail/quotations" : {
@@ -23155,6 +25006,45 @@
         },
         "summary" : "Days of cover, reorder suggestions, dead stock and shrinkage by branch (issue #149)",
         "tags" : [ "retail-reports" ]
+      }
+    },
+    "/api/v1/retail/reports/supplier-payables" : {
+      "get" : {
+        "operationId" : "getRetailSupplierPayables",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "supplier_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierPayables"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Supplier balance and ageing as of today, with goods received and not yet invoiced (issue #198)",
+        "tags" : [ "retail-payables" ]
       }
     },
     "/api/v1/retail/reports/transfers-in-flight" : {
@@ -24372,6 +26262,427 @@
         "tags" : [ "retail-stock" ]
       }
     },
+    "/api/v1/retail/supplier-bills" : {
+      "get" : {
+        "operationId" : "listRetailSupplierBills",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "supplier_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "open",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierBillList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Supplier invoices in the caller's branch scope, newest first, without lines (issue #198)",
+        "tags" : [ "retail-payables" ]
+      },
+      "post" : {
+        "operationId" : "createRetailSupplierBill",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailSupplierBillRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierBill"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record a supplier invoice matched to received lines: clears goods received not invoiced into trade creditors and posts the price variance (issue #198); M",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/supplier-bills/match" : {
+      "post" : {
+        "operationId" : "matchRetailSupplierBill",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailSupplierBillRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierBillMatch"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What an invoice comes to against the receipts it bills, and whether it needs a reason, without recording it (issue #198)",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/supplier-bills/{bill_id}" : {
+      "get" : {
+        "operationId" : "getRetailSupplierBill",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "bill_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierBill"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One supplier invoice with its lines (issue #198)",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/supplier-bills/{bill_id}/void" : {
+      "post" : {
+        "operationId" : "voidRetailSupplierBill",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "bill_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailSupplierBillVoidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierBill"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Void an invoice as a whole by reversal, once; refused while a payment stands against it (issue #198); M",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/supplier-payments" : {
+      "get" : {
+        "operationId" : "listRetailSupplierPayments",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "supplier_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierPaymentList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Supplier payments in the caller's branch scope, newest first, without allocations (issue #198)",
+        "tags" : [ "retail-payables" ]
+      },
+      "post" : {
+        "operationId" : "createRetailSupplierPayment",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailSupplierPaymentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierPayment"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Pay a supplier in cash, mobile money or bank, allocated to open invoices and credit restocks (issue #198); M",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/supplier-payments/{payment_id}" : {
+      "get" : {
+        "operationId" : "getRetailSupplierPayment",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "payment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierPayment"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One supplier payment with its allocations (issue #198)",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/supplier-payments/{payment_id}/reverse" : {
+      "post" : {
+        "operationId" : "reverseRetailSupplierPayment",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "payment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailSupplierPaymentReverseRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierPayment"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reverse a payment as a whole, once, with a reason; its allocations stop counting (issue #198); M",
+        "tags" : [ "retail-payables" ]
+      }
+    },
     "/api/v1/retail/suppliers" : {
       "get" : {
         "operationId" : "listRetailSuppliers",
@@ -24461,6 +26772,62 @@
         },
         "summary" : "Edit or deactivate a supplier (#146); never deleted",
         "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/suppliers/{supplier_id}/open-items" : {
+      "get" : {
+        "operationId" : "listRetailSupplierOpenItems",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "supplier_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierOpenItems"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What a supplier is owed on invoices and credit restocks in the caller's scope, oldest due first (issue #198)",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/suppliers/{supplier_id}/unbilled-receipts" : {
+      "get" : {
+        "operationId" : "listRetailUnbilledReceipts",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "supplier_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailUnbilledReceiptList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The received lines of a supplier that no invoice bills in full, which a new invoice is built from (issue #198)",
+        "tags" : [ "retail-payables" ]
       }
     },
     "/api/v1/retail/transfers" : {

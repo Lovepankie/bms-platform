@@ -963,8 +963,69 @@ export const quotationsPage: Tour = {
   ],
 };
 
+// The tour of the purchasing capability (issue #198): it starts once for whoever may order and receive goods, when first enabled.
+// JUSTIFICATION-A3: two new tours for the new screens; each tour is data, like the ones above it.
+export const purchasingCapability: Tour = {
+  id: 'capability-purchasing',
+  version: 1,
+  title: 'New: purchase orders',
+  audience: (me) => held(me, 'retail.purchase.create'),
+  autoStart: true,
+  capability: { module: 'retail', key: 'purchasing' },
+  steps: [
+    {
+      id: 'intro',
+      title: 'Purchase orders are on',
+      body: 'You can order from a supplier, receive what arrives, record the supplier\'s invoice and pay it. Restock still works as before for buying without an order.',
+    },
+    {
+      id: 'tile',
+      route: '/staff/retail',
+      target: 'retail-purchaseOrders',
+      module: 'retail',
+      optional: true,
+      title: 'Your orders',
+      body: 'Open Purchase orders to make an order. When the goods arrive, open the order and choose Receive goods.',
+    },
+    {
+      id: 'list',
+      route: '/staff/retail/purchase-orders',
+      target: 'purchase-orders-list',
+      module: 'retail',
+      title: 'Find an order',
+      body: 'Type an order number or a supplier\'s name. Open an order to send it, change it while it is a draft, or receive goods against it.',
+    },
+  ],
+};
+
+export const purchasingPage: Tour = {
+  id: 'page-purchase-orders',
+  version: 1,
+  title: 'This page: purchase orders',
+  audience: (me) => held(me, 'retail.purchase.create') && capable(me, 'purchasing'),
+  autoStart: false,
+  page: '/staff/retail/purchase-orders',
+  steps: [
+    {
+      id: 'help',
+      target: 'purchase-orders-help',
+      module: 'retail',
+      title: 'How an order works',
+      body: 'Save an order as a draft, then send it. A large order waits for a second person to approve it. When goods arrive, receive them against the order, in part or in full.',
+    },
+    {
+      id: 'list',
+      target: 'purchase-orders-list',
+      module: 'retail',
+      title: 'Your orders',
+      body: 'Each order shows its status: draft, sent, partly received, received or cancelled. Use the buttons above to see only one kind.',
+    },
+  ],
+};
+
 export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
+  purchasingCapability, purchasingPage,
 ];

@@ -13,6 +13,8 @@ export type RetailScreen =
   | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer'
   // The trade screens of ADR-033: offered only while their capability is on (SCREEN_CAPABILITY below).
   | 'stockByLocation' | 'inTransit' | 'priceLists' | 'customerGroups' | 'customerAccounts' | 'customerAgeing' | 'documents' | 'quotations' | 'returns'
+  // Optional purchasing (ADR-033, issue #198): orders and goods received, then supplier invoices, payments and what is owed.
+  | 'purchaseOrders' | 'goodsReceived' | 'supplierBills' | 'supplierPayments' | 'supplierPayables'
   // The cash book (ADR-022, FR-RET-31).
   | 'savings' | 'banking' | 'expenses' | 'withdrawals' | 'advances' | 'cashSummary' | 'bankingReport' | 'expensesReport' | 'expenseSetup'
   // The administrator's retail settings (profile and capabilities) and the screens of a capability (ADR-033).
@@ -34,6 +36,11 @@ export const SCREEN_CAPABILITY: Partial<Record<RetailScreen, string>> = {
   documents: 'documents',
   quotations: 'documents',
   returns: 'returns',
+  purchaseOrders: 'purchasing',
+  goodsReceived: 'purchasing',
+  supplierBills: 'purchasing',
+  supplierPayments: 'purchasing',
+  supplierPayables: 'purchasing',
 };
 
 /** The catalogue management screens (#146); the Catalogue tile opens when any of them may be used. */
@@ -55,6 +62,13 @@ export const DOCUMENT_ISSUE = 'retail.document.issue';
 export const SALE_RETURN = 'retail.sale.return';
 /** Reverse a payment on account (the permission that voids a sale). */
 export const SALE_VOID = 'retail.sale.void';
+/** Purchase orders and goods received (every holder of the restock permission, consulted only while the purchasing capability is on). */
+export const PURCHASE_CREATE = 'retail.purchase.create';
+/** Decide a large purchase order in the approvals inbox (a second person, never the one who sent it). */
+export const PURCHASE_APPROVE = 'retail.purchase.approve';
+/** Supplier invoices, payments to suppliers, open items and the payables report (administrators). */
+export const PAYABLE_MANAGE = 'retail.payable.manage';
+export const SETTINGS_MANAGE = 'core.settings.manage';
 export const SAVINGS_RECORD = 'retail.savings.record';
 export const SAVINGS_OVERWRITE = 'retail.savings.overwrite';
 export const CASHBOOK_READ = 'retail.cashbook.read';
@@ -100,6 +114,12 @@ const NEEDS: Record<RetailScreen, string[]> = {
   // Customer returns and their credit notes are the administrator's (retail.sale.return); the sale to take goods back from is found
   // in the sales lists, which are a sales read.
   returns: [SALE_RETURN, 'retail.sale.read'],
+  // Purchase orders and goods received are the restock permission's; the money side (invoices, payments, what is owed) is the administrators'.
+  purchaseOrders: [PURCHASE_CREATE],
+  goodsReceived: [PURCHASE_CREATE],
+  supplierBills: [PAYABLE_MANAGE],
+  supplierPayments: [PAYABLE_MANAGE],
+  supplierPayables: [PAYABLE_MANAGE],
   // Stock value is a stock read; its cost columns and the profit report need retail.profit.read.
   valuation: ['retail.stock.read'],
   profit: [PROFIT],
@@ -214,6 +234,7 @@ export const UNITS = 'units';
 export const PRICE_LISTS = 'price_lists';
 export const CUSTOMER_ACCOUNTS = 'customer_accounts';
 export const RETURNS = 'returns';
+export const PURCHASING = 'purchasing';
 export const BRANCH_ROLE_MANAGE = 'retail.branch_role.manage';
 export const TRANSFER_RECEIPT = 'transfer_receipt';
 export const DOCUMENTS = 'documents';
@@ -284,6 +305,11 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'documents', path: '/staff/retail/documents', label: 'Documents', hint: 'Invoices, delivery notes and quotations, with their numbers' },
   { screen: 'quotations', path: '/staff/retail/quotations', label: 'Quotations', hint: 'Prices offered to a buyer until a date' },
   { screen: 'returns', path: '/staff/retail/returns', label: 'Customer returns', hint: 'Goods taken back from customers, and their credit notes' },
+  { screen: 'purchaseOrders', path: '/staff/retail/purchase-orders', label: 'Purchase orders', hint: 'Order from a supplier, then receive what arrives' },
+  { screen: 'goodsReceived', path: '/staff/retail/goods-received', label: 'Goods received', hint: 'Deliveries from suppliers, with or without an order' },
+  { screen: 'supplierBills', path: '/staff/retail/supplier-bills', label: 'Supplier invoices', hint: 'What suppliers have billed you for the goods received' },
+  { screen: 'supplierPayments', path: '/staff/retail/supplier-payments', label: 'Supplier payments', hint: 'Money paid to suppliers, and what each payment cleared' },
+  { screen: 'supplierPayables', path: '/staff/retail/supplier-payables', label: 'What you owe suppliers', hint: 'Owed to each supplier, by how late it is' },
   { screen: 'branchRoles', path: '/staff/retail/branch-roles', label: 'Branch roles', hint: 'Which branches are stores and which are shops' },
   { screen: 'settings', path: '/staff/retail/settings', label: 'Retail settings', hint: 'Shop or trade, and the features you use' },
 ];

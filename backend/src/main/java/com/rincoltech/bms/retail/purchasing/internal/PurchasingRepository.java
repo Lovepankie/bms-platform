@@ -69,6 +69,21 @@ class PurchasingRepository {
                 .optional();
     }
 
+    /**
+     * Takes the supplier's row lock for the rest of the transaction: the one lock that serialises billing, paying,
+     * voiding receipts and voiding bills for a supplier (ADR-033, issue #198), so two requests cannot both spend what
+     * is left of a receipt or of a bill. It is FOR NO KEY UPDATE, which does not block the key share that inserting a row
+     * with a foreign key to the supplier takes (the lesson of the catalogue's product lock). Every writer takes it first, then
+     * the order, then the products and balances. False when there is no such supplier.
+     */
+    boolean lockSupplier(UUID id) {
+        return jdbc.sql("SELECT id FROM retail_suppliers WHERE id = ? FOR NO KEY UPDATE")
+                .param(id)
+                .query(UUID.class)
+                .optional()
+                .isPresent();
+    }
+
     List<Supplier> suppliers() {
         return jdbc.sql(
                         "SELECT id, name, contact, active, created_at, version FROM retail_suppliers ORDER BY lower(name), id")

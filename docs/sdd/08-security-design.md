@@ -227,6 +227,8 @@ platform API and holds no tenant permissions.
 | `retail.credit.manage` | Y | | | | | | | |
 | `retail.credit.override` | Y | | | | | | | |
 | `retail.sale.return` | Y | | | | | | | |
+| `retail.payable.manage` | Y | | | | | | | |
+| `retail.purchase.approve` | Y | | | | | | | |
 | `retail.document.issue` | Y | | | | | | | |
 
 Notes:
@@ -310,7 +312,12 @@ Notes:
   administrators only, not money-moving, consulted only while the `documents` capability is on, in the branch scope of the permission (the
   source branch for the delivery note of a stock move); converting a quotation also needs `retail.sale.create`, which the sale it makes checks as any
   sale does, and changing a series prefix needs `core.settings.manage`; the credit note PDF of a return needs `retail.sale.return` as well, in the return's branch. The stored PDF of a document is readable through the core download route by
-  whoever holds the permission in the document's branch (FR-DOC-03) and only while the capability is on. Design only: `retail.payable.manage`.
+  whoever holds the permission in the document's branch (FR-DOC-03) and only while the capability is on. Built with optional purchasing (issue #198, migration V47): `retail.payable.manage` (record supplier invoices and
+  payments, reverse and void them, read what is owed to suppliers and the payables report) and `retail.purchase.approve` (decide a
+  large purchase order), both administrators only and consulted only while the `purchasing` capability is on; orders and receipts
+  use the existing `retail.purchase.create`. Their scope is the order's, the receipt's, the invoice's and the payment's branch (an
+  invoice may bill receipts of several branches only when the caller's scope covers all of them), and the author, the last editor and the sender of an order above
+  the tenant's threshold for `retail_purchase_order` (section 8.4) cannot be its checker.
   Each becomes a row of the matrix in the slice that seeds it, because `PermissionMatrixIT` compares
   the seeded permissions with the matrix; all of them go to administrators only.
   `retail.credit.manage` alone sets credit limits and terms: `retail.customer.manage`, which the sales
@@ -430,8 +437,9 @@ CHECK constraint as well as the service.
 | `member_credit_refund` | `lending.repayments.create` | `lending.credits.refund_approve` | Yes |
 | `retail_sale_return` | `retail.sale.return` | `retail.sale.return` | Yes, counted over the returns of the sale, and no checker at all while no threshold is set |
 | `retail_sale_return_void` | `retail.sale.return` | `retail.sale.return` | Reads the threshold of `retail_sale_return`: needed for a return that was approved or is worth it alone; none while no threshold is set |
+| `retail_purchase_order` | `retail.purchase.create` | `retail.purchase.approve` | Yes, on the order's total, and no checker at all while no threshold is set; it is the send of a draft order |
 
-Registered so far: `collateral_release` (#13); `retail_sale_return` and `retail_sale_return_void` (#201, `retail.sales`, ADR-033: unlike the lending actions an unset threshold means no checker, so the
+Registered so far: `collateral_release` (#13); `retail_purchase_order` (#198, `retail.purchasing`, ADR-033: sending a purchase order, with the same open default as returns); `retail_sale_return` and `retail_sale_return_void` (#201, `retail.sales`, ADR-033: unlike the lending actions an unset threshold means no checker, so the
 action pends only at or above a threshold the tenant sets); `loan_disbursement`, `repayment_reversal` and
 `loan_write_off` (#108, `lending.loans`, ADR-026); `investment_funding`, `investment_early_withdrawal`
 and `investment_reversal` (#152, `lending.investments`, ADR-031). Increment 10 adds two checker

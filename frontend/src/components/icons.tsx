@@ -140,6 +140,39 @@ export const icons = {
       <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
     </Svg>
   ),
+  // The purchasing screens (issue #198). JUSTIFICATION-A3: five new icons, one per new screen; the home tiles read icons by screen name.
+  purchaseOrders: (
+    <Svg>
+      <path d="M6 3h9l4 4v14H6z" />
+      <path d="M14 3v5h5M9 12h7M9 16h7" />
+    </Svg>
+  ),
+  goodsReceived: (
+    <Svg>
+      <path d="M3 8l9-5 9 5v9l-9 5-9-5z" />
+      <path d="M3 8l9 5 9-5M12 13v9" />
+    </Svg>
+  ),
+  supplierBills: (
+    <Svg>
+      <path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" />
+      <path d="M9 8h6M9 12h3" />
+      <path d="M15 13v4M13.5 14.5h3" />
+    </Svg>
+  ),
+  supplierPayments: (
+    <Svg>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M6 9v.01M18 15v.01" />
+    </Svg>
+  ),
+  supplierPayables: (
+    <Svg>
+      <path d="M4 20V4M4 20h16" />
+      <path d="M8 16v-4M12 16V8M16 16v-6" />
+    </Svg>
+  ),
   customerAgeing: (
     <Svg>
       <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />

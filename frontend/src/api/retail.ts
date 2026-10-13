@@ -67,6 +67,43 @@ export type ReturnLine = S['RetailReturnLine'];
 /** 201 with the return when it was recorded; 202 with `approval_id` when it waits for a second administrator. */
 export type ReturnOutcome = S['RetailReturnOutcome'];
 export type ReturnPage = S['RetailReturnList'];
+// JUSTIFICATION-A3: the purchasing capability's types are new API surface (ADR-033, issue #198); nothing existing carries them.
+/**
+ * Optional retail purchasing (the purchasing capability, ADR-033, issue #198): purchase orders, goods received, supplier invoices
+ * ("bills"), supplier payments and the payables report. Money is integer minor units; quantities are decimal strings with three
+ * places, in base units unless a field says it is in the unit entered.
+ */
+export type PurchaseOrder = S['RetailPurchaseOrder'];
+export type PurchaseOrderLine = S['RetailPurchaseOrderLine'];
+export type PurchaseOrderRequest = S['RetailPurchaseOrderRequest'];
+export type PurchaseOrderLineRequest = S['RetailPurchaseOrderLineRequest'];
+/** 200 with the order when it was sent; 202 with `approval_id` when it waits for a checker (retail.purchase.approve). */
+export type PurchaseOrderOutcome = S['RetailPurchaseOrderOutcome'];
+export type PurchaseOrderPage = S['RetailPurchaseOrderList'];
+export type GoodsReceipt = S['RetailGoodsReceipt'];
+export type GoodsReceiptLine = S['RetailGoodsReceiptLine'];
+export type GoodsReceiptRequest = S['RetailGoodsReceiptRequest'];
+export type GoodsReceiptLineRequest = S['RetailGoodsReceiptLineRequest'];
+export type GoodsReceiptPage = S['RetailGoodsReceiptList'];
+export type SupplierBill = S['RetailSupplierBill'];
+export type SupplierBillLine = S['RetailSupplierBillLine'];
+export type SupplierBillRequest = S['RetailSupplierBillRequest'];
+export type SupplierBillLineRequest = S['RetailSupplierBillLineRequest'];
+export type SupplierBillMatch = S['RetailSupplierBillMatch'];
+export type SupplierBillPage = S['RetailSupplierBillList'];
+export type UnbilledReceipts = S['RetailUnbilledReceiptList'];
+export type UnbilledReceiptLine = S['RetailUnbilledReceiptLine'];
+export type SupplierPayment = S['RetailSupplierPayment'];
+export type SupplierPaymentRequest = S['RetailSupplierPaymentRequest'];
+export type SupplierPaymentAllocation = S['RetailSupplierPaymentAllocationRequest'];
+export type SupplierPaymentPage = S['RetailSupplierPaymentList'];
+/** A supplier invoice (`bill`) or a credit restock (`restock`) that still owes something. */
+export type SupplierOpenItem = S['RetailSupplierOpenItem'];
+export type SupplierOpenItems = S['RetailSupplierOpenItems'];
+export type SupplierPayables = S['RetailSupplierPayables'];
+export type SupplierPayablesRow = S['RetailSupplierPayablesRow'];
+export type PurchasingSettings = S['RetailPurchasingSettings'];
+export type PurchasingSettingsUpdate = S['RetailPurchasingSettingsUpdate'];
 export type Supplier = S['RetailSupplier'];
 export type SaleRequest = S['RetailSaleRequest'];
 export type Sale = S['RetailSale'];
@@ -296,6 +333,40 @@ export interface RetailApi {
   getReturn(id: string): Promise<SaleReturn>;
   /** Voids a return as a whole by reversal (retail.sale.return); takes the Idempotency-Key of its form. 202 `executed: false` when it needs a second administrator. */
   voidReturn(id: string, reason: string, idempotencyKey: string): Promise<ReturnOutcome>;
+
+  // JUSTIFICATION-A3: the purchasing capability's methods are new API surface (issue #198). Every route answers 404 capability_not_enabled
+  // while the capability is off. Orders and receipts need retail.purchase.create; invoices, payments, open items and the payables
+  // report need retail.payable.manage; the settings need core.settings.manage. Every POST takes the Idempotency-Key of its form.
+  listPurchaseOrders(q: { query?: string; status?: string; supplierId?: string; cursor?: string; signal?: AbortSignal }): Promise<PurchaseOrderPage>;
+  getPurchaseOrder(id: string): Promise<PurchaseOrder>;
+  createPurchaseOrder(body: PurchaseOrderRequest, idempotencyKey: string): Promise<PurchaseOrder>;
+  /** A draft order replaced as a whole under If-Match with the order's version (409 version_conflict, 409 order_not_draft). */
+  updatePurchaseOrder(id: string, version: number, body: PurchaseOrderRequest): Promise<PurchaseOrder>;
+  /** 200 `executed` when sent; 202 with `approval_id` when its value needs a second person (retail.purchase.approve). */
+  sendPurchaseOrder(id: string, idempotencyKey: string): Promise<PurchaseOrderOutcome>;
+  cancelPurchaseOrder(id: string, reason: string, idempotencyKey: string): Promise<PurchaseOrder>;
+  listGoodsReceipts(q: { query?: string; status?: string; orderId?: string; supplierId?: string; cursor?: string; signal?: AbortSignal }): Promise<GoodsReceiptPage>;
+  getGoodsReceipt(id: string): Promise<GoodsReceipt>;
+  createGoodsReceipt(body: GoodsReceiptRequest, idempotencyKey: string): Promise<GoodsReceipt>;
+  voidGoodsReceipt(id: string, reason: string, idempotencyKey: string): Promise<GoodsReceipt>;
+  listSupplierBills(q: { query?: string; openOnly?: boolean; supplierId?: string; cursor?: string; signal?: AbortSignal }): Promise<SupplierBillPage>;
+  getSupplierBill(id: string): Promise<SupplierBill>;
+  createSupplierBill(body: SupplierBillRequest, idempotencyKey: string): Promise<SupplierBill>;
+  /** The three-way view of a supplier invoice without recording anything; same body as createSupplierBill. */
+  matchSupplierBill(body: SupplierBillRequest): Promise<SupplierBillMatch>;
+  voidSupplierBill(id: string, reason: string, idempotencyKey: string): Promise<SupplierBill>;
+  /** Goods received from a supplier and not yet on an invoice, line by line. */
+  unbilledReceipts(supplierId: string): Promise<UnbilledReceipts>;
+  listSupplierPayments(q: { query?: string; status?: string; supplierId?: string; cursor?: string; signal?: AbortSignal }): Promise<SupplierPaymentPage>;
+  getSupplierPayment(id: string): Promise<SupplierPayment>;
+  createSupplierPayment(body: SupplierPaymentRequest, idempotencyKey: string): Promise<SupplierPayment>;
+  reverseSupplierPayment(id: string, reason: string, idempotencyKey: string): Promise<SupplierPayment>;
+  /** The invoices and credit restocks of a supplier that still owe something, oldest due first. */
+  supplierOpenItems(supplierId: string): Promise<SupplierOpenItems>;
+  supplierPayables(): Promise<SupplierPayables>;
+  purchasingSettings(): Promise<PurchasingSettings>;
+  /** The tolerances replaced under If-Match with the settings version; an omitted field is unchanged (core.settings.manage). */
+  changePurchasingSettings(version: number, body: PurchasingSettingsUpdate): Promise<PurchasingSettings>;
   /** The credit note of a return as a stored PDF (retail.document.issue), rendered once; a voided return is served marked void. */
   renderCreditNote(returnId: string): Promise<CreditNoteDocument>;
   updateCustomer(id: string, version: number, body: { name?: string; contact?: string }): Promise<Customer>;
@@ -740,6 +811,103 @@ const realRetail: RetailApi = {
 
   async voidReturn(id, reason, key) {
     return unwrap(await api.POST('/api/v1/retail/returns/{return_id}/void', { params: { path: { return_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  // JUSTIFICATION-A3: the purchasing capability's calls are new API surface (issue #198), each one a single typed request like the ones above.
+  async listPurchaseOrders({ query, status, supplierId, cursor, signal }) {
+    return unwrap(await api.GET('/api/v1/retail/purchase-orders', { params: { query: { q: query || undefined, status: status || undefined, supplier_id: supplierId, limit: 50, cursor } }, signal }));
+  },
+
+  async getPurchaseOrder(id) {
+    return unwrap(await api.GET('/api/v1/retail/purchase-orders/{order_id}', { params: { path: { order_id: id } } }));
+  },
+
+  async createPurchaseOrder(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/purchase-orders', { params: { header: { 'Idempotency-Key': key } }, body }));
+  },
+
+  async updatePurchaseOrder(id, version, body) {
+    return unwrap(await api.PUT('/api/v1/retail/purchase-orders/{order_id}', { params: { path: { order_id: id }, header: { 'If-Match': `"${version}"` } }, body }));
+  },
+
+  async sendPurchaseOrder(id, key) {
+    return unwrap(await api.POST('/api/v1/retail/purchase-orders/{order_id}/send', { params: { path: { order_id: id }, header: { 'Idempotency-Key': key } } }));
+  },
+
+  async cancelPurchaseOrder(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/purchase-orders/{order_id}/cancel', { params: { path: { order_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  async listGoodsReceipts({ query, status, orderId, supplierId, cursor, signal }) {
+    return unwrap(await api.GET('/api/v1/retail/goods-receipts', { params: { query: { q: query || undefined, status: status || undefined, order_id: orderId, supplier_id: supplierId, limit: 50, cursor } }, signal }));
+  },
+
+  async getGoodsReceipt(id) {
+    return unwrap(await api.GET('/api/v1/retail/goods-receipts/{receipt_id}', { params: { path: { receipt_id: id } } }));
+  },
+
+  async createGoodsReceipt(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/goods-receipts', { params: { header: { 'Idempotency-Key': key } }, body }));
+  },
+
+  async voidGoodsReceipt(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/goods-receipts/{receipt_id}/void', { params: { path: { receipt_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  async listSupplierBills({ query, openOnly, supplierId, cursor, signal }) {
+    return unwrap(await api.GET('/api/v1/retail/supplier-bills', { params: { query: { q: query || undefined, open: openOnly || undefined, supplier_id: supplierId, limit: 50, cursor } }, signal }));
+  },
+
+  async getSupplierBill(id) {
+    return unwrap(await api.GET('/api/v1/retail/supplier-bills/{bill_id}', { params: { path: { bill_id: id } } }));
+  },
+
+  async createSupplierBill(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/supplier-bills', { params: { header: { 'Idempotency-Key': key } }, body }));
+  },
+
+  async matchSupplierBill(body) {
+    return unwrap(await api.POST('/api/v1/retail/supplier-bills/match', { body }));
+  },
+
+  async voidSupplierBill(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/supplier-bills/{bill_id}/void', { params: { path: { bill_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  async unbilledReceipts(supplierId) {
+    return unwrap(await api.GET('/api/v1/retail/suppliers/{supplier_id}/unbilled-receipts', { params: { path: { supplier_id: supplierId } } }));
+  },
+
+  async listSupplierPayments({ query, status, supplierId, cursor, signal }) {
+    return unwrap(await api.GET('/api/v1/retail/supplier-payments', { params: { query: { q: query || undefined, status: status || undefined, supplier_id: supplierId, limit: 50, cursor } }, signal }));
+  },
+
+  async getSupplierPayment(id) {
+    return unwrap(await api.GET('/api/v1/retail/supplier-payments/{payment_id}', { params: { path: { payment_id: id } } }));
+  },
+
+  async createSupplierPayment(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/supplier-payments', { params: { header: { 'Idempotency-Key': key } }, body }));
+  },
+
+  async reverseSupplierPayment(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/supplier-payments/{payment_id}/reverse', { params: { path: { payment_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  async supplierOpenItems(supplierId) {
+    return unwrap(await api.GET('/api/v1/retail/suppliers/{supplier_id}/open-items', { params: { path: { supplier_id: supplierId } } }));
+  },
+
+  async supplierPayables() {
+    return unwrap(await api.GET('/api/v1/retail/reports/supplier-payables', { params: { query: {} } }));
+  },
+
+  async purchasingSettings() {
+    return unwrap(await api.GET('/api/v1/retail/purchasing/settings'));
+  },
+
+  async changePurchasingSettings(version, body) {
+    return unwrap(await api.PUT('/api/v1/retail/purchasing/settings', { params: { header: { 'If-Match': `"${version}"` } }, body }));
   },
 
   async renderCreditNote(returnId) {

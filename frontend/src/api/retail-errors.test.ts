@@ -24,6 +24,33 @@ describe('retail problem details in plain words', () => {
     expect(message).not.toMatch(/00000000-0000/);
   });
 
+  // JUSTIFICATION-A3: a table of the new purchasing codes, one row each; an extension of the test above, nothing weakened.
+  it.each([
+    ['capability_not_enabled', 404, /not switched on/i],
+    ['order_not_draft', 409, /sent already/i],
+    ['order_not_sent', 409, /not been sent/i],
+    ['order_closed', 409, /closed/i],
+    ['receipt_exceeds_order', 422, /more is being received than was ordered/i],
+    ['quantity_not_representable', 422, /convert exactly/i],
+    ['receipt_billed', 409, /void the invoice first/i],
+    ['receipt_voided', 409, /voided already/i],
+    ['receipt_stock_moved', 409, /sold, used or moved/i],
+    ['bill_exceeds_received', 422, /more than was received/i],
+    ['bill_total_mismatch', 422, /does not match its lines/i],
+    ['variance_reason_required', 422, /say why it differs/i],
+    ['duplicate_supplier_bill', 409, /already has an invoice/i],
+    ['bill_paid', 409, /reverse the payment first/i],
+    ['bill_voided', 409, /voided already/i],
+    ['payment_exceeds_open', 422, /more than this supplier is owed/i],
+    ['allocation_exceeds_open', 422, /still owed on that invoice/i],
+    ['allocation_total_mismatch', 422, /add up to the payment/i],
+    ['payment_reversed', 409, /reversed already/i],
+    ['retail_chart_missing', 422, /not set up/i],
+    ['amount_out_of_range', 422, /too large or too small/i],
+  ])('maps the purchasing code %s', (code, status, text) => {
+    expect(retailMessage({ code, detail: 'Bill 00000000-0000-4000-8000-000000000001 failed' }, status)).toMatch(text);
+  });
+
   it('shows the server message for a code it does not know', () => {
     expect(retailMessage({ code: 'some_new_rule', detail: 'The server says no.' }, 422)).toBe('The server says no.');
     expect(retailMessage({ code: 'some_new_rule', title: 'Business rule failed' }, 422)).toBe('Business rule failed');

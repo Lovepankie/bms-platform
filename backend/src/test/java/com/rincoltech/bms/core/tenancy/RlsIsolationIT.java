@@ -367,6 +367,80 @@ class RlsIsolationIT {
                           FROM retail_sale_lines l JOIN retail_sales s ON s.id = l.sale_id
                          WHERE l.tenant_id = ? LIMIT 1
                         """).params(t.tenantId(), saleReturn, t.tenantId()).update();
+        // Optional purchasing (ADR-033, #198): an order and its line, a receipt against it and its line, a supplier
+        // invoice
+        // with its line and entry, a payment with its allocation, and the tolerances.
+        // JUSTIFICATION-A3: a fixture row for each new table; the isolation test needs one row per tenant table.
+        UUID order = UUID.randomUUID();
+        UUID orderLine = UUID.randomUUID();
+        UUID goodsReceipt = UUID.randomUUID();
+        UUID receiptLine = UUID.randomUUID();
+        UUID bill = UUID.randomUUID();
+        UUID supplierPayment = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_purchase_orders (id, tenant_id, order_no, branch_seq, branch_id, supplier_id, ordered_on,
+                                                            currency, total_minor, created_by)
+                        VALUES (?, ?, 'PORLS-000001', 1, ?, ?, DATE '2026-01-15', 'UGX', 200, ?)
+                        """)
+                .params(order, t.tenantId(), t.headOffice(), supplier, user)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_purchase_order_lines (id, tenant_id, order_id, line_no, product_id, qty, cost_minor,
+                                                                 line_total_minor)
+                        VALUES (?, ?, ?, 1, ?, 2, 100, 200)
+                        """).params(orderLine, t.tenantId(), order, retailProduct).update();
+        owner.sql("""
+                        INSERT INTO retail_goods_receipts (id, tenant_id, receipt_no, branch_seq, branch_id, supplier_id, order_id,
+                                                           received_on, currency, total_minor, journal_entry_id, created_by)
+                        VALUES (?, ?, 'GRRLS-000001', 1, ?, ?, ?, DATE '2026-01-15', 'UGX', 200, ?, ?)
+                        """)
+                .params(goodsReceipt, t.tenantId(), t.headOffice(), supplier, order, entry, user)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_goods_receipt_lines (id, tenant_id, receipt_id, line_no, order_line_id, product_id, qty,
+                                                                entered_cost_minor, cost_minor, line_total_minor, stocked_minor)
+                        VALUES (?, ?, ?, 1, ?, ?, 2, 100, 100, 200, 200)
+                        """)
+                .params(receiptLine, t.tenantId(), goodsReceipt, orderLine, retailProduct)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_supplier_bills (id, tenant_id, bill_no, branch_seq, branch_id, supplier_id, supplier_ref,
+                                                           bill_date, due_date, currency, total_minor, cleared_minor, variance_minor,
+                                                           created_by)
+                        VALUES (?, ?, 'SBRLS-000001', 1, ?, ?, 'INV-RLS-1', DATE '2026-01-15', DATE '2026-02-15', 'UGX', 200, 200, 0, ?)
+                        """)
+                .params(bill, t.tenantId(), t.headOffice(), supplier, user)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_supplier_bill_lines (id, tenant_id, bill_id, line_no, receipt_line_id, qty,
+                                                                unit_price_minor, line_total_minor, cleared_minor, variance_minor)
+                        VALUES (gen_random_uuid(), ?, ?, 1, ?, 2, 100, 200, 200, 0)
+                        """).params(t.tenantId(), bill, receiptLine).update();
+        owner.sql(
+                        "INSERT INTO retail_supplier_bill_entries (tenant_id, bill_id, branch_id, entry_id) VALUES (?, ?, ?, ?)")
+                .params(t.tenantId(), bill, t.headOffice(), entry)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_supplier_payments (id, tenant_id, payment_no, branch_seq, branch_id, supplier_id, paid_on,
+                                                              currency, method, amount_minor, allocation, journal_entry_id, created_by)
+                        VALUES (?, ?, 'SPRLS-000001', 1, ?, ?, DATE '2026-01-15', 'UGX', 'cash', 100, 'manual', ?, ?)
+                        """)
+                .params(supplierPayment, t.tenantId(), t.headOffice(), supplier, entry, user)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_supplier_payment_allocations (id, tenant_id, payment_id, line_no, bill_id, branch_id,
+                                                                         amount_minor)
+                        VALUES (gen_random_uuid(), ?, ?, 1, ?, ?, 100)
+                        """)
+                .params(t.tenantId(), supplierPayment, bill, t.headOffice())
+                .update();
+        owner.sql(
+                        "INSERT INTO retail_supplier_payment_entries (tenant_id, payment_id, branch_id, entry_id) VALUES (?, ?, ?, ?)")
+                .params(t.tenantId(), supplierPayment, t.secondBranch(), entry)
+                .update();
+        owner.sql("INSERT INTO retail_purchasing_settings (tenant_id, over_receipt_bp) VALUES (?, 500)")
+                .param(t.tenantId())
+                .update();
         // The facts of a credit note PDF (ADR-033, #197): issuer, day and buyer as named, for the fixture return.
         // JUSTIFICATION-A3: a fixture row for the new table; the isolation test needs one row per tenant table.
         owner.sql("""

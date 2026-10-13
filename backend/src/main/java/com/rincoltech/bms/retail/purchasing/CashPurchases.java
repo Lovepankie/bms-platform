@@ -8,7 +8,8 @@ import java.util.UUID;
 /**
  * What the cash book reads from purchasing (ADR-022 decisions 9 and 10), in the caller's
  * transaction: restocks paid in cash leave the till, valued at the line costs of the branch's own
- * quantities, rounded per line as the journal entry is.
+ * quantities, rounded per line as the journal entry is. So do cash payments to suppliers (issue #198), on
+ * the day they were paid, net of the cash a reversal put back on the day it was reversed.
  */
 public interface CashPurchases {
 
