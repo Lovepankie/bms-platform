@@ -29,7 +29,7 @@ jobs:
   backend:
     name: Backend (mvn verify)
     runs-on: [self-hosted, hillary-pi]
-    timeout-minutes: 45
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: backend
