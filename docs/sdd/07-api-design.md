@@ -1136,6 +1136,9 @@ in `docs/specs/lending-insights-metrics.md`.
 
 ### 7.11.24 Lending: AI assistant (`/lending/advisor`, ADR-037, off by default)
 
+No route exists yet: the gateway, the call log and the settings group behind `/lending/advisor/settings` are built in
+#220 (`core.ai`, no endpoint, no permission); the routes below arrive with #226 and #230.
+
 Refused with 404 `advisor_disabled` unless the tenant has switched the assistant on. Responses carry
 `Cache-Control: no-store`. Every answer body has `advisory: true`, `as_of`, `source` (`model` or `fallback`), the text,
 and `facts` (keys with display values). Provider errors never reach the client; the fallback is returned instead.

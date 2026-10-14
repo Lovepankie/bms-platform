@@ -788,6 +788,14 @@ class RlsIsolationIT {
                         VALUES (?, ?, 'lending.par', '{}', repeat('a', 64), '{}', 'json', 'cancelled', ?,
                                 DATE '2026-01-15', now(), 1000, 1000000)
                         """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        // The language model call log (migration V51, #220): a finished call by the fixture user, no text.
+        // JUSTIFICATION-A3: a fixture row for the new table; the isolation test needs one row per tenant table.
+        owner.sql("""
+                        INSERT INTO ai_calls (id, tenant_id, finished_at, purpose, user_id, model, request_hash, outcome,
+                                              input_tokens, output_tokens, tokens_counted, estimated_cost_micro,
+                                              cost_counted_micro, latency_ms, attempts)
+                        VALUES (?, ?, now(), 'brief', ?, 'test-model', repeat('a', 64), 'ok', 10, 20, 30, 5, 5, 120, 1)
+                        """).params(UUID.randomUUID(), t.tenantId(), user).update();
     }
 
     static String randomHash() {

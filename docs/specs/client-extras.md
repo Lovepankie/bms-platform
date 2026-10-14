@@ -564,7 +564,13 @@ learn whether the value justifies the cost and the care.
 ### 5.3 Architecture
 
 - `core.ai`: `LlmClient` port, `OpenAiCompatibleClient`, token accounting, per tenant and platform
-  caps, `ai_calls` log, circuit breaker, recording stub (refused in production).
+  caps, `ai_calls` log, circuit breaker, recording stub (refused in production). Built in slice C1 (#220,
+  migration V51); the choices it made are the amendment of ADR-037. In short: callers use `AiGateway`,
+  which refuses before any network call (switch, allow-list, unconfigured provider, per call cap, the
+  daily token and cost caps of the tenant and of the platform, an open breaker); the tenant's switch,
+  caps and acknowledgement are the settings group `ai` read through `AiSettings`; and the first
+  provider is DeepSeek through its OpenAI-compatible endpoint, the cheapest chat model, set by
+  `BMS_AI_MODEL` alone. The runbook is `docs/runbooks/ai-assistant.md`.
 - `lending.advisor`: prompt builder, alias mapper, `NumericValidator`, the daily job, the brief and
   question endpoints. Depends on `core.ai` and on the public `PortfolioFacts` port of
   `lending.insights` (the port takes the caller's scope); core depends on no vertical (ADR-002). `ModularityTest` covers it.
@@ -680,11 +686,15 @@ ceiling bounds the worst case. The first test measures cost per brief (5.8).
 
 ### 5.10 Logging
 
-`ai_calls` (row-level security): tenant, kind (`brief`, `question`), asking user (staff; never sent),
-model, request text (aliases and aggregates only), response text, validation outcome, token counts,
-estimated cost, latency, status, fallback reason. The text is safe by construction and a test enforces
-it. Retention 90 days. Reading it needs `lending.advisor.configure`. Provider error bodies are not
-stored.
+`ai_calls` (row-level security): tenant, purpose (`brief`, `question`, `evaluation`), asking user (staff;
+never sent), model, the SHA-256 of the request, token counts, estimated cost, latency, outcome, the HTTP
+status and a closed fallback reason. **It stores no request text, no response text and no provider error text** (settled
+in slice C1, #220, migration V51; ADR-037 decision 9 and its amendment say the same), so the log cannot leak what it never held; a test pins the column list, so a new
+column is a review decision. The slice that builds the prompts may add aliased text and the validation
+outcome by its own expand migration and an amendment of ADR-037, if the evaluation needs them. Retention
+90 days (a nightly job deletes older rows and closes a call left pending for an hour). A row is finished
+once and its request columns never change (a database trigger). Reading it needs
+`lending.advisor.configure`, from slice C3. Provider error bodies are never read into the log or an exception.
 
 ### 5.11 Data protection (Uganda Data Protection and Privacy Act, 2019)
 
@@ -891,7 +901,7 @@ thread or inside a money transaction (chapter 12 section 12.1).
 |---|---|
 | Pesapal | `BMS_PESAPAL_BASE_URL`, `BMS_PESAPAL_CONSUMER_KEY`, `BMS_PESAPAL_CONSUMER_SECRET`, `BMS_PESAPAL_IPN_ID`, `BMS_PESAPAL_IPN_TOKEN`, `BMS_PESAPAL_TENANT_ID`, `BMS_PESAPAL_PLATFORM_CONSUMER_KEY`, `BMS_PESAPAL_PLATFORM_CONSUMER_SECRET`, `BMS_PESAPAL_PLATFORM_IPN_ID`, `BMS_PESAPAL_PLATFORM_IPN_TOKEN` |
 | SMS | `BMS_SMS_PROVIDER`, `BMS_SMS_MODE`, `BMS_SMS_ALLOWLIST`, `BMS_SMS_AT_BASE_URL`, `BMS_SMS_AT_USERNAME`, `BMS_SMS_AT_API_KEY`, `BMS_SMS_CALLBACK_TOKEN`, `BMS_SMS_PLATFORM_DAILY_CAP` |
-| AI | `BMS_AI_PROVIDER`, `BMS_AI_BASE_URL`, `BMS_AI_API_KEY`, `BMS_AI_MODEL`, `BMS_AI_PLATFORM_DAILY_TOKENS`, `BMS_AI_ENABLED_TENANTS` |
+| AI | `BMS_AI_PROVIDER` (`off`, `openai_compatible`, or `recording` in dev and test only), `BMS_AI_BASE_URL`, `BMS_AI_API_KEY`, `BMS_AI_MODEL`, `BMS_AI_ENABLED_TENANTS`, `BMS_AI_PLATFORM_DAILY_TOKENS`, `BMS_AI_PLATFORM_DAILY_COST_MICRO`, `BMS_AI_PRICE_INPUT_MICRO_PER_MILLION`, `BMS_AI_PRICE_OUTPUT_MICRO_PER_MILLION`, `BMS_AI_PRICE_CURRENCY`; optional tuning (not secrets, defaults in `application.yml`): `BMS_AI_BUDGET_SECONDS` (30, never more), `BMS_AI_MAX_TOKENS_PER_CALL`, `BMS_AI_MAX_INPUT_TOKENS_PER_CALL`, `BMS_AI_TENANT_DAILY_TOKENS`, `BMS_AI_TENANT_DAILY_COST_MICRO`; a daily cap of 0 means stop, a negative one or a per call limit of 0 fails startup; `BMS_AI_ENABLED_TENANTS` holds tenant ids only |
 | Reports | `BMS_REPORTS_MAX_CONCURRENT_RUNS`, `BMS_REPORTS_PDF_ROW_CAP`, `BMS_REPORTS_XLSX_ROW_CAP` (not secrets; staging values 1, 500, 20,000); slice D1 adds `BMS_REPORTS_MAX_FILE_BYTES` (64 MiB; 8 MiB on staging) and `BMS_REPORTS_SPOOL_DIR`, and `BMS_REPORTS_XLSX_ROW_CAP` caps the rows of every tabular output (sheet, CSV and JSON) |
 
 `.env.example` lists each with a placeholder. Rotation: Pesapal secret and SMS key on staff change and

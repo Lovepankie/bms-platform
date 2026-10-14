@@ -180,6 +180,26 @@ bms:
       base-url: ${BMS_SMS_AT_BASE_URL:}
       username: ${BMS_SMS_AT_USERNAME:}
       api-key: ${BMS_SMS_AT_API_KEY:}
+  # Language model gateway (ADR-037, chapter 9 section 9.8). Off unless BMS_AI_PROVIDER=openai_compatible and
+  # the base URL, key and model are all set; an incomplete setting is off, never a startup failure. The
+  # recording stub is for the dev and test profiles only. Prices are operations configuration, in micro-units
+  # of the price currency per million tokens, and never in the repository. Never logged.
+  ai:
+    provider: ${BMS_AI_PROVIDER:off}
+    base-url: ${BMS_AI_BASE_URL:}
+    api-key: ${BMS_AI_API_KEY:}
+    model: ${BMS_AI_MODEL:}
+    budget-seconds: ${BMS_AI_BUDGET_SECONDS:30}
+    max-tokens-per-call: ${BMS_AI_MAX_TOKENS_PER_CALL:800}
+    max-input-tokens-per-call: ${BMS_AI_MAX_INPUT_TOKENS_PER_CALL:8000}
+    platform-daily-tokens: ${BMS_AI_PLATFORM_DAILY_TOKENS:200000}
+    platform-daily-cost-micro: ${BMS_AI_PLATFORM_DAILY_COST_MICRO:2000000}
+    tenant-daily-tokens: ${BMS_AI_TENANT_DAILY_TOKENS:20000}
+    tenant-daily-cost-micro: ${BMS_AI_TENANT_DAILY_COST_MICRO:500000}
+    price-input-micro-per-million: ${BMS_AI_PRICE_INPUT_MICRO_PER_MILLION:0}
+    price-output-micro-per-million: ${BMS_AI_PRICE_OUTPUT_MICRO_PER_MILLION:0}
+    price-currency: ${BMS_AI_PRICE_CURRENCY:USD}
+    enabled-tenants: ${BMS_AI_ENABLED_TENANTS:}
   # Sign-up volume bounds (chapter 7 section 7.10), counted in the database: over a bound a request
   # is answered 202 and nothing is created or sent; the global caps alert the operator once an hour.
   onboarding:

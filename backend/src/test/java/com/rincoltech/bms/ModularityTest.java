@@ -31,6 +31,7 @@ class ModularityTest {
                 .containsExactlyInAnyOrder(
                         "kernel",
                         "core.tenancy",
+                        "core.ai",
                         "core.identity",
                         "core.audit",
                         "core.documents",

@@ -116,7 +116,7 @@ core.payments         -> core.ledger, core.notifications (booking is delegated t
 core.reporting        -> core.tenancy, core.audit, core.documents, core.jobs, core.operations
                          (queued runs, the snapshot transaction, the spool, the JSON and CSV renderers, the file expiry;
                          the Excel and PDF builders follow in slice D2; verticals register reports, it names none; ADR-038)
-core.ai               -> core.tenancy, core.audit, core.jobs (no vertical)
+core.ai               -> core.tenancy (the settings group ai), the kernel (no vertical; ADR-037, built in #220); its retention job is a database function
 lending               -> any core module
 lending.loans         -> lending.members, lending.products, lending.collateral, lending.savings (transfer)
 lending.seed          -> lending.loans (LoanServicing), lending.savings (SavingsServicing),
