@@ -21,8 +21,7 @@ final class ReportsApi {
             @Schema(description = "The permission that lets a user run it")
             String permission,
 
-            @Schema(description = "json or csv until the PDF and Excel slices")
-            List<String> formats,
+            @Schema(description = "json, csv, pdf or xlsx") List<String> formats,
 
             List<CatalogueParam> params) {}
 
@@ -49,11 +48,12 @@ final class ReportsApi {
                             "The report's parameters; omitted ones take their defaults and are echoed on the output")
             Map<String, Object> params,
 
-            @Schema(description = "json or csv") String format) {}
+            @Schema(description = "json, csv, pdf or xlsx") String format) {}
 
     /**
      * A run. Errors are codes ({@code report_too_large}, {@code snapshot_unavailable}, {@code timeout},
-     * {@code interrupted}, {@code reports_disabled}, {@code requester_deactivated}, {@code run_failed}); never a
+     * {@code report_stale_as_of}, {@code interrupted}, {@code reports_disabled}, {@code requester_deactivated},
+     * {@code run_failed}); never a
      * message that could carry data. A file is fetched with {@code POST /documents/{document_id}/download-url}.
      */
     @Schema(name = "ReportRun")

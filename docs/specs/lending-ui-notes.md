@@ -129,7 +129,7 @@ Deferred: member self-service (the member portal's Invest screen, increment 11),
 the certificate PDF in document storage, and a member page with tabs (the member tab is the filtered list above until
 member screens exist).
 
-## Reports (extras slice D1, issue #214, ADR-038)
+## Reports (extras slices D1 and D2, issues #214 and #217, ADR-038)
 
 A minimal staff page, `/staff/reports` (tab "Reports", shown to a user of a lending tenant who holds one of the
 `lending.reports.*` permissions and only while `GET /me` says `reports_enabled`; a business administrator turns reports on with the
@@ -140,4 +140,6 @@ the user's own runs show a status (Waiting, Running, Ready, Failed, Cancelled), 
 and, for a failed run, the reason in words (`src/api/reports.ts` maps the stable error codes). The list refreshes every 3 seconds while
 any run is open, and a polite notice says when one becomes ready (the in-app notice of FR-RPT-04). Download fetches a 5 minute signed
 link; a file older than 30 days reads "Deleted after 30 days". Cancel stops a waiting or running run. The page never shows a row of a
-report; it hands the file over.
+report; it hands the file over. The file type is chosen from what the report offers, with the PDF (to read and print) first, then Excel
+(a workbook), CSV and JSON; a run in the list names its type in words ("Excel", not "XLSX"). Slice D2 added the PDF and Excel types and the
+report "Loan portfolio outstanding" beside "Portfolio at risk and ageing".

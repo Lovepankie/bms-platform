@@ -37,6 +37,7 @@ import tools.jackson.databind.ObjectMapper;
             "bms.reports.max-concurrent-runs=1",
             "bms.reports.timeout=PT2S",
             "bms.reports.xlsx-row-cap=500",
+            "bms.reports.pdf-row-cap=200",
             "bms.reports.max-file-bytes=1048576",
             "bms.reports.cancel-poll=PT0.2S",
             "bms.reports.heartbeat=PT0.1S",
@@ -149,7 +150,7 @@ class ReportRunsIT extends ReportsItSupport {
             }
         }
         assertThat(par.get("permission").asString()).isEqualTo(PORTFOLIO);
-        assertThat(par.get("formats")).extracting(JsonNode::asString).containsExactly("csv", "json");
+        assertThat(par.get("formats")).extracting(JsonNode::asString).containsExactly("csv", "json", "pdf", "xlsx");
         assertThat(par.get("params"))
                 .extracting(p -> p.get("name").asString())
                 .contains("as_at", "branch_id", "group_by");
@@ -174,7 +175,7 @@ class ReportRunsIT extends ReportsItSupport {
         TestDatabase.Fixture t = tenant(true);
         UUID user = UUID.randomUUID();
 
-        ResponseEntity<JsonNode> pdf = post(t, user, PORTFOLIO, "test.rows", Map.of(), "pdf");
+        ResponseEntity<JsonNode> pdf = post(t, user, PORTFOLIO, "test.rows", Map.of(), "docx");
         assertThat(pdf.getStatusCode().value()).isEqualTo(422);
         assertThat(pdf.getBody().toString()).contains("format");
         ResponseEntity<JsonNode> unknown = post(t, user, PORTFOLIO, "test.rows", Map.of("zzz", 1), "json");

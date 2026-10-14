@@ -370,6 +370,21 @@ output changed.
   23:59 and executed after midnight, and a download refused after the requester's branches narrowed; in `ReportRunsIT`, the rate limit
   under concurrent requests and an identical repeat past the limit. `RlsIsolationIT` covers `report_runs` through its factory row,
   and `ModularityTest` and `SecurityArchitectureTest` cover the new modules and the one caller of `deleteReportObject`.
+  Built (extras slice D2, issue #217): `XlsxWriterTest` (every cell kind by exact value and style, a missing figure as an empty cell,
+  the total row set off, a currency with a minor unit, text that begins like a formula as a string cell with the quote prefix and no
+  formula element anywhere, markup, quotes, scripts and characters XML cannot hold, sheet names, landscape and repeated header, a file
+  past its cap, read back with the JDK's XML parser and, once by hand, with `openpyxl`), `ReportFormatsIT` (the PDF of a synthetic report
+  with eight column kinds by extracted text: the letterhead, the parameters box, every figure in words, landscape, embedded fonts, "page x
+  of y", the number, a table cut at the PDF row cap with the pointer and the total kept, the header on every page, markup and
+  scripts, a 120 letter word; the same report as a workbook and as JSON with equal totals; the layout holding no transaction and no
+  connection), `LendingPortfolioReportsIT` (the hand-computed portfolio of a book with a borrower in two branches per branch, product
+  and officer; every group of both reports equal to the insights endpoints for the same filter and caller; the worked example of chapter 14
+  as PDF and workbook; a branch limited and an officer limited caller; another tenant, another branch, another user and the switched-off
+  tenant all 404 for the PDF and the workbook; the queue-time business date across 20:59 and 21:01 UTC in every format; names with markup,
+  quotes and scripts in JSON, CSV, workbook and PDF; no name or figure in a log), the portfolio cases of `InsightsFiguresIT` against the
+  golden model, and `ReportMemoryIT` with both lending reports as PDF and Excel, a sheet of 20,000 rows and a PDF cut at 500 rows on the
+  224 MB heap. The visual check is `make document-samples` (a PNG per page in `backend/target/document-samples`) and the reviewed sample
+  sheet `docs/ui/report-samples/report-sample-sheet.png`, assembled by `scripts/report-sample-sheet.py`.
   The `core.ai` gateway (#220) is covered by
   `OpenAiCompatibleClientTest` (a local server: the request, retries and pauses with jitter and a minimum on a fake clock, the
   30 second budget, no redirect, no provider text in an exception, the usage of a bad 200), `CircuitBreakerTest` (states,

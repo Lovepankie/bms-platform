@@ -23,6 +23,13 @@ class ReportsProperties {
      */
     final int tableRowCap;
 
+    /**
+     * Rows of one table printed in a PDF ({@code BMS_REPORTS_PDF_ROW_CAP}; 500 on staging, 3,000 elsewhere). A longer
+     * table is cut there, its total row kept, and the page says the full detail is in the Excel file: a PDF is read, not
+     * processed, and its layout is held in memory while it is made.
+     */
+    final int pdfRowCap;
+
     /** Bytes in one output file ({@code BMS_REPORTS_MAX_FILE_BYTES}); the file is uploaded from disk, never held in memory. */
     final long maxFileBytes;
 
@@ -47,6 +54,7 @@ class ReportsProperties {
     ReportsProperties(
             @Value("${bms.reports.max-concurrent-runs:2}") int maxConcurrentRuns,
             @Value("${bms.reports.xlsx-row-cap:200000}") int tableRowCap,
+            @Value("${bms.reports.pdf-row-cap:3000}") int pdfRowCap,
             @Value("${bms.reports.max-file-bytes:67108864}") long maxFileBytes,
             @Value("${bms.reports.timeout:PT10M}") Duration timeout,
             @Value("${bms.reports.spool-dir:}") String spoolDir,
@@ -56,6 +64,7 @@ class ReportsProperties {
             @Value("${bms.reports.heartbeat-stale:PT1M}") Duration heartbeatStale) {
         this.maxConcurrentRuns = Math.max(1, maxConcurrentRuns);
         this.tableRowCap = Math.max(1, tableRowCap);
+        this.pdfRowCap = Math.max(1, pdfRowCap);
         this.maxFileBytes = Math.max(1024, maxFileBytes);
         this.timeout = timeout;
         this.spoolDir = spoolDir.isBlank()

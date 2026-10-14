@@ -186,7 +186,7 @@ migration) with status only, no details.
   `BMS_REPORTS_PDF_ROW_CAP`, `BMS_REPORTS_XLSX_ROW_CAP` (staging 1, 500 and 20,000, because the staging API has about 224 MB of
   heap), `BMS_REPORTS_MAX_FILE_BYTES` (64 MiB; 8 MiB on staging) and `BMS_REPORTS_SPOOL_DIR` (empty: a folder in the temp
   directory). `BMS_REPORTS_XLSX_ROW_CAP` is the row cap of every tabular output (an Excel sheet, a CSV section, a JSON table);
-  the PDF cap is read by slice D2. All four are plain settings in `deploy/compose*.yml` and `.env.example`, not secrets. Each adapter is off
+  `BMS_REPORTS_PDF_ROW_CAP` cuts a longer PDF table to that many rows (its total kept) with a pointer to the Excel file (slice D2, issue #217; on the staging heap 500 is measured, 3,000 fills the old generation). All four are plain settings in `deploy/compose*.yml` and `.env.example`, not secrets. Each adapter is off
   when its values are unset. The API gets them and no other container does. Staging uses sandbox values only and the
   startup guards of `docs/specs/client-extras.md` section 8 refuse a live Pesapal URL, SMS `live` mode and any non-sandbox SMS
   provider URL or account in every SMS mode there. The staging

@@ -44,7 +44,10 @@ public interface ReportDefinition {
     /** The parameters it accepts; a request naming any other is refused. */
     List<Param> params();
 
-    /** The output formats it supports, a subset of {@code json} and {@code csv} until the PDF and Excel slices. */
+    /**
+     * The output formats it supports, a subset of {@code json}, {@code csv}, {@code pdf} and {@code xlsx}. Every format is
+     * rendered from the same spooled rows by the framework, so a report offers all four by writing its tables once.
+     */
     Set<String> formats();
 
     /**
@@ -55,6 +58,15 @@ public interface ReportDefinition {
      * @param params the request's parameters as sent
      */
     Prepared prepare(Map<String, Object> params);
+
+    /**
+     * The scope a run was made under, in words, for the first lines of a PDF and the Parameters sheet (for example "2 branches
+     * selected, your own loans only"). Built from the frozen scope, so it says what the figures cover and not what was asked.
+     * Null (the default) leaves the generic line, which reads the {@code branch_id} parameter only.
+     */
+    default String describeScope(Prepared run) {
+        return null;
+    }
 
     /**
      * Download time, with the downloader signed in: may they still have a file made under {@code run}'s frozen scope?

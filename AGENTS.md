@@ -215,15 +215,24 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   10 minute timeout, row and size caps, cancel, the nightly `report-expiry` that deletes files after 30 days (download then 410
   `report_expired`), the catalogue `GET /reports`, `POST` and `GET /report-runs`, `POST /report-runs/{id}/cancel`, the audit
   (`core.reports.run`, never a row), and a minimal Reports screen; off until the tenant setting `reports_enabled` is on. The
-  first report, `lending.par` (JSON and CSV), reads the figures through the new public port `InsightsFigures` of
-  `lending.insights`, which holds the PAR figures so far. No permission is added. Deferred: the PDF and Excel renderers, the
-  other six reports and the pack, the full report centre (slices D2 to D5, issues #217, #222, #225, #229).
+  first report, `lending.par`, reads the figures through the new public port `InsightsFigures` of `lending.insights`. No
+  permission is added. Deferred: the other six reports and the pack, the full report centre (slices D3 to D5, issues #222,
+  #225, #229).
+- **Built (extras slice D2, issue #217, ADR-038):** no migration and no permission. The report PDF (the shared `report` template of
+  `core.documents` under the tenant letterhead: parameters box, repeated heading, tinted rows, total row, page x of y, landscape above
+  seven columns, rows cut at `BMS_REPORTS_PDF_ROW_CAP` with a pointer to the Excel file) and the Excel workbook (a minimal streaming
+  writer in `core.reporting`: numeric cells, real dates, a sheet per table and a Parameters sheet, text that begins like a formula
+  as a string cell with the quote prefix) join JSON and CSV, rendered from the same spool; `lending.par` and the new
+  `lending.portfolio_outstanding` (active loans, distinct borrowers, principal and interest outstanding, arrears, average principal;
+  by branch, product or officer) are offered in all four formats, from `InsightsFigures.par` and `.portfolio`, with tests that every group
+  equals the insights endpoints for the same filter and caller. `ReportMemoryIT` runs both reports as PDF and Excel on the 224 MB
+  heap. The Reports screen offers the PDF first. Visual check: `make document-samples` and `docs/ui/report-samples/`.
 - **Built (client extras C1, issue #220, ADR-037):** migration `V51` (`ai_calls`, `ai_platform_usage`); `core.ai`, the
   language model gateway: nothing is sent unless `BMS_AI_PROVIDER=openai_compatible` with a base URL, key and model, the tenant
   has switched the assistant on (settings group `ai`, with the acknowledgement) and is named in `BMS_AI_ENABLED_TENANTS`; per
   call, daily tenant and platform token and cost caps are checked before any network call, an input screen refuses personal-data shapes, and a failed call keeps its reservation; no route, no permission, no screen
   (those are C2 to C5). Runbook: `docs/runbooks/ai-assistant.md`.
-- **Client extras (issue #210; slices D1, B1 and C1 are built):** `docs/specs/client-extras.md` specifies mobile money through Pesapal
+- **Client extras (issue #210; slices D1, D2, B1 and C1 are built):** `docs/specs/client-extras.md` specifies mobile money through Pesapal
   (ADR-035), SMS through Africa's Talking on the outbox (ADR-036), the advisory AI brief (ADR-037) and the formal
   reports pack as PDF and Excel (ADR-038), with a note on credit bureaus. The build slices are issues
   #211 to #233 in the order of the spec's section 10.
@@ -303,7 +312,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `core.notifications` | Templates, outbox, SMS and email adapters: the platform outbox with SMTP and Telegram senders (ADR-024) and the SMS channel (ADR-036, issue #212): provider port, Africa's Talking adapter, sink, delivery and cost log, opt-out, window, caps, startup guard | NTF | 6.4 `notification_outbox`, SMS tables, 6.5 | 7.11.3, 7.11.7 |
 | `core.onboarding` | Public sign-up, applications, Verify, Needs info, Reject, Activate (ADR-024) | ONB | 6.4 `onboarding_applications` | 7.11.3 |
 | `core.documents` | PDFs, uploads, object storage, signed URLs | DOC | 6.5 `documents` | 7.11.7 |
-| `core.reporting` | Report catalogue and runs: the queue, the runner job, one snapshot transaction per run into a spool, JSON and CSV files, cancel and the 30 day expiry (ADR-038, issue #214); verticals register their reports | RPT; chapter 14 | 6.5 `report_runs` | 7.11.8 |
+| `core.reporting` | Report catalogue and runs: the queue, the runner job, one snapshot transaction per run into a spool, JSON, CSV, PDF and Excel files, cancel and the 30 day expiry (ADR-038, issues #214 and #217); verticals register their reports | RPT; chapter 14 | 6.5 `report_runs` | 7.11.8 |
 | `core.imports` | Import batches, review queue, commit | IMP; chapter 13 | 13.4 | 7.11.9 |
 | `core.payments` | Payment intents, gateway, callbacks | PAY; chapter 12 | 6.5 | 7.11.10 |
 | `core.ai` (ADR-037, issue #220, migration `V51`) | The `LlmClient` port and one OpenAI-compatible adapter, the `AiGateway` every caller uses (tenant switch, platform allow-list, daily token and cost caps checked before any network call, circuit breaker, 30 second budget), the `ai_calls` log of counts and a request hash and never text, the settings group `ai` through `AiSettings`, a recording stub refused outside dev and test; off by default (`docs/runbooks/ai-assistant.md`); depends on no vertical | FR-AIA | 6.13 `ai_calls` | none |
@@ -319,7 +328,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `lending.investments` | Investment products, investments, returns job, maturity, rollover, early withdrawal, maturity ladder (ADR-031) | INV; 3.25.1 R-INV | 6.7 | 7.11.16 |
 | `lending.insights` | The insights read model, snapshots, daily digest, panel registry (ADR-030) | INS | 6.7 | 7.11.22 |
 | `lending.advisor` (ADR-037, design) | The advisory AI brief and question box over insights facts; aggregates and aliases only | FR-AIA | 6.13 `ai_briefs` | 7.11.24 |
-| `lending.reports` (ADR-038; `lending.par` built, issue #214) | The definitions of the seven formal reports and the monthly pack, built on the insights figures through the public `InsightsFigures` port | RPT; chapter 14 section 14.10 | 6.5 `report_runs` | 7.11.8 |
+| `lending.reports` (ADR-038; `lending.par` built in #214, `lending.portfolio_outstanding` in #217) | The definitions of the seven formal reports and the monthly pack, built on the insights figures through the public `InsightsFigures` port | RPT; chapter 14 section 14.10 | 6.5 `report_runs` | 7.11.8 |
 | `lending` collections | Due lists, arrears, actions | CLN | 6.7 | 7.11.17 |
 | Member area | Member self-service | MSS; chapter 11 | none | 7.11.18 |
 | `retail.manifest` | The retail vertical's registration with the core (ADR-020) | 3.28 | 6.11.1 chart | none |
@@ -510,7 +519,7 @@ Accepted (this list is the ADR index):
 - ADR-037 AI portfolio monitoring: advisory, aggregates and aliases only, numbers validated in code,
   off by default (proposed, #210)
 - ADR-038 The reports pack: asynchronous runs over one snapshot, PDF through the shared templates,
-  streamed Excel (proposed, #210; run framework built and amended by #214)
+  streamed Excel (proposed, #210; run framework built and amended by #214, PDF and Excel renderers by #217)
 - ADR-039 One search convention: a shared kernel matcher (folded text, AND of terms, phone digits, ranked, rank in the
   cursor), `bms_fold` and `bms_digits` in V40 and no search index (none is usable under row-level security), one
   live search hook in the PWA (proposed, #241; spec `docs/specs/search.md`)

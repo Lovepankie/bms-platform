@@ -6945,7 +6945,7 @@ export interface components {
         };
         ReportCatalogueEntry: {
             description?: string;
-            /** @description json or csv until the PDF and Excel slices */
+            /** @description json, csv, pdf or xlsx */
             formats?: string[];
             key?: string;
             params?: components["schemas"]["ReportCatalogueParam"][];
@@ -7005,7 +7005,7 @@ export interface components {
             title?: string;
         };
         ReportRunRequest: {
-            /** @description json or csv */
+            /** @description json, csv, pdf or xlsx */
             format?: string;
             /** @description The report's parameters; omitted ones take their defaults and are echoed on the output */
             params?: {

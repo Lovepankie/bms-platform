@@ -1,6 +1,6 @@
 # Client extras: mobile money, SMS, AI monitoring, the reports pack, and a note on credit bureaus
 
-**Status:** Design; slice #212 (SMS channel core) built · **Issue:** #210 (umbrella) · **Decisions:** ADR-035 (Pesapal collections),
+**Status:** Design; slices #212 (SMS channel core), #214 (report runs) and #217 (report PDF and Excel, portfolio and PAR) built · **Issue:** #210 (umbrella) · **Decisions:** ADR-035 (Pesapal collections),
 ADR-036 (SMS channel), ADR-037 (AI monitoring), ADR-038 (reports pack); PDF rendering follows
 ADR-034 (accepted, merged in pull request 205) ·
 **Expectations:** issue #150 · **SDD:** chapters 5, 7, 8, 9, 11, 12, 14 and 15 carry the consequences
@@ -767,7 +767,8 @@ object is deleted, the `documents` row stays, a download answers 410 `report_exp
 **As built in slice D1 (issue #214).** The run framework, its JSON and CSV renderers and `lending.par` are built; the
 amendment at the end of ADR-038 records what building settled: the scope frozen at queuing and the two step
 `InsightsFigures` port, the tenant setting `reports_enabled`, the `cancelled` status, the caps and the clock, and who may fetch a
-file. The PDF and Excel renderers, the other six reports, the pack and the report centre are slices D2 to D5.
+file. The PDF and Excel renderers and the portfolio report arrived with slice D2 (issue #217, below); the other reports, the pack and
+the report centre are slices D3 to D5.
 
 ### 6.3 Consistency, and memory: query first, then render
 
@@ -800,10 +801,11 @@ row count, never rows). Downloads use the signed URL path (FR-DOC-03).
 
 ### 6.6 Excel
 
-Apache POI streaming workbook (SXSSF), 100 rows in memory. One sheet per report; money as numeric cells in
-whole currency units with the format; rates as percentages to one decimal; real dates; frozen header;
-widths set. Totals are values from the same code as the PDF, not spreadsheet formulas. A text value
-beginning with `=`, `+`, `-` or `@` is written as an explicit string. Cap 200,000 rows per sheet, 20,000 on staging
+A minimal streaming writer in `core.reporting` (Apache POI is not in the build; ADR-038 amendment for issue #217), one row in memory.
+A `Parameters` sheet first, then one sheet per table of a report (a report with two tables, as PAR and ageing, has two sheets); money as
+numeric cells in whole currency units with the format; rates as percentages to one decimal; real dates; frozen header; widths set.
+Totals are values from the same code as the PDF, not spreadsheet formulas. A text value is always a string cell, and one beginning with
+`=`, `+`, `-`, `@`, a tab or a carriage return also carries the quote prefix style. Cap 200,000 rows per sheet, 20,000 on staging
 (`report_too_large`).
 
 ### 6.7 PDF
@@ -825,6 +827,15 @@ product), which the insights module resolves against the caller's permissions, s
 there is one implementation of PAR and collected. Cross check: the pack's PAR30, PAR90, principal outstanding, and
 collection rate equal the insights metrics for the same range (`portfolio.par30`, `portfolio.par90`,
 `portfolio.principal_outstanding`, `portfolio.collection_rate`).
+
+**As built in slice D2 (issue #217).** The PDF and Excel renderers, the report template, the `InsightsFigures.portfolio` method and the
+reports `lending.portfolio_outstanding` and `lending.par` as PDF, Excel, CSV and JSON are built (chapter 14 section 14.10 lists what each
+file holds, and the ADR-038 amendment what building settled). No migration and no permission. Two differences from the text above: the
+portfolio report has no fees and penalties outstanding and no grouping by purpose, because the insights positions and the nightly snapshot
+do not hold them; and the workbook has a sheet for each table rather than for each report. `ReportMemoryIT` on the 224 MB heap
+passes with the lending reports as PDF and Excel, a sheet of 20,000 rows and a PDF cut at 500 rows; the production cap of 3,000 PDF rows
+finishes on that heap but fills the old generation, so it stays a setting for hosts with more memory. The visual check is
+`make document-samples` and the reviewed sample sheet `docs/ui/report-samples/report-sample-sheet.png`.
 
 ### 6.9 Collections, disbursements, officer performance
 
@@ -956,7 +967,7 @@ runbook. Order is the recommended build order; slices of different areas can run
 | 4 | #214 | D1 Report runs framework (**built**, migration V49; see ADR-038 amendment) | none (PDF later) |
 | 5 | #215 | B2 Delivery reports and `core.sms_usage` | B1 |
 | 6 | #216 | A3 Loan repayment by Pesapal, with the port extension (3.4.1), the savepoint and the minimal unallocated receipt posting | A2, increment 5 (#108), payment methods table (#160) |
-| 7 | #217 | D2 The public `InsightsFigures` port, Excel writer, report PDF templates, portfolio and PAR, `ReportMemoryIT` | D1, the document templates of ADR-034 (#120, pull request 209) |
+| 7 | #217 | D2 The public `InsightsFigures` port, Excel writer, report PDF templates, portfolio and PAR, `ReportMemoryIT` (**built**, no migration; see ADR-038 amendment) | D1, the document templates of ADR-034 (#120, pull request 209) |
 | 8 | #218 | B3 Tenant SMS settings, opt-out, template overrides | B1 |
 | 9 | #219 | A4 Savings deposit by Pesapal | A3 |
 | 10 | #220 | C1 `core.ai` port, adapter, caps, call log | none |

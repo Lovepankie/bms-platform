@@ -9,7 +9,7 @@
 <head th:fragment="head">
   <style th:inline="text">
     @page {
-      size: A4;
+      size: [[${doc['landscape'] != null ? 'A4 landscape' : 'A4'}]];
       margin: [[${doc['voided'] != null ? '45mm' : '37mm'}]] 15mm 22mm 15mm;
       @top-center { content: element(letterhead); }
       @bottom-center { content: element(pagefoot); }

@@ -116,7 +116,7 @@ public class TestReports {
 
         @Override
         public Set<String> formats() {
-            return Set.of("json", "csv");
+            return Set.of("json", "csv", "pdf", "xlsx");
         }
 
         @Override
@@ -322,6 +322,76 @@ public class TestReports {
                                         .single()));
                 out.table("rows", "Rows", List.of(new Column("id", "Number", Kind.COUNT)))
                         .row(1);
+            }
+        };
+    }
+
+    // JUSTIFICATION-A3: the PDF and workbook renderers (issue #217) need a report with every column kind, a total and
+    // eight columns.
+    /**
+     * {@code n} rows of every column kind (eight columns, so the PDF turns landscape) and a total row: row {@code i} is
+     * "Test Group i", {@code i} loans, {@code i} x 1,000,000 principal, {@code i} x 7 basis points, and a date {@code i}
+     * days after 1 October 2026. The total is the sum, written by hand-checkable arithmetic (n x (n + 1) / 2).
+     */
+    @Bean
+    ReportDefinition kindsReport(BusinessClock clock) {
+        return new Base("test.kinds", "lending", clock) {
+            @Override
+            public void query(Prepared prepared, ReportOutput out) {
+                ReportOutput.Table t = out.table(
+                        "kinds",
+                        "Every kind",
+                        List.of(
+                                new Column("group", "Group", Kind.TEXT),
+                                new Column("loans", "Loans", Kind.COUNT),
+                                new Column("principal", "Principal", Kind.MONEY),
+                                new Column("interest", "Interest", Kind.MONEY),
+                                new Column("par", "PAR", Kind.BASIS_POINTS),
+                                new Column("share", "Share", Kind.BASIS_POINTS),
+                                new Column("since", "Since", Kind.DATE),
+                                new Column("note", "Note", Kind.TEXT)));
+                long n = n(prepared);
+                for (long i = 1; i <= n; i++) {
+                    t.row(
+                            "Test Group " + i,
+                            i,
+                            i * 1_000_000L,
+                            i * 10_000L,
+                            i * 7L,
+                            null,
+                            LocalDate.of(2026, 10, 1).plusDays(i - 1),
+                            i % 2 == 0 ? "even" : null);
+                }
+                long sum = n * (n + 1) / 2;
+                t.total("Total", sum, sum * 1_000_000L, sum * 10_000L, null, 10_000L, null, null);
+            }
+        };
+    }
+
+    // JUSTIFICATION-A3: new case (issue #217); no existing synthetic report has markup, quotes and scripts the PDF font
+    // lacks.
+    /** Fabricated names with markup, quotes, accents and scripts the PDF font lacks, for the escaping tests of every format. */
+    public static final List<String> MARKUP_NAMES = List.of(
+            "Test <Branch> & \"Co\" 'North' >=< end",
+            "Ünï Çödé Ñandú",
+            "Тестовый Банк 日本語 العربية 😀",
+            "</td></tr><script>alert(1)</script>",
+            "Tab\there and\nnew line",
+            "Very long unbroken name " + "W".repeat(120));
+
+    @Bean
+    ReportDefinition markupReport(BusinessClock clock) {
+        return new Base("test.markup", "lending", clock) {
+            @Override
+            public void query(Prepared prepared, ReportOutput out) {
+                ReportOutput.Table t = out.table(
+                        "names",
+                        "Names",
+                        List.of(new Column("name", "Name", Kind.TEXT), new Column("amount", "Amount", Kind.MONEY)));
+                long i = 0;
+                for (String name : MARKUP_NAMES) {
+                    t.row(name, ++i * 1_000L);
+                }
             }
         };
     }

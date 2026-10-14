@@ -15,6 +15,8 @@ import com.rincoltech.bms.lending.insights.InsightsFigures.ParBucket;
 import com.rincoltech.bms.lending.insights.InsightsFigures.ParFigures;
 import com.rincoltech.bms.lending.insights.InsightsFigures.ParGroup;
 import com.rincoltech.bms.lending.insights.InsightsFigures.ParGroupBy;
+import com.rincoltech.bms.lending.insights.InsightsFigures.PortfolioFigures;
+import com.rincoltech.bms.lending.insights.InsightsFigures.PortfolioGroup;
 import com.rincoltech.bms.lending.insights.InsightsFigures.PortfolioScope;
 import com.rincoltech.bms.lending.seed.internal.LendingSeeder;
 import java.time.Clock;
@@ -89,6 +91,9 @@ class InsightsFiguresIT extends IntegrationTest {
 
     @Autowired
     InsightsFigures figures;
+
+    @Autowired
+    InsightsSnapshots snapshotWriter;
 
     @Autowired
     TenantJobs tenantJobs;
@@ -258,6 +263,153 @@ class InsightsFiguresIT extends IntegrationTest {
         }
     }
 
+    // JUSTIFICATION-A3: the portfolio figures of slice D2 (issue #217) are new on the port; PAR had the tests above.
+
+    /** As {@link #par}, for the portfolio figures: resolved in the request, read later without a principal. */
+    private PortfolioFigures portfolio(Principal who, LocalDate asAt, List<UUID> branches, ParGroupBy by) {
+        CurrentPrincipal.set(who);
+        PortfolioScope scope =
+                tenantJobs.callAs(a.tenantId(), () -> inTx(() -> figures.scope(asAt, asAt, branches, null, null)));
+        CurrentPrincipal.clear();
+        return tenantJobs.callAs(a.tenantId(), () -> figures.portfolio(scope, by, () -> {}));
+    }
+
+    /**
+     * One group against the model's positions, summed with plain loops: loans, the distinct members that hold them,
+     * principal and interest outstanding, arrears, and the average principal per loan (half up, none without loans).
+     */
+    private static void matchesPortfolio(PortfolioGroup g, List<Pos> positions) {
+        Set<UUID> borrowers = new java.util.HashSet<>();
+        long principal = 0;
+        long interest = 0;
+        long arrears = 0;
+        for (Pos p : positions) {
+            borrowers.add(model.loans.get(p.loan()).member());
+            principal += p.po();
+            interest += p.io();
+            arrears += p.arrears();
+        }
+        assertThat(g.loans()).as("loans").isEqualTo(positions.size());
+        assertThat(g.borrowers()).as("distinct borrowers").isEqualTo(borrowers.size());
+        assertThat(g.principalOutstandingMinor()).as("principal").isEqualTo(principal);
+        assertThat(g.interestOutstandingMinor()).as("interest").isEqualTo(interest);
+        assertThat(g.arrearsMinor()).as("arrears").isEqualTo(arrears);
+        long n = positions.size();
+        assertThat(g.averagePrincipalMinor())
+                .as("average principal, half up")
+                .isEqualTo(n == 0 ? null : Math.floorDiv(principal * 2 + n, n * 2));
+    }
+
+    @Test
+    void thePortfolioFiguresEqualTheModelTodayTotalAndPerGroupAndBorrowersAreDistinctPerGroup() {
+        Principal who = user(UUID.randomUUID(), ALL, null);
+        PortfolioFigures all = portfolio(who, TODAY, List.of(), ParGroupBy.NONE);
+        assertThat(all.source()).isEqualTo("live");
+        assertThat(all.groups()).isEmpty();
+        List<Pos> expected = live(l -> true);
+        assertThat(expected).isNotEmpty();
+        matchesPortfolio(all.total(), expected);
+        for (ParGroupBy by : List.of(ParGroupBy.BRANCH, ParGroupBy.PRODUCT, ParGroupBy.OFFICER)) {
+            PortfolioFigures f = portfolio(who, TODAY, List.of(), by);
+            assertThat(f.total().borrowers()).isEqualTo(all.total().borrowers());
+            long loans = 0;
+            long borrowers = 0;
+            for (PortfolioGroup g : f.groups()) {
+                UUID key = UUID.fromString(g.key());
+                Predicate<Loan> in = switch (by) {
+                    case BRANCH -> l -> l.branch().equals(key);
+                    case PRODUCT -> l -> l.product().equals(key);
+                    default -> l -> key.equals(l.officer());
+                };
+                matchesPortfolio(g, live(in));
+                loans += g.loans();
+                borrowers += g.borrowers();
+            }
+            assertThat(loans)
+                    .as("the %s groups add up to the book", by)
+                    .isEqualTo(f.total().loans());
+            assertThat(borrowers)
+                    .as("a borrower counts once in each group, so the groups hold at least the total's borrowers")
+                    .isGreaterThanOrEqualTo(f.total().borrowers());
+            assertThat(f.groups()).extracting(PortfolioGroup::label).isSorted();
+        }
+    }
+
+    @Test
+    void thePortfolioFiguresOfAPastDateEqualTheReplayedModelTotalAndPerBranch() {
+        Principal who = user(UUID.randomUUID(), ALL, null);
+        for (LocalDate d : List.of(TODAY.minusDays(1), TODAY.minusDays(45), TODAY.minusDays(200))) {
+            PortfolioFigures f = portfolio(who, d, List.of(), ParGroupBy.BRANCH);
+            assertThat(f.source()).as("source on %s", d).isEqualTo("snapshot");
+            List<Pos> positions = List.copyOf(model.asOf(d).values());
+            matchesPortfolio(f.total(), positions);
+            for (PortfolioGroup g : f.groups()) {
+                UUID branch = UUID.fromString(g.key());
+                matchesPortfolio(
+                        g,
+                        positions.stream()
+                                .filter(p -> model.loans.get(p.loan()).branch().equals(branch))
+                                .toList());
+            }
+        }
+    }
+
+    @Test
+    void thePortfolioOfABranchScopedAndOfAnOfficerScopedCallerIsTheirOwn() {
+        UUID north = model.loans.values().stream()
+                .map(Loan::branch)
+                .distinct()
+                .filter(b -> !b.equals(a.headOffice()))
+                .findFirst()
+                .orElseThrow();
+        matchesPortfolio(
+                portfolio(user(UUID.randomUUID(), ALL, Set.of(north)), TODAY, List.of(), ParGroupBy.NONE)
+                        .total(),
+                live(l -> l.branch().equals(north)));
+        PortfolioFigures other = portfolio(
+                user(UUID.randomUUID(), ALL, Set.of(north)), TODAY, List.of(a.headOffice()), ParGroupBy.BRANCH);
+        assertThat(other.total().loans()).isZero();
+        assertThat(other.total().borrowers()).isZero();
+        assertThat(other.total().averagePrincipalMinor()).isNull();
+        assertThat(other.groups()).isEmpty();
+        UUID officer = model.loans.values().stream()
+                .filter(l -> l.status().equals("active"))
+                .map(Loan::officer)
+                .findFirst()
+                .orElseThrow();
+        matchesPortfolio(
+                portfolio(user(officer, Set.of("lending.insights.read"), null), TODAY, List.of(), ParGroupBy.NONE)
+                        .total(),
+                live(l -> officer.equals(l.officer())));
+    }
+
+    @Test
+    void thePortfolioOfAPastDateWithNoSnapshotIsRefusedAndTheCheckpointCanStopIt() {
+        TestDatabase.Fixture empty = TestDatabase.tenant("figures-empty-portfolio", true);
+        PortfolioScope past = new PortfolioScope(TODAY.minusDays(3), TODAY.minusDays(3), TODAY, null, null, null);
+        assertThatThrownBy(() ->
+                        tenantJobs.callAs(empty.tenantId(), () -> figures.portfolio(past, ParGroupBy.NONE, () -> {})))
+                .isInstanceOfSatisfying(
+                        ApiException.class, e -> assertThat(e.code()).isEqualTo("snapshot_unavailable"));
+        PortfolioScope todayScope = new PortfolioScope(TODAY, TODAY, TODAY, null, null, null);
+        PortfolioFigures none =
+                tenantJobs.callAs(empty.tenantId(), () -> figures.portfolio(todayScope, ParGroupBy.OFFICER, () -> {}));
+        assertThat(none.total().loans()).isZero();
+        assertThat(none.groups()).isEmpty();
+        // A checkpoint that throws stops the read before any figure is made, as a cancelled run does.
+        int[] calls = {0};
+        assertThatThrownBy(() -> tenantJobs.callAs(
+                        a.tenantId(),
+                        () -> figures.portfolio(todayScope, ParGroupBy.BRANCH, () -> {
+                            if (++calls[0] == 1) {
+                                throw new IllegalStateException("cancelled");
+                            }
+                        })))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("cancelled");
+        assertThat(calls[0]).isEqualTo(1);
+    }
+
     @Test
     void aPastDateWithNoSnapshotIsRefusedNotGuessed() {
         TestDatabase.Fixture empty = TestDatabase.tenant("figures-empty", true);
@@ -342,19 +494,36 @@ class InsightsFiguresIT extends IntegrationTest {
         assertThat(scope.to()).isEqualTo(TODAY);
 
         // The run is executed after midnight: the clock is now on 2026-10-09 in Kampala, and tonight's snapshot of the
-        // 8th
-        // has not been written. The scope still reads the 8th from the loan tables, as the day it was asked on.
+        // 8th has
+        // not been written. The loan tables now hold the 9th's activity, so they are no longer the 8th's book: the
+        // figures
+        // are refused with a retry hint, never read live under the 8th.
         clock.now = Instant.parse("2026-10-08T21:00:30Z");
-        assertThat(tenantJobs
-                        .callAs(a.tenantId(), () -> figures.par(scope, ParGroupBy.NONE, () -> {}))
-                        .source())
-                .isEqualTo("live");
+        assertThatThrownBy(() -> tenantJobs.callAs(a.tenantId(), () -> figures.par(scope, ParGroupBy.NONE, () -> {})))
+                .isInstanceOfSatisfying(
+                        ApiException.class, e -> assertThat(e.code()).isEqualTo("report_stale_as_of"));
+        assertThatThrownBy(() ->
+                        tenantJobs.callAs(a.tenantId(), () -> figures.portfolio(scope, ParGroupBy.NONE, () -> {})))
+                .isInstanceOfSatisfying(
+                        ApiException.class, e -> assertThat(e.code()).isEqualTo("report_stale_as_of"));
         // Resolved after midnight instead, the same date is a past date and has no snapshot: that is what the frozen
         // date avoids.
         PortfolioScope late = new PortfolioScope(TODAY, TODAY, TODAY.plusDays(1), null, null, null);
         assertThatThrownBy(() -> tenantJobs.callAs(a.tenantId(), () -> figures.par(late, ParGroupBy.NONE, () -> {})))
                 .isInstanceOfSatisfying(
                         ApiException.class, e -> assertThat(e.code()).isEqualTo("snapshot_unavailable"));
+        // Once the nightly job has written the 8th, the same scope reads that snapshot, which is the 8th's book.
+        tenantJobs.callAs(a.tenantId(), () -> inTx(() -> snapshotWriter.backfill(TODAY, TODAY)));
+        ParFigures later = tenantJobs.callAs(a.tenantId(), () -> figures.par(scope, ParGroupBy.NONE, () -> {}));
+        assertThat(later.source()).isEqualTo("snapshot");
+        assertThat(later.asAt()).isEqualTo(TODAY);
+        matches(later.total(), live(l -> true));
+        // On the day itself the same scope is still live.
+        clock.now = NOW;
+        assertThat(tenantJobs
+                        .callAs(a.tenantId(), () -> figures.par(scope, ParGroupBy.NONE, () -> {}))
+                        .source())
+                .isEqualTo("live");
     }
 
     @Test

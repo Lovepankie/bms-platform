@@ -3,10 +3,7 @@ package com.rincoltech.bms.core.reporting.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rincoltech.bms.TestDatabase;
-import com.rincoltech.bms.lending.insights.InsightsSnapshots;
-import java.sql.Date;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -17,10 +14,8 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * {@code lending.par}, the first report on the framework (extras slice D1, issue #214; FR-RPT-05, FR-RPT-02; ADR-038
@@ -38,159 +33,13 @@ import tools.jackson.databind.ObjectMapper;
             "bms.reports.max-concurrent-runs=1",
             "bms.reports.timeout=PT2S",
             "bms.reports.xlsx-row-cap=500",
+            "bms.reports.pdf-row-cap=200",
             "bms.reports.max-file-bytes=1048576",
             "bms.reports.cancel-poll=PT0.2S",
             "bms.reports.heartbeat=PT0.1S",
             "bms.reports.runner-enabled=false"
         })
-class LendingParReportIT extends ReportsItSupport {
-
-    static final LocalDate TODAY = LocalDate.of(2026, 10, 8);
-    static final java.util.concurrent.atomic.AtomicInteger NIN = new java.util.concurrent.atomic.AtomicInteger();
-    static final String PAR_PERMS = PORTFOLIO + ",lending.insights.read,lending.insights.all_officers";
-
-    @Autowired
-    ObjectMapper mapper;
-
-    @Autowired
-    InsightsSnapshots snapshots;
-
-    @Autowired
-    PlatformTransactionManager transactions;
-
-    /** The tenant of the golden dataset and the ids the tests need. */
-    record Book(TestDatabase.Fixture t, UUID officerA, UUID officerB, UUID product) {}
-
-    // ---- the dataset -------------------------------------------------------------------------------
-
-    /**
-     * Head office, officer A: 4,000,000 current; 2,200,000 current; 1,000,000 + 50,000 interest, first unpaid item due
-     * 30 days ago. Test Branch Two, officer B: 2,000,000 current; 500,000 + 10,000 fees, due 31 days ago; 300,000, due
-     * 91 days ago. Not counted: a written-off loan (200,000 overdue).
-     */
-    Book goldenBook() {
-        TestDatabase.Fixture t = tenant(true);
-        UUID a = UUID.randomUUID();
-        UUID b = UUID.randomUUID();
-        UUID product = product(t, a);
-        loan(t, product, t.headOffice(), a, "LN0001", "active", 4_000_000, 0, 0, TODAY.plusDays(30));
-        loan(t, product, t.headOffice(), a, "LN0002", "active", 2_200_000, 0, 0, TODAY.plusDays(30));
-        loan(t, product, t.headOffice(), a, "LN0003", "active", 1_000_000, 50_000, 0, TODAY.minusDays(30));
-        loan(t, product, t.secondBranch(), b, "LN0004", "active", 2_000_000, 0, 0, TODAY.plusDays(30));
-        loan(t, product, t.secondBranch(), b, "LN0005", "active", 500_000, 0, 10_000, TODAY.minusDays(31));
-        loan(t, product, t.secondBranch(), b, "LN0006", "active", 300_000, 0, 0, TODAY.minusDays(91));
-        loan(t, product, t.headOffice(), a, "LN0007", "written_off", 200_000, 0, 0, TODAY.minusDays(200));
-        // Written off on 1 September: not in the loan book on any date after it.
-        TestDatabase.owner()
-                .sql(
-                        "UPDATE lending_loans SET written_off_on = DATE '2026-09-01' WHERE tenant_id = ? AND loan_no = 'LN0007'")
-                .param(t.tenantId())
-                .update();
-        return new Book(t, a, b, product);
-    }
-
-    UUID product(TestDatabase.Fixture t, UUID user) {
-        UUID product = UUID.randomUUID();
-        TestDatabase.owner()
-                .sql(
-                        "INSERT INTO lending_loan_products (id, tenant_id, code, name, status) VALUES (?, ?, 'PAR', 'Test Product', 'active')")
-                .params(product, t.tenantId())
-                .update();
-        TestDatabase.owner()
-                .sql("""
-                        INSERT INTO lending_loan_product_versions (id, tenant_id, product_id, version_no, currency,
-                            interest_method, interest_rate_bp, rate_unit, term_unit, min_term_count, max_term_count,
-                            default_term_count, repayment_pattern, min_principal_minor, max_principal_minor, created_by)
-                        VALUES (?, ?, ?, 1, 'UGX', 'flat', 1000, 'per_term', 'month', 1, 1, 1, 'bullet', 1000, 100000000, ?)
-                        """)
-                .params(UUID.randomUUID(), t.tenantId(), product, user)
-                .update();
-        return product;
-    }
-
-    /** One loan with one schedule item due on {@code due} and nothing paid on it. */
-    void loan(
-            TestDatabase.Fixture t,
-            UUID product,
-            UUID branch,
-            UUID officer,
-            String no,
-            String status,
-            long principal,
-            long interest,
-            long fees,
-            LocalDate due) {
-        UUID member = UUID.randomUUID();
-        // A national id is CM or CF and twelve letters or digits (chapter 6, lending_members).
-        String nin = "CMTEST" + String.format("%08d", NIN.incrementAndGet());
-        var owner = TestDatabase.owner();
-        owner.sql("""
-                        INSERT INTO lending_members (id, tenant_id, branch_id, member_no, full_name, phone_e164, id_type,
-                                                     national_id, currency, kyc_status, status, source)
-                        VALUES (?, ?, ?, ?, ?, '+256700000001', 'nin', ?, 'UGX', 'incomplete', 'active', 'staff')
-                        """)
-                .params(member, t.tenantId(), branch, "M" + no, "Test Borrower " + no, nin)
-                .update();
-        UUID loan = UUID.randomUUID();
-        owner.sql("""
-                        INSERT INTO lending_loans (id, tenant_id, branch_id, loan_no, member_id, product_version_id,
-                            officer_user_id, status, channel, purpose_category, currency, requested_principal_minor,
-                            requested_term_count, term_unit, interest_method, interest_rate_bp, rate_unit, repayment_pattern,
-                            disbursed_on, principal_disbursed_minor, principal_outstanding_minor, maturity_date)
-                        SELECT ?, ?, ?, ?, ?, v.id, ?, ?, 'staff', 'business', 'UGX', ?, 1, 'month', 'flat', 1000, 'per_term',
-                               'bullet', DATE '2026-01-05', ?, ?, DATE '2026-12-31'
-                          FROM lending_loan_product_versions v WHERE v.product_id = ?
-                        """)
-                .params(
-                        loan,
-                        t.tenantId(),
-                        branch,
-                        no,
-                        member,
-                        officer,
-                        status,
-                        principal,
-                        principal,
-                        principal,
-                        product)
-                .update();
-        owner.sql("""
-                        INSERT INTO lending_schedule_items (id, tenant_id, loan_id, item_no, due_date, principal_due_minor,
-                                                            interest_due_minor, fees_due_minor, status)
-                        VALUES (?, ?, ?, 1, ?, ?, ?, ?, 'due')
-                        """)
-                .params(UUID.randomUUID(), t.tenantId(), loan, Date.valueOf(due), principal, interest, fees)
-                .update();
-    }
-
-    JsonNode par(Book book, UUID user, String permissions, Map<String, Object> params, String format) throws Exception {
-        ResponseEntity<JsonNode> posted = post(book.t(), user, permissions, "lending.par", params, format);
-        assertThat(posted.getStatusCode().value()).as("%s", posted.getBody()).isEqualTo(202);
-        drain();
-        return run(book.t(), user, permissions, posted.getBody().get("id").asString());
-    }
-
-    JsonNode file(Book book, UUID user, String permissions, JsonNode run) throws Exception {
-        assertThat(run.get("status").asString()).as("%s", run).isEqualTo("ready");
-        return mapper.readTree(
-                download(book.t(), user, permissions, run.get("document_id").asString()));
-    }
-
-    static JsonNode table(JsonNode file, String key) {
-        for (JsonNode t : file.get("tables")) {
-            if (t.get("key").asString().equals(key)) {
-                return t;
-            }
-        }
-        throw new AssertionError("no table " + key);
-    }
-
-    static List<String> rows(JsonNode table) {
-        List<String> out = new ArrayList<>();
-        table.get("rows").forEach(r -> out.add(r.toString()));
-        return out;
-    }
-
+class LendingParReportIT extends LendingBookSupport {
     // ---- golden figures ----------------------------------------------------------------------------
 
     @Test
@@ -341,8 +190,36 @@ class LendingParReportIT extends ReportsItSupport {
         ResponseEntity<JsonNode> posted = post(book.t(), user, PAR_PERMS, "lending.par", Map.of(), "json");
         assertThat(posted.getStatusCode().value()).as("%s", posted.getBody()).isEqualTo(202);
         assertThat(posted.getBody().get("as_of").asString()).isEqualTo("2026-10-08");
-        // The runner gets to it after midnight (00:00:30 on 2026-10-09), before tonight's snapshot job has written
-        // 2026-10-08.
+        // The 9th's first disbursement lands, and the runner gets to the run after midnight (00:00:30 on 2026-10-09),
+        // before
+        // tonight's snapshot job has written 2026-10-08: the loan tables are no longer the 8th's book, so the run is
+        // refused
+        // with a retry hint and never prints the 9th's figures under the 8th.
+        loanOfMember(
+                book.t(),
+                book.product(),
+                book.t().headOffice(),
+                book.officerA(),
+                "LN0009",
+                "MLN0002",
+                5_000_000,
+                LocalDate.of(2026, 10, 9));
+        clock.set(java.time.Instant.parse("2026-10-08T21:00:30Z"));
+        drain();
+        JsonNode refused =
+                run(book.t(), user, PAR_PERMS, posted.getBody().get("id").asString());
+        assertThat(refused.get("status").asString()).as("%s", refused).isEqualTo("failed");
+        assertThat(refused.get("error").asString()).isEqualTo("report_stale_as_of");
+
+        // Once the nightly job has written the 8th, the same request, made at 23:59:30 and run after midnight, is the
+        // 8th's
+        // book from the snapshot: six loans and 10,000,000, without the loan of the 9th.
+        tenantJobs.callAs(
+                book.t().tenantId(),
+                () -> new TransactionTemplate(transactions)
+                        .execute(x -> snapshots.backfill(LocalDate.of(2026, 10, 8), LocalDate.of(2026, 10, 8))));
+        clock.set(java.time.Instant.parse("2026-10-08T20:59:30Z"));
+        posted = post(book.t(), user, PAR_PERMS, "lending.par", Map.of(), "json");
         clock.set(java.time.Instant.parse("2026-10-08T21:00:30Z"));
         drain();
 
@@ -353,7 +230,7 @@ class LendingParReportIT extends ReportsItSupport {
         JsonNode file = mapper.readTree(
                 download(book.t(), user, PAR_PERMS, run.get("document_id").asString()));
         assertThat(file.get("parameters").get("as_at").asString()).isEqualTo("2026-10-08");
-        assertThat(file.get("notes").toString()).contains("loan tables");
+        assertThat(file.get("notes").toString()).contains("nightly snapshot of 2026-10-08");
         assertThat(rows(table(file, "par"))).containsExactly("[\"All loans\",6,10000000,1860000,1800,800,300,300]");
     }
 
@@ -512,15 +389,6 @@ class LendingParReportIT extends ReportsItSupport {
         assertThat(par.get(6).asLong()).isEqualTo(metric(page, "portfolio.par60"));
         assertThat(par.get(7).asLong()).isEqualTo(metric(page, "portfolio.par90"));
         assertThat(par.get(1).asLong()).isEqualTo(metric(page, "portfolio.active_loans"));
-    }
-
-    private static long metric(JsonNode body, String key) {
-        for (JsonNode m : body.get("metrics")) {
-            if (m.get("key").asString().equals(key)) {
-                return m.get("value").asLong();
-            }
-        }
-        throw new AssertionError("no metric " + key);
     }
 
     // ---- a book past the checkpoint block --------------------------------------------------------

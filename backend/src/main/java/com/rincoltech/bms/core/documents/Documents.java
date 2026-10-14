@@ -67,6 +67,20 @@ public interface Documents {
     byte[] renderPdf(String template, Map<String, Object> model);
 
     /**
+     * As {@link #renderPdf(String, Map)} written to {@code target} instead of returned (a report's PDF, ADR-038): the file
+     * is streamed out as it is laid out and no byte array of the whole document is made. Waits for a render place for up to
+     * {@code waitMillis} (a report run is a job and can wait longer than a request), then answers 503
+     * {@code documents_busy}. The model is built by {@code model} only once the place is held, so a report that waits holds
+     * no table in memory. A report render takes at most one of the places, so a receipt or a statement asked for while two
+     * reports are made still finds one (with a single place configured the report shares it). No transaction and no storage.
+     */
+    void renderPdf(
+            String template,
+            java.util.function.Supplier<Map<String, Object>> model,
+            java.nio.file.Path target,
+            long waitMillis);
+
+    /**
      * First half of storing a generated PDF: writes the bytes to object storage under a fresh key.
      * No transaction and no database, so a caller can keep its row lock for {@link #recordGenerated}
      * alone and never hold it across a render or an upload. The object is unreferenced until recorded;

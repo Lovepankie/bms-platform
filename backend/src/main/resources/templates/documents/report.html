@@ -1,0 +1,39 @@
+<!-- A formal report (ADR-038, issue #217; ADR-034 quality bar): the shared letterhead and footer, the title, a parameters box on every report (FR-RPT-02), then each table of the report with its header repeated on every page, tinted rows, a totals row set off, and landscape when a table has more than seven columns. Every value reaches the page as text already formatted by the report renderer; this template only lays it out. -->
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head}"></head>
+<body>
+  <div th:replace="~{layout :: letterhead}"></div>
+  <div th:replace="~{layout :: pagefoot}"></div>
+  <h1 th:text="${doc.title}">PORTFOLIO AT RISK</h1>
+
+  <div class="box">
+    <table class="facts">
+      <tr><td class="k" style="width: 16%;">As at</td><td class="strong" th:text="${report.asAt}">8 Oct 2026</td></tr>
+      <tr th:each="p : ${report.parameters}"><td class="k" th:text="${p.label}">Group by</td><td th:text="${p.value}">Branch</td></tr>
+      <tr><td class="k">Currency</td><td th:text="${report.currency}">UGX</td></tr>
+      <tr><td class="k">Made</td><td th:text="${report.madeLine}">14 Oct 2026 13:05 (Africa/Kampala) by Test User</td></tr>
+      <tr><td class="k">Data read</td><td th:text="${report.readLine}">14 Oct 2026 13:05 (Africa/Kampala)</td></tr>
+    </table>
+    <div class="muted" th:each="n : ${report.notes}" th:text="${n}">A note about where the figures came from.</div>
+  </div>
+
+  <th:block th:each="t : ${tables}">
+    <h2 th:text="${t.title}">Table</h2>
+    <table class="grid" style="table-layout: fixed; font-size: 8.8pt;">
+      <thead>
+        <tr><th th:each="c : ${t.columns}" th:class="${c.num} ? 'num'" th:style="${'width: ' + c.width + '%; ' + c.hstyle}" th:text="${c.label}">Column</th></tr>
+      </thead>
+      <tbody>
+        <tr th:each="r : ${t.rows}">
+          <td th:each="cell, st : ${r}" th:style="${t.columns[st.index].style}" th:class="${t.columns[st.index].num} ? 'num'" th:text="${cell}">cell</td>
+        </tr>
+        <tr class="note" th:if="${t.cut != null}"><td th:colspan="${#lists.size(t.columns)}" th:text="${t.cut}">Showing the first 500 of 900 rows. The full detail is in the Excel file.</td></tr>
+      </tbody>
+      <tbody th:if="${t.total != null}">
+        <tr class="total"><td th:each="cell, st : ${t.total}" th:style="${t.columns[st.index].style}" th:class="${t.columns[st.index].num} ? 'num'" th:text="${cell}">total</td></tr>
+      </tbody>
+    </table>
+    <div class="muted" th:if="${t.empty}">No rows.</div>
+  </th:block>
+</body>
+</html>

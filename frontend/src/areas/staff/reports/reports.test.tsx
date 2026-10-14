@@ -3,7 +3,7 @@ import type { ReactElement } from 'react';
 import { renderToString as render } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { runErrorText, type ReportCatalogueEntry, type ReportRun } from '../../../api/reports';
-import { CatalogueList, RunsTable, paramLabel, sizeText } from './page';
+import { CatalogueList, RunsTable, defaultFormat, formatName, paramLabel, sizeText } from './page';
 import { showReports } from './permissions';
 
 const renderToString = (node: ReactElement) =>
@@ -18,7 +18,7 @@ const par: ReportCatalogueEntry = {
   title: 'Portfolio at risk and ageing',
   description: 'PAR 1, 30, 60 and 90 and the ageing of the active loans on a date.',
   permission: 'lending.reports.portfolio',
-  formats: ['csv', 'json'],
+  formats: ['csv', 'json', 'pdf', 'xlsx'],
   params: [
     { name: 'as_at', type: 'date', required: false, description: 'The date the loans stand at.', values: [] },
     { name: 'branch_id', type: 'uuid_list', required: false, description: 'Branches to include.', values: [] },
@@ -67,6 +67,7 @@ describe('failures in words', () => {
   it.each([
     ['report_too_large', /too large/i],
     ['snapshot_unavailable', /not saved for that date/i],
+    ['report_stale_as_of', /passed before it was made/i],
     ['timeout', /took too long/i],
     ['interrupted', /restart/i],
     ['reports_disabled', /switched off/i],
@@ -95,9 +96,22 @@ describe('the catalogue', () => {
 
   it('leaves the branch to the staff bar and offers the file types', () => {
     expect(html).not.toContain('Branch id');
-    expect(html).toContain('CSV (spreadsheet)');
-    expect(html).toContain('JSON');
+    expect(html).toContain('PDF (to read and print)');
+    expect(html).toContain('Excel (workbook)');
+    expect(html).toContain('CSV (plain spreadsheet)');
+    expect(html).toContain('JSON (data)');
     expect(html).toContain('Run report');
+  });
+
+  it('offers the PDF first, then the workbook, and whatever the report has when it has neither', () => {
+    // The file type is chosen with the PDF selected, so a click on Run report makes the file to read and print.
+    expect(html).toMatch(/<option value="pdf" selected="">PDF \(to read and print\)<\/option>/);
+    expect(html).not.toMatch(/<option value="csv" selected/);
+    expect(defaultFormat(['csv', 'json', 'pdf', 'xlsx'])).toBe('pdf');
+    expect(defaultFormat(['csv', 'json', 'xlsx'])).toBe('xlsx');
+    expect(defaultFormat(['json', 'csv'])).toBe('csv');
+    expect(defaultFormat(['json'])).toBe('json');
+    expect(defaultFormat([])).toBe('json');
   });
 
   it('says so when no report is available', () => {
@@ -135,6 +149,17 @@ describe('your reports', () => {
     expect(html).toContain('Deleted after 30 days');
     expect(html).toContain('too large to produce');
     expect(html).not.toContain('report_too_large');
+  });
+
+  it('names each file type in words', () => {
+    expect(formatName('xlsx')).toBe('Excel');
+    expect(formatName('pdf')).toBe('PDF');
+    const html = renderToString(
+      <RunsTable runs={[run({ format: 'xlsx' }), run({ id: 'b', format: 'pdf' })]} onChange={() => {}} />,
+    );
+    expect(html).toContain('(Excel)');
+    expect(html).toContain('(PDF)');
+    expect(html).not.toContain('XLSX');
   });
 
   it('says so when there is nothing yet, and while a stop is on its way', () => {

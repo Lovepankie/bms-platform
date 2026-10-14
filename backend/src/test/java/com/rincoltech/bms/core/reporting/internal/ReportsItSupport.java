@@ -179,6 +179,27 @@ abstract class ReportsItSupport extends IntegrationTest {
         return file.getBody();
     }
 
+    // JUSTIFICATION-A3: the PDF and workbook files (issue #217) are binary; download() reads text and would corrupt
+    // them.
+    /** The bytes of a ready run's file, fetched through the signed URL as a browser would. */
+    byte[] downloadBytes(TestDatabase.Fixture t, UUID user, String permissions, String documentId) {
+        ResponseEntity<JsonNode> url = http.exchange(
+                "/api/v1/documents/" + documentId + "/download-url",
+                HttpMethod.POST,
+                new HttpEntity<>(headers(t, user, permissions)),
+                JsonNode.class);
+        assertThat(url.getStatusCode().value()).as("%s", url.getBody()).isEqualTo(200);
+        HttpHeaders h = new HttpHeaders();
+        h.add("X-Tenant", t.slug());
+        ResponseEntity<byte[]> file = http.exchange(
+                URI.create(http.getRootUri() + url.getBody().get("url").asString()),
+                HttpMethod.GET,
+                new HttpEntity<>(h),
+                byte[].class);
+        assertThat(file.getStatusCode().value()).isEqualTo(200);
+        return file.getBody();
+    }
+
     /** Queues one run, drains the queue and returns the finished run. */
     JsonNode runToTheEnd(TestDatabase.Fixture t, UUID user, String key, Map<String, Object> params, String format)
             throws InterruptedException {

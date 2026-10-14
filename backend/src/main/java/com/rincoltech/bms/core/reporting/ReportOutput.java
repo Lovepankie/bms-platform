@@ -36,6 +36,13 @@ public interface ReportOutput {
          * {@code LocalDate}, the other kinds a {@code Long} or {@code Integer}; any cell may be null.
          */
         void row(Object... cells);
+
+        /**
+         * The table's last row, set off as a total (bold and ruled in the PDF and the workbook; an ordinary row in JSON
+         * and CSV). Like {@link #row} it counts toward the row cap, but the PDF keeps it when it cuts a long table, so
+         * the total is always printed. No row may follow it.
+         */
+        void total(Object... cells);
     }
 
     /**

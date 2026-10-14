@@ -191,6 +191,63 @@ class Positions {
                 HAVING sum(i.p_un + i.i_un + i.f_un) > 0
                 """;
 
+    /** The snapshot rows of a business date in the scope, one per loan, with the same column names as the live read. */
+    private static String snapshotSql(Scope s, Map<String, Object> p) {
+        return """
+                SELECT sn.loan_id AS id, l.loan_no, l.member_id, sn.branch_id, sn.officer_user_id, sn.product_id,
+                       sn.principal_outstanding_minor AS po, sn.interest_outstanding_minor AS io,
+                       sn.arrears_minor AS arrears, sn.days_past_due
+                  FROM lending_loan_daily_snapshots sn
+                  JOIN lending_loans l ON l.id = sn.loan_id
+                 WHERE sn.business_date = :d""" + s.snapshotFilter("sn", p);
+    }
+
+    /**
+     * Distinct borrowers of the active loans in the scope, in total and per group, counted by the database over the very
+     * statement that {@link #forEachLive} or {@link #forEachSnapshot} streams (so the loans are the same ones), in memory
+     * of the number of groups. {@code groupColumn} is {@code branch_id}, {@code product_id}, {@code officer_user_id}, or
+     * null for the total only. A member with loans in two groups counts once in each and once in the total.
+     */
+    Borrowers borrowers(Scope s, LocalDate date, boolean live, String groupColumn) {
+        if (s.empty()) {
+            return new Borrowers(0, new LinkedHashMap<>());
+        }
+        Map<String, Object> p = new LinkedHashMap<>();
+        String inner;
+        if (live) {
+            inner = liveSql(s, p);
+        } else {
+            p.put("d", Date.valueOf(date));
+            inner = snapshotSql(s, p);
+        }
+        if (groupColumn == null) {
+            long total = jdbc.sql("SELECT count(DISTINCT member_id) FROM (" + inner + ") x")
+                    .params(p)
+                    .query(Long.class)
+                    .single();
+            return new Borrowers(total, new LinkedHashMap<>());
+        }
+        long[] total = {0};
+        Map<UUID, Long> byGroup = new LinkedHashMap<>();
+        jdbc.sql("SELECT " + groupColumn + " AS g, GROUPING(" + groupColumn
+                        + ") AS whole, count(DISTINCT member_id) AS n" + " FROM (" + inner
+                        + ") x GROUP BY GROUPING SETS ((" + groupColumn + "), ())")
+                .params(p)
+                .query((rs, n) -> {
+                    if (rs.getInt("whole") == 1) {
+                        total[0] = rs.getLong("n");
+                    } else {
+                        byGroup.put(rs.getObject("g", UUID.class), rs.getLong("n"));
+                    }
+                    return 0;
+                })
+                .list();
+        return new Borrowers(total[0], byGroup);
+    }
+
+    /** Distinct borrowers in total and by group id (a null id is the loans with no such value). */
+    record Borrowers(long total, Map<UUID, Long> byGroup) {}
+
     /** The snapshot rows of one business date in the scope, as positions. */
     List<Position> snapshot(Scope s, LocalDate date) {
         if (s.empty()) {
@@ -198,13 +255,7 @@ class Positions {
         }
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("d", Date.valueOf(date));
-        String sql = """
-                SELECT sn.loan_id AS id, l.loan_no, l.member_id, sn.branch_id, sn.officer_user_id, sn.product_id,
-                       sn.principal_outstanding_minor AS po, sn.interest_outstanding_minor AS io,
-                       sn.arrears_minor AS arrears, sn.days_past_due
-                  FROM lending_loan_daily_snapshots sn
-                  JOIN lending_loans l ON l.id = sn.loan_id
-                 WHERE sn.business_date = :d""" + s.snapshotFilter("sn", p);
+        String sql = snapshotSql(s, p);
         return jdbc.sql(sql)
                 .params(p)
                 .query((rs, n) -> new Position(
@@ -228,13 +279,7 @@ class Positions {
         }
         Map<String, Object> p = new LinkedHashMap<>();
         p.put("d", Date.valueOf(date));
-        String sql = """
-                SELECT sn.loan_id AS id, l.loan_no, l.member_id, sn.branch_id, sn.officer_user_id, sn.product_id,
-                       sn.principal_outstanding_minor AS po, sn.interest_outstanding_minor AS io,
-                       sn.arrears_minor AS arrears, sn.days_past_due
-                  FROM lending_loan_daily_snapshots sn
-                  JOIN lending_loans l ON l.id = sn.loan_id
-                 WHERE sn.business_date = :d""" + s.snapshotFilter("sn", p);
+        String sql = snapshotSql(s, p);
         try (java.util.stream.Stream<Position> rows = streaming
                 .sql(sql)
                 .params(p)

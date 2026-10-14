@@ -38,6 +38,7 @@ import tools.jackson.databind.ObjectMapper;
             "bms.reports.max-concurrent-runs=1",
             "bms.reports.timeout=PT2S",
             "bms.reports.xlsx-row-cap=500",
+            "bms.reports.pdf-row-cap=200",
             "bms.reports.max-file-bytes=1048576",
             "bms.reports.cancel-poll=PT0.2S",
             "bms.reports.heartbeat=PT0.1S",

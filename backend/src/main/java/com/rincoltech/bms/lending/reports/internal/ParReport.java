@@ -1,24 +1,16 @@
 package com.rincoltech.bms.lending.reports.internal;
 
-import com.rincoltech.bms.core.reporting.ReportDefinition;
 import com.rincoltech.bms.core.reporting.ReportOutput;
 import com.rincoltech.bms.core.reporting.ReportOutput.Column;
 import com.rincoltech.bms.core.reporting.ReportOutput.Kind;
-import com.rincoltech.bms.core.reporting.ReportParams;
 import com.rincoltech.bms.lending.insights.InsightsFigures;
 import com.rincoltech.bms.lending.insights.InsightsFigures.ParBucket;
 import com.rincoltech.bms.lending.insights.InsightsFigures.ParFigures;
 import com.rincoltech.bms.lending.insights.InsightsFigures.ParGroup;
 import com.rincoltech.bms.lending.insights.InsightsFigures.ParGroupBy;
-import com.rincoltech.bms.lending.insights.InsightsFigures.PortfolioScope;
-import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
@@ -39,10 +31,9 @@ import tools.jackson.databind.ObjectMapper;
  * with restructuring, which is not built yet.
  */
 @Component
-class ParReport implements ReportDefinition {
+class ParReport extends PortfolioReport {
 
     static final String KEY = "lending.par";
-    static final List<String> GROUPS = List.of("none", "branch", "product", "officer");
 
     private static final Map<String, String> BUCKET_LABELS = Map.of(
             "current", "Current (not late)",
@@ -51,12 +42,8 @@ class ParReport implements ReportDefinition {
             "61_90", "61 to 90 days late",
             "over_90", "Over 90 days late");
 
-    private final InsightsFigures figures;
-    private final ObjectMapper mapper;
-
     ParReport(InsightsFigures figures, ObjectMapper mapper) {
-        this.figures = figures;
-        this.mapper = mapper;
+        super(figures, mapper);
     }
 
     @Override
@@ -75,74 +62,9 @@ class ParReport implements ReportDefinition {
     }
 
     @Override
-    public String module() {
-        return "lending";
-    }
-
-    @Override
-    public String permission() {
-        return "lending.reports.portfolio";
-    }
-
-    @Override
-    public List<Param> params() {
-        return List.of(
-                new Param(
-                        "as_at",
-                        "date",
-                        false,
-                        "The date the loans stand at; today when absent. A past date reads the nightly snapshot."),
-                new Param(
-                        "branch_id",
-                        "uuid_list",
-                        false,
-                        "Branches to include; every branch in your scope when absent."),
-                new Param(
-                        "group_by",
-                        "enum",
-                        false,
-                        "Split the figures by branch, product or officer; none gives the total only.",
-                        GROUPS));
-    }
-
-    @Override
-    public Set<String> formats() {
-        return Set.of("json", "csv");
-    }
-
-    @Override
-    public Prepared prepare(Map<String, Object> params) {
-        LocalDate asked = ReportParams.date(params, "as_at", null);
-        List<UUID> branches = ReportParams.uuids(params, "branch_id");
-        String groupBy = ReportParams.choice(params, "group_by", GROUPS, "none");
-        // One reading of the business date, taken by the port: an absent date is that day, and the scope keeps it, so a
-        // request made as midnight passes cannot ask for yesterday with today's rules.
-        PortfolioScope resolved = figures.scope(asked, asked, branches, null, null);
-        LocalDate asAt = resolved.to();
-        PortfolioScope scope = new PortfolioScope(
-                asAt, asAt, resolved.today(), resolved.branchIds(), resolved.officerId(), resolved.productId());
-        Map<String, Object> normalised = new LinkedHashMap<>();
-        normalised.put("as_at", asAt.toString());
-        if (!branches.isEmpty()) {
-            normalised.put("branch_id", branches.stream().map(UUID::toString).toList());
-        }
-        normalised.put("group_by", groupBy);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> frozen = mapper.convertValue(scope, Map.class);
-        return new Prepared(normalised, frozen, asAt);
-    }
-
-    @Override
-    public boolean stillAllowed(Prepared run) {
-        return figures.covers(mapper.convertValue(run.scope(), PortfolioScope.class));
-    }
-
-    @Override
     public void query(Prepared prepared, ReportOutput out) {
-        PortfolioScope scope = mapper.convertValue(prepared.scope(), PortfolioScope.class);
-        ParGroupBy by = ParGroupBy.valueOf(
-                String.valueOf(prepared.params().get("group_by")).toUpperCase(Locale.ROOT));
-        ParFigures f = figures.par(scope, by, out::checkpoint);
+        ParGroupBy by = groupBy(prepared);
+        ParFigures f = figures.par(scope(prepared), by, out::checkpoint);
         out.note("Figures read from the "
                 + (f.source().equals("live") ? "loan tables" : "nightly snapshot of " + f.asAt()) + ".");
         out.note("Only active loans are counted; written-off loans are not.");
@@ -155,15 +77,16 @@ class ParReport implements ReportDefinition {
                         new Column("active_loans", "Active loans", Kind.COUNT),
                         new Column("principal_outstanding", "Principal outstanding", Kind.MONEY),
                         new Column("arrears", "Arrears", Kind.MONEY),
-                        new Column("par1_bp", "PAR 1 (basis points)", Kind.BASIS_POINTS),
-                        new Column("par30_bp", "PAR 30 (basis points)", Kind.BASIS_POINTS),
-                        new Column("par60_bp", "PAR 60 (basis points)", Kind.BASIS_POINTS),
-                        new Column("par90_bp", "PAR 90 (basis points)", Kind.BASIS_POINTS)));
+                        new Column("par1_bp", "PAR 1", Kind.BASIS_POINTS),
+                        new Column("par30_bp", "PAR 30", Kind.BASIS_POINTS),
+                        new Column("par60_bp", "PAR 60", Kind.BASIS_POINTS),
+                        new Column("par90_bp", "PAR 90", Kind.BASIS_POINTS)));
         List<ParGroup> rows = new ArrayList<>(f.groups());
         rows.add(f.total());
-        for (ParGroup g : rows) {
+        String totalLabel = by == ParGroupBy.NONE ? "All loans" : "Total";
+        for (ParGroup g : f.groups()) {
             par.row(
-                    g == f.total() ? (by == ParGroupBy.NONE ? "All loans" : "Total") : g.label(),
+                    g.label(),
                     g.loans(),
                     g.principalOutstandingMinor(),
                     g.arrearsMinor(),
@@ -172,6 +95,17 @@ class ParReport implements ReportDefinition {
                     g.par60Bp(),
                     g.par90Bp());
         }
+        ParGroup t = f.total();
+        // The total is the last row of the table, set off in the PDF and the workbook.
+        par.total(
+                totalLabel,
+                t.loans(),
+                t.principalOutstandingMinor(),
+                t.arrearsMinor(),
+                t.par1Bp(),
+                t.par30Bp(),
+                t.par60Bp(),
+                t.par90Bp());
 
         ReportOutput.Table ageing = out.table(
                 "ageing",
@@ -181,10 +115,10 @@ class ParReport implements ReportDefinition {
                         new Column("bucket", "Age", Kind.TEXT),
                         new Column("loans", "Loans", Kind.COUNT),
                         new Column("principal_outstanding", "Principal outstanding", Kind.MONEY),
-                        new Column("share_bp", "Share of principal (basis points)", Kind.BASIS_POINTS),
+                        new Column("share_bp", "Share of principal", Kind.BASIS_POINTS),
                         new Column("arrears", "Arrears", Kind.MONEY)));
         for (ParGroup g : rows) {
-            String label = g == f.total() ? (by == ParGroupBy.NONE ? "All loans" : "Total") : g.label();
+            String label = g == f.total() ? totalLabel : g.label();
             for (ParBucket b : g.buckets()) {
                 ageing.row(
                         label,

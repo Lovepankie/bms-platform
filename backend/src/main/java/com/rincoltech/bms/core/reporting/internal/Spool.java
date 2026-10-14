@@ -23,8 +23,12 @@ import tools.jackson.databind.ObjectMapper;
  */
 final class Spool {
 
-    /** One table as written: its columns, its row count and the file holding its rows. */
-    record TableMeta(String key, String title, List<ReportOutput.Column> columns, long rows, Path file) {}
+    /**
+     * One table as written: its columns, its row count and the file holding its rows. When {@code hasTotal} the last
+     * row is the table's total (see {@link ReportOutput.Table#total}).
+     */
+    record TableMeta(
+            String key, String title, List<ReportOutput.Column> columns, long rows, Path file, boolean hasTotal) {}
 
     /** What a run's ending requires of the code that writes or reads its rows. */
     interface Guard {
@@ -64,6 +68,29 @@ final class Spool {
                 @SuppressWarnings("unchecked")
                 List<Object> row = mapper.readValue(line, List.class);
                 sink.accept(row);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * As {@link #forEachRow} for the first {@code head} rows and, when {@code keepLast}, the table's last row (its total):
+     * the lines in between are read and counted but never parsed, so cutting a table of 200,000 rows to a few hundred for
+     * a PDF costs a scan of the file and no more memory.
+     */
+    void forEachRowCut(TableMeta table, Guard guard, long head, boolean keepLast, Consumer<List<Object>> sink) {
+        try (BufferedReader in = Files.newBufferedReader(table.file(), StandardCharsets.UTF_8)) {
+            String line;
+            long n = 0;
+            while ((line = in.readLine()) != null) {
+                guard.checkpoint();
+                n++;
+                if (n <= head || (keepLast && n == table.rows())) {
+                    @SuppressWarnings("unchecked")
+                    List<Object> row = mapper.readValue(line, List.class);
+                    sink.accept(row);
+                }
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -112,6 +139,7 @@ final class Spool {
         private List<Column> currentColumns;
         private Path currentFile;
         private long currentRows;
+        private boolean currentTotal;
         private long total;
         private long bytes;
 
@@ -129,12 +157,23 @@ final class Spool {
             currentColumns = List.copyOf(columns);
             currentFile = dir.resolve(tables.size() + ".jsonl");
             currentRows = 0;
+            currentTotal = false;
             try {
                 current = Files.newBufferedWriter(currentFile, StandardCharsets.UTF_8);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
-            return this::row;
+            return new Table() {
+                @Override
+                public void row(Object... cells) {
+                    Writer.this.row(false, cells);
+                }
+
+                @Override
+                public void total(Object... cells) {
+                    Writer.this.row(true, cells);
+                }
+            };
         }
 
         @Override
@@ -152,9 +191,12 @@ final class Spool {
             guard.checkpoint();
         }
 
-        private void row(Object... cells) {
+        private void row(boolean isTotal, Object... cells) {
             if (current == null) {
                 throw new IllegalStateException("No table is open.");
+            }
+            if (currentTotal) {
+                throw new IllegalStateException("Table " + currentKey + " ended with its total row.");
             }
             if (cells.length != currentColumns.size()) {
                 throw new IllegalArgumentException(
@@ -184,6 +226,7 @@ final class Spool {
             }
             currentRows++;
             total++;
+            currentTotal = isTotal;
         }
 
         private static Object cell(Column column, Object value) {
@@ -195,7 +238,7 @@ final class Spool {
                     if (!(value instanceof String s)) {
                         throw wrong(column, value);
                     }
-                    yield s;
+                    yield wellFormed(s);
                 }
                 case DATE -> {
                     if (!(value instanceof LocalDate d)) {
@@ -212,6 +255,28 @@ final class Spool {
             };
         }
 
+        /** Text that UTF-8 can hold: an unpaired surrogate (which a database cannot store, but a report could build) becomes U+FFFD. */
+        private static String wellFormed(String s) {
+            for (int i = 0; i < s.length(); i++) {
+                char c = s.charAt(i);
+                if (Character.isSurrogate(c)) {
+                    StringBuilder out = new StringBuilder(s.length());
+                    for (int j = 0; j < s.length(); j++) {
+                        char d = s.charAt(j);
+                        if (Character.isHighSurrogate(d)
+                                && j + 1 < s.length()
+                                && Character.isLowSurrogate(s.charAt(j + 1))) {
+                            out.append(d).append(s.charAt(++j));
+                        } else {
+                            out.append(Character.isSurrogate(d) ? '\uFFFD' : d);
+                        }
+                    }
+                    return out.toString();
+                }
+            }
+            return s;
+        }
+
         private static IllegalArgumentException wrong(Column column, Object value) {
             return new IllegalArgumentException("Column " + column.key() + " is " + column.kind() + ", not "
                     + value.getClass().getSimpleName());
@@ -226,7 +291,7 @@ final class Spool {
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
-            tables.add(new TableMeta(currentKey, currentTitle, currentColumns, currentRows, currentFile));
+            tables.add(new TableMeta(currentKey, currentTitle, currentColumns, currentRows, currentFile, currentTotal));
             current = null;
         }
 

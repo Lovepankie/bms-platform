@@ -4,7 +4,8 @@
 
 Proposed (issue #210, design only; spec `docs/specs/client-extras.md` section 6; delivers increment 8,
 issue #111). The run framework is built by slice D1 (issue #214, migration V49), which amends decisions 1, 3 and 7 (see
-"Amendment (issue #214)" at the end); the PDF, Excel, the other six reports and the pack follow in slices D2 to D5. Builds on ADR-003 (row-level security), ADR-004 (integer money), ADR-008 (jobs), ADR-030
+"Amendment (issue #214)" at the end); the PDF and Excel renderers and the portfolio and PAR reports are built by slice D2 (issue #217,
+no migration), which amends decisions 5 and 6 (see "Amendment (issue #217)"); the other reports and the pack follow in slices D3 to D5. Builds on ADR-003 (row-level security), ADR-004 (integer money), ADR-008 (jobs), ADR-030
 (insights definitions) and, for PDF rendering, ADR-034 (accepted, merged in
 pull request 205). Implements FR-RPT-01 to FR-RPT-05 and
 chapter 14 sections 14.3 to 14.7. Migrations are numbered when each build slice merges.
@@ -172,3 +173,65 @@ file download but not by the query already queued. The whole output file is held
 bounds.
 **Watch for:** a report that reads tables itself instead of the port (decision 3 still applies); a new renderer that holds a table
 in memory instead of reading the spool.
+
+## Amendment (issue #217, slice D2: the PDF and Excel renderers and the portfolio reports)
+
+Building the renderers settled nine things (7 to 9 came from the independent review). None reverses a decision; two of them (1 and 2) change a means the first text named.
+
+1. **Excel is written by a minimal streaming writer, not by Apache POI.** Decision 6 named POI's SXSSF; the issue allowed a minimal
+   writer when POI is not already in the build, and it is not. POI with its XML libraries would add several megabytes of jars that
+   nothing else in the API needs, to a host whose whole heap is 224 MB, for a result the format does simply: a zip of five XML parts and a
+   sheet per table, the rows written one at a time from the spool. The writer is about 400 lines in `core.reporting`, is read back in tests
+   with the JDK's XML parser (and was opened once with `openpyxl`), and carries the guarantees of decision 6 itself: numeric cells (the exact
+   decimal of the integer minor units, never a float), the exact fraction for a rate, real dates, a frozen filled header repeated on
+   every printed page, totals as values, and a string cell with the quote prefix for text that begins like a formula. If a later report
+   needs charts, formulas or styles the writer does not have, POI is the answer then, and only for that report.
+2. **A sheet for each table, with a `Parameters` sheet first.** Decision 6 said one sheet per report. A report may have several tables with
+   different columns (PAR and its ageing), and a sheet is one grid with one frozen header, so the sheet follows the table. The pack of slice D5
+   joins the sheets of its reports under names that carry the report.
+3. **The PDF is one template over the spool.** `core.documents` gains a streaming `renderPdf(template, model, target, wait)` and a `report`
+   template on the shared letterhead; `core.reporting` builds its model from the spool after the snapshot has committed, so the layout holds
+   no transaction and no connection (a test asserts it on the layout thread). A run waits for a render place up to its own deadline, where a
+   request would be told `documents_busy` after three seconds. A table over `BMS_REPORTS_PDF_ROW_CAP` is cut to its first rows and its total
+   row, which is always printed, with the printed pointer to the Excel file; the spool is scanned and only the printed rows are parsed.
+   Landscape above seven columns, a heading that wraps inside its column and a word that wraps inside its cell are part of the template.
+   Every file is named in storage and to the browser by type and id; the PDF's number `RPT-yyyymmdd-xxxxxx` is kept as the document's number.
+4. **The portfolio figures join the port.** `InsightsFigures.portfolio` returns the active loans, distinct borrowers, principal and interest
+   outstanding, arrears and average principal per loan, per group and in total, over the same positions, bucket rule and rounding as
+   `par`; the distinct borrowers are counted by the database over the very statement that streams the positions, so memory is the number of
+   groups. Fees and penalties outstanding and the grouping by purpose are not in the report: the positions and the nightly snapshot do not
+   hold them, and a report may not recompute a figure the page does not own (decision 3). They come with the arrears job of increment 6.
+   Tests assert every group of both reports equals the insights endpoints for the same filter and caller.
+5. **A percentage is made from the integer basis points.** The PDF shows a rate to one decimal half up from the integer, as chapter 14 says,
+   so 755 basis points reads 7.6% where the unrounded ratio (7.547%) would read 7.5%; the workbook holds the exact fraction and the JSON the
+   integer, so the three agree on the figure and differ only in how many places they show.
+6. **Memory, measured.** On a 224 MB heap (the staging API) `ReportMemoryIT` runs both lending reports as PDF and Excel, a sheet of 20,000
+   rows of eight columns and a PDF of a table of 20,000 rows cut at the staging cap of 500, with the old generation's peak at 118 to 124 of 149 MB
+   (the application alone holds 51 MB) and under the nine tenths the test requires. The production PDF cap of 3,000 rows also finishes on
+   that heap but fills the old generation (149 of 149 MB), so it is a setting for hosts with more heap and not for staging;
+   `-Dreports.memory.pdf3000=true` repeats the measurement. The PDF layout, not the spool, is what grows with the cap, which is why the cap
+   exists.
+
+7. **A run that outlives its date reads that date's snapshot, or is refused.** Amendment (issue #214) item 1 froze the business date so a
+   run queued at 23:59 and executed after midnight would still read the loan tables as of the day it was asked for. The tables are the
+   new day's by then (disbursements and repayments land), so that file said "as at the 8th" over the 9th's figures and no longer matched
+   the insights page. When the business date at execution is later than the frozen date, `InsightsFigures` reads the snapshot of the frozen
+   date if the nightly job has written it and otherwise refuses with 422 `report_stale_as_of`, which the screen explains (ask again once
+   the snapshot has run, or for today). It never guesses. The time a run's data was read is now the business clock's, taken as the
+   snapshot transaction starts, like every other timestamp of a run.
+8. **The scope is printed from the frozen scope.** A definition may describe the scope its run was frozen to
+   (`ReportDefinition.describeScope`); the lending reports say "All branches in your access", "n branches selected" and, for a caller
+   without `lending.insights.all_officers`, "your own loans only", so a file never claims more than it covers.
+9. **Reports leave a render place for documents.** The document renderer has two places (it holds a layout in memory), and
+   `BMS_REPORTS_MAX_CONCURRENT_RUNS` is two in production, so two report PDFs could take both and turn a receipt away with 503. A report
+   now takes at most one place (all but one, never fewer than one), builds its model (the printed rows) only after it holds it, and waits
+   for it until its own deadline. A measurement behind `-Dreports.memory.production=true` runs two tenants' PDFs of 3,000 rows and
+   workbooks of 20,000 rows on the production container's heap (1,075 MB, G1); all four runs finish with the old generation peaking at 190 of 1,080 MB.
+
+**Better:** one definition per figure now holds for the portfolio too, in four formats; the workbook opens in any spreadsheet with real
+numbers and no formula route; the PDF is the quality bar of ADR-034 with a visual check script and a reviewed sample sheet.
+**Worse:** the writer is ours to maintain, and a feature of SpreadsheetML it lacks (charts, formulas) means POI for that report; a PDF of
+more than a few hundred rows holds its whole layout in memory while it is made.
+**Watch for:** a report that lists a column the PDF cannot print in its width (a long heading is wrapped, a long figure is not: widen the
+column weights in `PdfReport`); a new column kind (add it to the spool, the PDF text, the workbook cell and the CSV together); the PDF cap raised
+on a small host without running `ReportMemoryIT` first.

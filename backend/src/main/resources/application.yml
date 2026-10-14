@@ -148,7 +148,7 @@ bms:
     max-concurrent-runs: ${BMS_REPORTS_MAX_CONCURRENT_RUNS:2}
     # Rows in the largest table of one output (an Excel sheet, a CSV section, a JSON table).
     xlsx-row-cap: ${BMS_REPORTS_XLSX_ROW_CAP:200000}
-    # Rows of one table in a PDF; read by the PDF slice (D2), listed here so the three are set together.
+    # Rows of one table in a PDF; a longer table is cut with a note that the full detail is in the Excel file.
     pdf-row-cap: ${BMS_REPORTS_PDF_ROW_CAP:3000}
     # Bytes of one output file.
     max-file-bytes: ${BMS_REPORTS_MAX_FILE_BYTES:67108864}

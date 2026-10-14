@@ -38,15 +38,31 @@ public interface InsightsFigures {
 
     /**
      * Portfolio at risk and ageing as at {@code scope.to()} (chapter 14 section 14.3, {@code lending.par}): the live loan
-     * tables when {@code to} is the scope's business date, the nightly snapshot for an earlier one. Runs in the caller's
-     * transaction, which should be read only. Refuses with 422 {@code snapshot_unavailable} when a past date has no
-     * snapshot.
+     * tables when {@code to} is the scope's business date and that date is still the business date, the nightly snapshot
+     * for an earlier one. A scope whose date has passed since it was resolved (a run that waited past midnight) reads that date's
+     * snapshot when it exists, because the loan tables are the new day's by then, and is refused with 422
+     * {@code report_stale_as_of} when it does not. Runs in the caller's transaction, which should be read only. Refuses with
+     * 422 {@code snapshot_unavailable} when a past date has no snapshot.
      *
      * <p>The loans are read in blocks and totalled as they arrive, so memory grows with the number of groups and never
      * with the number of loans; {@code checkpoint} is called every 1,000 loans, so a caller can stop a long read (a
      * cancelled or timed out run) by throwing from it.
      */
     ParFigures par(PortfolioScope scope, ParGroupBy groupBy, Runnable checkpoint);
+
+    /**
+     * The loan portfolio as at {@code scope.to()} (chapter 14 section 14.3, {@code lending.portfolio_outstanding}): per
+     * group and in total, the active loans, their distinct borrowers, principal and interest outstanding and arrears, from
+     * the same positions as {@link #par} and the insights page (the live loan tables for the scope's business date, the
+     * nightly snapshot for an earlier one; 422 {@code snapshot_unavailable} when there is none). Runs in the caller's
+     * transaction, which should be read only; memory grows with the number of groups, not of loans, and {@code checkpoint}
+     * is called every 1,000 loans as for {@link #par}.
+     *
+     * <p>The borrowers of a group are the distinct members with an active loan in it, so a member with loans in two
+     * branches counts once in each branch and once in the total: the groups' borrowers can add up to more than the
+     * total's, as on the insights page.
+     */
+    PortfolioFigures portfolio(PortfolioScope scope, ParGroupBy groupBy, Runnable checkpoint);
 
     /**
      * True when the signed-in caller could still ask for everything {@code scope} covers: they still hold
@@ -103,6 +119,33 @@ public interface InsightsFigures {
             Long par60Bp,
             Long par90Bp,
             List<ParBucket> buckets) {}
+
+    // JUSTIFICATION-A3: the portfolio report (issue #217) reads figures PAR does not carry (borrowers, interest,
+    // average); same port.
+
+    /**
+     * @param asAt the date the figures stand at
+     * @param source {@code live} or {@code snapshot}, as for {@link ParFigures}
+     * @param currency the tenant's currency; amounts are integer minor units
+     * @param total every loan in scope
+     * @param groups one per group when grouped (sorted by label), empty for {@link ParGroupBy#NONE}
+     */
+    record PortfolioFigures(
+            LocalDate asAt, String source, String currency, PortfolioGroup total, List<PortfolioGroup> groups) {}
+
+    /**
+     * Active loans of one group on the date: their count, distinct borrowers, principal and interest outstanding, arrears,
+     * and the average principal outstanding per loan (half up, null when the group has no loans).
+     */
+    record PortfolioGroup(
+            String key,
+            String label,
+            long loans,
+            long borrowers,
+            long principalOutstandingMinor,
+            long interestOutstandingMinor,
+            long arrearsMinor,
+            Long averagePrincipalMinor) {}
 
     /** One age bucket of a group: its loans, principal outstanding, share of the group's principal and arrears. */
     record ParBucket(String bucket, long loans, long principalOutstandingMinor, Long shareBp, long arrearsMinor) {}

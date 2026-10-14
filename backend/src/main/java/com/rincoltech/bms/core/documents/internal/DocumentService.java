@@ -286,6 +286,15 @@ class DocumentService implements Documents {
     }
 
     @Override
+    public void renderPdf(
+            String template,
+            java.util.function.Supplier<Map<String, Object>> model,
+            java.nio.file.Path target,
+            long waitMillis) {
+        pdf.renderTo(template, model, target, waitMillis);
+    }
+
+    @Override
     public GeneratedObject putGenerated(byte[] bytes, String docType) {
         return putFile(bytes, docType, "application/pdf", "pdf");
     }
@@ -462,6 +471,7 @@ class DocumentService implements Documents {
             case "image/png" -> ".png";
             case "image/webp" -> ".webp";
             case "text/csv" -> ".csv";
+            case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> ".xlsx";
             case "application/json" -> ".json";
             default -> "";
         };

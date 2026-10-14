@@ -53,6 +53,16 @@ export function sizeText(run: Pick<ReportRun, 'row_count' | 'size_bytes'>): stri
   return `${rows}, ${size}`;
 }
 
+/** A file type in the words people use: "Excel" for xlsx. */
+export function formatName(format: string): string {
+  return format === 'xlsx' ? 'Excel' : format.toUpperCase();
+}
+
+/** The file type to offer first: the PDF to read and print, else the Excel workbook, else whatever comes first. */
+export function defaultFormat(formats: string[]): string {
+  return ['pdf', 'xlsx', 'csv', 'json'].find((f) => formats.includes(f)) ?? formats[0] ?? 'json';
+}
+
 function Reports() {
   const { me } = useStaff();
   if (!showReports(me)) {
@@ -156,7 +166,7 @@ export function CatalogueList({
 
 function RunForm({ entry, branchIds, onQueued }: { entry: ReportCatalogueEntry; branchIds: string[] | undefined; onQueued: () => void }) {
   const [values, setValues] = useState<Record<string, string>>({});
-  const [format, setFormat] = useState(entry.formats.includes('csv') ? 'csv' : (entry.formats[0] ?? 'json'));
+  const [format, setFormat] = useState(defaultFormat(entry.formats));
   const queue = useMutation({
     mutationFn: () => {
       const params: Record<string, unknown> = {};
@@ -204,7 +214,7 @@ function RunForm({ entry, branchIds, onQueued }: { entry: ReportCatalogueEntry; 
         File type
         <select value={format} onChange={(ev) => setFormat(ev.target.value)}>
           {entry.formats.map((f) => (
-            <option key={f} value={f}>{f === 'csv' ? 'CSV (spreadsheet)' : f.toUpperCase()}</option>
+            <option key={f} value={f}>{FORMAT_LABEL[f] ?? f.toUpperCase()}</option>
           ))}
         </select>
       </label>
@@ -213,6 +223,13 @@ function RunForm({ entry, branchIds, onQueued }: { entry: ReportCatalogueEntry; 
     </form>
   );
 }
+
+const FORMAT_LABEL: Record<string, string> = {
+  pdf: 'PDF (to read and print)',
+  xlsx: 'Excel (workbook)',
+  csv: 'CSV (plain spreadsheet)',
+  json: 'JSON (data)',
+};
 
 /** "as_at" reads "As at", "group_by" reads "Group by". */
 export function paramLabel(name: string): string {
@@ -270,7 +287,7 @@ export function RunsTable({
             <tbody>
               {runs.map((r) => (
                 <tr key={r.id}>
-                  <td data-label="Report">{r.title} <span className="ln-muted">({r.format.toUpperCase()})</span></td>
+                  <td data-label="Report">{r.title} <span className="ln-muted">({formatName(r.format)})</span></td>
                   <td data-label="As at">{r.as_of}</td>
                   <td data-label="Asked">{when(r.requested_at)}</td>
                   <td data-label="Status">

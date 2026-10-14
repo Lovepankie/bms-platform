@@ -121,6 +121,16 @@ Parameters: `as_at`, branches, group by (`branch`, `product`, `officer`, `purpos
 interest outstanding (`interest_outstanding_minor`), fees and penalties outstanding,
 arrears, average `PO` per loan.
 
+**Built (extras slice D2, issue #217), with two differences from the list above.** Grouping is `none`, `branch`, `product` or
+`officer`; and fees and penalties outstanding are not in the table. Both are limits of the figures the insights module holds, which the
+report must not recompute (section 14.10): a loan's position carries principal, interest and arrears, and the nightly snapshot
+(`lending_loan_daily_snapshots`) has no column for fees or penalties and no loan purpose, so a past date could not be served. They arrive
+with the arrears job of increment 6, which owns the snapshot, and the report says so in a note. The table (`portfolio`) has, per group
+and in a last total row: active loans, borrowers, principal outstanding, interest outstanding, arrears, and the average principal per
+loan (`PO` divided by the loans, rounded half up, empty when there are none). Borrowers are the distinct members with an active loan
+in the group, so a member with loans in two branches counts once in each and once in the total, and the groups can add up to more than
+the total; the report says so in a note.
+
 ### `lending.par`: Portfolio at risk and ageing
 
 Parameters: `as_at`, branches, group by.
@@ -357,7 +367,7 @@ Rules added by the pack:
 - **One snapshot, then render.** A run queries in a single read-only `REPEATABLE READ` transaction into a disk spool and commits
   before rendering; it records `as_of` and `snapshot_at`, and a pack's seven reports agree with each other. On staging (about
   224 MB of heap) one run at a time, 500 PDF rows and 20,000 sheet rows, each report rendered to its own PDF and merged on disk.
-- **Outputs.** PDF through the shared document templates (landscape above seven columns, header repeated, a parameters box,
+- **Outputs.** (Built in slice D2, issue #217: see the paragraph below.) PDF through the shared document templates (landscape above seven columns, header repeated, a parameters box,
   tables over 3,000 rows cut with a pointer to the Excel file) and Excel through a streaming writer (numeric cells, real
   dates, explicit string cells for text starting with `=`, `+`, `-` or `@`, 200,000 row cap per sheet). Totals come from one
   piece of code, so the files cannot differ.
@@ -373,13 +383,63 @@ takes `as_at` (today by default; a past date reads `lending_loan_daily_snapshots
 when none was written), `branch_id` (repeatable) and `group_by` (`none`, `branch`, `product` or `officer`), and writes two
 tables: `par` (per group and a total row: active loans, principal outstanding, arrears, PAR 1, 30, 60 and 90 in basis points
 of the group's principal) and `ageing` (per group and bucket: loans, principal outstanding, share of the group's principal,
-arrears). The figures come from the public `InsightsFigures` port (`lending.insights`), which holds only the PAR figures so far;
-slice D2 (issue #217) adds the others to it. A test asserts the report's principal outstanding, arrears, active loans and PAR 1,
+arrears). The figures come from the public `InsightsFigures` port (`lending.insights`); slice D2 (issue #217) added the portfolio
+figures to it and the remaining reports add theirs. A test asserts the report's principal outstanding, arrears, active loans and PAR 1,
 30, 60 and 90 equal the insights portfolio metrics for the same date. The restructured loan's separate line (FR-LCL-04) is not
-printed, because loans cannot be restructured yet. The business date is the one of the request: a run asked for at 23:59 and executed after midnight still reads the loan tables as
-of the day it was asked for, not a snapshot that tonight's job has not written. The figures are totalled as the loans are read, in
+printed, because loans cannot be restructured yet. The business date is the one of the request, and the figures are the book of that date: a run asked for at 23:59 and executed
+after midnight no longer finds that book in the loan tables (they hold the new day's disbursements and repayments), so it reads the
+date's nightly snapshot when the job has written it and is refused with `report_stale_as_of` when it has not (the user asks again
+once the snapshot exists, or for today). The figures are totalled as the loans are read, in
 blocks, so memory grows with the number of groups, not of loans; a cancelled or timed out run stops within 1,000 loans. The tenant
 switch is the setting `reports_enabled` (chapter 6 `tenant_settings`), also in `GET /me`.
+
+**Built (extras slice D2, issue #217).** The PDF and Excel renderers, and the second report, `lending.portfolio_outstanding`. No
+migration (the `format` check of `report_runs` already allowed `pdf` and `xlsx`) and no permission (both reports run under
+`lending.reports.portfolio`, and need `lending.insights.read` as well, as `lending.par` does).
+
+- **Formats.** `lending.par` and `lending.portfolio_outstanding` are offered as `pdf`, `xlsx`, `csv` and `json`; a report writes its
+  tables once and every format is rendered from the same spool, so the figures cannot differ. `lending.portfolio_outstanding` takes
+  `as_at`, `branch_id` and `group_by` like `lending.par`, and writes one table (section 14.3). Both read the figures through
+  `InsightsFigures` (the new `portfolio` method beside `par`, over the same positions, the same bucket rule and the same basis point
+  rounding as the insights page); tests assert that the total and every branch, product and officer row equal the insights endpoints
+  for the same filter and caller, in every format, and that a branch limited or officer limited caller gets their own scope in the
+  PDF and the workbook.
+- **PDF.** The shared `report` template over the ADR-034 letterhead: the tenant's logo, name and brand colour, a readable number
+  `RPT-yyyymmdd-xxxxxx` (the date the file was made in the tenant's time zone and six characters of the run's id, kept as the
+  document's number), a centred title, a parameters box (the date the figures stand at, each parameter in words, the currency, who
+  made the file and when, when the data was read, the notes), then each table with its heading repeated on every page, tinted rows and a
+  total row set off between rules, and "page x of y" in the footer. A4, landscape when a table has more than seven columns, Open Sans
+  embedded. Money is in whole currency units with the currency in the column heading, a rate is a percentage to one decimal made from
+  the integer basis points half up (so 755 basis points reads 7.6%, not 7.5%), a date is `8 Oct 2026`, a missing figure is a dash, and
+  a long unbroken word wraps inside its cell. A table longer than `BMS_REPORTS_PDF_ROW_CAP` (3,000; 500 on staging) is cut to that many
+  rows with the printed note "Showing the first 500 of 900 rows. The full detail is in the Excel file." and keeps its total row. A
+  character the font lacks prints as "?" (ADR-034). The layout is read from the spool after the snapshot has committed and holds no
+  transaction and no connection; a run waits for a render place up to its own deadline.
+- **Excel.** A minimal streaming writer in `core.reporting` (Apache POI is not in the build, ADR-038 amendment): a `Parameters` sheet
+  first (the report, the date as a real date, when the data was read and the file made, by whom, the currency, the parameters in words,
+  the notes), then a sheet for each table named by its title. Money is a numeric cell holding the exact decimal of the integer minor
+  units with a thousands format; a rate is the exact fraction (0.1389) shown as `0.0%`; a date is a real date; a count is a number; a
+  missing figure is an empty cell. The header row is frozen, filled in the brand colour and repeated on every printed page, the total
+  row is bold between rules, and the sheet prints landscape above seven columns with "Page x of y". Totals are the report's own values,
+  not formulas. Text is always a string cell, never a formula, and text that begins with `=`, `+`, `-`, `@`, a tab or a carriage
+  return also carries the quote prefix style, so it stays text when edited; characters XML cannot hold are dropped and a cell is cut at
+  32,767 characters. The workbook is streamed to disk a row at a time.
+- **Memory.** `ReportMemoryIT` runs both reports as PDF and Excel on the seeded book, a sheet of 20,000 rows of eight columns (the staging
+  cap) and a PDF of a table of 20,000 rows cut at 500, in a child JVM on 224 MB of heap, with the old generation's peak under nine tenths
+  of its limit (it measured 118 and 124 of 149 MB in two runs, the application alone holding 51 MB). At the production cap of 3,000 PDF rows the same run
+  finishes but the old generation fills its limit, so staging keeps 500 and a production host with more heap takes 3,000
+  (`-Dreports.memory.pdf3000=true` repeats the measurement).
+- **Business date.** The figures are those of the request's business date in Kampala, whichever format: a PDF or workbook asked for at
+  23:59:30 and made after midnight says "As at 8 Oct 2026" and "Made 9 Oct 2026 00:01" and holds the 8th's book, read from the 8th's
+  snapshot. The loan tables are the 9th's by then, so a run whose date has passed without its snapshot is failed `report_stale_as_of`
+  rather than printing the 9th's figures under the 8th (a test lands a disbursement of the 9th between the queue and the run). Tests queue
+  across 20:59 and 21:01 UTC. The time the data was read is the business clock's, taken as the snapshot transaction starts.
+- **Scope in words.** The first lines of the PDF (the letterhead's second line and the parameters box) and of the Parameters sheet say
+  what the figures cover, from the frozen scope: "All branches in your access", "1 branch selected", "2 branches selected", and ", your
+  own loans only" for a caller without `lending.insights.all_officers`.
+- **Render places.** A report PDF takes at most one of the document renderer's two places and builds its model only once it holds it, so
+  a receipt or a statement asked for while two reports are made still finds a place (a test holds a report in its layout and renders a
+  document beside it).
 
 ## 14.8 Test datasets
 

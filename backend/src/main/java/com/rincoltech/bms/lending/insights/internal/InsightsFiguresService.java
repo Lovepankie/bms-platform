@@ -88,6 +88,7 @@ class InsightsFiguresService implements InsightsFigures {
         final String label;
         long loans;
         long po;
+        long io;
         long arrears;
         final long[] atRisk = new long[EDGES];
         final long[] bucketLoans = new long[BUCKETS.size()];
@@ -102,6 +103,7 @@ class InsightsFiguresService implements InsightsFigures {
         void add(Position l) {
             loans++;
             po += l.principalOutstandingMinor();
+            io += l.interestOutstandingMinor();
             arrears += l.arrearsMinor();
             for (int e = 0; e < EDGES; e++) {
                 if (l.daysPastDue() > PAR_EDGES[e]) {
@@ -134,47 +136,84 @@ class InsightsFiguresService implements InsightsFigures {
         }
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public ParFigures par(PortfolioScope p, ParGroupBy groupBy, Runnable checkpoint) {
+    /** The positions of the scope, a block at a time into {@code sink}; returns whether they came from the live tables. */
+    private boolean read(PortfolioScope p, Runnable checkpoint, java.util.function.Consumer<Position> sink) {
         // The business date of the request, not of the moment the run executes (see PortfolioScope).
         LocalDate today = p.today();
         if (p.to().isAfter(today)) {
             throw ApiException.rule("range_in_future", "The date is today or earlier.");
         }
-        String currency = tenant.profile().currency();
-        Scope s = new Scope(p.from(), p.to(), today, p.branchIds(), p.officerId(), p.productId(), currency);
+        Scope s = scopeOf(p);
         boolean live = s.to().equals(today);
+        if (live && service.today().isAfter(today)) {
+            // The date the figures were asked for has passed while the run waited: the loan tables now hold the new
+            // day's
+            // disbursements and repayments, so they are no longer the book of the date on the page. Read that date's
+            // snapshot
+            // when the nightly job has written it, and refuse (never a guess) when it has not.
+            if (!positions.snapshotTaken(s.to())) {
+                throw ApiException.rule(
+                        "report_stale_as_of",
+                        "The date of this report (" + s.to()
+                                + ") passed before it was made and its snapshot is not written"
+                                + " yet. Ask for it again once the nightly snapshot has run, or for today's date.");
+            }
+            live = false;
+        }
         if (!live && !positions.snapshotTaken(s.to())) {
             throw ApiException.rule(
                     "snapshot_unavailable",
                     "No snapshot of the loan book exists for " + s.to() + ". Pick a later date.");
         }
-        Totals total = new Totals("all", "All loans");
-        Map<UUID, Totals> groups = new LinkedHashMap<>();
-        Function<Position, UUID> by = switch (groupBy) {
+        long[] seen = {0};
+        java.util.function.Consumer<Position> counted = l -> {
+            if ((++seen[0] % CHECKPOINT_EVERY) == 0) {
+                checkpoint.run();
+            }
+            sink.accept(l);
+        };
+        checkpoint.run();
+        if (live) {
+            positions.forEachLive(s, counted);
+        } else {
+            positions.forEachSnapshot(s, s.to(), counted);
+        }
+        checkpoint.run();
+        return live;
+    }
+
+    private Scope scopeOf(PortfolioScope p) {
+        return new Scope(
+                p.from(),
+                p.to(),
+                p.today(),
+                p.branchIds(),
+                p.officerId(),
+                p.productId(),
+                tenant.profile().currency());
+    }
+
+    private static Function<Position, UUID> groupKey(ParGroupBy groupBy) {
+        return switch (groupBy) {
             case BRANCH -> Position::branchId;
             case PRODUCT -> Position::productId;
             default -> Position::officerUserId;
         };
-        long[] seen = {0};
-        java.util.function.Consumer<Position> sink = l -> {
-            if ((++seen[0] % CHECKPOINT_EVERY) == 0) {
-                checkpoint.run();
-            }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ParFigures par(PortfolioScope p, ParGroupBy groupBy, Runnable checkpoint) {
+        Totals total = new Totals("all", "All loans");
+        Map<UUID, Totals> groups = new LinkedHashMap<>();
+        Function<Position, UUID> by = groupKey(groupBy);
+        boolean live = read(p, checkpoint, l -> {
             total.add(l);
             if (groupBy != ParGroupBy.NONE) {
                 groups.computeIfAbsent(by.apply(l), k -> new Totals(String.valueOf(k), null))
                         .add(l);
             }
-        };
-        checkpoint.run();
-        if (live) {
-            positions.forEachLive(s, sink);
-        } else {
-            positions.forEachSnapshot(s, s.to(), sink);
-        }
-        checkpoint.run();
+        });
         List<ParGroup> out = new ArrayList<>();
         if (groupBy != ParGroupBy.NONE) {
             Map<UUID, String> names = names(groupBy, groups.keySet());
@@ -183,7 +222,62 @@ class InsightsFiguresService implements InsightsFigures {
             }
             out.sort(Comparator.comparing(ParGroup::label).thenComparing(ParGroup::key));
         }
-        return new ParFigures(s.to(), live ? "live" : "snapshot", currency, total.done("All loans"), out);
+        String currency = tenant.profile().currency();
+        return new ParFigures(p.to(), live ? "live" : "snapshot", currency, total.done("All loans"), out);
+    }
+
+    // JUSTIFICATION-A3: the portfolio report (issue #217) needs borrowers and interest per group; it reads the same
+    // positions as par().
+    @Override
+    @Transactional(readOnly = true)
+    public PortfolioFigures portfolio(PortfolioScope p, ParGroupBy groupBy, Runnable checkpoint) {
+        Totals total = new Totals("all", "All loans");
+        Map<UUID, Totals> groups = new LinkedHashMap<>();
+        Function<Position, UUID> by = groupKey(groupBy);
+        boolean live = read(p, checkpoint, l -> {
+            total.add(l);
+            if (groupBy != ParGroupBy.NONE) {
+                groups.computeIfAbsent(by.apply(l), k -> new Totals(String.valueOf(k), null))
+                        .add(l);
+            }
+        });
+        String column = switch (groupBy) {
+            case NONE -> null;
+            case BRANCH -> "branch_id";
+            case PRODUCT -> "product_id";
+            case OFFICER -> "officer_user_id";
+        };
+        Positions.Borrowers borrowers = positions.borrowers(scopeOf(p), p.to(), live, column);
+        checkpoint.run();
+        List<PortfolioGroup> out = new ArrayList<>();
+        if (groupBy != ParGroupBy.NONE) {
+            Map<UUID, String> names = names(groupBy, groups.keySet());
+            for (Map.Entry<UUID, Totals> e : groups.entrySet()) {
+                out.add(portfolioGroup(
+                        e.getValue(),
+                        names.getOrDefault(e.getKey(), InsightsService.staffLabel(e.getKey())),
+                        borrowers.byGroup().getOrDefault(e.getKey(), 0L)));
+            }
+            out.sort(Comparator.comparing(PortfolioGroup::label).thenComparing(PortfolioGroup::key));
+        }
+        return new PortfolioFigures(
+                p.to(),
+                live ? "live" : "snapshot",
+                tenant.profile().currency(),
+                portfolioGroup(total, "All loans", borrowers.total()),
+                out);
+    }
+
+    private static PortfolioGroup portfolioGroup(Totals t, String label, long borrowers) {
+        return new PortfolioGroup(
+                t.key,
+                label,
+                t.loans,
+                borrowers,
+                t.po,
+                t.io,
+                t.arrears,
+                t.loans == 0 ? null : InsightsService.divideHalfUp(t.po, t.loans));
     }
 
     private Map<UUID, String> names(ParGroupBy by, Set<UUID> ids) {

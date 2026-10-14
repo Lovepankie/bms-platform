@@ -12,6 +12,7 @@ import com.rincoltech.bms.core.reporting.internal.RunStore.Run;
 import com.rincoltech.bms.core.reporting.internal.Spool.Guard;
 import com.rincoltech.bms.core.reporting.internal.Spool.TableMeta;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
+import com.rincoltech.bms.core.tenancy.Letterheads;
 import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.BusinessClock;
@@ -20,7 +21,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -46,7 +46,7 @@ import tools.jackson.databind.ObjectMapper;
  *       report's {@link ReportDefinition#query} writes its rows to the spool on disk, one at a time. The
  *       transaction then <b>commits</b>, so the snapshot (and the old row versions it pins) is released before
  *       anything slow happens. Every row of a run comes from this one snapshot.
- *   <li><b>Snapshot time.</b> The database's own start time of that transaction is recorded on the run.
+ *   <li><b>Snapshot time.</b> The business clock's time at the start of that transaction is recorded on the run.
  *   <li><b>Render.</b> The JSON or CSV file is streamed from the spool to a file, capped in size.
  *   <li><b>Store.</b> The object is written to storage without a transaction open, then one short transaction
  *       records the document and marks the run ready.
@@ -70,6 +70,7 @@ class RunExecutor {
     private final TenantSettings settings;
     private final CurrentTenant tenant;
     private final Documents documents;
+    private final Letterheads letterheads;
     private final AuditLog audit;
     private final BusinessClock clock;
     private final ObjectMapper mapper;
@@ -85,6 +86,7 @@ class RunExecutor {
             TenantSettings settings,
             CurrentTenant tenant,
             Documents documents,
+            Letterheads letterheads,
             AuditLog audit,
             BusinessClock clock,
             ObjectMapper mapper,
@@ -96,6 +98,7 @@ class RunExecutor {
         this.settings = settings;
         this.tenant = tenant;
         this.documents = documents;
+        this.letterheads = letterheads;
         this.audit = audit;
         this.clock = clock;
         this.mapper = mapper;
@@ -125,7 +128,7 @@ class RunExecutor {
             List<TableMeta> tables, List<String> notes, long rows, Instant snapshotAt, String currency) {}
 
     /** A rendered file waiting to be stored. */
-    private record Rendered(Path file, String contentType, String extension) {}
+    private record Rendered(Path file, String contentType, String extension, String docNumber) {}
 
     /** The run's deadline and its cancel check, called from wherever rows are written or read. */
     private final class RunGuard implements Guard {
@@ -231,10 +234,8 @@ class RunExecutor {
                             remaining.plusSeconds(30).toMillis() + "ms")
                     .query((rs, n) -> 1)
                     .single();
-            Instant snapshotAt = jdbc.sql("SELECT transaction_timestamp()")
-                    .query(Timestamp.class)
-                    .single()
-                    .toInstant();
+            // The business clock, like every other timestamp of a run, so a test that pins the clock pins this too.
+            Instant snapshotAt = clock.now();
             String currency = tenant.profile().currency();
             try (Spool.Writer out = spool.writer(rowCap, sizeCap, guard)) {
                 def.query(prepared, out);
@@ -245,21 +246,62 @@ class RunExecutor {
     }
 
     private Rendered render(Run run, ReportDefinition def, Spool spool, Queried q, RunGuard guard) {
+        Instant made = clock.now();
         Header header = new Header(
-                def.key(), def.title(), run.params(), run.asOf(), q.snapshotAt(), clock.now(), q.currency(), q.notes());
+                def.key(), def.title(), run.params(), run.asOf(), q.snapshotAt(), made, q.currency(), q.notes());
         long sizeCap = Math.min(run.sizeCapBytes(), limits.maxFileBytes);
         Path target = spool.dir().resolve("output");
-        return switch (run.format()) {
+        Rendered rendered = switch (run.format()) {
             case "json" -> {
                 Renderers.json(mapper, spool, header, q.tables(), target, sizeCap, guard);
-                yield new Rendered(target, "application/json", "json");
+                yield new Rendered(target, "application/json", "json", null);
             }
             case "csv" -> {
                 Renderers.csv(spool, header, q.tables(), target, sizeCap, guard);
-                yield new Rendered(target, "text/csv", "csv");
+                yield new Rendered(target, "text/csv", "csv", null);
+            }
+            case "xlsx" -> {
+                // Everything the file says around the figures is read first, in one short transaction; the rendering
+                // that follows holds no connection (decision 2).
+                Presentation p = presentation(run, def);
+                XlsxWriter.write(target, sizeCap, header, p, q.tables(), spool, guard);
+                yield new Rendered(
+                        target,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "xlsx",
+                        ReportFormats.reportNumber(run.id(), made, p.zone()));
+            }
+            case "pdf" -> {
+                Presentation p = presentation(run, def);
+                String number = ReportFormats.reportNumber(run.id(), made, p.zone());
+                PdfReport.write(documents, limits, header, p, number, q.tables(), spool, target, guard);
+                yield new Rendered(target, "application/pdf", "pdf", number);
             }
             default -> throw new ReportFailure("format_unavailable", "This build cannot render " + run.format() + ".");
         };
+        try {
+            if (Files.size(rendered.file()) > sizeCap) {
+                throw new ReportFailure("report_too_large", "The report is larger than the size limit.");
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return rendered;
+    }
+
+    // JUSTIFICATION-A3: the PDF and Excel renderers (issue #217) need the letterhead and the requester's name; nothing
+    // here read them.
+    /** The letterhead, the requester's name and the time zone, read in one short transaction before rendering. */
+    private Presentation presentation(Run run, ReportDefinition def) {
+        return plain.execute(s -> {
+            String by = jdbc.sql("SELECT full_name FROM users WHERE id = ?")
+                    .param(run.requestedBy())
+                    .query(String.class)
+                    .optional()
+                    .orElse("Staff");
+            String scope = def.describeScope(new ReportDefinition.Prepared(run.params(), run.scope(), run.asOf()));
+            return Presentation.of(letterheads.current(), by, tenant.profile().timezone(), def, run.params(), scope);
+        });
     }
 
     /** Stores the file with no transaction open, then records it and marks the run ready in one short one. */
@@ -277,8 +319,8 @@ class RunExecutor {
         try {
             Instant now = clock.now();
             Boolean ready = plain.execute(s -> {
-                StoredDocument doc =
-                        documents.recordGenerated(object, null, SUBJECT, run.id(), null, run.requestedBy());
+                StoredDocument doc = documents.recordGenerated(
+                        object, rendered.docNumber(), SUBJECT, run.id(), null, run.requestedBy());
                 boolean marked = store.markReady(
                         run.id(), doc.id(), (int) q.rows(), size, now, now.plus(Duration.ofDays(limits.retentionDays)));
                 if (!marked) {

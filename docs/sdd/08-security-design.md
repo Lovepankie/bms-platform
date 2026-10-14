@@ -266,6 +266,12 @@ Notes:
   it (no signed-in user) can neither widen nor lose it; `lending.par` takes it from the insights module, the same code as the
   insights endpoints, and needs `lending.insights.read` as well. Report runs are off until a tenant administrator sets
   `reports_enabled` in the tenant settings (`core.settings.manage`).
+  Built (extras slice D2, issue #217): the PDF and Excel renderers and `lending.portfolio_outstanding` add no permission and no seeded
+  row either (both lending reports run under `lending.reports.portfolio`); `PermissionMatrixIT` still passes and this matrix equals the
+  seeds. A spreadsheet cell is never a formula: text is written as a string cell and text that begins with `=`, `+`, `-`, `@`, a tab or a
+  carriage return carries the quote prefix style (FR-RPT-07, threat "formula injection through a name"). The PDF prints every value as
+  escaped text through the XML-mode templates and loads nothing but `data:` URIs (ADR-034). A file name served to a browser is
+  `report-<id>.<ext>`, and no log line, run row or audit entry carries a name or a figure.
 - Branch managers approve loans, but never one they submitted or appraised (FR-APR-03).
 - Member ID images (`id_front`, `id_back`) need `lending.members.verify_kyc` in the member's
   branch, so tenant admins and branch managers, the people who verify KYC; photos and other member

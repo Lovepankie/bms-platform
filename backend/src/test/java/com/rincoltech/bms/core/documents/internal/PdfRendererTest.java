@@ -105,6 +105,66 @@ class PdfRendererTest {
                 .isNotEmpty();
     }
 
+    // JUSTIFICATION-A3: review cases of issue #217 (a name that looks like a data URI, the places reserved for
+    // documents).
+    /** Only the tenant's logo is a data: URI the application built; a value that merely begins with "data:" is cleaned. */
+    @Test
+    void aNameThatBeginsWithDataIsCleanedLikeAnyOtherText() throws Exception {
+        String text = text(renderer.render("probe", Map.of("text", "data:\u0001\u0007x <b>y</b>")));
+        assertThat(text).contains("data:x <b>y</b>").doesNotContain("\u0001");
+    }
+
+    /**
+     * A report takes at most one of the two render places, builds its model only once it holds them, and a receipt or a
+     * statement (the interactive {@code render}, which uses the same places) is never turned away by two reports at once.
+     */
+    @Test
+    void aReportHoldsAtMostOneOfTwoPlacesBuildsItsModelLateAndLeavesOneForAnInteractiveRender() throws Exception {
+        PdfRenderer two = new PdfRenderer(2, 300);
+        CountDownLatch holding = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        java.nio.file.Path first = java.nio.file.Files.createTempFile("report-a", ".pdf");
+        java.nio.file.Path second = java.nio.file.Files.createTempFile("report-b", ".pdf");
+        AtomicInteger secondModels = new AtomicInteger();
+        Thread running = Thread.ofVirtual()
+                .start(() -> two.renderTo(
+                        "probe",
+                        () -> {
+                            holding.countDown();
+                            try {
+                                release.await();
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            }
+                            return Map.of("text", "first report");
+                        },
+                        first,
+                        5_000));
+        holding.await();
+        // A second report waits for the one report place, and gives up with 503; its model was never built.
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> two.renderTo(
+                        "probe",
+                        () -> {
+                            secondModels.incrementAndGet();
+                            return Map.of("text", "second report");
+                        },
+                        second,
+                        200))
+                .isInstanceOfSatisfying(
+                        ApiException.class, e -> assertThat(e.code()).isEqualTo("documents_busy"));
+        assertThat(secondModels.get()).as("a report that waits holds no model").isZero();
+        // An interactive render, with a report in the middle of its layout, finds the other place at once.
+        assertThat(two.render("probe", Map.of("text", "receipt"))).isNotEmpty();
+        release.countDown();
+        running.join();
+        assertThat(text(java.nio.file.Files.readAllBytes(first))).contains("first report");
+        // Both places are free again.
+        two.renderTo("probe", () -> Map.of("text", "second report"), second, 1_000);
+        assertThat(text(java.nio.file.Files.readAllBytes(second))).contains("second report");
+        java.nio.file.Files.deleteIfExists(first);
+        java.nio.file.Files.deleteIfExists(second);
+    }
+
     @Test
     void aDataUriImageIsDrawn() throws Exception {
         byte[] pdf = renderer.render("probe", Map.of("src", dataUri()));

@@ -64,6 +64,8 @@ export class ReportsError extends Error {
 const RUN_ERRORS: Record<string, string | undefined> = {
   report_too_large: 'This report is too large to produce. Choose fewer branches or a shorter range and run it again.',
   snapshot_unavailable: 'The loan book was not saved for that date. Choose a later date.',
+  report_stale_as_of:
+    'The date of this report passed before it was made, and the loan book of that day is not saved yet. Run it again once the nightly snapshot has run, or choose today.',
   timeout: 'The report took too long and was stopped. Choose fewer branches or a later date and run it again.',
   interrupted: 'The report was interrupted by a restart. Run it again.',
   reports_disabled: 'Reports were switched off before this one started.',

@@ -28,7 +28,8 @@ class ReportRegistry {
             if (!seen.add(d.key())) {
                 throw new IllegalStateException("Two reports are registered as " + d.key());
             }
-            if (!d.formats().stream().allMatch(f -> f.equals("json") || f.equals("csv"))) {
+            if (!d.formats().stream()
+                    .allMatch(f -> f.equals("json") || f.equals("csv") || f.equals("pdf") || f.equals("xlsx"))) {
                 throw new IllegalStateException("Report " + d.key() + " offers a format this build cannot render.");
             }
             byKey.put(d.key(), d);

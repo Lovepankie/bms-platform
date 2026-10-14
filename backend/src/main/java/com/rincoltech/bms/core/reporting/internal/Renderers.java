@@ -136,7 +136,12 @@ final class Renderers {
                 out.line(t.title());
                 List<String> heading = new ArrayList<>();
                 for (Column c : t.columns()) {
-                    heading.add(c.kind() == Kind.MONEY ? c.label() + " (" + h.currency() + " minor units)" : c.label());
+                    heading.add(
+                            switch (c.kind()) {
+                                case MONEY -> c.label() + " (" + h.currency() + " minor units)";
+                                case BASIS_POINTS -> c.label() + " (basis points)";
+                                default -> c.label();
+                            });
                 }
                 out.line(heading.toArray(new String[0]));
                 spool.forEachRow(t, guard, row -> {
@@ -214,7 +219,7 @@ final class Renderers {
     // ---- the size cap -------------------------------------------------------------------------
 
     /** Counts bytes and stops with {@code report_too_large} at the cap. */
-    private static OutputStream capped(OutputStream inner, long max) {
+    static OutputStream capped(OutputStream inner, long max) {
         return new FilterOutputStream(new BufferedOutputStream(inner, 64 * 1024)) {
             private long written;
 

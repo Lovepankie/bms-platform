@@ -501,6 +501,13 @@ Responses of these routes are `Cache-Control: no-store`. The switch is the tenan
 permission and a loan officer sees only their own loans. The lending report `lending.par` additionally needs
 `lending.insights.read`, because its branch scope is the insights page's.
 
+Formats (slice D2, issue #217): `json`, `csv`, `pdf` (`application/pdf`) and `xlsx`
+(`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`); the catalogue lists the formats each report offers, and a request for
+any other is 422 on `format`. `lending.par` and `lending.portfolio_outstanding` offer all four. A file is served as an attachment named
+by its type and id only (`report-<document id>.pdf` or `.xlsx`), never by anything in it; the PDF's printed number
+(`RPT-yyyymmdd-xxxxxx`) is the document's `doc_number`. A run that cannot render because its output passes the byte cap ends `failed` with
+`report_too_large`, as for the other formats; a PDF table over `BMS_REPORTS_PDF_ROW_CAP` is cut with a printed pointer to the Excel file and does not fail.
+
 ### 7.11.9 Imports (`/imports`)
 
 | Method | Path | Permission | Notes |

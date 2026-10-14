@@ -5208,9 +5208,9 @@
             "type" : "string"
           },
           "formats" : {
-            "description" : "json or csv until the PDF and Excel slices",
+            "description" : "json, csv, pdf or xlsx",
             "items" : {
-              "description" : "json or csv until the PDF and Excel slices",
+              "description" : "json, csv, pdf or xlsx",
               "type" : "string"
             },
             "type" : "array"
@@ -5339,7 +5339,7 @@
       "ReportRunRequest" : {
         "properties" : {
           "format" : {
-            "description" : "json or csv",
+            "description" : "json, csv, pdf or xlsx",
             "type" : "string"
           },
           "params" : {
