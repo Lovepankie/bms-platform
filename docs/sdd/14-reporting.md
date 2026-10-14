@@ -366,6 +366,21 @@ Rules added by the pack:
 - **Regulator summary.** Labelled "Data summary. Not a filed return." until the client's return formats are known.
 - **Retention.** Run files are deleted after 30 days; downloads then answer 410 `report_expired`.
 
+**Built (extras slice D1, issue #214).** The run framework (`core.reporting`: queued runs, the runner job, one snapshot
+transaction per run into a disk spool, the JSON and CSV renderers, cancel, the 30 day file expiry, the catalogue and the run
+routes of chapter 7 section 7.11.8, a minimal Reports screen) and the first report, `lending.par`, as JSON and CSV. `lending.par`
+takes `as_at` (today by default; a past date reads `lending_loan_daily_snapshots` and is refused with `snapshot_unavailable`
+when none was written), `branch_id` (repeatable) and `group_by` (`none`, `branch`, `product` or `officer`), and writes two
+tables: `par` (per group and a total row: active loans, principal outstanding, arrears, PAR 1, 30, 60 and 90 in basis points
+of the group's principal) and `ageing` (per group and bucket: loans, principal outstanding, share of the group's principal,
+arrears). The figures come from the public `InsightsFigures` port (`lending.insights`), which holds only the PAR figures so far;
+slice D2 (issue #217) adds the others to it. A test asserts the report's principal outstanding, arrears, active loans and PAR 1,
+30, 60 and 90 equal the insights portfolio metrics for the same date. The restructured loan's separate line (FR-LCL-04) is not
+printed, because loans cannot be restructured yet. The business date is the one of the request: a run asked for at 23:59 and executed after midnight still reads the loan tables as
+of the day it was asked for, not a snapshot that tonight's job has not written. The figures are totalled as the loans are read, in
+blocks, so memory grows with the number of groups, not of loans; a cancelled or timed out run stops within 1,000 loans. The tenant
+switch is the setting `reports_enabled` (chapter 6 `tenant_settings`), also in `GET /me`.
+
 ## 14.8 Test datasets
 
 Each report has a fabricated dataset (a handful of loans, repayments and journals) with a

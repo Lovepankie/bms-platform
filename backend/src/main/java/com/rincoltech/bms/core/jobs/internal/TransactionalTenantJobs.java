@@ -46,6 +46,11 @@ class TransactionalTenantJobs implements TenantJobs {
     }
 
     @Override
+    public <T> T callAs(UUID tenantId, Supplier<T> work) {
+        return TenantContext.callAs(tenantId, work);
+    }
+
+    @Override
     public <T> T callAsTenant(String slug, String moduleKey, Supplier<T> work) {
         UUID tenantId = jdbc.sql("SELECT id FROM app_resolve_tenant_status(?) WHERE status = 'active'")
                 .param(slug)

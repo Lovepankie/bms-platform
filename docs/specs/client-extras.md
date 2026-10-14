@@ -726,6 +726,11 @@ running returns the same run. Timeout 10 minutes. The requester sees status on t
 gets an in-app notice (and email if configured) when ready (FR-RPT-04). Files expire after 30 days (the
 object is deleted, the `documents` row stays, a download answers 410 `report_expired`).
 
+**As built in slice D1 (issue #214).** The run framework, its JSON and CSV renderers and `lending.par` are built; the
+amendment at the end of ADR-038 records what building settled: the scope frozen at queuing and the two step
+`InsightsFigures` port, the tenant setting `reports_enabled`, the `cancelled` status, the caps and the clock, and who may fetch a
+file. The PDF and Excel renderers, the other six reports, the pack and the report centre are slices D2 to D5.
+
 ### 6.3 Consistency, and memory: query first, then render
 
 A run has two phases. **Query:** all queries execute in one read-only `REPEATABLE READ` transaction under
@@ -859,7 +864,7 @@ thread or inside a money transaction (chapter 12 section 12.1).
 | Pesapal | `BMS_PESAPAL_BASE_URL`, `BMS_PESAPAL_CONSUMER_KEY`, `BMS_PESAPAL_CONSUMER_SECRET`, `BMS_PESAPAL_IPN_ID`, `BMS_PESAPAL_IPN_TOKEN`, `BMS_PESAPAL_TENANT_ID`, `BMS_PESAPAL_PLATFORM_CONSUMER_KEY`, `BMS_PESAPAL_PLATFORM_CONSUMER_SECRET`, `BMS_PESAPAL_PLATFORM_IPN_ID`, `BMS_PESAPAL_PLATFORM_IPN_TOKEN` |
 | SMS | `BMS_SMS_PROVIDER`, `BMS_SMS_MODE`, `BMS_SMS_ALLOWLIST`, `BMS_SMS_AT_BASE_URL`, `BMS_SMS_AT_USERNAME`, `BMS_SMS_AT_API_KEY`, `BMS_SMS_CALLBACK_TOKEN`, `BMS_SMS_PLATFORM_DAILY_CAP` |
 | AI | `BMS_AI_PROVIDER`, `BMS_AI_BASE_URL`, `BMS_AI_API_KEY`, `BMS_AI_MODEL`, `BMS_AI_PLATFORM_DAILY_TOKENS`, `BMS_AI_ENABLED_TENANTS` |
-| Reports | `BMS_REPORTS_MAX_CONCURRENT_RUNS`, `BMS_REPORTS_PDF_ROW_CAP`, `BMS_REPORTS_XLSX_ROW_CAP` (not secrets; staging values 1, 500, 20,000) |
+| Reports | `BMS_REPORTS_MAX_CONCURRENT_RUNS`, `BMS_REPORTS_PDF_ROW_CAP`, `BMS_REPORTS_XLSX_ROW_CAP` (not secrets; staging values 1, 500, 20,000); slice D1 adds `BMS_REPORTS_MAX_FILE_BYTES` (64 MiB; 8 MiB on staging) and `BMS_REPORTS_SPOOL_DIR`, and `BMS_REPORTS_XLSX_ROW_CAP` caps the rows of every tabular output (sheet, CSV and JSON) |
 
 `.env.example` lists each with a placeholder. Rotation: Pesapal secret and SMS key on staff change and
 yearly, after any suspected exposure, and when the provider requires; AI key the same. Rotation runbooks
@@ -910,7 +915,7 @@ runbook. Order is the recommended build order; slices of different areas can run
 | 1 | #211 | A1 Pesapal sandbox spike, fixtures, confirmed contract | none |
 | 2 | #212 | B1 SMS channel core: tenant on the outbox, provider, modes, delivery log | none |
 | 3 | #213 | A2 Gateway core: port, adapter, intents, IPN endpoint, idempotent booking | A1 |
-| 4 | #214 | D1 Report runs framework | none (PDF later) |
+| 4 | #214 | D1 Report runs framework (**built**, migration V49; see ADR-038 amendment) | none (PDF later) |
 | 5 | #215 | B2 Delivery reports and `core.sms_usage` | B1 |
 | 6 | #216 | A3 Loan repayment by Pesapal, with the port extension (3.4.1), the savepoint and the minimal unallocated receipt posting | A2, increment 5 (#108), payment methods table (#160) |
 | 7 | #217 | D2 The public `InsightsFigures` port, Excel writer, report PDF templates, portfolio and PAR, `ReportMemoryIT` | D1, the document templates of ADR-034 (#120, pull request 209) |

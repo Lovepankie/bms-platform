@@ -23,6 +23,14 @@ public interface TenantJobs {
     int forEachActiveTenantWithModule(String jobName, String moduleKey, Consumer<UUID> work);
 
     /**
+     * Runs work as one tenant that a job has just found (for example from a platform function that lists
+     * the tenants with queued report runs), outside any transaction: the work opens its own, and each binds
+     * {@code app.tenant_id} as a request's would. The id must come from the platform's own listing of active
+     * tenants, never from a request. Not for use inside an open transaction.
+     */
+    <T> T callAs(UUID tenantId, Supplier<T> work);
+
+    /**
      * For a one-off command run against one tenant (the retail import): binds the active tenant
      * with this slug that has the module switched on, then runs the work outside any transaction,
      * so the work opens its own transactions and each binds {@code app.tenant_id} as a request's

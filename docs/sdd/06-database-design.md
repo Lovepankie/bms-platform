@@ -354,6 +354,7 @@ write. Keys and defaults:
 | `appraisal_weights` | object | section 3.18.1 defaults | FR-ORG-04 |
 | `disabled_collateral_types` | string array | empty | FR-COL-05 |
 | `require_mfa_all_staff` | boolean | false | FR-IAM-06 |
+| `reports_enabled` | boolean | false; the tenant switch of the report runs (ADR-038, issue #214): off, nothing is queued, run or listed | FR-RPT-04 |
 
 `logo_document_id` is set only by the logo upload route, never by a settings patch: it names a
 `documents` row of this tenant whose subject type is `core.tenant` and subject id is the tenant id
@@ -546,13 +547,29 @@ SELECT and INSERT only. `sha256` is of the stored bytes, after images are re-enc
 
 ### `report_runs` (RLS)
 
-(std, no `version`) `report_key text NOT NULL`, `params jsonb NOT NULL`,
-`format text NOT NULL` [`json`, `csv`, `pdf`, `xlsx`, `pack`], `status text NOT NULL` [`queued`,
-`running`, `ready`, `failed`], `requested_by uuid NOT NULL`, `started_at timestamptz`,
-`finished_at timestamptz`, `document_id uuid`, `row_count integer`, `error text`. Added by ADR-038: `as_of date`,
-`snapshot_at timestamptz`, `params_hash text` (dedupe of identical queued or running runs), `pdf_document_id uuid`,
-`xlsx_document_id uuid` (a pack has both), `expires_at timestamptz` (30 days after ready; the file object is deleted
-then and the `documents` row stays).
+Built (issue #214, extras slice D1, migration V49; ADR-038). (std, no `version`) `report_key text NOT NULL` (a key such as
+`lending.par`), `params jsonb NOT NULL` (the normalised parameters, every default filled in, printed on the output),
+`params_hash text NOT NULL` (SHA-256 of the report, format, as-of date and parameters), `scope jsonb NOT NULL` (the branches and
+officer the requester could see when the run was queued, frozen: the job has no signed-in user), `format text NOT NULL`
+[`json`, `csv`, `pdf`, `xlsx`, `pack`; slice D1 runs `json` and `csv`], `status text NOT NULL` [`queued`, `running`, `ready`,
+`failed`, `cancelled`], `requested_by uuid NOT NULL`, `as_of date NOT NULL` (the business date the figures stand at),
+`snapshot_at timestamptz` (the database's start time of the query transaction, set when the query phase has committed),
+`started_at`, `finished_at`, `cancel_requested_at` (a running run asked to stop), `owner text` (the process that claimed
+the run, `host/instance`) and `heartbeat_at timestamptz` (when that process last said the run was alive), `document_id uuid` (the stored file; composite
+foreign key to `documents`), `row_count integer`, `size_bytes bigint`, `row_cap integer NOT NULL` and `size_cap_bytes bigint
+NOT NULL` (the limits the run was queued under; the run applies the smaller of these and the limits in force when it
+executes), `error text` (a stable code, never a message: `report_too_large`, `snapshot_unavailable`, `timeout`, `interrupted`,
+`reports_disabled`, `requester_deactivated`, `report_unavailable`, `run_failed`), `expires_at timestamptz` (30 days after
+ready) and `files_deleted_at timestamptz` (the object was deleted; the `documents` row stays). Checks: a `ready` run names its
+document and expiry and no other run does; a `failed` run names its error and no other run does. Unique indexes: one `running`
+run per tenant (`report_runs_one_running`) and one open run per tenant, requester and `params_hash`
+(`report_runs_dedupe`, over `queued` and `running`), so two identical requests give one run even when they arrive together.
+`bms_app` holds SELECT, INSERT and UPDATE; a row is never deleted. Slice D2 adds `pdf_document_id` and `xlsx_document_id` for
+the pack. Three read-only `SECURITY DEFINER` functions let the runner see across tenants without reading any run's content:
+`app_count_running_report_runs()`, `app_tenants_with_queued_report_runs()` and
+`app_tenants_with_stale_report_runs(cutoff)`, which names the tenants with a running run whose heartbeat (or start, if it never
+beat) is older than the cutoff. The migration sets `lock_timeout` to five seconds before it takes its brief locks on `tenants` and
+`documents`.
 
 ### `payment_methods` (RLS)
 

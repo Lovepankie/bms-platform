@@ -73,4 +73,15 @@ class SecurityArchitectureTest {
                         com.rincoltech.bms.core.documents.Documents.class, "publicAssetBytes", String.class, UUID.class)
                 .check(CLASSES);
     }
+
+    /** Deleting a stored report file is for the report module's expiry only (ADR-038). */
+    @Test
+    void onlyReportingDeletesReportObjects() {
+        noClasses()
+                .that()
+                .resideOutsideOfPackages("com.rincoltech.bms.core.reporting..", "com.rincoltech.bms.core.documents..")
+                .should()
+                .callMethod(com.rincoltech.bms.core.documents.Documents.class, "deleteReportObject", UUID.class)
+                .check(CLASSES);
+    }
 }

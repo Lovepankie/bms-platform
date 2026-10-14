@@ -14,6 +14,7 @@ import { showInsights } from './insights/permissions';
 import { showInvestments } from './lending/investment-state';
 import { showLending } from './lending/permissions';
 import { showSavings } from './lending/savings-permissions';
+import { showReports } from './reports/permissions';
 import { RetailNav } from './retail/nav';
 import { canSeeProfit, showRetail } from './retail/permissions';
 
@@ -117,6 +118,7 @@ export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: 
         {showSavings(me) && <Link to="/staff/lending/savings">Savings</Link>}
         {showInvestments(me) && <Link to="/staff/lending/investments">Investments</Link>}
         {showInsights(me) && <Link to="/staff/insights" data-tour="nav-insights">Insights</Link>}
+        {showReports(me) && <Link to="/staff/reports">Reports</Link>}
         {showRetail(me) && <Link to="/staff/retail" data-tour="nav-retail">Retail</Link>}
         {permissions.includes('core.settings.manage') && <Link to="/staff/setup">Business set-up</Link>}
       </nav>

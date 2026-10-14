@@ -97,7 +97,14 @@ services:
       # Global sign-up caps per hour (chapter 7 section 7.10); defaults 30 and 60.
       BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR: ${BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR:-30}
       BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR: ${BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR:-60}
+      # Report runs (ADR-038): two at once, 200000 rows a table, 64 MiB a file. Not secrets.
+      BMS_REPORTS_MAX_CONCURRENT_RUNS: ${BMS_REPORTS_MAX_CONCURRENT_RUNS:-2}
+      BMS_REPORTS_XLSX_ROW_CAP: ${BMS_REPORTS_XLSX_ROW_CAP:-200000}
+      BMS_REPORTS_PDF_ROW_CAP: ${BMS_REPORTS_PDF_ROW_CAP:-3000}
+      BMS_REPORTS_MAX_FILE_BYTES: ${BMS_REPORTS_MAX_FILE_BYTES:-67108864}
     mem_limit: 1536m
+    # Report runs (ADR-038): a stop interrupts the running reports and gives them 15 seconds to close; Docker would kill at 10.
+    stop_grace_period: 30s
     depends_on:
       postgres:
         condition: service_healthy

@@ -56,8 +56,20 @@ class Positions {
 
     private final JdbcClient jdbc;
 
-    Positions(JdbcClient jdbc) {
+    /** Rows fetched from the server at a time by the streaming reads. */
+    static final int FETCH = 2000;
+
+    private final JdbcClient streaming;
+
+    Positions(JdbcClient jdbc, javax.sql.DataSource dataSource) {
         this.jdbc = jdbc;
+        // The same connection and transaction as every other read (a JdbcTemplate over the pool joins the transaction
+        // in
+        // progress), with a fetch size so the driver hands rows over in blocks instead of loading the whole result.
+        org.springframework.jdbc.core.JdbcTemplate template =
+                new org.springframework.jdbc.core.JdbcTemplate(dataSource);
+        template.setFetchSize(FETCH);
+        this.streaming = JdbcClient.create(template);
     }
 
     /** Active loans in the scope today, from the schedule items as they stand. */
@@ -66,8 +78,29 @@ class Positions {
             return List.of();
         }
         Map<String, Object> p = new LinkedHashMap<>();
+        String sql = liveSql(s, p);
+        return jdbc.sql(sql).params(p).query((rs, n) -> map(rs, s.today())).list();
+    }
+
+    /**
+     * The same positions as {@link #live}, handed to {@code sink} one at a time as the server returns them in blocks of
+     * {@link #FETCH}: memory does not grow with the book. For a report that totals them (ADR-038); call in a transaction.
+     */
+    void forEachLive(Scope s, java.util.function.Consumer<Position> sink) {
+        if (s.empty()) {
+            return;
+        }
+        Map<String, Object> p = new LinkedHashMap<>();
+        String sql = liveSql(s, p);
+        try (java.util.stream.Stream<Position> rows =
+                streaming.sql(sql).params(p).query((rs, n) -> map(rs, s.today())).stream()) {
+            rows.forEach(sink);
+        }
+    }
+
+    private static String liveSql(Scope s, Map<String, Object> p) {
         p.put("today", Date.valueOf(s.today()));
-        String sql = """
+        return """
                 WITH items AS (
                     SELECT si.loan_id, si.due_date,
                            si.principal_due_minor - si.principal_paid_minor AS p_un,
@@ -86,7 +119,6 @@ class Positions {
                   JOIN lending_loan_product_versions pv ON pv.id = l.product_version_id
                  GROUP BY l.id, l.loan_no, l.member_id, l.branch_id, l.officer_user_id, pv.product_id
                 """;
-        return jdbc.sql(sql).params(p).query((rs, n) -> map(rs, s.today())).list();
     }
 
     /**
@@ -187,6 +219,39 @@ class Positions {
                         rs.getLong("arrears"),
                         rs.getInt("days_past_due")))
                 .list();
+    }
+
+    /** As {@link #snapshot}, one position at a time in blocks of {@link #FETCH} (see {@link #forEachLive}). */
+    void forEachSnapshot(Scope s, LocalDate date, java.util.function.Consumer<Position> sink) {
+        if (s.empty()) {
+            return;
+        }
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("d", Date.valueOf(date));
+        String sql = """
+                SELECT sn.loan_id AS id, l.loan_no, l.member_id, sn.branch_id, sn.officer_user_id, sn.product_id,
+                       sn.principal_outstanding_minor AS po, sn.interest_outstanding_minor AS io,
+                       sn.arrears_minor AS arrears, sn.days_past_due
+                  FROM lending_loan_daily_snapshots sn
+                  JOIN lending_loans l ON l.id = sn.loan_id
+                 WHERE sn.business_date = :d""" + s.snapshotFilter("sn", p);
+        try (java.util.stream.Stream<Position> rows = streaming
+                .sql(sql)
+                .params(p)
+                .query((rs, n) -> new Position(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("loan_no"),
+                        rs.getObject("member_id", UUID.class),
+                        rs.getObject("branch_id", UUID.class),
+                        rs.getObject("officer_user_id", UUID.class),
+                        rs.getObject("product_id", UUID.class),
+                        rs.getLong("po"),
+                        rs.getLong("io"),
+                        rs.getLong("arrears"),
+                        rs.getInt("days_past_due")))
+                .stream()) {
+            rows.forEach(sink);
+        }
     }
 
     /**

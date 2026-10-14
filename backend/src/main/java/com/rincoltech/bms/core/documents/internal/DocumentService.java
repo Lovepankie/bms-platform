@@ -287,23 +287,77 @@ class DocumentService implements Documents {
 
     @Override
     public GeneratedObject putGenerated(byte[] bytes, String docType) {
+        return putFile(bytes, docType, "application/pdf", "pdf");
+    }
+
+    @Override
+    public GeneratedObject putFile(byte[] bytes, String docType, String contentType, String extension) {
         UUID id = UUID.randomUUID();
         ZonedDateTime at = clock.now().atZone(ZoneOffset.UTC);
-        String key = "tenants/%s/%s/%04d/%02d/%s.pdf"
-                .formatted(TenantContext.require(), docType, at.getYear(), at.getMonthValue(), id);
-        storage.put(key, bytes, "application/pdf");
-        return new GeneratedObject(id, key, docType, sha256(bytes), bytes.length);
+        String key = "tenants/%s/%s/%04d/%02d/%s.%s"
+                .formatted(TenantContext.require(), docType, at.getYear(), at.getMonthValue(), id, extension);
+        storage.put(key, bytes, contentType);
+        return new GeneratedObject(id, key, docType, contentType, sha256(bytes), bytes.length);
+    }
+
+    @Override
+    public GeneratedObject putFile(java.nio.file.Path file, String docType, String contentType, String extension) {
+        long size;
+        String digest;
+        try {
+            size = java.nio.file.Files.size(file);
+            if (size > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException("A generated file is at most 2 GiB.");
+            }
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            try (java.io.InputStream in = java.nio.file.Files.newInputStream(file)) {
+                byte[] block = new byte[64 * 1024];
+                int n;
+                while ((n = in.read(block)) > 0) {
+                    md.update(block, 0, n);
+                }
+            }
+            digest = java.util.HexFormat.of().formatHex(md.digest());
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+        UUID id = UUID.randomUUID();
+        ZonedDateTime at = clock.now().atZone(ZoneOffset.UTC);
+        String key = "tenants/%s/%s/%04d/%02d/%s.%s"
+                .formatted(TenantContext.require(), docType, at.getYear(), at.getMonthValue(), id, extension);
+        storage.putFile(key, file, contentType);
+        return new GeneratedObject(id, key, docType, contentType, digest, (int) size);
     }
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public StoredDocument recordGenerated(
             GeneratedObject object, String docNumber, String subjectType, UUID subjectId, UUID branchId) {
+        return recordGenerated(
+                object,
+                docNumber,
+                subjectType,
+                subjectId,
+                branchId,
+                CurrentPrincipal.require().userId());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public StoredDocument recordGenerated(
+            GeneratedObject object,
+            String docNumber,
+            String subjectType,
+            UUID subjectId,
+            UUID branchId,
+            UUID createdBy) {
         deleteIfRolledBack(object.key());
         jdbc.sql("""
                         INSERT INTO documents (id, tenant_id, branch_id, doc_type, doc_number, subject_type, subject_id,
                                                object_key, content_type, size_bytes, sha256, created_by)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, 'application/pdf', ?, ?, ?)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """)
                 .params(
                         object.id(),
@@ -313,9 +367,10 @@ class DocumentService implements Documents {
                         subjectType,
                         subjectId,
                         object.key(),
+                        object.contentType(),
                         object.sizeBytes(),
                         object.sha256(),
-                        CurrentPrincipal.require().userId())
+                        createdBy)
                 .update();
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("doc_type", object.docType());
@@ -326,6 +381,24 @@ class DocumentService implements Documents {
         after.put("sha256", object.sha256());
         audit.record(AuditLog.Entry.created("core.document.generated", "core.document", object.id(), branchId, after));
         return find(object.id()).orElseThrow();
+    }
+
+    @Override
+    public void deleteReportObject(UUID documentId) {
+        // The lookup is its own short transaction and the storage call runs with none open, so a slow object store
+        // never
+        // holds a connection (the caller, the nightly expiry, calls this outside any transaction).
+        var row = ownTransaction.execute(s -> jdbc.sql("SELECT object_key, doc_type FROM documents WHERE id = ?")
+                .param(documentId)
+                .query((rs, n) -> new String[] {rs.getString("object_key"), rs.getString("doc_type")})
+                .optional());
+        if (row.isEmpty()) {
+            return;
+        }
+        if (!"report".equals(row.get()[1])) {
+            throw new IllegalArgumentException("Only the object of a report document may be deleted this way.");
+        }
+        storage.delete(row.get()[0]);
     }
 
     @Override
@@ -388,6 +461,8 @@ class DocumentService implements Documents {
             case "image/jpeg" -> ".jpg";
             case "image/png" -> ".png";
             case "image/webp" -> ".webp";
+            case "text/csv" -> ".csv";
+            case "application/json" -> ".json";
             default -> "";
         };
         return d.docType().replaceAll("[^A-Za-z0-9_-]", "_") + "-" + d.id() + ext;
@@ -408,6 +483,9 @@ class DocumentService implements Documents {
                     d.id(),
                     d.branchId(),
                     Map.of("subject_type", d.subjectType(), "subject_id", d.subjectId()))));
+            if (access.stream().anyMatch(a -> a.subjectType().equals(d.subjectType()) && a.hideDenial())) {
+                throw ApiException.notFound();
+            }
             throw new ApiException(
                     HttpStatus.FORBIDDEN,
                     "permission_denied",

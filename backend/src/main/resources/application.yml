@@ -141,6 +141,19 @@ bms:
       access-key-id: ${R2_DOCUMENTS_ACCESS_KEY_ID:}
       secret-access-key: ${R2_DOCUMENTS_SECRET_ACCESS_KEY:}
       bucket: ${R2_DOCUMENTS_BUCKET:}
+  # Report runs (ADR-038, docs/specs/client-extras.md sections 6 and 9.1). Not secrets. These are the production
+  # defaults; the staging host (a 448 MB container with about 224 MB of heap) sets 1 run, 20000 rows and 8 MiB.
+  reports:
+    # Runs executing at once across the platform.
+    max-concurrent-runs: ${BMS_REPORTS_MAX_CONCURRENT_RUNS:2}
+    # Rows in the largest table of one output (an Excel sheet, a CSV section, a JSON table).
+    xlsx-row-cap: ${BMS_REPORTS_XLSX_ROW_CAP:200000}
+    # Rows of one table in a PDF; read by the PDF slice (D2), listed here so the three are set together.
+    pdf-row-cap: ${BMS_REPORTS_PDF_ROW_CAP:3000}
+    # Bytes of one output file.
+    max-file-bytes: ${BMS_REPORTS_MAX_FILE_BYTES:67108864}
+    # Where a run's spool files live while it runs; empty means a folder in the system temp directory.
+    spool-dir: ${BMS_REPORTS_SPOOL_DIR:}
   # Outbox senders (spec section 11, chapter 9 section 9.8). A sender whose values are unset is off:
   # its rows stay pending and nothing fails. SMTP is implicit TLS (465); 587 is blocked on the
   # staging host. Never logged.

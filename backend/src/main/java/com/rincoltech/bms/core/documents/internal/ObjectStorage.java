@@ -8,6 +8,12 @@ interface ObjectStorage {
 
     void put(String key, byte[] bytes, String contentType);
 
+    /**
+     * Stores a file without reading it into memory (a report's output, up to its size cap). The caller keeps the file
+     * until this returns.
+     */
+    void putFile(String key, java.nio.file.Path file, String contentType);
+
     /** The object's bytes; empty when there is none. For assets the application serves itself. */
     Optional<byte[]> get(String key);
 

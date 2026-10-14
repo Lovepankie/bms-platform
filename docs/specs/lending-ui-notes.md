@@ -128,3 +128,16 @@ its draft and Idempotency-Key in the tab (`retail/idempotency.ts`). Investment r
 Deferred: member self-service (the member portal's Invest screen, increment 11), online payments, USSD, SMS reminders,
 the certificate PDF in document storage, and a member page with tabs (the member tab is the filtered list above until
 member screens exist).
+
+## Reports (extras slice D1, issue #214, ADR-038)
+
+A minimal staff page, `/staff/reports` (tab "Reports", shown to a user of a lending tenant who holds one of the
+`lending.reports.*` permissions and only while `GET /me` says `reports_enabled`; a business administrator turns reports on with the
+"Reports" box in Business set-up, a `PATCH /settings` with `reports_enabled`); the full report centre is slice D5. A page opened while
+reports are off (the catalogue answers 404) says so. The page lists each report the user may run, a small form per report (its parameters from the catalogue: dates,
+a choice such as "Group by", the branch chosen in the staff bar, the file type) and "Run report", which queues a run. Under "Your reports"
+the user's own runs show a status (Waiting, Running, Ready, Failed, Cancelled), the date the figures stand at, the size of a ready file
+and, for a failed run, the reason in words (`src/api/reports.ts` maps the stable error codes). The list refreshes every 3 seconds while
+any run is open, and a polite notice says when one becomes ready (the in-app notice of FR-RPT-04). Download fetches a 5 minute signed
+link; a file older than 30 days reads "Deleted after 30 days". Cancel stops a waiting or running run. The page never shows a row of a
+report; it hands the file over.

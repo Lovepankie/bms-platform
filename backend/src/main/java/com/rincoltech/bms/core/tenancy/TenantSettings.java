@@ -29,4 +29,11 @@ public interface TenantSettings {
 
     /** FR-ORG-07: the most active loans one member may hold; null when the tenant sets no limit. */
     Integer maxActiveLoansPerMember();
+
+    /**
+     * Whether the report runs of ADR-038 are switched on for this tenant (extras slice D1, issue #214).
+     * Off by default: a tenant administrator turns it on in the settings, and nothing is queued, run or
+     * listed until then.
+     */
+    boolean reportsEnabled();
 }

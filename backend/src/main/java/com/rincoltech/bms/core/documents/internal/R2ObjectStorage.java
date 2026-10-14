@@ -65,6 +65,13 @@ class R2ObjectStorage implements ObjectStorage {
     }
 
     @Override
+    public void putFile(String key, java.nio.file.Path file, String contentType) {
+        // Streamed from the file with a known length: the object is never held in memory (the checksum calculation is
+        // only when required, as for put).
+        s3.putObject(b -> b.bucket(bucket).key(key).contentType(contentType), RequestBody.fromFile(file));
+    }
+
+    @Override
     public Optional<byte[]> get(String key) {
         try {
             return Optional.of(

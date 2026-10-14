@@ -51,7 +51,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 ledger        = component "General Ledger" "Chart of accounts, periods, post_entry, reversals, trial balance, subledger reconciliation (ADR-004)." "core" "core"
                 notifications = component "Notifications" "Outgoing message port with a recording fake adapter, and the platform outbox (ADR-024): rows written in the cause's transaction, a sender job with SKIP LOCKED claims, SMTP email over implicit TLS and Telegram operator alerts, each off when unconfigured; failed rows for the operator portal. SMS is a channel of the outbox (ADR-036): the row carries its tenant and category, a tenant delivery log records status and cost, windows, opt-out, Africa's Talking adapter, modes that sink SMS outside production." "core" "core"
                 documents     = component "Documents" "PDF rendering, uploads, object storage keys, signed download URLs." "core" "core"
-                reporting     = component "Reporting" "Report catalogue, parameters, asynchronous report runs over one read-only REPEATABLE READ snapshot, PDF through the shared document templates and streamed Excel exports, 30 day file expiry (ADR-038)." "core" "core"
+                reporting     = component "Reporting" "Report catalogue, parameters and asynchronous report runs (issue #214, ADR-038): a queued run, the runner job, one read-only REPEATABLE READ snapshot transaction into a disk spool that commits before the JSON or CSV file is rendered and stored, cancel, the 30 day file expiry, off until the tenant switch is on; PDF and streamed Excel follow in slice D2." "core" "core"
                 imports       = component "Imports" "Batches, rows, issues, review queue, preview, commit orchestration; templates are registered by modules." "core" "core"
                 payments      = component "Payments" "Payment intents, the Pesapal v3 gateway adapter (ADR-035): hosted orders with a random merchant reference, notifications as untrusted hints confirmed by an authenticated status query, idempotent booking through the registered purpose handlers (loan repayment, savings deposit, subscription payment), unallocated receipts, nightly reconciliation, merchant statement upload." "core" "core"
                 ai            = component "AI" "LlmClient port and one OpenAI-compatible adapter (ADR-037, off by default): per tenant and platform token caps, circuit breaker, call log without personal data. Depends on no vertical." "core" "core"
@@ -69,7 +69,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 insights      = component "Lending: Insights" "The insights read model (ADR-030): morning brief, portfolio, revenue from posted journal lines, member activity, drill-down tables with CSV export; the nightly per-loan snapshot until increment 6 owns it; the owner's plain-text daily digest; the panel registry savings and investments plug into." "lending" "lending"
                 collections   = component "Lending: Collections" "Due and arrears lists, officer assignment, collection actions, promises to pay." "lending" "lending"
                 advisor       = component "Lending: AI Advisor" "Advisory daily brief and question box over insights facts (ADR-037): aggregates and aliases only, number validator, fallback to the deterministic brief, off by default, advisory label." "lending" "lending"
-                lendingReports = component "Lending: Reports" "The definitions of the seven formal reports, built on the insights figures through a public port, (portfolio, PAR, collections, disbursements, officer performance, collateral register, regulator summary) and the monthly pack (ADR-038)." "lending" "lending"
+                lendingReports = component "Lending: Reports" "The definitions of the formal reports, built on the insights figures through the public InsightsFigures port: lending.par today (issue #214); collections, disbursements, officer performance, collateral register, regulator summary and the monthly pack follow (ADR-038)." "lending" "lending"
 
                 # ---------------- retail vertical (ADR-020) ----------------
                 retailCatalogue = component "Retail: Catalogue" "Categories, units, products with current cost and sell price; append-only price history written with every price change; pack sizes of a product (a unit and its factor in base units) behind the units capability; price lists, their dated items with quantity breaks and customer groups behind the price_lists capability." "retail" "retail"
@@ -144,7 +144,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.web -> bms.api.collections "Due lists, arrears lists, collection actions"
         bms.web -> bms.api.approvals "Checker queue and decisions"
         bms.web -> bms.api.ledger "Chart of accounts, manual journals, period close"
-        bms.web -> bms.api.reporting "Runs and downloads reports"
+        bms.web -> bms.api.reporting "Reports page: the catalogue, queues a run, polls its status, cancels, then fetches the file through the signed URL" "JSON/HTTPS"
         bms.web -> bms.api.imports "Uploads, reviews and commits imports"
         bms.web -> bms.api.payments "Starts mobile money payments; polls their status"
 
@@ -220,10 +220,13 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.ai -> llmProvider "Chat completions with a 30 second budget and a circuit breaker" "HTTPS"
         bms.api.ai -> bms.db "Call log without personal data, token counters"
         bms.api.lendingReports -> bms.api.insights "Reads figures through the public InsightsFigures port with a public PortfolioScope (cross checked by test)"
-        bms.api.lendingReports -> bms.api.reporting "Registers the seven reports and the pack"
+        bms.api.lendingReports -> bms.api.reporting "Registers its reports (lending.par today; the seven and the pack follow)"
         bms.api.lendingReports -> bms.db "Reads loans, schedules, transactions, collateral and snapshots under RLS"
         bms.api.reporting -> bms.api.documents "Stores run files (PDF, Excel); expiry deletes the object"
-        bms.api.reporting -> bms.api.jobs "Runs the report runner and the nightly file expiry"
+        bms.api.reporting -> bms.api.jobs "Runs the report runner (every 15 seconds) and the nightly file expiry; the runner acts as a tenant found through three read-only definer functions"
+        bms.api.reporting -> bms.api.tenancy "Reads the tenant's reports switch and the modules that are on"
+        bms.api.reporting -> bms.api.audit "Audits every run, cancel, failure and expiry with the report key and parameters, never rows"
+        bms.api.reporting -> bms.api.operations "Replays a repeated Idempotency-Key"
 
         bms.web -> bms.api.retailCatalogue "Manages categories, units and products; edits prices"
         bms.api.retailCatalogue -> bms.api.audit "Writes audit rows"
@@ -311,7 +314,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.ledger      -> bms.db "Writes balanced, immutable journal entries"
         bms.api.notifications -> bms.db "Writes notifications and outbox rows"
         bms.api.documents   -> bms.storage "Stores uploads; issues signed URLs"
-        bms.api.reporting   -> bms.db "Reads through read-only views"
+        bms.api.reporting   -> bms.db "Reads and writes report_runs under RLS; a run's queries read through its report's module in one read-only snapshot"
 
         # ==================================================================
         # DEPLOYMENT (SDD chapter 9; ADR-006; staging ADR-018)

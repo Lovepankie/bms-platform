@@ -16,6 +16,15 @@ public interface DocumentAccess {
     boolean canRead(Principal principal, UUID subjectId);
 
     /**
+     * True when a refusal should look like "no such document" (404) rather than "not yours" (403), because the
+     * existence of the subject is itself private (a report run belongs to its requester alone). The refusal is audited
+     * either way.
+     */
+    default boolean hideDenial() {
+        return false;
+    }
+
+    /**
      * May this principal read this particular document of the subject? Defaults to the subject rule;
      * a module overrides it when some documents need a narrower permission (#29: member ID images).
      */

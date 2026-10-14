@@ -57,7 +57,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   ADR-032) `V30`, the first-run preferences (issue #19, ADR-025) `V31`, and lending investments
   (issue #152, ADR-031) `V32`, and lending insights (issue #153, ADR-030) `V33`. Flyway runs with
   `outOfOrder` off, so a new migration takes a number above the highest one on any open branch
-  (`V34` is the retail cash book, issue #147; `V35` is claimed by lending, issue #176; `V36` is claimed by lending payment methods, issue #160; `V37` is retail branch roles, issue #191; `V38` is the retail two-step transfer, issue #193; `V39` is units of measure, issue #194; `V40` is search, issue #241; `V41` is price lists, issue #195; `V42` is the loan reopen pledge guard, issue #176; `V43` is payment methods, issue #160; `V44` is customer accounts, issue #196; `V45` is returns, issue #201; `V46` is optional documents, issue #197; `V47` is optional purchasing, issue #198; `V48` is landed cost and supplier credit notes, issue #199). The retail analytics pass (issue #149) is reports only on existing data: no migration; its
+  (`V34` is the retail cash book, issue #147; `V35` is claimed by lending, issue #176; `V36` is claimed by lending payment methods, issue #160; `V37` is retail branch roles, issue #191; `V38` is the retail two-step transfer, issue #193; `V39` is units of measure, issue #194; `V40` is search, issue #241; `V41` is price lists, issue #195; `V42` is the loan reopen pledge guard, issue #176; `V43` is payment methods, issue #160; `V44` is customer accounts, issue #196; `V45` is returns, issue #201; `V46` is optional documents, issue #197; `V47` is optional purchasing, issue #198; `V48` is landed cost and supplier credit notes, issue #199; `V49` is report runs, issue #214). The retail analytics pass (issue #149) is reports only on existing data: no migration; its
   queries are in `scripts/db-bench/queries` (k01 to k15).
 - **Built (trade 1 of 10, issue #191, ADR-033):** migration `V37` (`retail_branch_roles`, the permission
   `retail.branch_role.manage`, a backfill of role `both`); the tenant settings group `retail.capabilities`
@@ -208,7 +208,17 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   digest settings, indexes); the owner's daily digest through the outbox; `seed-lending
   --insights-demo [--scale N]` for a fabricated year. Metrics dictionary:
   `docs/specs/lending-insights-metrics.md`.
-- **Client extras, design only (issue #210):** `docs/specs/client-extras.md` specifies mobile money through Pesapal
+- **Built (extras slice D1, issue #214, ADR-038):** migration `V49` (`report_runs` and three read-only definer functions for the
+  runner); `core.reporting`: queued report runs with the job `core.reporting.report-runner` (every 15 seconds, one run per
+  tenant, `BMS_REPORTS_MAX_CONCURRENT_RUNS` across the platform), one read-only `REPEATABLE READ` snapshot transaction per run
+  into a disk spool that commits before the JSON or CSV file is rendered and stored as a core document of type `report`, a
+  10 minute timeout, row and size caps, cancel, the nightly `report-expiry` that deletes files after 30 days (download then 410
+  `report_expired`), the catalogue `GET /reports`, `POST` and `GET /report-runs`, `POST /report-runs/{id}/cancel`, the audit
+  (`core.reports.run`, never a row), and a minimal Reports screen; off until the tenant setting `reports_enabled` is on. The
+  first report, `lending.par` (JSON and CSV), reads the figures through the new public port `InsightsFigures` of
+  `lending.insights`, which holds the PAR figures so far. No permission is added. Deferred: the PDF and Excel renderers, the
+  other six reports and the pack, the full report centre (slices D2 to D5, issues #217, #222, #225, #229).
+- **Client extras, design only (issue #210; slice D1 above is built):** `docs/specs/client-extras.md` specifies mobile money through Pesapal
   (ADR-035), SMS through Africa's Talking on the outbox (ADR-036), the advisory AI brief (ADR-037) and the formal
   reports pack as PDF and Excel (ADR-038), with a note on credit bureaus. Nothing is built; the build slices are issues
   #211 to #233 in the order of the spec's section 10. The numbers 033 and 034 belong to open pull requests.
@@ -278,7 +288,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `core.notifications` | Templates, outbox, SMS and email adapters; today the platform outbox with SMTP and Telegram senders (ADR-024) | NTF | 6.4 `notification_outbox`, 6.5 | 7.11.3, 7.11.7 |
 | `core.onboarding` | Public sign-up, applications, Verify, Needs info, Reject, Activate (ADR-024) | ONB | 6.4 `onboarding_applications` | 7.11.3 |
 | `core.documents` | PDFs, uploads, object storage, signed URLs | DOC | 6.5 `documents` | 7.11.7 |
-| `core.reporting` | Report catalogue and runs | RPT; chapter 14 | 6.5 `report_runs` | 7.11.8 |
+| `core.reporting` | Report catalogue and runs: the queue, the runner job, one snapshot transaction per run into a spool, JSON and CSV files, cancel and the 30 day expiry (ADR-038, issue #214); verticals register their reports | RPT; chapter 14 | 6.5 `report_runs` | 7.11.8 |
 | `core.imports` | Import batches, review queue, commit | IMP; chapter 13 | 13.4 | 7.11.9 |
 | `core.payments` | Payment intents, gateway, callbacks | PAY; chapter 12 | 6.5 | 7.11.10 |
 | `core.ai` (ADR-037, design) | The `LlmClient` port and one OpenAI-compatible adapter, token caps, call log, circuit breaker; depends on no vertical | FR-AIA | 6.13 `ai_calls` | none |
@@ -294,7 +304,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `lending.investments` | Investment products, investments, returns job, maturity, rollover, early withdrawal, maturity ladder (ADR-031) | INV; 3.25.1 R-INV | 6.7 | 7.11.16 |
 | `lending.insights` | The insights read model, snapshots, daily digest, panel registry (ADR-030) | INS | 6.7 | 7.11.22 |
 | `lending.advisor` (ADR-037, design) | The advisory AI brief and question box over insights facts; aggregates and aliases only | FR-AIA | 6.13 `ai_briefs` | 7.11.24 |
-| `lending.reports` (ADR-038, design) | The definitions of the seven formal reports and the monthly pack, built on the insights figures through a public port | RPT; chapter 14 section 14.10 | 6.5 `report_runs` | 7.11.8 |
+| `lending.reports` (ADR-038; `lending.par` built, issue #214) | The definitions of the seven formal reports and the monthly pack, built on the insights figures through the public `InsightsFigures` port | RPT; chapter 14 section 14.10 | 6.5 `report_runs` | 7.11.8 |
 | `lending` collections | Due lists, arrears, actions | CLN | 6.7 | 7.11.17 |
 | Member area | Member self-service | MSS; chapter 11 | none | 7.11.18 |
 | `retail.manifest` | The retail vertical's registration with the core (ADR-020) | 3.28 | 6.11.1 chart | none |
@@ -485,7 +495,7 @@ Accepted (this list is the ADR index):
 - ADR-037 AI portfolio monitoring: advisory, aggregates and aliases only, numbers validated in code,
   off by default (proposed, #210)
 - ADR-038 The reports pack: asynchronous runs over one snapshot, PDF through the shared templates,
-  streamed Excel (proposed, #210)
+  streamed Excel (proposed, #210; run framework built and amended by #214)
 - ADR-039 One search convention: a shared kernel matcher (folded text, AND of terms, phone digits, ranked, rank in the
   cursor), `bms_fold` and `bms_digits` in V40 and no search index (none is usable under row-level security), one
   live search hook in the PWA (proposed, #241; spec `docs/specs/search.md`)

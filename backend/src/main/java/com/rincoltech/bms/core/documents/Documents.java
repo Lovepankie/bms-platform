@@ -75,6 +75,21 @@ public interface Documents {
     GeneratedObject putGenerated(byte[] pdf, String docType);
 
     /**
+     * As {@link #putGenerated} for a generated file that is not a PDF (a report's JSON or CSV, ADR-038):
+     * the caller names the content type and the extension, and decides that the bytes are what it says,
+     * since it wrote them. Same two-step contract: record it with {@link #recordGenerated} or give it up
+     * with {@link #discardGenerated}.
+     */
+    GeneratedObject putFile(byte[] bytes, String docType, String contentType, String extension);
+
+    /**
+     * As {@link #putFile(byte[], String, String, String)} for a file on disk: the checksum is taken by reading it once
+     * in blocks and the object is uploaded from the file, so the output of a report is never held in memory. Refuses a
+     * file over 2 GiB. No transaction and no database.
+     */
+    GeneratedObject putFile(java.nio.file.Path file, String docType, String contentType, String extension);
+
+    /**
      * Second half: records the object as {@code docType} with its {@code docNumber} (FR-DOC-02), in
      * the caller's transaction, which serialises concurrent issues of the same document (for example
      * under its subject's row lock) and has looked for it with {@link #findGenerated} first. A
@@ -83,11 +98,31 @@ public interface Documents {
     StoredDocument recordGenerated(
             GeneratedObject object, String docNumber, String subjectType, UUID subjectId, UUID branchId);
 
+    /**
+     * As {@link #recordGenerated} for a job that has no signed-in user: {@code createdBy} is the user the
+     * file was made for (a report run's requester), and no principal is read.
+     */
+    StoredDocument recordGenerated(
+            GeneratedObject object,
+            String docNumber,
+            String subjectType,
+            UUID subjectId,
+            UUID branchId,
+            UUID createdBy);
+
+    /**
+     * Deletes the stored object of a generated report (ADR-038: report files are kept 30 days). The
+     * {@code documents} row is written once and stays as metadata; only the bytes go. Refuses any document
+     * that is not of type {@code report}. Only {@code core.reporting} calls it (an architecture test
+     * enforces that). Safe to call again: a missing object is not an error.
+     */
+    void deleteReportObject(UUID documentId);
+
     /** Removes an object that {@link #putGenerated} wrote and nothing recorded. Never throws. */
     void discardGenerated(GeneratedObject object);
 
     /** An uploaded generated PDF waiting to be recorded. */
-    record GeneratedObject(UUID id, String key, String docType, String sha256, int sizeBytes) {}
+    record GeneratedObject(UUID id, String key, String docType, String contentType, String sha256, int sizeBytes) {}
 
     /** Every generated document of the subject in one query, newest first. */
     List<GeneratedDocument> listGenerated(String subjectType, UUID subjectId);

@@ -107,7 +107,12 @@ final class UserApi {
             @Schema(
                     description =
                             "Per enabled module that has a settings group, the capabilities switched on (ADR-033); the PWA offers a capability's screens only when listed")
-            Map<String, List<String>> moduleCapabilities) {}
+            Map<String, List<String>> moduleCapabilities,
+
+            @Schema(
+                    description =
+                            "True when the tenant has switched report runs on (setting reports_enabled, ADR-038); the PWA shows the Reports tab only then")
+            boolean reportsEnabled) {}
 
     @Schema(name = "PlatformMe")
     record PlatformMeResponse(UUID userId, String kind, String fullName, String email, List<String> permissions) {}

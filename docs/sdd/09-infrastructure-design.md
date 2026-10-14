@@ -176,7 +176,9 @@ migration) with status only, no details.
   `BMS_SMS_ALLOWLIST`, `BMS_SMS_AT_BASE_URL`, `BMS_SMS_AT_USERNAME`, `BMS_SMS_AT_API_KEY`, `BMS_SMS_CALLBACK_TOKEN`, `BMS_SMS_PLATFORM_DAILY_CAP`; AI
   `BMS_AI_PROVIDER`, `BMS_AI_BASE_URL`, `BMS_AI_API_KEY`, `BMS_AI_MODEL`, `BMS_AI_PLATFORM_DAILY_TOKENS`, `BMS_AI_ENABLED_TENANTS`; reports `BMS_REPORTS_MAX_CONCURRENT_RUNS`,
   `BMS_REPORTS_PDF_ROW_CAP`, `BMS_REPORTS_XLSX_ROW_CAP` (staging 1, 500 and 20,000, because the staging API has about 224 MB of
-  heap). Each adapter is off
+  heap), `BMS_REPORTS_MAX_FILE_BYTES` (64 MiB; 8 MiB on staging) and `BMS_REPORTS_SPOOL_DIR` (empty: a folder in the temp
+  directory). `BMS_REPORTS_XLSX_ROW_CAP` is the row cap of every tabular output (an Excel sheet, a CSV section, a JSON table);
+  the PDF cap is read by slice D2. All four are plain settings in `deploy/compose*.yml` and `.env.example`, not secrets. Each adapter is off
   when its values are unset. The API gets them and no other container does. Staging uses sandbox values only and the
   startup guards of `docs/specs/client-extras.md` section 8 refuse a live Pesapal URL, SMS `live` mode and any non-sandbox SMS
   provider URL or account in every SMS mode there. The staging
@@ -207,7 +209,11 @@ the same image.
 
 Jobs added by the client extras design (issue #210, each with its slice): `core.payments.create-order` and
 `core.payments.poll-pending` (every 2 minutes, 48 hours per intent), `core.payments.reconcile` (nightly after the end of day),
-`core.reporting.report-runner` (every 15 seconds, one run per tenant, one at a time on staging and two elsewhere) and its nightly file expiry,
+`core.reporting.report-runner` (every 15 seconds, one run per tenant, one at a time on staging and two elsewhere) and its nightly file expiry
+`core.reporting.report-expiry` (03:30, built in issue #214; `docs/runbooks/reports-operations.md`; files are deleted in batches with no
+transaction open). A report run is stamped with the process that holds it and beaten every 10 seconds (`bms.reports.heartbeat`); a run
+with no beat for a minute (`bms.reports.heartbeat-stale`; two beats on the first tick of a new process) is failed as `interrupted`,
+and a clean stop interrupts the workers and gives them 15 seconds to close their runs (the api containers set `stop_grace_period: 30s`),
 `lending.advisor.daily-brief` (per tenant with the assistant on, idempotent by date), and a higher batch for the SMS
 channel of the outbox sender.
 

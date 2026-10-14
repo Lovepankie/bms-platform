@@ -38,6 +38,15 @@ class FakeObjectStorage implements ObjectStorage {
         objects.put(key, new StoredObject(bytes.clone(), contentType));
     }
 
+    @Override
+    public void putFile(String key, java.nio.file.Path file, String contentType) {
+        try {
+            objects.put(key, new StoredObject(java.nio.file.Files.readAllBytes(file), contentType));
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
     /** For tests: reads served by {@link #get}, and a switch that makes them fail like an outage. */
     final java.util.concurrent.atomic.AtomicInteger gets = new java.util.concurrent.atomic.AtomicInteger();
 

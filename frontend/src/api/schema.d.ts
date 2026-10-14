@@ -2373,6 +2373,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/report-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own runs, newest first */
+        get: operations["listReportRuns"];
+        put?: never;
+        /** Queue a report run; an identical request by the same user while one is queued or running returns that run (202 new, 200 existing) */
+        post: operations["createReportRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/report-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One run: its status, parameters, dates and file; the requester, or a holder of core.audit.read */
+        get: operations["getReportRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/report-runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a run: at once when queued, at the next checkpoint when running; the requester only */
+        post: operations["cancelReportRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The reports this user may run: those of the modules the tenant has on, under a permission the user holds (FR-RPT-01) */
+        get: operations["listReports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/advances": {
         parameters: {
             query?: never;
@@ -6519,6 +6588,8 @@ export interface components {
             };
             permissions?: string[];
             phone_e164?: string;
+            /** @description True when the tenant has switched report runs on (setting reports_enabled, ADR-038); the PWA shows the Reports tab only then */
+            reports_enabled?: boolean;
             roles?: components["schemas"]["RoleAssignment"][];
             /** @description Guided tours the user finished or dismissed, by tour id (issue #19) */
             tours?: {
@@ -6846,6 +6917,77 @@ export interface components {
             balances?: components["schemas"]["LoanBalances"];
             loan_status?: string;
             transaction?: components["schemas"]["LoanTransaction"];
+        };
+        ReportCatalogueEntry: {
+            description?: string;
+            /** @description json or csv until the PDF and Excel slices */
+            formats?: string[];
+            key?: string;
+            params?: components["schemas"]["ReportCatalogueParam"][];
+            /** @description The permission that lets a user run it */
+            permission?: string;
+            title?: string;
+        };
+        ReportCatalogueParam: {
+            description?: string;
+            name?: string;
+            required?: boolean;
+            /** @description date, uuid_list, enum, integer or text */
+            type?: string;
+            /** @description The allowed values of an enum */
+            values?: string[];
+        };
+        ReportRun: {
+            /** Format: date */
+            as_of?: string;
+            /** @description A running run that has been asked to stop */
+            cancel_requested?: boolean;
+            /** Format: uuid */
+            document_id?: string;
+            error?: string;
+            /** @description True once the file is gone; a download then answers 410 report_expired */
+            expired?: boolean;
+            /**
+             * Format: date-time
+             * @description When the file is deleted
+             */
+            expires_at?: string;
+            /** Format: date-time */
+            finished_at?: string;
+            format?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @description The normalised parameters, as printed on the output */
+            params?: {
+                [key: string]: Record<string, never>;
+            };
+            report_key?: string;
+            /** Format: date-time */
+            requested_at?: string;
+            /** Format: int32 */
+            row_count?: number;
+            /** Format: int64 */
+            size_bytes?: number;
+            /**
+             * Format: date-time
+             * @description When the data was read (the snapshot of the query phase)
+             */
+            snapshot_at?: string;
+            /** Format: date-time */
+            started_at?: string;
+            /** @description queued, running, ready, failed or cancelled */
+            status?: string;
+            title?: string;
+        };
+        ReportRunRequest: {
+            /** @description json or csv */
+            format?: string;
+            /** @description The report's parameters; omitted ones take their defaults and are echoed on the output */
+            params?: {
+                [key: string]: Record<string, never>;
+            };
+            /** @description A key from the catalogue, for example lending.par */
+            report_key?: string;
         };
         RetailAccountAllocation: {
             /** Format: int64 */
@@ -11866,6 +12008,8 @@ export interface components {
             /** Format: int32 */
             max_active_loans_per_member?: number;
             receipt_footer?: string;
+            /** @description True when the report runs are switched on for this tenant (default false; extras slice D1, ADR-038) */
+            reports_enabled?: boolean;
             require_mfa_all_staff?: boolean;
             /** @description True once the business set-up checklist has been dismissed */
             setup_dismissed?: boolean;
@@ -12010,6 +12154,7 @@ export interface components {
             /** Format: int32 */
             max_active_loans_per_member?: number;
             receipt_footer?: string;
+            reports_enabled?: boolean;
             require_mfa_all_staff?: boolean;
             setup_dismissed?: boolean;
             /** @description Subject to aggregator approval */
@@ -16080,6 +16225,118 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    listReportRuns: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportRun"][];
+                };
+            };
+        };
+    };
+    createReportRun: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportRunRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportRun"];
+                };
+            };
+        };
+    };
+    getReportRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportRun"];
+                };
+            };
+        };
+    };
+    cancelReportRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportRun"];
+                };
+            };
+        };
+    };
+    listReports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportCatalogueEntry"][];
+                };
             };
         };
     };

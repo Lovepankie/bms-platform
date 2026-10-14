@@ -146,6 +146,12 @@ services:
       # Global sign-up caps per hour (chapter 7 section 7.10); defaults 30 and 60.
       BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR: ${BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR:-30}
       BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR: ${BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR:-60}
+      # Report runs (ADR-038): the 224 MB heap of this host sets one run at a time, 20000 rows a table, 500 rows in a
+      # PDF and 8 MiB a file (docs/specs/client-extras.md section 6.3). Not secrets.
+      BMS_REPORTS_MAX_CONCURRENT_RUNS: ${BMS_REPORTS_MAX_CONCURRENT_RUNS:-1}
+      BMS_REPORTS_XLSX_ROW_CAP: ${BMS_REPORTS_XLSX_ROW_CAP:-20000}
+      BMS_REPORTS_PDF_ROW_CAP: ${BMS_REPORTS_PDF_ROW_CAP:-500}
+      BMS_REPORTS_MAX_FILE_BYTES: ${BMS_REPORTS_MAX_FILE_BYTES:-8388608}
       # A small JVM for a 448 MB container: serial GC, C1 only (less memory and CPU on a Pi, slower
       # peak throughput, which staging does not need), a capped code cache and few request threads.
       # Metaspace is 128m rather than 160m (ADR-018 finding L6): heap (224m) + metaspace (128m) +
@@ -157,6 +163,8 @@ services:
         -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/urandom
       SERVER_TOMCAT_THREADS_MAX: "24"
     mem_limit: 448m
+    # Report runs (ADR-038): a stop interrupts the running reports and gives them 15 seconds to close; Docker would kill at 10.
+    stop_grace_period: 30s
     cpus: 2.0
     depends_on:
       postgres:

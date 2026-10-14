@@ -3,7 +3,8 @@
 ## Status
 
 Proposed (issue #210, design only; spec `docs/specs/client-extras.md` section 6; delivers increment 8,
-issue #111). Builds on ADR-003 (row-level security), ADR-004 (integer money), ADR-008 (jobs), ADR-030
+issue #111). The run framework is built by slice D1 (issue #214, migration V49), which amends decisions 1, 3 and 7 (see
+"Amendment (issue #214)" at the end); the PDF, Excel, the other six reports and the pack follow in slices D2 to D5. Builds on ADR-003 (row-level security), ADR-004 (integer money), ADR-008 (jobs), ADR-030
 (insights definitions) and, for PDF rendering, ADR-034 (accepted, merged in
 pull request 205). Implements FR-RPT-01 to FR-RPT-05 and
 chapter 14 sections 14.3 to 14.7. Migrations are numbered when each build slice merges.
@@ -119,3 +120,55 @@ be reproducible.
   starts after they merge.
 - Report durations at 20 times the demo seed are measured in the first slice (NFR-PERF-01 to
   NFR-PERF-05) and the caps tuned from the measurement, not from this record.
+
+## Amendment (issue #214, slice D1: the run framework)
+
+Building the framework settled five things the first text left open. None reverses a decision; each completes one.
+
+1. **The scope is frozen when the run is queued.** A run executes in a job, where no user is signed in, so the branches and the
+   officer a report may read cannot be resolved there. They are resolved in the request, by the code that already resolves them
+   for the insights page, and stored on the run (`report_runs.scope`) with the business date of the request (`PortfolioScope.today`, so a run asked for at 23:59 and executed after midnight
+   still reads the loan tables of the day it was asked for and does not fail for a snapshot that tonight's job has not written); the job reads only from
+   the stored scope and never holds a principal, so it can neither widen nor lose what the requester could see. Decision 3 becomes a two step port:
+   `InsightsFigures.scope(...)` runs in the request, with the principal, and returns a plain `PortfolioScope`; `InsightsFigures.par(...)`
+   (and, with slice D2, the other figures) runs in the run's transaction from that value alone. A caller without
+   `lending.insights.read` is refused at the first step. The requester's deactivation between queuing and running ends the run
+   (`requester_deactivated`).
+2. **The port starts with what the first report needs.** Slice D1 builds `InsightsFigures` with the PAR and ageing figures only;
+   slice D2 adds the rest to the same port. The cross check test of decision 3 already compares the report's PAR figures with
+   the insights metrics.
+3. **A tenant switch and a run status for cancelling.** Report runs are off by default behind the tenant setting
+   `reports_enabled` (`core.settings.manage`): off, the catalogue is empty and every run route answers 404 `reports_not_enabled`, and
+   a run queued before the switch went off ends `reports_disabled`. A run may be `cancelled` by its requester: at once when
+   queued, at the next checkpoint when running.
+4. **The caps and the clock.** `BMS_REPORTS_XLSX_ROW_CAP` is the row cap of every tabular output, not only an Excel sheet: the JSON
+   table and the CSV section obey it, and the PDF cap (`BMS_REPORTS_PDF_ROW_CAP`) is read by slice D2. A file is also capped in
+   bytes (`BMS_REPORTS_MAX_FILE_BYTES`; 64 MiB, 8 MiB on staging), because a stored file is held in memory once to be written to
+   storage. A run records the caps it was queued under and applies the smaller of those and the limits in force when it runs. The
+   query transaction lifts the connection's 60 second statement and idle-in-transaction limits to the run's remaining time (with a
+   margin, so the application's own deadline fires first and the run ends with `timeout`); every timestamp is written from the
+   business clock so a test can pin it. Concurrency is counted in the database (a read-only definer function), so the limit holds
+   across API instances, and a run left `running` by a process that died is failed as `interrupted`: every run is stamped with its process and beaten every 10
+   seconds, a run with no beat for a minute is failed by the next runner tick (two beats on the first tick of a new process, since whatever was
+   beating before it started is dead; who owned the run does not matter, a recreated container has a new host name), and a clean stop
+   interrupts the workers, gives them 15 seconds inside the containers' 30 second stop grace period, and fails and audits what is left, so
+   a deploy never blocks the one place of the staging host for the length of a timeout. The figures of the port are totalled as the loans arrive in blocks (memory
+   by group, not by loan) and call a checkpoint every 1,000 loans, so a cancel or a timeout does not wait for the first row. The repeat
+   check precedes the rate limit, and the limit is counted under a lock per requester.
+5. **Files, access and expiry.** The file of a run is a `documents` row of type `report` whose subject is the run; only the
+   requester may fetch it, judged when it is asked for: reports must still be on, they must still hold the report's permission, and
+   their branches and officers must still cover the frozen scope (`InsightsFigures.covers`); every refusal is 404, not 403, so a run is
+   not even known to anyone else (an auditor may read the status, not the file). The output is uploaded from the file on disk, never held
+   in memory (`Documents.putFile(Path, ...)`, `RequestBody.fromFile`). The
+   nightly expiry deletes the object through a narrow `Documents` method that refuses any other document type, and marks the run;
+   the row stays and a download answers 410 `report_expired`. The in-app notice of decision 7 is the screen's own refresh of the
+   run list while any run is open; e-mail notice is left to the report centre (slice D5).
+
+**Better:** a report run cannot see more than its requester could, whatever happens between the request and the run; the framework
+is proved on a JSON and CSV report before any PDF work; the staging host is protected by caps that were tested at their edge and by
+`ReportMemoryIT` on a 224 MB heap.
+**Worse:** the stored scope is a snapshot of the requester's permissions: a permission withdrawn after queuing is honoured at the
+file download but not by the query already queued. The whole output file is held in memory once to be stored, which the byte cap
+bounds.
+**Watch for:** a report that reads tables itself instead of the port (decision 3 still applies); a new renderer that holds a table
+in memory instead of reading the spool.

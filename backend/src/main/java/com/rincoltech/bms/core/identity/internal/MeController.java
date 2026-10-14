@@ -10,6 +10,7 @@ import com.rincoltech.bms.core.identity.internal.UserApi.UserResponse;
 import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.core.tenancy.ModuleSettings;
 import com.rincoltech.bms.core.tenancy.TenantModules;
+import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.AuthenticatedEndpoint;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
@@ -49,6 +50,7 @@ class MeController {
     private final TourProgress tours;
     private final TenantModules modules;
     private final ModuleSettings moduleSettings;
+    private final TenantSettings settings;
 
     MeController(
             UserService users,
@@ -57,7 +59,8 @@ class MeController {
             JdbcClient jdbc,
             TourProgress tours,
             TenantModules modules,
-            ModuleSettings moduleSettings) {
+            ModuleSettings moduleSettings,
+            TenantSettings settings) {
         this.users = users;
         this.accounts = accounts;
         this.branches = branches;
@@ -65,6 +68,7 @@ class MeController {
         this.tours = tours;
         this.modules = modules;
         this.moduleSettings = moduleSettings;
+        this.settings = settings;
     }
 
     @GetMapping("/me")
@@ -101,7 +105,8 @@ class MeController {
                 accounts.unusedRecoveryCodes(user.id()),
                 tours.of(user.id()),
                 modules.enabledKeys(),
-                moduleSettings.enabledCapabilities());
+                moduleSettings.enabledCapabilities(),
+                settings.reportsEnabled());
     }
 
     /**

@@ -73,6 +73,11 @@ class SettingsController {
             @Schema(description = "True once the business set-up checklist has been dismissed")
             boolean setupDismissed,
 
+            @Schema(
+                    description =
+                            "True when the report runs are switched on for this tenant (default false; extras slice D1, ADR-038)")
+            boolean reportsEnabled,
+
             int version) {}
 
     /** Omitted (or null) fields are unchanged (chapter 7 section 7.5). */
@@ -109,7 +114,8 @@ class SettingsController {
                             "#RRGGBB, or an empty string to clear it; white or near-black text on it must reach contrast 4.5 (FR-TEN-08)")
             String themePrimary,
 
-            Boolean setupDismissed) {}
+            Boolean setupDismissed,
+            Boolean reportsEnabled) {}
 
     @GetMapping
     @RequiresPermission("core.settings.read")

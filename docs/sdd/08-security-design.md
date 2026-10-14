@@ -254,6 +254,16 @@ Notes:
   platform operator only; the assistant can be switched on only for tenants in `BMS_AI_ENABLED_TENANTS`; collections can be
   switched on only for the tenant named by `BMS_PESAPAL_TENANT_ID`; a member's SMS opt-out needs `lending.members.update`. Running a report run needs
   the report's own permission (a pack needs all seven); loan officers still see only their own loans.
+  Built (extras slice D1, issue #214): report runs add no permission and no seeded row (the matrix and the seeds are unchanged;
+  `PermissionMatrixIT` still compares them). `POST /report-runs` is open to signed-in staff and the service checks the report's own
+  permission, because the permission belongs to the report, not to the route; a run is read by its requester or a holder of
+  `core.audit.read`, and its file by its requester alone, judged when it is asked for: while reports are on, while they still hold the
+  report's permission, and while their branches and officers still cover the frozen scope (a user moved from all branches to one
+  cannot keep downloading the tenant-wide file); every refusal is 404. The branch and
+  officer scope is resolved from the requester's permissions when the run is queued and stored on the run, so the job that executes
+  it (no signed-in user) can neither widen nor lose it; `lending.par` takes it from the insights module, the same code as the
+  insights endpoints, and needs `lending.insights.read` as well. Report runs are off until a tenant administrator sets
+  `reports_enabled` in the tenant settings (`core.settings.manage`).
 - Branch managers approve loans, but never one they submitted or appraised (FR-APR-03).
 - Member ID images (`id_front`, `id_back`) need `lending.members.verify_kyc` in the member's
   branch, so tenant admins and branch managers, the people who verify KYC; photos and other member

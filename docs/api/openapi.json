@@ -4380,6 +4380,10 @@
           "phone_e164" : {
             "type" : "string"
           },
+          "reports_enabled" : {
+            "description" : "True when the tenant has switched report runs on (setting reports_enabled, ADR-038); the PWA shows the Reports tab only then",
+            "type" : "boolean"
+          },
           "roles" : {
             "items" : {
               "$ref" : "#/components/schemas/RoleAssignment"
@@ -5186,6 +5190,160 @@
           },
           "transaction" : {
             "$ref" : "#/components/schemas/LoanTransaction"
+          }
+        }
+      },
+      "ReportCatalogueEntry" : {
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "formats" : {
+            "description" : "json or csv until the PDF and Excel slices",
+            "items" : {
+              "description" : "json or csv until the PDF and Excel slices",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "params" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ReportCatalogueParam"
+            },
+            "type" : "array"
+          },
+          "permission" : {
+            "description" : "The permission that lets a user run it",
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ReportCatalogueParam" : {
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "required" : {
+            "type" : "boolean"
+          },
+          "type" : {
+            "description" : "date, uuid_list, enum, integer or text",
+            "type" : "string"
+          },
+          "values" : {
+            "description" : "The allowed values of an enum",
+            "items" : {
+              "description" : "The allowed values of an enum",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "ReportRun" : {
+        "properties" : {
+          "as_of" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "cancel_requested" : {
+            "description" : "A running run that has been asked to stop",
+            "type" : "boolean"
+          },
+          "document_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "error" : {
+            "type" : "string"
+          },
+          "expired" : {
+            "description" : "True once the file is gone; a download then answers 410 report_expired",
+            "type" : "boolean"
+          },
+          "expires_at" : {
+            "description" : "When the file is deleted",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "finished_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "format" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "params" : {
+            "additionalProperties" : {
+              "description" : "The normalised parameters, as printed on the output",
+              "type" : "object"
+            },
+            "description" : "The normalised parameters, as printed on the output",
+            "type" : "object"
+          },
+          "report_key" : {
+            "type" : "string"
+          },
+          "requested_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "row_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "size_bytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "snapshot_at" : {
+            "description" : "When the data was read (the snapshot of the query phase)",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "started_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "queued, running, ready, failed or cancelled",
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ReportRunRequest" : {
+        "properties" : {
+          "format" : {
+            "description" : "json or csv",
+            "type" : "string"
+          },
+          "params" : {
+            "additionalProperties" : {
+              "description" : "The report's parameters; omitted ones take their defaults and are echoed on the output",
+              "type" : "object"
+            },
+            "description" : "The report's parameters; omitted ones take their defaults and are echoed on the output",
+            "type" : "object"
+          },
+          "report_key" : {
+            "description" : "A key from the catalogue, for example lending.par",
+            "type" : "string"
           }
         }
       },
@@ -15145,6 +15303,10 @@
           "receipt_footer" : {
             "type" : "string"
           },
+          "reports_enabled" : {
+            "description" : "True when the report runs are switched on for this tenant (default false; extras slice D1, ADR-038)",
+            "type" : "boolean"
+          },
           "require_mfa_all_staff" : {
             "type" : "boolean"
           },
@@ -15544,6 +15706,9 @@
             "maxLength" : 500,
             "minLength" : 0,
             "type" : "string"
+          },
+          "reports_enabled" : {
+            "type" : "boolean"
           },
           "require_mfa_all_staff" : {
             "type" : "boolean"
@@ -21625,6 +21790,151 @@
         },
         "summary" : "Reset the lost second factor of a tenant admin (FR-IAM-12)",
         "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/report-runs" : {
+      "get" : {
+        "operationId" : "listReportRuns",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 50,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ReportRun"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own runs, newest first",
+        "tags" : [ "reports" ]
+      },
+      "post" : {
+        "operationId" : "createReportRun",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReportRunRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReportRun"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Queue a report run; an identical request by the same user while one is queued or running returns that run (202 new, 200 existing)",
+        "tags" : [ "reports" ]
+      }
+    },
+    "/api/v1/report-runs/{run_id}" : {
+      "get" : {
+        "operationId" : "getReportRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReportRun"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One run: its status, parameters, dates and file; the requester, or a holder of core.audit.read",
+        "tags" : [ "reports" ]
+      }
+    },
+    "/api/v1/report-runs/{run_id}/cancel" : {
+      "post" : {
+        "operationId" : "cancelReportRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "run_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReportRun"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cancel a run: at once when queued, at the next checkpoint when running; the requester only",
+        "tags" : [ "reports" ]
+      }
+    },
+    "/api/v1/reports" : {
+      "get" : {
+        "operationId" : "listReports",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ReportCatalogueEntry"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The reports this user may run: those of the modules the tenant has on, under a permission the user holds (FR-RPT-01)",
+        "tags" : [ "reports" ]
       }
     },
     "/api/v1/retail/advances" : {

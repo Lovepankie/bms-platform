@@ -767,6 +767,14 @@ class RlsIsolationIT {
                         t.headOffice(),
                         user)
                 .update();
+        // A report run (migration V49, extras slice D1). Cancelled, so the runner of another test in the same database
+        // never finds it queued and tries to execute a run with an empty scope.
+        owner.sql("""
+                        INSERT INTO report_runs (id, tenant_id, report_key, params, params_hash, scope, format, status,
+                                                 requested_by, as_of, finished_at, row_cap, size_cap_bytes)
+                        VALUES (?, ?, 'lending.par', '{}', repeat('a', 64), '{}', 'json', 'cancelled', ?,
+                                DATE '2026-01-15', now(), 1000, 1000000)
+                        """).params(UUID.randomUUID(), t.tenantId(), user).update();
     }
 
     static String randomHash() {

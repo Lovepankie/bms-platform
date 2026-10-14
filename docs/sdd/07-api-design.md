@@ -222,7 +222,7 @@ published under the platform host.
 | 422 | Validation and business rule failures (codes below) |
 | 423 | `tenant_suspended`, `account_locked` |
 | 428 | `precondition_required`: a `PATCH`, or a state transition or retail price edit, without `If-Match` (section 7.9) |
-| 429 | Rate limited; `Retry-After` header set where the limiter knows it; `rate_limited` on the public sign-up endpoints (section 7.10) |
+| 429 | Rate limited; `Retry-After` header set where the limiter knows it; `rate_limited` on the public sign-up endpoints and on report runs (section 7.10) |
 | 500 | `internal_error`; the body carries only the generic title and the `request_id` |
 | 503 | Dependency down (the database); readiness fails; `uploads_busy` (image re-encoding is at capacity, retry shortly); `storage_unavailable` (document storage not configured) |
 
@@ -487,11 +487,17 @@ generic `POST /documents`. Built (#12): these two routes and the member document
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/reports` | authenticated staff | Catalogue filtered by permission. FR-RPT-01 |
-| GET | `/reports/{report_key}` | report's permission | Synchronous JSON for small reports; params as query |
-| POST | `/report-runs` | report's permission (a pack needs all seven) | `{report_key \| pack, params, format}`; async, returns the run (an identical queued or running request returns the same run). FR-RPT-04, FR-RPT-06, ADR-038 |
-| GET | `/report-runs` | requester | Own runs with status, as-of date, expiry |
-| GET | `/report-runs/{run_id}` | requester or `core.audit.read` | Status and document ids; 422 codes `report_too_large`, `snapshot_unavailable`, `timeout` on `failed` runs. Download goes through `POST /documents/{id}/download-url`, 410 `report_expired` after 30 days |
+| GET | `/reports` | authenticated staff | Catalogue filtered by permission and by the tenant's modules: a list of `{key, title, description, permission, formats, params}`; 404 `reports_not_enabled` while the tenant has not switched report runs on, like every other report route. FR-RPT-01. **Built (#214)** |
+| GET | `/reports/{report_key}` | report's permission | Synchronous JSON for small reports; params as query. Not built |
+| POST | `/report-runs` | report's permission (a pack needs all seven) | `{report_key, params, format}`; async, returns the run: 202 when queued, 200 when an identical queued or running request of the same user already exists (it is returned instead). An identical request is answered with the existing run before the rate limit is applied. Optional `Idempotency-Key` replays the first answer. 404 `reports_not_enabled` while the tenant switch is off, 404 `report_not_found`, 403 `permission_denied`, 422 `validation_failed` for an unknown parameter, a bad value or an unsupported format, 429 `rate_limited` at 10 new runs a minute per user (counted under a lock per requester, so it holds under concurrent requests). FR-RPT-04, FR-RPT-06, ADR-038. **Built (#214)**: formats `json` and `csv`; `pdf`, `xlsx` and `pack` arrive with slices D2 to D5 |
+| GET | `/report-runs` | requester | Own runs, newest first, with status, as-of date and expiry (`?limit`, at most 100). **Built (#214)** |
+| GET | `/report-runs/{run_id}` | requester or `core.audit.read` | Status, parameters, dates, row count, size, `document_id`, `expires_at`, `expired` and the stable `error` code of a `failed` run (`report_too_large`, `snapshot_unavailable`, `timeout`, ...); anyone else gets 404. Download goes through `POST /documents/{id}/download-url`: the requester only, while reports are on, while they still hold the report's permission and while their branches and officers still cover the scope the file was made under; every other case, including a colleague, is 404 (not 403); 410 `report_expired` after 30 days. **Built (#214)** |
+| POST | `/report-runs/{run_id}/cancel` | requester | A queued run is cancelled at once (200); a running one is asked to stop and ends `cancelled` at its next checkpoint (202); a finished one is 409 `run_finished`. Audited. **Built (#214)** |
+
+Responses of these routes are `Cache-Control: no-store`. The switch is the tenant setting `reports_enabled` (`PATCH /settings`,
+`core.settings.manage`; also `GET /me` `reports_enabled`, which the PWA reads to show the Reports tab), off by default. No new permission exists: a report is run under its own `lending.reports.*`
+permission and a loan officer sees only their own loans. The lending report `lending.par` additionally needs
+`lending.insights.read`, because its branch scope is the insights page's.
 
 ### 7.11.9 Imports (`/imports`)
 

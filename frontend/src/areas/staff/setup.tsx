@@ -142,6 +142,19 @@ export function Setup() {
     });
   }
 
+  function setReports(on: boolean) {
+    void run(async () => {
+      const { error } = await api.PATCH('/api/v1/settings', {
+        params: { header: { 'If-Match': `"${current.version}"` } },
+        body: { reports_enabled: on },
+      });
+      if (error) throw new Error(problemOf(error).detail ?? 'Could not change the reports setting.');
+      await refresh();
+      await queryClient.invalidateQueries({ queryKey: ['me'] });
+      return on ? 'Reports are on. The Reports tab is now shown to staff who may run reports.' : 'Reports are off.';
+    });
+  }
+
   function dismiss() {
     void run(async () => {
       const { error } = await api.PATCH('/api/v1/settings', {
@@ -245,6 +258,14 @@ export function Setup() {
               (contrast {check.ratio.toFixed(1)} to 1)
             </p>
           )}
+        </fieldset>
+
+        <fieldset>
+          <legend>Reports</legend>
+          <label>
+            <input type="checkbox" checked={current.reports_enabled === true} disabled={busy} onChange={(e) => setReports(e.target.checked)} />{' '}
+            Let staff run reports (portfolio at risk and others), prepared in the background and kept for 30 days
+          </label>
         </fieldset>
 
         <button disabled={busy || (colour !== '' && !check.ok)} onClick={save} data-tour="setup-save">

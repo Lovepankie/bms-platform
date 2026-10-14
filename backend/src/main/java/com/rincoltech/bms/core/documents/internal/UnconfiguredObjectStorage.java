@@ -18,6 +18,11 @@ class UnconfiguredObjectStorage implements ObjectStorage {
     }
 
     @Override
+    public void putFile(String key, java.nio.file.Path file, String contentType) {
+        throw unavailable();
+    }
+
+    @Override
     public Optional<byte[]> get(String key) {
         throw unavailable();
     }

@@ -113,7 +113,9 @@ core.onboarding       -> core.tenancy, core.platform, core.audit, core.notificat
 core.notifications    -> core.audit (the operator's "send again" is audited)
 core.imports          -> core.ledger, core.documents   (templates register into it)
 core.payments         -> core.ledger, core.notifications (booking is delegated through a registry)
-core.reporting        -> core.documents (runs, snapshot transaction, Excel and PDF builders; ADR-038)
+core.reporting        -> core.tenancy, core.audit, core.documents, core.jobs, core.operations
+                         (queued runs, the snapshot transaction, the spool, the JSON and CSV renderers, the file expiry;
+                         the Excel and PDF builders follow in slice D2; verticals register reports, it names none; ADR-038)
 core.ai               -> core.tenancy, core.audit, core.jobs (no vertical)
 lending               -> any core module
 lending.loans         -> lending.members, lending.products, lending.collateral, lending.savings (transfer)
@@ -124,7 +126,7 @@ lending.insights      -> core.tenancy, core.audit, core.jobs, core.notifications
                          lending.savings (SavingsMetrics), lending.investments (InvestmentMetrics)
                          (reads the lending and ledger tables with SQL, read-only, under RLS; ADR-030)
 lending.collections   -> lending.loans, lending.members
-lending.reports       -> core.reporting, core.documents, lending.insights (the public InsightsFigures port, ADR-038)
+lending.reports       -> core.reporting, lending.insights (the public InsightsFigures port, ADR-038)
 lending.advisor       -> core.ai, core.tenancy, core.audit, core.jobs, lending.insights (PortfolioFacts)
                          (never reads member rows; sends aggregates and aliases only; ADR-037)
 lending.savings       -> lending.members (member lookup, the receipt SMS phone; ADR-032)
