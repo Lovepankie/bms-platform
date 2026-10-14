@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import com.rincoltech.bms.lending.loans.internal.LoanLedger.After;
 import com.rincoltech.bms.lending.loans.internal.LoanLedger.Deduction;
 import com.rincoltech.bms.lending.loans.internal.LoanLedger.Entry;
-import com.rincoltech.bms.lending.loans.internal.LoanLedger.PenaltyCharge;
+import com.rincoltech.bms.lending.loans.internal.LoanLedger.PenaltyEvent;
 import com.rincoltech.bms.lending.loans.internal.LoanLedger.Statement;
 import com.rincoltech.bms.lending.loans.internal.Servicing.Allocation;
 import com.rincoltech.bms.lending.loans.internal.Servicing.Item;
@@ -222,7 +222,7 @@ class LoanLedgerTest {
         return statement(b, writtenOff, outstandingNow, List.of());
     }
 
-    static Statement statement(Book b, boolean writtenOff, long outstandingNow, List<PenaltyCharge> penalties) {
+    static Statement statement(Book b, boolean writtenOff, long outstandingNow, List<PenaltyEvent> penalties) {
         return LoanLedger.statement(
                 b.transactions(),
                 b.scheduleRows(writtenOff),
@@ -366,12 +366,12 @@ class LoanLedgerTest {
         Book b = new Book();
         b.disburse();
         LocalDate due = b.contracted.get(0).dueDate;
-        List<PenaltyCharge> penalties = new ArrayList<>();
-        penalties.add(new PenaltyCharge(1, due.plusDays(1), b.next(), 2_000));
-        penalties.add(new PenaltyCharge(1, due.plusDays(2), b.next(), 2_000));
-        penalties.add(new PenaltyCharge(2, due.plusDays(2), b.next(), 1_000));
+        List<PenaltyEvent> penalties = new ArrayList<>();
+        penalties.add(new PenaltyEvent(1, due.plusDays(1), b.next(), 2_000, false));
+        penalties.add(new PenaltyEvent(1, due.plusDays(2), b.next(), 2_000, false));
+        penalties.add(new PenaltyEvent(2, due.plusDays(2), b.next(), 1_000, false));
         UUID p1 = b.repay(300_000, due.plusDays(2));
-        penalties.add(new PenaltyCharge(1, due.plusDays(3), b.next(), 2_000));
+        penalties.add(new PenaltyEvent(1, due.plusDays(3), b.next(), 2_000, false));
 
         long outstanding = b.outstanding() + 7_000;
         Statement st = statement(b, false, outstanding, penalties);
@@ -397,5 +397,40 @@ class LoanLedgerTest {
                         .outstandingMinor())
                 .as("the three penalties recorded before the payment count, the later one does not")
                 .isEqualTo(1_590_000 + 5_000 - 300_000);
+    }
+
+    /** FR-ARR-04: a waiver is a credit on its own date, and a receipt counts it only when recorded before it. */
+    @Test
+    void aWaiverIsCreditedOnItsDateAndCountsOnlyForLaterReceipts() {
+        Book b = new Book();
+        b.disburse();
+        LocalDate due = b.contracted.get(0).dueDate;
+        List<PenaltyEvent> penalties = new ArrayList<>();
+        penalties.add(new PenaltyEvent(1, due.plusDays(1), b.next(), 2_000, false));
+        penalties.add(new PenaltyEvent(1, due.plusDays(2), b.next(), 2_000, false));
+        UUID p1 = b.repay(100_000, due.plusDays(3));
+        penalties.add(new PenaltyEvent(1, due.plusDays(3), b.next(), 1_500, true));
+        UUID p2 = b.repay(100_000, due.plusDays(3));
+
+        long outstanding = b.outstanding() + 4_000 - 1_500;
+        Statement st = statement(b, false, outstanding, penalties);
+        assertRunningBalance(st);
+        assertThat(st.closingMinor()).isEqualTo(outstanding);
+        List<String> order = st.entries().stream()
+                .filter(e -> !e.note())
+                .map(Entry::description)
+                .toList();
+        assertThat(order.subList(order.size() - 3, order.size()))
+                .as("the waiver sits between the two payments of its day, by when it was recorded")
+                .containsExactly("Repayment", "Penalties waived", "Repayment");
+        assertThat(st.entries())
+                .anyMatch(e -> e.description().equals("Penalties waived") && e.creditedMinor() == 1_500);
+
+        assertThat(LoanLedger.after(b.transactions(), b.scheduleRows(false), penalties, p1)
+                        .outstandingMinor())
+                .isEqualTo(1_590_000 + 4_000 - 100_000);
+        assertThat(LoanLedger.after(b.transactions(), b.scheduleRows(false), penalties, p2)
+                        .outstandingMinor())
+                .isEqualTo(1_590_000 + 4_000 - 1_500 - 200_000);
     }
 }

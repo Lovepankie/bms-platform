@@ -327,7 +327,7 @@ class LoanDocuments {
         LoanLedger.Statement st = LoanLedger.statement(
                 txns,
                 repo.scheduleRows(loanId),
-                repo.penaltyCharges(loanId),
+                repo.penaltyEvents(loanId),
                 deductions,
                 today,
                 b.totalOutstandingMinor(),
@@ -463,7 +463,7 @@ class LoanDocuments {
             }
         }
         model.put("allocations", rows);
-        After now = LoanLedger.after(all, items, repo.penaltyCharges(loan.id()), t.id());
+        After now = LoanLedger.after(all, items, repo.penaltyEvents(loan.id()), t.id());
         Map<String, Object> after = new LinkedHashMap<>();
         after.put(
                 "outstanding",

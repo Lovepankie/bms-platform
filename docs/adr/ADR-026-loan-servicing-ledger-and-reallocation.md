@@ -139,3 +139,12 @@ Also decided here, within the rules of chapter 3:
   needs retail to post and read through `PaymentMethods` (#236). A correction credits the account the original entry
   debited, never the method's mapping at the time of the correction. A request is checked at the
   branch of the loan, account or investment, the same row that execution resolves.
+
+## Addendum of 2026-10-14 (issue #265): the replay keeps charges and waivers
+
+The replay of a reversal starts from the items as they stand, not as first contracted: the
+penalties due already include every penalty charge (increment 6 T1), and `Item.fresh()` now keeps
+the standing fee and penalty waivers while clearing everything paid. The repayments are then
+re-applied around them, so a reversal returns money and never undoes a waiver. Waived interest is
+still cleared, because today it is only the early settlement rebate, which the replay recomputes; an
+explicit interest waiver (not built) would need its own column or rows to survive the same way.

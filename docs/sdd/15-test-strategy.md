@@ -346,6 +346,14 @@ arrears, nothing more on a rerun, a repayment that pays the penalty first and po
 income, a statement with one penalty line per day that reconciles, and a charge that the owner
 cannot delete or change. `LoanLedgerTest` places penalties on their own dates and keeps a later
 penalty out of an earlier receipt.
+
+Waivers (#265). `ServicingTest` replays a schedule with a standing waiver and a rebate: the waiver
+stays, the rebate is recomputed. `LoanLedgerTest` credits a waiver on its date between the two
+payments of that day by when it was recorded, and counts it only for the later receipt.
+`LoanServicingIT` waives part of a penalty through maker and checker (the maker cannot approve,
+nothing changes before the checker, nothing is posted, the statement shows it and reconciles),
+refuses more than is left, waives the rest without an amount, closes the loan on payoff, and
+reverses a payment made after two waivers without undoing them.
 `-Dbms.golden.record=true` rewrites the golden files for review. `make document-samples` writes
 each document as a PDF and a PNG per page to `backend/target/document-samples`, the visual check
 of the quality bar before a template change is merged.

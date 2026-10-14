@@ -2258,4 +2258,130 @@ class LoanServicingIT extends LoanFixtures {
         assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(loan(loan).get("status").asString()).isEqualTo("written_off");
     }
+
+    /** A product that charges 2,000 a day from the day after the due date. */
+    String dailyPenaltyProduct(String code) {
+        Map<String, Object> penalty = new LinkedHashMap<>();
+        penalty.put("penalty_method", "flat_per_period");
+        penalty.put("penalty_period_unit", "day");
+        penalty.put("penalty_grace_days", 0);
+        penalty.put("penalty_flat_minor", 2_000);
+        return product(code, penalty, List.of());
+    }
+
+    ResponseEntity<JsonNode> requestWaiver(String loan, String charge, Long amount) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("amount_minor", amount);
+        body.put("reason", "Test goodwill");
+        return send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/charges/" + charge + "/waive",
+                withKey(as(manager, managerPerms, "*", null), key()),
+                body);
+    }
+
+    /** Requested by the manager and approved by the accountant. */
+    void waived(String loan, String charge, Long amount) {
+        ResponseEntity<JsonNode> r = requestWaiver(loan, charge, amount);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        ResponseEntity<JsonNode> d =
+                decide(r.getBody().get("approval_request_id").asString(), accountant, accountantPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+    }
+
+    /**
+     * FR-ARR-04: a waiver of part of a penalty is maker-checker, posts nothing, shows on the
+     * statement on its date, and is refused above what is left; waiving the rest and paying the
+     * contract closes the loan.
+     */
+    @Test
+    void frArr04_aWaiverTakesThePenaltyOffAndPostsNothing() throws Exception {
+        String loan = approved(dailyPenaltyProduct("WAIVE"), 1_200_000, 3, 94);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        runArrears();
+        JsonNode charges = get(loan, "/charges").get("items");
+        assertThat(charges).hasSize(5);
+        assertThat(charges.get(0).get("waivable_minor").asLong()).isEqualTo(2_000);
+        String first = charges.get(0).get("id").asString();
+
+        ResponseEntity<JsonNode> tooMuch = requestWaiver(loan, first, 3_000L);
+        assertThat(tooMuch.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(tooMuch.getBody().get("code").asString()).isEqualTo("waiver_exceeds_charge");
+
+        ResponseEntity<JsonNode> r = requestWaiver(loan, first, 1_500L);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        String approval = r.getBody().get("approval_request_id").asString();
+        assertThat(decide(approval, manager, managerPerms).getStatusCode())
+                .as("the maker never approves")
+                .isNotEqualTo(HttpStatus.OK);
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .as("nothing changes before the checker")
+                .isEqualTo(10_000);
+        assertThat(decide(approval, accountant, accountantPerms).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        JsonNode b = loan(loan).get("balances");
+        assertThat(b.get("penalties_outstanding_minor").asLong()).isEqualTo(8_500);
+        assertThat(b.get("penalties_assessed_minor").asLong())
+                .as("assessed stays gross")
+                .isEqualTo(10_000);
+        JsonNode after = get(loan, "/charges").get("items").get(0);
+        assertThat(after.get("waived_minor").asLong()).isEqualTo(1_500);
+        assertThat(after.get("waivable_minor").asLong()).isEqualTo(500);
+        assertThat(get(loan, "/schedule")
+                        .get("items")
+                        .get(0)
+                        .get("waived_minor")
+                        .asLong())
+                .isEqualTo(1_500);
+
+        byte[] statement = render(loan, "loan_statement").getBody();
+        assertReconciles(statement, b.get("total_outstanding_minor").asLong());
+        assertThat(statementRows(statement))
+                .filteredOn(row -> row.line().contains("Penalties waived"))
+                .singleElement()
+                .satisfies(row -> assertThat(row.credited()).isEqualTo(1_500));
+
+        // The rest of the charge, all that is left when no amount is given, then the whole loan.
+        waived(loan, first, null);
+        assertThat(requestWaiver(loan, first, null).getBody().get("code").asString())
+                .isEqualTo("nothing_to_waive");
+        long payoff = get(loan, "/payoff-quote").get("total_minor").asLong();
+        repaid(loan, payoff, today);
+        assertThat(loan(loan).get("status").asString()).isEqualTo("closed");
+        booksAgree();
+    }
+
+    /**
+     * ADR-026 Watch for: a reversal replays the repayments from the schedule with its standing
+     * waivers, so it gives the money back without undoing the waiver.
+     */
+    @Test
+    void frArr04_aReversalKeepsTheWaiver() {
+        String loan = approved(dailyPenaltyProduct("WAIVEREV"), 1_200_000, 3, 95);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        runArrears();
+        JsonNode charges = get(loan, "/charges").get("items");
+        waived(loan, charges.get(0).get("id").asString(), null);
+        waived(loan, charges.get(1).get("id").asString(), null);
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .isEqualTo(6_000);
+
+        String paid = repaid(loan, 6_000, today).get("transaction").get("id").asString();
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .isZero();
+        ResponseEntity<JsonNode> d = decide(requestReversal(loan, paid), manager, managerPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .as("the payment comes back, the 4,000 waived stays waived")
+                .isEqualTo(6_000);
+        assertThat(get(loan, "/schedule")
+                        .get("items")
+                        .get(0)
+                        .get("waived_minor")
+                        .asLong())
+                .isEqualTo(4_000);
+        booksAgree();
+    }
 }

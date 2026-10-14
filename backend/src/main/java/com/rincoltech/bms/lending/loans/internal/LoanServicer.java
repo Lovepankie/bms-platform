@@ -757,6 +757,73 @@ class LoanServicer implements LoanServicing {
                 "lending.loan.written_off", SUBJECT, loan.id(), loan.branchId(), Map.of("status", "active"), after));
     }
 
+    // ---- Waiver (FR-ARR-04) ---------------------------------------------------------------
+
+    /**
+     * What may still be waived on a penalty charge: its amount less what is already waived on it,
+     * and never more than the item's unpaid penalties (a penalty paid is not waived). Refused on a
+     * loan that is not active or a charge that is not a penalty of this loan.
+     */
+    long waivable(Loan loan, ServicingRepository.Charge charge) {
+        requireStatus(loan, Set.of("active"));
+        if (!charge.loanId().equals(loan.id())) {
+            throw ApiException.notFound();
+        }
+        if (!charge.chargeType().equals("penalty")) {
+            throw ApiException.rule("not_waivable", "Only a penalty can be waived on this route.");
+        }
+        long unpaid = repo.items(loan.id()).stream()
+                .filter(i -> i.id.equals(charge.itemId()))
+                .findFirst()
+                .orElseThrow()
+                .unpaid("penalty");
+        return Math.max(0, Math.min(charge.amountMinor() - charge.waivedMinor(), unpaid));
+    }
+
+    /** The checks of a waiver request, run again at execution: the amount, all that is waivable when null. */
+    long checkWaiver(Loan loan, ServicingRepository.Charge charge, Long amountMinor) {
+        long waivable = waivable(loan, charge);
+        if (waivable == 0) {
+            throw ApiException.rule("nothing_to_waive", "Nothing is left to waive on this charge.");
+        }
+        long amount = amountMinor == null ? waivable : amountMinor;
+        if (amount <= 0 || amount > waivable) {
+            throw ApiException.rule("waiver_exceeds_charge", "At most " + waivable + " can be waived on this charge.");
+        }
+        return amount;
+    }
+
+    /**
+     * FR-ARR-04: the approved waiver is recorded with its date and taken off the item's penalties;
+     * nothing is posted, because the penalty never was (ADR-004). A waiver that leaves nothing owing
+     * closes the loan.
+     */
+    void waive(UUID chargeId, long amountMinor, String reason, UUID approvalId, UUID makerId, UUID checkerId) {
+        ServicingRepository.Charge charge = repo.charge(chargeId).orElseThrow(ApiException::notFound);
+        Loan loan = loans.lock(charge.loanId()).orElseThrow(ApiException::notFound);
+        long amount = checkWaiver(loan, charge, amountMinor);
+        LocalDate today = today();
+        UUID waiverId = UUID.randomUUID();
+        repo.insertWaiver(waiverId, charge, amount, today, reason, approvalId, makerId, checkerId);
+        List<Item> items = repo.items(loan.id());
+        for (Item i : items) {
+            if (i.id.equals(charge.itemId())) {
+                i.penaltiesWaived += amount;
+            }
+        }
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("waiver_id", waiverId);
+        after.put("charge_id", charge.id());
+        after.put("item_no", charge.itemNo());
+        after.put("amount_minor", amount);
+        after.put("reason", reason);
+        after.put("approval_request_id", approvalId);
+        audit.record(AuditLog.Entry.created("lending.loan.charge_waived", SUBJECT, loan.id(), loan.branchId(), after));
+        if (refresh(loan.id(), items, today).settled()) {
+            close(loan, today, checkerId != null ? checkerId : makerId);
+        }
+    }
+
     // ---- Payoff quote (FR-REP-06) ---------------------------------------------------------
 
     Quote quote(Loan loan, LocalDate valueDate) {

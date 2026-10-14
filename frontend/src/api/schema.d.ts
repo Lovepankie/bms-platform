@@ -1157,6 +1157,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/loans/{loan_id}/charges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The loan's penalty charges with what each still allows a waiver to take (R-PEN) */
+        get: operations["listLoanCharges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/charges/{charge_id}/waive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request a waiver of all or part of a penalty, with a reason (FR-ARR-04) */
+        post: operations["requestLoanChargeWaiver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/loans/{loan_id}/collateral": {
         parameters: {
             query?: never;
@@ -5254,6 +5288,12 @@ export interface components {
             /** @description #FFFFFF or #111111, the readable text colour on themePrimary; null with it */
             theme_text?: string;
         };
+        /** @description FR-ARR-04: amount_minor left out waives all that is waivable */
+        ChargeWaiverRequest: {
+            /** Format: int64 */
+            amount_minor?: number;
+            reason: string;
+        };
         Collateral: {
             /** Format: uuid */
             branch_id?: string;
@@ -6477,6 +6517,34 @@ export interface components {
             total_paid_minor?: number;
             /** Format: date */
             written_off_on?: string;
+        };
+        /** @description R-PEN: one charge on a schedule item, and what can still be waived */
+        LoanCharge: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date */
+            business_date?: string;
+            /** @description penalty or fee */
+            charge_type?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int32 */
+            item_no?: number;
+            /**
+             * Format: int32
+             * @description The penalty period; null for a fee
+             */
+            period_no?: number;
+            /**
+             * Format: int64
+             * @description What a waiver may still take: unwaived and not yet paid
+             */
+            waivable_minor?: number;
+            /** Format: int64 */
+            waived_minor?: number;
+        };
+        LoanChargeList: {
+            items?: components["schemas"]["LoanCharge"][];
         };
         LoanDecisionRequest: {
             /**
@@ -14744,6 +14812,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    listLoanCharges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanChargeList"];
+                };
+            };
+        };
+    };
+    requestLoanChargeWaiver: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                loan_id: string;
+                charge_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChargeWaiverRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanActionOutcome"];
                 };
             };
         };

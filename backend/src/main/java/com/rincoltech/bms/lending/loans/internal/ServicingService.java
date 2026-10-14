@@ -11,6 +11,8 @@ import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.lending.loans.internal.LoanRepository.Loan;
 import com.rincoltech.bms.lending.loans.internal.Servicing.Quote;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.ActionOutcome;
+import com.rincoltech.bms.lending.loans.internal.ServicingApi.ChargeList;
+import com.rincoltech.bms.lending.loans.internal.ServicingApi.ChargeRow;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.DisbursementRequest;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.PayoffQuote;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.ReasonRequest;
@@ -19,6 +21,7 @@ import com.rincoltech.bms.lending.loans.internal.ServicingApi.RepaymentResult;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.Schedule;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.ScheduleRow;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.TransactionList;
+import com.rincoltech.bms.lending.loans.internal.ServicingApi.WaiverRequest;
 import com.rincoltech.bms.lending.loans.internal.ServicingRepository.Txn;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -154,6 +157,48 @@ class ServicingService {
                     Map.of(WriteOffAction.REASON, r.reason().trim())));
             return outcome(id, o);
         });
+    }
+
+    /** FR-ARR-04: waits for a checker above the tenant's threshold (FR-APR-04), else takes effect now. */
+    @Transactional
+    Outcome<ActionOutcome> requestWaiver(UUID id, UUID chargeId, String key, WaiverRequest r) {
+        return idempotency.once(
+                key, "POST", BASE + id + "/charges/" + chargeId + "/waive", r, ActionOutcome.class, () -> {
+                    Loan loan = lock(id, "lending.charges.waive_request");
+                    ServicingRepository.Charge charge = repo.charge(chargeId).orElseThrow(ApiException::notFound);
+                    long amount = servicer.checkWaiver(loan, charge, r.amountMinor());
+                    Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put(WaiverAction.CHARGE, charge.id().toString());
+                    payload.put(WaiverAction.AMOUNT, amount);
+                    payload.put(WaiverAction.REASON, r.reason().trim());
+                    Approvals.Outcome o = approvals.request(new ActionRequest(
+                            WaiverAction.TYPE,
+                            loan.branchId(),
+                            loan.id(),
+                            loan.version(),
+                            amount,
+                            loan.currency(),
+                            payload));
+                    return outcome(id, o);
+                });
+    }
+
+    /** R-PEN: the loan's charges with what each still allows a waiver to take. */
+    @Transactional(readOnly = true)
+    ChargeList charges(UUID id) {
+        Loan loan = inScope(id);
+        boolean active = loan.status().equals("active");
+        return new ChargeList(repo.charges(id).stream()
+                .map(c -> new ChargeRow(
+                        c.id(),
+                        c.itemNo(),
+                        c.chargeType(),
+                        c.periodNo(),
+                        c.businessDate(),
+                        c.amountMinor(),
+                        c.waivedMinor(),
+                        active && c.chargeType().equals("penalty") ? servicer.waivable(loan, c) : 0))
+                .toList());
     }
 
     /** FR-DIS-04: the items and a totals row. */
