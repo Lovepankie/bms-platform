@@ -816,7 +816,8 @@ disbursement, FR-DIS-03; a repayment on a closed loan; a quote on a loan that is
 | POST | `/lending/loans/{loan_id}/repayments` | `lending.repayments.create` | **M**. `{amount_minor, value_date, payment_method_key, external_reference}`. FR-REP-01 |
 | POST | `/lending/loans/{loan_id}/transactions/{txn_id}/reverse` | `lending.repayments.reverse_request` | **M A**. FR-REP-05 |
 | GET | `/lending/loans/{loan_id}/payoff-quote` | `lending.loans.read` | `?value_date=`. FR-REP-06 |
-| POST | `/lending/loans/{loan_id}/charges/{charge_id}/waive` | `lending.charges.waive_request` | **M A**. FR-ARR-04 |
+| GET | `/lending/loans/{loan_id}/charges` | `lending.loans.read` | R-PEN: each charge with `waived_minor` and `waivable_minor` (unwaived and unpaid) |
+| POST | `/lending/loans/{loan_id}/charges/{charge_id}/waive` | `lending.charges.waive_request` | **M A**. FR-ARR-04. `{amount_minor?, reason}`; without an amount, all that is waivable. 201 at once below the `charge_waiver` threshold, else 202 |
 | POST | `/lending/loans/{loan_id}/write-off` | `lending.loans.write_off_request` | **M A**. FR-LCL-02 |
 | POST | `/lending/loans/{loan_id}/restructure` | `lending.loans.restructure_request` | **M A**. FR-LCL-04 (P2) |
 | PUT | `/lending/loans/{loan_id}/officer` | `lending.collections.assign` | FR-CLN-01 |

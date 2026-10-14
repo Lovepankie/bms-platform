@@ -387,6 +387,14 @@ the cap freed by the cancelled amount, an imported loan not back-charged, and th
 failing two nights running, none for a loan that did not fail on the previous finished run, and the
 push still sent when a night with no run lies between the two failing runs; the time-zone case runs on a
 pinned clock.
+
+Waivers (#265). `ServicingTest` replays a schedule with a standing waiver and a rebate: the waiver
+stays, the rebate is recomputed. `LoanLedgerTest` credits a waiver on its date between the two
+payments of that day by when it was recorded, and counts it only for the later receipt.
+`LoanServicingIT` waives part of a penalty through maker and checker (the maker cannot approve,
+nothing changes before the checker, nothing is posted, the statement shows it and reconciles),
+refuses more than is left, waives the rest without an amount, closes the loan on payoff, and
+reverses a payment made after two waivers without undoing them.
 `-Dbms.golden.record=true` rewrites the golden files for review. `make document-samples` writes
 each document as a PDF and a PNG per page to `backend/target/document-samples`, the visual check
 of the quality bar before a template change is merged.

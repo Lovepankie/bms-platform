@@ -21,7 +21,8 @@ import java.util.function.LongFunction;
  * <p>What the member owes is the principal, the interest and fees on the schedule, and the penalties
  * charged so far, less what has been applied to them. The statement charges the whole schedule when
  * the loan is disbursed, because that is what the loan's outstanding balance counts from then on,
- * each penalty on the business date it was charged (R-PEN, ADR-034), and every
+ * each penalty on the business date it was charged and each waiver on the date it took effect
+ * (R-PEN, FR-ARR-04, ADR-034), and every
  * later line moves the balance by exactly what the servicing code moved it by: a repayment by the
  * sum of its own allocation rows, a reversal by the sum of the rows it wrote (which include the
  * re-allocation of later repayments), a write-off by the amount written off on the schedule items.
@@ -50,7 +51,7 @@ final class LoanLedger {
     record Deduction(String name, long amountMinor) {}
 
     /**
-     * A penalty charged (R-PEN), charged again after a reversal, or cancelled on schedule item {@code itemNo}: the
+     * A penalty charged (R-PEN), charged again after a reversal, waived (FR-ARR-04) or cancelled on schedule item {@code itemNo}: the
      * business date it is for, and when it was recorded, which places it among the transactions for a receipt. A
      * charge is cancelled, in whole or in part, when a back-dated repayment shows it was not owed or owed less, and
      * charged again when a reversal shows it was owed after all (the review of #270).
@@ -60,6 +61,7 @@ final class LoanLedger {
         enum Kind {
             CHARGED("Penalties charged"),
             RECHARGED("Penalties charged again after a reversal"),
+            WAIVED("Penalties waived"),
             CANCELLED("Penalties cancelled after a back-dated payment");
 
             final String text;
@@ -279,7 +281,7 @@ final class LoanLedger {
     /**
      * Prints the penalty events that come before transaction {@code t} (all that are left when it is
      * null), one line per date and kind. The nightly run charges at the start of the business date,
-     * so a day's charges come before its payments; a cancel takes its place by when it was recorded.
+     * so a day's charges come before its payments; a waiver or a cancel takes its place by when it was recorded.
      */
     private static void penaltiesBefore(
             List<Entry> entries, long[] balance, List<PenaltyEvent> unprinted, LoanTransaction t) {

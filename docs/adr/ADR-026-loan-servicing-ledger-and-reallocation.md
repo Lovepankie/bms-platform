@@ -161,3 +161,12 @@ import). It now also serves the payments module booking a verified gateway payme
   module does not strand: `before_last_repayment` is retried once dated today, anything else posts the amount to unallocated
   receipts (ADR-035 decision 14).
 - The javadoc of the port now says "the seed, the import and gateway bookings".
+
+## Addendum of 2026-10-19 (issue #265): the replay keeps charges and waivers
+
+The replay of a reversal starts from the items as they stand, not as first contracted: the
+penalties due already include every penalty charge (increment 6 T1), and `Item.fresh()` now keeps
+the standing fee and penalty waivers while clearing everything paid. The repayments are then
+re-applied around them, so a reversal returns money and never undoes a waiver. Waived interest is
+still cleared, because today it is only the early settlement rebate, which the replay recomputes; an
+explicit interest waiver (not built) would need its own column or rows to survive the same way.

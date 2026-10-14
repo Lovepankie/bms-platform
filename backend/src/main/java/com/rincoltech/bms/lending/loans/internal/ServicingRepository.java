@@ -405,8 +405,8 @@ class ServicingRepository {
     }
 
     /**
-     * The loan's penalty charges (R-PEN) and their cancels with their dates, for the statement and the receipts
-     * (ADR-034).
+     * The loan's penalty charges (R-PEN), their waivers (FR-ARR-04) and their cancels with their dates, for the
+     * statement and the receipts (ADR-034).
      */
     List<LoanLedger.PenaltyEvent> penaltyEvents(UUID loanId) {
         return jdbc.sql("""
@@ -429,7 +429,7 @@ class ServicingRepository {
                          WHERE x.loan_id = ?
                          ORDER BY 2, 3, 1
                         """)
-                .params(loanId, loanId)
+                .params(loanId, loanId, loanId)
                 .query((rs, n) -> new LoanLedger.PenaltyEvent(
                         rs.getInt(1),
                         rs.getObject(2, LocalDate.class),
@@ -437,6 +437,84 @@ class ServicingRepository {
                         rs.getLong(4),
                         LoanLedger.PenaltyEvent.Kind.valueOf(rs.getString(5))))
                 .list();
+    }
+
+    /** One charge on a loan (R-PEN, FR-ARR-04). */
+    record Charge(
+            UUID id,
+            UUID loanId,
+            UUID itemId,
+            int itemNo,
+            String chargeType,
+            Integer periodNo,
+            LocalDate businessDate,
+            long amountMinor,
+            long waivedMinor) {}
+
+    private static final String CHARGE = """
+            SELECT c.id, c.loan_id, c.schedule_item_id, s.item_no, c.charge_type, c.period_no, c.business_date,
+                   c.amount_minor, c.waived_minor
+              FROM lending_loan_charges c
+              JOIN lending_schedule_items s ON s.id = c.schedule_item_id
+            """;
+
+    private static Charge charge(ResultSet rs, int n) throws SQLException {
+        return new Charge(
+                rs.getObject(1, UUID.class),
+                rs.getObject(2, UUID.class),
+                rs.getObject(3, UUID.class),
+                rs.getInt(4),
+                rs.getString(5),
+                rs.getObject(6, Integer.class),
+                rs.getObject(7, LocalDate.class),
+                rs.getLong(8),
+                rs.getLong(9));
+    }
+
+    Optional<Charge> charge(UUID chargeId) {
+        return jdbc.sql(CHARGE + " WHERE c.id = ?")
+                .param(chargeId)
+                .query(ServicingRepository::charge)
+                .optional();
+    }
+
+    /** The loan's charges, oldest first. */
+    List<Charge> charges(UUID loanId) {
+        return jdbc.sql(CHARGE + " WHERE c.loan_id = ? ORDER BY c.business_date, s.item_no, c.period_no")
+                .param(loanId)
+                .query(ServicingRepository::charge)
+                .list();
+    }
+
+    /** FR-ARR-04: records an approved waiver and adds it to the charge's waived amount. */
+    void insertWaiver(
+            UUID id,
+            Charge charge,
+            long amountMinor,
+            LocalDate businessDate,
+            String reason,
+            UUID approvalId,
+            UUID requestedBy,
+            UUID approvedBy) {
+        jdbc.sql("""
+                        INSERT INTO lending_charge_waivers (id, tenant_id, loan_id, charge_id, amount_minor, business_date,
+                            reason, approval_request_id, requested_by, approved_by)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """)
+                .params(
+                        id,
+                        charge.loanId(),
+                        charge.id(),
+                        amountMinor,
+                        businessDate,
+                        reason,
+                        approvalId,
+                        requestedBy,
+                        approvedBy)
+                .update();
+        jdbc.sql("UPDATE lending_loan_charges SET waived_minor = waived_minor + ? WHERE id = ?")
+                .params(amountMinor, charge.id())
+                .update();
     }
 
     /** The loan's transactions, newest first, each with the allocation rows it wrote. */
