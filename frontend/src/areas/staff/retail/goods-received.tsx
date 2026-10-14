@@ -8,7 +8,7 @@ import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { SkeletonList } from '../../../components/states';
 import { useStaff } from '../context';
 import { showQty } from './maths';
-import { PURCHASE_CREATE, canUse, holdsAt } from './permissions';
+import { PAYABLE_MANAGE, PURCHASE_CREATE, canUse, holdsAt } from './permissions';
 import { RECEIPT_STATUS_WORDS, canVoidReceipt, inLineUnit } from './purchasing-state';
 import { Facts, MoreButton, ReasonPanel, StatusBadge, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
@@ -23,6 +23,7 @@ export function ReceiptRow({ row, branchName }: { row: GoodsReceipt; branchName?
     <li className="rt-card" data-testid={`receipt-${row.receipt_no}`}>
       <p>
         <strong>{row.receipt_no}</strong> <StatusBadge words={RECEIPT_STATUS_WORDS[row.status ?? ''] ?? (row.status ?? '')} warn={row.status === 'voided'} />
+        {row.held_for_costing && row.status === 'posted' && <> <StatusBadge words="Held, not costed" warn /></>}
         <br />
         {row.supplier_name}, {showDate(row.received_on)}, <strong>{money(row.total_minor ?? 0)}</strong>
       </p>
@@ -46,7 +47,8 @@ export function GoodsReceivedPage() {
     <Gate screen="goodsReceived" title="Goods received">
       <p className="hint" data-tour="goods-received-help">
         Each delivery from a supplier is recorded here. Receive against an order from the order itself, or record a delivery that came with no order.
-        A wrong delivery is undone by voiding it and receiving it again correctly. Sending goods back to a supplier, and supplier credit notes, are not supported yet.
+        A wrong delivery is undone by voiding it and receiving it again correctly. Goods sent back to a supplier are recorded on a supplier credit note.
+        A delivery marked held is waiting for its freight and duty to be added as a landed cost.
       </p>
       <p className="cluster">
         <Link className="btn rt-primary" to="/staff/retail/goods-received/new">Receive goods without an order</Link>
@@ -76,9 +78,16 @@ export function GoodsReceivedPage() {
 export function GoodsReceiptView({ receipt, nameOf }: { receipt: GoodsReceipt; nameOf: (branchId: string | undefined) => string }) {
   const lines = receipt.lines ?? [];
   const showBilled = lines.some((l) => l.billed_qty !== undefined);
+  // The landed amount is sent only with profit access, and only for lines a landed cost has touched.
+  const showLanded = lines.some((l) => l.landed_minor !== undefined);
+  const held = receipt.held_for_costing === true && receipt.status === 'posted';
   return (
     <section aria-label="Goods received" data-testid="goods-receipt">
-      <h2>{receipt.receipt_no} <StatusBadge words={RECEIPT_STATUS_WORDS[receipt.status ?? ''] ?? (receipt.status ?? '')} warn={receipt.status === 'voided'} /></h2>
+      <h2>
+        {receipt.receipt_no} <StatusBadge words={RECEIPT_STATUS_WORDS[receipt.status ?? ''] ?? (receipt.status ?? '')} warn={receipt.status === 'voided'} />
+        {held && <> <StatusBadge words="Held, not costed" warn /></>}
+      </h2>
+      {held && <p className="hint" data-testid="receipt-held">Held until the landed cost is in. While the business requires costing before sale, this quantity cannot be moved out of the branch. Other stock of the same item can still go.</p>}
       <Facts
         rows={[
           ['Supplier', receipt.supplier_name ?? ''],
@@ -101,6 +110,7 @@ export function GoodsReceiptView({ receipt, nameOf }: { receipt: GoodsReceipt; n
               {showBilled && <th className="num">On invoices</th>}
               <th className="num">Cost of one</th>
               <th className="num">Total</th>
+              {showLanded && <th className="num">Landed costs added</th>}
             </tr>
           </thead>
           <tbody>
@@ -111,11 +121,12 @@ export function GoodsReceiptView({ receipt, nameOf }: { receipt: GoodsReceipt; n
                 {showBilled && <td className="num">{inLineUnit(l.billed_qty, l)} {l.unit}</td>}
                 <td className="num">{money(l.entered_cost_minor ?? 0)}</td>
                 <td className="num">{money(l.line_total_minor ?? 0)}</td>
+                {showLanded && <td className="num">{money(l.landed_minor ?? 0)}</td>}
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr><td colSpan={showBilled ? 4 : 3}><strong>Total received</strong></td><td className="num"><strong>{money(receipt.total_minor ?? 0)}</strong></td></tr>
+            <tr><td colSpan={showBilled ? 4 : 3}><strong>Total received</strong></td><td className="num"><strong>{money(receipt.total_minor ?? 0)}</strong></td>{showLanded && <td />}</tr>
           </tfoot>
         </table>
       </div>
@@ -146,6 +157,18 @@ export function GoodsReceiptPage() {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });
+  // Releasing a hold is a different action from voiding, so it has keys of its own.
+  const releaseKeys = useActionKeys();
+  const released = useMutation({
+    mutationFn: (reason: string) => retail.releaseReceiptHold(receiptId, reason, releaseKeys.keyFor(receiptId, reason)),
+    onSuccess: (r) => {
+      releaseKeys.done(receiptId);
+      const text = `Released ${r.receipt_no ?? 'the delivery'}. It no longer waits for a landed cost.`;
+      setMessage(text);
+      show(text);
+      void queryClient.invalidateQueries({ queryKey: ['retail'] });
+    },
+  });
   if (!allowed) {
     return (
       <main className="rt">
@@ -163,11 +186,26 @@ export function GoodsReceiptPage() {
       <Problem error={receipt.error} />
       {message && <Success>{message}</Success>}
       {r && <GoodsReceiptView receipt={r} nameOf={nameOf} />}
+      {r && r.status === 'posted' && canUse(me, 'landedCosts') && holdsAt(me, PAYABLE_MANAGE, r.branch_id) && (
+        <p><Link className="btn-sm" to="/staff/retail/landed-costs/new" search={{ receipt: r.id } as never} data-tour="receipt-landed">Add landed cost</Link></p>
+      )}
+      {r && r.status === 'posted' && r.held_for_costing === true && holdsAt(me, PAYABLE_MANAGE, r.branch_id) && (
+        <ReasonPanel
+          fieldId="release-reason"
+          openLabel="Release the hold"
+          question="Why does this delivery need no landed cost?"
+          hint="Use this when there is no freight or duty to add. Adding a landed cost to the delivery releases the hold by itself."
+          confirmLabel="Release the hold"
+          busy={released.isPending}
+          error={released.error}
+          onSubmit={(reason) => released.mutate(reason)}
+        />
+      )}
       {r && canVoidReceipt(r) && holdsAt(me, PURCHASE_CREATE, r.branch_id) && (
         <ReasonPanel
           openLabel="Void this delivery"
           question="Why is it voided?"
-          hint="This is how a wrong delivery is undone: void it, then receive it again correctly. Sending goods back to a supplier is not supported yet. The goods come out of stock again. This is refused if the delivery is already on a supplier invoice (void the invoice first), or if some of the goods have been sold, used or moved."
+          hint="This is how a wrong delivery is undone: void it, then receive it again correctly. Goods sent back to a supplier are recorded on a supplier credit note instead. The goods come out of stock again. This is refused if the delivery is already on a supplier invoice (void the invoice first), or if some of the goods have been sold, used or moved."
           confirmLabel="Void the delivery"
           busy={voided.isPending}
           error={voided.error}

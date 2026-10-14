@@ -1,7 +1,10 @@
 import type {
-  GoodsReceipt, GoodsReceiptLine, GoodsReceiptRequest, PurchaseOrder, PurchaseOrderLine, PurchaseOrderRequest, PurchasingSettings, RetailApi, SupplierBill,
-  SupplierBillLine, SupplierBillMatch, SupplierBillRequest, SupplierOpenItem, SupplierPayablesRow, SupplierPayment,
+  GoodsReceipt, GoodsReceiptLine, GoodsReceiptRequest, LandedCost, LandedCostLine, LandedCostPreview, LandedCostRequest, PurchaseOrder, PurchaseOrderLine, PurchaseOrderRequest,
+  PurchasingSettings, RetailApi, SupplierBill, SupplierBillLine, SupplierBillMatch, SupplierBillRequest, SupplierCredit, SupplierCreditLine, SupplierCreditRequest,
+  SupplierOpenItem, SupplierPayablesRow, SupplierPayment,
 } from './retail';
+import { creditedByLine } from '../areas/staff/retail/credits-state';
+import { spreadMinor } from '../areas/staff/retail/landed-state';
 import { lineTotalMinor, milliOf, parseQty, qtyString } from '../areas/staff/retail/maths';
 
 // Fabricated optional purchasing for VITE_RETAIL_MOCK and for tests (ADR-033, issue #198): the REAL snake_case shapes of the
@@ -10,7 +13,9 @@ import { lineTotalMinor, milliOf, parseQty, qtyString } from '../areas/staff/ret
 // bills received and unbilled quantities at the supplier's price and shows the difference against what the goods were received at
 // (a reason is needed above the tolerance), a payment clears invoices and credit restocks oldest first or as chosen, and a void or
 // a reversal puts everything back. Stock moves through the environment; the ledger is not simulated. Every route answers 404
-// capability_not_enabled while the capability is off. Nothing here is real.
+// capability_not_enabled while the capability is off. Landed costs (the charges of one payee spread over received lines in exact
+// integers, with the payee's invoice as a bill of kind landed_cost) and supplier credit notes (goods sent back or a price
+// adjustment against an invoice that stands) follow the same rules in small (issue #199). Nothing here is real.
 
 export interface PurchasingEnv {
   /** The purchasing capability of this mock instance. */
@@ -30,6 +35,8 @@ export interface PurchasingEnv {
   /** Puts base units into (or, negative, takes them out of) a branch; `costMinor` per base unit and `sellMinor` set the item's prices. */
   move: (branchId: string, productId: string, baseMilli: number, costMinor?: number, sellMinor?: number) => void;
   balance: (branchId: string, productId: string) => number;
+  /** The item's cost per base unit now, in minor units. */
+  cost: (productId: string) => number;
 }
 
 export type PurchasingMock = Pick<
@@ -38,7 +45,9 @@ export type PurchasingMock = Pick<
   | 'listGoodsReceipts' | 'getGoodsReceipt' | 'createGoodsReceipt' | 'voidGoodsReceipt'
   | 'listSupplierBills' | 'getSupplierBill' | 'createSupplierBill' | 'matchSupplierBill' | 'voidSupplierBill' | 'unbilledReceipts'
   | 'listSupplierPayments' | 'getSupplierPayment' | 'createSupplierPayment' | 'reverseSupplierPayment' | 'supplierOpenItems' | 'supplierPayables'
-  | 'purchasingSettings' | 'changePurchasingSettings'
+  | 'purchasingSettings' | 'changePurchasingSettings' | 'releaseReceiptHold'
+  | 'listLandedCosts' | 'getLandedCost' | 'createLandedCost' | 'previewLandedCost' | 'voidLandedCost'
+  | 'listSupplierCredits' | 'getSupplierCredit' | 'createSupplierCredit' | 'voidSupplierCredit'
 >;
 
 /** An order worth at least this much waits for a second person to approve it (the mock's stand-in for the tenant's threshold). */
@@ -59,7 +68,10 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
   const billedBy = new Map<string, Billed[]>();
   const movedBy = new Map<string, { branchId: string; productId: string; baseMilli: number }[]>();
   const sequence = new Map<string, number>();
-  let settings: PurchasingSettings = { bill_tolerance_bp: 100, over_receipt_bp: 0, version: 1 };
+  let settings: PurchasingSettings = { bill_tolerance_bp: 100, over_receipt_bp: 0, require_costing_before_sale: false, version: 1 };
+  const landed: LandedCost[] = [];
+  const credits: SupplierCredit[] = [];
+  const creditMoves = new Map<string, { branchId: string; productId: string; baseMilli: number }[]>();
   // One fabricated credit restock, so a payment can clear both kinds of open item.
   const restocks: Restock[] = [{ id: 'restock0-0000-4000-8000-000000000001', purchase_no: 'P-900001', supplier_id: env.suppliers()[0]?.id ?? '', date: env.today(), total_minor: 12_000, paid_minor: 0 }];
 
@@ -180,6 +192,7 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
       id, receipt_no: next(`GR${env.branchCode(branchId)}`), status: 'posted', branch_id: branchId, supplier_id: order?.supplier_id ?? body.supplier_id,
       supplier_name: supplierName(order?.supplier_id ?? body.supplier_id), ...(order ? { order_id: order.id, order_no: order.order_no } : {}), currency: 'UGX',
       received_on: body.received_on ?? env.today(), ...(body.delivery_ref ? { delivery_ref: body.delivery_ref } : {}), ...(body.note ? { note: body.note } : {}),
+      held_for_costing: body.hold_for_costing === true,
       line_count: lines.length, lines, total_minor: lines.reduce((sum, l) => sum + (l.line_total_minor ?? 0), 0), created_at: new Date().toISOString(), created_by: 'mock-user', version: 1,
     };
     receipts.push(made);
@@ -233,7 +246,7 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
     const asOf = env.today();
     const fromBills = openBills(supplierId).map((b): SupplierOpenItem => ({
       id: b.id, kind: 'bill', number: b.bill_no, supplier_ref: b.supplier_ref, date: b.bill_date, due_date: b.due_date, days_past_due: days(b.due_date ?? asOf, asOf),
-      total_minor: b.total_minor, paid_minor: b.paid_minor, open_minor: b.open_minor,
+      total_minor: b.total_minor, paid_minor: b.paid_minor, credited_minor: b.credited_minor ?? 0, open_minor: b.open_minor,
     }));
     const fromRestocks = restocks.filter((r) => r.supplier_id === supplierId && r.total_minor > r.paid_minor).map((r): SupplierOpenItem => ({
       id: r.id, kind: 'restock', number: r.purchase_no, date: r.date, due_date: r.date, days_past_due: days(r.date, asOf), total_minor: r.total_minor, paid_minor: r.paid_minor, open_minor: r.total_minor - r.paid_minor,
@@ -262,12 +275,147 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
   };
   const withoutLines = <T extends { lines?: unknown }>(r: T): T => ({ ...r, lines: undefined });
 
+  // ---- Landed costs (issue #199) -------------------------------------------------------------------------------------
+
+  const landedOf = (id: string): LandedCost => landed.find((x) => x.id === id) ?? notFound();
+  /** What standing landed costs have allocated to a received line. */
+  const landedOn = (receiptLineId: string | undefined): number =>
+    landed.filter((x) => x.status === 'posted').flatMap((x) => x.lines ?? []).filter((l) => l.receipt_line_id === receiptLineId).reduce((sum, l) => sum + (l.allocated_minor ?? 0), 0);
+  const receiptLineOf = (id: string) => {
+    for (const r of receipts) {
+      const l = (r.lines ?? []).find((x) => x.id === id);
+      if (l) return { r, l };
+    }
+    return undefined;
+  };
+
+  const landedWork = (body: LandedCostRequest): LandedCostPreview & { lines: LandedCostLine[]; method: string } => {
+    if (!env.suppliers().some((s) => s.id === body.supplier_id)) env.refuse(422, 'validation_failed', 'No such supplier.');
+    if (body.charges.length === 0 || body.lines.length === 0) env.refuse(422, 'validation_failed', 'A landed cost needs charges and goods.');
+    const method = body.method ?? 'value';
+    const total = body.charges.reduce((sum, c) => sum + c.amount_minor, 0);
+    const found = body.lines.map((l) => {
+      const hit = receiptLineOf(l.receipt_line_id) ?? env.refuse(422, 'validation_failed', 'One of the lines is not on a delivery.');
+      if (hit.r.status !== 'posted') env.refuse(422, 'validation_failed', 'One of the deliveries has been voided.');
+      if (body.cost_date && body.cost_date < (hit.r.received_on ?? '')) env.refuse(422, 'validation_failed', 'The charges cannot be dated before the goods were received.');
+      return { req: l, ...hit };
+    });
+    const bases = found.map((f) => {
+      if (method === 'value') return f.l.line_total_minor ?? 0;
+      if (method === 'quantity') return milliOf(f.l.qty ?? '0');
+      if (method === 'weight') return parseQty(f.req.weight ?? '') ?? env.refuse(422, 'validation_failed', 'Enter the weight of every line.');
+      return f.req.amount_minor ?? env.refuse(422, 'validation_failed', 'Enter the share of every line.');
+    });
+    let shares: number[];
+    if (method === 'manual') {
+      if (bases.reduce((a, b) => a + b, 0) !== total) env.refuse(422, 'allocation_total_mismatch', 'The shares must add up to the total.');
+      shares = bases;
+    } else {
+      shares = spreadMinor(total, bases) ?? env.refuse(422, 'allocation_basis_zero', 'These goods add up to nothing by this method.');
+    }
+    const lines = found.map((f, i): LandedCostLine => {
+      const share = shares[i] ?? 0;
+      const qtyMilli = milliOf(f.l.qty ?? '0');
+      const productId = f.l.product_id ?? '';
+      const onHand = Math.max(0, Math.min(env.balance(f.r.branch_id ?? '', productId), qtyMilli));
+      const toInventory = qtyMilli > 0 ? Number((BigInt(share) * BigInt(onHand)) / BigInt(qtyMilli)) : 0;
+      const before = env.cost(productId);
+      const applied = toInventory > 0 && onHand > 0;
+      return {
+        line_no: i + 1, receipt_id: f.r.id, receipt_no: f.r.receipt_no, receipt_line_id: f.l.id, product_id: productId, branch_id: f.r.branch_id, code: f.l.code, description: f.l.description,
+        qty: f.l.qty, basis: String(bases[i] ?? 0), ...(method === 'weight' ? { weight: qtyString(bases[i] ?? 0) } : {}), allocated_minor: share, on_hand_qty: qtyString(onHand),
+        to_inventory_minor: toInventory, to_cogs_minor: share - toInventory, cost_before_minor: before,
+        cost_after_minor: applied ? before + Math.round((toInventory * 1000) / onHand) : before, cost_applied: applied,
+        ...(applied ? {} : { cost_note: 'The goods were all sold, used or moved, so the whole share is counted as a cost of sales and the cost is not changed.' }),
+      };
+    });
+    return { total_minor: total, total_mismatch: body.total_minor !== total, method, lines };
+  };
+
+  const postLanded = (body: LandedCostRequest): LandedCost => {
+    const w = landedWork(body);
+    if (w.total_mismatch) env.refuse(422, 'landed_total_mismatch', 'The total does not match the charges.');
+    if (bills.some((b) => b.supplier_id === body.supplier_id && b.supplier_ref === body.supplier_ref && b.status === 'posted')) env.refuse(409, 'duplicate_supplier_bill', 'Already recorded.');
+    const billId = env.nextId('supplier-bill');
+    const bill: SupplierBill = {
+      id: billId, bill_no: next('SB'), supplier_id: body.supplier_id, supplier_name: supplierName(body.supplier_id), supplier_ref: body.supplier_ref, kind: 'landed_cost', status: 'posted', currency: 'UGX',
+      bill_date: body.cost_date ?? env.today(), due_date: body.due_date, line_count: 0, lines: [], total_minor: w.total_minor, cleared_minor: 0, variance_minor: 0, paid_minor: 0, credited_minor: 0,
+      open_minor: w.total_minor, branch_id: w.lines[0]?.branch_id, created_at: new Date().toISOString(), created_by: 'mock-user', version: 1,
+    };
+    bills.push(bill);
+    w.lines.forEach((l) => {
+      const r = receipts.find((x) => x.id === l.receipt_id);
+      if (r) r.held_for_costing = false;
+      if (l.cost_applied) env.move(l.branch_id ?? '', l.product_id ?? '', 0, l.cost_after_minor);
+    });
+    const made: LandedCost = {
+      id: env.nextId('landed-cost'), landed_no: next('LC'), bill_id: billId, bill_no: bill.bill_no, branch_id: bill.branch_id, status: 'posted', supplier_id: body.supplier_id,
+      supplier_name: supplierName(body.supplier_id), supplier_ref: body.supplier_ref, currency: 'UGX', method: w.method as LandedCost['method'], cost_date: bill.bill_date, due_date: body.due_date,
+      ...(body.note ? { note: body.note } : {}), total_minor: w.total_minor, paid_minor: 0, line_count: w.lines.length, lines: w.lines,
+      charges: body.charges.map((c, i) => ({ line_no: i + 1, kind: c.kind, ...(c.description ? { description: c.description } : {}), amount_minor: c.amount_minor })),
+      created_at: new Date().toISOString(), created_by: 'mock-user', version: 1,
+    };
+    landed.push(made);
+    return made;
+  };
+
+  /** A landed cost as read: what has been paid on the payee's invoice is the invoice's own figure. */
+  const landedView = (x: LandedCost): LandedCost => ({ ...x, paid_minor: bills.find((b) => b.id === x.bill_id)?.paid_minor ?? 0 });
+
+  // ---- Supplier credit notes (issue #199) ----------------------------------------------------------------------------
+
+  const creditOf = (id: string): SupplierCredit => credits.find((x) => x.id === id) ?? notFound();
+
+  const postCredit = (body: SupplierCreditRequest): SupplierCredit => {
+    const bill = billOf(body.bill_id);
+    if (bill.status !== 'posted') env.refuse(409, 'bill_voided', 'That invoice has been voided.');
+    if (bill.kind === 'landed_cost') env.refuse(409, 'bill_is_landed_cost', 'This is the invoice of a landed cost.');
+    if (body.credit_date && body.credit_date < (bill.bill_date ?? '')) env.refuse(422, 'validation_failed', 'The credit note cannot be dated before the invoice.');
+    if (body.reason.trim().length < MIN_REASON) env.refuse(422, 'validation_failed', 'Give a reason of at least 5 characters.');
+    if (credits.some((c) => c.supplier_id === bill.supplier_id && c.supplier_ref === body.supplier_ref && c.status === 'posted')) env.refuse(409, 'duplicate_supplier_credit', 'Already recorded.');
+    const taken = creditedByLine(credits.filter((c) => c.bill_id === bill.id));
+    const moves: { branchId: string; productId: string; baseMilli: number }[] = [];
+    const lines = body.lines.map((l, i): SupplierCreditLine => {
+      const bl = (bill.lines ?? []).find((x) => x.id === l.bill_line_id) ?? env.refuse(422, 'validation_failed', 'That line is not on the invoice.');
+      const held = taken[bl.id ?? ''] ?? { qtyMilli: 0, minor: 0 };
+      const common = { line_no: i + 1, bill_line_id: bl.id, receipt_no: bl.receipt_no, receipt_line_id: bl.receipt_line_id, product_id: bl.product_id, code: bl.code, description: bl.description, unit: bl.unit };
+      if (body.kind === 'price') {
+        const amount = l.amount_minor ?? env.refuse(422, 'validation_failed', 'Enter the amount to take off.');
+        if (amount <= 0 || amount > (bl.line_total_minor ?? 0) - held.minor) env.refuse(422, 'credit_exceeds_billed_value', 'That is more than the line is still worth.');
+        return { ...common, line_total_minor: amount };
+      }
+      const qty = parseQty(l.qty ?? '') ?? env.refuse(422, 'validation_failed', 'Enter a quantity above zero.');
+      if (qty > milliOf(bl.unit_qty ?? bl.qty ?? '0') - held.qtyMilli) env.refuse(422, 'credit_exceeds_billed', 'More is sent back than was billed and not yet credited.');
+      const each = l.unit_credit_minor ?? bl.unit_price_minor ?? 0;
+      if (each > (bl.unit_price_minor ?? 0)) env.refuse(422, 'credit_exceeds_billed_value', 'The credit for one is more than the invoice charged.');
+      const baseMilli = Math.round((qty * milliOf(bl.qty ?? '0')) / Math.max(1, milliOf(bl.unit_qty ?? bl.qty ?? '0')));
+      const receipt = receipts.find((r) => r.id === bl.receipt_id);
+      moves.push({ branchId: receipt?.branch_id ?? '', productId: bl.product_id ?? '', baseMilli });
+      return { ...common, unit_qty: qtyString(qty), qty: qtyString(baseMilli), unit_credit_minor: each, line_total_minor: lineTotalMinor(each, qty) };
+    });
+    const total = lines.reduce((sum, l) => sum + (l.line_total_minor ?? 0), 0);
+    if (body.total_minor !== total) env.refuse(422, 'credit_total_mismatch', 'The total does not match the lines.');
+    if (total > (bill.open_minor ?? 0)) env.refuse(422, 'credit_exceeds_open', 'That is more than the invoice still has to pay.');
+    if (moves.some((m) => env.balance(m.branchId, m.productId) < m.baseMilli)) env.refuse(422, 'insufficient_stock', 'There is not enough stock to send back.');
+    moves.forEach((m) => env.move(m.branchId, m.productId, -m.baseMilli));
+    Object.assign(bill, { credited_minor: (bill.credited_minor ?? 0) + total, open_minor: (bill.open_minor ?? 0) - total });
+    const id = env.nextId('supplier-credit');
+    creditMoves.set(id, moves);
+    const made: SupplierCredit = {
+      id, credit_no: next('SC'), bill_id: bill.id, bill_no: bill.bill_no, bill_supplier_ref: bill.supplier_ref, branch_id: bill.branch_id, supplier_id: bill.supplier_id, supplier_name: bill.supplier_name,
+      supplier_ref: body.supplier_ref, kind: body.kind, status: 'posted', currency: 'UGX', credit_date: body.credit_date ?? env.today(), total_minor: total, reason: body.reason.trim(),
+      ...(body.note ? { note: body.note } : {}), line_count: lines.length, lines, created_at: new Date().toISOString(), created_by: 'mock-user', version: 1,
+    };
+    credits.push(made);
+    return made;
+  };
+
   return {
     purchasingSettings: () => gate(() => ({ ...settings })),
     changePurchasingSettings: (version, body) =>
       gate(() => {
         stale(settings, version);
-        settings = { ...settings, ...(body.bill_tolerance_bp !== undefined ? { bill_tolerance_bp: body.bill_tolerance_bp } : {}), ...(body.over_receipt_bp !== undefined ? { over_receipt_bp: body.over_receipt_bp } : {}), version: (settings.version ?? 1) + 1 };
+        settings = { ...settings, ...(body.bill_tolerance_bp !== undefined ? { bill_tolerance_bp: body.bill_tolerance_bp } : {}), ...(body.over_receipt_bp !== undefined ? { over_receipt_bp: body.over_receipt_bp } : {}), ...(body.require_costing_before_sale !== undefined ? { require_costing_before_sale: body.require_costing_before_sale } : {}), version: (settings.version ?? 1) + 1 };
         return { ...settings };
       }),
 
@@ -308,7 +456,7 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
     getGoodsReceipt: (id) =>
       gate(() => {
         const r = receiptOf(id);
-        return { ...r, lines: (r.lines ?? []).map((l) => ({ ...l, billed_qty: qtyString(billedQty(l.id)) })) };
+        return { ...r, lines: (r.lines ?? []).map((l) => ({ ...l, billed_qty: qtyString(billedQty(l.id)), ...(landedOn(l.id) > 0 ? { landed_minor: landedOn(l.id) } : {}) })) };
       }),
     createGoodsReceipt: (body, key) => gate(() => env.once(`receipt|${key}`, body, () => receive(body))),
     voidGoodsReceipt: (id, reason, key) =>
@@ -364,7 +512,7 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
           const made: SupplierBill = {
             id, bill_no: next('SB'), supplier_id: body.supplier_id, supplier_name: supplierName(body.supplier_id), supplier_ref: body.supplier_ref, kind: 'goods', status: 'posted', currency: 'UGX',
             bill_date: body.bill_date, due_date: body.due_date, ...(body.note ? { note: body.note } : {}), line_count: w.lines.length, lines: w.lines, total_minor: w.total_minor, cleared_minor: w.cleared_minor,
-            variance_minor: w.variance_minor, ...(body.variance_reason ? { variance_reason: body.variance_reason } : {}), paid_minor: 0, open_minor: w.total_minor, created_at: new Date().toISOString(), created_by: 'mock-user', version: 1,
+            variance_minor: w.variance_minor, ...(body.variance_reason ? { variance_reason: body.variance_reason } : {}), paid_minor: 0, credited_minor: 0, open_minor: w.total_minor, created_at: new Date().toISOString(), created_by: 'mock-user', version: 1,
           };
           bills.push(made);
           return made;
@@ -378,6 +526,8 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
           const b = billOf(id);
           const why = reasonOf(reason);
           if (b.status === 'voided') env.refuse(409, 'bill_voided', 'This invoice has been voided already.');
+          if (b.kind === 'landed_cost') env.refuse(409, 'bill_is_landed_cost', 'This is the invoice of a landed cost.');
+          if ((b.credited_minor ?? 0) > 0) env.refuse(409, 'bill_credited', 'A credit note stands against this invoice.');
           if ((b.paid_minor ?? 0) > 0) env.refuse(409, 'bill_paid', 'Reverse the payment first.');
           Object.assign(b, { status: 'voided', open_minor: 0, void_reason: why, voided_on: env.today(), voided_at: new Date().toISOString(), voided_by: 'mock-user', version: (b.version ?? 1) + 1 });
           return b;
@@ -453,5 +603,69 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
         });
         return { as_of: env.today(), currency: 'UGX', suppliers: rows, totals };
       }),
+
+    releaseReceiptHold: (id, reason, key) =>
+      gate(() =>
+        env.once(`receipt-release|${key}`, { id, reason }, () => {
+          const r = receiptOf(id);
+          reasonOf(reason);
+          if (r.held_for_costing !== true) env.refuse(409, 'not_held', 'This delivery is not held.');
+          if ((r.lines ?? []).some((l) => landedOn(l.id) > 0)) env.refuse(409, 'receipt_costed', 'A landed cost covers this delivery.');
+          Object.assign(r, { held_for_costing: false, version: (r.version ?? 1) + 1 });
+          return r;
+        }),
+      ),
+
+    previewLandedCost: (body) =>
+      gate(() => {
+        const { lines, ...rest } = landedWork(body);
+        return { ...rest, lines };
+      }),
+    createLandedCost: (body, key) => gate(() => env.once(`landed|${key}`, body, () => landedView(postLanded(body)))),
+    listLandedCosts: (q) =>
+      gate(() => ({
+        items: listed(landed, q, (x) => `${x.landed_no} ${x.supplier_ref} ${x.bill_no}`)
+          .filter((x) => !q.receiptId || (x.lines ?? []).some((l) => l.receipt_id === q.receiptId))
+          .map((x) => ({ ...landedView(x), lines: undefined, charges: undefined })),
+      })),
+    getLandedCost: (id) => gate(() => landedView(landedOf(id))),
+    voidLandedCost: (id, reason, key) =>
+      gate(() =>
+        env.once(`landed-void|${key}`, { id, reason }, () => {
+          const x = landedOf(id);
+          const why = reasonOf(reason);
+          if (x.status === 'voided') env.refuse(409, 'landed_cost_voided', 'This landed cost has been voided already.');
+          const bill = billOf(x.bill_id ?? '');
+          if ((bill.paid_minor ?? 0) > 0) env.refuse(409, 'bill_paid', 'Reverse the payment first.');
+          (x.lines ?? []).forEach((l) => {
+            if (l.cost_applied && env.cost(l.product_id ?? '') === l.cost_after_minor) env.move(l.branch_id ?? '', l.product_id ?? '', 0, l.cost_before_minor);
+          });
+          Object.assign(bill, { status: 'voided', open_minor: 0, void_reason: why, voided_on: env.today(), voided_at: new Date().toISOString(), voided_by: 'mock-user', version: (bill.version ?? 1) + 1 });
+          Object.assign(x, { status: 'voided', void_reason: why, voided_on: env.today(), voided_at: new Date().toISOString(), voided_by: 'mock-user', version: (x.version ?? 1) + 1 });
+          return landedView(x);
+        }),
+      ),
+
+    createSupplierCredit: (body, key) => gate(() => env.once(`credit|${key}`, body, () => postCredit(body))),
+    listSupplierCredits: (q) =>
+      gate(() => ({
+        items: listed(credits, q, (c) => `${c.credit_no} ${c.supplier_ref} ${c.bill_no}`)
+          .filter((c) => !q.billId || c.bill_id === q.billId)
+          .map((c) => ({ ...c, lines: undefined })),
+      })),
+    getSupplierCredit: (id) => gate(() => creditOf(id)),
+    voidSupplierCredit: (id, reason, key) =>
+      gate(() =>
+        env.once(`credit-void|${key}`, { id, reason }, () => {
+          const c = creditOf(id);
+          const why = reasonOf(reason);
+          if (c.status === 'voided') env.refuse(409, 'credit_voided', 'This credit note has been voided already.');
+          (creditMoves.get(id) ?? []).forEach((m) => env.move(m.branchId, m.productId, m.baseMilli));
+          const bill = billOf(c.bill_id ?? '');
+          Object.assign(bill, { credited_minor: (bill.credited_minor ?? 0) - (c.total_minor ?? 0), open_minor: (bill.open_minor ?? 0) + (c.total_minor ?? 0) });
+          Object.assign(c, { status: 'voided', void_reason: why, voided_on: env.today(), voided_at: new Date().toISOString(), voided_by: 'mock-user', version: (c.version ?? 1) + 1 });
+          return c;
+        }),
+      ),
   };
 }

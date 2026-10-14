@@ -89,7 +89,10 @@ class ReportsRepository {
      * and damage at their cost snapshots by the day they happened. Customer returns (issue #201) that were not voided
      * take their value and their cost off by the day of the return, and the cost of the goods they wrote off as damaged
      * counts as usage, so the profit falls by the margin of goods that went back on the shelf and by the whole credit of
-     * goods that did not, and a day already reported keeps its sales.
+     * goods that did not, and a day already reported keeps its sales. The part of a landed cost that belongs to goods
+     * already sold (issue #199) is a cost of sales on the day of the charge, and the same part of a supplier price credit
+     * takes it off on the day of the credit; a voided document drops out, as a voided sale does. The price variance of a
+     * supplier invoice or credit note is not in this report, as it never was.
      */
     List<DayFigures> daily(List<UUID> branchIds, LocalDate from, LocalDate to) {
         Map<String, Object> params = new LinkedHashMap<>();
@@ -98,6 +101,8 @@ class ReportsRepository {
         String salesFilter = "";
         String usageFilter = "";
         String returnsFilter = "";
+        String landedFilter = "";
+        String landedFilter2 = "";
         if (branchIds != null) {
             if (branchIds.isEmpty()) {
                 return List.of();
@@ -105,6 +110,8 @@ class ReportsRepository {
             salesFilter = " AND s.branch_id IN (:branchIds)";
             usageFilter = " AND branch_id IN (:branchIds)";
             returnsFilter = " AND r.branch_id IN (:branchIds)";
+            landedFilter = " AND l.branch_id IN (:branchIds)";
+            landedFilter2 = " AND l.branch_id IN (:branchIds)";
             params.put("branchIds", branchIds);
         }
         return jdbc.sql("""
@@ -124,6 +131,17 @@ class ReportsRepository {
                                               WHERE l.return_id = r.id AND l.disposition = 'write_off'), 0)
                               FROM retail_sale_returns r
                              WHERE r.status = 'completed' AND r.returned_on BETWEEN :from AND :to""" + returnsFilter + """
+
+                            UNION ALL
+                            SELECT l.branch_id, d.cost_date, 0, l.to_cogs_minor, 0
+                              FROM retail_landed_cost_lines l JOIN retail_landed_costs d ON d.id = l.landed_cost_id
+                             WHERE d.status = 'posted' AND d.cost_date BETWEEN :from AND :to""" + landedFilter + """
+
+                            UNION ALL
+                            SELECT l.branch_id, c.credit_date, 0, -l.to_cogs_minor, 0
+                              FROM retail_supplier_credit_lines l JOIN retail_supplier_credits c ON c.id = l.credit_id
+                             WHERE c.status = 'posted' AND l.to_cogs_minor > 0 AND c.credit_date BETWEEN :from AND :to"""
+                        + landedFilter2 + """
 
                         ) f GROUP BY branch_id, day ORDER BY day, branch_id
                         """)

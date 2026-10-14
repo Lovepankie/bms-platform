@@ -92,12 +92,14 @@ class PaymentsRepository {
             LocalDate dueDate,
             long totalMinor,
             long paidMinor,
+            long creditedMinor,
             Instant createdAt,
             Map<UUID, Long> shares,
             Map<UUID, Long> paidBy) {
 
+        /** What is still to pay: the total less supplier credit notes that stand and less payments that stand. */
         long openMinor() {
-            return totalMinor - paidMinor;
+            return totalMinor - creditedMinor - paidMinor;
         }
 
         /** The branches the item belongs to: the invoice's, or every branch whose creditors the restock credited. */
@@ -276,6 +278,10 @@ class PaymentsRepository {
                         JOIN retail_supplier_payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'posted'
                        WHERE a.tenant_id = b.tenant_id AND a.bill_id = b.id), 0)""";
 
+    private static final String CREDITED_BILL = """
+            coalesce((SELECT sum(c.total_minor) FROM retail_supplier_credits c
+                       WHERE c.tenant_id = b.tenant_id AND c.bill_id = b.id AND c.status = 'posted'), 0)""";
+
     private static final String PAID_RESTOCK = """
             coalesce((SELECT sum(a.amount_minor) FROM retail_supplier_payment_allocations a
                         JOIN retail_supplier_payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'posted'
@@ -290,13 +296,13 @@ class PaymentsRepository {
         List<Open> out = new ArrayList<>();
         jdbc.sql("""
                         SELECT b.supplier_id, s.name AS supplier_name, b.id, b.bill_no, b.supplier_ref, b.bill_date, b.due_date,
-                               b.total_minor, %s AS paid_minor, b.created_at, b.branch_id
+                               b.total_minor, %s AS paid_minor, %s AS credited_minor, b.created_at, b.branch_id
                           FROM retail_supplier_bills b
                           JOIN retail_suppliers s ON s.tenant_id = b.tenant_id AND s.id = b.supplier_id
                          WHERE b.status = 'posted' AND (CAST(:supplier AS uuid) IS NULL OR b.supplier_id = CAST(:supplier AS uuid))
-                           AND b.total_minor > %s
+                           AND b.total_minor > %s + %s
                          ORDER BY b.id
-                        """.formatted(PAID_BILL, PAID_BILL))
+                        """.formatted(PAID_BILL, CREDITED_BILL, PAID_BILL, CREDITED_BILL))
                 .param("supplier", supplierId)
                 .query(rs -> {
                     out.add(new Open(
@@ -310,8 +316,11 @@ class PaymentsRepository {
                             rs.getDate("due_date").toLocalDate(),
                             rs.getLong("total_minor"),
                             rs.getLong("paid_minor"),
+                            rs.getLong("credited_minor"),
                             rs.getTimestamp("created_at").toInstant(),
-                            Map.of(rs.getObject("branch_id", UUID.class), rs.getLong("total_minor")),
+                            Map.of(
+                                    rs.getObject("branch_id", UUID.class),
+                                    rs.getLong("total_minor") - rs.getLong("credited_minor")),
                             Map.of(rs.getObject("branch_id", UUID.class), rs.getLong("paid_minor"))));
                 });
         List<UUID> restocks = new ArrayList<>();
@@ -381,6 +390,7 @@ class PaymentsRepository {
                     (LocalDate) r[4],
                     (Long) r[5],
                     (Long) r[6],
+                    0L,
                     (Instant) r[7],
                     credited.getOrDefault(id, Map.of()),
                     paidBy.getOrDefault(id, Map.of())));

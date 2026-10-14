@@ -30,15 +30,20 @@ class BillsRepository {
                         JOIN retail_supplier_payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id AND p.status = 'posted'
                        WHERE a.tenant_id = b.tenant_id AND a.bill_id = b.id), 0)""";
 
+    /** What supplier credit notes that stand have taken off the invoice. */
+    private static final String CREDITED = """
+            coalesce((SELECT sum(c.total_minor) FROM retail_supplier_credits c
+                       WHERE c.tenant_id = b.tenant_id AND c.bill_id = b.id AND c.status = 'posted'), 0)""";
+
     private static final String SELECT_BILL = """
             SELECT b.id, b.bill_no, b.branch_seq, b.branch_id, b.supplier_id, s.name AS supplier_name, b.supplier_ref,
                    b.bill_date, b.due_date, b.currency, b.kind, b.total_minor, b.cleared_minor, b.variance_minor,
-                   b.variance_reason, b.note, b.status, %s AS paid_minor,
+                   b.variance_reason, b.note, b.status, %s AS paid_minor, %s AS credited_minor,
                    (SELECT count(*) FROM retail_supplier_bill_lines l WHERE l.tenant_id = b.tenant_id AND l.bill_id = b.id) AS line_count,
                    b.created_at, b.created_by, b.voided_at, b.voided_on, b.voided_by, b.void_reason, b.version
               FROM retail_supplier_bills b
               JOIN retail_suppliers s ON s.tenant_id = b.tenant_id AND s.id = b.supplier_id
-            """.formatted(PAID);
+            """.formatted(PAID, CREDITED);
 
     /** What the bill list matches (ADR-039): our number, the supplier's invoice number and the supplier's name. */
     static final Search.Fields SEARCH =
@@ -69,6 +74,7 @@ class BillsRepository {
             String note,
             String status,
             long paidMinor,
+            long creditedMinor,
             int lineCount,
             Instant createdAt,
             UUID createdBy,
@@ -135,7 +141,8 @@ class BillsRepository {
             long varianceMinor,
             String varianceReason,
             String note,
-            UUID createdBy) {}
+            UUID createdBy,
+            String kind) {}
 
     record NewLine(
             UUID id,
@@ -151,9 +158,10 @@ class BillsRepository {
     void insert(NewBill b) {
         jdbc.sql("""
                         INSERT INTO retail_supplier_bills (id, tenant_id, bill_no, branch_seq, branch_id, supplier_id, supplier_ref,
-                            bill_date, due_date, currency, total_minor, cleared_minor, variance_minor, variance_reason, note, created_by)
+                            bill_date, due_date, currency, total_minor, cleared_minor, variance_minor, variance_reason, note, created_by,
+                            kind)
                         VALUES (:id, current_setting('app.tenant_id')::uuid, :no, :seq, :branch, :supplier, :ref, :billDate, :due,
-                            :currency, :total, :cleared, :variance, :reason, :note, :by)
+                            :currency, :total, :cleared, :variance, :reason, :note, :by, :kind)
                         """)
                 .param("id", b.id())
                 .param("no", b.billNo())
@@ -170,6 +178,7 @@ class BillsRepository {
                 .param("reason", b.varianceReason())
                 .param("note", b.note())
                 .param("by", b.createdBy())
+                .param("kind", b.kind())
                 .update();
     }
 
@@ -235,6 +244,23 @@ class BillsRepository {
                         """).param(billId).query(Boolean.class).single();
     }
 
+    /** True when a supplier credit note that stands is against the invoice. */
+    boolean credited(UUID billId) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM retail_supplier_credits WHERE bill_id = ? AND status = 'posted')")
+                .param(billId)
+                .query(Boolean.class)
+                .single();
+    }
+
+    /** True when a landed cost that stands names the invoice as the goods invoice its charges belong to. */
+    boolean namedByLandedCost(UUID billId) {
+        return jdbc.sql(
+                        "SELECT EXISTS (SELECT 1 FROM retail_landed_costs WHERE goods_bill_id = ? AND status = 'posted')")
+                .param(billId)
+                .query(Boolean.class)
+                .single();
+    }
+
     boolean refExists(UUID supplierId, String ref) {
         return jdbc.sql("""
                         SELECT EXISTS (SELECT 1 FROM retail_supplier_bills
@@ -285,7 +311,10 @@ class BillsRepository {
             params.put("status", status);
         }
         if (openOnly) {
-            sql.append(" AND b.status = 'posted' AND b.total_minor > ").append(PAID);
+            sql.append(" AND b.status = 'posted' AND b.total_minor > ")
+                    .append(PAID)
+                    .append(" + ")
+                    .append(CREDITED);
         }
         if (from != null) {
             sql.append(" AND b.bill_date >= :from");
@@ -439,6 +468,7 @@ class BillsRepository {
                 rs.getString("note"),
                 rs.getString("status"),
                 rs.getLong("paid_minor"),
+                rs.getLong("credited_minor"),
                 rs.getInt("line_count"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getObject("created_by", UUID.class),

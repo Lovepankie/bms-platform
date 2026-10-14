@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, getRouteApi } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type SupplierBill } from '../../../api/retail';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { SkeletonList } from '../../../components/states';
 import { useStaff } from '../context';
+import { canCredit } from './credits-state';
 import { showQty } from './maths';
 import { PAYABLE_MANAGE, canUse, holdsAt } from './permissions';
 import { varianceWords } from './payables-state';
@@ -25,6 +26,7 @@ export function BillRow({ row }: { row: SupplierBill }) {
     <li className="rt-card" data-testid={`bill-${row.bill_no}`}>
       <p>
         <strong>{row.bill_no}</strong> (invoice {row.supplier_ref}) <StatusBadge words={BILL_STATUS[row.status ?? ''] ?? (row.status ?? '')} warn={row.status === 'voided'} />
+        {row.kind === 'landed_cost' && <> <StatusBadge words="Landed cost" /></>}
         <br />
         {row.supplier_name}, due {showDate(row.due_date)}, <strong>{money(row.total_minor ?? 0)}</strong>
       </p>
@@ -69,7 +71,8 @@ export function SupplierBillsPage() {
 }
 
 /** One invoice: facts, the goods it bills against what they were received at, and what is paid and owed. */
-export function SupplierBillView({ bill, nameOf }: { bill: SupplierBill; nameOf: (branchId: string | undefined) => string }) {
+export function SupplierBillView({ bill, nameOf, landedCostId }: { bill: SupplierBill; nameOf: (branchId: string | undefined) => string; landedCostId?: string }) {
+  const landedCost = bill.kind === 'landed_cost';
   return (
     <section aria-label="Supplier invoice" data-testid="supplier-bill">
       <h2>{bill.bill_no} <StatusBadge words={BILL_STATUS[bill.status ?? ''] ?? (bill.status ?? '')} warn={bill.status === 'voided'} /></h2>
@@ -77,14 +80,24 @@ export function SupplierBillView({ bill, nameOf }: { bill: SupplierBill; nameOf:
         rows={[
           ['Supplier', bill.supplier_name ?? ''],
           ['Supplier\'s invoice number', bill.supplier_ref ?? ''],
+          ...(landedCost
+            ? [['What it is', landedCostId
+              ? <Link key="lc" to="/staff/retail/landed-costs/$landedCostId" params={{ landedCostId }}>The invoice of a landed cost</Link>
+              : 'The invoice of a landed cost'] as [string, ReactNode]]
+            : []),
           ['Branch', nameOf(bill.branch_id)],
           ['Invoice date', showDate(bill.bill_date)],
           ['Due on', showDate(bill.due_date)],
           ['Invoice total', money(bill.total_minor ?? 0)],
           ['Paid so far', money(bill.paid_minor ?? 0)],
+          ['Taken off by credit notes', money(bill.credited_minor ?? 0)],
           ['Still owed', money(bill.open_minor ?? 0)],
-          ['Goods were received at', money(bill.cleared_minor ?? 0)],
-          ['The invoice compared with the goods', varianceWords(bill.variance_minor)],
+          ...(landedCost
+            ? []
+            : [
+              ['Goods were received at', money(bill.cleared_minor ?? 0)] as [string, string],
+              ['The invoice compared with the goods', varianceWords(bill.variance_minor)] as [string, string],
+            ]),
           ...(bill.variance_reason ? [['Why it differs', bill.variance_reason] as [string, string]] : []),
           ...(bill.note ? [['Note', bill.note] as [string, string]] : []),
           ...(bill.status === 'voided' ? [['Voided because', bill.void_reason ?? ''] as [string, string]] : []),
@@ -135,6 +148,13 @@ export function SupplierBillPage() {
   const allowed = canUse(me, 'supplierBills');
   const bill = useQuery({ queryKey: ['retail', 'supplier-bill', billId], queryFn: () => retail.getSupplierBill(billId), enabled: allowed });
   useCrumbLabel(bill.data?.bill_no);
+  // The invoice of a landed cost points back to it. The landed cost list has no filter by invoice, so the payee's own are searched.
+  const isLanded = bill.data?.kind === 'landed_cost';
+  const landed = useQuery({
+    queryKey: ['retail', 'landed-of-bill', billId],
+    queryFn: async () => (await retail.listLandedCosts({ supplierId: bill.data?.supplier_id })).items?.find((c) => c.bill_id === billId),
+    enabled: allowed && isLanded && canUse(me, 'landedCosts'),
+  });
   const voided = useMutation({
     mutationFn: (reason: string) => retail.voidSupplierBill(billId, reason, keys.keyFor(billId, reason)),
     onSuccess: (b) => {
@@ -161,21 +181,32 @@ export function SupplierBillPage() {
       {bill.isPending && <SkeletonList label="Loading the invoice" />}
       <Problem error={bill.error} />
       {message && <Success>{message}</Success>}
-      {b && <SupplierBillView bill={b} nameOf={nameOf} />}
+      {b && <SupplierBillView bill={b} nameOf={nameOf} landedCostId={landed.data?.id} />}
       {b && b.status === 'posted' && holdsAt(me, PAYABLE_MANAGE, b.branch_id) && (
         <div className="stack">
           {(b.open_minor ?? 0) > 0 && (
             <p><Link className="btn-sm" to="/staff/retail/supplier-payments/new" search={{ supplier: b.supplier_id } as never}>Pay this supplier</Link></p>
           )}
-          <ReasonPanel
-            openLabel="Void this invoice"
-            question="Why is it voided?"
-            hint="This is refused once a payment has been made on it: reverse the payment first. The goods it billed can then go on another invoice."
-            confirmLabel="Void the invoice"
-            busy={voided.isPending}
-            error={voided.error}
-            onSubmit={(reason) => voided.mutate(reason)}
-          />
+          {canCredit(b) && (
+            <p><Link className="btn-sm" to="/staff/retail/supplier-credits/new" search={{ bill: b.id } as never} data-tour="bill-credit">Credit note</Link></p>
+          )}
+          {isLanded && (
+            <p className="hint" data-testid="landed-bill-note">
+              This is the invoice of a landed cost, so it cannot be voided here.
+              {landed.data?.id ? <> Void <Link to="/staff/retail/landed-costs/$landedCostId" params={{ landedCostId: landed.data.id }}>the landed cost</Link> instead.</> : ' Void the landed cost instead.'}
+            </p>
+          )}
+          {!isLanded && (
+            <ReasonPanel
+              openLabel="Void this invoice"
+              question="Why is it voided?"
+              hint="This is refused once a payment has been made on it: reverse the payment first. It is also refused while a credit note stands against it. The goods it billed can then go on another invoice."
+              confirmLabel="Void the invoice"
+              busy={voided.isPending}
+              error={voided.error}
+              onSubmit={(reason) => voided.mutate(reason)}
+            />
+          )}
         </div>
       )}
       {toast}

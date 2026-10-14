@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 class JdbcStockLedger implements StockLedger {
 
     /** Kinds refused when they would take a balance below zero; there is no setting (ADR-020 decision 4). */
-    static final Set<String> GUARDED = Set.of("sale", "usage", "damage", "transfer_out");
+    static final Set<String> GUARDED = Set.of("sale", "usage", "damage", "transfer_out", "return_to_supplier");
 
     /** Kinds that carry the transfer they belong to, the movement's source id (FR-RET-16). */
     static final Set<String> TRANSFER = Set.of("transfer_out", "transfer_in");

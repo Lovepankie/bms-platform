@@ -18,6 +18,7 @@ import { DocumentsPage } from '../areas/staff/retail/documents';
 import { QuotationsPage } from '../areas/staff/retail/quotations';
 import { ReturnsPage } from '../areas/staff/retail/returns';
 import { PurchaseOrdersPage } from '../areas/staff/retail/purchase-orders';
+import { LandedCostsPage } from '../areas/staff/retail/landed-costs';
 import { CataloguePage } from '../areas/staff/retail/catalogue';
 import { RetailHome } from '../areas/staff/retail/home';
 import { RetailNav } from '../areas/staff/retail/nav';
@@ -101,6 +102,8 @@ function screen(path: string | undefined): ReactElement {
       return <ReturnsPage />;
     case '/staff/retail/purchase-orders':
       return <PurchaseOrdersPage />;
+    case '/staff/retail/landed-costs':
+      return <LandedCostsPage />;
     case '/staff/lending':
       return <Loans />;
     case '/staff/lending/loans/$loanId':
@@ -223,6 +226,7 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-returns': [RETURNER],
   'capability-purchasing': [BUYER],
   'page-purchase-orders': [BUYER],
+  'page-landed-costs': [BUYER],
 };
 
 describe('every tour target exists on its screen', () => {

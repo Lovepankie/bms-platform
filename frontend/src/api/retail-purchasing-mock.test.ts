@@ -267,3 +267,152 @@ describe('supplier payments in the mock', () => {
     await expect(api.changePurchasingSettings(1, { bill_tolerance_bp: 0 })).rejects.toMatchObject({ status: 409, code: 'version_conflict' });
   });
 });
+
+// Landed costs and supplier credit notes (issue #199): charges spread in exact integers over received lines with the payee's
+// invoice as a bill of kind landed_cost, a hold released by a landed cost, and credit notes that send goods back or adjust a price
+// without ever taking more than the invoice has left to pay. Fabricated data.
+describe('landed costs in the mock', () => {
+  const forwarder = 's0000000-0000-4000-8000-000000000002';
+
+  async function delivered(hold = false) {
+    const { api, productId } = await shop();
+    const order = await sentOrder(api, productId, '10');
+    const receipt = await api.createGoodsReceipt({ order_id: order.id, branch_id: branch, hold_for_costing: hold, lines: [{ order_line_id: order.lines?.[0]?.id, qty: '10', cost_minor: 3500 }] }, key());
+    return { api, productId, receipt, lineId: receipt.lines?.[0]?.id ?? '' };
+  }
+  const landedBody = (lineId: string, over: Record<string, unknown> = {}) => ({
+    supplier_id: forwarder, supplier_ref: `FWD-${++n}`, due_date: '2026-11-11', total_minor: 10000,
+    charges: [{ kind: 'freight' as const, amount_minor: 6000 }, { kind: 'duty' as const, amount_minor: 4000 }], lines: [{ receipt_line_id: lineId }], ...over,
+  });
+
+  it('answers 404 while the capability is off', async () => {
+    const api = createMockRetail();
+    await expect(api.listLandedCosts({})).rejects.toMatchObject({ status: 404, code: 'capability_not_enabled' });
+    await expect(api.listSupplierCredits({})).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('previews the shares without recording anything, and flags a total that is not the charges', async () => {
+    const { api, lineId } = await delivered();
+    const preview = await api.previewLandedCost(landedBody(lineId));
+    expect(preview).toMatchObject({ total_minor: 10000, total_mismatch: false, method: 'value', lines: [{ allocated_minor: 10000, to_inventory_minor: 10000, to_cogs_minor: 0, cost_applied: true }] });
+    expect((await api.previewLandedCost(landedBody(lineId, { total_minor: 9000 }))).total_mismatch).toBe(true);
+    expect((await api.listLandedCosts({})).items).toHaveLength(0);
+  });
+
+  it('records the landed cost, makes the payee\'s invoice a bill of kind landed_cost, and shows the landed amount on the line', async () => {
+    const { api, receipt, lineId } = await delivered(true);
+    expect((await api.getGoodsReceipt(receipt.id ?? '')).held_for_costing).toBe(true);
+    const made = await api.createLandedCost(landedBody(lineId), key());
+    expect(made).toMatchObject({ status: 'posted', total_minor: 10000, method: 'value', paid_minor: 0, landed_no: expect.stringMatching(/^LC-/), charges: [{ kind: 'freight' }, { kind: 'duty' }] });
+    const bill = await api.getSupplierBill(made.bill_id ?? '');
+    expect(bill).toMatchObject({ kind: 'landed_cost', total_minor: 10000, open_minor: 10000, supplier_id: forwarder });
+    const after = await api.getGoodsReceipt(receipt.id ?? '');
+    expect(after.held_for_costing).toBe(false);
+    expect(after.lines?.[0]?.landed_minor).toBe(10000);
+    expect((await api.listLandedCosts({ query: made.landed_no })).items?.[0]).toMatchObject({ id: made.id, lines: undefined });
+    await expect(api.voidSupplierBill(made.bill_id ?? '', 'Wrong supplier', key())).rejects.toMatchObject({ code: 'bill_is_landed_cost' });
+  });
+
+  it('refuses a wrong total, a typed split that does not add up and a repeated invoice number', async () => {
+    const { api, lineId } = await delivered();
+    await expect(api.createLandedCost(landedBody(lineId, { total_minor: 9000 }), key())).rejects.toMatchObject({ code: 'landed_total_mismatch' });
+    await expect(api.createLandedCost(landedBody(lineId, { method: 'manual', lines: [{ receipt_line_id: lineId, amount_minor: 9000 }] }), key())).rejects.toMatchObject({ code: 'allocation_total_mismatch' });
+    await expect(api.createLandedCost(landedBody(lineId, { method: 'weight', lines: [{ receipt_line_id: lineId }] }), key())).rejects.toMatchObject({ status: 422 });
+    const ok = await api.createLandedCost(landedBody(lineId, { supplier_ref: 'FWD-DUP' }), key());
+    expect(ok.status).toBe('posted');
+    await expect(api.createLandedCost(landedBody(lineId, { supplier_ref: 'FWD-DUP' }), key())).rejects.toMatchObject({ code: 'duplicate_supplier_bill' });
+  });
+
+  it('is paid through the ordinary supplier payment, and cannot be voided once paid', async () => {
+    const { api, lineId } = await delivered();
+    const made = await api.createLandedCost(landedBody(lineId), key());
+    await api.createSupplierPayment({ supplier_id: forwarder, branch_id: branch, method: 'cash', amount_minor: 4000 } as never, key());
+    expect((await api.getLandedCost(made.id ?? '')).paid_minor).toBe(4000);
+    await expect(api.voidLandedCost(made.id ?? '', 'Wrong goods', key())).rejects.toMatchObject({ code: 'bill_paid' });
+  });
+
+  it('voids with a reason, voids the payee\'s invoice with it, and refuses a second time', async () => {
+    const { api, lineId } = await delivered();
+    const made = await api.createLandedCost(landedBody(lineId), key());
+    await expect(api.voidLandedCost(made.id ?? '', 'abc', key())).rejects.toMatchObject({ status: 422 });
+    expect((await api.voidLandedCost(made.id ?? '', 'Wrong goods', key())).status).toBe('voided');
+    expect((await api.getSupplierBill(made.bill_id ?? '')).status).toBe('voided');
+    await expect(api.voidLandedCost(made.id ?? '', 'Wrong goods', key())).rejects.toMatchObject({ code: 'landed_cost_voided' });
+  });
+
+  it('releases a hold with a reason, once, and not for a delivery that is not held', async () => {
+    const { api, receipt } = await delivered(true);
+    await expect(api.releaseReceiptHold(receipt.id ?? '', 'abc', key())).rejects.toMatchObject({ status: 422 });
+    expect((await api.releaseReceiptHold(receipt.id ?? '', 'No freight on this one', key())).held_for_costing).toBe(false);
+    await expect(api.releaseReceiptHold(receipt.id ?? '', 'No freight on this one', key())).rejects.toMatchObject({ code: 'not_held' });
+  });
+
+  it('keeps the costing setting under If-Match, off by default', async () => {
+    const { api } = await shop();
+    const read = await api.purchasingSettings();
+    expect(read.require_costing_before_sale).toBe(false);
+    expect(await api.changePurchasingSettings(read.version ?? 1, { require_costing_before_sale: true })).toMatchObject({ require_costing_before_sale: true, bill_tolerance_bp: 100 });
+  });
+});
+
+describe('supplier credit notes in the mock', () => {
+  async function invoiced() {
+    const { api, productId } = await shop();
+    const order = await sentOrder(api, productId, '10');
+    const receipt = await receiveAgainst(api, order.id ?? '', order.lines?.[0]?.id ?? '', '10', 3500);
+    const bill = await api.createSupplierBill(billFor(receipt.lines?.[0]?.id ?? '', '10', 3500), key());
+    return { api, productId, bill, lineId: bill.lines?.[0]?.id ?? '' };
+  }
+  const creditBody = (billId: string, lineId: string, over: Record<string, unknown> = {}) => ({
+    bill_id: billId, kind: 'goods' as const, supplier_ref: `CN-${++n}`, total_minor: 7000, reason: 'Damaged on arrival', lines: [{ bill_line_id: lineId, qty: '2' }], ...over,
+  });
+  const onHand = async (api: Api) => Number((await api.listProducts({ query: 'P003', branchId: branch }))[0]?.qty);
+
+  it('sends goods back out of stock and takes the credit off what the invoice leaves to pay', async () => {
+    const { api, bill, lineId } = await invoiced();
+    const before = await onHand(api);
+    const made = await api.createSupplierCredit(creditBody(bill.id ?? '', lineId), key());
+    expect(made).toMatchObject({ status: 'posted', kind: 'goods', total_minor: 7000, credit_no: expect.stringMatching(/^SC-/), lines: [{ unit_qty: '2.000', unit_credit_minor: 3500, line_total_minor: 7000 }] });
+    expect(await onHand(api)).toBe(before - 2);
+    expect(await api.getSupplierBill(bill.id ?? '')).toMatchObject({ credited_minor: 7000, open_minor: 28000 });
+    expect((await api.supplierOpenItems(supplier)).items?.find((i) => i.kind === 'bill')).toMatchObject({ credited_minor: 7000, open_minor: 28000 });
+    expect((await api.listSupplierCredits({ billId: bill.id })).items).toHaveLength(1);
+  });
+
+  it('refuses more than was billed less earlier credit notes, a wrong total and a credit for one above the billed price', async () => {
+    const { api, bill, lineId } = await invoiced();
+    await api.createSupplierCredit(creditBody(bill.id ?? '', lineId, { lines: [{ bill_line_id: lineId, qty: '8' }], total_minor: 28000 }), key());
+    await expect(api.createSupplierCredit(creditBody(bill.id ?? '', lineId, { lines: [{ bill_line_id: lineId, qty: '3' }], total_minor: 10500 }), key())).rejects.toMatchObject({ code: 'credit_exceeds_billed' });
+    await expect(api.createSupplierCredit(creditBody(bill.id ?? '', lineId, { total_minor: 6000 }), key())).rejects.toMatchObject({ code: 'credit_total_mismatch' });
+    await expect(api.createSupplierCredit(creditBody(bill.id ?? '', lineId, { lines: [{ bill_line_id: lineId, qty: '1', unit_credit_minor: 3600 }], total_minor: 3600 }), key())).rejects.toMatchObject({ code: 'credit_exceeds_billed_value' });
+  });
+
+  it('refuses a credit above the open amount after a payment, and a repeated credit note number', async () => {
+    const { api, bill, lineId } = await invoiced();
+    await api.createSupplierPayment({ supplier_id: supplier, branch_id: branch, method: 'cash', amount_minor: 42000 } as never, key());
+    await expect(api.createSupplierCredit(creditBody(bill.id ?? '', lineId), key())).rejects.toMatchObject({ code: 'credit_exceeds_open' });
+    await api.createSupplierCredit(creditBody(bill.id ?? '', lineId, { supplier_ref: 'CN-DUP', lines: [{ bill_line_id: lineId, qty: '1' }], total_minor: 3500 }), key());
+    await expect(api.createSupplierCredit(creditBody(bill.id ?? '', lineId, { supplier_ref: 'CN-DUP', lines: [{ bill_line_id: lineId, qty: '1' }], total_minor: 3500 }), key())).rejects.toMatchObject({ code: 'duplicate_supplier_credit' });
+  });
+
+  it('takes money off a line for a price credit and moves no stock', async () => {
+    const { api, bill, lineId } = await invoiced();
+    const before = await onHand(api);
+    const made = await api.createSupplierCredit({ bill_id: bill.id ?? '', kind: 'price', supplier_ref: 'CN-PRICE', total_minor: 1500, reason: 'Wrong price', lines: [{ bill_line_id: lineId, amount_minor: 1500 }] }, key());
+    expect(made).toMatchObject({ kind: 'price', total_minor: 1500 });
+    expect(await onHand(api)).toBe(before);
+    await expect(api.createSupplierCredit({ bill_id: bill.id ?? '', kind: 'price', supplier_ref: 'CN-PRICE2', total_minor: 34000, reason: 'Wrong price', lines: [{ bill_line_id: lineId, amount_minor: 34000 }] }, key())).rejects.toMatchObject({ code: 'credit_exceeds_billed_value' });
+  });
+
+  it('voids with a reason, puts the stock and the open amount back, and blocks voiding an invoice it stands against', async () => {
+    const { api, bill, lineId } = await invoiced();
+    const before = await onHand(api);
+    const made = await api.createSupplierCredit(creditBody(bill.id ?? '', lineId), key());
+    await expect(api.voidSupplierBill(bill.id ?? '', 'Wrong supplier', key())).rejects.toMatchObject({ code: 'bill_credited' });
+    await expect(api.voidSupplierCredit(made.id ?? '', 'abc', key())).rejects.toMatchObject({ status: 422 });
+    expect((await api.voidSupplierCredit(made.id ?? '', 'Sent back by mistake', key())).status).toBe('voided');
+    expect(await onHand(api)).toBe(before);
+    expect(await api.getSupplierBill(bill.id ?? '')).toMatchObject({ credited_minor: 0, open_minor: 35000 });
+    await expect(api.voidSupplierCredit(made.id ?? '', 'Sent back by mistake', key())).rejects.toMatchObject({ code: 'credit_voided' });
+  });
+});

@@ -161,7 +161,11 @@ export function createMockRetail(): RetailApi {
     if ((p.version ?? 1) !== version) refuse(412, 'version_conflict', 'This item was changed by someone else. Reload and try again.');
   };
   const customers: Customer[] = [{ id: 'c0000000-0000-4000-8000-000000000001', name: 'Test Buyer 01', contact: '+256700000001', version: 1 }];
-  const suppliers: Supplier[] = [{ id: 's0000000-0000-4000-8000-000000000001', name: 'Test Supplier 01', active: true, version: 1 }];
+  // The second supplier row is a forwarder, who is owed the landed cost of imported goods (issue #199).
+  const suppliers: Supplier[] = [
+    { id: 's0000000-0000-4000-8000-000000000001', name: 'Test Supplier 01', active: true, version: 1 },
+    { id: 's0000000-0000-4000-8000-000000000002', name: 'Test Forwarder 01', active: true, version: 1 },
+  ];
   const stocktakes = new Map<string, Stocktake>();
   const sales: (Sale & { costTotal: number })[] = [];
   const usageCostByDay = new Map<string, number>();
@@ -274,6 +278,7 @@ export function createMockRetail(): RetailApi {
       if (p && sellMinor !== undefined) p.sellMinor = sellMinor;
     },
     balance: bal,
+    cost: (id) => products.get(id)?.costMinor ?? 0,
   });
 
   const mock: RetailApi = {

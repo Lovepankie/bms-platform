@@ -15,6 +15,8 @@ import { shortcutsFor } from './nav';
 import { SCREEN_CAPABILITY, canUse, screensFor } from './permissions';
 import { ChangeReview, RetailSettings } from './settings';
 import { GoodsReceivedPage } from './goods-received';
+import { LandedCostsPage } from './landed-costs';
+import { SupplierCreditsPage } from './supplier-credits';
 import { PurchaseOrdersPage } from './purchase-orders';
 import { SupplierBillsPage } from './supplier-bills';
 import { SupplierPaymentsPage } from './supplier-payments';
@@ -214,7 +216,7 @@ describe('a tour per capability starts once when first enabled', () => {
 
 // Optional purchasing (issue #198, ADR-033): everything is off by default, and "off" is today's menu and today's Restock.
 describe('purchasing follows its capability', () => {
-  const NEW_SCREENS = ['purchaseOrders', 'goodsReceived', 'supplierBills', 'supplierPayments', 'supplierPayables'];
+  const NEW_SCREENS = ['purchaseOrders', 'goodsReceived', 'supplierBills', 'supplierPayments', 'supplierPayables', 'landedCosts', 'supplierCredits'];
   const screens = (me: Me) => screensFor(me).map((s) => s.screen);
 
   it('offers none of the purchasing screens or shortcuts while purchasing is absent, and leaves Restock where it was', () => {
@@ -226,7 +228,7 @@ describe('purchasing follows its capability', () => {
     }
   });
 
-  it('adds exactly the five screens when it is on, and changes nothing else', () => {
+  it('adds exactly the seven screens when it is on, and changes nothing else', () => {
     const off = screens(admin([]));
     const on = screens(admin(['purchasing']));
     expect(on.filter((s) => !off.includes(s)).sort()).toEqual([...NEW_SCREENS].sort());
@@ -239,9 +241,10 @@ describe('purchasing follows its capability', () => {
     const buyer = withPermissions(['retail.purchase.create', 'retail.stock.read']);
     expect(canUse(buyer, 'purchaseOrders')).toBe(true);
     expect(canUse(buyer, 'goodsReceived')).toBe(true);
-    for (const screen of ['supplierBills', 'supplierPayments', 'supplierPayables'] as const) expect(canUse(buyer, screen), screen).toBe(false);
+    // Landed costs and supplier credit notes are the money side too: no new permission, the same one as supplier invoices.
+    for (const screen of ['supplierBills', 'supplierPayments', 'supplierPayables', 'landedCosts', 'supplierCredits'] as const) expect(canUse(buyer, screen), screen).toBe(false);
     const clerk = withPermissions(['retail.payable.manage']);
-    for (const screen of ['supplierBills', 'supplierPayments', 'supplierPayables'] as const) expect(canUse(clerk, screen), screen).toBe(true);
+    for (const screen of ['supplierBills', 'supplierPayments', 'supplierPayables', 'landedCosts', 'supplierCredits'] as const) expect(canUse(clerk, screen), screen).toBe(true);
     expect(canUse(clerk, 'purchaseOrders')).toBe(false);
     expect(canUse(admin(['purchasing']), 'supplierPayables')).toBe(true);
     // The seeded sales role holds neither, so it sees no new screen with the capability on.
@@ -256,7 +259,7 @@ describe('purchasing follows its capability', () => {
           <StaffContext.Provider value={{ me, branch: null }}>{node}</StaffContext.Provider>
         </QueryClientProvider>,
       );
-    for (const node of [<PurchaseOrdersPage key="o" />, <GoodsReceivedPage key="g" />, <SupplierBillsPage key="b" />, <SupplierPaymentsPage key="p" />, <SupplierPayablesPage key="r" />]) {
+    for (const node of [<PurchaseOrdersPage key="o" />, <GoodsReceivedPage key="g" />, <SupplierBillsPage key="b" />, <SupplierPaymentsPage key="p" />, <SupplierPayablesPage key="r" />, <LandedCostsPage key="l" />, <SupplierCreditsPage key="c" />]) {
       expect(page(admin([]), node)).toContain('You do not have access');
       expect(page(admin(undefined), node)).toContain('You do not have access');
     }

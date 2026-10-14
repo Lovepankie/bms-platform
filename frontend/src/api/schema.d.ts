@@ -3013,6 +3013,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/goods-receipts/{receipt_id}/release-hold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release a receipt held as received and not costed without a landed cost, with a reason (issue #199); M */
+        post: operations["releaseRetailGoodsReceiptHold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/goods-receipts/{receipt_id}/void": {
         parameters: {
             query?: never;
@@ -3024,6 +3041,75 @@ export interface paths {
         put?: never;
         /** Void a receipt as a whole by reversal, once; refused while an invoice bills it or its stock has moved (issue #198); M */
         post: operations["voidRetailGoodsReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/landed-costs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Landed costs in the caller's branch scope, newest first, without charges or lines (issue #199) */
+        get: operations["listRetailLandedCosts"];
+        put?: never;
+        /** Record a landed cost: charges of one payee spread over received lines by value, quantity, weight or typed amounts; adds to inventory for goods on hand and to cost of goods sold for goods already sold, moves the product's cost when the receipt is still its latest cost event, and creates the payee's invoice (issue #199); M */
+        post: operations["createRetailLandedCost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/landed-costs/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** How a landed cost would be spread and what it would do, without recording it (issue #199) */
+        post: operations["previewRetailLandedCost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/landed-costs/{landed_cost_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One landed cost with its charges and its allocation (issue #199) */
+        get: operations["getRetailLandedCost"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/landed-costs/{landed_cost_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a landed cost as a whole by reversal, once; refused while a payment stands against the payee's invoice, while a credit note touches its lines, or when the goods have moved on (issue #199); M */
+        post: operations["voidRetailLandedCost"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4113,6 +4199,58 @@ export interface paths {
         put?: never;
         /** Void an invoice as a whole by reversal, once; refused while a payment stands against it (issue #198); M */
         post: operations["voidRetailSupplierBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/supplier-credits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Supplier credit notes in the caller's branch scope, newest first, without lines (issue #199) */
+        get: operations["listRetailSupplierCredits"];
+        put?: never;
+        /** Record a supplier credit note against an invoice: goods sent back to the supplier or a price adjustment; it takes the amount off what the invoice leaves to pay (issue #199); M */
+        post: operations["createRetailSupplierCredit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/supplier-credits/{credit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One supplier credit note with its lines (issue #199) */
+        get: operations["getRetailSupplierCredit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/supplier-credits/{credit_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a credit note as a whole by reversal, once; goods go back into stock; refused when a price credit's goods have moved on (issue #199); M */
+        post: operations["voidRetailSupplierCredit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8081,6 +8219,8 @@ export interface components {
             created_by?: string;
             currency?: string;
             delivery_ref?: string;
+            /** @description True while the receipt is held as received and not costed (issue #199) */
+            held_for_costing?: boolean;
             /** Format: uuid */
             id?: string;
             /** Format: int32 */
@@ -8132,6 +8272,11 @@ export interface components {
             entered_cost_minor?: number;
             /** Format: uuid */
             id?: string;
+            /**
+             * Format: int64
+             * @description What standing landed cost documents have allocated to the line (issue #199); needs retail.profit.read
+             */
+            landed_minor?: number;
             /** Format: int32 */
             line_no?: number;
             /**
@@ -8188,6 +8333,9 @@ export interface components {
             items?: components["schemas"]["RetailGoodsReceipt"][];
             next_cursor?: string;
         };
+        RetailGoodsReceiptReleaseRequest: {
+            reason: string;
+        };
         RetailGoodsReceiptRequest: {
             /**
              * Format: uuid
@@ -8196,6 +8344,8 @@ export interface components {
             branch_id?: string;
             /** @description The supplier's delivery note number */
             delivery_ref?: string;
+            /** @description Hold the receipt as received and not costed until its landed cost is in (issue #199). While the tenant requires costing, a held receipt's products cannot be transferred out of the branch. Absent means false */
+            hold_for_costing?: boolean;
             lines: components["schemas"]["RetailGoodsReceiptLineRequest"][];
             note?: string;
             /**
@@ -8238,6 +8388,193 @@ export interface components {
             to_branch_id?: string;
             /** Format: date */
             transfer_date?: string;
+        };
+        RetailLandedCost: {
+            /** Format: uuid */
+            bill_id?: string;
+            bill_no?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** @description A list carries neither charges nor lines */
+            charges?: components["schemas"]["RetailLandedCostCharge"][];
+            /** Format: date */
+            cost_date?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            currency?: string;
+            /** Format: date */
+            due_date?: string;
+            /** Format: uuid */
+            goods_bill_id?: string;
+            /** Format: uuid */
+            id?: string;
+            landed_no?: string;
+            /** Format: int32 */
+            line_count?: number;
+            lines?: components["schemas"]["RetailLandedCostLine"][];
+            /** @enum {string} */
+            method?: "value" | "quantity" | "weight" | "manual";
+            note?: string;
+            /**
+             * Format: int64
+             * @description Paid on the payee's invoice by payments that stand
+             */
+            paid_minor?: number;
+            /** @enum {string} */
+            status?: "posted" | "voided";
+            /** Format: uuid */
+            supplier_id?: string;
+            supplier_name?: string;
+            supplier_ref?: string;
+            /** Format: int64 */
+            total_minor?: number;
+            /** Format: int32 */
+            version?: number;
+            void_reason?: string;
+            /** Format: date-time */
+            voided_at?: string;
+            /** Format: uuid */
+            voided_by?: string;
+            /** Format: date */
+            voided_on?: string;
+        };
+        /** @description A list carries neither charges nor lines */
+        RetailLandedCostCharge: {
+            /** Format: int64 */
+            amount_minor?: number;
+            description?: string;
+            kind?: string;
+            /** Format: int32 */
+            line_no?: number;
+        };
+        RetailLandedCostChargeRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            description?: string;
+            /** @enum {string} */
+            kind: "freight" | "duty" | "clearing" | "insurance" | "other";
+        };
+        RetailLandedCostLine: {
+            /**
+             * Format: int64
+             * @description This line's share of the total, which is the landed cost of the line; needs retail.profit.read
+             */
+            allocated_minor?: number;
+            /** @description What the spread used: the value in minor units, the quantity or the weight; needs retail.profit.read */
+            basis?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            code?: string;
+            /**
+             * Format: int64
+             * @description The product's cost per base unit after; equal to before when not applied; needs retail.profit.read
+             */
+            cost_after_minor?: number;
+            cost_applied?: boolean;
+            /**
+             * Format: int64
+             * @description The product's cost per base unit before; needs retail.profit.read
+             */
+            cost_before_minor?: number;
+            /** @description Why the cost was not moved, when it was not */
+            cost_note?: string;
+            description?: string;
+            /** Format: int32 */
+            line_no?: number;
+            /** @description The units of the line still on hand in its branch when the cost was added; needs retail.profit.read */
+            on_hand_qty?: string;
+            /** Format: uuid */
+            product_id?: string;
+            /** @description Received, in base units */
+            qty?: string;
+            /** Format: uuid */
+            receipt_id?: string;
+            /** Format: uuid */
+            receipt_line_id?: string;
+            receipt_no?: string;
+            /**
+             * Format: int64
+             * @description The share for goods already sold, used or moved, posted to cost of goods sold; needs retail.profit.read
+             */
+            to_cogs_minor?: number;
+            /**
+             * Format: int64
+             * @description The share for goods still on hand, added to inventory; needs retail.profit.read
+             */
+            to_inventory_minor?: number;
+            weight?: string;
+        };
+        RetailLandedCostLineRequest: {
+            /**
+             * Format: int64
+             * @description This line's share, in minor units. Required for method manual; the shares must add to the total
+             */
+            amount_minor?: number;
+            /**
+             * Format: uuid
+             * @description The received line the charges are spread over
+             */
+            receipt_line_id: string;
+            /**
+             * @description The line's total weight, in any one unit used on every line. Required for method weight
+             * @example 120.5
+             */
+            weight?: string;
+        };
+        RetailLandedCostList: {
+            items?: components["schemas"]["RetailLandedCost"][];
+            next_cursor?: string;
+        };
+        /** @description How a landed cost would be spread and what it would do, worked out without recording anything */
+        RetailLandedCostPreview: {
+            lines?: components["schemas"]["RetailLandedCostLine"][];
+            method?: string;
+            /**
+             * Format: int64
+             * @description The charges added up
+             */
+            total_minor?: number;
+            /** @description True when the typed total differs from the charges */
+            total_mismatch?: boolean;
+        };
+        RetailLandedCostRequest: {
+            charges: components["schemas"]["RetailLandedCostChargeRequest"][];
+            /**
+             * Format: date
+             * @description The date of the charge; absent means today in the business time zone
+             */
+            cost_date?: string;
+            /** Format: date */
+            due_date: string;
+            /**
+             * Format: uuid
+             * @description A supplier invoice for goods that the charges belong to; every line must be billed by it
+             */
+            goods_bill_id?: string;
+            lines: components["schemas"]["RetailLandedCostLineRequest"][];
+            /**
+             * @description How the total is spread over the lines; absent means value
+             * @enum {string}
+             */
+            method?: "value" | "quantity" | "weight" | "manual";
+            note?: string;
+            /**
+             * Format: uuid
+             * @description Who the charges are owed to: the forwarder, carrier or agent, a supplier row
+             */
+            supplier_id: string;
+            /** @description The payee's own invoice number; unique per supplier */
+            supplier_ref: string;
+            /**
+             * Format: int64
+             * @description The total as invoiced. It must equal the charges: a typing check
+             */
+            total_minor: number;
+        };
+        RetailLandedCostVoidRequest: {
+            reason: string;
         };
         /** @description One entry per branch of the report, in its order */
         RetailLocationBalance: {
@@ -9121,6 +9458,8 @@ export interface components {
              * @description How far above the ordered quantity a receipt line may go, in basis points of the ordered quantity. 0 means a receipt never exceeds its order
              */
             over_receipt_bp?: number;
+            /** @description Issue #199: while on, stock of a product on a goods received note that is held as received and not costed cannot be moved out of the receiving branch by a transfer. Off by default */
+            require_costing_before_sale?: boolean;
             /** Format: int32 */
             version?: number;
         };
@@ -9130,6 +9469,7 @@ export interface components {
             bill_tolerance_bp?: number;
             /** Format: int32 */
             over_receipt_bp?: number;
+            require_costing_before_sale?: boolean;
         };
         RetailQuotation: {
             /** Format: uuid */
@@ -10095,6 +10435,11 @@ export interface components {
             created_at?: string;
             /** Format: uuid */
             created_by?: string;
+            /**
+             * Format: int64
+             * @description Taken off by supplier credit notes that stand (issue #199)
+             */
+            credited_minor?: number;
             currency?: string;
             /** Format: date */
             due_date?: string;
@@ -10109,7 +10454,7 @@ export interface components {
             note?: string;
             /**
              * Format: int64
-             * @description Total less paid; zero once voided
+             * @description Total less paid less credited; zero once voided
              */
             open_minor?: number;
             /**
@@ -10240,11 +10585,174 @@ export interface components {
         RetailSupplierBillVoidRequest: {
             reason: string;
         };
+        RetailSupplierCredit: {
+            /** Format: uuid */
+            bill_id?: string;
+            bill_no?: string;
+            bill_supplier_ref?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            /** Format: date */
+            credit_date?: string;
+            credit_no?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @enum {string} */
+            kind?: "goods" | "price";
+            /** Format: int32 */
+            line_count?: number;
+            /** @description A list carries no lines */
+            lines?: components["schemas"]["RetailSupplierCreditLine"][];
+            note?: string;
+            reason?: string;
+            /** @enum {string} */
+            status?: "posted" | "voided";
+            /** Format: uuid */
+            supplier_id?: string;
+            supplier_name?: string;
+            supplier_ref?: string;
+            /** Format: int64 */
+            total_minor?: number;
+            /** Format: int32 */
+            version?: number;
+            void_reason?: string;
+            /** Format: date-time */
+            voided_at?: string;
+            /** Format: uuid */
+            voided_by?: string;
+            /** Format: date */
+            voided_on?: string;
+        };
+        /** @description A list carries no lines */
+        RetailSupplierCreditLine: {
+            /** Format: uuid */
+            bill_line_id?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            code?: string;
+            /** Format: int64 */
+            cost_after_minor?: number;
+            cost_applied?: boolean;
+            /**
+             * Format: int64
+             * @description Price credit: the product's cost per base unit before and after; needs retail.profit.read
+             */
+            cost_before_minor?: number;
+            cost_note?: string;
+            description?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int32 */
+            line_no?: number;
+            /**
+             * Format: int64
+             * @description The credit for the line
+             */
+            line_total_minor?: number;
+            /** Format: uuid */
+            product_id?: string;
+            /** @description Goods credit: sent back, in base units */
+            qty?: string;
+            /** Format: uuid */
+            receipt_line_id?: string;
+            receipt_no?: string;
+            /**
+             * Format: int64
+             * @description Price credit: the part for goods already sold, to cost of goods sold; needs retail.profit.read
+             */
+            to_cogs_minor?: number;
+            /**
+             * Format: int64
+             * @description The part credited to inventory; needs retail.profit.read
+             */
+            to_inventory_minor?: number;
+            unit?: string;
+            /**
+             * Format: int64
+             * @description Goods credit: the credit for one unit as entered
+             */
+            unit_credit_minor?: number;
+            /** Format: uuid */
+            unit_id?: string;
+            /** @description Goods credit: sent back, in the unit it was received in */
+            unit_qty?: string;
+            /**
+             * Format: int64
+             * @description The part posted to purchase price variance; needs retail.profit.read
+             */
+            variance_minor?: number;
+        };
+        RetailSupplierCreditLineRequest: {
+            /**
+             * Format: int64
+             * @description Price credit: the amount taken off the line. Absent on a goods credit
+             */
+            amount_minor?: number;
+            /**
+             * Format: uuid
+             * @description The line of the invoice this credits
+             */
+            bill_line_id: string;
+            /**
+             * @description Goods credit: the quantity sent back, in the unit the line was received in; at most what the invoice billed and no credit note has returned. Absent on a price credit
+             * @example 2
+             */
+            qty?: string;
+            /**
+             * Format: int64
+             * @description Goods credit: the credit for one unit as entered; absent means the price the invoice billed. Absent on a price credit
+             */
+            unit_credit_minor?: number;
+        };
+        RetailSupplierCreditList: {
+            items?: components["schemas"]["RetailSupplierCredit"][];
+            next_cursor?: string;
+        };
+        RetailSupplierCreditRequest: {
+            /**
+             * Format: uuid
+             * @description The supplier invoice this credit note is against; it must still stand
+             */
+            bill_id: string;
+            /**
+             * Format: date
+             * @description Absent means today in the business time zone
+             */
+            credit_date?: string;
+            /**
+             * @description goods: stock goes back to the supplier. price: an adjustment
+             * @enum {string}
+             */
+            kind: "goods" | "price";
+            lines: components["schemas"]["RetailSupplierCreditLineRequest"][];
+            note?: string;
+            reason: string;
+            /** @description The supplier's own credit note number; unique per supplier */
+            supplier_ref: string;
+            /**
+             * Format: int64
+             * @description The credit as printed. It must equal the sum of the lines: a typing check
+             */
+            total_minor: number;
+        };
+        RetailSupplierCreditVoidRequest: {
+            reason: string;
+        };
         RetailSupplierList: {
             items?: components["schemas"]["RetailSupplier"][];
         };
         /** @description A supplier invoice or a credit restock that still owes something */
         RetailSupplierOpenItem: {
+            /**
+             * Format: int64
+             * @description Taken off by supplier credit notes that stand (issue #199)
+             */
+            credited_minor?: number;
             /** Format: date */
             date?: string;
             /**
@@ -10263,7 +10771,10 @@ export interface components {
             kind?: "bill" | "restock";
             /** @description Our number: the invoice number or the restock number */
             number?: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Total less credited less paid
+             */
             open_minor?: number;
             /** Format: int64 */
             paid_minor?: number;
@@ -16810,6 +17321,34 @@ export interface operations {
             };
         };
     };
+    releaseRetailGoodsReceiptHold: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                receipt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailGoodsReceiptReleaseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailGoodsReceipt"];
+                };
+            };
+        };
+    };
     voidRetailGoodsReceipt: {
         parameters: {
             query?: never;
@@ -16834,6 +17373,136 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailGoodsReceipt"];
+                };
+            };
+        };
+    };
+    listRetailLandedCosts: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                supplier_id?: string;
+                receipt_id?: string;
+                status?: string;
+                from?: string;
+                to?: string;
+                q?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailLandedCostList"];
+                };
+            };
+        };
+    };
+    createRetailLandedCost: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailLandedCostRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailLandedCost"];
+                };
+            };
+        };
+    };
+    previewRetailLandedCost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailLandedCostRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailLandedCostPreview"];
+                };
+            };
+        };
+    };
+    getRetailLandedCost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                landed_cost_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailLandedCost"];
+                };
+            };
+        };
+    };
+    voidRetailLandedCost: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                landed_cost_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailLandedCostVoidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailLandedCost"];
                 };
             };
         };
@@ -18872,6 +19541,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSupplierBill"];
+                };
+            };
+        };
+    };
+    listRetailSupplierCredits: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                supplier_id?: string;
+                bill_id?: string;
+                status?: string;
+                from?: string;
+                to?: string;
+                q?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierCreditList"];
+                };
+            };
+        };
+    };
+    createRetailSupplierCredit: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSupplierCreditRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierCredit"];
+                };
+            };
+        };
+    };
+    getRetailSupplierCredit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                credit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierCredit"];
+                };
+            };
+        };
+    };
+    voidRetailSupplierCredit: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                credit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSupplierCreditVoidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierCredit"];
                 };
             };
         };

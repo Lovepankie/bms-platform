@@ -48,7 +48,9 @@ export function useActionKeys() {
  * A button that opens a small form asking why: a reason of at least five characters, then one button. Used for cancelling an
  * order and for voiding goods received, an invoice or a payment.
  */
-export function ReasonPanel({ openLabel, question, hint, confirmLabel, busy, error, onSubmit }: {
+export function ReasonPanel({ openLabel, question, hint, confirmLabel, busy, error, onSubmit, fieldId = 'reason-text' }: {
+  /** The id of the text box; two panels on one page need two ids. */
+  fieldId?: string;
   openLabel: string;
   question: string;
   hint?: string;
@@ -70,8 +72,8 @@ export function ReasonPanel({ openLabel, question, hint, confirmLabel, busy, err
         if (why && !busy) onSubmit(why);
       }}
     >
-      <label htmlFor="reason-text">{question} (at least {MIN_REASON} characters)</label>
-      <input id="reason-text" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
+      <label htmlFor={fieldId}>{question} (at least {MIN_REASON} characters)</label>
+      <input id={fieldId} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
       {hint && <p className="hint">{hint}</p>}
       <Problem error={error} />
       <p className="cluster">

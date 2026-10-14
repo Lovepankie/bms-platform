@@ -29,7 +29,10 @@ class ReceiptsRepository {
                    o.order_no, r.received_on, r.currency, r.total_minor, r.delivery_ref, r.note, r.status,
                    (SELECT count(*) FROM retail_goods_receipt_lines l WHERE l.tenant_id = r.tenant_id AND l.receipt_id = r.id) AS line_count,
                    r.journal_entry_id, r.created_at, r.created_by, r.voided_at, r.voided_on, r.voided_by, r.void_reason,
-                   r.void_entry_id, r.version
+                   r.void_entry_id,
+                   EXISTS (SELECT 1 FROM retail_receipt_holds h
+                            WHERE h.tenant_id = r.tenant_id AND h.receipt_id = r.id AND h.released_at IS NULL) AS held,
+                   r.version
               FROM retail_goods_receipts r
               JOIN retail_suppliers s ON s.tenant_id = r.tenant_id AND s.id = r.supplier_id
               LEFT JOIN retail_purchase_orders o ON o.tenant_id = r.tenant_id AND o.id = r.order_id
@@ -70,6 +73,7 @@ class ReceiptsRepository {
             UUID voidedBy,
             String voidReason,
             UUID voidEntryId,
+            boolean held,
             int version) {}
 
     record LineRow(
@@ -90,7 +94,8 @@ class ReceiptsRepository {
             Long sellMinor,
             long lineTotalMinor,
             long stockedMinor,
-            BigDecimal billedQty) {}
+            BigDecimal billedQty,
+            long landedMinor) {}
 
     record NewReceipt(
             UUID id,
@@ -255,7 +260,11 @@ class ReceiptsRepository {
                                l.sell_minor, l.line_total_minor, l.stocked_minor,
                                coalesce((SELECT sum(bl.qty) FROM retail_supplier_bill_lines bl
                                            JOIN retail_supplier_bills b ON b.tenant_id = bl.tenant_id AND b.id = bl.bill_id AND b.status = 'posted'
-                                          WHERE bl.tenant_id = l.tenant_id AND bl.receipt_line_id = l.id), 0) AS billed_qty
+                                          WHERE bl.tenant_id = l.tenant_id AND bl.receipt_line_id = l.id), 0) AS billed_qty,
+                               coalesce((SELECT sum(x.allocated_minor) FROM retail_landed_cost_lines x
+                                           JOIN retail_landed_costs d ON d.tenant_id = x.tenant_id AND d.id = x.landed_cost_id
+                                                AND d.status = 'posted'
+                                          WHERE x.tenant_id = l.tenant_id AND x.receipt_line_id = l.id), 0) AS landed_minor
                           FROM retail_goods_receipt_lines l
                           JOIN retail_products p ON p.tenant_id = l.tenant_id AND p.id = l.product_id
                           LEFT JOIN retail_units u ON u.tenant_id = l.tenant_id AND u.id = l.unit_id
@@ -280,7 +289,8 @@ class ReceiptsRepository {
                             rs.getObject("sell_minor", Long.class),
                             rs.getLong("line_total_minor"),
                             rs.getLong("stocked_minor"),
-                            rs.getBigDecimal("billed_qty")));
+                            rs.getBigDecimal("billed_qty"),
+                            rs.getLong("landed_minor")));
         });
         return out;
     }
@@ -306,6 +316,36 @@ class ReceiptsRepository {
                 .param(orderId)
                 .query(Long.class)
                 .single();
+    }
+
+    // ---- Holds: a receipt held as received and not costed (issue #199) ----------------------
+
+    void hold(UUID receiptId, UUID by) {
+        jdbc.sql("""
+                        INSERT INTO retail_receipt_holds (tenant_id, receipt_id, held_by)
+                        VALUES (current_setting('app.tenant_id')::uuid, ?, ?)
+                        """).params(receiptId, by).update();
+    }
+
+    /** Rows changed: 0 when the receipt has no open hold. */
+    int release(UUID receiptId, UUID by, String kind, String reason, UUID landedCostId) {
+        return jdbc.sql("""
+                        UPDATE retail_receipt_holds SET released_at = now(), released_by = ?, release_kind = ?,
+                               release_reason = ?, landed_cost_id = ?
+                         WHERE receipt_id = ? AND released_at IS NULL
+                        """).params(by, kind, reason, landedCostId, receiptId).update();
+    }
+
+    /**
+     * Puts the hold back on a receipt that a landed cost released, when no landed cost stands on it any more; 0 when the
+     * receipt was not released by a landed cost (a hold released by hand with a reason stays released).
+     */
+    int rehold(UUID receiptId) {
+        return jdbc.sql("""
+                        UPDATE retail_receipt_holds SET released_at = NULL, released_by = NULL, release_kind = NULL,
+                               release_reason = NULL, landed_cost_id = NULL
+                         WHERE receipt_id = ? AND release_kind = 'landed_cost'
+                        """).params(receiptId).update();
     }
 
     /** True when a supplier invoice that stands bills any line of the receipt. */
@@ -343,6 +383,7 @@ class ReceiptsRepository {
                 rs.getObject("voided_by", UUID.class),
                 rs.getString("void_reason"),
                 rs.getObject("void_entry_id", UUID.class),
+                rs.getBoolean("held"),
                 rs.getInt("version"));
     }
 }

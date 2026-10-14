@@ -127,6 +127,11 @@ final class PaymentsApi {
 
             long totalMinor,
             long paidMinor,
+
+            @Schema(description = "Taken off by supplier credit notes that stand (issue #199)")
+            long creditedMinor,
+
+            @Schema(description = "Total less credited less paid")
             long openMinor,
 
             @Schema(description = "Days past the due date in the business time zone; 0 or less is not yet due")

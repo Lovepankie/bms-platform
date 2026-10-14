@@ -7887,6 +7887,10 @@
           "delivery_ref" : {
             "type" : "string"
           },
+          "held_for_costing" : {
+            "description" : "True while the receipt is held as received and not costed (issue #199)",
+            "type" : "boolean"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"
@@ -7983,6 +7987,11 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "landed_minor" : {
+            "description" : "What standing landed cost documents have allocated to the line (issue #199); needs retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "line_no" : {
             "format" : "int32",
             "type" : "integer"
@@ -8076,6 +8085,16 @@
           }
         }
       },
+      "RetailGoodsReceiptReleaseRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
       "RetailGoodsReceiptRequest" : {
         "properties" : {
           "branch_id" : {
@@ -8088,6 +8107,10 @@
             "maxLength" : 60,
             "minLength" : 0,
             "type" : "string"
+          },
+          "hold_for_costing" : {
+            "description" : "Hold the receipt as received and not costed until its landed cost is in (issue #199). While the tenant requires costing, a held receipt's products cannot be transferred out of the branch. Absent means false",
+            "type" : "boolean"
           },
           "lines" : {
             "items" : {
@@ -8172,6 +8195,369 @@
             "type" : "string"
           }
         }
+      },
+      "RetailLandedCost" : {
+        "properties" : {
+          "bill_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "bill_no" : {
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "charges" : {
+            "description" : "A list carries neither charges nor lines",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailLandedCostCharge"
+            },
+            "type" : "array"
+          },
+          "cost_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "due_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "goods_bill_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "landed_no" : {
+            "type" : "string"
+          },
+          "line_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailLandedCostLine"
+            },
+            "type" : "array"
+          },
+          "method" : {
+            "enum" : [ "value", "quantity", "weight", "manual" ],
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "paid_minor" : {
+            "description" : "Paid on the payee's invoice by payments that stand",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "enum" : [ "posted", "voided" ],
+            "type" : "string"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "supplier_name" : {
+            "type" : "string"
+          },
+          "supplier_ref" : {
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "void_reason" : {
+            "type" : "string"
+          },
+          "voided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "voided_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "voided_on" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailLandedCostCharge" : {
+        "description" : "A list carries neither charges nor lines",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "line_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailLandedCostChargeRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "description" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "kind" : {
+            "enum" : [ "freight", "duty", "clearing", "insurance", "other" ],
+            "pattern" : "freight|duty|clearing|insurance|other",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor", "kind" ]
+      },
+      "RetailLandedCostLine" : {
+        "properties" : {
+          "allocated_minor" : {
+            "description" : "This line's share of the total, which is the landed cost of the line; needs retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "basis" : {
+            "description" : "What the spread used: the value in minor units, the quantity or the weight; needs retail.profit.read",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "cost_after_minor" : {
+            "description" : "The product's cost per base unit after; equal to before when not applied; needs retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cost_applied" : {
+            "type" : "boolean"
+          },
+          "cost_before_minor" : {
+            "description" : "The product's cost per base unit before; needs retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cost_note" : {
+            "description" : "Why the cost was not moved, when it was not",
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "line_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "on_hand_qty" : {
+            "description" : "The units of the line still on hand in its branch when the cost was added; needs retail.profit.read",
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "description" : "Received, in base units",
+            "type" : "string"
+          },
+          "receipt_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "receipt_line_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "receipt_no" : {
+            "type" : "string"
+          },
+          "to_cogs_minor" : {
+            "description" : "The share for goods already sold, used or moved, posted to cost of goods sold; needs retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "to_inventory_minor" : {
+            "description" : "The share for goods still on hand, added to inventory; needs retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "weight" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailLandedCostLineRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "description" : "This line's share, in minor units. Required for method manual; the shares must add to the total",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "receipt_line_id" : {
+            "description" : "The received line the charges are spread over",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "weight" : {
+            "description" : "The line's total weight, in any one unit used on every line. Required for method weight",
+            "example" : "120.5",
+            "type" : "string"
+          }
+        },
+        "required" : [ "receipt_line_id" ]
+      },
+      "RetailLandedCostList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailLandedCost"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailLandedCostPreview" : {
+        "description" : "How a landed cost would be spread and what it would do, worked out without recording anything",
+        "properties" : {
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailLandedCostLine"
+            },
+            "type" : "array"
+          },
+          "method" : {
+            "type" : "string"
+          },
+          "total_minor" : {
+            "description" : "The charges added up",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_mismatch" : {
+            "description" : "True when the typed total differs from the charges",
+            "type" : "boolean"
+          }
+        }
+      },
+      "RetailLandedCostRequest" : {
+        "properties" : {
+          "charges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailLandedCostChargeRequest"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "cost_date" : {
+            "description" : "The date of the charge; absent means today in the business time zone",
+            "format" : "date",
+            "type" : "string"
+          },
+          "due_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "goods_bill_id" : {
+            "description" : "A supplier invoice for goods that the charges belong to; every line must be billed by it",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailLandedCostLineRequest"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "method" : {
+            "description" : "How the total is spread over the lines; absent means value",
+            "enum" : [ "value", "quantity", "weight", "manual" ],
+            "pattern" : "value|quantity|weight|manual",
+            "type" : "string"
+          },
+          "note" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "supplier_id" : {
+            "description" : "Who the charges are owed to: the forwarder, carrier or agent, a supplier row",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "supplier_ref" : {
+            "description" : "The payee's own invoice number; unique per supplier",
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "total_minor" : {
+            "description" : "The total as invoiced. It must equal the charges: a typing check",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "charges", "due_date", "lines", "supplier_id", "supplier_ref", "total_minor" ]
+      },
+      "RetailLandedCostVoidRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
       },
       "RetailLocationBalance" : {
         "description" : "One entry per branch of the report, in its order",
@@ -9884,6 +10270,10 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "require_costing_before_sale" : {
+            "description" : "Issue #199: while on, stock of a product on a goods received note that is held as received and not costed cannot be moved out of the receiving branch by a transfer. Off by default",
+            "type" : "boolean"
+          },
           "version" : {
             "format" : "int32",
             "type" : "integer"
@@ -9904,6 +10294,9 @@
             "maximum" : 10000,
             "minimum" : 0,
             "type" : "integer"
+          },
+          "require_costing_before_sale" : {
+            "type" : "boolean"
           }
         }
       },
@@ -11795,6 +12188,11 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "credited_minor" : {
+            "description" : "Taken off by supplier credit notes that stand (issue #199)",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "currency" : {
             "type" : "string"
           },
@@ -11825,7 +12223,7 @@
             "type" : "string"
           },
           "open_minor" : {
-            "description" : "Total less paid; zero once voided",
+            "description" : "Total less paid less credited; zero once voided",
             "format" : "int64",
             "type" : "integer"
           },
@@ -12078,6 +12476,301 @@
         },
         "required" : [ "reason" ]
       },
+      "RetailSupplierCredit" : {
+        "properties" : {
+          "bill_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "bill_no" : {
+            "type" : "string"
+          },
+          "bill_supplier_ref" : {
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "credit_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "credit_no" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "enum" : [ "goods", "price" ],
+            "type" : "string"
+          },
+          "line_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lines" : {
+            "description" : "A list carries no lines",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierCreditLine"
+            },
+            "type" : "array"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "posted", "voided" ],
+            "type" : "string"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "supplier_name" : {
+            "type" : "string"
+          },
+          "supplier_ref" : {
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "void_reason" : {
+            "type" : "string"
+          },
+          "voided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "voided_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "voided_on" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSupplierCreditLine" : {
+        "description" : "A list carries no lines",
+        "properties" : {
+          "bill_line_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "cost_after_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cost_applied" : {
+            "type" : "boolean"
+          },
+          "cost_before_minor" : {
+            "description" : "Price credit: the product's cost per base unit before and after; needs retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cost_note" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "line_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "line_total_minor" : {
+            "description" : "The credit for the line",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "description" : "Goods credit: sent back, in base units",
+            "type" : "string"
+          },
+          "receipt_line_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "receipt_no" : {
+            "type" : "string"
+          },
+          "to_cogs_minor" : {
+            "description" : "Price credit: the part for goods already sold, to cost of goods sold; needs retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "to_inventory_minor" : {
+            "description" : "The part credited to inventory; needs retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "unit_credit_minor" : {
+            "description" : "Goods credit: the credit for one unit as entered",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit_qty" : {
+            "description" : "Goods credit: sent back, in the unit it was received in",
+            "type" : "string"
+          },
+          "variance_minor" : {
+            "description" : "The part posted to purchase price variance; needs retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailSupplierCreditLineRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "description" : "Price credit: the amount taken off the line. Absent on a goods credit",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "bill_line_id" : {
+            "description" : "The line of the invoice this credits",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "description" : "Goods credit: the quantity sent back, in the unit the line was received in; at most what the invoice billed and no credit note has returned. Absent on a price credit",
+            "example" : "2",
+            "type" : "string"
+          },
+          "unit_credit_minor" : {
+            "description" : "Goods credit: the credit for one unit as entered; absent means the price the invoice billed. Absent on a price credit",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "bill_line_id" ]
+      },
+      "RetailSupplierCreditList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierCredit"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSupplierCreditRequest" : {
+        "properties" : {
+          "bill_id" : {
+            "description" : "The supplier invoice this credit note is against; it must still stand",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "credit_date" : {
+            "description" : "Absent means today in the business time zone",
+            "format" : "date",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "goods: stock goes back to the supplier. price: an adjustment",
+            "enum" : [ "goods", "price" ],
+            "pattern" : "goods|price",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierCreditLineRequest"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "note" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          },
+          "supplier_ref" : {
+            "description" : "The supplier's own credit note number; unique per supplier",
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "total_minor" : {
+            "description" : "The credit as printed. It must equal the sum of the lines: a typing check",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "bill_id", "kind", "lines", "reason", "supplier_ref", "total_minor" ]
+      },
+      "RetailSupplierCreditVoidRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
       "RetailSupplierList" : {
         "properties" : {
           "items" : {
@@ -12091,6 +12784,11 @@
       "RetailSupplierOpenItem" : {
         "description" : "A supplier invoice or a credit restock that still owes something",
         "properties" : {
+          "credited_minor" : {
+            "description" : "Taken off by supplier credit notes that stand (issue #199)",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "date" : {
             "format" : "date",
             "type" : "string"
@@ -12118,6 +12816,7 @@
             "type" : "string"
           },
           "open_minor" : {
+            "description" : "Total less credited less paid",
             "format" : "int64",
             "type" : "integer"
           },
@@ -22918,6 +23617,51 @@
         "tags" : [ "retail-purchasing" ]
       }
     },
+    "/api/v1/retail/goods-receipts/{receipt_id}/release-hold" : {
+      "post" : {
+        "operationId" : "releaseRetailGoodsReceiptHold",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "receipt_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailGoodsReceiptReleaseRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailGoodsReceipt"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Release a receipt held as received and not costed without a landed cost, with a reason (issue #199); M",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
     "/api/v1/retail/goods-receipts/{receipt_id}/void" : {
       "post" : {
         "operationId" : "voidRetailGoodsReceipt",
@@ -22961,6 +23705,235 @@
         },
         "summary" : "Void a receipt as a whole by reversal, once; refused while an invoice bills it or its stock has moved (issue #198); M",
         "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/landed-costs" : {
+      "get" : {
+        "operationId" : "listRetailLandedCosts",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "supplier_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "receipt_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailLandedCostList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Landed costs in the caller's branch scope, newest first, without charges or lines (issue #199)",
+        "tags" : [ "retail-payables" ]
+      },
+      "post" : {
+        "operationId" : "createRetailLandedCost",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailLandedCostRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailLandedCost"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record a landed cost: charges of one payee spread over received lines by value, quantity, weight or typed amounts; adds to inventory for goods on hand and to cost of goods sold for goods already sold, moves the product's cost when the receipt is still its latest cost event, and creates the payee's invoice (issue #199); M",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/landed-costs/preview" : {
+      "post" : {
+        "operationId" : "previewRetailLandedCost",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailLandedCostRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailLandedCostPreview"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "How a landed cost would be spread and what it would do, without recording it (issue #199)",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/landed-costs/{landed_cost_id}" : {
+      "get" : {
+        "operationId" : "getRetailLandedCost",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "landed_cost_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailLandedCost"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One landed cost with its charges and its allocation (issue #199)",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/landed-costs/{landed_cost_id}/void" : {
+      "post" : {
+        "operationId" : "voidRetailLandedCost",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "landed_cost_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailLandedCostVoidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailLandedCost"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Void a landed cost as a whole by reversal, once; refused while a payment stands against the payee's invoice, while a credit note touches its lines, or when the goods have moved on (issue #199); M",
+        "tags" : [ "retail-payables" ]
       }
     },
     "/api/v1/retail/price-lists" : {
@@ -26488,6 +27461,206 @@
           }
         },
         "summary" : "Void an invoice as a whole by reversal, once; refused while a payment stands against it (issue #198); M",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/supplier-credits" : {
+      "get" : {
+        "operationId" : "listRetailSupplierCredits",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "supplier_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "bill_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierCreditList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Supplier credit notes in the caller's branch scope, newest first, without lines (issue #199)",
+        "tags" : [ "retail-payables" ]
+      },
+      "post" : {
+        "operationId" : "createRetailSupplierCredit",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailSupplierCreditRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierCredit"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record a supplier credit note against an invoice: goods sent back to the supplier or a price adjustment; it takes the amount off what the invoice leaves to pay (issue #199); M",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/supplier-credits/{credit_id}" : {
+      "get" : {
+        "operationId" : "getRetailSupplierCredit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "credit_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierCredit"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One supplier credit note with its lines (issue #199)",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/supplier-credits/{credit_id}/void" : {
+      "post" : {
+        "operationId" : "voidRetailSupplierCredit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "credit_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailSupplierCreditVoidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierCredit"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Void a credit note as a whole by reversal, once; goods go back into stock; refused when a price credit's goods have moved on (issue #199); M",
         "tags" : [ "retail-payables" ]
       }
     },

@@ -81,8 +81,19 @@ final class ReceiptsApi {
 
             @Size(max = 300) String note,
 
+            @Schema(
+                    description =
+                            "Hold the receipt as received and not costed until its landed cost is in (issue #199). While the"
+                                    + " tenant requires costing, a held receipt's products cannot be transferred out of the"
+                                    + " branch. Absent means false")
+            Boolean holdForCosting,
+
             @NotEmpty @Size(max = OrdersApi.MAX_LINES) @Valid
             List<ReceiptLineRequest> lines) {}
+
+    @Schema(name = "RetailGoodsReceiptReleaseRequest")
+    record ReleaseRequest(
+            @NotBlank @Size(min = 5, max = 300) String reason) {}
 
     @Schema(name = "RetailGoodsReceiptVoidRequest")
     record VoidRequest(@NotBlank @Size(min = 5, max = 300) String reason) {}
@@ -120,7 +131,12 @@ final class ReceiptsApi {
             @Schema(
                     description = "Billed so far on supplier invoices that stand, in base units; present with"
                             + " retail.payable.manage")
-            String billedQty) {}
+            String billedQty,
+
+            @Schema(
+                    description =
+                            "What standing landed cost documents have allocated to the line (issue #199); needs retail.profit.read")
+            Long landedMinor) {}
 
     @Schema(name = "RetailGoodsReceipt")
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -146,6 +162,9 @@ final class ReceiptsApi {
             LocalDate voidedOn,
             UUID voidedBy,
             String voidReason,
+
+            @Schema(description = "True while the receipt is held as received and not costed (issue #199)")
+            boolean heldForCosting,
 
             @Schema(description = "Send as If-Match where a route takes it")
             int version) {}

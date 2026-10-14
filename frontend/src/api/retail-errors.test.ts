@@ -47,6 +47,27 @@ describe('retail problem details in plain words', () => {
     ['payment_reversed', 409, /reversed already/i],
     ['retail_chart_missing', 422, /not set up/i],
     ['amount_out_of_range', 422, /too large or too small/i],
+    // Landed costs and supplier credit notes (issue #199).
+    ['landed_total_mismatch', 422, /not the sum of the charges/i],
+    ['allocation_basis_zero', 422, /adds up to nothing/i],
+    ['line_returned', 422, /sent back to the supplier/i],
+    ['landed_cost_voided', 409, /voided already/i],
+    ['landed_cost_stock_moved', 409, /moved on/i],
+    ['landed_cost_credited', 409, /void the credit note first/i],
+    ['bill_is_landed_cost', 409, /void the landed cost instead/i],
+    ['bill_credited', 409, /void the credit note first/i],
+    ['receipt_costed', 409, /already covers this delivery/i],
+    ['receipt_not_costed', 422, /held until its landed cost is in/i],
+    ['not_held', 409, /nothing to release/i],
+    ['credit_total_mismatch', 422, /not the sum of the lines/i],
+    ['credit_exceeds_billed', 422, /more is sent back than the invoice billed/i],
+    ['credit_exceeds_billed_value', 422, /more than the invoice charged/i],
+    ['credit_exceeds_open', 422, /still has to pay/i],
+    ['credit_exceeds_on_hand', 422, /still in the branch/i],
+    ['duplicate_supplier_credit', 409, /already has a credit note/i],
+    ['credit_voided', 409, /voided already/i],
+    ['credit_stock_moved', 409, /moved on since/i],
+    ['insufficient_stock', 422, /not enough stock/i],
   ])('maps the purchasing code %s', (code, status, text) => {
     expect(retailMessage({ code, detail: 'Bill 00000000-0000-4000-8000-000000000001 failed' }, status)).toMatch(text);
   });

@@ -23,6 +23,7 @@ import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.Movement;
 import com.rincoltech.bms.retail.stock.StockLedger.Recorded;
+import com.rincoltech.bms.retail.stock.TransferOutGuard;
 import com.rincoltech.bms.retail.stock.internal.TransferApi.CancelRequest;
 import com.rincoltech.bms.retail.stock.internal.TransferApi.ReceiveLine;
 import com.rincoltech.bms.retail.stock.internal.TransferApi.ReceiveRequest;
@@ -45,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,6 +92,7 @@ class TransferService {
     private final CurrentTenant tenant;
     private final BusinessClock clock;
     private final AuditLog audit;
+    private final ObjectProvider<TransferOutGuard> guards;
 
     TransferService(
             TransferRepository repo,
@@ -102,7 +105,8 @@ class TransferService {
             Branches branches,
             CurrentTenant tenant,
             BusinessClock clock,
-            AuditLog audit) {
+            AuditLog audit,
+            ObjectProvider<TransferOutGuard> guards) {
         this.repo = repo;
         this.catalogue = catalogue;
         this.stock = stock;
@@ -114,6 +118,7 @@ class TransferService {
         this.tenant = tenant;
         this.clock = clock;
         this.audit = audit;
+        this.guards = guards;
     }
 
     @Transactional
@@ -169,6 +174,9 @@ class TransferService {
         if (!problems.isEmpty()) {
             throw ApiException.validation(problems);
         }
+        Map<UUID, java.math.BigDecimal> quantities = new java.util.LinkedHashMap<>();
+        lines.forEach(l -> quantities.put(l.productId(), l.qty()));
+        guards.orderedStream().forEach(g -> g.check(from, quantities));
         UUID id = UUID.randomUUID();
         UUID by = CurrentPrincipal.require().userId();
         String note = r.note() == null || r.note().isBlank() ? null : r.note().trim();

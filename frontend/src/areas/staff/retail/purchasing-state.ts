@@ -206,6 +206,8 @@ export interface ReceiveForm {
   receivedOn: string;
   deliveryRef: string;
   note: string;
+  /** Hold the delivery as received and not costed until its landed cost is in (issue #199); absent means not held. */
+  hold?: boolean;
   lines: ReceiveLineForm[];
 }
 
@@ -325,6 +327,7 @@ export function buildReceiptRequest(form: ReceiveForm, orderId?: string): GoodsR
     received_on: form.receivedOn || undefined,
     ...(form.deliveryRef.trim() ? { delivery_ref: form.deliveryRef.trim() } : {}),
     ...(form.note.trim() ? { note: form.note.trim() } : {}),
+    ...(form.hold ? { hold_for_costing: true } : {}),
     lines: form.lines.filter(isReceived).map((l) => ({
       ...(l.orderLineId ? { order_line_id: l.orderLineId } : { product_id: l.productId, ...(l.unitId ? { unit_id: l.unitId } : {}) }),
       qty: qtyString(parseQty(l.qty) ?? 0),

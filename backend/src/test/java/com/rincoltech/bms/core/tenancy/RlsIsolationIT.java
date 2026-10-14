@@ -411,11 +411,12 @@ class RlsIsolationIT {
                         """)
                 .params(bill, t.tenantId(), t.headOffice(), supplier, user)
                 .update();
+        UUID billLine = UUID.randomUUID();
         owner.sql("""
                         INSERT INTO retail_supplier_bill_lines (id, tenant_id, bill_id, line_no, receipt_line_id, qty,
                                                                 unit_price_minor, line_total_minor, cleared_minor, variance_minor)
-                        VALUES (gen_random_uuid(), ?, ?, 1, ?, 2, 100, 200, 200, 0)
-                        """).params(t.tenantId(), bill, receiptLine).update();
+                        VALUES (?, ?, ?, 1, ?, 2, 100, 200, 200, 0)
+                        """).params(billLine, t.tenantId(), bill, receiptLine).update();
         owner.sql(
                         "INSERT INTO retail_supplier_bill_entries (tenant_id, bill_id, branch_id, entry_id) VALUES (?, ?, ?, ?)")
                 .params(t.tenantId(), bill, t.headOffice(), entry)
@@ -440,6 +441,79 @@ class RlsIsolationIT {
                 .update();
         owner.sql("INSERT INTO retail_purchasing_settings (tenant_id, over_receipt_bp) VALUES (?, 500)")
                 .param(t.tenantId())
+                .update();
+        // Landed cost, supplier credit notes and the hold on an uncosted receipt (ADR-033, #199): a landed cost with
+        // its payee's
+        // invoice, one charge, one allocated line and its entry; a hold; a credit note with its line and entry. The
+        // landed
+        // cost, its charge and its line go in one statement, because the parts must add up at the commit of the
+        // statement.
+        // JUSTIFICATION-A3: a fixture row for each new table; the isolation test needs one row per tenant table.
+        UUID landedBill = UUID.randomUUID();
+        UUID landed = UUID.randomUUID();
+        UUID credit = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_supplier_bills (id, tenant_id, bill_no, branch_seq, branch_id, supplier_id, supplier_ref,
+                                                           bill_date, due_date, currency, kind, total_minor, cleared_minor,
+                                                           variance_minor, created_by)
+                        VALUES (?, ?, 'SBRLS-000002', 2, ?, ?, 'FWD-RLS-1', DATE '2026-01-16', DATE '2026-02-16', 'UGX', 'landed_cost',
+                                50, 50, 0, ?)
+                        """)
+                .params(landedBill, t.tenantId(), t.headOffice(), supplier, user)
+                .update();
+        owner.sql("""
+                        WITH doc AS (
+                            INSERT INTO retail_landed_costs (id, tenant_id, landed_no, branch_seq, branch_id, supplier_id, bill_id,
+                                                             method, cost_date, currency, total_minor, created_by)
+                            VALUES (:landed, :tenant, 'LCRLS-000001', 1, :branch, :supplier, :bill, 'value', DATE '2026-01-16',
+                                    'UGX', 50, :user)
+                        ), charge AS (
+                            INSERT INTO retail_landed_cost_charges (id, tenant_id, landed_cost_id, line_no, kind, amount_minor)
+                            VALUES (gen_random_uuid(), :tenant, :landed, 1, 'freight', 50)
+                        )
+                        INSERT INTO retail_landed_cost_lines (id, tenant_id, landed_cost_id, line_no, receipt_line_id, branch_id,
+                                                              product_id, basis, allocated_minor, line_qty, on_hand_qty,
+                                                              to_inventory_minor, to_cogs_minor, cost_before_minor,
+                                                              cost_after_minor, cost_applied)
+                        VALUES (gen_random_uuid(), :tenant, :landed, 1, :receiptLine, :branch, :product, 200, 50, 2, 2, 50, 0,
+                                100, 125, true)
+                        """)
+                .param("landed", landed)
+                .param("tenant", t.tenantId())
+                .param("branch", t.headOffice())
+                .param("supplier", supplier)
+                .param("bill", landedBill)
+                .param("user", user)
+                .param("receiptLine", receiptLine)
+                .param("product", retailProduct)
+                .update();
+        owner.sql(
+                        "INSERT INTO retail_landed_cost_entries (tenant_id, landed_cost_id, branch_id, entry_id) VALUES (?, ?, ?, ?)")
+                .params(t.tenantId(), landed, t.headOffice(), entry)
+                .update();
+        owner.sql("INSERT INTO retail_receipt_holds (tenant_id, receipt_id, held_by) VALUES (?, ?, ?)")
+                .params(t.tenantId(), goodsReceipt, user)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_supplier_credits (id, tenant_id, credit_no, branch_seq, branch_id, supplier_id, bill_id,
+                                                             supplier_ref, credit_date, currency, kind, total_minor, reason, created_by)
+                        VALUES (?, ?, 'SCRLS-000001', 1, ?, ?, ?, 'CN-RLS-1', DATE '2026-01-17', 'UGX', 'goods', 100,
+                                'Test goods damaged', ?)
+                        """)
+                .params(credit, t.tenantId(), t.headOffice(), supplier, bill, user)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_supplier_credit_lines (id, tenant_id, credit_id, line_no, bill_line_id, receipt_line_id,
+                                                                  branch_id, product_id, qty, unit_credit_minor, line_total_minor,
+                                                                  to_inventory_minor, to_cogs_minor, variance_minor,
+                                                                  cost_before_minor, cost_after_minor, cost_applied)
+                        VALUES (gen_random_uuid(), ?, ?, 1, ?, ?, ?, ?, 1, 100, 100, 100, 0, 0, 100, 100, false)
+                        """)
+                .params(t.tenantId(), credit, billLine, receiptLine, t.headOffice(), retailProduct)
+                .update();
+        owner.sql(
+                        "INSERT INTO retail_supplier_credit_entries (tenant_id, credit_id, branch_id, entry_id) VALUES (?, ?, ?, ?)")
+                .params(t.tenantId(), credit, t.headOffice(), entry)
                 .update();
         // The facts of a credit note PDF (ADR-033, #197): issuer, day and buyer as named, for the fixture return.
         // JUSTIFICATION-A3: a fixture row for the new table; the isolation test needs one row per tenant table.

@@ -15,6 +15,8 @@ export type RetailScreen =
   | 'stockByLocation' | 'inTransit' | 'priceLists' | 'customerGroups' | 'customerAccounts' | 'customerAgeing' | 'documents' | 'quotations' | 'returns'
   // Optional purchasing (ADR-033, issue #198): orders and goods received, then supplier invoices, payments and what is owed.
   | 'purchaseOrders' | 'goodsReceived' | 'supplierBills' | 'supplierPayments' | 'supplierPayables'
+  // Landed costs and supplier credit notes (issue #199), also under the purchasing capability.
+  | 'landedCosts' | 'supplierCredits'
   // The cash book (ADR-022, FR-RET-31).
   | 'savings' | 'banking' | 'expenses' | 'withdrawals' | 'advances' | 'cashSummary' | 'bankingReport' | 'expensesReport' | 'expenseSetup'
   // The administrator's retail settings (profile and capabilities) and the screens of a capability (ADR-033).
@@ -41,6 +43,8 @@ export const SCREEN_CAPABILITY: Partial<Record<RetailScreen, string>> = {
   supplierBills: 'purchasing',
   supplierPayments: 'purchasing',
   supplierPayables: 'purchasing',
+  landedCosts: 'purchasing',
+  supplierCredits: 'purchasing',
 };
 
 /** The catalogue management screens (#146); the Catalogue tile opens when any of them may be used. */
@@ -120,6 +124,9 @@ const NEEDS: Record<RetailScreen, string[]> = {
   supplierBills: [PAYABLE_MANAGE],
   supplierPayments: [PAYABLE_MANAGE],
   supplierPayables: [PAYABLE_MANAGE],
+  // Landed costs and supplier credit notes are the administrator's too (issue #199): no new permission exists.
+  landedCosts: [PAYABLE_MANAGE],
+  supplierCredits: [PAYABLE_MANAGE],
   // Stock value is a stock read; its cost columns and the profit report need retail.profit.read.
   valuation: ['retail.stock.read'],
   profit: [PROFIT],
@@ -310,6 +317,8 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'supplierBills', path: '/staff/retail/supplier-bills', label: 'Supplier invoices', hint: 'What suppliers have billed you for the goods received' },
   { screen: 'supplierPayments', path: '/staff/retail/supplier-payments', label: 'Supplier payments', hint: 'Money paid to suppliers, and what each payment cleared' },
   { screen: 'supplierPayables', path: '/staff/retail/supplier-payables', label: 'What you owe suppliers', hint: 'Owed to each supplier, by how late it is' },
+  { screen: 'landedCosts', path: '/staff/retail/landed-costs', label: 'Landed costs', hint: 'Freight, duty and clearing, added to what the goods cost' },
+  { screen: 'supplierCredits', path: '/staff/retail/supplier-credits', label: 'Supplier credit notes', hint: 'Goods sent back to a supplier, or money taken off an invoice' },
   { screen: 'branchRoles', path: '/staff/retail/branch-roles', label: 'Branch roles', hint: 'Which branches are stores and which are shops' },
   { screen: 'settings', path: '/staff/retail/settings', label: 'Retail settings', hint: 'Shop or trade, and the features you use' },
 ];

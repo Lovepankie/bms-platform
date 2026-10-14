@@ -21,6 +21,7 @@ import com.rincoltech.bms.retail.purchasing.internal.ReceiptsApi.ReceiptLine;
 import com.rincoltech.bms.retail.purchasing.internal.ReceiptsApi.ReceiptLineRequest;
 import com.rincoltech.bms.retail.purchasing.internal.ReceiptsApi.ReceiptList;
 import com.rincoltech.bms.retail.purchasing.internal.ReceiptsApi.ReceiptRequest;
+import com.rincoltech.bms.retail.purchasing.internal.ReceiptsApi.ReleaseRequest;
 import com.rincoltech.bms.retail.purchasing.internal.ReceiptsApi.VoidRequest;
 import com.rincoltech.bms.retail.purchasing.internal.ReceiptsRepository.LineRow;
 import com.rincoltech.bms.retail.purchasing.internal.ReceiptsRepository.NewLine;
@@ -71,6 +72,7 @@ class ReceiptsService {
     static final int MAX_LIMIT = 200;
 
     private final ReceiptsRepository repo;
+    private final LandedCostRepository landed;
     private final OrdersRepository orderRepo;
     private final OrdersService orders;
     private final PurchasingRepository suppliers;
@@ -89,6 +91,7 @@ class ReceiptsService {
 
     ReceiptsService(
             ReceiptsRepository repo,
+            LandedCostRepository landed,
             OrdersRepository orderRepo,
             OrdersService orders,
             PurchasingRepository suppliers,
@@ -105,6 +108,7 @@ class ReceiptsService {
             AuditLog audit,
             TenantSettings tenantSettings) {
         this.repo = repo;
+        this.landed = landed;
         this.orderRepo = orderRepo;
         this.orders = orders;
         this.suppliers = suppliers;
@@ -316,6 +320,9 @@ class ReceiptsService {
                 entry,
                 by));
         newLines.forEach(l -> repo.insertLine(id, l));
+        if (Boolean.TRUE.equals(r.holdForCosting())) {
+            repo.hold(id, by);
+        }
         if (order != null) {
             orders.refreshStatus(order.id());
         }
@@ -327,6 +334,9 @@ class ReceiptsService {
         }
         after.put("total_minor", total);
         after.put("lines", newLines.size());
+        if (Boolean.TRUE.equals(r.holdForCosting())) {
+            after.put("held_for_costing", true);
+        }
         audit.record(AuditLog.Entry.created("retail.goods_receipt.created", RECEIPT, id, branch, after));
         return view(repo.find(id, false).orElseThrow(), true);
     }
@@ -446,6 +456,13 @@ class ReceiptsService {
                     "Receipt billed",
                     "A supplier invoice bills this receipt. Void the invoice first.");
         }
+        if (landed.costed(id)) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "receipt_costed",
+                    "Receipt costed",
+                    "A landed cost has been added to this receipt. Void the landed cost first.");
+        }
         List<Recorded> moved = stock.bySource(RECEIPT, id);
         Map<List<UUID>, BigDecimal> net = new TreeMap<>(
                 Comparator.<List<UUID>, UUID>comparing(k -> k.get(0)).thenComparing(k -> k.get(1)));
@@ -498,6 +515,51 @@ class ReceiptsService {
                 r.branchId(),
                 Map.of("status", "posted"),
                 Map.of("status", "voided", "reason", reason, "receipt_no", r.receiptNo())));
+        return view(repo.find(id, false).orElseThrow(), true);
+    }
+
+    // ---- Hold ------------------------------------------------------------------------------
+
+    @Transactional
+    Outcome<Receipt> releaseHold(String key, UUID id, ReleaseRequest r) {
+        capabilities.require(RetailCapabilities.PURCHASING);
+        return idempotency.once(
+                key, "POST", RECEIPTS + "/" + id + "/release-hold", r, Receipt.class, () -> releaseNow(id, r));
+    }
+
+    /** Releases a receipt held as received and not costed without a landed cost, with a reason: no landed cost will come. Needs retail.payable.manage in the receipt's branch. */
+    private Receipt releaseNow(UUID id, ReleaseRequest request) {
+        Principal principal = CurrentPrincipal.require();
+        String reason = request.reason().trim();
+        if (reason.length() < OrdersService.MIN_REASON) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "reason", "invalid", "Give a reason of at least " + OrdersService.MIN_REASON + " characters.")));
+        }
+        // Lifting the hold is the administrator's, not the receiving clerk's, or the hold would stop nothing.
+        repo.find(id, false)
+                .filter(x -> principal.may(OrdersService.PAYABLE, x.branchId()))
+                .orElseThrow(ApiException::notFound);
+        // Under the receipt's lock, as a void and a landed cost take it, so the hold and the status cannot change
+        // meanwhile.
+        Row r = repo.find(id, true).orElseThrow(ApiException::notFound);
+        if (r.status().equals("voided")) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT, "receipt_voided", "Receipt voided", "This receipt has been voided already.");
+        }
+        if (repo.release(id, principal.userId(), "waived", reason, null) == 0) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "not_held",
+                    "Not held",
+                    "This receipt is not held as received and not costed.");
+        }
+        audit.record(new AuditLog.Entry(
+                "retail.goods_receipt.hold_released",
+                RECEIPT,
+                id,
+                r.branchId(),
+                Map.of("held_for_costing", true),
+                Map.of("held_for_costing", false, "reason", reason, "receipt_no", r.receiptNo())));
         return view(repo.find(id, false).orElseThrow(), true);
     }
 
@@ -561,8 +623,9 @@ class ReceiptsService {
         List<ReceiptLine> ls = null;
         if (detail) {
             boolean billed = CurrentPrincipal.require().may(OrdersService.PAYABLE, r.branchId());
+            boolean costs = CurrentPrincipal.require().may("retail.profit.read", r.branchId());
             ls = repo.lines(List.of(r.id())).getOrDefault(r.id(), List.of()).stream()
-                    .map(l -> line(l, billed))
+                    .map(l -> line(l, billed, costs))
                     .toList();
         }
         return new Receipt(
@@ -587,10 +650,11 @@ class ReceiptsService {
                 r.voidedOn(),
                 r.voidedBy(),
                 r.voidReason(),
+                r.held(),
                 r.version());
     }
 
-    private static ReceiptLine line(LineRow l, boolean billed) {
+    private static ReceiptLine line(LineRow l, boolean billed, boolean costs) {
         return new ReceiptLine(
                 l.id(),
                 l.lineNo(),
@@ -607,6 +671,7 @@ class ReceiptsService {
                 l.costMinor(),
                 l.sellMinor(),
                 l.lineTotalMinor(),
-                billed ? Quantities.format(l.billedQty()) : null);
+                billed ? Quantities.format(l.billedQty()) : null,
+                costs ? l.landedMinor() : null);
     }
 }

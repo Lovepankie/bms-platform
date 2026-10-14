@@ -173,6 +173,22 @@ export const icons = {
       <path d="M8 16v-4M12 16V8M16 16v-6" />
     </Svg>
   ),
+  // JUSTIFICATION-A3: two new icons for landed costs and supplier credit notes (issue #199); the home tiles read icons by screen name.
+  landedCosts: (
+    <Svg>
+      <path d="M2 16h13l2-6h3l2 3v3h-2" />
+      <path d="M5 16V8h8v8" />
+      <circle cx="7" cy="18" r="1.6" />
+      <circle cx="17" cy="18" r="1.6" />
+    </Svg>
+  ),
+  supplierCredits: (
+    <Svg>
+      <path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" />
+      <path d="M9 9h6" />
+      <path d="M9 13h6" />
+    </Svg>
+  ),
   customerAgeing: (
     <Svg>
       <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />

@@ -104,6 +104,22 @@ export type SupplierPayables = S['RetailSupplierPayables'];
 export type SupplierPayablesRow = S['RetailSupplierPayablesRow'];
 export type PurchasingSettings = S['RetailPurchasingSettings'];
 export type PurchasingSettingsUpdate = S['RetailPurchasingSettingsUpdate'];
+// JUSTIFICATION-A3: landed costs and supplier credit notes are new API surface (issue #199); nothing existing carries these types.
+/** Landed cost (issue #199): freight, duty and the like of one payee, spread over received lines. The payee's invoice is a supplier bill of kind `landed_cost`. */
+export type LandedCost = S['RetailLandedCost'];
+export type LandedCostCharge = S['RetailLandedCostCharge'];
+export type LandedCostChargeRequest = S['RetailLandedCostChargeRequest'];
+export type LandedCostLine = S['RetailLandedCostLine'];
+export type LandedCostLineRequest = S['RetailLandedCostLineRequest'];
+export type LandedCostRequest = S['RetailLandedCostRequest'];
+export type LandedCostPreview = S['RetailLandedCostPreview'];
+export type LandedCostPage = S['RetailLandedCostList'];
+/** Supplier credit notes (issue #199): goods sent back or a price adjustment, against an invoice that stands. */
+export type SupplierCredit = S['RetailSupplierCredit'];
+export type SupplierCreditLine = S['RetailSupplierCreditLine'];
+export type SupplierCreditRequest = S['RetailSupplierCreditRequest'];
+export type SupplierCreditLineRequest = S['RetailSupplierCreditLineRequest'];
+export type SupplierCreditPage = S['RetailSupplierCreditList'];
 export type Supplier = S['RetailSupplier'];
 export type SaleRequest = S['RetailSaleRequest'];
 export type Sale = S['RetailSale'];
@@ -367,6 +383,18 @@ export interface RetailApi {
   purchasingSettings(): Promise<PurchasingSettings>;
   /** The tolerances replaced under If-Match with the settings version; an omitted field is unchanged (core.settings.manage). */
   changePurchasingSettings(version: number, body: PurchasingSettingsUpdate): Promise<PurchasingSettings>;
+  /** A receipt held as received and not costed, released without a landed cost, with a reason (retail.purchase.create). */
+  releaseReceiptHold(id: string, reason: string, idempotencyKey: string): Promise<GoodsReceipt>;
+  listLandedCosts(q: { query?: string; status?: string; supplierId?: string; receiptId?: string; cursor?: string; signal?: AbortSignal }): Promise<LandedCostPage>;
+  getLandedCost(id: string): Promise<LandedCost>;
+  createLandedCost(body: LandedCostRequest, idempotencyKey: string): Promise<LandedCost>;
+  /** How the charges would be spread and what that would do, without recording anything; same body as createLandedCost. */
+  previewLandedCost(body: LandedCostRequest): Promise<LandedCostPreview>;
+  voidLandedCost(id: string, reason: string, idempotencyKey: string): Promise<LandedCost>;
+  listSupplierCredits(q: { query?: string; status?: string; supplierId?: string; billId?: string; cursor?: string; signal?: AbortSignal }): Promise<SupplierCreditPage>;
+  getSupplierCredit(id: string): Promise<SupplierCredit>;
+  createSupplierCredit(body: SupplierCreditRequest, idempotencyKey: string): Promise<SupplierCredit>;
+  voidSupplierCredit(id: string, reason: string, idempotencyKey: string): Promise<SupplierCredit>;
   /** The credit note of a return as a stored PDF (retail.document.issue), rendered once; a voided return is served marked void. */
   renderCreditNote(returnId: string): Promise<CreditNoteDocument>;
   updateCustomer(id: string, version: number, body: { name?: string; contact?: string }): Promise<Customer>;
@@ -908,6 +936,46 @@ const realRetail: RetailApi = {
 
   async changePurchasingSettings(version, body) {
     return unwrap(await api.PUT('/api/v1/retail/purchasing/settings', { params: { header: { 'If-Match': `"${version}"` } }, body }));
+  },
+
+  async releaseReceiptHold(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/goods-receipts/{receipt_id}/release-hold', { params: { path: { receipt_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  async listLandedCosts({ query, status, supplierId, receiptId, cursor, signal }) {
+    return unwrap(await api.GET('/api/v1/retail/landed-costs', { params: { query: { q: query || undefined, status: status || undefined, supplier_id: supplierId, receipt_id: receiptId, limit: 50, cursor } }, signal }));
+  },
+
+  async getLandedCost(id) {
+    return unwrap(await api.GET('/api/v1/retail/landed-costs/{landed_cost_id}', { params: { path: { landed_cost_id: id } } }));
+  },
+
+  async createLandedCost(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/landed-costs', { params: { header: { 'Idempotency-Key': key } }, body }));
+  },
+
+  async previewLandedCost(body) {
+    return unwrap(await api.POST('/api/v1/retail/landed-costs/preview', { body }));
+  },
+
+  async voidLandedCost(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/landed-costs/{landed_cost_id}/void', { params: { path: { landed_cost_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  async listSupplierCredits({ query, status, supplierId, billId, cursor, signal }) {
+    return unwrap(await api.GET('/api/v1/retail/supplier-credits', { params: { query: { q: query || undefined, status: status || undefined, supplier_id: supplierId, bill_id: billId, limit: 50, cursor } }, signal }));
+  },
+
+  async getSupplierCredit(id) {
+    return unwrap(await api.GET('/api/v1/retail/supplier-credits/{credit_id}', { params: { path: { credit_id: id } } }));
+  },
+
+  async createSupplierCredit(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/supplier-credits', { params: { header: { 'Idempotency-Key': key } }, body }));
+  },
+
+  async voidSupplierCredit(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/supplier-credits/{credit_id}/void', { params: { path: { credit_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
   },
 
   async renderCreditNote(returnId) {

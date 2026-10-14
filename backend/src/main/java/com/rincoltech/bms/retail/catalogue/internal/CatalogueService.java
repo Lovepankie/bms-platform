@@ -519,6 +519,28 @@ class CatalogueService {
         audit.record(new AuditLog.Entry("retail.product.price_changed", PRODUCT, locked.id(), null, was, now));
     }
 
+    /**
+     * A history row that changes nothing (the cost and the sell price are the same on both sides) to say why a landed cost or a
+     * supplier credit left the cost alone (ADR-033, issue #199). The product row is not touched, so its version stays and a
+     * person editing it meanwhile is not told it changed; there is no price audit row, as no price changed.
+     */
+    void noteCostUnchanged(Product locked, UUID sourceId, String reason) {
+        repo.insertHistory(
+                new PriceChange(
+                        UUID.randomUUID(),
+                        null,
+                        CurrentPrincipal.require().userId(),
+                        "purchase",
+                        sourceId,
+                        locked.costMinor(),
+                        locked.costMinor(),
+                        locked.sellMinor(),
+                        locked.sellMinor(),
+                        locked.currency(),
+                        reason),
+                locked.id());
+    }
+
     @Transactional(readOnly = true)
     PriceHistory history(UUID id) {
         repo.find(id).orElseThrow(ApiException::notFound);

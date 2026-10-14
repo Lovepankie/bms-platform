@@ -614,6 +614,36 @@ need `core.settings.manage`. Each page has a breadcrumb and a live search where 
   mock (`retail-purchasing-mock.ts`) holds the server's rules in small for development and tests.
 - Follow-up, marked: the purchase order as a PDF to send to the supplier. It reuses the ADR-034 renderer once the documents slice (#197) is on main.
 
+## Landed costs and supplier credit notes (#199, ADR-033)
+
+Both are part of the `purchasing` capability (`SCREEN_CAPABILITY`) and need `retail.payable.manage` (administrators), in the branch of the goods;
+there is no new permission. The tiles Landed costs and Supplier credit notes sit beside the other purchasing tiles, and each route has a crumb.
+
+- **Landed costs** (`/staff/retail/landed-costs`): live search by our number, the payee's invoice number or the payee, a status filter, and for each
+  row the total and what is paid and still owed on the payee's invoice. **A landed cost** (`/landed-costs/$landedCostId`, crumb "Landed cost") shows
+  the facts, the charges, a link to the payee's invoice and the allocation table: per line the received line, its share of the charges and, for
+  `retail.profit.read`, the part added to the stock still on hand, the part counted against what is already sold or moved, and what happened to the
+  cost of one (or why it did not change). The share and the basis are sent only with `retail.profit.read`; without it the page says amounts are shown
+  to people who can read costs and still shows the total. It voids with a reason; the server's refusals (paid invoice, stock moved, credit note
+  standing) are shown in plain words.
+- **New landed cost** (`/landed-costs/new`, optionally `?receipt=` from a delivery): choose who is owed (a supplier row, the forwarder), their invoice
+  number and dates, add charges (kind, optional description, amount) with a running total beside the invoice total as printed, choose how to spread
+  them (by value, quantity, weight, or amounts typed, each in one sentence), find posted deliveries and tick their lines (all ticked at first). A
+  weight box shows only for the weight method, a share box only for typed amounts, with a live check that the shares add up. **Review** asks the
+  server to work out the shares (`POST /retail/landed-costs/preview`) and shows them before **Save**. The draft survives a reload and one
+  `Idempotency-Key` belongs to one attempt, like the other forms.
+- **Supplier credit notes** (`/supplier-credits`, `/supplier-credits/$creditId`) list and show credit notes and void them with a reason. **New credit
+  note** (`/supplier-credits/new`, optionally `?bill=`) finds a standing goods invoice, asks whether goods are sent back or a price is adjusted, and per
+  invoice line takes a quantity (shown against what the invoice billed and what earlier credit notes took, with the credit for one starting at the
+  billed price) or an amount, then the supplier's credit note number, date, reason and the total as printed. The checks on the page only repeat the
+  server's; the server decides.
+- **Other screens.** The supplier invoice shows what credit notes took off and what is still owed, a Credit note button for a standing goods invoice,
+  and for the invoice of a landed cost a label, a link to the landed cost and no void (the landed cost is voided instead). Goods received shows a
+  "Held, not costed" badge, the landed amount of each line, an Add landed cost button and a reason panel to release a hold (administrators). The
+  receive form has a "Hold until the landed cost is in" box. Retail settings has the switch that stops goods on a held delivery being moved out.
+- The tour `capability-purchasing` (now version 2) gains the two tiles, and the Help page tour `page-landed-costs` explains the landed costs page.
+  The mock (`retail-purchasing-mock.ts`) holds the same rules in small, with a second fabricated supplier row for the forwarder.
+
 ## Left to do
 
 - Void a sale and pay a credit sale screens; see `docs/specs/retail-ui-parity.md`.

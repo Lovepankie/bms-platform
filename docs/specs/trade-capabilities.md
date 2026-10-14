@@ -2,7 +2,7 @@
 
 **Status:** Proposed (design only, issue #190) · **Decision record:** ADR-033 · **Module:** `retail`
 
-Slices 1 (branch roles), 3 (two-step transfers), 4 (units of measure, section 4), 5 (price lists, section 3), 6 (customer accounts, section 5) 7 (customer returns, section 5.3) and 9 (optional purchasing, section 7, without the supplier credit note and landed cost) are built; the others are design only. This page designs how the retail module serves a wholesaler
+Slices 1 (branch roles), 3 (two-step transfers), 4 (units of measure, section 4), 5 (price lists, section 3), 6 (customer accounts, section 5) 7 (customer returns, section 5.3) 9 (optional purchasing, section 7) and 10 (landed cost and the supplier credit note, sections 7.2 and 7.5) are built; the others are design only. This page designs how the retail module serves a wholesaler
 without a second module and without changing anything for a plain shop. Migration numbers are not
 given here: they are assigned at merge time (AGENTS.md). Every amount and name in this page is
 fabricated.
@@ -454,12 +454,15 @@ line with the remainder on the line with the largest value, so the parts add exa
   still the product's **latest cost-setting event**; if a newer receipt, restock or manual edit has
   since set the cost, the allocation posts to inventory and records a price history row noting it
   was not applied, and never overwrites the newer cost.
-- **Known simplification.** Stock movement snapshots are immutable (FR-RET-03), so a charge that
+- **Known simplification (superseded by section 7.5).** Stock movement snapshots are immutable (FR-RET-03), so a charge that
   arrives after some of the goods were sold or transferred is added to inventory in full, and the
   cost of those earlier sales is not restated. The difference sits in the revaluation difference
   that valuation already reports (ADR-020 decision 8). The mitigation is procedural and built in:
   a GRN can be held `received, not costed` and the tenant setting `purchasing.require_costing_before_sale`
   (default off) refuses transfers out of it until it is costed.
+  **As built (issue #199):** the share of the charge for goods already sold, used or moved is posted to cost of goods sold, not
+  left in the revaluation difference; the hold and the setting are built too; the rounding rule is the largest remainder, not half
+  up per line; see section 7.5.
 
 ### 7.3 Postings
 
@@ -468,9 +471,9 @@ See section 12.3. Plain restock postings do not change.
 ### 7.4 As built (issue #198, slice 9, migration V47)
 
 Built: purchase order, goods received, supplier invoice, supplier payment and the supplier payables report. Not built, and
-left to the slices named: the supplier credit note (the `retail_supplier_credits` of section 10), landed cost allocation (issue
-#199; it attaches to the receipt lines and to a bill of kind `landed_cost`, a value the bill table's check already allows, so
-that slice adds a table and no ALTER), and a purchase order PDF (a marked follow-up: it reuses the ADR-034 renderer once the
+left to the slices named: the supplier credit note (the `retail_supplier_credits` of section 10) and landed cost allocation (both
+built in issue #199, section 7.5; landed cost attaches to a bill of kind `landed_cost`, a value the bill table's check already
+allowed), and a purchase order PDF (a marked follow-up: it reuses the ADR-034 renderer once the
 documents slice is on main). The choices the design left open:
 
 1. **Order states and the approval point.** An order is `draft`, `sent`, `partly_received`, `received` or `cancelled`; the
@@ -557,13 +560,88 @@ documents slice is on main). The choices the design left open:
     the over-receipt tolerance (422 `receipt_value_exceeds_order`: a price above the order's is as much an over-receipt as a
     quantity above it). So the goods received not invoiced that a delivery can raise is bounded by what a second person
     authorised, order by order. With no threshold set neither limit applies.
-12. **Not yet supported.** Returns of goods to a supplier and the supplier credit note are the next slice (#199). A wrong
-    delivery is undone by voiding it (as a whole, while no invoice bills it and none of it has been sold or moved), and a wrong
-    price by an invoice with a reason.
+12. **Returns of goods to a supplier and the supplier credit note** were the next slice, and are built in issue #199 (section 7.5).
+    Until then a wrong delivery is undone by voiding it (as a whole, while no invoice bills it and none of it has been sold or
+    moved), and a wrong price by an invoice with a reason; both still work.
 13. **The payables report without the capability.** Section 8 says that, for a tenant without `purchasing`, credit restocks
     are shown from trade creditors by supplier. That view is deferred: the report, like every route of this slice, is 404
     `capability_not_enabled` while the capability is off, and a tenant that has not switched it on has no payment route for a
     credit restock either.
+
+### 7.5 As built (issue #199, slice 10, migration V48)
+
+Built: landed cost allocation, the supplier credit note (goods sent back and price adjustments), the hold on an uncosted receipt and
+its setting. The payables report of 7.4 item 7 already carried the ageing; a landed cost invoice and a credit note flow into it through
+the bill. The choices the design left open, and where the build differs from section 7.2:
+
+1. **The document.** `retail_landed_costs` (numbered `LC` + the branch code of its first received line + six digits per tenant and
+   branch) with its charges (`freight`, `duty`, `clearing`, `insurance`, `other`, each an amount and an optional description) and its
+   allocation (`retail_landed_cost_lines`, one row per received line). The payee (the forwarder, carrier or agent) is a supplier row; its
+   invoice is a `retail_supplier_bills` row of kind `landed_cost` with the payee's own invoice number (unique per supplier among
+   invoices that stand), created in the same transaction, so payments, reversals, open items and ageing need no change; its cleared
+   amount is the whole total and its variance zero. The typed invoice total must equal the charges (422 `landed_total_mismatch`).
+   The charges may name the goods invoice they belong to (`goods_bill_id`), and then every line must be billed by it. A landed cost is
+   never edited: a mistake is voided and recorded again, so there is no `If-Match` on it.
+2. **Spread.** Four methods: `value` (the default; the value the receipt line's stock movement carried), `quantity` (base units),
+   `weight` (a weight typed per line, any one unit) and `manual` (amounts typed per line that must add to the total, 422
+   `allocation_total_mismatch`). The shares are exact integers: each line takes the floor of its exact proportion and the units left
+   over go one each to the largest fractional remainders, ties to the larger basis and then to the earlier line (receipt number, then line
+   number; the lines are sorted first so the order they were typed in never matters). This replaces "half up per line with the
+   remainder on the largest line", which can make the parts exceed the total. A line with a zero basis takes nothing; when every basis
+   is zero a value spread is refused (422 `allocation_basis_zero`). A deferred database trigger refuses a document whose charges or
+   allocated lines do not add to its total. A line that has goods sent back to the supplier cannot be costed (422 `line_returned`).
+3. **Goods already sold, used or in transit.** Stock is not tracked by lot, so the units of a receipt line still on hand are read first in, first
+   out over every branch together: the balances less the stock that came in after the receipt (positive movements that are not undone, not a
+   transfer in and not a customer return, less what credit notes sent back out of them), up to the quantity received less what was sent back.
+   The product's cost is one figure and the valuation is balance times cost, so the ledger follows the valuation: the cost change per unit (the
+   charge over the quantity received, rounded down) times those units is debited to the inventory of the branches that hold the product, in
+   proportion to what each holds, and the rest of the charge to cost of goods sold in the receiving branch, dated the day of the charge. After a
+   charge each branch's valuation equals its inventory account; a unit moved to another branch takes its share there; a charge under one minor
+   unit a unit is expensed because it cannot move the cost; when a newer cost event stops the cost moving, the share for the units on hand goes to
+   inventory all the same and the difference is left to the revaluation difference. The credit is trade creditors for the whole total in the
+   document's branch (the branch of its first line) with the payee as the subledger, and inter-branch clearing for the other branches' parts, as a
+   supplier invoice does. The earlier sales' snapshots are not restated. The part for goods already sold is a cost of sales in the daily profit
+   report on the day of the charge (and a price credit's part is taken off on the day of the credit); the margin, sales analysis, dashboard and
+   evaluation reports analyse what was sold at the cost it was sold at and do not change.
+4. **Cost.** The product's cost per base unit rises by the line's share over the received quantity, rounded down, only when no
+   purchase movement that stands and no change of the cost in the price history (other than a landed cost or a credit note of ours) is newer
+   than the receipt line's movement; else a history row (source `purchase`, the same cost on both sides, the reason says so and names no amount,
+   the product row untouched) notes it was not applied. The allocation row keeps the cost before and after and why. Voiding takes back the
+   document's own change per unit, in any order of voids, unless a different cost event (a later receipt or restock, a manual change) has set the
+   cost since; then it is left and the history says so.
+5. **Void.** A landed cost is voided as a whole by reversing each entry and voiding its invoice, once, with a reason; refused while a
+   payment stands against the invoice (409 `bill_paid`), while a standing credit note touches one of its lines (409
+   `landed_cost_credited`), and when the goods it was added to have been sold or moved since (422 `landed_cost_stock_moved`). A receipt
+   with a landed cost cannot be voided (409 `receipt_costed`), and the invoice of a landed cost cannot be voided as an invoice (409
+   `bill_is_landed_cost`).
+6. **Supplier credit note.** `retail_supplier_credits`, numbered `SC`, against one standing supplier invoice for goods, with the
+   supplier's own credit note number (unique per supplier among those that stand). Kind `goods`: per invoice line a quantity in the unit
+   the line was received in, at most what the invoice billed and no credit note has returned; the credit per unit defaults to the billed
+   price and may differ; the units go out as `return_to_supplier` movements (negative, refused when the branch does not have them, 422
+   `insufficient_stock`); the credit debits trade creditors in the invoice's branch and credits inventory at the carrying cost of the
+   units (the lot's stocked value plus landed cost less price credits, in proportion, the last units taking the remainder), the
+   difference to purchase price variance. Kind `price`: an amount per invoice line, at most what is left of the line; the part that
+   undoes the line's own price variance goes back to purchase price variance, the rest is spread as a landed cost in reverse (inventory
+   for units on hand, cost of goods sold for the rest, the cost per unit falling under the same guard). A credit note can never take an
+   invoice below zero: the total may not exceed what the invoice leaves to pay (422 `credit_exceeds_open`), and it is applied to its
+   invoice in full when recorded, so the "open credit notes" of section 8 are zero by construction; spending an unapplied credit on a later
+   invoice and a cash refund from the supplier are deferred. A bill with a credit note standing cannot be voided (409 `bill_credited`).
+   Voiding a credit note reverses its entries and puts the goods back; a price credit is refused once the goods it credited moved (422
+   `credit_stock_moved`).
+7. **The hold and the setting.** A receipt can be received with `hold_for_costing` (chosen when the delivery is received; there is no route to
+   hold it later); it then shows as held until a landed cost allocates to it (released automatically; voiding that landed cost holds it again
+   when no other stands) or an administrator releases it with a reason (`POST /retail/goods-receipts/{id}/release-hold`, `retail.payable.manage`
+   in the receipt's branch, under the receipt's lock, not on a voided receipt). With `require_costing_before_sale` on (a column of the purchasing
+   settings row, `core.settings.manage`, `If-Match`, audited), a transfer out of the receiving branch may not take the quantity a held receipt
+   received: the branch can move out only what it holds beyond it (422 `receipt_not_costed`), so other deliveries of the same product still move.
+   Sales are not blocked: stores do not sell, and a branch that does both keeps selling.
+8. **Permissions.** No new permission: `retail.payable.manage` (administrators) in the branch of every received line and of the invoice,
+   consulted only while `purchasing` is on. The cost columns of a line (the parts for inventory and cost of goods sold, the cost before
+   and after, the landed amount on a receipt line) are present only with `retail.profit.read` in the line's branch. No maker-checker: the
+   spec asks for one only on large orders.
+9. **Expand only, and the lock is honest.** Eight tables, one column on `retail_purchasing_settings` and the replacement of the two
+   `retail_stock_movements` checks by looser ones added `NOT VALID` (so no scan), behind `lock_timeout` of five seconds and as the last
+   statement of the file; no permission and no chart account. Validating the two checks is left to a later migration and cannot fail.
 
 ## 8. Reports
 
@@ -575,7 +653,7 @@ All reports are read only, respect branch scope per row, and omit cost, value an
 | Stock by store and shop | `GET /retail/reports/stock-by-location`: per product, the balance in each branch the caller may read, grouped by role (stores, then shops), a subtotal per role and a **combined total**; stock **in transit** (section 9.3) as its own column so the combined total neither double counts nor loses it. Extends `/retail/stock/all-branches`, which stays |
 | Combined total | The sum across all readable branches, quantity and, with profit read, value at cost; the revaluation difference is shown as in valuation |
 | Transfers in flight | `GET /retail/reports/transfers-in-flight` (needs `transfer_receipt`): dispatched and not received, with age, source, destination, lines. Empty by construction when transfers are atomic |
-| Supplier payables | `GET /retail/reports/supplier-payables` (needs `purchasing`): per supplier, open bills by days past due (same buckets as customer ageing), unbilled receipts (goods received not invoiced) and open credit notes. For tenants without `purchasing`, credit restocks are shown from trade creditors by supplier (deferred, section 7.4 item 13) |
+| Supplier payables | `GET /retail/reports/supplier-payables` (needs `purchasing`): per supplier, open bills by days past due (same buckets as customer ageing; a landed cost invoice is a bill, and a credit note has already come off its invoice) and unbilled receipts (goods received not invoiced). Open credit notes are zero by construction (7.5 item 6). For tenants without `purchasing`, credit restocks are shown from trade creditors by supplier (deferred, section 7.4 item 13) |
 | Customer ageing | Section 5.2 |
 
 ## 9. Workflow for the wholesaler
@@ -671,11 +749,13 @@ where noted, with the `reject_mutation` trigger. Names are provisional.
 | `retail_purchase_orders`, `_lines` | supplier, branch, status, lines with ordered qty, unit, cost; `received_qty` is derived from GRN lines, not stored | `(tenant_id, supplier_id, status)` |
 | `retail_goods_receipts`, `_lines` | branch, optional order, supplier; lines with received qty, unit, cost, `landed_unit_cost_minor` set by allocation; append-only; the movement carries `source_type = retail.goods_receipt` | `(tenant_id, supplier_id, received_on)` |
 | `retail_supplier_bills`, `_allocations` | supplier, number, date, due date, amount, `kind` (`goods`, `landed_cost`), allocations to GRNs | unique `(tenant_id, supplier_id, number)` ; `(tenant_id, supplier_id, due_date)` for ageing |
-| `retail_supplier_credits` | supplier, kind (`goods`, `price`), lines, amount | `(tenant_id, supplier_id)` |
+| `retail_supplier_credits`, `_lines`, `_entries` | Built in V48: the invoice it is against, the supplier's credit note number, kind (`goods`, `price`), total, reason; lines name the invoice line and carry the credit, the parts for inventory, cost of goods sold and variance, and the cost before and after; one entry per branch | `(tenant_id, supplier_id)`; `(tenant_id, bill_id)` |
+| `retail_landed_costs`, `_charges`, `_lines`, `_entries` | Built in V48 (section 7.5): the payee, its invoice (`bill_id`, a bill of kind `landed_cost`), method, total, charges, and one allocation row per received line; a deferred trigger checks the parts add to the total | `(tenant_id, bill_id)` unique |
+| `retail_receipt_holds` | Built in V48: a receipt held as received and not costed until a landed cost or a reason releases it | partial index on open holds |
 | `retail_supplier_payments` | supplier, method, amount, bill allocations, journal entry | `(tenant_id, supplier_id, paid_on)` |
 | `retail_transfers` (change) | V22 is not just extended. It (a) limits `status` to `completed` or `voided`, (b) requires `out_entry_id` and `in_entry_id` to be both null or both set, (c) ties `voided_at`, `voided_by` and `void_reason` to the status `voided` in two further checks, and (d) has a guard trigger that lets an UPDATE change only the void columns once. Migration V38 **replaces** all five: (a) `status` in (`completed`, `in_transit`, `received`, `cancelled`, `voided`); (b) `completed` keeps both-or-neither, `in_transit` has the source entry only (none at zero cost), `cancelled` has no destination entry, `received` has the source entry unless the cost is zero (its destination entry is null only when nothing of value arrived), `voided` has no rule because it follows either; (c) the void columns belong to `voided` and `cancelled`, and `received_at` and `received_by` are set together, only on `received` or a received transfer later `voided`; (d) the guard allows exactly `in_transit` to `received` (sets `in_entry_id`, `shortage_entry_id`, `received_at`, `received_by`, once), `in_transit` to `cancelled` (void-style columns once), and `completed` or `received` to `voided` as before, and refuses every other change. Added columns: `received_at`, `received_by`, `shortage_entry_id`; line `received_qty` (set once while in transit, so the lines' append-only trigger becomes a guard that allows only that). Each new check is added `NOT VALID`, validated and the old one dropped last; the transfer table is small so this is one migration. Existing rows are all `completed` or `voided` and satisfy every new rule | partial `(tenant_id, created_at desc, id desc) where status = 'in_transit'` |
 
-Stock movement kinds gain `return_to_supplier` (negative). `retail_stock_movements` is the largest
+Stock movement kinds gain `return_to_supplier` (negative; built in V48). `retail_stock_movements` is the largest
 table and its `kind` and sign checks (V11) must be **replaced**, so the migration adds the new
 constraints `NOT VALID` (a metadata change that takes no long lock), and a separate, later
 migration runs `VALIDATE CONSTRAINT`, which scans without blocking writes; the old constraints are
@@ -710,8 +790,10 @@ Branch-bound routes check scope per ADR-017. Full catalogue goes in SDD 7.11.23.
 | GET | `/retail/reports/customer-ageing` | `retail.sale.read` | `customer_accounts` |
 | POST (M), GET | `/retail/sales/{id}/documents`, `/retail/documents/{id}` | `retail.document.issue` | `documents` |
 | POST, GET, PATCH | `/retail/quotations`, `/retail/quotations/{id}/convert` | `retail.document.issue`; convert needs `retail.sale.create` | `documents` |
-| POST (M), GET | `/retail/purchase-orders`, `/retail/goods-receipts`, `/retail/supplier-bills`, `/retail/supplier-credits`, `/retail/supplier-payments` | `retail.purchase.create` (orders and receipts), `retail.payable.manage` (bills, credits, payments) | `purchasing` (built, issue #198, without the supplier credits; also the order's `PUT`, `send` and `cancel`, the receipt's and the bill's `void`, the payment's `reverse`, `POST /retail/supplier-bills/match`, `GET /retail/suppliers/{id}/unbilled-receipts` and `.../open-items`, and `GET`, `PUT /retail/purchasing/settings`; section 7.4) |
-| POST (M) | `/retail/supplier-bills/{id}/landed-cost` | `retail.payable.manage` | `purchasing` |
+| POST (M), GET | `/retail/purchase-orders`, `/retail/goods-receipts`, `/retail/supplier-bills`, `/retail/supplier-credits`, `/retail/supplier-payments` | `retail.purchase.create` (orders and receipts), `retail.payable.manage` (bills, credits, payments) | `purchasing` (built, issue #198; the supplier credits are built in issue #199 on their own route; also the order's `PUT`, `send` and `cancel`, the receipt's and the bill's `void`, the payment's `reverse`, `POST /retail/supplier-bills/match`, `GET /retail/suppliers/{id}/unbilled-receipts` and `.../open-items`, and `GET`, `PUT /retail/purchasing/settings`; section 7.4) |
+| POST (M), GET | `/retail/landed-costs`, `/retail/landed-costs/{id}`, `/retail/landed-costs/{id}/void`, `POST /retail/landed-costs/preview` | `retail.payable.manage` | `purchasing` (built, issue #199, as its own route and not under a bill: the payee's invoice is created with it; section 7.5) |
+| POST (M), GET | `/retail/supplier-credits`, `/retail/supplier-credits/{id}`, `/retail/supplier-credits/{id}/void` | `retail.payable.manage` | `purchasing` (built, issue #199) |
+| POST (M) | `/retail/goods-receipts/{id}/release-hold` | `retail.purchase.create` | `purchasing` (built, issue #199) |
 | POST (M) | `/retail/transfers/{id}/receive`, `/retail/transfers/{id}/cancel` | `retail.stock.transfer` | `transfer_receipt` |
 | GET | `/retail/reports/stock-by-location`, `/retail/reports/transfers-in-flight`, `/retail/reports/supplier-payables` | `retail.stock.read` (payables: `retail.payable.manage`) | as stated in section 8 |
 
@@ -750,9 +832,9 @@ existing in entry at receipt; a shortage at receipt debits `stock_shrinkage` and
 |---|---|---|---|
 | Goods received, per branch | `inventory`, quantities at the line costs | `goods_received_not_invoiced` | `retail.goods_receipt:<id>` |
 | Supplier invoice for goods | `goods_received_not_invoiced`, the receipts it clears; `purchase_price_variance` for a difference | `trade_creditors` (supplier as subledger), the bill amount | `retail.supplier_bill:<id>` |
-| Landed cost allocation | `inventory`, the allocated amount | `trade_creditors` (the carrier, subledger) | `retail.landed_cost:<id>` |
-| Supplier credit, goods returned | `trade_creditors` | `inventory` at the cost returned; any remainder to `purchase_price_variance` | `retail.supplier_credit:<id>` |
-| Supplier credit, price adjustment | `trade_creditors` | `inventory` for goods still on hand at the receipt, else `cost_of_goods_sold` | `retail.supplier_credit:<id>` |
+| Landed cost allocation | `inventory` for goods on hand; `cost_of_goods_sold` for goods already sold or moved (issue #199) | `trade_creditors` (the carrier, subledger), the whole total in the document's branch; `interbranch_clearing` in the others | `retail.landed_cost:<id>:<branch>` |
+| Supplier credit, goods returned | `trade_creditors` | `inventory` at the carrying cost of the units; any difference to `purchase_price_variance` (either side) | `retail.supplier_credit:<id>:<branch>` |
+| Supplier credit, price adjustment | `trade_creditors` | `purchase_price_variance` for the invoice line's own variance; `inventory` for goods still on hand at the receipt, else `cost_of_goods_sold` | `retail.supplier_credit:<id>:<branch>` |
 | Supplier payment | `trade_creditors` | `cash_on_hand`, `mobile_money` or `bank` | `retail.supplier_payment:<id>` |
 | Voids | The reversal of each entry (`reverses_entry_id` set) | | `<key>_void` |
 
@@ -789,7 +871,14 @@ Follows SDD 15.4.2 and adds, per slice:
 - **Purchasing.** GRN then bill clears the accrual to zero; partial receipts; bill with a price
   difference posts variance; landed cost allocation adds exactly (remainder rule); credit note
   cannot return more than on hand; every entry balances (deferred balance trigger); plain restock
-  results are identical on the old and new path.
+  results are identical on the old and new path. Landed cost and credit notes (issue #199): the
+  shares add to the total for random bases and the same lines in another order give the same
+  shares; goods sold or moved before the charge split it between inventory and cost of goods sold
+  by first in, first out; a newer receipt or a manual price change is never overwritten and the
+  history says so; the payee's invoice is paid and aged like any other; a void is refused while paid,
+  credited or once the goods moved, and puts the cost back only where it is still the document's; a
+  credit never exceeds what the invoice leaves to pay; the hold refuses a transfer only while the
+  setting is on; costs are absent without `retail.profit.read`.
 - **Returns.** A return cannot exceed sold less returned; stock and cost restore at the sale snapshot; `account` refund never takes the balance below zero; sales analysis nets returns; every entry balances.
 - **Transfers.** The replaced status check, entry-pair check and update guard allow exactly the transitions of section 10 and refuse the rest; cancel of a dispatched transfer restores the source and reverses its entry; in-transit stock is in neither balance and the in-flight report equals the open dispatches (never read from account 1190);
   shortage posts to shrinkage and clearing returns to zero; cancel restores the source.
@@ -826,7 +915,7 @@ Answers written after one pass looking for what breaks.
 | Changing a product's base unit once packs exist | Refused (422 `unit_in_use_by_pack`): factors are relative to the base, so changing it would silently rescale stock |
 | Open transfers when `transfer_receipt` is switched on or off | On: existing completed transfers are untouched. Off while any transfer is `in_transit`: refused until they are received or cancelled |
 | Switching `price_lists` off with open quotations | A quotation keeps its stored prices; conversion re-prices at the product price when lists are off, and says so |
-| Landed cost after goods were sold | Documented simplification (7.2) reported through the revaluation difference; mitigation setting `purchasing.require_costing_before_sale` |
+| Landed cost after goods were sold | Built (7.5): the share for goods on hand (first in, first out) goes to inventory and the share for goods sold or moved to cost of goods sold, earlier snapshots are not restated; the hold and the setting `require_costing_before_sale` are built |
 | Pack cost rounding | One visible account `purchase_rounding`, bounded by half a minor unit per base unit |
 | Migrations | Mostly additive, but not all: slice 3 replaces the transfer status check, entry-pair check and update guard, and slice 8 replaces the stock movement kind and sign checks. Replacements add the new constraint `NOT VALID` first and `VALIDATE` in the same migration for a small table (a later migration for the largest tables), and drop the old one last. Numbering is assigned at merge, and the migration order test (issue #172) is updated by each slice |
 
@@ -858,6 +947,11 @@ Answers written after one pass looking for what breaks.
   copied prices, ADR-020 context).
 - Transfers in flight need the two-step transfer; making it a capability keeps the atomic transfer,
   which plain shops rely on, as the default.
+- Landed cost build (issue #199): the design's half up per line with the remainder on the largest line can make the parts exceed the
+  total, so the shares use the largest remainder; the design's "added to inventory in full" for goods already sold overstates stock
+  and understates cost, so the share for gone goods goes to cost of goods sold; a credit note that is applied to its invoice in full
+  cannot leave an unapplied balance, so the design's "open credit notes" column is zero and spending an unapplied credit is deferred;
+  the carrying cost of a lot has one denominator, so a landed cost or price credit is refused on a line that has goods sent back.
 - Purchasing build (issue #198): the design said matching is reported and blocks nothing, but goods received not invoiced
   cannot clear more than was received, so a bill is refused for more quantity than is received and unbilled (prices and values
   still differ freely, posted as variance). Every writer of one supplier takes the supplier's row lock first, which is what
@@ -871,7 +965,7 @@ Answers written after one pass looking for what breaks.
    deferred list below is firm.
 2. **Rounding of pack costs on currencies with no minor subunit** is visible as a small expense;
    a finer cost scale would be a later change touching every cost column.
-3. **Landed cost timing** (7.2) is an accepted simplification.
+3. **Landed cost timing** (7.2): resolved in 7.5 by posting the share for goods already sold or moved to cost of goods sold; earlier sales' snapshots stay immutable.
 4. **Capability combinations** multiply test paths; the all-off contract test and one component test
    per combination bound it.
 5. **Documents creeping into the sale's critical path.** Mitigation: the after-step rule and a test
@@ -881,7 +975,7 @@ Answers written after one pass looking for what breaks.
 
 ## 16. Deliberately deferred
 
-Weighted average cost (pending ADR-021); tiered or mix-and-match quantity breaks across lines;
+Weighted average cost (pending ADR-021); spending an unapplied supplier credit on a later invoice and a cash refund from a supplier; tiered or mix-and-match quantity breaks across lines;
 promotions and coupons; tax and VAT handling on documents (the module has no tax model today);
 unallocated customer deposits; server-side PDFs (documents
 follow-up, issue #120); sending documents by message or email; serial or batch tracking and expiry;
@@ -906,4 +1000,4 @@ capabilities off changing nothing. Order matters: **slice 1 alone unblocks the w
 | 7 | #201 | Customer returns and sales credit notes (`returns`). **Built**, migration V45 | 6 |
 | 8 | #197 | Optional documents: invoice, delivery note, quotation, credit note PDF, numbered series. **Built**, migration V46 | 5, 6 and 7 optional |
 | 9 | #198 | Optional purchasing: purchase order, goods received, supplier invoice, supplier credit, supplier payment (also against credit restocks). **Built**, migration V47, without the supplier credit note (section 7.4) | 1, 4 |
-| 10 | #199 | Landed cost allocation and the supplier payables report | 9 |
+| 10 | #199 | Landed cost allocation, the supplier credit note and the supplier payables report. **Built**, migration V48 (the report was built with slice 9) | 9 |

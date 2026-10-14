@@ -21,8 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The two tolerances of the purchasing capability (ADR-033, issue #198) and the read-only view of the order approval
- * threshold. A tenant that never saved them reads zero for both, the strictest setting: a receipt cannot exceed its order
+ * The two tolerances of the purchasing capability (ADR-033, issue #198), the switch that holds an uncosted receipt back
+ * from transfers (issue #199) and the read-only view of the order approval threshold. A tenant that never saved them reads zero for both, the strictest setting: a receipt cannot exceed its order
  * and every difference on a supplier invoice needs a reason. Saved under {@code If-Match} on the version, audited with the
  * old and new values; changing them needs {@code core.settings.manage}.
  */
@@ -50,12 +50,19 @@ class PurchasingSettingsService {
                                     + " present only when one is set; while it is absent an order needs no second administrator")
             Long orderApprovalThresholdMinor,
 
+            @Schema(
+                    description =
+                            "Issue #199: while on, stock of a product on a goods received note that is held as received and not"
+                                    + " costed cannot be moved out of the receiving branch by a transfer. Off by default")
+            boolean requireCostingBeforeSale,
+
             int version) {}
 
     @Schema(name = "RetailPurchasingSettingsUpdate", description = "Omitted fields are unchanged")
     record Update(
             @Min(0) @Max(10000) Integer overReceiptBp,
-            @Min(0) @Max(10000) Integer billToleranceBp) {}
+            @Min(0) @Max(10000) Integer billToleranceBp,
+            Boolean requireCostingBeforeSale) {}
 
     private final JdbcClient jdbc;
     private final TenantSettings tenantSettings;
@@ -78,10 +85,13 @@ class PurchasingSettingsService {
 
     /** What is in force, for the receipt and bill rules; zero for both when nothing was saved. */
     Settings current() {
-        return jdbc.sql("SELECT over_receipt_bp, bill_tolerance_bp, version FROM retail_purchasing_settings")
-                .query((rs, n) -> new Settings(rs.getInt(1), rs.getInt(2), threshold(), rs.getInt(3)))
+        return jdbc.sql("""
+                        SELECT over_receipt_bp, bill_tolerance_bp, require_costing_before_sale, version
+                          FROM retail_purchasing_settings
+                        """)
+                .query((rs, n) -> new Settings(rs.getInt(1), rs.getInt(2), threshold(), rs.getBoolean(3), rs.getInt(4)))
                 .optional()
-                .orElseGet(() -> new Settings(0, 0, threshold(), 1));
+                .orElseGet(() -> new Settings(0, 0, threshold(), false, 1));
     }
 
     @Transactional(readOnly = true)
@@ -100,9 +110,10 @@ class PurchasingSettingsService {
                         ON CONFLICT DO NOTHING
                         """).update();
         Settings before = jdbc.sql("""
-                        SELECT over_receipt_bp, bill_tolerance_bp, version FROM retail_purchasing_settings FOR UPDATE
+                        SELECT over_receipt_bp, bill_tolerance_bp, require_costing_before_sale, version
+                          FROM retail_purchasing_settings FOR UPDATE
                         """)
-                .query((rs, n) -> new Settings(rs.getInt(1), rs.getInt(2), threshold(), rs.getInt(3)))
+                .query((rs, n) -> new Settings(rs.getInt(1), rs.getInt(2), threshold(), rs.getBoolean(3), rs.getInt(4)))
                 .single();
         // A tenant that never saved reads version 1, and its first save sends 1; the row it just created is version 1.
         if (before.version() != expected) {
@@ -110,6 +121,8 @@ class PurchasingSettingsService {
         }
         int over = u.overReceiptBp() == null ? before.overReceiptBp() : u.overReceiptBp();
         int tolerance = u.billToleranceBp() == null ? before.billToleranceBp() : u.billToleranceBp();
+        boolean costing =
+                u.requireCostingBeforeSale() == null ? before.requireCostingBeforeSale() : u.requireCostingBeforeSale();
         if (over < 0 || over > 10000 || tolerance < 0 || tolerance > 10000) {
             throw ApiException.validation(
                     List.of(new FieldProblem("tolerance", "invalid", "Tolerances are 0 to 10000 basis points.")));
@@ -124,14 +137,18 @@ class PurchasingSettingsService {
             was.put("bill_tolerance_bp", before.billToleranceBp());
             now.put("bill_tolerance_bp", tolerance);
         }
+        if (costing != before.requireCostingBeforeSale()) {
+            was.put("require_costing_before_sale", before.requireCostingBeforeSale());
+            now.put("require_costing_before_sale", costing);
+        }
         if (now.isEmpty()) {
             return before;
         }
         UUID by = CurrentPrincipal.require().userId();
         jdbc.sql("""
-                        UPDATE retail_purchasing_settings SET over_receipt_bp = ?, bill_tolerance_bp = ?, updated_at = now(),
-                               updated_by = ?, version = version + 1
-                        """).params(over, tolerance, by).update();
+                        UPDATE retail_purchasing_settings SET over_receipt_bp = ?, bill_tolerance_bp = ?,
+                               require_costing_before_sale = ?, updated_at = now(), updated_by = ?, version = version + 1
+                        """).params(over, tolerance, costing, by).update();
         audit.record(new AuditLog.Entry(
                 "retail.purchasing.settings_changed",
                 "retail.purchasing_settings",

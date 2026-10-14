@@ -94,6 +94,11 @@ export function ReceiveFormView({ form, blind, order, suppliers, branches, picke
       <input id="receive-ref" value={form.deliveryRef} maxLength={60} onChange={(e) => onChange({ ...form, deliveryRef: e.target.value })} />
       <label htmlFor="receive-note">Note (optional)</label>
       <input id="receive-note" value={form.note} maxLength={300} onChange={(e) => onChange({ ...form, note: e.target.value })} />
+      <label>
+        <input type="checkbox" checked={form.hold === true} onChange={(e) => onChange({ ...form, hold: e.target.checked })} />
+        <span>Hold until the landed cost is in</span>
+      </label>
+      <p className="hint">Tick this when freight or duty is still to come. The delivery shows as held, not costed, until you add the landed cost or release the hold.</p>
       {picker}
       <h2>What arrived</h2>
       {form.lines.length === 0 && <p className="empty-state">{blind ? 'No items yet. Find an item above and add it.' : 'Everything on this order has arrived.'}</p>}

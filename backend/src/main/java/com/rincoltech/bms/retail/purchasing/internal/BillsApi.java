@@ -133,7 +133,10 @@ final class BillsApi {
             @Schema(description = "Paid by payments that stand")
             long paidMinor,
 
-            @Schema(description = "Total less paid; zero once voided")
+            @Schema(description = "Taken off by supplier credit notes that stand (issue #199)")
+            long creditedMinor,
+
+            @Schema(description = "Total less paid less credited; zero once voided")
             long openMinor,
 
             int lineCount,

@@ -213,7 +213,8 @@ class BillsService {
                     plan.variance(),
                     reason,
                     PurchasingService.blankToNull(r.note()),
-                    by));
+                    by,
+                    "goods"));
         } catch (DuplicateKeyException e) {
             throw duplicate();
         }
@@ -247,7 +248,7 @@ class BillsService {
         return view(repo.find(id).orElseThrow(), true);
     }
 
-    private static ApiException duplicate() {
+    static ApiException duplicate() {
         return new ApiException(
                 HttpStatus.CONFLICT,
                 "duplicate_supplier_bill",
@@ -412,12 +413,33 @@ class BillsService {
             throw new ApiException(
                     HttpStatus.CONFLICT, "bill_voided", "Invoice voided", "This invoice has been voided already.");
         }
+        if (b.kind().equals("landed_cost")) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "bill_is_landed_cost",
+                    "Landed cost invoice",
+                    "This invoice belongs to a landed cost. Void the landed cost instead.");
+        }
         if (repo.paid(id)) {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "bill_paid",
                     "Invoice paid",
                     "A payment stands against this invoice. Reverse the payment first.");
+        }
+        if (repo.namedByLandedCost(id)) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "bill_costed",
+                    "Invoice has a landed cost",
+                    "A landed cost names this invoice. Void the landed cost first.");
+        }
+        if (repo.credited(id)) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "bill_credited",
+                    "Invoice credited",
+                    "A supplier credit note stands against this invoice. Void the credit note first.");
         }
         LocalDate today = clock.today(tenant.profile().timezone());
         for (UUID entry : repo.entries(id)) {
@@ -552,7 +574,8 @@ class BillsService {
                 b.note(),
                 b.status(),
                 posted ? b.paidMinor() : 0,
-                posted ? b.totalMinor() - b.paidMinor() : 0,
+                posted ? b.creditedMinor() : 0,
+                posted ? b.totalMinor() - b.paidMinor() - b.creditedMinor() : 0,
                 b.lineCount(),
                 ls,
                 b.createdAt(),

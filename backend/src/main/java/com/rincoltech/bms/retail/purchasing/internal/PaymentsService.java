@@ -417,6 +417,7 @@ class PaymentsService {
                         o.dueDate(),
                         o.totalMinor(),
                         o.paidMinor(),
+                        o.creditedMinor(),
                         o.openMinor(),
                         daysPastDue(o.dueDate(), today)))
                 .toList();

@@ -5,6 +5,7 @@ import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.retail.purchasing.internal.ReceiptsApi.Receipt;
 import com.rincoltech.bms.retail.purchasing.internal.ReceiptsApi.ReceiptList;
 import com.rincoltech.bms.retail.purchasing.internal.ReceiptsApi.ReceiptRequest;
+import com.rincoltech.bms.retail.purchasing.internal.ReceiptsApi.ReleaseRequest;
 import com.rincoltech.bms.retail.purchasing.internal.ReceiptsApi.VoidRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -94,6 +95,24 @@ class ReceiptsController {
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody VoidRequest request) {
         Outcome<Receipt> outcome = service.voidReceipt(idempotencyKey, id, request);
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok();
+        if (outcome.replayed()) {
+            response.header("Idempotent-Replayed", "true");
+        }
+        return response.body(outcome.body());
+    }
+
+    @PostMapping("/{receipt_id}/release-hold")
+    @RequiresPermission("retail.payable.manage")
+    @Operation(
+            summary =
+                    "Release a receipt held as received and not costed without a landed cost, with a reason (issue #199); M",
+            operationId = "releaseRetailGoodsReceiptHold")
+    ResponseEntity<Receipt> releaseHold(
+            @PathVariable("receipt_id") UUID id,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody ReleaseRequest request) {
+        Outcome<Receipt> outcome = service.releaseHold(idempotencyKey, id, request);
         ResponseEntity.BodyBuilder response = ResponseEntity.ok();
         if (outcome.replayed()) {
             response.header("Idempotent-Replayed", "true");

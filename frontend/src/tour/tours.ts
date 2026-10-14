@@ -967,7 +967,8 @@ export const quotationsPage: Tour = {
 // JUSTIFICATION-A3: two new tours for the new screens; each tour is data, like the ones above it.
 export const purchasingCapability: Tour = {
   id: 'capability-purchasing',
-  version: 1,
+  // Version 2 adds the landed cost and credit note steps (issue #199), so whoever finished version 1 sees them once.
+  version: 2,
   title: 'New: purchase orders',
   audience: (me) => held(me, 'retail.purchase.create'),
   autoStart: true,
@@ -976,7 +977,7 @@ export const purchasingCapability: Tour = {
     {
       id: 'intro',
       title: 'Purchase orders are on',
-      body: 'You can order from a supplier, receive what arrives, record the supplier\'s invoice and pay it. Restock still works as before for buying without an order.',
+      body: 'You can order from a supplier, receive what arrives, record the supplier\'s invoice and pay it. You can also add freight and duty to what goods cost, and record credit notes from suppliers. Restock still works as before for buying without an order.',
     },
     {
       id: 'tile',
@@ -986,6 +987,26 @@ export const purchasingCapability: Tour = {
       optional: true,
       title: 'Your orders',
       body: 'Open Purchase orders to make an order. When the goods arrive, open the order and choose Receive goods.',
+    },
+    {
+      id: 'tile-landed',
+      route: '/staff/retail',
+      target: 'retail-landedCosts',
+      module: 'retail',
+      needs: ['retail.payable.manage'],
+      optional: true,
+      title: 'Freight and duty',
+      body: 'Open Landed costs to add freight, duty, clearing or insurance to what a delivery cost you. The charges are shared over the goods, so each item\'s cost includes its part.',
+    },
+    {
+      id: 'tile-credits',
+      route: '/staff/retail',
+      target: 'retail-supplierCredits',
+      module: 'retail',
+      needs: ['retail.payable.manage'],
+      optional: true,
+      title: 'Credit notes from suppliers',
+      body: 'Open Supplier credit notes when you send goods back, or when a supplier takes money off an invoice. The credit comes off what you still owe on that invoice.',
     },
     {
       id: 'list',
@@ -1023,9 +1044,43 @@ export const purchasingPage: Tour = {
   ],
 };
 
+// The landed costs page tour (issue #199): the money side belongs to whoever may manage what is owed to suppliers.
+// JUSTIFICATION-A3: a new tour for the new screen; each tour is data, like the ones above it.
+export const landedCostsPage: Tour = {
+  id: 'page-landed-costs',
+  version: 1,
+  title: 'This page: landed costs',
+  audience: (me) => held(me, 'retail.payable.manage') && capable(me, 'purchasing'),
+  autoStart: false,
+  page: '/staff/retail/landed-costs',
+  steps: [
+    {
+      id: 'help',
+      target: 'landed-help',
+      module: 'retail',
+      title: 'What a landed cost is',
+      body: 'Freight, duty, clearing and insurance are part of what goods cost. Record them here and they are shared over the goods you choose.',
+    },
+    {
+      id: 'new',
+      target: 'landed-new',
+      module: 'retail',
+      title: 'Add the charges',
+      body: 'Tap New landed cost. Choose who is owed, type the charges, pick how to share them, then tick the goods. You see each line\'s share before you save.',
+    },
+    {
+      id: 'list',
+      target: 'landed-list',
+      module: 'retail',
+      title: 'Your landed costs',
+      body: 'Open one to see the share each item took, or to void it. The person you owe is paid on the supplier payments page, like any supplier.',
+    },
+  ],
+};
+
 export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage,
+  purchasingCapability, purchasingPage, landedCostsPage,
 ];

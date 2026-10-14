@@ -1223,6 +1223,169 @@ class MigrationOrderIT {
                                 """).params(tenant, supplier).update()).isEqualTo(1);
     }
 
+    /**
+     * Landed cost and supplier credit notes (#199, V48): a database a server already migrated to V47, holding a retail tenant
+     * with a stock movement and a purchasing settings row, takes the migration without touching any existing table's columns
+     * but the one new setting; the eight new tables are empty with their constraints validated; the two stock movement checks
+     * are replaced by looser ones that are not yet validated (the lock note of the file) and validate without failing; the
+     * new kind return_to_supplier inserts only as a negative quantity; and no permission or chart account is added.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates a populated stock movement table across the landed cost migration.
+     */
+    @Test
+    void landedCostMigrationReplacesTheMovementChecksWithoutScanningAndAddsEightEmptyTables() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            verifyLandedCostMigration(postgres.getJdbcUrl());
+        }
+    }
+
+    /** The body of the case above, on any empty database that has the roles of {@code 01-roles.sh}. */
+    static void verifyLandedCostMigration(String url) {
+        assertThat(flyway(url, "47").migrate().targetSchemaVersion).isEqualTo("47");
+        JdbcClient owner =
+                JdbcClient.create(new DriverManagerDataSource(url, "bms_owner", TestDatabase.OWNER_PASSWORD));
+        UUID tenant = UUID.randomUUID();
+        UUID branch = UUID.randomUUID();
+        UUID product = UUID.randomUUID();
+        owner.sql(
+                        "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v47l', 'Test Tenant V47L', '00000000-0000-4000-8000-000000000001')")
+                .param(tenant)
+                .update();
+        owner.sql(
+                        "INSERT INTO branches (id, tenant_id, code, name, is_head_office) VALUES (?, ?, 'HQ', 'Head Office', true)")
+                .params(branch, tenant)
+                .update();
+        owner.sql("SELECT platform_set_tenant_modules(?, ?::text[], NULL)")
+                .params(tenant, "{retail}")
+                .query((rs, n) -> 1)
+                .single();
+        UUID category = UUID.randomUUID();
+        UUID unit = UUID.randomUUID();
+        owner.sql("INSERT INTO retail_categories (id, tenant_id, name) VALUES (?, ?, 'Test Category')")
+                .params(category, tenant)
+                .update();
+        owner.sql("INSERT INTO retail_units (id, tenant_id, name) VALUES (?, ?, 'u-test')")
+                .params(unit, tenant)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_products (id, tenant_id, code, description, category_id, unit_id, currency, cost_minor, sell_minor)
+                        VALUES (?, ?, 'TEST-1', 'Test Product', ?, ?, 'UGX', 100, 150)
+                        """).params(product, tenant, category, unit).update();
+        owner.sql("""
+                        INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, business_date, branch_id, product_id, kind, qty,
+                            unit_cost_minor, source_type)
+                        VALUES (gen_random_uuid(), ?, now(), DATE '2026-01-15', ?, ?, 'purchase', 5, 100, 'test')
+                        """).params(tenant, branch, product).update();
+        owner.sql("INSERT INTO retail_purchasing_settings (tenant_id, bill_tolerance_bp) VALUES (?, 25)")
+                .param(tenant)
+                .update();
+        String existing =
+                "('retail_purchases', 'retail_suppliers', 'retail_goods_receipts', 'retail_goods_receipt_lines',"
+                        + " 'retail_supplier_bills', 'retail_supplier_bill_lines', 'retail_stock_movements', 'journal_entries',"
+                        + " 'journal_lines', 'gl_accounts')";
+        String columns =
+                "SELECT string_agg(table_name || '.' || column_name || ':' || data_type, ',' ORDER BY table_name,"
+                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN "
+                        + existing;
+        String before = owner.sql(columns).query(String.class).single();
+        long permissions =
+                owner.sql("SELECT count(*) FROM permissions").query(Long.class).single();
+        long accounts =
+                owner.sql("SELECT count(*) FROM gl_accounts").query(Long.class).single();
+
+        MigrateResult result = DatabaseMigrator.migrate(url, "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+        assertThat(result.success).isTrue();
+        assertThat(result.migrations.stream().map(m -> m.version).toList())
+                .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("47") + 1, VERSIONS.size()));
+        assertThat(owner.sql(columns).query(String.class).single())
+                .as("the existing tables keep their shape")
+                .isEqualTo(before);
+        assertThat(owner.sql("SELECT count(*) FROM permissions")
+                        .query(Long.class)
+                        .single())
+                .as("no permission is added")
+                .isEqualTo(permissions);
+        assertThat(owner.sql("SELECT count(*) FROM gl_accounts")
+                        .query(Long.class)
+                        .single())
+                .as("no chart account is added")
+                .isEqualTo(accounts);
+        String created = "('retail_landed_costs', 'retail_landed_cost_charges', 'retail_landed_cost_lines',"
+                + " 'retail_landed_cost_entries', 'retail_receipt_holds', 'retail_supplier_credits',"
+                + " 'retail_supplier_credit_lines', 'retail_supplier_credit_entries')";
+        assertThat(owner.sql("SELECT count(*) FROM pg_class WHERE relname IN " + created + " AND relkind = 'r'")
+                        .query(Long.class)
+                        .single())
+                .as("eight new tables")
+                .isEqualTo(8);
+        assertThat(owner.sql("""
+                                SELECT (SELECT count(*) FROM retail_landed_costs) + (SELECT count(*) FROM retail_landed_cost_charges)
+                                     + (SELECT count(*) FROM retail_landed_cost_lines) + (SELECT count(*) FROM retail_landed_cost_entries)
+                                     + (SELECT count(*) FROM retail_receipt_holds) + (SELECT count(*) FROM retail_supplier_credits)
+                                     + (SELECT count(*) FROM retail_supplier_credit_lines)
+                                     + (SELECT count(*) FROM retail_supplier_credit_entries)
+                                """).query(Long.class).single())
+                .as("a tenant that never turns the capability on writes nothing")
+                .isZero();
+        assertThat(owner.sql("""
+                                SELECT count(*) FROM pg_constraint
+                                 WHERE conrelid IN (SELECT oid FROM pg_class WHERE relname IN %s) AND NOT convalidated
+                                """.formatted(created)).query(Long.class).single())
+                .as("every constraint of the new tables ends validated")
+                .isZero();
+        assertThat(owner.sql("""
+                                SELECT count(*) FROM pg_class c
+                                 WHERE c.relname IN %s AND c.relkind = 'r' AND c.relrowsecurity AND c.relforcerowsecurity
+                                """.formatted(created)).query(Long.class).single())
+                .as("row-level security is forced on every new table")
+                .isEqualTo(8);
+        // The setting: the existing row reads the new column as false and keeps its value.
+        assertThat(owner.sql(
+                                "SELECT require_costing_before_sale || ':' || bill_tolerance_bp FROM retail_purchasing_settings")
+                        .query(String.class)
+                        .single())
+                .isEqualTo("false:25");
+        // The two movement checks were replaced without a scan, so they are not yet validated; validating them cannot
+        // fail.
+        assertThat(owner.sql("""
+                                SELECT string_agg(conname || '=' || convalidated, ',' ORDER BY conname) FROM pg_constraint
+                                 WHERE conrelid = 'retail_stock_movements'::regclass
+                                   AND conname IN ('retail_stock_movements_kind_check', 'retail_stock_movements_check')
+                                """).query(String.class).single())
+                .isEqualTo("retail_stock_movements_check=false,retail_stock_movements_kind_check=false");
+        owner.sql("ALTER TABLE retail_stock_movements VALIDATE CONSTRAINT retail_stock_movements_kind_check")
+                .update();
+        owner.sql("ALTER TABLE retail_stock_movements VALIDATE CONSTRAINT retail_stock_movements_check")
+                .update();
+        // The new kind goes out of stock, never in; an unknown kind is still refused; the old rows are as they were.
+        String insert = """
+                INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, business_date, branch_id, product_id, kind, qty,
+                    unit_cost_minor, source_type)
+                VALUES (gen_random_uuid(), ?, now(), DATE '2026-01-16', ?, ?, ?, CAST(? AS numeric), 100, 'test')
+                """;
+        assertThat(owner.sql(insert)
+                        .params(tenant, branch, product, "return_to_supplier", "-2")
+                        .update())
+                .isEqualTo(1);
+        assertThatThrownBy(() -> owner.sql(insert)
+                        .params(tenant, branch, product, "return_to_supplier", "2")
+                        .update())
+                .hasStackTraceContaining("retail_stock_movements_check");
+        assertThatThrownBy(() -> owner.sql(insert)
+                        .params(tenant, branch, product, "sold_to_nobody", "-2")
+                        .update())
+                .hasStackTraceContaining("violates check constraint");
+        assertThatThrownBy(() -> owner.sql(insert)
+                        .params(tenant, branch, product, "sale", "2")
+                        .update())
+                .hasStackTraceContaining("retail_stock_movements_check");
+        assertThat(owner.sql("SELECT count(*) FROM retail_stock_movements WHERE kind = 'purchase'")
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+    }
+
     @Test
     void noTwoMigrationsShareAVersion() {
         try (PostgreSQLContainer postgres = database()) {

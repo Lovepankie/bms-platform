@@ -405,7 +405,20 @@ describe('the purchasing settings', () => {
     type(/supplier invoice may differ/, '1.5');
     expect(button('Save purchasing settings').disabled).toBe(false);
     fireEvent.click(button('Save purchasing settings'));
-    expect(onSave).toHaveBeenCalledWith({ bill_tolerance_bp: 150, over_receipt_bp: 250 });
+    expect(onSave).toHaveBeenCalledWith({ bill_tolerance_bp: 150, over_receipt_bp: 250, require_costing_before_sale: false });
+  });
+
+  it('saves the costing switch on its own, with its one-sentence explanation (issue #199)', () => {
+    const onSave = vi.fn();
+    render(<PurchasingSettingsForm settings={{ bill_tolerance_bp: 100, over_receipt_bp: 0, require_costing_before_sale: false, version: 2 }} onSave={onSave} />);
+    const box = screen.getByLabelText(/Do not move goods out until their landed cost is in/) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(screen.getByText(/cannot be moved out of its branch/).textContent).toMatch(/held, not costed/);
+    expect(button('Save purchasing settings').disabled).toBe(true);
+    fireEvent.click(box);
+    expect(button('Save purchasing settings').disabled).toBe(false);
+    fireEvent.click(button('Save purchasing settings'));
+    expect(onSave).toHaveBeenCalledWith({ bill_tolerance_bp: 100, over_receipt_bp: 0, require_costing_before_sale: true });
   });
 
   it('refuses a percent that is not 0 to 100 with two decimals, and says no limit is set when the server sent none', () => {

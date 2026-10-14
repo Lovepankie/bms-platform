@@ -46,6 +46,22 @@ public interface RetailCatalogue {
     ProductSnapshot applyPurchasePrices(UUID productId, long costMinor, Long sellMinor, UUID purchaseId);
 
     /**
+     * ADR-033, issue #199: a landed cost or a supplier price credit moves the product's cost to {@code costMinor} in the
+     * caller's transaction, with a {@code purchase} history row that names the document ({@code sourceId}) and says why, and
+     * an audit row. The selling price is kept. The caller has decided that the cost may change (the cost update guard).
+     *
+     * @return the product as it is now
+     */
+    ProductSnapshot applyCostChange(UUID productId, long costMinor, UUID sourceId, String reason);
+
+    /**
+     * ADR-033, issue #199: records, without changing any price, that a landed cost or supplier credit did not move the
+     * product's cost because a newer cost event had set it since (a {@code purchase} history row with the same cost on both
+     * sides and the reason). Never overwrites a newer cost.
+     */
+    void noteCostNotApplied(UUID productId, UUID sourceId, String reason);
+
+    /**
      * The one normal form of a product code, for the API and the importer alike (review F9):
      * {@code strip()} and the no-break spaces it keeps are removed at the ends (a no-break space pasted from a
      * spreadsheet), then NFKC folds compatibility forms (full-width letters and digits). A code that

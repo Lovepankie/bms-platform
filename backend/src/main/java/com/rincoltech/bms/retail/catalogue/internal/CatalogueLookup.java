@@ -49,6 +49,23 @@ class CatalogueLookup implements RetailCatalogue {
         return snapshot(repo.find(productId).orElseThrow());
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ProductSnapshot applyCostChange(UUID productId, long costMinor, UUID sourceId, String reason) {
+        CatalogueApi.Product locked = repo.lock(productId).orElseThrow(ApiException::notFound);
+        if (costMinor != locked.costMinor()) {
+            service.changePrices(locked, costMinor, locked.sellMinor(), "purchase", sourceId, reason);
+        }
+        return snapshot(repo.find(productId).orElseThrow());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void noteCostNotApplied(UUID productId, UUID sourceId, String reason) {
+        CatalogueApi.Product locked = repo.lock(productId).orElseThrow(ApiException::notFound);
+        service.noteCostUnchanged(locked, sourceId, reason);
+    }
+
     static ProductSnapshot snapshot(CatalogueApi.Product p) {
         return new ProductSnapshot(
                 p.id(),
