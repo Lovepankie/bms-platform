@@ -274,6 +274,51 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * #212: the SMS channel migration adds the tenant, category and subject to the outbox and replaces the
+     * claim. A database at V47 that holds pending SMS rows queued by the old code (no tenant, the balance in
+     * the parameters) keeps them, they read as transactional rows of no tenant, and the new claim still
+     * takes them.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates SMS rows across the SMS channel migration.
+     */
+    @Test
+    void smsChannelMigrationKeepsThePendingSmsRowsOfADatabaseAtV47() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            assertThat(flyway(postgres, "47").migrate().targetSchemaVersion).isEqualTo("47");
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            owner.sql(
+                            "SELECT notification_outbox_enqueue(?, 'sms', '+256700000001', 'savings.deposit',"
+                                    + " '{\"balance\": \"75,000\"}'::jsonb, 'test:v47-sms', NULL, now() + interval '2 days', now())")
+                    .param(UUID.randomUUID())
+                    .query(Boolean.class)
+                    .single();
+
+            MigrateResult result =
+                    DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+            assertThat(result.migrations.stream().map(m -> m.version).toList())
+                    .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("47") + 1, VERSIONS.size()));
+            var row = owner.sql(
+                            "SELECT status, tenant_id IS NULL AS no_tenant, category, subject_type IS NULL AS no_subject,"
+                                    + " params->>'balance' AS balance FROM notification_outbox WHERE idempotency_key = 'test:v47-sms'")
+                    .query()
+                    .singleRow();
+            assertThat(row.get("status")).isEqualTo("pending");
+            assertThat(row.get("no_tenant")).isEqualTo(true);
+            assertThat(row.get("category")).isEqualTo("transactional");
+            assertThat(row.get("no_subject")).isEqualTo(true);
+            assertThat(row.get("balance")).isEqualTo("75,000");
+            // The replaced claim still takes it.
+            assertThat(owner.sql("SELECT idempotency_key FROM notification_outbox_claim(ARRAY['sms'], 3,"
+                                    + " now() + interval '1 minute', now() + interval '3 minutes')")
+                            .query(String.class)
+                            .list())
+                    .containsExactly("test:v47-sms");
+        }
+    }
+
     private static List<String> clearing(JdbcClient owner, UUID tenant) {
         return owner.sql("""
                         SELECT code || ' ' || is_system_controlled FROM gl_accounts

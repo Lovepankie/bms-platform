@@ -12,6 +12,7 @@ import com.rincoltech.bms.core.tenancy.internal.SettingsController.UpdateSetting
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.Versions;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -191,6 +192,24 @@ class SettingsService implements TenantSettings, ModuleSettings {
 
     @Override
     @Transactional(readOnly = true)
+    public LocalTime smsWindowStart() {
+        return LocalTime.parse(current().smsWindowStart());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LocalTime smsWindowEnd() {
+        return LocalTime.parse(current().smsWindowEnd());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean smsIncludeBalance() {
+        return current().smsIncludeBalance();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<String, Integer> appraisalWeights() {
         return Map.copyOf(current().appraisalWeights());
     }
@@ -348,6 +367,7 @@ class SettingsService implements TenantSettings, ModuleSettings {
                 (String) s.get("sms_sender_name"),
                 (String) s.getOrDefault("sms_window_start", "08:00"),
                 (String) s.getOrDefault("sms_window_end", "20:00"),
+                (Boolean) s.getOrDefault("sms_include_balance", false),
                 thresholds,
                 ((Number) s.getOrDefault("approval_validity_days", 14)).intValue(),
                 (Boolean) s.getOrDefault("allow_loans_before_kyc_verified", false),

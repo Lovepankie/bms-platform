@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.notifications;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * The notification outbox (FR-NTF-01, FR-NTF-10, spec section 11): a message is written in the
@@ -14,10 +15,18 @@ public interface Outbox {
     String EMAIL = "email";
     String TELEGRAM = "telegram";
     /**
-     * A member SMS (chapter 11 section 11.3). No sender exists until the aggregator is chosen
-     * (pending ADR-013): rows stay pending until their {@code expiresAt}, then the purge clears them.
+     * A member SMS (chapter 11 section 11.3, ADR-036). The channel sends according to {@code BMS_SMS_MODE}
+     * and the tenant's switch: with either off no row is sent, and a row for a tenant whose SMS is
+     * switched off is not written at all. A row always has an expiry: a transactional SMS lives one
+     * hour at most.
      */
     String SMS = "sms";
+    /** Receipts, payment links: never held by the sending window (ADR-036 decision 5). */
+    String TRANSACTIONAL = "transactional";
+    /** Reminders before a due date: sent only inside the tenant's sending window. */
+    String REMINDER = "reminder";
+    /** Notices after a due date: sent only inside the tenant's sending window. */
+    String ARREARS = "arrears";
     /** The recipient of a Telegram operator alert; the chat id stays in the environment. */
     String OPERATOR_CHAT = "operator";
     /** The prefix of a Telegram recipient that names a numeric chat (a tenant's digest, ADR-030). */
@@ -46,6 +55,11 @@ public interface Outbox {
      * @param throttleKey groups rows for a volume bound (see {@link #countSince}), or null
      * @param expiresAt when the link the message carries stops working, or null: the row is never
      *     sent, sent again or kept with its parameters after it
+     * @param category {@link #TRANSACTIONAL}, {@link #REMINDER} or {@link #ARREARS}; null means transactional
+     * @param subject the member or account the message is about, for the opt-out and the delivery
+     *     log; null when it is about neither
+     * @param notBefore hold the first attempt until this time; null means now. A reminder or arrears
+     *     SMS without it waits for the tenant's window and expires at the end of that window day
      */
     record Message(
             String channel,
@@ -54,10 +68,25 @@ public interface Outbox {
             Map<String, String> params,
             String idempotencyKey,
             String throttleKey,
-            Instant expiresAt) {
+            Instant expiresAt,
+            String category,
+            Subject subject,
+            Instant notBefore) {
 
         public Message {
             params = Map.copyOf(params);
+            category = category == null ? TRANSACTIONAL : category;
+        }
+
+        public Message(
+                String channel,
+                String recipient,
+                String templateKey,
+                Map<String, String> params,
+                String idempotencyKey,
+                String throttleKey,
+                Instant expiresAt) {
+            this(channel, recipient, templateKey, params, idempotencyKey, throttleKey, expiresAt, null, null, null);
         }
 
         public Message(
@@ -67,6 +96,18 @@ public interface Outbox {
                 Map<String, String> params,
                 String idempotencyKey) {
             this(channel, recipient, templateKey, params, idempotencyKey, null, null);
+        }
+    }
+
+    /** What a message is about: a {@code member} or an {@code account}, by id. */
+    record Subject(String type, UUID id) {
+
+        public static Subject member(UUID id) {
+            return new Subject("member", id);
+        }
+
+        public static Subject account(UUID id) {
+            return new Subject("account", id);
         }
     }
 }

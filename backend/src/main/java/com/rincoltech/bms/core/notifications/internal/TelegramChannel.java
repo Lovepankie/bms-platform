@@ -74,7 +74,7 @@ class TelegramChannel implements OutboxChannel {
     }
 
     @Override
-    public void send(Delivery delivery) throws Exception {
+    public Result send(Delivery delivery) throws Exception {
         String chat = chatOf(delivery.recipient(), telegram.operatorChatId());
         if (chat == null) {
             throw new SendFailure("Telegram sends to the operator chat or a numeric chat only");
@@ -98,5 +98,6 @@ class TelegramChannel implements OutboxChannel {
         if (response.statusCode() / 100 != 2) {
             throw new SendFailure("Telegram answered HTTP " + response.statusCode());
         }
+        return Result.SENT;
     }
 }

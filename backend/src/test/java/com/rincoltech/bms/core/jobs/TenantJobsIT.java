@@ -59,6 +59,32 @@ class TenantJobsIT extends IntegrationTest {
         assertThat(expiredKeys(suspended)).isEqualTo(1);
     }
 
+    /** ADR-036: the tenant a stored outbox row names is bound for one short transaction, if it is active. */
+    @Test
+    void callForTenantBindsThatTenantInOneTransactionAndRefusesAnInactiveOne() {
+        TestDatabase.Fixture a = TestDatabase.tenant("jobs-for-a", true);
+        TestDatabase.Fixture b = TestDatabase.tenant("jobs-for-b", true);
+        long seen = jobs.callForTenant(a.tenantId(), () -> {
+            assertThat(TenantContext.require()).isEqualTo(a.tenantId());
+            // Inside a transaction bound to a: only a's rows are visible.
+            return jdbc.sql("SELECT count(*) FROM branches WHERE tenant_id = ?")
+                    .param(b.tenantId())
+                    .query(Long.class)
+                    .single();
+        });
+        assertThat(seen).isZero();
+        assertThat(TenantContext.current()).isEmpty();
+
+        TestDatabase.owner()
+                .sql("UPDATE tenants SET status = 'suspended' WHERE id = ?")
+                .param(b.tenantId())
+                .update();
+        org.junit.jupiter.api.Assertions.assertThrows(
+                TenantJobs.InactiveTenantException.class, () -> jobs.callForTenant(b.tenantId(), () -> "ran"));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                TenantJobs.InactiveTenantException.class, () -> jobs.callForTenant(UUID.randomUUID(), () -> "ran"));
+    }
+
     long expiredKeys(TestDatabase.Fixture t) {
         return TestDatabase.owner()
                 .sql("SELECT count(*) FROM idempotency_keys WHERE tenant_id = ? AND key = 'expired-key-0001'")

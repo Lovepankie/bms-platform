@@ -63,7 +63,15 @@ class OutboxController {
             String lastError,
 
             Instant createdAt,
-            Instant failedAt) {}
+            Instant failedAt,
+
+            @Schema(
+                    description =
+                            "The tenant that caused the row (an SMS, a tenant digest), or null for a platform row")
+            UUID tenantId,
+
+            @Schema(description = "transactional, reminder or arrears")
+            String category) {}
 
     @Schema(name = "OutboxStatus")
     record Status(
@@ -93,7 +101,9 @@ class OutboxController {
                         rs.getInt("attempts"),
                         rs.getString("last_error"),
                         rs.getTimestamp("created_at").toInstant(),
-                        rs.getTimestamp("failed_at").toInstant()))
+                        rs.getTimestamp("failed_at").toInstant(),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getString("category")))
                 .list();
         return new Status(dispatcher.enabledChannels(), counts, failures);
     }

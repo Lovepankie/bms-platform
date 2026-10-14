@@ -28,7 +28,7 @@ packages.
 | First run signs the invitee in; guided tours are data with per-user progress on the server | ADR-025 (proposed) |
 | Mobile money and card collections through Pesapal v3: hosted orders, notification as a hint, status query as the truth | ADR-035 (proposed) |
 | Credit scoring model beyond the rules-based default | pending ADR-012 |
-| SMS as a channel of the notification outbox, Africa's Talking first, tenant delivery log, sink outside production | ADR-036 (proposed) |
+| SMS as a channel of the notification outbox, Africa's Talking first, tenant delivery log, sink outside production | ADR-036 (channel core built, #212) |
 | USSD aggregator | pending ADR-013 |
 | AI portfolio monitoring: advisory, aggregates and aliases only, numbers validated in code, off by default | ADR-037 (proposed) |
 | The reports pack: async runs over one snapshot, PDF through the shared templates, streamed Excel | ADR-038 (proposed) |
@@ -171,7 +171,10 @@ The core iterates registries; it never names a vertical.
   never rolls back the financial record that caused it. The platform outbox of ADR-024
   (`notification_outbox`) is the first one built: written through `Outbox.enqueue` in the cause's
   transaction, sent by the `core.notifications.outbox-sender` job every 30 seconds, one row per
-  transaction with `FOR UPDATE SKIP LOCKED`, at least once.
+  transaction with `FOR UPDATE SKIP LOCKED`, at least once. SMS rows carry their tenant and category, are
+  claimed transactional first and round-robin across tenants, and are sent by their own job
+  (`core.notifications.sms-sender`, ADR-036): the channel binds the stored tenant (`TenantJobs.callForTenant`) for two short tenant
+  transactions around the provider call, which holds no connection.
 - Scheduled jobs run one tenant per transaction (`app_list_active_tenants()`), and inside
   a tenant, in batches of at most 500 accounts per transaction so a single bad record
   cannot stall a tenant's whole run. Every job is idempotent for its business date.

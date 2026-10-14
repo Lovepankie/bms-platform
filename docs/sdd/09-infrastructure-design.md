@@ -169,6 +169,14 @@ migration) with status only, no details.
   SMTPS to the mail provider and HTTPS to `api.telegram.org`; nothing is opened inbound.
   `BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR` (default 30) and
   `BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR` (default 60) are the global sign-up caps.
+- SMS (ADR-036, issue #212, `docs/runbooks/sms-setup.md`), optional on every host: `BMS_ENVIRONMENT` (the staging compose
+  file fixes it to `staging`; production sets it in `.env`; anything but `production` is treated as not production),
+  `BMS_SMS_PROVIDER` (`africastalking` or `fake`), `BMS_SMS_MODE` (`off`, `sink`, `allowlist`, `live`; unset is `sink` on staging
+  and `off` elsewhere), `BMS_SMS_ALLOWLIST`, `BMS_SMS_PLATFORM_DAILY_CAP` (default 2000), `BMS_SMS_AT_BASE_URL`,
+  `BMS_SMS_AT_USERNAME` and `BMS_SMS_AT_API_KEY`. The API refuses to start, in every mode, when outside production the URL is
+  not the Africa's Talking sandbox host or the account is not `sandbox`, when the mode is `live` outside production, and in
+  production when the mode is `sink` or the provider is the fake. Outbound traffic is HTTPS to the provider; nothing is
+  opened inbound until the delivery report slice (#215).
 - Client extras (issue #210, design): Pesapal `BMS_PESAPAL_BASE_URL`, `BMS_PESAPAL_CONSUMER_KEY`,
   `BMS_PESAPAL_CONSUMER_SECRET`, `BMS_PESAPAL_IPN_ID`, `BMS_PESAPAL_IPN_TOKEN`, `BMS_PESAPAL_TENANT_ID` (the one tenant the
   merchant account is bound to), `BMS_PESAPAL_PLATFORM_CONSUMER_KEY`, `BMS_PESAPAL_PLATFORM_CONSUMER_SECRET`,

@@ -10,6 +10,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -287,6 +288,18 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), usage, retailProduct)
                 .update();
+        // SMS delivery log and opt-out (migration V50, ADR-036).
+        owner.sql("""
+                        INSERT INTO sms_deliveries (id, tenant_id, outbox_id, template_key, category, recipient_masked,
+                                                    recipient_hash, provider, status)
+                        VALUES (?, ?, ?, 'savings.deposit', 'transactional', '+256*****0001', repeat('a', 64), 'sink', 'sunk')
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), UUID.randomUUID())
+                .update();
+        owner.sql("""
+                        INSERT INTO sms_opt_outs (id, tenant_id, member_id, recipient_hash, scope, source)
+                        VALUES (?, ?, ?, repeat('b', 64), 'reminders', 'staff')
+                        """).params(UUID.randomUUID(), t.tenantId(), kinMember).update();
         owner.sql(
                         "INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type) VALUES (?, ?, 'system', 'test.fixture.created', 'test')")
                 .params(UUID.randomUUID(), t.tenantId())
@@ -796,8 +809,12 @@ class RlsIsolationIT {
         return TestDatabase.owner().sql("""
                         SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
                          WHERE n.nspname = 'public' AND c.relkind = 'r'
-                           -- Platform tables (chapter 6 section 6.4) carry no tenant policy by design.
+                           -- Platform tables (chapter 6 section 6.4) carry no tenant policy by design. The outbox
+                           -- is one: it gained a tenant_id for the SMS channel (ADR-036) and stays reachable
+                           -- only through definer functions; smsPlatformTablesAreClosedToTheApplicationRole
+                           -- proves it.
                            AND c.relname NOT LIKE 'platform\\_%'
+                           AND c.relname <> 'notification_outbox'
                            AND (c.relname = 'tenants' OR EXISTS (
                                 SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'tenant_id'
                                    AND NOT a.attisdropped))
@@ -975,6 +992,151 @@ class RlsIsolationIT {
                     }
                 }))
                 .hasStackTraceContaining("violates row-level security policy");
+    }
+
+    /**
+     * ADR-036, FR-NTF-13: the SMS delivery log is tenant isolated like any tenant table: tenant A
+     * reads none of B's rows and cannot write a row stamped with B.
+     */
+    @Test
+    void theSmsDeliveryLogAndOptOutsAreIsolatedPerTenant() throws SQLException {
+        for (String table : List.of("sms_deliveries", "sms_opt_outs")) {
+            long seesOwn = asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM " + table));
+            long seesOthers = asApp(
+                    a.tenantId(),
+                    c -> count(c, "SELECT count(*) FROM " + table + " WHERE tenant_id = ?", b.tenantId()));
+            assertThat(seesOwn).as("own rows in %s", table).isPositive();
+            assertThat(seesOthers).as("rows of B in %s", table).isZero();
+        }
+        assertThatThrownBy(() -> asApp(a.tenantId(), c -> {
+                    try (PreparedStatement ps = c.prepareStatement(
+                            "INSERT INTO sms_deliveries (id, tenant_id, outbox_id, template_key, category, recipient_masked,"
+                                    + " recipient_hash, provider, status) VALUES (?, ?, ?, 'x', 'transactional', '+256*****0001',"
+                                    + " repeat('c', 64), 'sink', 'sunk')")) {
+                        ps.setObject(1, UUID.randomUUID());
+                        ps.setObject(2, b.tenantId());
+                        ps.setObject(3, UUID.randomUUID());
+                        return ps.executeUpdate();
+                    }
+                }))
+                .hasStackTraceContaining("violates row-level security policy");
+        // The delivery log is kept 13 months by a definer function; the application role has no DELETE.
+        assertThatThrownBy(() -> asApp(
+                        a.tenantId(),
+                        c -> count(c, "WITH d AS (DELETE FROM sms_deliveries RETURNING 1) SELECT count(*) FROM d")))
+                .hasStackTraceContaining("permission denied");
+    }
+
+    /**
+     * ADR-036 decision 2 and 13: the outbox (now with a tenant_id), the operator's per tenant controls
+     * and the channel state are platform tables. The application role has no privilege on them, so a
+     * tenant session reaches them only through the definer functions, and the tenant is read from the
+     * bound transaction, never a parameter.
+     */
+    @Test
+    void smsPlatformTablesAreClosedToTheApplicationRole() throws SQLException {
+        for (String table : List.of("notification_outbox", "platform_sms_controls", "sms_channel_state")) {
+            assertThatThrownBy(() -> asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM " + table)))
+                    .as("SELECT on %s", table)
+                    .hasStackTraceContaining("permission denied");
+            assertThatThrownBy(() -> asApp(
+                            a.tenantId(),
+                            c -> count(c, "WITH d AS (DELETE FROM " + table + " RETURNING 1) SELECT count(*) FROM d")))
+                    .as("DELETE on %s", table)
+                    .hasStackTraceContaining("permission denied");
+        }
+        // The enqueue overload takes no tenant parameter: it stamps the bound tenant, or none.
+        String bound = "rls.sms.outbox:" + UUID.randomUUID();
+        String unbound = "rls.sms.outbox:" + UUID.randomUUID();
+        enqueueAsApp(a.tenantId(), bound);
+        enqueueAsApp(null, unbound);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT tenant_id FROM notification_outbox WHERE idempotency_key = ?")
+                        .param(bound)
+                        .query(UUID.class)
+                        .single())
+                .isEqualTo(a.tenantId());
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT tenant_id FROM notification_outbox WHERE idempotency_key = ?")
+                        .param(unbound)
+                        .query(UUID.class)
+                        .optional())
+                .isEmpty();
+        // A tenant transaction cannot change the operator's SMS controls (platform only).
+        assertThatThrownBy(() -> asApp(a.tenantId(), c -> {
+                    try (PreparedStatement ps =
+                            c.prepareStatement("SELECT sms_tenant_control_set(?, true, 100000, NULL, now())")) {
+                        ps.setObject(1, a.tenantId());
+                        ps.execute();
+                        return null;
+                    }
+                }))
+                .hasStackTraceContaining("platform operator only");
+    }
+
+    /**
+     * Every SMS and tenant lookup function of V50 is a definer function owned by bms_owner, executable
+     * by bms_app and not by PUBLIC (ADR-016): they are the only way into the platform SMS tables.
+     */
+    @Test
+    void theSmsFunctionsAreDefinerFunctionsNotExecutableByPublic() {
+        List<Map<String, Object>> functions =
+                TestDatabase.owner().sql("""
+                        SELECT p.oid::text AS oid, p.proname FROM pg_proc p
+                         WHERE p.pronamespace = 'public'::regnamespace
+                           AND (p.proname LIKE 'sms\\_%' OR p.proname = 'app_tenant_is_active')
+                        """).query().listOfRows();
+        assertThat(functions)
+                .extracting(f -> f.get("proname"))
+                .contains(
+                        "sms_tenant_control_current",
+                        "sms_tenant_control_get",
+                        "sms_tenant_control_set",
+                        "sms_channel_mode_changed",
+                        "sms_platform_count_since",
+                        "sms_tenant_count_since",
+                        "sms_deliveries_purge",
+                        "app_tenant_is_active");
+        for (Map<String, Object> f : functions) {
+            Map<String, Object> row =
+                    TestDatabase.owner().sql("""
+                            SELECT p.prosecdef, pg_get_userbyid(p.proowner) AS owner,
+                                   has_function_privilege('bms_app', p.oid, 'EXECUTE') AS app,
+                                   coalesce(array_to_string(p.proacl, ','), '') AS acl
+                              FROM pg_proc p WHERE p.oid = ?::oid
+                            """).param(f.get("oid")).query().singleRow();
+            assertThat(row.get("prosecdef"))
+                    .as("%s is SECURITY DEFINER", f.get("proname"))
+                    .isEqualTo(true);
+            assertThat(row.get("owner")).as("%s owner", f.get("proname")).isEqualTo("bms_owner");
+            assertThat(row.get("app"))
+                    .as("%s executable by bms_app", f.get("proname"))
+                    .isEqualTo(true);
+            assertThat(List.of(((String) row.get("acl")).split(",")))
+                    .as("%s not executable by PUBLIC", f.get("proname"))
+                    .noneMatch(entry -> entry.startsWith("="));
+        }
+    }
+
+    /** Calls the enqueue overload as bms_app and commits, so the owner can read the row back. */
+    static void enqueueAsApp(UUID tenantId, String key) throws SQLException {
+        try (Connection c = TestDatabase.appDataSource().getConnection()) {
+            c.setAutoCommit(false);
+            if (tenantId != null) {
+                try (PreparedStatement ps = c.prepareStatement("SELECT set_config('app.tenant_id', ?, true)")) {
+                    ps.setString(1, tenantId.toString());
+                    ps.execute();
+                }
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT notification_outbox_enqueue(?, 'telegram', 'operator', 'sms.cap_alert', '{}'::jsonb, ?, NULL, now() - interval '1 hour',"
+                            + " now(), 'transactional', NULL, NULL, NULL)")) {
+                ps.setObject(1, UUID.randomUUID());
+                ps.setString(2, key);
+                ps.execute();
+            }
+            c.commit();
+        }
     }
 
     /** 15.4 item 3, NFR-ISO-03: with no tenant bound, every tenant-owned table raises. */

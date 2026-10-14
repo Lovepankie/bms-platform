@@ -1022,19 +1022,22 @@ class OnboardingIT extends IntegrationTest {
                     .as("%s has FORCE ROW LEVEL SECURITY (review N9)", table)
                     .isTrue();
         }
-        List<String> functions = owner().sql("""
-                        SELECT p.proname FROM pg_proc p
+        // By oid, not by name: a function may have overloads (the outbox enqueue has two since V50).
+        List<Map<String, Object>> functions = owner().sql("""
+                        SELECT p.oid::text AS oid, p.proname FROM pg_proc p
                          WHERE p.pronamespace = 'public'::regnamespace
                            AND (p.proname LIKE 'onboarding\\_application%' OR p.proname LIKE 'notification\\_outbox\\_%')
-                        """).query(String.class).list();
+                        """).query().listOfRows();
         assertThat(functions).hasSizeGreaterThanOrEqualTo(19);
-        for (String function : functions) {
-            Map<String, Object> row = owner().sql("""
+        for (Map<String, Object> f : functions) {
+            String function = (String) f.get("proname");
+            Map<String, Object> row =
+                    owner().sql("""
                             SELECT p.prosecdef, pg_get_userbyid(p.proowner) AS owner,
                                    has_function_privilege('bms_app', p.oid, 'EXECUTE') AS app,
                                    coalesce(array_to_string(p.proacl, ','), '') AS acl
-                              FROM pg_proc p WHERE p.proname = ? AND p.pronamespace = 'public'::regnamespace
-                            """).param(function).query().singleRow();
+                              FROM pg_proc p WHERE p.oid = ?::oid
+                            """).param(f.get("oid")).query().singleRow();
             assertThat(row.get("prosecdef"))
                     .as("%s is SECURITY DEFINER", function)
                     .isEqualTo(true);

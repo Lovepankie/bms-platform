@@ -23,7 +23,7 @@
 
 | Integration | Direction | Decision | Adapter interface |
 |---|---|---|---|
-| SMS | Outbound, plus delivery report callbacks | ADR-036 (proposed): Africa's Talking first, as a channel of the notification outbox | `SmsProvider` |
+| SMS | Outbound (built, #212), plus delivery report callbacks (#215) | ADR-036: Africa's Talking first, as a channel of the notification outbox | `SmsProvider` |
 | USSD | Inbound session callbacks | Pending ADR-013, later phase | `UssdProvider` |
 | Payment gateway (mobile money, cards) | Outbound collection requests, inbound callbacks, status queries, settlement reports | ADR-035 (proposed): Pesapal v3 | `PaymentGateway` |
 | Object storage | Outbound | Cloudflare R2 over the S3 API (product plan) | `ObjectStorage` |
@@ -35,10 +35,21 @@
 
 ```
 SmsProvider
-  send(to_e164, body, sender_id?, client_ref) -> {provider_message_id, segments, status}
-  parse_delivery_report(http_request) -> [{provider_message_id, status, error_code?}]
-  verify_delivery_report(http_request) -> bool
+  send(to_e164, body, sender_id?, client_ref) -> {provider, status, message_id?, segments?, cost_raw?, failure_reason?}
+        status: ACCEPTED | SUNK | REJECTED; throws Transient (certainly not sent) or Ambiguous (may have been sent)
+  parse_delivery_report(http_request) -> [{provider_message_id, status, error_code?}]      (#215)
+  verify_delivery_report(http_request) -> bool                                             (#215)
 ```
+
+Built in issue #212: `send` only. Adapters are `AfricasTalkingSmsProvider` (a form POST with the key in the `apiKey` header, the
+JSON answer read per recipient, a 15 second total time per message, a clean failure for a connection that could not be made
+or a 401, 403, 429 or 503 answer, or no balance, and an ambiguous one for anything after the request was written: a timeout,
+a broken connection, an SSL error while reading, an HTTP 500, 502 or 504 or an internal or gateway error code in the answer;
+a 409 Do Not Disturb is a final rejection), `SinkSmsProvider` (no client, no URL, no
+credential; the only provider allowed outside production), `AllowlistSmsProvider` (the real provider for listed numbers, the
+sink for the rest) and `RecordingSmsProvider` (the fake). The configuration picks the provider from `BMS_SMS_MODE`
+(`SmsConfiguration`) and the startup guard (`SmsSettings.resolve`) refuses every combination that could text a real phone from
+outside production.
 
 `client_ref` is the `notifications.id`, so a retried send that the provider already
 accepted can be recognised.
@@ -56,14 +67,16 @@ accepted can be recognised.
 
 ### 12.3.3 What ADR-036 settles and what stays pending ADR-013
 
-ADR-036 (proposed) settles the SMS half: the provider (Africa's Talking first), the tenant link on the outbox row, the
+ADR-036 settles the SMS half: the provider (Africa's Talking first), the tenant link on the outbox row, the
 delivery log, modes that make a real send on staging impossible, sending windows, opt-out, the delivery report
 endpoint with a path token, and cost recording (spec `docs/specs/client-extras.md` section 4). Still pending ADR-013:
 the USSD code model (per tenant or shared) and USSD sessions. Commercial questions (whether SMS cost is passed on)
 stay outside this repository. The flow of section 12.3.2 changes in one way: the body is rendered at send time inside
 a short tenant transaction, because tenant template overrides and the opt-out need the tenant. The channel returns `Sent`,
 `Deferred(until)` or `Unknown` (a read timeout after the request was written) instead of only throwing; retries follow the outbox
-(attempts at once, after 1 and after 5 minutes) and the 30 minute step of FR-NTF-05 is dropped for SMS.
+(attempts at once, after 1 and after 5 minutes) and the 30 minute step of FR-NTF-05 is dropped for SMS. As built (issue #212) the
+channel also answers `Refused(reason)` for a message it will never send (see the amendment in ADR-036), writes the delivery log
+row `queued` before the network call so a crash is never resent, and has its own sender job.
 
 ## 12.4 Payment gateway and mobile money
 

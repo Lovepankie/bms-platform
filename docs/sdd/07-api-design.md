@@ -397,8 +397,10 @@ The refresh token never appears in a response body: it is the `__Host-bms_rt` co
 | POST | `/platform/applications/{application_id}/needs-info` | `platform.tenants.manage` | `{note}`, which the applicant sees (FR-ONB-06) |
 | POST | `/platform/applications/{application_id}/reject` | `platform.tenants.manage` | `{note}`, the reason the applicant sees (FR-ONB-06) |
 | POST | `/platform/applications/{application_id}/activate` | `platform.tenants.manage` | `{modules, term, way_in, payment_note?, slug, plan_code?, agent_code?}`: creates the tenant through the FR-TEN-01 path and queues the activation email; `activated_now: false` and nothing done on a repeat (FR-ONB-07) |
-| GET | `/platform/outbox` | `platform.tenants.read` | `enabled_channels`, `counts` per status and the failed rows with a masked recipient (FR-NTF-09) |
-| POST | `/platform/outbox/{outbox_id}/retry` | `platform.tenants.manage` | A failed row back to `pending`; 409 `outbox_not_failed` otherwise. Audited |
+| GET | `/platform/outbox` | `platform.tenants.read` | `enabled_channels`, `counts` per status and the failed rows with a masked recipient, and from #212 the row's `tenant_id` and `category` (FR-NTF-09) |
+| POST | `/platform/outbox/{outbox_id}/retry` | `platform.tenants.manage` | A failed row back to `pending`; 409 `outbox_not_failed` otherwise. Audited. For an SMS whose outcome was `unknown` it is the deliberate resend (ADR-036); 409 `outbox_too_old` once the receipt's hour has passed |
+| GET | `/platform/tenants/{tenant_id}/sms` | `platform.tenants.read` | `{enabled, daily_cap, used_today, platform_daily_cap, mode}`; off and a cap of 200 for a tenant never set; 404 for an unknown tenant. Built in #212 (ADR-036, FR-NTF-20) |
+| PUT | `/platform/tenants/{tenant_id}/sms` | `platform.tenants.manage` | `{enabled, daily_cap}` (0 to 100000), the only way to switch SMS on or change the cap; audited as `platform.sms.controls_changed` with before and after |
 
 The sign-up endpoints sit under `/platform` so they are served only on the platform host and
 resolve no tenant; they need no token. Their link token travels in the body: the emailed link
@@ -409,7 +411,7 @@ carries it in the URL fragment, which no server receives.
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET | `/settings` | `core.settings.read` | |
-| PATCH | `/settings` | `core.settings.manage` | FR-TEN-08. Includes `theme_primary` (`#RRGGBB`, or an empty string to clear it back to the platform look; a colour with no readable text colour is a 422 `validation_failed` with the field error `insufficient_contrast`) and `setup_dismissed` |
+| PATCH | `/settings` | `core.settings.manage` | FR-TEN-08. Includes `sms_include_balance` (boolean, default false: whether a savings receipt SMS carries the balance, FR-NTF-17; built in #212), and `theme_primary` (`#RRGGBB`, or an empty string to clear it back to the platform look; a colour with no readable text colour is a 422 `validation_failed` with the field error `insufficient_contrast`) and `setup_dismissed` |
 | PUT | `/settings/logo` | `core.settings.manage` | `multipart/form-data` field `file`: PNG, JPEG or WebP, 1 MB, 128 px or more; re-encoded and scaled to 512 px; returns the settings. Takes no `If-Match` but bumps the settings `version`, so a form holding the old version must refetch before its next `PATCH`. A logo over 4 megapixels is 422 `image_too_large`. FR-TEN-08 |
 | DELETE | `/settings/logo` | `core.settings.manage` | Clears the logo; the file is kept. Idempotent |
 | GET | `/branding` | public | `{display_name, theme_primary, theme_text, logo_url, modules}` for the tenant of the request host; `logo_url` is `/api/v1/branding/logo?v=<document id>` or null; `modules` is the sorted list of enabled module keys (`lending`, `retail`), so the landing page promises only what the tenant has (#99). FR-TEN-08 |
@@ -474,7 +476,7 @@ endpoint.
 | PUT | `/notification-templates/{event_key}/{channel}` | `core.notification_templates.manage` | FR-NTF-03 |
 | POST | `/notification-templates/{event_key}/{channel}/preview` | `core.notification_templates.manage` | Renders with fabricated sample data |
 | GET | `/notifications` | `core.notifications.read` | Send log with status. For SMS it reads `sms_deliveries` (status, segments, recorded cost, masked recipient) (ADR-036) |
-| GET, PUT | `/settings/sms` | read / `core.settings.manage` | Sender name, window, `sms_include_balance`; the daily cap and `sms_sender_approved` are read only here (the operator sets them) |
+| GET, PUT | `/settings/sms` | read / `core.settings.manage` | Not built yet (#218); until then `sms_include_balance`, `sms_sender_name` and the window are in `/settings`. Sender name, window, `sms_include_balance`; the daily cap and `sms_sender_approved` are read only here (the operator sets them) |
 | PUT, DELETE | `/lending/members/{member_id}/sms-opt-out` | `lending.members.update` | `{scope: reminders \| all}`; audited. FR-NTF-14 |
 | GET | `/documents/{document_id}` | permission on the subject | Metadata. Declared "authenticated" (staff); the owning module's `DocumentAccess` decides, 403 `permission_denied` when it says no |
 | POST | `/documents/{document_id}/download-url` | permission on the subject | `{url, expires_at}`, 5 minutes; every issue is audited (`core.document.download_url_issued`). Member ID images (`id_front`, `id_back`) need `lending.members.verify_kyc` (chapter 8). FR-DOC-03 |

@@ -38,4 +38,21 @@ public interface TenantJobs {
      * {@link IllegalArgumentException} before anything runs.
      */
     <T> T callAsTenant(String slug, String moduleKey, Supplier<T> work);
+
+    /**
+     * For work tied to one tenant by a row the platform stored when that tenant's own transaction caused it
+     * (an outbox row's tenant, ADR-036): binds that tenant and runs the work in one short transaction of its
+     * own, so row-level security applies as it does to a request. The id is the one the cause bound, read
+     * from the stored row; it is never a request's input. An unknown, suspended or closed tenant is refused
+     * with {@link InactiveTenantException} before anything runs.
+     */
+    <T> T callForTenant(UUID tenantId, Supplier<T> work);
+
+    /** The tenant is unknown, suspended or closed: nothing ran. */
+    final class InactiveTenantException extends RuntimeException {
+
+        public InactiveTenantException() {
+            super("The tenant is not active.", null, false, false);
+        }
+    }
 }

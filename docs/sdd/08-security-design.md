@@ -250,8 +250,10 @@ Notes:
   merchant statement and reads the reconciliation (ADR-035); switching collections on needs `core.settings.manage`. The
   AI assistant (ADR-037) needs `lending.advisor.use` to read the brief and ask, `lending.advisor.configure` to read the
   call log and set caps, and `core.settings.manage` to switch it on after the acknowledgement. SMS sender name, window and
-  `sms_include_balance` need `core.settings.manage`, while the daily SMS cap and the sender approval are set by the
-  platform operator only; the assistant can be switched on only for tenants in `BMS_AI_ENABLED_TENANTS`; collections can be
+  `sms_include_balance` need `core.settings.manage`, while the SMS switch, the daily SMS cap and the sender approval are set by the
+  platform operator only (issue #212 seeds no new permission: the operator's `PUT /platform/tenants/{tenant_id}/sms` uses
+  `platform.tenants.manage` and its read `platform.tenants.read`, and the database refuses the change from any transaction
+  bound to a tenant); the assistant can be switched on only for tenants in `BMS_AI_ENABLED_TENANTS`; collections can be
   switched on only for the tenant named by `BMS_PESAPAL_TENANT_ID`; a member's SMS opt-out needs `lending.members.update`. Running a report run needs
   the report's own permission (a pack needs all seven); loan officers still see only their own loans.
   Built (extras slice D1, issue #214): report runs add no permission and no seeded row (the matrix and the seeds are unchanged;

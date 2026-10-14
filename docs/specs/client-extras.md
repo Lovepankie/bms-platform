@@ -1,12 +1,12 @@
 # Client extras: mobile money, SMS, AI monitoring, the reports pack, and a note on credit bureaus
 
-**Status:** Draft, design only · **Issue:** #210 (umbrella) · **Decisions:** ADR-035 (Pesapal collections),
+**Status:** Design; slice #212 (SMS channel core) built · **Issue:** #210 (umbrella) · **Decisions:** ADR-035 (Pesapal collections),
 ADR-036 (SMS channel), ADR-037 (AI monitoring), ADR-038 (reports pack); PDF rendering follows
 ADR-034 (accepted, merged in pull request 205) ·
 **Expectations:** issue #150 · **SDD:** chapters 5, 7, 8, 9, 11, 12, 14 and 15 carry the consequences
 
-This specification covers five extras a lending client asked for. It is a design: nothing here is
-built, and every build slice is a separate issue (section 10). It uses invented examples only; no
+This specification covers five extras a lending client asked for. It is a design, and every build slice
+is a separate issue (section 10); where a slice is built, its section says so (section 4.15 for the SMS channel core). It uses invented examples only; no
 client name, price, phone number or secret appears in it.
 
 | Area | Product owner decision (2026-10-11) | Where |
@@ -502,6 +502,34 @@ the payer's number, category `transactional`, once per intent, only while the in
 | A tenant admin raises its own SMS cap | The cap is operator-only; a platform ceiling sits above every tenant (4.6) |
 | Reminders at 08:00 delay receipts | Transactional rows are claimed first, round-robin across tenants (4.6) |
 | Collection harassment of borrowers | Window, opt-out, no next-of-kin messages, wording rules; the tenant remains the data controller |
+
+### 4.15 As built in slice #212 (differences from the design above)
+
+The channel core is built (pull request for issue #212; ADR-036 carries the Amendment). Where the build differs from, or
+sharpens, the text above:
+
+- **Four outcomes.** `Sent`, `Deferred(until)`, `Unknown` and `Refused(reason)`; a refusal is a final no (opt-out, switched off,
+  a number we will not text, a provider rejection) recorded `failed` with its reason and never retried.
+- **Operator controls in a platform table.** The per tenant switch and the daily cap are rows of `platform_sms_controls`
+  (not a tenant setting), written by `PUT /platform/tenants/{tenant_id}/sms`. SMS is off for a tenant until the operator
+  switches it on, and while it is off no SMS row is written. The default cap shown for a tenant never set is 200; the
+  platform ceiling defaults to 2000.
+- **No message is sent twice by the machine.** The delivery row is written `queued` before the network call; an attempt that
+  finds it `queued` or `unknown` answers `Unknown` and does not call the provider. The operator's "send again" is the only way
+  to resend an unknown message.
+- **An over-cap reminder outlives today.** Deferred to tomorrow's window, it also gets an expiry at the end of tomorrow's window
+  day (bounded to 2 days after it was queued), so it can be sent then.
+- **Ambiguity is wider than a timeout.** An HTTP 500, 502 or 504, a gateway error code in the answer and an SSL error while
+  reading are unknown, not retried. The provider alert of 4.14 (key refused, no credit) is one Telegram alert a day.
+- **Fairness has a memory.** One row is claimed per call, so a tenant's turn is its rank among its own due rows plus the rows it
+  was given in the last minute.
+- **The guard covers every non-production environment**, including an unset `BMS_ENVIRONMENT`, and production refuses the
+  sandbox when the mode can send.
+- **Not in this slice.** Delivery reports (4.7, #215, so no `delivered` or `undelivered` yet), the tenant SMS settings screen,
+  template overrides and the staff opt-out screens (4.8 to 4.10, #218), reminders (#227), the payment link (#231). The port
+  has `send` only; the opt-out table, the sending window and the caps are built and honoured.
+- **Throughput.** SMS has its own sender job (200 rows and a 4 minute budget per run). Measured against the fake provider the
+  dispatcher handled 200 messages in about 1.4 seconds; the provider's own latency is measured by the manual sandbox job.
 
 ## 5. AI monitoring (ADR-037)
 

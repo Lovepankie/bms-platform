@@ -2,8 +2,10 @@
 
 ## Status
 
-Proposed (issue #210, design only; spec `docs/specs/client-extras.md` section 4). Settles the SMS
-half of what chapter 12 section 12.3.3 carried as pending ADR-013; USSD remains pending ADR-013.
+Accepted. Designed in issue #210 (spec `docs/specs/client-extras.md` section 4); the channel core, decisions 1 to 6
+and 8 to 14 except the tenant screens, is built by issue #212 (see the Amendment below). Delivery reports (decision 7)
+come with #215, the tenant settings screens, opt-out screens and template overrides with #218, reminders with #227.
+Settles the SMS half of what chapter 12 section 12.3.3 carried as pending ADR-013; USSD remains pending ADR-013.
 Builds on ADR-008 (jobs), ADR-016 (definer functions), ADR-024 (the outbox), ADR-032 (savings
 receipts queued as SMS that expire unsent). Implements FR-NTF-02 to FR-NTF-07 and the SMS events of
 chapter 11 section 11.3. Migrations are numbered when each build slice merges.
@@ -149,3 +151,89 @@ Staging must never text a real person.
 - The outbox claim and record functions change (priority, fairness, result types): the existing email and
   Telegram tests must stay green, and the isolation tests cover the new column.
 - Alphanumeric sender registration time in Uganda is outside our control; do not promise a date.
+
+## Amendment (issue #212, the channel core)
+
+Building the slice changed or sharpened these decisions; the numbers refer to the Decision section above.
+
+- **Decision 6, a fourth outcome.** `OutboxChannel.send` returns `Sent`, `Deferred(until)`, `Unknown` or `Refused(reason)`. A
+  refusal is a message the channel will never send (an opt-out, SMS switched off for the tenant, a number it will not
+  text, a provider's final no): the row is marked `failed` with the reason code, its parameters are cleared and it is not
+  retried. Without it those cases would have been retried three times as clean failures. The new definer function
+  `notification_outbox_record_result` records all four, and a clean failure; the older `notification_outbox_record`
+  stays for the rollout. A deferral that names a time already gone is moved a minute on, so it cannot be claimed again at
+  once. The operator's "send again" (`notification_outbox_retry`) is the deliberate duplicate: for an SMS it is the only
+  thing that moves a delivery log row from `unknown` back to `failed`, so the channel may send it once more.
+- **Decision 6, never a second text after a crash.** The delivery log row is written `queued` in the first tenant
+  transaction, before the network call, and moved to its outcome in the second. An attempt that finds its row `queued` or
+  `unknown` (an earlier attempt died or timed out after the request may have gone) answers `Unknown` and does not call the
+  provider; one that finds it `sent` or `sunk` answers `Sent` without a call. If the second transaction fails, the answer
+  of the provider is still returned: the message went, and a resend would be worse than a stale log row.
+- **Decision 5, fairness needs a memory.** The claim takes one row per call, so a rank within the tenant alone is 1 again for
+  the tenant just served and one tenant's thousand reminders would run before another's one. A tenant's turn is its rank
+  among its own due rows plus the rows it was given in the last minute (attempted and updated since then). Transactional
+  rows still come first; ties go to the earlier due time. An index on `notification_outbox(updated_at)` serves the count.
+- **Decision 13, where the operator's controls live.** The per tenant switch and daily cap are in a platform table,
+  `platform_sms_controls`, not a tenant setting: the application role has no privilege on it, the only writer is a definer
+  function that refuses a transaction bound to a tenant, and the platform console endpoint
+  `PUT /platform/tenants/{tenant_id}/sms` (permission `platform.tenants.manage`) is audited. **SMS is off for a tenant until
+  the operator switches it on, and while it is off no SMS row is written for that tenant** (the enqueue returns false), so
+  nothing sits in the outbox for a tenant that does not use SMS. The platform ceiling is `BMS_SMS_PLATFORM_DAILY_CAP`
+  (default 2000); the default tenant cap shown for a tenant with no row is 200. Both are counted over the Africa/Kampala
+  business day from the delivery log (rows queued, sent, delivered, undelivered, unknown or sunk count). Operator alerts
+  go to the Telegram operator chat once per scope, state and day, at 80 percent and when a cap is reached.
+- **Decision 4, the guard covers every non-production environment.** The sandbox-only rule for the provider URL and
+  account applies whenever `BMS_ENVIRONMENT` is not `production`, including when it is unset, not only on staging.
+  `BMS_ENVIRONMENT` is passed to the API by both compose files; the staging file fixes it to `staging`. Production also
+  refuses the sandbox URL or account when the mode can send. The fake provider is `BMS_SMS_PROVIDER=fake`.
+- **Decision 8, the opt-out in this slice.** The table `sms_opt_outs` and its use in the channel are built; the staff screens
+  that write it are #218. Scope `all` blocks every category; scope `reminders` blocks reminders and arrears. A row with a
+  number hash blocks that member on that number only; a row without one blocks the member on any number. A removal sets
+  `removed_at`. `member_id` has no foreign key, as no core table references a vertical's table (ADR-002).
+- **Decision 14, startup records the mode.** The application tells the database its mode at the first dispatch after a
+  start, in every mode including `off`, through `sms_channel_mode_changed`, which also drops the backlog when the mode
+  moves from `off`, `sink` or never seen to `allowlist` or `live`. Until that call has succeeded the channel does not
+  send. The default savings receipt carries no balance (the parameter is not even written to the outbox unless the tenant
+  setting `sms_include_balance` is on), and a transactional SMS lives one hour at most, enforced in the enqueue function.
+- **Decision 2, how the stored tenant is bound.** The channel binds the tenant an outbox row stores through a new method of the
+  jobs module, `TenantJobs.callForTenant(tenantId, work)`: one short transaction with the tenant bound, the id read from the
+  stored row and never from a request. It is the one place a stored id becomes a bound tenant (an architecture test lets only
+  `core.jobs`, `core.platform` and the kernel do that), so `core.notifications` depends on `core.jobs`. It checks the tenant
+  is active (`app_tenant_is_active`); a suspended or closed tenant's message is refused (`tenant_inactive`), not sent.
+- **Decision 2, the phone.** The member's phone check is the strict number rule (`PhoneNumbers.forSms`): only a Uganda
+  mobile number in a form we can read without guessing; a bare 10 digit foreign number, a number of another country and
+  anything with stray digits are refused (`invalid_phone`) and never reach the provider. The outbox row also carries a
+  `subject` (member or account) for the opt-out.
+- **Throughput.** SMS has its own sender job (`core.notifications.sms-sender`, 200 rows and a 4 minute budget per run,
+  every 30 seconds); the general sender leaves SMS to it. The dispatcher itself handled 200 messages in about 1.4 seconds
+  against the fake provider on a laptop; the real provider's latency is unmeasured until the sandbox contract job runs.
+- **Decision 3 and the Watch-for item on phone numbers in the outbox.** The nightly outbox purge also deletes a failed SMS row
+  30 days after it failed, as it does a sent one, because the `recipient` column of a failed row would otherwise keep a
+  phone number for ever; email and Telegram rows are unchanged.
+- **Decision 13, a reminder over its cap must outlive today.** A reminder expires at the end of its window day, and one over the
+  tenant cap is deferred to tomorrow's window, so it would always expire first. `Deferred` can therefore carry a later
+  expiry (the end of tomorrow's window day); `notification_outbox_record_result` takes it as an optional last argument and
+  only ever moves the expiry later (the new expiry is at most 2 days after the row was queued, and never earlier than the one it had). A receipt held past twice the cap still
+  expires after its hour: holding it is not deferring it to a day when it would be stale.
+- **Decision 13, what the caps count and how exactly.** The caps count messages, not segments (a two segment message is one
+  toward the cap, though two toward the bill; `segments` in the delivery log is what the bill uses). The check reads the
+  count and then sends without a lock, so concurrent senders could overshoot a cap by a few messages. One SMS sender job runs
+  at a time across instances (db-scheduler), which bounds this to the messages in flight; a hard cap would need a per day
+  counter row locked per message, which is not worth its cost for a cost limit.
+- **Decision 6, what is ambiguous.** An HTTP 500, 502 or 504, a gateway or internal error code (500, 501) inside the
+  provider's answer, a read timeout, a broken connection and an SSL error after the connection was made are all `Unknown`
+  (no automatic retry), because the provider may have taken the message first. Only a connection that could not be made, a
+  failed TLS handshake, a 401 or 403, a 429, a 503 and "no balance" are clean failures. A 409 (Do Not Disturb), as an HTTP status or as the per recipient code inside a 2xx answer, is a final
+  rejection (`provider_dnd`). The other per recipient codes: 401, 402, 403, 404, 406, 407 and 502 are final rejections,
+  405 (no balance) is a clean failure, 500 and 501 are unknown, and an unlisted code is unknown.
+- **Spec 4.14, the provider alert.** On `provider_auth_failed` and `provider_insufficient_balance` the channel queues one
+  Telegram operator alert per reason per day (`sms.provider_alert`; the text carries the reason and the day, nothing else).
+- **The keyed phone hash is application code, not a database function.** The migration lists no SQL hash helper: the key is
+  derived from the application data key (HMAC-SHA256 with a fixed purpose label, `SmsRecipientHash`), so the secret never
+  reaches the database and an operator with SQL access cannot test a number against the log. The column
+  `recipient_hash` holds the 64 hex characters.
+- **The contract test.** `AfricasTalkingSandboxContractTest` and the manual workflow `sms-sandbox-contract` send one message
+  to the provider's sandbox (never on a pull request); it is the only check of the answer format and status codes against
+  the real provider, which until it has run come from the provider's public reference.
+- **Delivery reports (decision 7)** and the `SmsProvider.parse_delivery_report` method are not in this slice; the port has
+  `send` only.

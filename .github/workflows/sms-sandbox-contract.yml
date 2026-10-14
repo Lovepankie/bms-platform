@@ -1,0 +1,45 @@
+name: SMS sandbox contract
+
+# Manual only (spec section 8, ADR-036, issue #212): one real message to the Africa's Talking
+# SANDBOX, to confirm that the answer format and status codes the adapter reads are the provider's.
+# Never on a pull request, never on a schedule, never against production: the test builds its
+# settings through the startup guard as a staging host would, so it cannot be pointed at the live
+# host.
+#
+# This workflow holds a secret (the sandbox key), so it follows deploy.yml's rule (ADR-018 finding
+# H1): the shared self-hosted runner is persistent and runs unreviewed pull request code, so it never
+# sees a secret. This job runs on a GitHub-hosted runner, on the default branch only (a dispatch on
+# any other branch is skipped, because workflow_dispatch runs the test code of the chosen branch),
+# with read-only repository permissions, and the key is in the environment of the one step that
+# needs it and is never echoed. The test number is a repository variable.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Africa's Talking sandbox contract
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - name: Contract test against the sandbox
+        env:
+          BMS_SMS_CONTRACT: "true"
+          BMS_SMS_AT_API_KEY: ${{ secrets.BMS_SMS_SANDBOX_API_KEY }}
+          BMS_SMS_CONTRACT_TO: ${{ vars.BMS_SMS_CONTRACT_TO }}
+        run: mvn -B -Dtest=AfricasTalkingSandboxContractTest test

@@ -68,13 +68,14 @@ class OutboxIT extends IntegrationTest {
         }
 
         @Override
-        public void send(Delivery delivery) throws SendFailure {
+        public Result send(Delivery delivery) throws SendFailure {
             tried.add(delivery.idempotencyKey());
             if (failures > 0) {
                 failures--;
                 throw new SendFailure("fake provider down");
             }
             sent.add(delivery);
+            return Result.SENT;
         }
     }
 
@@ -303,10 +304,11 @@ class OutboxIT extends IntegrationTest {
             }
 
             @Override
-            public void send(Delivery delivery) {
+            public Result send(Delivery delivery) {
                 if (delivery.idempotencyKey().equals(key)) {
                     throw new AssertionError("the send died");
                 }
+                return Result.SENT;
             }
         };
         assertThatThrownBy(() -> {
@@ -516,7 +518,12 @@ class OutboxIT extends IntegrationTest {
                 Map.entry("receipt_no", "RC-HQ-000001"),
                 Map.entry("balance", "75,000"),
                 Map.entry("date", "6 Oct 2026"),
-                Map.entry("text", "Test digest line."));
+                Map.entry("text", "Test digest line."),
+                Map.entry("day", "2026-10-06"),
+                Map.entry("scope", "platform"),
+                Map.entry("state", "80 percent"),
+                Map.entry("cap", "2000"),
+                Map.entry("reason", "provider_auth_failed"));
         for (String channel : List.of("email", "telegram", "sms")) {
             for (String key : OutboxTemplates.keys(channel)) {
                 OutboxTemplates.Rendered rendered = templates.render(channel, key, params);

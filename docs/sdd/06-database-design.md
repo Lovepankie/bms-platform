@@ -265,8 +265,7 @@ expired rows are deleted 90 days after `closed_at` (FR-ONB-09).
 ### `notification_outbox` (platform; no privilege for `bms_app`, definer functions only, ADR-024)
 
 One row per message to send (spec section 11, FR-NTF-09): `id uuid PK`, `channel` [`email`,
-`telegram`, `sms`] (`sms` from `V30` for the savings receipts; no sender exists yet, so those rows
-expire unsent after two days, ADR-032), `recipient varchar(320)` (an address, `operator` for the
+`telegram`, `sms`] (`sms` from `V30` for the savings receipts, sent by the SMS channel from `V50`, ADR-036), `recipient varchar(320)` (an address, `operator` for the
 Telegram operator chat, whose id stays in the environment, or an E.164 phone for SMS), `template_key varchar(100)`, `params jsonb` (template values;
 cleared to `{}` once sent, because they can hold a one-time link), `status` [`pending`, `sent`,
 `failed`], `attempts integer`, `idempotency_key varchar(200) UNIQUE`, `throttle_key varchar(400)`
@@ -276,20 +275,56 @@ link the row carries stops working: never sent, sent again or kept with its para
 varchar(300)` (an error class or a sender's own safe message, never a text, an address or a
 token), `next_attempt_at` (also the claim lease), `created_at`, `updated_at`, `sent_at`,
 `failed_at`. Indexes on pending rows, failed rows, `(throttle_key, created_at)` and
-`(template_key, created_at)`. Row-level security forced with no policy, no grant to `bms_app`.
-Functions: `notification_outbox_enqueue` (ON CONFLICT on the key does nothing),
+`(template_key, created_at)`, and from `V50` `(updated_at)` for the claim's fairness count. Row-level security forced with no policy, no grant to `bms_app`.
+`V50` (issue #212, ADR-036) adds `tenant_id uuid` (null for a platform row; foreign key to `tenants`), `category` [`transactional`,
+`reminder`, `arrears`] (default `transactional`) and `subject_type` [`member`, `account`] with `subject_id uuid`. The table has
+a `tenant_id` but is a platform table: no policy, no grant, reached only through the functions below, which is why the isolation
+suite lists it by name.
+Functions: `notification_outbox_enqueue` (ON CONFLICT on the key does nothing; `V50` adds an overload that takes the category,
+subject and a hold time, reads the tenant from `app.tenant_id` and never from a parameter, refuses an SMS without a bound tenant
+or an expiry, writes no SMS row for a tenant the operator has not switched on, and caps a transactional SMS at one hour),
 `notification_outbox_count_since` (rows by throttle key or template in a time window, for the
 sign-up bounds), `notification_outbox_claim` (first marks due rows with their attempts used up or
 their link expired as `failed`, then takes one due row of the enabled channels with `FOR UPDATE
 SKIP LOCKED`, counting the attempt and setting the lease in the same statement),
 `notification_outbox_record` (sent, or pending again after 1 then 5 minutes, or `failed` at the
-third attempt), `notification_outbox_failures`, `notification_outbox_counts`,
+third attempt), `notification_outbox_record_result` (`V50`: `sent`, a clean `failed` with the same retry rule, `deferred`
+which gives the attempt back and holds the row until a time, `unknown` which marks it `failed` with `unknown_outcome` and
+keeps its parameters, `refused` which marks it `failed` with a reason code and clears them; an optional last argument lets a
+deferral move the expiry later, to at most 2 days after the row was queued, never earlier than it was), `notification_outbox_failures`
+(with the tenant and the category from `V50`), `notification_outbox_counts`,
 `notification_outbox_retry` (only a failed row younger than 7 days, with its link not expired and
-its parameters kept) and
-`notification_outbox_purge` (sent rows deleted after 30 days; any unsent row older than 7 days
-or past its `expires_at` loses its parameters, a pending one becoming `failed`, `expired`). It has no
-`tenant_id` in this slice; tenant messages (`outbox_events`, `notifications` of section 6.5) are
-still to come.
+its parameters kept; for an SMS whose delivery log row is `unknown` it also moves that row back to `failed`, the operator's
+deliberate resend) and
+`notification_outbox_purge` (sent rows deleted after 30 days, and from `V50` failed SMS rows 30 days after they failed, because their
+`recipient` holds a phone number; any unsent row older than 7 days
+or past its `expires_at` loses its parameters, a pending one becoming `failed`, `expired`). The claim (`V50` changes it) takes
+transactional rows first, then orders by a tenant's turn (its rank among its own due rows plus the rows it was given in the
+last minute), then by due time, and locks the best twenty candidates in that order with `SKIP LOCKED`.
+
+### SMS tables (issue #212, `V50`, ADR-036)
+
+- `platform_sms_controls` (platform; no privilege for `bms_app`): `tenant_id PK`, `enabled boolean` (default false),
+  `daily_cap integer` (0 to 100000), `updated_by`, `updated_at`. Read by `sms_tenant_control_current()` (the bound tenant's
+  own row) and `sms_tenant_control_get(tenant)`; written only by `sms_tenant_control_set`, which refuses a transaction bound
+  to a tenant. A tenant with no row is off with a cap of 200.
+- `app_tenant_is_active(tenant)`: whether a tenant is `active`; read by `TenantJobs.callForTenant`, which refuses to bind a
+  suspended or closed tenant for the SMS steps.
+- `sms_channel_state` (platform; one row): `mode`, `sending`, `changed_at`; written by `sms_channel_mode_changed(mode, now)`,
+  which marks every pending SMS row `failed`, `backlog_dropped`, when the mode moves from a non-sending one to
+  `allowlist` or `live`.
+- `sms_deliveries` (tenant, row-level security; `SELECT, INSERT, UPDATE` for `bms_app`): `id`, `tenant_id`, `created_at`,
+  `updated_at`, `outbox_id` (unique per tenant; no foreign key, the outbox is purged earlier), `template_key`, `category`,
+  `subject_type`, `subject_id`, `recipient_masked` (`+256*****1234`), `recipient_hash` (HMAC-SHA256 under a key derived from
+  the application data key), `provider` [`africastalking`, `sink`, `fake`], `provider_message_id`, `segments` (counted by us),
+  `provider_segments`, `cost_minor`, `currency`, `cost_raw`, `status` [`queued`, `sent`, `delivered`, `undelivered`,
+  `failed`, `rejected`, `blocked_optout`, `sunk`, `unknown`], `failure_reason`, `attempts`. The message text and the number
+  are in no column. Indexes on `(tenant_id, provider_message_id)`, `(tenant_id, created_at)` and `(created_at)`. Kept 13
+  months by `sms_deliveries_purge`; counted by `sms_platform_count_since` (the platform ceiling) and
+  `sms_tenant_count_since` (the operator's view).
+- `sms_opt_outs` (tenant, row-level security): `id`, `tenant_id`, `created_at`, `member_id` (no foreign key), `recipient_hash`
+  (null means any number), `scope` [`reminders`, `all`], `source` [`staff`, `member`], `created_by`, `removed_at`,
+  `removed_by`; active while `removed_at` is null.
 
 ### `unmatched_gateway_callbacks` (`bms_platform` and `bms_app` INSERT; `bms_platform` SELECT)
 
@@ -343,7 +378,7 @@ write. Keys and defaults:
 | `sms_sender_name` | string or null | null (aggregator default) | FR-NTF-02 |
 | `sms_window_start`, `sms_window_end` | `HH:MM` | `08:00`, `20:00` | FR-NTF-04 |
 | `sms_sender_approved` | boolean, set by the operator | false (shared sender) | ADR-036 |
-| `sms_daily_cap` | integer, set by the platform operator only (read only to the tenant admin) | a small default | ADR-036 |
+| `sms_daily_cap` | not a tenant setting: the cap and the on/off switch are in the platform table `platform_sms_controls`, set by the platform operator only | 200 until set; off | ADR-036, FR-NTF-20 |
 | `sms_include_balance` | boolean | false | ADR-036, FR-NTF-17 |
 | `payments.collections_enabled` | boolean | false; settable only for the tenant named by `BMS_PESAPAL_TENANT_ID` while credentials are environment-level | ADR-035 |
 | `ai.enabled`, `ai.daily_token_cap`, `ai.acknowledged_by`, `ai.acknowledged_at`, `ai.acknowledged_text_version` | boolean, integer, user, time, text | false, small, null | ADR-037 |
@@ -2072,9 +2107,10 @@ tables with `tenant_id`, forced row-level security (`bms_apply_tenant_rls`) and 
 
 | Table | Slice | Purpose |
 |---|---|---|
-| `notification_outbox.tenant_id`, `.category` (columns, platform table, additive) | #212 | The tenant that caused an SMS row and its category (ADR-036). The enqueue takes the tenant from the bound transaction; platform rows keep null |
-| `sms_deliveries` | #212 | One row per SMS attempt outcome: outbox id, template key, category, subject type and id, recipient masked, `recipient_hash`, provider, `provider_message_id`, `segments`, `provider_segments`, `cost_minor`, `currency`, `cost_raw`, `status`, `failure_reason`, timestamps. Index on `(tenant_id, provider_message_id)` and `(tenant_id, created_at)`. Retention 13 months |
-| `sms_opt_outs` | #218 | `member_id`, `recipient_hash`, `scope` [`reminders`, `all`], `source` [`staff`, `member`], `created_by`, `created_at`; a removal is a new row with `removed_at` |
+| `notification_outbox.tenant_id`, `.category`, `.subject_type`, `.subject_id` (columns, platform table, additive; built, `V50`) | #212 | The tenant that caused an SMS row, its category and subject (ADR-036). The enqueue takes the tenant from the bound transaction; platform rows keep null |
+| `platform_sms_controls`, `sms_channel_state` (platform; built, `V50`) | #212 | The operator's per tenant switch and cap; the SMS mode last seen, for the backlog drop. See "SMS tables" in section 6.4 |
+| `sms_deliveries` (built, `V50`) | #212 | One row per SMS message, moved from `queued` to its outcome: outbox id, template key, category, subject type and id, recipient masked, `recipient_hash`, provider, `provider_message_id`, `segments`, `provider_segments`, `cost_minor`, `currency`, `cost_raw`, `status`, `failure_reason`, timestamps. Index on `(tenant_id, provider_message_id)` and `(tenant_id, created_at)`. Retention 13 months |
+| `sms_opt_outs` (table built in `V50`, #212; the screens that write it are #218) | #212, #218 | `member_id`, `recipient_hash`, `scope` [`reminders`, `all`], `source` [`staff`, `member`], `created_by`, `created_at`; a removal sets `removed_at` |
 | `notification_templates` | #218 | Tenant overrides for `event_key` and `channel` with the text and a version (FR-NTF-03) |
 | `ai_calls` | #220 | Tenant, kind, asking user, model, request and response text (aliases and aggregates only), validation outcome, token counts, `estimated_cost_micro`, latency, status, fallback reason; 90 day retention |
 | `ai_briefs` | #226 | One stored all-branches brief per tenant and business date with its facts digest and `source` [`model`, `fallback`], unique on `(tenant_id, brief_date)`; shown only to all-branch users (FR-AIA-08) |

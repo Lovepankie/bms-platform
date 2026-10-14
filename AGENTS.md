@@ -218,10 +218,20 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   first report, `lending.par` (JSON and CSV), reads the figures through the new public port `InsightsFigures` of
   `lending.insights`, which holds the PAR figures so far. No permission is added. Deferred: the PDF and Excel renderers, the
   other six reports and the pack, the full report centre (slices D2 to D5, issues #217, #222, #225, #229).
-- **Client extras, design only (issue #210; slice D1 above is built):** `docs/specs/client-extras.md` specifies mobile money through Pesapal
+- **Client extras (issue #210; slices D1 and B1 are built):** `docs/specs/client-extras.md` specifies mobile money through Pesapal
   (ADR-035), SMS through Africa's Talking on the outbox (ADR-036), the advisory AI brief (ADR-037) and the formal
-  reports pack as PDF and Excel (ADR-038), with a note on credit bureaus. Nothing is built; the build slices are issues
-  #211 to #233 in the order of the spec's section 10. The numbers 033 and 034 belong to open pull requests.
+  reports pack as PDF and Excel (ADR-038), with a note on credit bureaus. The build slices are issues
+  #211 to #233 in the order of the spec's section 10.
+- **Built (extras slice B1, issue #212, ADR-036):** the SMS channel core in `core.notifications`: tenant,
+  category and subject on the outbox row; the claim that takes transactional rows first and rotates across tenants;
+  `OutboxChannel.send` returning sent, deferred, unknown or refused; the `SmsProvider` port with the Africa's Talking
+  adapter, a non-sending sink (the only provider outside production), an allow-list provider and a recording fake;
+  `BMS_SMS_MODE` off, sink, allowlist, live with a startup guard that refuses any non-sandbox URL or account outside
+  production in every mode; the `sms_deliveries` delivery and cost log, `sms_opt_outs`, the sending window, the platform
+  ceiling and the operator-only per tenant switch and cap (`PUT /platform/tenants/{tenant_id}/sms`); strict phone
+  forms for SMS; savings receipts through the channel without the balance unless `sms_include_balance`; migration
+  `V50`; runbooks `docs/runbooks/sms-setup.md` and `sms-incident.md`. Delivery reports are #215, the tenant SMS settings
+  and opt-out screens #218.
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
   Cloudflare Tunnel and pulls every green build of `main` from a `staging` pointer tag; hosts are
@@ -285,7 +295,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `core.approvals` | Maker-checker | APR | 6.5 `approval_requests` | 7.11.5 |
 | `core.platform` | Platform console: tenant creation, modules, subscriptions | TEN | 6.4, 6.5 | 7.11.3 |
 | `core.ledger` | Chart of accounts, periods, journals, reconciliation | GL | 6.6 | 7.11.6 |
-| `core.notifications` | Templates, outbox, SMS and email adapters; today the platform outbox with SMTP and Telegram senders (ADR-024) | NTF | 6.4 `notification_outbox`, 6.5 | 7.11.3, 7.11.7 |
+| `core.notifications` | Templates, outbox, SMS and email adapters: the platform outbox with SMTP and Telegram senders (ADR-024) and the SMS channel (ADR-036, issue #212): provider port, Africa's Talking adapter, sink, delivery and cost log, opt-out, window, caps, startup guard | NTF | 6.4 `notification_outbox`, SMS tables, 6.5 | 7.11.3, 7.11.7 |
 | `core.onboarding` | Public sign-up, applications, Verify, Needs info, Reject, Activate (ADR-024) | ONB | 6.4 `onboarding_applications` | 7.11.3 |
 | `core.documents` | PDFs, uploads, object storage, signed URLs | DOC | 6.5 `documents` | 7.11.7 |
 | `core.reporting` | Report catalogue and runs: the queue, the runner job, one snapshot transaction per run into a spool, JSON and CSV files, cancel and the 30 day expiry (ADR-038, issue #214); verticals register their reports | RPT; chapter 14 | 6.5 `report_runs` | 7.11.8 |
@@ -490,8 +500,8 @@ Accepted (this list is the ADR index):
   hint, the status query as the truth, idempotent booking through purpose handlers (proposed, #210;
   settles the question that was pending ADR-011)
 - ADR-036 SMS as a channel of the notification outbox: Africa's Talking first, tenant link and delivery
-  log, modes with a sink outside production, windows and opt-out (proposed, #210; settles the SMS half
-  of pending ADR-013)
+  log, modes with a sink outside production, windows and opt-out (accepted; channel core built in #212;
+  settles the SMS half of pending ADR-013)
 - ADR-037 AI portfolio monitoring: advisory, aggregates and aliases only, numbers validated in code,
   off by default (proposed, #210)
 - ADR-038 The reports pack: asynchronous runs over one snapshot, PDF through the shared templates,

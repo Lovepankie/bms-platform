@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.tenancy;
 
+import java.time.LocalTime;
 import java.util.Map;
 import java.util.Set;
 
@@ -29,6 +30,18 @@ public interface TenantSettings {
 
     /** FR-ORG-07: the most active loans one member may hold; null when the tenant sets no limit. */
     Integer maxActiveLoansPerMember();
+
+    /** FR-NTF-04: when the tenant's sending window opens (default 08:00); reminders and arrears wait for it. */
+    LocalTime smsWindowStart();
+
+    /** FR-NTF-04: when the tenant's sending window closes (default 20:00). */
+    LocalTime smsWindowEnd();
+
+    /**
+     * FR-NTF-17, ADR-036 decision 14: whether a savings receipt SMS carries the account balance
+     * (default false: on a phone a household shares, a balance tells everyone what a member holds).
+     */
+    boolean smsIncludeBalance();
 
     /**
      * Whether the report runs of ADR-038 are switched on for this tenant (extras slice D1, issue #214).

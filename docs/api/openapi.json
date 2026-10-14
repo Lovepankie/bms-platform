@@ -4834,6 +4834,10 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "category" : {
+            "description" : "transactional, reminder or arrears",
+            "type" : "string"
+          },
           "channel" : {
             "type" : "string"
           },
@@ -4858,6 +4862,11 @@
             "type" : "string"
           },
           "template_key" : {
+            "type" : "string"
+          },
+          "tenant_id" : {
+            "description" : "The tenant that caused the row (an SMS, a tenant digest), or null for a platform row",
+            "format" : "uuid",
             "type" : "string"
           }
         }
@@ -15314,6 +15323,10 @@
             "description" : "True once the business set-up checklist has been dismissed",
             "type" : "boolean"
           },
+          "sms_include_balance" : {
+            "description" : "Whether a savings receipt SMS carries the account balance (default false, FR-NTF-17)",
+            "type" : "boolean"
+          },
           "sms_sender_name" : {
             "type" : "string"
           },
@@ -15329,6 +15342,33 @@
           },
           "version" : {
             "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "TenantSmsControls" : {
+        "properties" : {
+          "daily_cap" : {
+            "description" : "Messages a day; receipts may go up to twice this, reminders stop at it",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "enabled" : {
+            "description" : "Off by default; only the platform operator switches it on",
+            "type" : "boolean"
+          },
+          "mode" : {
+            "description" : "BMS_SMS_MODE of this environment: off, sink, allowlist or live",
+            "type" : "string"
+          },
+          "platform_daily_cap" : {
+            "description" : "The platform-wide ceiling of BMS_SMS_PLATFORM_DAILY_CAP, read only",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "used_today" : {
+            "description" : "Messages counted today (Africa/Kampala), sent, in flight or sunk",
+            "format" : "int64",
             "type" : "integer"
           }
         }
@@ -15716,6 +15756,9 @@
           "setup_dismissed" : {
             "type" : "boolean"
           },
+          "sms_include_balance" : {
+            "type" : "boolean"
+          },
           "sms_sender_name" : {
             "description" : "Subject to aggregator approval",
             "pattern" : "^[A-Za-z0-9 ]{3,11}$",
@@ -15735,6 +15778,20 @@
             "type" : "string"
           }
         }
+      },
+      "UpdateTenantSmsControlsRequest" : {
+        "properties" : {
+          "daily_cap" : {
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "daily_cap", "enabled" ]
       },
       "UpdateUserRequest" : {
         "description" : "Omitted fields are unchanged",
@@ -21694,6 +21751,70 @@
           }
         },
         "summary" : "Resume a suspended tenant (FR-TEN-06)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/sms" : {
+      "get" : {
+        "operationId" : "platformGetSmsControls",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantSmsControls"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A tenant's SMS switch, daily cap and use today (ADR-036)",
+        "tags" : [ "platform" ]
+      },
+      "put" : {
+        "operationId" : "platformSetSmsControls",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateTenantSmsControlsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantSmsControls"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Switch SMS on or off for a tenant and set its daily cap (ADR-036)",
         "tags" : [ "platform" ]
       }
     },

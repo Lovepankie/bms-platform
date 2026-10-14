@@ -36,7 +36,7 @@ class SmtpEmailChannel implements OutboxChannel {
     }
 
     @Override
-    public void send(Delivery delivery) throws Exception {
+    public Result send(Delivery delivery) throws Exception {
         Properties props = new Properties();
         props.put("mail.transport.protocol", "smtps");
         props.put("mail.smtps.host", smtp.host());
@@ -58,6 +58,7 @@ class SmtpEmailChannel implements OutboxChannel {
             message.saveChanges();
             transport.sendMessage(message, message.getAllRecipients());
         }
+        return Result.SENT;
     }
 
     /** {@code <key in base64url>@bms.outbox>}: stable per outbox row. */

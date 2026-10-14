@@ -288,6 +288,9 @@ class SavingsIT extends LoanFixtures {
         assertThat(deposit(account, 10_000, null).getBody().get("code").asString())
                 .isEqualTo("idempotency_key_missing");
 
+        // SMS is off for every tenant until the platform operator switches it on (ADR-036).
+        smsOn();
+
         String k = key();
         ResponseEntity<JsonNode> d = deposit(account, 50_000, k);
         assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.CREATED);
@@ -330,10 +333,69 @@ class SavingsIT extends LoanFixtures {
         assertThat(sms.getFirst().get("recipient")).isEqualTo("+256700000203");
         assertThat(sms.getFirst().get("template_key")).isEqualTo("savings.deposit");
         assertThat((String) sms.getFirst().get("params"))
-                .contains("50,000", first.get("account_no").asString());
+                .contains("50,000", first.get("account_no").asString())
+                // FR-NTF-17: the default receipt carries no balance.
+                .doesNotContain("balance");
         assertThat(sms.getFirst().get("status")).isEqualTo("pending");
         assertThat(sms.getFirst().get("expires")).isEqualTo(true);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT category || ' ' || subject_type || ' ' || (tenant_id = ?) || ' '"
+                                + " || (expires_at <= created_at + interval '1 hour') FROM notification_outbox"
+                                + " WHERE channel = 'sms' AND idempotency_key LIKE ?")
+                        .params(t.tenantId(), "lending.savings.sms:" + t.tenantId() + ":%")
+                        .query(String.class)
+                        .single())
+                .isEqualTo("transactional member true true");
         booksAgree();
+    }
+
+    /** ADR-036 decision 13 and 14: no row without the operator's switch; the balance only when the tenant asks. */
+    @Test
+    void frNtf17_aReceiptIsQueuedOnlyWhenTheOperatorSwitchedSmsOnAndCarriesTheBalanceOnlyIfAsked() {
+        String product = product("SMSOFF", Map.of());
+        String member = member("Test Saver 04", "+256700000204", t.headOffice(), true);
+        String account = open(member, product).get("id").asString();
+        String like = "lending.savings.sms:" + t.tenantId() + ":%";
+        String count = "SELECT count(*) FROM notification_outbox WHERE channel = 'sms' AND idempotency_key LIKE ?";
+
+        assertThat(deposit(account, 30_000, key()).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(TestDatabase.owner().sql(count).param(like).query(Long.class).single())
+                .isZero();
+
+        smsOn();
+        assertThat(deposit(account, 10_000, key()).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(TestDatabase.owner().sql(count).param(like).query(Long.class).single())
+                .isEqualTo(1);
+
+        // The tenant admin asks for the balance (the settings write is audited as any other).
+        ResponseEntity<JsonNode> settings =
+                send(HttpMethod.GET, "/api/v1/settings", as(admin, adminPerms, "*", null), null);
+        assertThat(settings.getBody().get("sms_include_balance").asBoolean()).isFalse();
+        ResponseEntity<JsonNode> changed = send(
+                HttpMethod.PATCH,
+                "/api/v1/settings",
+                as(admin, adminPerms, "*", settings.getHeaders().getETag()),
+                Map.of("sms_include_balance", true));
+        assertThat(changed.getStatusCode()).as("%s", changed.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(deposit(account, 5_000, key()).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        List<String> params = TestDatabase.owner()
+                .sql("SELECT params::text FROM notification_outbox WHERE channel = 'sms' AND idempotency_key LIKE ?"
+                        + " ORDER BY created_at DESC")
+                .param(like)
+                .query(String.class)
+                .list();
+        assertThat(params).hasSize(2);
+        assertThat(params.getFirst()).contains("balance", "45,000");
+        assertThat(params.getLast()).doesNotContain("balance");
+    }
+
+    /** The operator switches SMS on for this test's tenant, with a cap well above what a test sends. */
+    private void smsOn() {
+        TestDatabase.owner()
+                .sql("INSERT INTO platform_sms_controls (tenant_id, enabled, daily_cap) VALUES (?, true, 1000)"
+                        + " ON CONFLICT (tenant_id) DO UPDATE SET enabled = true")
+                .param(t.tenantId())
+                .update();
     }
 
     // ---- Withdrawals (FR-SAV-03) ------------------------------------------------------------

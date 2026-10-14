@@ -67,6 +67,10 @@ applicant, Needs info; for a tenant admin, a new invitation). A bot token that i
 `<digits>:<characters>` shape (for example with a trailing space or a CRLF line ending in
 `.env`) switches Telegram off with a warning in the log; fix the line.
 
+SMS is a channel of the same outbox but is off for every tenant until the platform operator switches it on
+(`PUT /api/v1/platform/tenants/{tenant_id}/sms`) and off for the environment until a provider and a mode are set;
+see `docs/runbooks/sms-setup.md`. A new tenant therefore sends no SMS until you decide it should.
+
 ## Protect the public sign-up (once per environment, the dev lead)
 
 The sign-up form is public. In front of the API's own bounds, add a Cloudflare rate limiting rule

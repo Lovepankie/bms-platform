@@ -68,6 +68,17 @@ class TransactionalTenantJobs implements TenantJobs {
         return TenantContext.callAs(tenantId, work);
     }
 
+    @Override
+    public <T> T callForTenant(UUID tenantId, Supplier<T> work) {
+        if (!Boolean.TRUE.equals(jdbc.sql("SELECT app_tenant_is_active(?)")
+                .param(tenantId)
+                .query(Boolean.class)
+                .single())) {
+            throw new InactiveTenantException();
+        }
+        return TenantContext.callAs(tenantId, () -> transactions.execute(status -> work.get()));
+    }
+
     private int run(String jobName, List<UUID> tenants, Consumer<UUID> work) {
         int failures = 0;
         for (UUID tenantId : tenants) {

@@ -36,6 +36,52 @@ class KernelTest {
         assertThat(PhoneNumbers.normaliseUganda(raw)).isEmpty();
     }
 
+    /** ADR-036: the forms a message may go to, all read as a Uganda mobile number (fabricated numbers). */
+    @ParameterizedTest
+    @CsvSource({
+        "+256700000001, +256700000001",
+        "+256 700 000 002, +256700000002",
+        "256700000003, +256700000003",
+        "0700000004, +256700000004",
+        "0700-000-005, +256700000005",
+        "(+256) 700.000.006, +256700000006"
+    })
+    void smsNumbersNormaliseOnlyFromTheFormsWeCanReadWithoutGuessing(String raw, String expected) {
+        assertThat(PhoneNumbers.forSms(raw)).contains(expected);
+    }
+
+    /**
+     * A bare 10 digit foreign number must never be sent: without its country code it would be read as
+     * a stranger's number in another country, so it is refused rather than guessed.
+     */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "",
+                "   ",
+                "700000007",
+                "2125550123",
+                "4155550123",
+                "6505550123",
+                "0612345678",
+                "0800000008",
+                "07000000091",
+                "070000009",
+                "25670000000",
+                "2567000000011",
+                "+14155550123",
+                "+254700000010",
+                "+2547000000",
+                "00256700000011",
+                "+25670000001x",
+                "abc",
+                "+256 7000 00012 3"
+            })
+    void ambiguousOrForeignNumbersAreRefusedForSms(String raw) {
+        assertThat(PhoneNumbers.forSms(raw)).as("%s", raw).isEmpty();
+        assertThat(PhoneNumbers.forSms(null)).isEmpty();
+    }
+
     /** FR-MEM-03: upper case, no spaces, C[MF] plus 12. */
     @Test
     void ninIsNormalisedAndValidated() {

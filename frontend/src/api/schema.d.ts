@@ -2322,6 +2322,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/tenants/{tenant_id}/sms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A tenant's SMS switch, daily cap and use today (ADR-036) */
+        get: operations["platformGetSmsControls"];
+        /** Switch SMS on or off for a tenant and set its daily cap (ADR-036) */
+        put: operations["platformSetSmsControls"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants/{tenant_id}/subscription": {
         parameters: {
             query?: never;
@@ -6771,6 +6789,8 @@ export interface components {
         OutboxFailure: {
             /** Format: int32 */
             attempts?: number;
+            /** @description transactional, reminder or arrears */
+            category?: string;
             channel?: string;
             /** Format: date-time */
             created_at?: string;
@@ -6783,6 +6803,11 @@ export interface components {
             /** @description Masked to its last 4 characters */
             recipient?: string;
             template_key?: string;
+            /**
+             * Format: uuid
+             * @description The tenant that caused the row (an SMS, a tenant digest), or null for a platform row
+             */
+            tenant_id?: string;
         };
         OutboxStatus: {
             /** @description Rows per status: pending, sent, failed */
@@ -12013,6 +12038,8 @@ export interface components {
             require_mfa_all_staff?: boolean;
             /** @description True once the business set-up checklist has been dismissed */
             setup_dismissed?: boolean;
+            /** @description Whether a savings receipt SMS carries the account balance (default false, FR-NTF-17) */
+            sms_include_balance?: boolean;
             sms_sender_name?: string;
             sms_window_end?: string;
             sms_window_start?: string;
@@ -12020,6 +12047,27 @@ export interface components {
             theme_primary?: string;
             /** Format: int32 */
             version?: number;
+        };
+        TenantSmsControls: {
+            /**
+             * Format: int32
+             * @description Messages a day; receipts may go up to twice this, reminders stop at it
+             */
+            daily_cap?: number;
+            /** @description Off by default; only the platform operator switches it on */
+            enabled?: boolean;
+            /** @description BMS_SMS_MODE of this environment: off, sink, allowlist or live */
+            mode?: string;
+            /**
+             * Format: int32
+             * @description The platform-wide ceiling of BMS_SMS_PLATFORM_DAILY_CAP, read only
+             */
+            platform_daily_cap?: number;
+            /**
+             * Format: int64
+             * @description Messages counted today (Africa/Kampala), sent, in flight or sunk
+             */
+            used_today?: number;
         };
         /** @description How the user left a guided tour, and its version then */
         TourState: {
@@ -12157,12 +12205,18 @@ export interface components {
             reports_enabled?: boolean;
             require_mfa_all_staff?: boolean;
             setup_dismissed?: boolean;
+            sms_include_balance?: boolean;
             /** @description Subject to aggregator approval */
             sms_sender_name?: string;
             sms_window_end?: string;
             sms_window_start?: string;
             /** @description #RRGGBB, or an empty string to clear it; white or near-black text on it must reach contrast 4.5 (FR-TEN-08) */
             theme_primary?: string;
+        };
+        UpdateTenantSmsControlsRequest: {
+            /** Format: int32 */
+            daily_cap: number;
+            enabled: boolean;
         };
         /** @description Omitted fields are unchanged */
         UpdateUserRequest: {
@@ -16155,6 +16209,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformTenant"];
+                };
+            };
+        };
+    };
+    platformGetSmsControls: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantSmsControls"];
+                };
+            };
+        };
+    };
+    platformSetSmsControls: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTenantSmsControlsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantSmsControls"];
                 };
             };
         };

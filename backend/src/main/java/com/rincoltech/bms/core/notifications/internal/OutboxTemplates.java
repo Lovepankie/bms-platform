@@ -104,14 +104,33 @@ class OutboxTemplates {
                             + " {emails} confirmation emails. New sign-ups are answered but nothing is sent until the"
                             + " hour passes. Check the edge rule and the portal."),
             "insights.daily_digest",
-            new Template(null, "{text}"));
+            new Template(null, "{text}"),
+            // ADR-036 decision 13: the operator hears when SMS use reaches 80 percent of a daily cap or
+            // a cap holds messages back. The scope is "platform" or a tenant id; no number, no text.
+            "sms.provider_alert",
+            new Template(
+                    null,
+                    "BMS SMS provider problem on {day}: {reason}. Check the Africa's Talking key and credit. Messages"
+                            + " are retried, then fail; receipts expire after an hour."),
+            "sms.cap_alert",
+            new Template(
+                    null,
+                    "BMS SMS cap on {day}: {scope} is at {state} of its daily limit of {cap}. Messages over the cap"
+                            + " are held, not dropped, until they expire. Check the usage and the cap."));
 
     /**
-     * Member receipts (chapter 11 section 11.3.1). Short enough for one SMS; no name, only the
-     * account number. Nothing sends them until an SMS sender exists (pending ADR-013).
+     * Member receipts (chapter 11 section 11.3.1, ADR-036 decision 14). Short enough for one SMS; no
+     * name, only the account number. The default carries no balance: on a phone a household shares, a
+     * balance tells everyone what a member holds. A template named {@code <key>.with_balance} is the
+     * variant a tenant that switched {@code sms_include_balance} on gets, chosen when the parameters
+     * carry a balance; the channel drops the balance parameter again when the setting is off.
      */
     private static final Map<String, Template> SMS = Map.of(
             "savings.deposit",
+            new Template(
+                    null,
+                    "{tenant_name}: Deposit of {currency} {amount} on account {account_no}. Receipt {receipt_no}."),
+            "savings.deposit.with_balance",
             new Template(
                     null,
                     "{tenant_name}: Deposit of {currency} {amount} on account {account_no}. Receipt {receipt_no}."
@@ -119,8 +138,14 @@ class OutboxTemplates {
             "savings.withdrawal",
             new Template(
                     null,
+                    "{tenant_name}: Withdrawal of {currency} {amount} from account {account_no}. Voucher {receipt_no}."),
+            "savings.withdrawal.with_balance",
+            new Template(
+                    null,
                     "{tenant_name}: Withdrawal of {currency} {amount} from account {account_no}. Voucher {receipt_no}."
                             + " Balance {currency} {balance}."));
+
+    static final String WITH_BALANCE = ".with_balance";
 
     private static Map<String, Template> byChannel(String channel) {
         return switch (channel) {
@@ -132,12 +157,19 @@ class OutboxTemplates {
     }
 
     Rendered render(String channel, String templateKey, Map<String, String> params) {
-        Template template = byChannel(channel).get(templateKey);
+        Template template = byChannel(channel).get(withBalanceVariant(channel, templateKey, params));
         if (template == null) {
             throw new IllegalArgumentException("no " + channel + " template " + templateKey);
         }
         return new Rendered(
                 template.subject() == null ? null : fill(template.subject(), params), fill(template.text(), params));
+    }
+
+    /** The SMS variant that carries the balance, when the parameters hold one and the template has it. */
+    private static String withBalanceVariant(String channel, String templateKey, Map<String, String> params) {
+        return "sms".equals(channel) && params.containsKey("balance") && SMS.containsKey(templateKey + WITH_BALANCE)
+                ? templateKey + WITH_BALANCE
+                : templateKey;
     }
 
     /** The placeholders a template uses, for the render tests. */

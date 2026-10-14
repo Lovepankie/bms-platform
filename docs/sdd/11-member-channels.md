@@ -140,7 +140,7 @@ within one 160 character GSM-7 segment where possible:
 | `loan.due_today` | On the due date | `{tenant_name}: {currency} {amount} for loan {loan_no} is due today.` |
 | `loan.overdue_1`, `loan.overdue_7`, `loan.overdue_30` | At 1, 7 and 30 DPD | `{tenant_name}: Loan {loan_no} is {dpd} days overdue. Amount in arrears {currency} {arrears}. Please pay to avoid penalties.` |
 | `loan.closed` | Loan closed | `{tenant_name}: Loan {loan_no} is fully paid. Thank you.` |
-| `savings.deposit`, `savings.withdrawal` | Transaction recorded by staff (a closure's payout too); queued in the outbox, not sent until an SMS sender exists (ADR-032) | `{tenant_name}: Deposit of {currency} {amount} on account {account_no}. Receipt {receipt_no}. Balance {currency} {balance}.` (a withdrawal says Withdrawal and Voucher) |
+| `savings.deposit`, `savings.withdrawal` | Transaction recorded by staff (a closure's payout too); queued in the outbox for a tenant the operator has switched on, sent by the SMS channel (ADR-032, ADR-036); expires an hour after it is queued | `{tenant_name}: Deposit of {currency} {amount} on account {account_no}. Receipt {receipt_no}.` (a withdrawal says Withdrawal and Voucher). With the tenant setting `sms_include_balance` on it ends ` Balance {currency} {balance}.` (template `savings.deposit.with_balance`) |
 | `investment.funded`, `investment.maturing`, `investment.paid_out` | Lifecycle | Similar pattern |
 | `auth.member_otp` | Activation or PIN reset | `{code} is your {tenant_name} code. It expires in 10 minutes. Do not share it.` |
 
@@ -158,6 +158,11 @@ within one 160 character GSM-7 segment where possible:
 - Opt-out: a member can be opted out of reminders and arrears messages, or of all non-security SMS (FR-NTF-14).
 - Staging never sends a real SMS (FR-NTF-12). Receipts and payment links are not held by the sending window; reminders
   and arrears notices are.
+- A message goes only to a number read without guessing (FR-NTF-19); SMS is off for a tenant until the operator switches it
+  on and sets its daily cap (FR-NTF-20); a receipt older than an hour and a reminder past its window day are never sent
+  (FR-NTF-17); a message that may already have gone is never sent again by the machine (FR-NTF-21).
+- No message carries a balance unless the tenant asked for it (`sms_include_balance`, FR-NTF-17), a loan purpose, a third
+  party or a threat; reminders never carry a balance.
 
 ## 11.4 USSD (later)
 
