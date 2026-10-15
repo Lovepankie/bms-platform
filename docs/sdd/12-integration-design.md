@@ -76,7 +76,11 @@ a short tenant transaction, because tenant template overrides and the opt-out ne
 `Deferred(until)` or `Unknown` (a read timeout after the request was written) instead of only throwing; retries follow the outbox
 (attempts at once, after 1 and after 5 minutes) and the 30 minute step of FR-NTF-05 is dropped for SMS. As built (issue #212) the
 channel also answers `Refused(reason)` for a message it will never send (see the amendment in ADR-036), writes the delivery log
-row `queued` before the network call so a crash is never resent, and has its own sender job.
+row `queued` before the network call so a crash is never resent, and has its own sender job. As built (issue #218) the
+same transaction also reads the tenant's own settings (its switch, sender id, window, caps and balance switch), the tenant's
+wording for the event, and the opt-out rows of the member and of the number, and passes the sender id to
+`SmsProvider.send` only while the operator still approves it for the tenant; the test message of the wording screen is a
+separate path that can reach only the sink or the allow-list (ADR-036 second amendment).
 
 ## 12.4 Payment gateway and mobile money
 

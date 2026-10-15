@@ -48,15 +48,6 @@ class SettingsController {
     record SettingsResponse(
             String displayName,
             String receiptFooter,
-            String smsSenderName,
-            String smsWindowStart,
-            String smsWindowEnd,
-
-            @Schema(
-                    description =
-                            "Whether a savings receipt SMS carries the account balance (default false, FR-NTF-17)")
-            boolean smsIncludeBalance,
-
             Map<String, Long> approvalThresholdsMinor,
             int approvalValidityDays,
             boolean allowLoansBeforeKycVerified,
@@ -91,17 +82,6 @@ class SettingsController {
     record UpdateSettingsRequest(
             @Size(min = 1, max = 100) String displayName,
             @Size(max = 500) String receiptFooter,
-
-            @Pattern(regexp = "^[A-Za-z0-9 ]{3,11}$") @Schema(description = "Subject to aggregator approval")
-            String smsSenderName,
-
-            @Pattern(regexp = "^([01][0-9]|2[0-3]):[0-5][0-9]$")
-            String smsWindowStart,
-
-            @Pattern(regexp = "^([01][0-9]|2[0-3]):[0-5][0-9]$")
-            String smsWindowEnd,
-
-            Boolean smsIncludeBalance,
 
             @Schema(description = "Action type to amount in minor units; below it no checker is needed (FR-APR-04)")
             Map<String, Long> approvalThresholdsMinor,

@@ -31,6 +31,9 @@ public interface TenantSettings {
     /** FR-ORG-07: the most active loans one member may hold; null when the tenant sets no limit. */
     Integer maxActiveLoansPerMember();
 
+    // The three SMS reads below come from the settings group "sms" (core.notifications, issue #218), which only
+    // PUT /settings/sms writes; PATCH /settings no longer takes them.
+
     /** FR-NTF-04: when the tenant's sending window opens (default 08:00); reminders and arrears wait for it. */
     LocalTime smsWindowStart();
 

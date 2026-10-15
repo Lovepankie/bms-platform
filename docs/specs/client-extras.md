@@ -531,6 +531,50 @@ sharpens, the text above:
 - **Throughput.** SMS has its own sender job (200 rows and a 4 minute budget per run). Measured against the fake provider the
   dispatcher handled 200 messages in about 1.4 seconds; the provider's own latency is measured by the manual sandbox job.
 
+### 4.16 As built in slice #218 (tenant SMS settings, opt-out screens and wording)
+
+The tenant side of 4.8 to 4.10 is built (migration `V52`; ADR-036 second amendment carries the decisions, review answers 11.1
+findings 4, 6 and 8 hold). Where the build differs from, or sharpens, the text above:
+
+- **Two switches.** SMS needs the operator's switch (4.6, `PUT /platform/tenants/{tenant_id}/sms`) and the tenant's own, the
+  settings group `sms` (`PUT /settings/sms`, the tenant administrator only), which is off for every tenant and is switched on
+  after the administrator accepts a notice that every message costs money, that a message goes only to a member's own phone and
+  that the platform caps the volume. The notice has a version; the user and time are stamped by the server. No SMS row is
+  written while either switch is off, a row queued before the tenant switched off is refused, and switching on drops the
+  tenant's pending rows (`backlog_dropped`) in the same transaction, so a switch-on never releases an old receipt. Tenants the
+  operator had already switched on are off until their administrator does the same.
+- **Sender id is an allow-list (4.8).** The `approved` flag is the table `platform_sms_sender_ids`: the operator approves an id
+  for a tenant (`PUT /platform/tenants/{tenant_id}/sms/sender-ids/{sender_id}`), an id belongs to one tenant at a time, and the
+  tenant administrator can only choose among its own. The shape is 3 to 11 ASCII letters and digits with at least one letter.
+  The channel checks the approval again on every message and uses the shared sender once an id is withdrawn.
+- **Window.** On the Africa/Kampala clock, at least 60 minutes, inside 06:00 to 21:00. These limits are hard; a tenant cannot set
+  them aside.
+- **Caps.** A tenant's daily cap is at most the operator's cap for it (and never above the platform ceiling); its monthly cap is
+  at most thirty-one times that. 0 means stop and is enforced for every message including receipts; an absent cap is the
+  ceiling. The lower of the stored cap and the ceiling applies on every message, so lowering the operator's cap bites at once.
+  The month is the Africa/Kampala calendar month; the monthly count is read only when a monthly cap is set.
+- **Opt-out (4.9).** Two kinds of row: about a member (from the member's page, `PUT /lending/members/{id}/sms-opt-out`; it holds
+  no number and follows the member to any number) and about a number alone (the administrator adds one or pastes up to 2000;
+  matched by the keyed hash, blocking the number whoever the message is about; a pasted list never weakens a block). Numbers are
+  shown masked and never stored. Stopping more is any permitted user's; lifting a row or narrowing `all` to `reminders` is the tenant
+  administrator's, needs a reason of 3 to 200 characters kept in the audit row, and the screens ask for a confirmation first. The
+  list searches as you type (ADR-039) and pages by cursor.
+- **Templates (4.10).** Overrides for the two savings receipts (the events the application sends today); each later event brings its
+  placeholder list. The language is `{name}` placeholders and plain text only. Limits: 320 characters, at most 4 segments in the
+  worst case (counted in UTF-16 units), no invisible or direction-changing characters, required placeholders, and no balance in any
+  override. A value longer than its placeholder allows is refused (`value_too_long`), never cut. The preview
+  shows fabricated data with the tenant's own business name, the encoding and segments, and a cost estimate that is the average
+  cost per segment of the tenant's own sent messages in the last 30 days (none without history). The test message reaches only the
+  sink or the environment's allow-list and never a number in a live mode; one that would really go out obeys the operator's switch,
+  the tenant's switch, the opt-out list and the caps, and is logged as a delivery.
+- **Settings moved.** `sms_sender_name`, `sms_window_start`, `sms_window_end` and `sms_include_balance` left `PATCH /settings` for
+  the group; `V52` copies the window and balance values once (a window that fails the limits is not copied). A window stored
+  outside 06:00 to 21:00 or under 60 minutes is replaced by the default on read. A row queued before the switch-on is refused by
+  the channel as `backlog_dropped`, including one already claimed when the switch was turned on.
+- **Not in this slice.** Per-event wording for the loan and investment events and the reminders (they join when their slices queue
+  them), delivery reports and the per-message history screen (#215), the operator's screen for sender ids (the routes and the runbook
+  exist), inbound STOP.
+
 ## 5. AI monitoring (ADR-037)
 
 ### 5.1 Summary

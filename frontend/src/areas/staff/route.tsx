@@ -17,6 +17,7 @@ import { showSavings } from './lending/savings-permissions';
 import { showReports } from './reports/permissions';
 import { RetailNav } from './retail/nav';
 import { canSeeProfit, showRetail } from './retail/permissions';
+import { showSms } from './sms/state';
 
 // The staff area layout: restores the session from the refresh cookie, shows who is signed in,
 // and holds the branch switcher (FR-BR-03). Switching the branch changes what lists show without
@@ -120,6 +121,7 @@ export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: 
         {showInsights(me) && <Link to="/staff/insights" data-tour="nav-insights">Insights</Link>}
         {showReports(me) && <Link to="/staff/reports">Reports</Link>}
         {showRetail(me) && <Link to="/staff/retail" data-tour="nav-retail">Retail</Link>}
+        {showSms(me) && <Link to="/staff/sms">SMS</Link>}
         {permissions.includes('core.settings.manage') && <Link to="/staff/setup">Business set-up</Link>}
       </nav>
     </header>

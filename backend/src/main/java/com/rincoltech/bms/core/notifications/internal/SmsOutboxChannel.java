@@ -2,7 +2,6 @@ package com.rincoltech.bms.core.notifications.internal;
 
 import com.rincoltech.bms.core.jobs.TenantJobs;
 import com.rincoltech.bms.core.notifications.Outbox;
-import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.Masking;
 import com.rincoltech.bms.kernel.PhoneNumbers;
@@ -65,7 +64,7 @@ final class SmsOutboxChannel implements OutboxChannel {
     private final SmsProvider provider;
     private final OutboxTemplates templates;
     private final BusinessClock clock;
-    private final TenantSettings tenantSettings;
+    private final SmsTenantConfig tenantConfig;
     private final TenantJobs tenantJobs;
     private final SmsRecipientHash hasher;
     private final Outbox outbox;
@@ -79,7 +78,7 @@ final class SmsOutboxChannel implements OutboxChannel {
             SmsProvider provider,
             OutboxTemplates templates,
             BusinessClock clock,
-            TenantSettings tenantSettings,
+            SmsTenantConfig tenantConfig,
             TenantJobs tenantJobs,
             SmsRecipientHash hasher,
             Outbox outbox) {
@@ -93,7 +92,7 @@ final class SmsOutboxChannel implements OutboxChannel {
         this.provider = provider;
         this.templates = templates;
         this.clock = clock;
-        this.tenantSettings = tenantSettings;
+        this.tenantConfig = tenantConfig;
         this.tenantJobs = tenantJobs;
         this.hasher = hasher;
         this.outbox = outbox;
@@ -167,7 +166,7 @@ final class SmsOutboxChannel implements OutboxChannel {
 
         SmsProvider.Outcome outcome;
         try {
-            outcome = provider.send(prepared.to(), prepared.text(), null, delivery.idempotencyKey());
+            outcome = provider.send(prepared.to(), prepared.text(), prepared.senderId(), delivery.idempotencyKey());
         } catch (SmsProvider.Transient e) {
             finish(row, prepared, provider.name(), "failed", null, e.getMessage());
             providerAlert(e.getMessage());
@@ -197,10 +196,11 @@ final class SmsOutboxChannel implements OutboxChannel {
     }
 
     /** What the first transaction decided: an answer now, or the message to send. */
-    private record Prepared(Result result, List<Alert> alerts, String to, String text, int segments, String hash) {
+    private record Prepared(
+            Result result, List<Alert> alerts, String to, String text, int segments, String hash, String senderId) {
 
         static Prepared done(Result result, List<Alert> alerts) {
-            return new Prepared(result, alerts, null, null, 0, null);
+            return new Prepared(result, alerts, null, null, 0, null, null);
         }
 
         /** The number and the text are not printed, even by accident. */
@@ -221,6 +221,20 @@ final class SmsOutboxChannel implements OutboxChannel {
                 .optional();
         if (cap.isEmpty()) {
             return Prepared.done(Result.refused("tenant_sms_off"), alerts);
+        }
+        // The tenant's own switch (the settings group sms): while it is off the row is refused, never held, so a
+        // message queued before the tenant switched off cannot be released by switching on again.
+        SmsTenantConfig.Config config = tenantConfig.current();
+        if (!config.enabled()) {
+            return Prepared.done(Result.refused("tenant_sms_off"), alerts);
+        }
+        // A row queued before the moment the tenant last switched on is the backlog of ADR-036 decision 14, even when
+        // it
+        // was claimed before that switch-on committed (the drop at the switch-on only reaches rows still pending).
+        if (config.enabledSince() != null
+                && row.queuedAt() != null
+                && row.queuedAt().isBefore(config.enabledSince())) {
+            return Prepared.done(Result.refused("backlog_dropped"), alerts);
         }
 
         Optional<Existing> existing = jdbc.sql(
@@ -270,12 +284,14 @@ final class SmsOutboxChannel implements OutboxChannel {
         }
 
         boolean transactional = Outbox.TRANSACTIONAL.equals(row.category());
-        SmsWindow window = SmsWindow.of(tenantSettings.smsWindowStart(), tenantSettings.smsWindowEnd());
+        SmsWindow window = SmsWindow.of(config.windowStart(), config.windowEnd());
         if (!transactional && !window.isOpen(now)) {
             return Prepared.done(Result.deferred(window.nextOpen(now)), alerts);
         }
 
-        // Caps (ADR-036 decision 13): counted over today's business day, Africa/Kampala.
+        // Caps (ADR-036 decision 13): counted over today's business day, Africa/Kampala. The tenant's own cap can
+        // only lower the operator's: the lower of the two applies, and 0 (the operator's or the tenant's) stops
+        // every message, receipts included (twice zero is zero).
         LocalDate today = now.atZone(ZONE).toLocalDate();
         Instant dayStart = today.atStartOfDay(ZONE).toInstant();
         Instant dayEnd = today.plusDays(1).atStartOfDay(ZONE).toInstant();
@@ -288,8 +304,25 @@ final class SmsOutboxChannel implements OutboxChannel {
                 .params(Timestamp.from(dayStart), Timestamp.from(dayEnd))
                 .query(Long.class)
                 .single();
-        long tenantCap = cap.get();
+        long tenantCap = config.dailyCap() == null ? cap.get() : Math.min(cap.get(), config.dailyCap());
         long platformCap = settings.platformDailyCap();
+        // The monthly cap is the tenant's own and is counted only when it set one (the ceiling, thirty-one times the
+        // daily cap, can never bind before the daily cap does).
+        boolean overMonth = false;
+        if (config.monthlyCap() != null) {
+            LocalDate firstOfMonth = today.withDayOfMonth(1);
+            long monthCount = jdbc.sql("SELECT count(*) FROM sms_deliveries WHERE created_at >= ? AND created_at < ?"
+                            + " AND status IN (" + COUNTED + ")")
+                    .params(
+                            Timestamp.from(firstOfMonth.atStartOfDay(ZONE).toInstant()),
+                            Timestamp.from(firstOfMonth
+                                    .plusMonths(1)
+                                    .atStartOfDay(ZONE)
+                                    .toInstant()))
+                    .query(Long.class)
+                    .single();
+            overMonth = transactional ? monthCount >= 2L * config.monthlyCap() : monthCount >= config.monthlyCap();
+        }
         String tenantScope = "tenant " + row.tenantId();
         String day = today.toString();
         warn(alerts, tenantScope, tenantCount, tenantCap, day);
@@ -302,7 +335,7 @@ final class SmsOutboxChannel implements OutboxChannel {
         if (platformCount >= platformCap) {
             return Prepared.done(Result.deferred(holdUntil), alerts);
         }
-        if (transactional ? tenantCount >= 2 * tenantCap : tenantCount >= tenantCap) {
+        if (overMonth || (transactional ? tenantCount >= 2 * tenantCap : tenantCount >= tenantCap)) {
             if (transactional) {
                 return Prepared.done(Result.deferred(holdUntil), alerts);
             }
@@ -312,18 +345,54 @@ final class SmsOutboxChannel implements OutboxChannel {
         }
 
         Map<String, String> params = new HashMap<>(row.params());
-        if (!tenantSettings.smsIncludeBalance()) {
+        if (!config.includeBalance()) {
             params.remove("balance");
         }
         String text;
         try {
-            text = templates.render(CHANNEL, row.templateKey(), params).text();
+            text = renderText(row.templateKey(), params);
         } catch (IllegalArgumentException e) {
             return Prepared.done(Result.refused("template_error"), alerts);
         }
         int segments = SmsSegments.count(text).segments();
+        // The sender id the tenant chose, only while the platform still approves it for this tenant; else the shared
+        // sender.
+        String senderId = config.senderId() == null
+                ? null
+                : jdbc.sql("SELECT sms_sender_id_approved(?)")
+                        .param(config.senderId())
+                        .query(String.class)
+                        .optional()
+                        .orElse(null);
         record(existing, row, masked, hash, segments, "queued", null, now);
-        return new Prepared(null, alerts, phone.get(), text, segments, hash);
+        return new Prepared(null, alerts, phone.get(), text, segments, hash, senderId);
+    }
+
+    /**
+     * The text of one message: the tenant's own wording for this event when it has saved one and it still renders (it
+     * is checked again here, since the whitelist may have moved on), else the default. A broken override never costs
+     * a receipt: the default goes instead, and a warning without the text is logged.
+     */
+    private String renderText(String templateKey, Map<String, String> params) {
+        var event = SmsTemplateEvents.find(templateKey);
+        if (event.isPresent()) {
+            Optional<String> override = jdbc.sql("SELECT body FROM sms_template_overrides WHERE event_key = ?")
+                    .param(templateKey)
+                    .query(String.class)
+                    .optional();
+            if (override.isPresent()) {
+                try {
+                    SmsTemplateLanguage.validate(event.get(), override.get());
+                    return SmsTemplateLanguage.render(event.get(), override.get(), params);
+                } catch (SmsTemplateLanguage.Problem e) {
+                    log.warn(
+                            "SMS wording override for {} did not render ({}); the default is sent",
+                            templateKey,
+                            e.code());
+                }
+            }
+        }
+        return templates.render(CHANNEL, templateKey, params).text();
     }
 
     /** An operator alert at 80 percent of a cap and again when it is reached (once each per day). */
@@ -333,15 +402,22 @@ final class SmsOutboxChannel implements OutboxChannel {
         }
     }
 
+    /**
+     * Two kinds of row block a message (spec 4.9): one about a member (it blocks the member, on the number it was
+     * recorded for when it holds one, else on any number) and one about a number alone (it blocks that number whoever
+     * the message is about, matched by the keyed hash, which is how a pasted STOP list works). Scope {@code all}
+     * blocks every category, {@code reminders} blocks reminders and arrears.
+     */
     private boolean optedOut(RowContext row, String hash) {
-        if (!"member".equals(row.subjectType()) || row.subjectId() == null) {
-            return false;
-        }
-        return Boolean.TRUE.equals(jdbc.sql("SELECT EXISTS (SELECT 1 FROM sms_opt_outs o"
-                        + " WHERE o.member_id = ? AND o.removed_at IS NULL"
-                        + " AND (o.recipient_hash IS NULL OR o.recipient_hash = ?)"
-                        + " AND (o.scope = 'all' OR (o.scope = 'reminders' AND ? <> 'transactional')))")
-                .params(row.subjectId(), hash, row.category())
+        boolean member = "member".equals(row.subjectType()) && row.subjectId() != null;
+        String aboutMember =
+                member ? " OR (o.member_id = ? AND (o.recipient_hash IS NULL OR o.recipient_hash = ?))" : "";
+        var query = jdbc.sql("SELECT EXISTS (SELECT 1 FROM sms_opt_outs o WHERE o.removed_at IS NULL"
+                + " AND (o.scope = 'all' OR (o.scope = 'reminders' AND ? <> 'transactional'))"
+                + " AND ((o.member_id IS NULL AND o.recipient_hash = ?)" + aboutMember + "))");
+        return Boolean.TRUE.equals((member
+                        ? query.params(row.category(), hash, row.subjectId(), hash)
+                        : query.params(row.category(), hash))
                 .query(Boolean.class)
                 .single());
     }

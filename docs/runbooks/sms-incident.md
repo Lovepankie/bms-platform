@@ -28,9 +28,23 @@ listed?), and the failed rows with tenant, category, masked recipient and `last_
 | `invalid_phone` | The number is not one we read without guessing | Fix the member's number |
 | `tenant_inactive` | The tenant was suspended or closed after the row was queued | Nothing; resume the tenant if it was a mistake |
 | `blocked_optout` | The member opted out | Nothing; it is logged on purpose |
-| `tenant_sms_off` | The operator switched the tenant off after the row was queued | Nothing, or switch the tenant on |
+| `tenant_sms_off` | The operator, or the tenant's own administrator, switched the tenant off after the row was queued | Nothing, or switch it on (a tenant's own switch is in its SMS settings; switching on drops the queued rows) |
 | `backlog_dropped` | Sending was switched on and this row was older than that moment | Nothing |
 | `expired` | A receipt older than an hour, or a reminder past its window day | Nothing; stale messages are not sent |
+
+## "SMS stopped for a tenant" checklist
+
+A tenant says its members get no text. Read `GET /api/v1/platform/tenants/{tenant_id}/sms` and then, in the order they bite:
+
+1. **The operator's switch** (`enabled`) is off: nothing is queued at all. Switch it on.
+2. **The tenant's own switch** is off (its administrator sees "Off" in the SMS settings, and the tenant was probably switched on
+   by you before the tenant switch existed): no row is queued and a queued row is refused (`tenant_sms_off`). Ask the administrator
+   to switch SMS on after reading the notice.
+3. **A cap of 0**, theirs or yours, stops everything including receipts; a lowered cap reached holds reminders until tomorrow
+   and receipts at twice the cap. The tenant's settings page shows both caps and the use today and this month.
+4. **The window** holds reminders and arrears notices outside it; receipts are not held by it.
+5. **The sender id was withdrawn**: messages still go, from the shared sender.
+6. **The member or the number is on the opt-out list** (`blocked_optout`): the business administrator lifts it from the member's page or the opt-out list, giving a reason; do it only when the person asked.
 
 ## A provider outage
 

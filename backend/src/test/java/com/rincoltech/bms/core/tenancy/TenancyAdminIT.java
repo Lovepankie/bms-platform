@@ -177,8 +177,11 @@ class TenancyAdminIT extends IntegrationTest {
     @Test
     void settingsAreValidatedAndAuditedWithBeforeAndAfter() {
         ResponseEntity<JsonNode> current = api.get("/api/v1/settings", admin.accessToken());
-        assertThat(current.getBody().get("sms_window_start").asString()).isEqualTo("08:00");
         assertThat(current.getBody().get("approval_validity_days").asInt()).isEqualTo(14);
+        // The SMS settings left this resource for /settings/sms: neither field is read here any more.
+        assertThat(current.getBody().has("sms_window_start")).isFalse();
+        assertThat(current.getBody().has("sms_sender_name")).isFalse();
+        assertThat(current.getBody().has("sms_include_balance")).isFalse();
         assertThat(current.getBody()
                         .get("appraisal_weights")
                         .get("repayment_history")
@@ -195,21 +198,15 @@ class TenancyAdminIT extends IntegrationTest {
                 admin.accessToken(),
                 Map.of("If-Match", etag));
         assertThat(badWeights.getBody().get("code").asString()).isEqualTo("validation_failed");
-        ResponseEntity<JsonNode> badWindow = api.call(
-                HttpMethod.PATCH,
-                "/api/v1/settings",
+        // A tenant admin cannot reach the SMS settings, least of all a sender id of its own choosing, through here.
+        for (Map<String, Object> sms : List.<Map<String, Object>>of(
                 Map.of("sms_window_start", "21:00"),
-                admin.accessToken(),
-                Map.of("If-Match", etag));
-        assertThat(badWindow.getBody().get("errors").get(0).get("field").asString())
-                .isEqualTo("sms_window_end");
-        ResponseEntity<JsonNode> badSender = api.call(
-                HttpMethod.PATCH,
-                "/api/v1/settings",
-                Map.of("sms_sender_name", "Far Too Long Name"),
-                admin.accessToken(),
-                Map.of("If-Match", etag));
-        assertThat(badSender.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+                Map.of("sms_sender_name", "AnyName"),
+                Map.of("sms_include_balance", true))) {
+            ResponseEntity<JsonNode> refused =
+                    api.call(HttpMethod.PATCH, "/api/v1/settings", sms, admin.accessToken(), Map.of("If-Match", etag));
+            assertThat(refused.getStatusCode()).as("%s", sms).isEqualTo(HttpStatus.BAD_REQUEST);
+        }
 
         ResponseEntity<JsonNode> changed = api.call(
                 HttpMethod.PATCH,

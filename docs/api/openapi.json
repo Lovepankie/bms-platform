@@ -90,6 +90,21 @@
           }
         }
       },
+      "AddSmsOptOutRequest" : {
+        "properties" : {
+          "phone" : {
+            "description" : "A Uganda mobile number; anything we cannot read without guessing is 422 invalid_phone",
+            "maxLength" : 30,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "scope" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "phone", "scope" ]
+      },
       "ApplicantLinkRequest" : {
         "properties" : {
           "token" : {
@@ -1398,6 +1413,25 @@
           }
         },
         "required" : [ "code", "name" ]
+      },
+      "ImportSmsOptOutsRequest" : {
+        "properties" : {
+          "dry_run" : {
+            "description" : "Default true: report what would happen and change nothing",
+            "type" : "boolean"
+          },
+          "numbers" : {
+            "description" : "Numbers separated by new lines, commas or semicolons; at most 2000",
+            "maxLength" : 200000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "scope" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "numbers", "scope" ]
       },
       "InsightsAgeingBucket" : {
         "properties" : {
@@ -3162,6 +3196,28 @@
         },
         "required" : [ "decision" ]
       },
+      "LiftMemberSmsOptOutRequest" : {
+        "properties" : {
+          "reason" : {
+            "description" : "Why it is lifted, 3 to 200 characters, kept in the audit row. Not for names or numbers",
+            "maxLength" : 200,
+            "minLength" : 3,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "LiftSmsOptOutRequest" : {
+        "properties" : {
+          "reason" : {
+            "description" : "Why it is lifted, 3 to 200 characters, kept in the audit row. Not for names or numbers",
+            "maxLength" : 200,
+            "minLength" : 3,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
       "Loan" : {
         "properties" : {
           "appraised_by" : {
@@ -4654,6 +4710,25 @@
           }
         }
       },
+      "MemberSmsOptOut" : {
+        "properties" : {
+          "opted_out" : {
+            "type" : "boolean"
+          },
+          "recipient_masked" : {
+            "description" : "The member's number when it was recorded, masked; the number is never stored",
+            "type" : "string"
+          },
+          "scope" : {
+            "description" : "reminders (reminders and arrears) or all (every SMS, receipts included); null when not opted out",
+            "type" : "string"
+          },
+          "since" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
       "MfaConfirmRequest" : {
         "properties" : {
           "code" : {
@@ -5117,6 +5192,16 @@
             "type" : "string"
           },
           "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PreviewSmsTemplateRequest" : {
+        "properties" : {
+          "text" : {
+            "description" : "Wording to preview without saving; omitted: the saved wording, else the default",
+            "maxLength" : 2000,
+            "minLength" : 0,
             "type" : "string"
           }
         }
@@ -14182,6 +14267,17 @@
           }
         }
       },
+      "SaveSmsTemplateRequest" : {
+        "properties" : {
+          "text" : {
+            "description" : "The wording with {placeholders} from the event's list; 422 with the code of the first problem",
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "text" ]
+      },
       "SavingsAccount" : {
         "properties" : {
           "account_no" : {
@@ -15035,6 +15131,15 @@
         },
         "required" : [ "guarantors" ]
       },
+      "SetMemberSmsOptOutRequest" : {
+        "properties" : {
+          "scope" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "scope" ]
+      },
       "SetPaymentMethodRequest" : {
         "properties" : {
           "branch_id" : {
@@ -15198,6 +15303,392 @@
         },
         "required" : [ "business_name", "contact_email", "contact_name", "contact_phone", "country", "modules", "term", "way_in" ]
       },
+      "SmsAcknowledgement" : {
+        "description" : "The text to show before switching on, and its version",
+        "properties" : {
+          "text" : {
+            "type" : "string"
+          },
+          "text_version" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SmsOptOut" : {
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "member (follows the member to any number) or number (this number, whoever it is about)",
+            "type" : "string"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "recipient_masked" : {
+            "description" : "+256*****1234: the number is never stored",
+            "type" : "string"
+          },
+          "scope" : {
+            "description" : "reminders (reminders and arrears) or all (every SMS, receipts included)",
+            "type" : "string"
+          },
+          "source" : {
+            "description" : "staff (member screen), number (added by an administrator) or import (a pasted list)",
+            "type" : "string"
+          }
+        }
+      },
+      "SmsOptOutImport" : {
+        "properties" : {
+          "added" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "changed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "dry_run" : {
+            "type" : "boolean"
+          },
+          "invalid" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SmsOptOutImportRow"
+            },
+            "type" : "array"
+          },
+          "rows_read" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "unchanged" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "SmsOptOutImportRow" : {
+        "properties" : {
+          "line" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "outcome" : {
+            "description" : "added, changed, unchanged, duplicate_in_list or invalid_phone",
+            "type" : "string"
+          }
+        }
+      },
+      "SmsOptOutPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SmsOptOut"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SmsSettings" : {
+        "properties" : {
+          "acknowledged_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "acknowledged_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "acknowledged_text_version" : {
+            "type" : "string"
+          },
+          "acknowledgement" : {
+            "$ref" : "#/components/schemas/SmsAcknowledgement"
+          },
+          "approved_sender_ids" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "daily_cap" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "daily_ceiling" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "effective_daily_cap" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "effective_monthly_cap" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "include_balance" : {
+            "type" : "boolean"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "monthly_cap" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "monthly_ceiling" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "operator_enabled" : {
+            "type" : "boolean"
+          },
+          "sender_id" : {
+            "type" : "string"
+          },
+          "sender_status" : {
+            "type" : "string"
+          },
+          "test_message_available" : {
+            "type" : "boolean"
+          },
+          "used_this_month" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "used_today" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "window_earliest" : {
+            "type" : "string"
+          },
+          "window_end" : {
+            "type" : "string"
+          },
+          "window_latest" : {
+            "type" : "string"
+          },
+          "window_min_minutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "window_start" : {
+            "type" : "string"
+          },
+          "window_zone" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SmsTemplate" : {
+        "properties" : {
+          "channel" : {
+            "type" : "string"
+          },
+          "default_text" : {
+            "type" : "string"
+          },
+          "event_key" : {
+            "type" : "string"
+          },
+          "max_chars" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "max_worst_case_segments" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "measure" : {
+            "$ref" : "#/components/schemas/SmsTemplateMeasure"
+          },
+          "note" : {
+            "description" : "Set when the sample is the default words because the business name is too long for the wording",
+            "type" : "string"
+          },
+          "override" : {
+            "$ref" : "#/components/schemas/SmsTemplateOverride"
+          },
+          "placeholders" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SmsTemplatePlaceholder"
+            },
+            "type" : "array"
+          },
+          "sample_text" : {
+            "description" : "The wording in force with sample data: the override, else the default",
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SmsTemplateList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SmsTemplate"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "SmsTemplateMeasure" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "encoding" : {
+            "description" : "gsm7 or ucs2",
+            "type" : "string"
+          },
+          "estimated_cost_minor" : {
+            "description" : "Average cost of a segment of this tenant's sent messages in the last 30 days, times segments; null without history",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "segments" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "units" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "worst_case_segments" : {
+            "description" : "Every placeholder at its longest and outside the SMS alphabet",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "SmsTemplateOverride" : {
+        "description" : "The tenant's own wording, or null while the default is used",
+        "properties" : {
+          "text" : {
+            "type" : "string"
+          },
+          "updated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "SmsTemplatePlaceholder" : {
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "max_length" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "sample" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SmsTemplatePreview" : {
+        "properties" : {
+          "measure" : {
+            "$ref" : "#/components/schemas/SmsTemplateMeasure"
+          },
+          "note" : {
+            "description" : "Set when the text shown is the default words, not the ones previewed (a business name too long for the wording)",
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SmsTestMessageRequest" : {
+        "properties" : {
+          "event_key" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "text" : {
+            "description" : "Wording to try; omitted: the saved wording, else the default",
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "to" : {
+            "description" : "A Uganda mobile number; a real send only if it is on the environment's allow-list",
+            "maxLength" : 30,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "event_key", "to" ]
+      },
+      "SmsTestMessageResult" : {
+        "properties" : {
+          "measure" : {
+            "$ref" : "#/components/schemas/SmsTemplateMeasure"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "outcome" : {
+            "description" : "sunk (recorded, nothing left the platform), sent, or not_sent",
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "For not_sent: channel_off, live_mode_preview_only, operator_sms_off, tenant_sms_off, blocked_optout, cap_reached or the provider's reason",
+            "type" : "string"
+          },
+          "recipient_masked" : {
+            "type" : "string"
+          },
+          "sent" : {
+            "description" : "True when a provider accepted the message for a real phone (allowlist mode, a listed number)",
+            "type" : "boolean"
+          },
+          "text" : {
+            "description" : "The text as it was (or would be) sent, with the TEST prefix",
+            "type" : "string"
+          }
+        }
+      },
       "StoredDocument" : {
         "properties" : {
           "branch_id" : {
@@ -15323,19 +15814,6 @@
             "description" : "True once the business set-up checklist has been dismissed",
             "type" : "boolean"
           },
-          "sms_include_balance" : {
-            "description" : "Whether a savings receipt SMS carries the account balance (default false, FR-NTF-17)",
-            "type" : "boolean"
-          },
-          "sms_sender_name" : {
-            "type" : "string"
-          },
-          "sms_window_end" : {
-            "type" : "string"
-          },
-          "sms_window_start" : {
-            "type" : "string"
-          },
           "theme_primary" : {
             "description" : "Brand colour #RRGGBB, or null for the platform look (FR-TEN-08)",
             "type" : "string"
@@ -15370,6 +15848,27 @@
             "description" : "Messages counted today (Africa/Kampala), sent, in flight or sunk",
             "format" : "int64",
             "type" : "integer"
+          }
+        }
+      },
+      "TenantSmsSenderId" : {
+        "properties" : {
+          "approved_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "sender_id" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TenantSmsSenderIds" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TenantSmsSenderId"
+            },
+            "type" : "array"
           }
         }
       },
@@ -15695,6 +16194,51 @@
         },
         "required" : [ "status", "terms" ]
       },
+      "UpdateSmsSettingsRequest" : {
+        "properties" : {
+          "acknowledged_text_version" : {
+            "description" : "The version of the acknowledgement text that was shown (GET acknowledgement.text_version)",
+            "maxLength" : 40,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "daily_cap" : {
+            "description" : "Messages a day; 0 stops every message. At most daily_ceiling (422 above_ceiling). A fraction is refused, never rounded",
+            "format" : "int32",
+            "maximum" : 1000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "enabled" : {
+            "description" : "Switch SMS on or off. Switching on needs acknowledged_text_version",
+            "type" : "boolean"
+          },
+          "include_balance" : {
+            "type" : "boolean"
+          },
+          "monthly_cap" : {
+            "description" : "Messages a month; 0 stops every message. At most monthly_ceiling (422 above_ceiling)",
+            "format" : "int32",
+            "maximum" : 1000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "sender_id" : {
+            "description" : "One of approved_sender_ids (422 not_approved otherwise), 3 to 11 letters and digits; an empty string clears it",
+            "pattern" : "^([A-Za-z0-9]{3,11})?$",
+            "type" : "string"
+          },
+          "window_end" : {
+            "pattern" : "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+            "type" : "string"
+          },
+          "window_start" : {
+            "description" : "HH:mm on the Africa/Kampala clock, between window_earliest and window_latest",
+            "pattern" : "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+            "type" : "string"
+          }
+        }
+      },
       "UpdateTenantSettingsRequest" : {
         "properties" : {
           "allow_loans_before_kyc_verified" : {
@@ -15755,22 +16299,6 @@
           },
           "setup_dismissed" : {
             "type" : "boolean"
-          },
-          "sms_include_balance" : {
-            "type" : "boolean"
-          },
-          "sms_sender_name" : {
-            "description" : "Subject to aggregator approval",
-            "pattern" : "^[A-Za-z0-9 ]{3,11}$",
-            "type" : "string"
-          },
-          "sms_window_end" : {
-            "pattern" : "^([01][0-9]|2[0-3]):[0-5][0-9]$",
-            "type" : "string"
-          },
-          "sms_window_start" : {
-            "pattern" : "^([01][0-9]|2[0-3]):[0-5][0-9]$",
-            "type" : "string"
           },
           "theme_primary" : {
             "description" : "#RRGGBB, or an empty string to clear it; white or near-black text on it must reach contrast 4.5 (FR-TEN-08)",
@@ -20135,6 +20663,106 @@
         "tags" : [ "lending-members" ]
       }
     },
+    "/api/v1/lending/members/{member_id}/sms-opt-out" : {
+      "delete" : {
+        "operationId" : "liftMemberSmsOptOut",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "member_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LiftMemberSmsOptOutRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MemberSmsOptOut"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lift a member's SMS opt-out with a reason; audited (FR-NTF-14, the tenant administrator only)",
+        "tags" : [ "lending-members" ]
+      },
+      "get" : {
+        "operationId" : "getMemberSmsOptOut",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "member_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MemberSmsOptOut"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether a member is opted out of SMS (FR-NTF-14)",
+        "tags" : [ "lending-members" ]
+      },
+      "put" : {
+        "operationId" : "setMemberSmsOptOut",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "member_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SetMemberSmsOptOutRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MemberSmsOptOut"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Opt a member out of reminders or of all SMS, or change the scope; audited (FR-NTF-14)",
+        "tags" : [ "lending-members" ]
+      }
+    },
     "/api/v1/lending/next-of-kin/{kin_id}" : {
       "delete" : {
         "operationId" : "deleteNextOfKin",
@@ -21042,6 +21670,159 @@
         "tags" : [ "users" ]
       }
     },
+    "/api/v1/notification-templates" : {
+      "get" : {
+        "operationId" : "listNotificationTemplates",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SmsTemplateList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The SMS wording per event type with defaults, placeholders and overrides",
+        "tags" : [ "notifications" ]
+      }
+    },
+    "/api/v1/notification-templates/{event_key}/{channel}" : {
+      "delete" : {
+        "operationId" : "revertNotificationTemplate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "event_key",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SmsTemplate"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Go back to the default wording for an event, audited",
+        "tags" : [ "notifications" ]
+      },
+      "put" : {
+        "operationId" : "saveNotificationTemplate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "event_key",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SaveSmsTemplateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SmsTemplate"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Save the tenant's own wording for an event, audited (FR-NTF-03)",
+        "tags" : [ "notifications" ]
+      }
+    },
+    "/api/v1/notification-templates/{event_key}/{channel}/preview" : {
+      "post" : {
+        "operationId" : "previewNotificationTemplate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "event_key",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PreviewSmsTemplateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SmsTemplatePreview"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Render wording with fabricated sample data: text, encoding, segments, cost estimate",
+        "tags" : [ "notifications" ]
+      }
+    },
     "/api/v1/platform/applications" : {
       "get" : {
         "operationId" : "platformListApplications",
@@ -21815,6 +22596,102 @@
           }
         },
         "summary" : "Switch SMS on or off for a tenant and set its daily cap (ADR-036)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/sms/sender-ids" : {
+      "get" : {
+        "operationId" : "platformListSmsSenderIds",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantSmsSenderIds"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The sender ids approved for a tenant (ADR-036)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/sms/sender-ids/{sender_id}" : {
+      "delete" : {
+        "operationId" : "platformWithdrawSmsSenderId",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "sender_id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantSmsSenderIds"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Withdraw a sender id from a tenant; its messages go from the shared sender at once (ADR-036)",
+        "tags" : [ "platform" ]
+      },
+      "put" : {
+        "operationId" : "platformApproveSmsSenderId",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "sender_id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantSmsSenderIds"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Approve a sender id for a tenant; 409 sender_id_taken when another tenant holds it (ADR-036)",
         "tags" : [ "platform" ]
       }
     },
@@ -29167,6 +30044,232 @@
         },
         "summary" : "Upload or replace the business logo: PNG, JPEG or WebP, 1 MB, 128 px or more (FR-TEN-08)",
         "tags" : [ "settings" ]
+      }
+    },
+    "/api/v1/settings/sms" : {
+      "get" : {
+        "operationId" : "getSmsSettings",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SmsSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's SMS settings, limits and use (ADR-036)",
+        "tags" : [ "settings" ]
+      },
+      "put" : {
+        "operationId" : "updateSmsSettings",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateSmsSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SmsSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change the tenant's SMS settings, audited with before and after (ADR-036)",
+        "tags" : [ "settings" ]
+      }
+    },
+    "/api/v1/sms/opt-outs" : {
+      "get" : {
+        "operationId" : "listSmsOptOuts",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "scope",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "kind",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SmsOptOutPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The SMS opt-out list, searched and paged (ADR-036, ADR-039)",
+        "tags" : [ "notifications" ]
+      },
+      "post" : {
+        "operationId" : "addSmsOptOut",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AddSmsOptOutRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SmsOptOut"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add a number to the SMS opt-out list, audited",
+        "tags" : [ "notifications" ]
+      }
+    },
+    "/api/v1/sms/opt-outs/import" : {
+      "post" : {
+        "operationId" : "importSmsOptOuts",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImportSmsOptOutsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SmsOptOutImport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Paste a list of numbers into the SMS opt-out list; a dry run first (the default), audited",
+        "tags" : [ "notifications" ]
+      }
+    },
+    "/api/v1/sms/opt-outs/{opt_out_id}" : {
+      "delete" : {
+        "operationId" : "removeSmsOptOut",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "opt_out_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LiftSmsOptOutRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lift one SMS opt-out with a reason, audited (the tenant administrator only)",
+        "tags" : [ "notifications" ]
+      }
+    },
+    "/api/v1/sms/test-message" : {
+      "post" : {
+        "operationId" : "sendSmsTestMessage",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SmsTestMessageRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SmsTestMessageResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Try wording on one number: only ever to the sink or the allow-list, never to a real number",
+        "tags" : [ "notifications" ]
       }
     },
     "/api/v1/users" : {

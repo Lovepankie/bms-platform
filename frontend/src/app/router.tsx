@@ -136,6 +136,19 @@ const staffInsightsRoute = createRoute({ getParentRoute: () => staffRoute, path:
 const staffReportsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/reports', staticData: { crumb: 'Reports' } }).lazy(() =>
   import('../areas/staff/reports/page').then((m) => m.Route),
 );
+// Tenant SMS settings, wording and opt-outs (extras slice B3, issue #218): one heading, a small menu, three pages.
+const staffSmsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/sms', staticData: { crumb: 'SMS' } }).lazy(() =>
+  import('../areas/staff/sms/layout').then((m) => m.Route),
+);
+const smsSettingsRoute = createRoute({ getParentRoute: () => staffSmsRoute, path: '/' }).lazy(() =>
+  import('../areas/staff/sms/settings').then((m) => m.Route),
+);
+const smsWordingRoute = createRoute({ getParentRoute: () => staffSmsRoute, path: '/wording', staticData: { crumb: 'Wording' } }).lazy(() =>
+  import('../areas/staff/sms/wording').then((m) => m.Route),
+);
+const smsOptOutsRoute = createRoute({ getParentRoute: () => staffSmsRoute, path: '/opt-outs', staticData: { crumb: 'Opt-outs' } }).lazy(() =>
+  import('../areas/staff/sms/opt-outs').then((m) => m.Route),
+);
 const lendingLoanRoute = createRoute({ getParentRoute: () => staffLendingRoute, path: '/loans/$loanId', staticData: { crumb: 'Loan' } }).lazy(() =>
   import('../areas/staff/lending/loan').then((m) => m.Route),
 );
@@ -282,7 +295,7 @@ export const router = createRouter({
         memberInvestmentNewRoute,
         investmentRoute,
         investmentCertificateRoute,
-      ]), staffInsightsRoute, staffReportsRoute]),
+      ]), staffInsightsRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
     memberRoute,
     styleRoute,
     signUpRoute,

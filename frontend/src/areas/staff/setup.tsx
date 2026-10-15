@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
+import { Link, createLazyRoute } from '@tanstack/react-router';
 import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import { api, fetchSettings, problemOf, type TenantSettings } from '../../api/client';
 import { useShellBrand } from '../../app/branding';
@@ -266,6 +266,13 @@ export function Setup() {
             <input type="checkbox" checked={current.reports_enabled === true} disabled={busy} onChange={(e) => setReports(e.target.checked)} />{' '}
             Let staff run reports (portfolio at risk and others), prepared in the background and kept for 30 days
           </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Text messages</legend>
+          <p>
+            <Link to="/staff/sms">SMS settings, wording and opt-outs</Link>: switch text messages on, choose the sender name and sending hours, and reword the messages.
+          </p>
         </fieldset>
 
         <button disabled={busy || (colour !== '' && !check.ok)} onClick={save} data-tour="setup-save">

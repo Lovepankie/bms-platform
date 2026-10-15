@@ -28,7 +28,7 @@ packages.
 | First run signs the invitee in; guided tours are data with per-user progress on the server | ADR-025 (proposed) |
 | Mobile money and card collections through Pesapal v3: hosted orders, notification as a hint, status query as the truth | ADR-035 (proposed) |
 | Credit scoring model beyond the rules-based default | pending ADR-012 |
-| SMS as a channel of the notification outbox, Africa's Talking first, tenant delivery log, sink outside production | ADR-036 (channel core built, #212) |
+| SMS as a channel of the notification outbox, Africa's Talking first, tenant delivery log, sink outside production | ADR-036 (channel core built, #212; tenant settings, sender id allow-list, opt-out screens and wording built, #218) |
 | USSD aggregator | pending ADR-013 |
 | AI portfolio monitoring: advisory, aggregates and aliases only, numbers validated in code, off by default | ADR-037 (proposed) |
 | The reports pack: async runs over one snapshot, PDF through the shared templates, streamed Excel | ADR-038 (proposed) |
@@ -131,6 +131,7 @@ lending.reports       -> core.reporting, lending.insights (the public InsightsFi
 lending.advisor       -> core.ai, core.tenancy, core.audit, core.jobs, lending.insights (PortfolioFacts)
                          (never reads member rows; sends aggregates and aliases only; ADR-037)
 lending.savings       -> lending.members (member lookup, the receipt SMS phone; ADR-032)
+lending.members       -> core.notifications (the member's SMS opt-out, SmsOptOuts port; ADR-036, #218)
 lending.investments   -> lending.members; lending.savings (monthly return credit) in a follow-up
                          (increment 10 pays due returns in cash, ADR-031)
 lending.collateral    -> lending.members
@@ -175,7 +176,10 @@ The core iterates registries; it never names a vertical.
   transaction with `FOR UPDATE SKIP LOCKED`, at least once. SMS rows carry their tenant and category, are
   claimed transactional first and round-robin across tenants, and are sent by their own job
   (`core.notifications.sms-sender`, ADR-036): the channel binds the stored tenant (`TenantJobs.callForTenant`) for two short tenant
-  transactions around the provider call, which holds no connection.
+  transactions around the provider call, which holds no connection. The tenant's own SMS settings are the settings group `sms`
+  (ADR-033 mechanism, ADR-036 second amendment): the channel reads it on every message through `SmsTenantConfig`, and
+  `TenantSettings` reads the window and the balance switch from it, so a settings change is audited, versioned under
+  `If-Match` and takes effect on the next message with no cache to expire.
 - Scheduled jobs run one tenant per transaction (`app_list_active_tenants()`), and inside
   a tenant, in batches of at most 500 accounts per transaction so a single bad record
   cannot stall a tenant's whole run. Every job is idempotent for its business date.

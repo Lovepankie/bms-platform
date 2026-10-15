@@ -7,6 +7,7 @@ import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.core.jobs.TenantJobs;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.lending.loans.LoanFixtures;
+import com.rincoltech.bms.testsupport.SmsTenants;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -369,13 +370,13 @@ class SavingsIT extends LoanFixtures {
 
         // The tenant admin asks for the balance (the settings write is audited as any other).
         ResponseEntity<JsonNode> settings =
-                send(HttpMethod.GET, "/api/v1/settings", as(admin, adminPerms, "*", null), null);
-        assertThat(settings.getBody().get("sms_include_balance").asBoolean()).isFalse();
+                send(HttpMethod.GET, "/api/v1/settings/sms", as(admin, adminPerms, "*", null), null);
+        assertThat(settings.getBody().get("include_balance").asBoolean()).isFalse();
         ResponseEntity<JsonNode> changed = send(
-                HttpMethod.PATCH,
-                "/api/v1/settings",
+                HttpMethod.PUT,
+                "/api/v1/settings/sms",
                 as(admin, adminPerms, "*", settings.getHeaders().getETag()),
-                Map.of("sms_include_balance", true));
+                Map.of("include_balance", true));
         assertThat(changed.getStatusCode()).as("%s", changed.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(deposit(account, 5_000, key()).getStatusCode()).isEqualTo(HttpStatus.CREATED);
         List<String> params = TestDatabase.owner()
@@ -396,6 +397,8 @@ class SavingsIT extends LoanFixtures {
                         + " ON CONFLICT (tenant_id) DO UPDATE SET enabled = true")
                 .param(t.tenantId())
                 .update();
+        // And the tenant's own switch, which its administrator sets: nothing is queued before both are on.
+        SmsTenants.enable(t.tenantId());
     }
 
     // ---- Withdrawals (FR-SAV-03) ------------------------------------------------------------

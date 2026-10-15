@@ -6,6 +6,7 @@ import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { money } from './loan-state';
 import { AccountRows, SavingsGate } from './savings';
+import { MemberSmsControl } from './member-sms';
 import { mayOpenAccounts } from './savings-permissions';
 
 // A member's savings tab (FR-SAV-02): every account the member holds (a member may hold several),
@@ -89,6 +90,7 @@ function MemberSavings() {
         ) : (
           <button type="button" className="rt-primary btn-block" onClick={() => setOpening(true)}>Open a savings account</button>
         ))}
+      <MemberSmsControl memberId={memberId} />
     </SavingsGate>
   );
 }

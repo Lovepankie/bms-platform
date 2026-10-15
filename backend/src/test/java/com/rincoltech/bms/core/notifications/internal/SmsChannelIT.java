@@ -12,6 +12,7 @@ import com.rincoltech.bms.core.notifications.Outbox;
 import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.TenantContext;
+import com.rincoltech.bms.testsupport.SmsTenants;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
@@ -70,6 +71,9 @@ class SmsChannelIT extends IntegrationTest {
 
     @Autowired
     TenantSettings tenantSettings;
+
+    @Autowired
+    SmsTenantConfig tenantConfig;
 
     @Autowired
     SmsRecipientHash hasher;
@@ -136,7 +140,7 @@ class SmsChannelIT extends IntegrationTest {
                     chosen == null ? provider : chosen,
                     templates,
                     business,
-                    tenantSettings,
+                    tenantConfig,
                     tenantJobs,
                     hasher,
                     outbox);
@@ -189,6 +193,8 @@ class SmsChannelIT extends IntegrationTest {
     TestDatabase.Fixture tenant(int dailyCap) {
         TestDatabase.Fixture t = TestDatabase.tenant("sms", true);
         setControls(t, true, dailyCap);
+        // The tenant's own switch: a tenant sends nothing until its administrator has switched SMS on.
+        SmsTenants.enable(t.tenantId());
         return t;
     }
 
@@ -339,7 +345,7 @@ class SmsChannelIT extends IntegrationTest {
                     null,
                     templates,
                     rig.business,
-                    tenantSettings,
+                    tenantConfig,
                     tenantJobs,
                     hasher,
                     rig.outbox);
@@ -579,6 +585,10 @@ class SmsChannelIT extends IntegrationTest {
         assertThat(enqueue(rig, t, "+256700000109", Outbox.TRANSACTIONAL, null, key()))
                 .isFalse();
         setControls(t, true, 100);
+        // The operator's switch alone is not enough: the tenant's own switch is still off, so no row is written.
+        assertThat(enqueue(rig, t, "+256700000109", Outbox.TRANSACTIONAL, null, key()))
+                .isFalse();
+        SmsTenants.enable(t.tenantId());
         String key = key();
         assertThat(enqueue(rig, t, "+256700000109", Outbox.TRANSACTIONAL, UUID.randomUUID(), key))
                 .isTrue();
@@ -794,11 +804,7 @@ class SmsChannelIT extends IntegrationTest {
         Instant start = kampala(day(15), 9, 0);
         Rig rig = live(start);
         TestDatabase.Fixture t = tenant(100);
-        TestDatabase.owner()
-                .sql("INSERT INTO tenant_settings (id, tenant_id, settings) VALUES (gen_random_uuid(), ?,"
-                        + " '{\"sms_window_start\": \"09:30\", \"sms_window_end\": \"17:00\"}'::jsonb)")
-                .param(t.tenantId())
-                .update();
+        SmsTenants.set(t.tenantId(), Map.of("window_start", "09:30", "window_end", "17:00"));
         String key = key();
         assertThat(enqueue(rig, t, "+256700000116", Outbox.ARREARS, UUID.randomUUID(), key))
                 .isTrue();
@@ -1231,7 +1237,7 @@ class SmsChannelIT extends IntegrationTest {
                 null,
                 templates,
                 live.business,
-                tenantSettings,
+                tenantConfig,
                 tenantJobs,
                 hasher,
                 live.outbox);
@@ -1474,5 +1480,448 @@ class SmsChannelIT extends IntegrationTest {
                         millis == 0 ? rows : rows * 1000 / millis);
         // A generous bound: the figure above is the measurement, this only catches a collapse.
         assertThat(millis).isLessThan(120_000);
+    }
+
+    // ---- The tenant's own settings (issue #218, ADR-036, spec 4.8 to 4.10) -------------------------
+    // JUSTIFICATION-A3: these tests need this class's Rig (channel, dispatcher, movable clock) and its helpers.
+
+    /** A message with parameters of the test's own choosing, queued as a savings receipt is. */
+    boolean enqueueWith(Rig rig, TestDatabase.Fixture t, String phone, Map<String, String> params, String key) {
+        return Boolean.TRUE.equals(TenantContext.callAs(
+                t.tenantId(),
+                () -> new TransactionTemplate(transactionManager)
+                        .execute(tx -> rig.outbox.enqueue(new Outbox.Message(
+                                Outbox.SMS,
+                                phone,
+                                "savings.deposit",
+                                params,
+                                key,
+                                null,
+                                null,
+                                Outbox.TRANSACTIONAL,
+                                Outbox.Subject.member(UUID.randomUUID()),
+                                null)))));
+    }
+
+    static String uniqueSender() {
+        return "B" + UUID.randomUUID().toString().replace("-", "").substring(0, 9);
+    }
+
+    /** The tenant's own switch gates the channel: a row queued before it was switched off is refused, never held. */
+    @Test
+    void aRowQueuedBeforeTheTenantSwitchedSmsOffIsRefusedAndSwitchingOnAgainDoesNotReleaseIt() {
+        Rig rig = live(day(60));
+        TestDatabase.Fixture t = tenant(100);
+        String key = receipt(rig, t, "+256700000401");
+        SmsTenants.set(t.tenantId(), Map.of("enabled", false));
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(rig.provider.sent()).isEmpty();
+        assertThat(outboxRow(key).get("status")).isEqualTo("failed");
+        assertThat(outboxRow(key).get("last_error")).isEqualTo("tenant_sms_off");
+        assertThat(hasDelivery(key)).isFalse();
+
+        SmsTenants.enable(t.tenantId());
+        assertThat(rig.dispatch(10)).isZero();
+        assertThat(rig.provider.sent()).isEmpty();
+        assertThat(outboxRow(key).get("status")).isEqualTo("failed");
+    }
+
+    @Test
+    void theApprovedSenderIdGoesToTheProviderAndAWithdrawnOrNeverApprovedOneDoesNot() {
+        Rig rig = live(day(61));
+        TestDatabase.Fixture t = tenant(100);
+        String sender = uniqueSender();
+        TestDatabase.owner()
+                .sql("INSERT INTO platform_sms_sender_ids (id, tenant_id, sender_id, approved_at)"
+                        + " VALUES (gen_random_uuid(), ?, ?, now())")
+                .params(t.tenantId(), sender)
+                .update();
+        SmsTenants.set(t.tenantId(), Map.of("sender_id", sender));
+
+        receipt(rig, t, "+256700000411");
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(rig.provider.sent())
+                .extracting(RecordingSmsProvider.Sent::senderId)
+                .containsExactly(sender);
+
+        // The operator withdraws it: the very next message goes from the shared sender, with no edit of the settings.
+        TestDatabase.owner()
+                .sql("UPDATE platform_sms_sender_ids SET withdrawn_at = now() WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .update();
+        receipt(rig, t, "+256700000412");
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(rig.provider.sent().get(1).senderId()).isNull();
+
+        // A name written straight into the settings that nobody approved is no sender either.
+        SmsTenants.set(t.tenantId(), Map.of("sender_id", uniqueSender()));
+        receipt(rig, t, "+256700000413");
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(rig.provider.sent().get(2).senderId()).isNull();
+
+        // Another business's approved id is not this business's either.
+        String theirs = uniqueSender();
+        TestDatabase.Fixture other = tenant(100);
+        TestDatabase.owner()
+                .sql("INSERT INTO platform_sms_sender_ids (id, tenant_id, sender_id, approved_at)"
+                        + " VALUES (gen_random_uuid(), ?, ?, now())")
+                .params(other.tenantId(), theirs)
+                .update();
+        SmsTenants.set(t.tenantId(), Map.of("sender_id", theirs));
+        receipt(rig, t, "+256700000414");
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(rig.provider.sent().get(3).senderId()).isNull();
+    }
+
+    /** The tenant's own daily cap lowers the operator's; the lower of the two applies. */
+    @Test
+    void theTenantsOwnDailyCapLowersTheOperatorsAndAHigherOneDoesNotRaiseIt() {
+        Rig rig = live(day(62));
+        TestDatabase.Fixture t = tenant(5);
+        SmsTenants.set(t.tenantId(), Map.of("daily_cap", 2));
+        Instant due = rig.clock.now.minus(Duration.ofMinutes(10));
+        List<String> reminders = List.of(key(), key(), key());
+        for (int i = 0; i < reminders.size(); i++) {
+            raw(t, "reminder", "+25670000042" + i, due, reminders.get(i));
+        }
+        assertThat(rig.dispatch(10)).isEqualTo(3);
+        assertThat(rig.provider.sent()).hasSize(2);
+        // The third waits for tomorrow's window, as any reminder over its cap does.
+        List<Map<String, Object>> waiting = reminders.stream()
+                .map(this::outboxRow)
+                .filter(r -> "pending".equals(r.get("status")))
+                .toList();
+        assertThat(waiting).hasSize(1);
+        assertThat(at(waiting.getFirst().get("next_attempt_at"))).isEqualTo(kampala(day(63), 8, 0));
+
+        // Receipts go on to twice the cap (two more), then are held.
+        String r1 = receipt(rig, t, "+256700000431");
+        String r2 = receipt(rig, t, "+256700000432");
+        String r3 = receipt(rig, t, "+256700000433");
+        assertThat(rig.dispatch(10)).isEqualTo(3);
+        // Which of the three is held depends on the order they were claimed in; two go and one waits.
+        assertThat(List.of(r1, r2, r3).stream()
+                        .map(k -> outboxRow(k).get("status"))
+                        .sorted(java.util.Comparator.comparing(Object::toString)))
+                .containsExactly("pending", "sent", "sent");
+        assertThat(rig.provider.sent()).hasSize(4);
+
+        // A tenant cap above the operator's (written past the screen's validation) raises nothing: operator cap 2.
+        Rig second = live(day(64));
+        TestDatabase.Fixture u = tenant(2);
+        SmsTenants.set(u.tenantId(), Map.of("daily_cap", 50));
+        Instant due2 = second.clock.now.minus(Duration.ofMinutes(10));
+        for (int i = 0; i < 3; i++) {
+            raw(u, "reminder", "+25670000044" + i, due2, key());
+        }
+        assertThat(second.dispatch(10)).isEqualTo(3);
+        assertThat(second.provider.sent()).hasSize(2);
+    }
+
+    /** A cap of 0 stops everything and is never read as "no cap of its own"; absent is the operator's cap. */
+    @Test
+    void aTenantCapOfZeroStopsEveryMessageAndAbsentMeansTheOperatorsCap() {
+        Rig rig = live(day(65));
+        TestDatabase.Fixture daily = tenant(100);
+        SmsTenants.set(daily.tenantId(), Map.of("daily_cap", 0));
+        String receipt = receipt(rig, daily, "+256700000451");
+        String reminder = key();
+        raw(daily, "reminder", "+256700000452", rig.clock.now.minus(Duration.ofMinutes(5)), reminder);
+        assertThat(rig.dispatch(10)).isEqualTo(2);
+        assertThat(rig.provider.sent()).isEmpty();
+        assertThat(outboxRow(receipt).get("status")).isEqualTo("pending");
+        assertThat(outboxRow(reminder).get("status")).isEqualTo("pending");
+        assertThat(hasDelivery(receipt)).isFalse();
+
+        TestDatabase.Fixture monthly = tenant(100);
+        SmsTenants.set(monthly.tenantId(), Map.of("monthly_cap", 0));
+        String monthlyReceipt = receipt(rig, monthly, "+256700000453");
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(rig.provider.sent()).isEmpty();
+        assertThat(outboxRow(monthlyReceipt).get("status")).isEqualTo("pending");
+
+        TestDatabase.Fixture none = tenant(100);
+        String sentKey = receipt(rig, none, "+256700000454");
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(outboxRow(sentKey).get("status")).isEqualTo("sent");
+    }
+
+    /** Africa/Kampala midnight is 21:00 UTC: 20:59 is still the old day and 21:01 is the new one. */
+    @Test
+    void theDailyCapCountsTheKampalaDayAndResetsAtItsMidnight() {
+        // 2031-04-02 20:59 UTC is 23:59 in Kampala; the cap counts messages, receipts may reach twice it.
+        Rig rig = live(Instant.parse("2031-04-02T20:59:00Z"));
+        TestDatabase.Fixture t = tenant(100);
+        SmsTenants.set(t.tenantId(), Map.of("daily_cap", 1));
+        String a = receipt(rig, t, "+256700000461");
+        String b = receipt(rig, t, "+256700000462");
+        String c = receipt(rig, t, "+256700000463");
+        assertThat(rig.dispatch(10)).isEqualTo(3);
+        assertThat(List.of(a, b, c).stream()
+                        .map(k -> outboxRow(k).get("status"))
+                        .sorted(java.util.Comparator.comparing(Object::toString)))
+                .containsExactly("pending", "sent", "sent");
+
+        // Two minutes later it is 00:01 on the next Kampala day: the count starts again.
+        rig.at(Instant.parse("2031-04-02T21:01:00Z"));
+        String d = receipt(rig, t, "+256700000464");
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(outboxRow(d).get("status")).isEqualTo("sent");
+        assertThat(rig.provider.sent()).hasSize(3);
+    }
+
+    @Test
+    void theMonthlyCapCountsAcrossDaysAndResetsAtTheKampalaMidnightOfTheFirst() {
+        // Day boundary inside a month: 2031-03-14 20:59:58 UTC to 21:00:01 UTC. A cap of 1 a month lets receipts reach
+        // 2.
+        Rig rig = live(Instant.parse("2031-03-14T20:59:58Z"));
+        TestDatabase.Fixture t = tenant(100);
+        SmsTenants.set(t.tenantId(), Map.of("monthly_cap", 1));
+        String a = receipt(rig, t, "+256700000471");
+        String b = receipt(rig, t, "+256700000472");
+        assertThat(rig.dispatch(10)).isEqualTo(2);
+        assertThat(outboxRow(a).get("status")).isEqualTo("sent");
+        assertThat(outboxRow(b).get("status")).isEqualTo("sent");
+
+        // The day changed (the daily count is zero again) but the month did not: the third is held.
+        rig.at(Instant.parse("2031-03-14T21:00:01Z"));
+        String c = receipt(rig, t, "+256700000473");
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(outboxRow(c).get("status")).isEqualTo("pending");
+        assertThat(rig.provider.sent()).hasSize(2);
+
+        // Month boundary: 2031-03-31 20:59:59 UTC is still March, 21:00:00 UTC is 00:00 on 1 April in Kampala.
+        Rig month = live(Instant.parse("2031-03-31T20:59:50Z"));
+        TestDatabase.Fixture u = tenant(100);
+        SmsTenants.set(u.tenantId(), Map.of("monthly_cap", 1));
+        String m1 = receipt(month, u, "+256700000481");
+        String m2 = receipt(month, u, "+256700000482");
+        assertThat(month.dispatch(10)).isEqualTo(2);
+        month.at(Instant.parse("2031-03-31T20:59:59Z"));
+        String m3 = receipt(month, u, "+256700000483");
+        assertThat(month.dispatch(10)).isEqualTo(1);
+        assertThat(outboxRow(m3).get("status"))
+                .as("still March at 23:59:59 in Kampala")
+                .isEqualTo("pending");
+        month.at(Instant.parse("2031-03-31T21:00:00Z"));
+        String m4 = receipt(month, u, "+256700000484");
+        assertThat(month.dispatch(10)).isEqualTo(1);
+        assertThat(outboxRow(m4).get("status")).as("1 April in Kampala").isEqualTo("sent");
+        assertThat(outboxRow(m1).get("status")).isEqualTo("sent");
+        assertThat(outboxRow(m2).get("status")).isEqualTo("sent");
+        assertThat(month.provider.sent()).hasSize(3);
+    }
+
+    @Test
+    void aNumberOnTheListBlocksItWhoeverTheMessageIsAboutAndAMemberRowFollowsTheMember() {
+        Rig rig = live(day(66));
+        TestDatabase.Fixture t = tenant(100);
+        String stopped = "+256700000491";
+        // A number alone (a pasted STOP list), scope all: blocks a receipt about a member, and one about nobody.
+        TestDatabase.owner()
+                .sql("INSERT INTO sms_opt_outs (id, tenant_id, recipient_hash, recipient_masked, scope, source)"
+                        + " VALUES (?, ?, ?, '+256*****0491', 'all', 'import')")
+                .params(UUID.randomUUID(), t.tenantId(), hasher.of(stopped))
+                .update();
+        String aboutMember = key();
+        String aboutNobody = key();
+        assertThat(enqueue(rig, t, "0700000491", Outbox.TRANSACTIONAL, UUID.randomUUID(), aboutMember))
+                .isTrue();
+        assertThat(enqueue(rig, t, stopped, Outbox.TRANSACTIONAL, null, aboutNobody))
+                .isTrue();
+        assertThat(rig.dispatch(10)).isEqualTo(2);
+        for (String blocked : List.of(aboutMember, aboutNobody)) {
+            assertThat(delivery(blocked).get("status")).isEqualTo("blocked_optout");
+            assertThat(outboxRow(blocked).get("status")).isEqualTo("failed");
+        }
+        assertThat(rig.provider.sent()).isEmpty();
+
+        // The other tenant does not see this row: the same number is theirs to text.
+        TestDatabase.Fixture other = tenant(100);
+        String theirs = key();
+        assertThat(enqueue(rig, other, stopped, Outbox.TRANSACTIONAL, null, theirs))
+                .isTrue();
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(delivery(theirs).get("status")).isEqualTo("sent");
+
+        // A number row with scope reminders blocks a reminder and lets a receipt through.
+        String remindersOnly = "+256700000492";
+        TestDatabase.owner()
+                .sql(
+                        "INSERT INTO sms_opt_outs (id, tenant_id, recipient_hash, scope, source) VALUES (?, ?, ?, 'reminders', 'number')")
+                .params(UUID.randomUUID(), t.tenantId(), hasher.of(remindersOnly))
+                .update();
+        String reminder = key();
+        String receipt = key();
+        assertThat(enqueue(rig, t, remindersOnly, Outbox.REMINDER, null, reminder))
+                .isTrue();
+        assertThat(enqueue(rig, t, remindersOnly, Outbox.TRANSACTIONAL, null, receipt))
+                .isTrue();
+        rig.at(kampala(rig.clock.now, 10, 0));
+        assertThat(rig.dispatch(10)).isEqualTo(2);
+        assertThat(delivery(reminder).get("status")).isEqualTo("blocked_optout");
+        assertThat(delivery(receipt).get("status")).isEqualTo("sent");
+
+        // A member-wide row (no number) follows the member to a new number, and does not touch another member.
+        UUID member = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql(
+                        "INSERT INTO sms_opt_outs (id, tenant_id, member_id, scope, source) VALUES (?, ?, ?, 'all', 'staff')")
+                .params(UUID.randomUUID(), t.tenantId(), member)
+                .update();
+        String followed = key();
+        String reused = key();
+        assertThat(enqueue(rig, t, "+256700000493", Outbox.TRANSACTIONAL, member, followed))
+                .isTrue();
+        assertThat(enqueue(rig, t, "+256700000493", Outbox.TRANSACTIONAL, UUID.randomUUID(), reused))
+                .isTrue();
+        assertThat(rig.dispatch(10)).isEqualTo(2);
+        assertThat(delivery(followed).get("status")).isEqualTo("blocked_optout");
+        assertThat(delivery(reused).get("status")).isEqualTo("sent");
+
+        // Lifted: the number row no longer blocks.
+        TestDatabase.owner()
+                .sql("UPDATE sms_opt_outs SET removed_at = now() WHERE tenant_id = ? AND recipient_hash = ?")
+                .params(t.tenantId(), hasher.of(stopped))
+                .update();
+        String afterLift = key();
+        assertThat(enqueue(rig, t, stopped, Outbox.TRANSACTIONAL, null, afterLift))
+                .isTrue();
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(delivery(afterLift).get("status")).isEqualTo("sent");
+    }
+
+    // ---- The tenant's own wording -------------------------------------------------------------------
+
+    void override(TestDatabase.Fixture t, String eventKey, String body) {
+        TestDatabase.owner()
+                .sql("INSERT INTO sms_template_overrides (id, tenant_id, event_key, body) VALUES (?, ?, ?, ?)"
+                        + " ON CONFLICT (tenant_id, event_key) DO UPDATE SET body = excluded.body")
+                .params(UUID.randomUUID(), t.tenantId(), eventKey, body)
+                .update();
+    }
+
+    @Test
+    void anOverrideIsSentExactlyWithTheNameInsertedAsPlainTextAndCountedInTheEncodingItNeeds() {
+        Rig rig = live(day(67));
+        TestDatabase.Fixture t = tenant(100);
+        override(t, "savings.deposit", "{tenant_name}: received {currency} {amount} into {account_no}. Thanks!");
+        int sentSoFar = 0;
+        for (String name : List.of("A & B <Sacco> \"Quoted\" 'x'", "مشروع الأمل", "幸福銀行", "{amount} {unknown} $1")) {
+            Map<String, String> params = new java.util.HashMap<>(PARAMS);
+            params.put("tenant_name", name);
+            String key = key();
+            assertThat(enqueueWith(rig, t, "+256700000501", params, key)).isTrue();
+            assertThat(rig.dispatch(10)).isEqualTo(1);
+            String body = rig.provider.sent().get(sentSoFar++).body();
+            // Exactly the tenant's wording, the name as it is: nothing escaped, nothing read for placeholders again.
+            assertThat(body).isEqualTo(name + ": received UGX 5,000 into SV000001. Thanks!");
+            // The log counts the segments of what was really sent, in the encoding it needed.
+            assertThat(delivery(key).get("segments"))
+                    .isEqualTo(SmsSegments.count(body).segments());
+        }
+        // A name outside the SMS alphabet makes the whole message UCS-2; a plain one does not.
+        assertThat(SmsSegments.count(rig.provider.sent().get(1).body()).encoding())
+                .isEqualTo(SmsSegments.Encoding.UCS2);
+        assertThat(SmsSegments.count(rig.provider.sent().get(0).body()).encoding())
+                .isEqualTo(SmsSegments.Encoding.GSM7);
+    }
+
+    @Test
+    void anOverrideNeverCarriesTheBalanceAndABrokenOneFallsBackToTheDefaultWording() {
+        Rig rig = live(day(68));
+        TestDatabase.Fixture t = tenant(100);
+        SmsTenants.set(t.tenantId(), Map.of("include_balance", true));
+        // With the balance switch on and no override, the default wording carries the balance.
+        Map<String, String> withBalance = new java.util.HashMap<>(PARAMS);
+        withBalance.put("balance", "99,000");
+        assertThat(enqueueWith(rig, t, "+256700000511", withBalance, key())).isTrue();
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(rig.provider.sent().get(0).body()).contains("Balance UGX 99,000");
+
+        // An override says what it says: no balance, even though the parameter is there.
+        override(t, "savings.deposit", "Received {amount} on {account_no}");
+        assertThat(enqueueWith(rig, t, "+256700000512", withBalance, key())).isTrue();
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(rig.provider.sent().get(1).body())
+                .isEqualTo("Received 5,000 on SV000001")
+                .doesNotContain("99,000");
+
+        // A saved wording that no longer passes the rules (written past the screen) costs no receipt: the default goes.
+        override(t, "savings.deposit", "Received {amount} on {account_no} balance {balance}");
+        assertThat(enqueueWith(rig, t, "+256700000513", PARAMS, key())).isTrue();
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(rig.provider.sent().get(2).body()).startsWith("Test Lender: Deposit of UGX 5,000");
+
+        // One business's wording is not another's.
+        TestDatabase.Fixture other = tenant(100);
+        assertThat(enqueueWith(rig, other, "+256700000514", PARAMS, key())).isTrue();
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(rig.provider.sent().get(3).body()).startsWith("Test Lender: Deposit of");
+    }
+
+    // JUSTIFICATION-A3: tests for review findings 3, 4 and 6 need this class's Rig and helpers.
+
+    /** Finding 6: a row queued before the switch-on is old news even when it was claimed before the switch-on committed. */
+    @Test
+    void aRowQueuedBeforeTheMomentOfTheSwitchOnIsRefusedEvenThoughTheTenantIsOnWhenItIsRead() {
+        Rig rig = live(day(80));
+        TestDatabase.Fixture t = tenant(100);
+        String old = receipt(rig, t, "+256700000521");
+        // The tenant switches on a minute after the row was queued (the stamp is the acknowledgement's time), and the
+        // channel reads the settings after that commit.
+        Instant switchedOn = rig.clock.now.plus(Duration.ofMinutes(1));
+        SmsTenants.set(t.tenantId(), Map.of("enabled", true, "acknowledged_at", switchedOn.toString()));
+        rig.advance(Duration.ofMinutes(2));
+        String fresh = receipt(rig, t, "+256700000522");
+        assertThat(rig.dispatch(10)).isEqualTo(2);
+        assertThat(outboxRow(old).get("status")).isEqualTo("failed");
+        assertThat(outboxRow(old).get("last_error")).isEqualTo("backlog_dropped");
+        assertThat(hasDelivery(old)).isFalse();
+        assertThat(outboxRow(fresh).get("status")).isEqualTo("sent");
+        assertThat(rig.provider.sent())
+                .extracting(RecordingSmsProvider.Sent::to)
+                .containsExactly("+256700000522");
+    }
+
+    /** Finding 3: a window stored outside the hard limits (an old value copied or written by hand) is clamped on read. */
+    @Test
+    void aWindowStoredOutsideTheHardLimitsIsClampedWhenTheChannelReadsIt() {
+        Rig rig = live(kampala(day(81), 5, 30));
+        TestDatabase.Fixture t = tenant(100);
+        SmsTenants.set(t.tenantId(), Map.of("window_start", "05:00", "window_end", "23:00"));
+        String early = key();
+        raw(t, "reminder", "+256700000531", rig.clock.now.minus(Duration.ofMinutes(5)), early);
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        // 05:30 is before 06:00, the hard limit, though the stored window opened at 05:00: it waits for 06:00.
+        assertThat(outboxRow(early).get("status")).isEqualTo("pending");
+        assertThat(at(outboxRow(early).get("next_attempt_at"))).isEqualTo(kampala(day(81), 6, 0));
+        rig.at(kampala(day(81), 6, 0));
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(outboxRow(early).get("status")).isEqualTo("sent");
+
+        // 21:00 is after the hard limit though the stored window ran to 23:00: held for the next morning.
+        rig.at(kampala(day(81), 21, 0));
+        String late = key();
+        raw(t, "reminder", "+256700000532", rig.clock.now.minus(Duration.ofMinutes(5)), late);
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        assertThat(outboxRow(late).get("status")).isEqualTo("pending");
+        assertThat(at(outboxRow(late).get("next_attempt_at"))).isEqualTo(kampala(day(82), 6, 0));
+        assertThat(rig.provider.sent()).hasSize(1);
+    }
+
+    /** Finding 4: a value too long for its place is never shortened; the default wording goes, whole. */
+    @Test
+    void aValueTooLongForTheOverrideSendsTheDefaultWordingWholeAndNeverACutNumber() {
+        Rig rig = live(day(83));
+        TestDatabase.Fixture t = tenant(100);
+        override(t, "savings.deposit", "Received {amount} on {account_no}");
+        String amount = "1".repeat(25);
+        Map<String, String> params = new java.util.HashMap<>(PARAMS);
+        params.put("amount", amount);
+        assertThat(enqueueWith(rig, t, "+256700000541", params, key())).isTrue();
+        assertThat(rig.dispatch(10)).isEqualTo(1);
+        String body = rig.provider.sent().getFirst().body();
+        assertThat(body).contains(amount).startsWith("Test Lender: Deposit of UGX " + amount);
     }
 }

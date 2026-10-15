@@ -249,12 +249,16 @@ Notes:
   `lending.advisor.configure` to the tenant admin. `core.payments.collect` starts a gateway collection and `core.payments.manage` uploads the
   merchant statement and reads the reconciliation (ADR-035); switching collections on needs `core.settings.manage`. The
   AI assistant (ADR-037) needs `lending.advisor.use` to read the brief and ask, `lending.advisor.configure` to read the
-  call log and set caps, and `core.settings.manage` to switch it on after the acknowledgement. SMS sender name, window and
-  `sms_include_balance` need `core.settings.manage`, while the SMS switch, the daily SMS cap and the sender approval are set by the
-  platform operator only (issue #212 seeds no new permission: the operator's `PUT /platform/tenants/{tenant_id}/sms` uses
-  `platform.tenants.manage` and its read `platform.tenants.read`, and the database refuses the change from any transaction
-  bound to a tenant); the assistant can be switched on only for tenants in `BMS_AI_ENABLED_TENANTS`; collections can be
-  switched on only for the tenant named by `BMS_PESAPAL_TENANT_ID`; a member's SMS opt-out needs `lending.members.update`. Running a report run needs
+  call log and set caps, and `core.settings.manage` to switch it on after the acknowledgement. The tenant's SMS settings (its own switch with the acknowledgement, the sender
+  choice, the window, the lowered caps, the balance switch, the opt-out list and its import) need `core.settings.manage`, which only the tenant
+  administrator holds, and are read with `core.settings.read` (the lists with `core.notifications.read`); the SMS wording, its
+  preview and the test message need `core.notification_templates.manage` (the tenant administrator). The operator's switch, the
+  operator's daily SMS cap and the approval of sender ids are the platform operator's only (issues #212 and #218 seed no new
+  permission: the operator's `PUT /platform/tenants/{tenant_id}/sms` and `.../sms/sender-ids/{sender_id}` use
+  `platform.tenants.manage` and their reads `platform.tenants.read`, and the database refuses these changes from any transaction
+  bound to a tenant). A tenant can lower its caps under the operator's and choose only a sender id the operator approved for it;
+  a test message goes only to the sink or the environment's allow-list, never to a number a user typed in a live environment; the assistant can be switched on only for tenants in `BMS_AI_ENABLED_TENANTS`; collections can be
+  switched on only for the tenant named by `BMS_PESAPAL_TENANT_ID`; a member's SMS opt-out is added with `lending.members.update`, but narrowing it or lifting it needs `core.settings.manage` and a reason that goes into the audit row (stopping less is the administrator's; the screens ask for a confirmation first); a test message that would really go out obeys the operator's switch, the tenant's switch, the opt-out list and the caps. Running a report run needs
   the report's own permission (a pack needs all seven); loan officers still see only their own loans.
   Built (extras slice D1, issue #214): report runs add no permission and no seeded row (the matrix and the seeds are unchanged;
   `PermissionMatrixIT` still compares them). `POST /report-runs` is open to signed-in staff and the service checks the report's own
@@ -682,6 +686,10 @@ Detailed requirements are NFR-DP-01 to NFR-DP-08 in chapter 4. Design consequenc
 | Personal data reaches the language model provider | Typed aggregate facts and aliases only, question scrub, leak tests, tenant acknowledgement, off by default (ADR-037, spec section 5.12) |
 | The model states a number that is not in the data | Cited-fact validation in code, fallback to the deterministic brief, advisory label (ADR-037) |
 | A report run exposes another tenant's data or a formula in a name executes in Excel | Row-level security in the run transaction, explicit string cells for dangerous leading characters (ADR-038) |
+| A tenant admin sends under a name that is not its own, or another business's name | The sender id is chosen from the operator's allow-list, one tenant per id at a time, checked at save and again on every message (ADR-036 second amendment) |
+| A tenant admin raises its own SMS cap, or sets 0 and gets the default | A cap can only be lowered under the operator's cap (422 `above_ceiling`), the lower of the stored cap and the ceiling applies to every message, and 0 is stored and enforced as stop |
+| A tenant's SMS wording runs code, spoofs a sender with hidden characters or costs five messages each | A placeholder language with a whitelist and no expressions, invisible and direction characters refused, a worst-case segment limit, one-pass rendering of plain text (ADR-036 second amendment) |
+| The test message form is used to text a real person | Sink or the environment's allow-list only, never in a live mode, a fresh sink for any unlisted number, ten an hour, audited with a masked number |
 
 ## 8.11 Open items
 

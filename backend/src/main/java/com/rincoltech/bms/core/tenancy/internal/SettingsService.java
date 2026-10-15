@@ -136,10 +136,6 @@ class SettingsService implements TenantSettings, ModuleSettings {
             }
         });
         SettingsResponse after = resolve(next, stored.version() + 1);
-        if (after.smsWindowStart().compareTo(after.smsWindowEnd()) >= 0) {
-            throw ApiException.validation(
-                    List.of(new FieldProblem("sms_window_end", "invalid", "Must be later than sms_window_start.")));
-        }
 
         jdbc.sql("UPDATE tenant_settings SET settings = CAST(? AS jsonb), updated_at = now(), version = version + 1")
                 .param(mapper.writeValueAsString(next))
@@ -193,19 +189,20 @@ class SettingsService implements TenantSettings, ModuleSettings {
     @Override
     @Transactional(readOnly = true)
     public LocalTime smsWindowStart() {
-        return LocalTime.parse(current().smsWindowStart());
+        // The SMS settings are the module group "sms" (core.notifications, ADR-036), written only by PUT /settings/sms.
+        return LocalTime.parse((String) group("sms").get("window_start"));
     }
 
     @Override
     @Transactional(readOnly = true)
     public LocalTime smsWindowEnd() {
-        return LocalTime.parse(current().smsWindowEnd());
+        return LocalTime.parse((String) group("sms").get("window_end"));
     }
 
     @Override
     @Transactional(readOnly = true)
     public boolean smsIncludeBalance() {
-        return current().smsIncludeBalance();
+        return Boolean.TRUE.equals(group("sms").get("include_balance"));
     }
 
     @Override
@@ -364,10 +361,6 @@ class SettingsService implements TenantSettings, ModuleSettings {
         return new SettingsResponse(
                 (String) s.getOrDefault("display_name", tenant.profile().name()),
                 (String) s.getOrDefault("receipt_footer", ""),
-                (String) s.get("sms_sender_name"),
-                (String) s.getOrDefault("sms_window_start", "08:00"),
-                (String) s.getOrDefault("sms_window_end", "20:00"),
-                (Boolean) s.getOrDefault("sms_include_balance", false),
                 thresholds,
                 ((Number) s.getOrDefault("approval_validity_days", 14)).intValue(),
                 (Boolean) s.getOrDefault("allow_loans_before_kyc_verified", false),

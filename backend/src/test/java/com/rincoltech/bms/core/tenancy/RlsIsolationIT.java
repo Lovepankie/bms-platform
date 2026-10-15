@@ -300,6 +300,11 @@ class RlsIsolationIT {
                         INSERT INTO sms_opt_outs (id, tenant_id, member_id, recipient_hash, scope, source)
                         VALUES (?, ?, ?, repeat('b', 64), 'reminders', 'staff')
                         """).params(UUID.randomUUID(), t.tenantId(), kinMember).update();
+        // The tenant's own SMS wording (migration V52).
+        owner.sql("""
+                        INSERT INTO sms_template_overrides (id, tenant_id, event_key, body)
+                        VALUES (?, ?, 'savings.deposit', 'Paid {amount} on {account_no}')
+                        """).params(UUID.randomUUID(), t.tenantId()).update();
         owner.sql(
                         "INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type) VALUES (?, ?, 'system', 'test.fixture.created', 'test')")
                 .params(UUID.randomUUID(), t.tenantId())
@@ -1008,7 +1013,7 @@ class RlsIsolationIT {
      */
     @Test
     void theSmsDeliveryLogAndOptOutsAreIsolatedPerTenant() throws SQLException {
-        for (String table : List.of("sms_deliveries", "sms_opt_outs")) {
+        for (String table : List.of("sms_deliveries", "sms_opt_outs", "sms_template_overrides")) {
             long seesOwn = asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM " + table));
             long seesOthers = asApp(
                     a.tenantId(),
@@ -1043,7 +1048,8 @@ class RlsIsolationIT {
      */
     @Test
     void smsPlatformTablesAreClosedToTheApplicationRole() throws SQLException {
-        for (String table : List.of("notification_outbox", "platform_sms_controls", "sms_channel_state")) {
+        for (String table : List.of(
+                "notification_outbox", "platform_sms_controls", "sms_channel_state", "platform_sms_sender_ids")) {
             assertThatThrownBy(() -> asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM " + table)))
                     .as("SELECT on %s", table)
                     .hasStackTraceContaining("permission denied");

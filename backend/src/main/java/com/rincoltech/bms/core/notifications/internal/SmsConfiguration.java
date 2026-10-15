@@ -2,7 +2,6 @@ package com.rincoltech.bms.core.notifications.internal;
 
 import com.rincoltech.bms.core.jobs.TenantJobs;
 import com.rincoltech.bms.core.notifications.Outbox;
-import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.BusinessClock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +37,14 @@ class SmsConfiguration {
         return settings;
     }
 
+    /** The one provider of this run, shared by the channel and the test message (which never sends to a real number). */
+    record SmsProviderRef(SmsProvider provider) {}
+
+    @Bean
+    SmsProviderRef smsProviderRef(SmsSettings settings, ObjectMapper mapper) {
+        return new SmsProviderRef(providerFor(settings, mapper));
+    }
+
     @Bean
     OutboxChannel smsOutboxChannel(
             JdbcClient jdbc,
@@ -45,12 +52,12 @@ class SmsConfiguration {
             SmsSettings settings,
             OutboxTemplates templates,
             BusinessClock clock,
-            TenantSettings tenantSettings,
+            SmsTenantConfig tenantConfig,
             TenantJobs tenantJobs,
             SmsRecipientHash hasher,
             Outbox outbox,
-            ObjectMapper mapper) {
-        SmsProvider provider = providerFor(settings, mapper);
+            SmsProviderRef providerRef) {
+        SmsProvider provider = providerRef.provider();
         if (provider == null && settings.mode() != SmsSettings.Mode.OFF && settings.mode() != SmsSettings.Mode.SINK) {
             log.warn(
                     "SMS mode {} but no provider is configured: the SMS sender stays off and rows stay pending",
@@ -63,7 +70,7 @@ class SmsConfiguration {
                 provider,
                 templates,
                 clock,
-                tenantSettings,
+                tenantConfig,
                 tenantJobs,
                 hasher,
                 outbox);

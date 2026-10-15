@@ -19,7 +19,14 @@
 @ApplicationModule(
         id = "lending.members",
         displayName = "Lending: Members",
-        allowedDependencies = {"kernel", "core.tenancy", "core.identity", "core.audit", "core.documents"})
+        allowedDependencies = {
+            "kernel",
+            "core.tenancy",
+            "core.identity",
+            "core.audit",
+            "core.documents",
+            "core.notifications"
+        })
 package com.rincoltech.bms.lending.members;
 
 import org.springframework.modulith.ApplicationModule;

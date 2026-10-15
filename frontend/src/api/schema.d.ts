@@ -1569,6 +1569,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/members/{member_id}/sms-opt-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether a member is opted out of SMS (FR-NTF-14) */
+        get: operations["getMemberSmsOptOut"];
+        /** Opt a member out of reminders or of all SMS, or change the scope; audited (FR-NTF-14) */
+        put: operations["setMemberSmsOptOut"];
+        post?: never;
+        /** Lift a member's SMS opt-out with a reason; audited (FR-NTF-14, the tenant administrator only) */
+        delete: operations["liftMemberSmsOptOut"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/next-of-kin/{kin_id}": {
         parameters: {
             query?: never;
@@ -1890,6 +1909,58 @@ export interface paths {
         /** Record how the user left a guided tour (issue #19) */
         put: operations["recordTourState"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notification-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The SMS wording per event type with defaults, placeholders and overrides */
+        get: operations["listNotificationTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notification-templates/{event_key}/{channel}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save the tenant's own wording for an event, audited (FR-NTF-03) */
+        put: operations["saveNotificationTemplate"];
+        post?: never;
+        /** Go back to the default wording for an event, audited */
+        delete: operations["revertNotificationTemplate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notification-templates/{event_key}/{channel}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Render wording with fabricated sample data: text, encoding, segments, cost estimate */
+        post: operations["previewNotificationTemplate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2335,6 +2406,41 @@ export interface paths {
         put: operations["platformSetSmsControls"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/sms/sender-ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The sender ids approved for a tenant (ADR-036) */
+        get: operations["platformListSmsSenderIds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/sms/sender-ids/{sender_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Approve a sender id for a tenant; 409 sender_id_taken when another tenant holds it (ADR-036) */
+        put: operations["platformApproveSmsSenderId"];
+        post?: never;
+        /** Withdraw a sender id from a tenant; its messages go from the shared sender at once (ADR-036) */
+        delete: operations["platformWithdrawSmsSenderId"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4708,6 +4814,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/sms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The tenant's SMS settings, limits and use (ADR-036) */
+        get: operations["getSmsSettings"];
+        /** Change the tenant's SMS settings, audited with before and after (ADR-036) */
+        put: operations["updateSmsSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sms/opt-outs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The SMS opt-out list, searched and paged (ADR-036, ADR-039) */
+        get: operations["listSmsOptOuts"];
+        put?: never;
+        /** Add a number to the SMS opt-out list, audited */
+        post: operations["addSmsOptOut"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sms/opt-outs/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Paste a list of numbers into the SMS opt-out list; a dry run first (the default), audited */
+        post: operations["importSmsOptOuts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sms/opt-outs/{opt_out_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Lift one SMS opt-out with a reason, audited (the tenant administrator only) */
+        delete: operations["removeSmsOptOut"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sms/test-message": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Try wording on one number: only ever to the sink or the allow-list, never to a real number */
+        post: operations["sendSmsTestMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -4862,6 +5055,11 @@ export interface components {
             /** Format: uuid */
             tenant_id?: string;
             tenant_slug?: string;
+        };
+        AddSmsOptOutRequest: {
+            /** @description A Uganda mobile number; anything we cannot read without guessing is 422 invalid_phone */
+            phone: string;
+            scope: string;
         };
         ApplicantLinkRequest: {
             token: string;
@@ -5361,6 +5559,13 @@ export interface components {
         HeadOfficeRequest: {
             code: string;
             name: string;
+        };
+        ImportSmsOptOutsRequest: {
+            /** @description Default true: report what would happen and change nothing */
+            dry_run?: boolean;
+            /** @description Numbers separated by new lines, commas or semicolons; at most 2000 */
+            numbers: string;
+            scope: string;
         };
         InsightsAgeingBucket: {
             /** Format: int64 */
@@ -6079,6 +6284,14 @@ export interface components {
             /** @description Required when rejected */
             note?: string;
         };
+        LiftMemberSmsOptOutRequest: {
+            /** @description Why it is lifted, 3 to 200 characters, kept in the audit row. Not for names or numbers */
+            reason: string;
+        };
+        LiftSmsOptOutRequest: {
+            /** @description Why it is lifted, 3 to 200 characters, kept in the audit row. Not for names or numbers */
+            reason: string;
+        };
         Loan: {
             /** Format: uuid */
             appraised_by?: string;
@@ -6713,6 +6926,15 @@ export interface components {
             named_as_kin_by?: components["schemas"]["RelatedMember"][];
             names_as_kin?: components["schemas"]["NextOfKin"][];
         };
+        MemberSmsOptOut: {
+            opted_out?: boolean;
+            /** @description The member's number when it was recorded, masked; the number is never stored */
+            recipient_masked?: string;
+            /** @description reminders (reminders and arrears) or all (every SMS, receipts included); null when not opted out */
+            scope?: string;
+            /** Format: date-time */
+            since?: string;
+        };
         MfaConfirmRequest: {
             code: string;
             mfa_token?: string;
@@ -6910,6 +7132,10 @@ export interface components {
             /** @description The application reference or the tenant slug */
             reference?: string;
             status?: string;
+        };
+        PreviewSmsTemplateRequest: {
+            /** @description Wording to preview without saving; omitted: the saved wording, else the default */
+            text?: string;
         };
         RecoveryCodes: {
             /** @description Shown once; each works once */
@@ -11540,6 +11766,10 @@ export interface components {
         RoleCatalogue: {
             items?: components["schemas"]["Role"][];
         };
+        SaveSmsTemplateRequest: {
+            /** @description The wording with {placeholders} from the event's list; 422 with the code of the first problem */
+            text: string;
+        };
         SavingsAccount: {
             account_no?: string;
             /**
@@ -11926,6 +12156,9 @@ export interface components {
         SetLoanGuarantorsRequest: {
             guarantors: components["schemas"]["LoanGuarantorInput"][];
         };
+        SetMemberSmsOptOutRequest: {
+            scope: string;
+        };
         SetPaymentMethodRequest: {
             /**
              * Format: uuid
@@ -11985,6 +12218,174 @@ export interface components {
             /** @description Leave empty. A hidden field: a value marks the request as automated */
             website?: string;
         };
+        /** @description The text to show before switching on, and its version */
+        SmsAcknowledgement: {
+            text?: string;
+            text_version?: string;
+        };
+        SmsOptOut: {
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            created_by?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @description member (follows the member to any number) or number (this number, whoever it is about) */
+            kind?: string;
+            /** Format: uuid */
+            member_id?: string;
+            /** @description +256*****1234: the number is never stored */
+            recipient_masked?: string;
+            /** @description reminders (reminders and arrears) or all (every SMS, receipts included) */
+            scope?: string;
+            /** @description staff (member screen), number (added by an administrator) or import (a pasted list) */
+            source?: string;
+        };
+        SmsOptOutImport: {
+            /** Format: int32 */
+            added?: number;
+            /** Format: int32 */
+            changed?: number;
+            dry_run?: boolean;
+            /** Format: int32 */
+            invalid?: number;
+            rows?: components["schemas"]["SmsOptOutImportRow"][];
+            /** Format: int32 */
+            rows_read?: number;
+            /** Format: int32 */
+            unchanged?: number;
+        };
+        SmsOptOutImportRow: {
+            /** Format: int32 */
+            line?: number;
+            /** @description added, changed, unchanged, duplicate_in_list or invalid_phone */
+            outcome?: string;
+        };
+        SmsOptOutPage: {
+            items?: components["schemas"]["SmsOptOut"][];
+            next_cursor?: string;
+        };
+        SmsSettings: {
+            /** Format: date-time */
+            acknowledged_at?: string;
+            /** Format: uuid */
+            acknowledged_by?: string;
+            acknowledged_text_version?: string;
+            acknowledgement?: components["schemas"]["SmsAcknowledgement"];
+            approved_sender_ids?: string[];
+            /** Format: int32 */
+            daily_cap?: number;
+            /** Format: int32 */
+            daily_ceiling?: number;
+            /** Format: int32 */
+            effective_daily_cap?: number;
+            /** Format: int64 */
+            effective_monthly_cap?: number;
+            enabled?: boolean;
+            include_balance?: boolean;
+            mode?: string;
+            /** Format: int32 */
+            monthly_cap?: number;
+            /** Format: int64 */
+            monthly_ceiling?: number;
+            operator_enabled?: boolean;
+            sender_id?: string;
+            sender_status?: string;
+            test_message_available?: boolean;
+            /** Format: int64 */
+            used_this_month?: number;
+            /** Format: int64 */
+            used_today?: number;
+            /** Format: int32 */
+            version?: number;
+            window_earliest?: string;
+            window_end?: string;
+            window_latest?: string;
+            /** Format: int32 */
+            window_min_minutes?: number;
+            window_start?: string;
+            window_zone?: string;
+        };
+        SmsTemplate: {
+            channel?: string;
+            default_text?: string;
+            event_key?: string;
+            /** Format: int32 */
+            max_chars?: number;
+            /** Format: int32 */
+            max_worst_case_segments?: number;
+            measure?: components["schemas"]["SmsTemplateMeasure"];
+            /** @description Set when the sample is the default words because the business name is too long for the wording */
+            note?: string;
+            override?: components["schemas"]["SmsTemplateOverride"];
+            placeholders?: components["schemas"]["SmsTemplatePlaceholder"][];
+            /** @description The wording in force with sample data: the override, else the default */
+            sample_text?: string;
+            title?: string;
+        };
+        SmsTemplateList: {
+            items?: components["schemas"]["SmsTemplate"][];
+        };
+        SmsTemplateMeasure: {
+            currency?: string;
+            /** @description gsm7 or ucs2 */
+            encoding?: string;
+            /**
+             * Format: int64
+             * @description Average cost of a segment of this tenant's sent messages in the last 30 days, times segments; null without history
+             */
+            estimated_cost_minor?: number;
+            /** Format: int32 */
+            segments?: number;
+            /** Format: int32 */
+            units?: number;
+            /**
+             * Format: int32
+             * @description Every placeholder at its longest and outside the SMS alphabet
+             */
+            worst_case_segments?: number;
+        };
+        /** @description The tenant's own wording, or null while the default is used */
+        SmsTemplateOverride: {
+            text?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        SmsTemplatePlaceholder: {
+            description?: string;
+            /** Format: int32 */
+            max_length?: number;
+            name?: string;
+            sample?: string;
+        };
+        SmsTemplatePreview: {
+            measure?: components["schemas"]["SmsTemplateMeasure"];
+            /** @description Set when the text shown is the default words, not the ones previewed (a business name too long for the wording) */
+            note?: string;
+            text?: string;
+        };
+        SmsTestMessageRequest: {
+            event_key: string;
+            /** @description Wording to try; omitted: the saved wording, else the default */
+            text?: string;
+            /** @description A Uganda mobile number; a real send only if it is on the environment's allow-list */
+            to: string;
+        };
+        SmsTestMessageResult: {
+            measure?: components["schemas"]["SmsTemplateMeasure"];
+            mode?: string;
+            /** @description sunk (recorded, nothing left the platform), sent, or not_sent */
+            outcome?: string;
+            /** @description For not_sent: channel_off, live_mode_preview_only, operator_sms_off, tenant_sms_off, blocked_optout, cap_reached or the provider's reason */
+            reason?: string;
+            recipient_masked?: string;
+            /** @description True when a provider accepted the message for a real phone (allowlist mode, a listed number) */
+            sent?: boolean;
+            /** @description The text as it was (or would be) sent, with the TEST prefix */
+            text?: string;
+        };
         StoredDocument: {
             /** Format: uuid */
             branch_id?: string;
@@ -12038,11 +12439,6 @@ export interface components {
             require_mfa_all_staff?: boolean;
             /** @description True once the business set-up checklist has been dismissed */
             setup_dismissed?: boolean;
-            /** @description Whether a savings receipt SMS carries the account balance (default false, FR-NTF-17) */
-            sms_include_balance?: boolean;
-            sms_sender_name?: string;
-            sms_window_end?: string;
-            sms_window_start?: string;
             /** @description Brand colour #RRGGBB, or null for the platform look (FR-TEN-08) */
             theme_primary?: string;
             /** Format: int32 */
@@ -12068,6 +12464,14 @@ export interface components {
              * @description Messages counted today (Africa/Kampala), sent, in flight or sunk
              */
             used_today?: number;
+        };
+        TenantSmsSenderId: {
+            /** Format: date-time */
+            approved_at?: string;
+            sender_id?: string;
+        };
+        TenantSmsSenderIds: {
+            items?: components["schemas"]["TenantSmsSenderId"][];
         };
         /** @description How the user left a guided tour, and its version then */
         TourState: {
@@ -12185,6 +12589,28 @@ export interface components {
             status: string;
             terms: components["schemas"]["SavingsProductTerms"];
         };
+        UpdateSmsSettingsRequest: {
+            /** @description The version of the acknowledgement text that was shown (GET acknowledgement.text_version) */
+            acknowledged_text_version?: string;
+            /**
+             * Format: int32
+             * @description Messages a day; 0 stops every message. At most daily_ceiling (422 above_ceiling). A fraction is refused, never rounded
+             */
+            daily_cap?: number;
+            /** @description Switch SMS on or off. Switching on needs acknowledged_text_version */
+            enabled?: boolean;
+            include_balance?: boolean;
+            /**
+             * Format: int32
+             * @description Messages a month; 0 stops every message. At most monthly_ceiling (422 above_ceiling)
+             */
+            monthly_cap?: number;
+            /** @description One of approved_sender_ids (422 not_approved otherwise), 3 to 11 letters and digits; an empty string clears it */
+            sender_id?: string;
+            window_end?: string;
+            /** @description HH:mm on the Africa/Kampala clock, between window_earliest and window_latest */
+            window_start?: string;
+        };
         UpdateTenantSettingsRequest: {
             allow_loans_before_kyc_verified?: boolean;
             /** @description repayment_history, affordability, collateral_cover, exposure; summing to 100 */
@@ -12205,11 +12631,6 @@ export interface components {
             reports_enabled?: boolean;
             require_mfa_all_staff?: boolean;
             setup_dismissed?: boolean;
-            sms_include_balance?: boolean;
-            /** @description Subject to aggregator approval */
-            sms_sender_name?: string;
-            sms_window_end?: string;
-            sms_window_start?: string;
             /** @description #RRGGBB, or an empty string to clear it; white or near-black text on it must reach contrast 4.5 (FR-TEN-08) */
             theme_primary?: string;
         };
@@ -15041,6 +15462,80 @@ export interface operations {
             };
         };
     };
+    getMemberSmsOptOut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberSmsOptOut"];
+                };
+            };
+        };
+    };
+    setMemberSmsOptOut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMemberSmsOptOutRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberSmsOptOut"];
+                };
+            };
+        };
+    };
+    liftMemberSmsOptOut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LiftMemberSmsOptOutRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberSmsOptOut"];
+                };
+            };
+        };
+    };
     deleteNextOfKin: {
         parameters: {
             query?: never;
@@ -15618,6 +16113,107 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    listNotificationTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmsTemplateList"];
+                };
+            };
+        };
+    };
+    saveNotificationTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                event_key: string;
+                channel: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSmsTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmsTemplate"];
+                };
+            };
+        };
+    };
+    revertNotificationTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                event_key: string;
+                channel: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmsTemplate"];
+                };
+            };
+        };
+    };
+    previewNotificationTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_key: string;
+                channel: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewSmsTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmsTemplatePreview"];
+                };
             };
         };
     };
@@ -16257,6 +16853,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantSmsControls"];
+                };
+            };
+        };
+    };
+    platformListSmsSenderIds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantSmsSenderIds"];
+                };
+            };
+        };
+    };
+    platformApproveSmsSenderId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                sender_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantSmsSenderIds"];
+                };
+            };
+        };
+    };
+    platformWithdrawSmsSenderId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                sender_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantSmsSenderIds"];
                 };
             };
         };
@@ -20723,6 +21387,174 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantSettings"];
+                };
+            };
+        };
+    };
+    getSmsSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmsSettings"];
+                };
+            };
+        };
+    };
+    updateSmsSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSmsSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmsSettings"];
+                };
+            };
+        };
+    };
+    listSmsOptOuts: {
+        parameters: {
+            query?: {
+                q?: string;
+                scope?: string;
+                kind?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmsOptOutPage"];
+                };
+            };
+        };
+    };
+    addSmsOptOut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSmsOptOutRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmsOptOut"];
+                };
+            };
+        };
+    };
+    importSmsOptOuts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportSmsOptOutsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmsOptOutImport"];
+                };
+            };
+        };
+    };
+    removeSmsOptOut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                opt_out_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LiftSmsOptOutRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sendSmsTestMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SmsTestMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmsTestMessageResult"];
                 };
             };
         };

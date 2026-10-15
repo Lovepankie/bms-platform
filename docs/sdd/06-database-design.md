@@ -322,9 +322,26 @@ last minute), then by due time, and locks the best twenty candidates in that ord
   are in no column. Indexes on `(tenant_id, provider_message_id)`, `(tenant_id, created_at)` and `(created_at)`. Kept 13
   months by `sms_deliveries_purge`; counted by `sms_platform_count_since` (the platform ceiling) and
   `sms_tenant_count_since` (the operator's view).
-- `sms_opt_outs` (tenant, row-level security): `id`, `tenant_id`, `created_at`, `member_id` (no foreign key), `recipient_hash`
-  (null means any number), `scope` [`reminders`, `all`], `source` [`staff`, `member`], `created_by`, `removed_at`,
-  `removed_by`; active while `removed_at` is null.
+- `sms_opt_outs` (tenant, row-level security): `id`, `tenant_id`, `created_at`, `member_id` (no foreign key; null for a row
+  about a number alone), `recipient_hash` (null means the member on any number; a row needs a member or a hash),
+  `recipient_masked` (`+256*****1234`, for display; the number is never stored), `scope` [`reminders`, `all`], `source`
+  [`staff`, `member`, `number`, `import`], `created_by`, `removed_at`, `removed_by`; active while `removed_at` is null. At most one
+  active row per member and one per number (partial unique indexes; `V52`), so two people at once or a double click do not stack
+  rows; written by the staff routes of #218 and honoured by the channel.
+- `platform_sms_sender_ids` (platform, built in `V52`, #218; forced row-level security with no policy and no grant to the
+  application role, like `platform_sms_controls`): `id`, `tenant_id`, `sender_id` (3 to 11 ASCII letters and digits, at least one
+  letter), `approved_by`, `approved_at`, `withdrawn_by`, `withdrawn_at`. A unique index on `lower(sender_id)` among the
+  active rows gives an id to one tenant at a time. Reached only through `sms_sender_ids_for_tenant`, `sms_sender_id_approve` and
+  `sms_sender_id_withdraw` (the operator's; each refuses a transaction bound to a tenant) and `sms_sender_ids_current` and
+  `sms_sender_id_approved` (the bound tenant's own).
+- `sms_template_overrides` (tenant, row-level security; built in `V52`, #218): `id`, `tenant_id`, `event_key`, `body` (at most 480
+  characters, validated by the placeholder language at save and again at send), `version` (the `If-Match` of a change; 0 while
+  there is none), `created_at`, `updated_at`, `updated_by`; unique on `(tenant_id, event_key)`. A removal deletes the row; the
+  audit log keeps what it said.
+- `sms_tenant_switched_on(now)` (definer, `V52`): marks the bound tenant's pending SMS outbox rows `failed` with
+  `backlog_dropped` when the tenant switches SMS on; `notification_outbox_enqueue` also writes no SMS row while the tenant's own
+  switch (`module_groups.sms.enabled`) is off. It marks only rows still pending; the channel also refuses, as `backlog_dropped`,
+  any row queued before the group's `acknowledged_at`, so a row already claimed at the switch-on cannot be sent either.
 
 ### `unmatched_gateway_callbacks` (`bms_platform` and `bms_app` INSERT; `bms_platform` SELECT)
 
@@ -375,11 +392,9 @@ write. Keys and defaults:
 | `theme_primary` | `#RRGGBB` string or null | null (platform look) | FR-TEN-08 |
 | `setup_dismissed` | boolean | false | FR-TEN-08 |
 | `receipt_footer` | string | empty | FR-DOC-01 |
-| `sms_sender_name` | string or null | null (aggregator default) | FR-NTF-02 |
-| `sms_window_start`, `sms_window_end` | `HH:MM` | `08:00`, `20:00` | FR-NTF-04 |
-| `sms_sender_approved` | boolean, set by the operator | false (shared sender) | ADR-036 |
-| `sms_daily_cap` | not a tenant setting: the cap and the on/off switch are in the platform table `platform_sms_controls`, set by the platform operator only | 200 until set; off | ADR-036, FR-NTF-20 |
-| `sms_include_balance` | boolean | false | ADR-036, FR-NTF-17 |
+| `module_groups.sms` (the settings group `sms`, built in #218, written only by `PUT /settings/sms`: `enabled`, `acknowledged_by`, `acknowledged_at`, `acknowledged_text_version`, `sender_id`, `window_start`, `window_end`, `daily_cap`, `monthly_cap`, `include_balance`) | boolean, user, time, text, string or absent, `HH:MM`, `HH:MM`, integer or absent, integer or absent, boolean | false; absent; absent; absent; no sender (the shared sender); `08:00`; `20:00`; absent (the operator's cap applies); absent; false. Switching on needs the acknowledgement. The sender must be one the operator approved for the tenant (`platform_sms_sender_ids`). The window is at least 60 minutes and inside 06:00 to 21:00. A cap is at most its ceiling (the operator's daily cap for the tenant, and 31 times that for a month) and **0 means stop, never the default** | ADR-036, FR-NTF-02, FR-NTF-04, FR-NTF-17, FR-NTF-20 |
+| `sms_sender_name`, `sms_window_start`, `sms_window_end`, `sms_include_balance` (flat keys before #218) | no longer read or written: `PATCH /settings` refuses them (400); migration `V52` copied the window and balance values of a tenant that had set them into its group once (the sender name was never approved and is not copied) | | ADR-036 |
+| `sms_daily_cap` | not a tenant setting: the operator's cap and the on/off switch are in the platform table `platform_sms_controls`, set by the platform operator only; the tenant's own `daily_cap` in the group above can only lower it | 200 until set; off | ADR-036, FR-NTF-20 |
 | `payments.collections_enabled` | boolean | false; settable only for the tenant named by `BMS_PESAPAL_TENANT_ID` while credentials are environment-level | ADR-035 |
 | `module_groups.ai` (the settings group `ai`: `enabled`, `daily_token_cap`, `daily_cost_cap_micro`, `acknowledged_by`, `acknowledged_at`, `acknowledged_text_version`) | boolean, integer, integer, user, time, text | false, `BMS_AI_TENANT_DAILY_TOKENS` (20,000), `BMS_AI_TENANT_DAILY_COST_MICRO` (500,000), null; a cap is at most the platform ceiling; switching on needs the acknowledgement and a tenant named in `BMS_AI_ENABLED_TENANTS` (403 `advisor_not_available`), enforced in the group's validation (built in #220) | ADR-037 |
 | `approval_thresholds_minor` | map of action type to integer | every action 0 | FR-APR-04 |
@@ -2112,8 +2127,9 @@ tables with `tenant_id`, forced row-level security (`bms_apply_tenant_rls`) and 
 | `notification_outbox.tenant_id`, `.category`, `.subject_type`, `.subject_id` (columns, platform table, additive; built, `V50`) | #212 | The tenant that caused an SMS row, its category and subject (ADR-036). The enqueue takes the tenant from the bound transaction; platform rows keep null |
 | `platform_sms_controls`, `sms_channel_state` (platform; built, `V50`) | #212 | The operator's per tenant switch and cap; the SMS mode last seen, for the backlog drop. See "SMS tables" in section 6.4 |
 | `sms_deliveries` (built, `V50`) | #212 | One row per SMS message, moved from `queued` to its outcome: outbox id, template key, category, subject type and id, recipient masked, `recipient_hash`, provider, `provider_message_id`, `segments`, `provider_segments`, `cost_minor`, `currency`, `cost_raw`, `status`, `failure_reason`, timestamps. Index on `(tenant_id, provider_message_id)` and `(tenant_id, created_at)`. Retention 13 months |
-| `sms_opt_outs` (table built in `V50`, #212; the screens that write it are #218) | #212, #218 | `member_id`, `recipient_hash`, `scope` [`reminders`, `all`], `source` [`staff`, `member`], `created_by`, `created_at`; a removal sets `removed_at` |
-| `notification_templates` | #218 | Tenant overrides for `event_key` and `channel` with the text and a version (FR-NTF-03) |
+| `sms_opt_outs` (table built in `V50`, #212; widened and written by the screens of #218, `V52`) | #212, #218 | `member_id` (null for a number alone), `recipient_hash`, `recipient_masked`, `scope` [`reminders`, `all`], `source` [`staff`, `member`, `number`, `import`], `created_by`, `created_at`; a removal sets `removed_at` |
+| `sms_template_overrides` (built, `V52`) | #218 | Tenant overrides for an `event_key` (channel `sms`) with the text and a version (FR-NTF-03); the planned name `notification_templates` is not used, as only SMS wording exists |
+| `platform_sms_sender_ids` (platform; built, `V52`) | #218 | The operator's allow-list of sender ids per tenant, one tenant per id at a time (ADR-036 second amendment) |
 | `ai_calls` | #220, built, migration V51 | One row per call to the language model gateway: tenant, `purpose`, asking user (never sent), model, `request_hash` (SHA-256 of the request, hex), `outcome` [`pending`, `ok`, `failed`, `refused`], a closed `reason`, `http_status`, `attempts`, `reserved_tokens`, `input_tokens`, `output_tokens`, `tokens_counted` and `cost_counted_micro` (what the row holds against the daily caps: the reservation while pending, the reported tokens once finished, nothing for a refusal), `estimated_cost_micro`, `cost_currency`, `latency_ms`. **No prompt text, no response text and no provider error text** (a test pins the column list). Row-level security; the application may insert, finish a pending row once (column grant and a guard trigger) and delete only rows older than 90 days, which the nightly `core.ai-calls-housekeeping` job does through the `SECURITY DEFINER` function `ai_calls_housekeeping()` for every tenant at once, suspended ones included, also closing a call pending for an hour as `failed`/`abandoned` (keeping its reservation). The platform-wide sum for the ceiling is the `SECURITY DEFINER` function `ai_platform_usage(from, to)`, which returns two numbers and no row |
 | `ai_briefs` | #226 | One stored all-branches brief per tenant and business date with its facts digest and `source` [`model`, `fallback`], unique on `(tenant_id, brief_date)`; shown only to all-branch users (FR-AIA-08) |
 | `payment_statement_rows` | #224 | Uploaded merchant statement rows: confirmation code, merchant reference, gross, fee, settled, matched intent id, fee journal entry id; unique on `(tenant_id, confirmation_code)` |

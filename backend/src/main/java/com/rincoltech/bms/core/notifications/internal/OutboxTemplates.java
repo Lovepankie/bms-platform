@@ -172,6 +172,12 @@ class OutboxTemplates {
                 : templateKey;
     }
 
+    /** The default text of a template, for the tenant wording screens (the same text the channel sends when no override exists). */
+    static String defaultText(String channel, String templateKey) {
+        Template template = byChannel(channel).get(templateKey);
+        return template == null ? null : template.text();
+    }
+
     /** The placeholders a template uses, for the render tests. */
     static java.util.Set<String> placeholders(String channel, String templateKey) {
         Template template = byChannel(channel).get(templateKey);

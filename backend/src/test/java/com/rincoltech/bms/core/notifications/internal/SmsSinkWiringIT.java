@@ -6,6 +6,7 @@ import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.core.notifications.Outbox;
 import com.rincoltech.bms.kernel.TenantContext;
+import com.rincoltech.bms.testsupport.SmsTenants;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,7 @@ class SmsSinkWiringIT extends IntegrationTest {
                 .sql("INSERT INTO platform_sms_controls (tenant_id, enabled, daily_cap) VALUES (?, true, 1000)")
                 .param(t.tenantId())
                 .update();
+        SmsTenants.enable(t.tenantId());
         String key = "test.sms.sink:" + UUID.randomUUID();
         boolean queued = Boolean.TRUE.equals(TenantContext.callAs(
                 t.tenantId(),
