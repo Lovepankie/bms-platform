@@ -185,3 +185,13 @@ number is printed on the page and a render must never run under the series lock.
 and the PDF is a rendering of it; a render that fails leaves a numbered document that renders from the same snapshot on the next
 request. The customer statement follows the schedule and statement rule: rendered on each request, never stored, numbered by date and a
 short customer code. `make document-samples` renders them too.
+
+## Addendum of 2026-10-14 (issue #264): penalties are dated
+
+Increment 6 records every penalty as a `lending_loan_charges` row with the business date it is
+charged for and the time the nightly run recorded it. `LoanLedger` no longer reads the items'
+penalties due: the statement charges the penalties of each date on that date (before that day's
+payments, because the run charges at the start of the business date), and a receipt's "loan after
+this payment" adds only the penalties recorded before the payment. The known limit above is
+closed. `PenaltyDatingGuardTest` now checks that `LoanLedger` never reads the items' penalties and
+that only the nightly run writes them; a later writer (a waiver) must keep the same dating.

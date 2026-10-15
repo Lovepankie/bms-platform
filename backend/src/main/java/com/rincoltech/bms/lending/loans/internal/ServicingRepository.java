@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -257,6 +258,24 @@ class ServicingRepository {
         return rows;
     }
 
+    /** The loan's penalty charges (R-PEN) with their dates, for the statement and the receipts (ADR-034). */
+    List<LoanLedger.PenaltyCharge> penaltyCharges(UUID loanId) {
+        return jdbc.sql("""
+                        SELECT s.item_no, c.business_date, c.created_at, c.amount_minor
+                          FROM lending_loan_charges c
+                          JOIN lending_schedule_items s ON s.id = c.schedule_item_id
+                         WHERE c.loan_id = ? AND c.charge_type = 'penalty'
+                         ORDER BY c.business_date, s.item_no, c.period_no
+                        """)
+                .param(loanId)
+                .query((rs, n) -> new LoanLedger.PenaltyCharge(
+                        rs.getInt(1),
+                        rs.getObject(2, LocalDate.class),
+                        rs.getObject(3, OffsetDateTime.class).toInstant(),
+                        rs.getLong(4)))
+                .list();
+    }
+
     /** The loan's transactions, newest first, each with the allocation rows it wrote. */
     List<LoanTransaction> transactions(UUID loanId) {
         Map<UUID, List<AllocationRow>> rows = new LinkedHashMap<>();
@@ -315,7 +334,11 @@ class ServicingRepository {
     // ---- Loan balances --------------------------------------------------------------------
 
     Optional<LoanBalances> balances(UUID loanId) {
-        return jdbc.sql("SELECT * FROM lending_loans WHERE id = ?")
+        return jdbc.sql("""
+                        SELECT l.*, (SELECT coalesce(sum(c.amount_minor), 0) FROM lending_loan_charges c
+                                      WHERE c.loan_id = l.id AND c.charge_type = 'penalty') AS penalties_assessed
+                          FROM lending_loans l WHERE l.id = ?
+                        """)
                 .param(loanId)
                 .query((rs, n) -> {
                     long principal = rs.getLong("principal_outstanding_minor");
@@ -338,7 +361,9 @@ class ServicingRepository {
                             rs.getObject("next_due_date", LocalDate.class),
                             rs.getObject("last_repayment_on", LocalDate.class),
                             rs.getLong("total_paid_minor"),
-                            rs.getLong("credit_balance_minor"));
+                            rs.getLong("credit_balance_minor"),
+                            ServicingApi.parBucket(rs.getInt("days_past_due")),
+                            rs.getLong("penalties_assessed"));
                 })
                 .optional();
     }
@@ -354,10 +379,20 @@ class ServicingRepository {
 
     /** The balances, arrears and DPD of R-DPD as computed from the items. */
     void position(UUID loanId, Position p) {
+        position(loanId, p, true);
+    }
+
+    /**
+     * {@code bumpVersion} false is the nightly recompute (FR-ARR-01): the DPD moves every night, and
+     * a version bump would make every pending approval on the loan stale overnight, while each
+     * approval re-checks its own facts when it runs.
+     */
+    void position(UUID loanId, Position p, boolean bumpVersion) {
         jdbc.sql("""
                         UPDATE lending_loans SET principal_outstanding_minor = ?, interest_outstanding_minor = ?,
                             fees_outstanding_minor = ?, penalties_outstanding_minor = ?, arrears_minor = ?,
-                            days_past_due = ?, next_due_date = ?, updated_at = now(), version = version + 1
+                            days_past_due = ?, next_due_date = ?, updated_at = now(),
+                            version = version + CASE WHEN ? THEN 1 ELSE 0 END
                          WHERE id = ?
                         """)
                 .params(
@@ -368,6 +403,7 @@ class ServicingRepository {
                         p.arrearsMinor(),
                         p.daysPastDue(),
                         p.nextDueDate(),
+                        bumpVersion,
                         loanId)
                 .update();
     }

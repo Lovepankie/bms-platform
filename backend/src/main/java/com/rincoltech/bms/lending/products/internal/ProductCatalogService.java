@@ -95,6 +95,13 @@ class ProductCatalogService implements ProductCatalog {
                 v.minCollateralCoverBp(),
                 v.requiresGuarantor(),
                 v.allocationOrder(),
-                v.flatEarlySettlementRebate());
+                v.flatEarlySettlementRebate(),
+                new ProductCatalog.PenaltyRule(
+                        v.penaltyMethod(),
+                        v.penaltyGraceDays(),
+                        v.penaltyPeriodUnit(),
+                        v.penaltyFlatMinor(),
+                        v.penaltyRateBp(),
+                        v.penaltyCapBp()));
     }
 }

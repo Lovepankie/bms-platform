@@ -630,6 +630,16 @@ SMS and PDF are deferred.
 | FR-ARR-03 | The loan view shall show arrears amount, DPD, PAR bucket (chapter 14) and assessed penalties. | Tested with fixed clocks. | MVP |
 | FR-ARR-04 | A branch manager shall request a waiver of all or part of an assessed penalty (or, with accountant role, of fees or interest) with a reason; the waiver is maker-checker and is recorded on the item as `waived`. | Waived penalties are never posted to income. Waiving principal is not allowed (that is a write-off). | MVP |
 
+Built in increment 6 T1 (#264): FR-ARR-01 and FR-ARR-03. The nightly job runs at 00:15 tenant
+local time, before the approval expiry (00:30, FR-ORG-08, its own job since increment 1) and the
+insights snapshot (00:45, which is FR-ARR-02, built in V33), so the snapshot sees the day's DPD.
+For every active loan it charges the R-PEN periods due by the business date as
+`lending_loan_charges` rows, adds them to the items' penalties due, and recomputes item statuses,
+DPD and arrears; a rerun the same day inserts nothing. The loan's `balances` add `par_bucket`
+(`current`, `1_30`, `31_60`, `61_90`, `over_90`) and `penalties_assessed_minor`. The statement
+charges each penalty on its own business date and a receipt counts only the penalties recorded
+before its payment (ADR-034 addendum of 2026-10-14). FR-ARR-04 is T2 (#265).
+
 ## 3.22 Closure, write-off and restructure (LCL)
 
 | ID | Requirement | Acceptance criteria | Phase |

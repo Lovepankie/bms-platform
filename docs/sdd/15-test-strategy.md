@@ -337,7 +337,15 @@ breaking, and answers 503 when no render slot is free. A statement read is one R
 snapshot (`LoanDocumentsIsolationIT`, with a READ COMMITTED control), a five hundred line statement
 renders in a child JVM with a 224 MB heap (`StatementMemoryTest`), document responses are
 `no-store`, another branch and another tenant get 404 (403 on the core document route across
-branches), and `PenaltyDatingGuardTest` stops penalties shipping without dated charges.
+branches), and `PenaltyDatingGuardTest` keeps the documents on dated penalty charges.
+
+Arrears (#264). `PenaltiesTest` covers R-PEN without a database: the grace days, each period unit,
+flat and percent charges, the cap and the periods already charged. `LoanServicingIT` runs the
+nightly job on a loan five days overdue: five penalty charges, DPD 5, the `1_30` bucket, the
+arrears, nothing more on a rerun, a repayment that pays the penalty first and posts it to penalty
+income, a statement with one penalty line per day that reconciles, and a charge that the owner
+cannot delete or change. `LoanLedgerTest` places penalties on their own dates and keeps a later
+penalty out of an earlier receipt.
 `-Dbms.golden.record=true` rewrites the golden files for review. `make document-samples` writes
 each document as a PDF and a PNG per page to `backend/target/document-samples`, the visual check
 of the quality bar before a template change is merged.

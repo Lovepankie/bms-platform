@@ -3,6 +3,7 @@ package com.rincoltech.bms.lending.loans.internal;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.AllocationRow;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.LoanTransaction;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.ScheduleRow;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -17,9 +18,10 @@ import java.util.function.LongFunction;
  * and nothing else: its transactions, their allocation rows and the contracted schedule. Pure: no
  * database, no clock.
  *
- * <p>What the member owes is the principal, the interest and fees on the schedule, and any penalties,
- * less what has been applied to them. The statement charges the whole schedule when the loan is
- * disbursed, because that is what the loan's outstanding balance counts from then on, and every
+ * <p>What the member owes is the principal, the interest and fees on the schedule, and the penalties
+ * charged so far, less what has been applied to them. The statement charges the whole schedule when
+ * the loan is disbursed, because that is what the loan's outstanding balance counts from then on,
+ * each penalty on the business date it was charged (R-PEN, ADR-034), and every
  * later line moves the balance by exactly what the servicing code moved it by: a repayment by the
  * sum of its own allocation rows, a reversal by the sum of the rows it wrote (which include the
  * re-allocation of later repayments), a write-off by the amount written off on the schedule items.
@@ -47,6 +49,12 @@ final class LoanLedger {
     /** The fees taken out of the proceeds at disbursement, by name, for the disbursement lines. */
     record Deduction(String name, long amountMinor) {}
 
+    /**
+     * One penalty charge (R-PEN) on schedule item {@code itemNo}: the business date it is charged for,
+     * and when the nightly run recorded it, which places it among the transactions for a receipt.
+     */
+    record PenaltyCharge(int itemNo, LocalDate date, Instant recordedAt, long amountMinor) {}
+
     /** The loan as it stood right after one transaction. */
     record After(long outstandingMinor, long creditMinor, LocalDate nextDue, boolean writtenOff) {}
 
@@ -59,14 +67,13 @@ final class LoanLedger {
     static Statement statement(
             List<LoanTransaction> txns,
             List<ScheduleRow> items,
+            List<PenaltyCharge> penalties,
             List<Deduction> deductions,
             LocalDate asAt,
             long outstandingNow,
             LongFunction<String> money) {
         long interest = items.stream().mapToLong(ScheduleRow::interestDueMinor).sum();
         long fees = items.stream().mapToLong(ScheduleRow::feesDueMinor).sum();
-        long penalties =
-                items.stream().mapToLong(ScheduleRow::penaltiesDueMinor).sum();
         long writtenOff = items.stream().mapToLong(ScheduleRow::writtenOffMinor).sum();
         Map<UUID, String> numbers = new LinkedHashMap<>();
         Map<UUID, LoanTransaction> byId = new LinkedHashMap<>();
@@ -80,9 +87,15 @@ final class LoanLedger {
                 .thenComparingInt(LoanLedger::rank)
                 .thenComparing(LoanTransaction::id));
 
+        List<PenaltyCharge> unprinted = new ArrayList<>(penalties);
+        unprinted.sort(Comparator.comparing(PenaltyCharge::date));
         List<Entry> entries = new ArrayList<>();
         long[] balance = {0};
         for (LoanTransaction t : printed) {
+            if (!t.txnType().equals("disbursement")) {
+                // The nightly run charges at the start of the business date, before that day's payments.
+                penaltiesUpTo(entries, balance, unprinted, t.valueDate());
+            }
             String number = t.receiptNo() == null ? "" : t.receiptNo();
             switch (t.txnType()) {
                 case "disbursement" -> {
@@ -106,7 +119,6 @@ final class LoanLedger {
                             "Net paid to the member: " + money.apply(t.amountMinor() - deducted));
                     charge(entries, balance, t.valueDate(), "", "Interest charged (schedule)", interest);
                     charge(entries, balance, t.valueDate(), "", "Fees added (schedule)", fees);
-                    charge(entries, balance, t.valueDate(), "", "Penalties charged", penalties);
                 }
                 case "repayment" -> {
                     long cash = rows(t, false);
@@ -182,6 +194,7 @@ final class LoanLedger {
                             t.txnType().replace('_', ' ') + ": " + money.apply(t.amountMinor()));
             }
         }
+        penaltiesUpTo(entries, balance, unprinted, LocalDate.MAX);
         long difference = outstandingNow - balance[0];
         if (difference > 0) {
             charge(entries, balance, asAt, "", "Other adjustments, see the loan's audit trail", difference);
@@ -193,17 +206,27 @@ final class LoanLedger {
 
     /**
      * The loan right after {@code txnId} was recorded: what a receipt shows under "Loan after this
-     * payment". Only the transactions recorded up to and including that one count, so it is the same
-     * whenever the receipt is first opened, and a later payment or reversal never changes it.
+     * payment". Only the transactions recorded up to and including that one, and the penalties recorded
+     * before it, count, so it is the same whenever the receipt is first opened, and a later payment,
+     * reversal or penalty never changes it.
      */
-    static After after(List<LoanTransaction> txns, List<ScheduleRow> items, UUID txnId) {
+    static After after(List<LoanTransaction> txns, List<ScheduleRow> items, List<PenaltyCharge> penalties, UUID txnId) {
         List<LoanTransaction> recorded = new ArrayList<>(txns);
         recorded.sort(Comparator.comparing(LoanTransaction::createdAt)
                 .thenComparingInt(LoanLedger::rank)
                 .thenComparing(LoanTransaction::id));
         Map<Integer, Long> remaining = new LinkedHashMap<>();
-        items.forEach(i -> remaining.put(
-                i.no(), i.principalDueMinor() + i.interestDueMinor() + i.feesDueMinor() + i.penaltiesDueMinor()));
+        items.forEach(i -> remaining.put(i.no(), i.principalDueMinor() + i.interestDueMinor() + i.feesDueMinor()));
+        Instant at = txns.stream()
+                .filter(t -> t.id().equals(txnId))
+                .findFirst()
+                .orElseThrow()
+                .createdAt();
+        for (PenaltyCharge p : penalties) {
+            if (!p.recordedAt().isAfter(at)) {
+                remaining.merge(p.itemNo(), p.amountMinor(), Long::sum);
+            }
+        }
         long credit = 0;
         boolean writtenOff = false;
         for (LoanTransaction t : recorded) {
@@ -231,6 +254,19 @@ final class LoanLedger {
             }
         }
         return new After(outstanding, credit, next, writtenOff);
+    }
+
+    /** Prints, one line per date, the penalties charged on or before {@code until}, and removes them. */
+    private static void penaltiesUpTo(
+            List<Entry> entries, long[] balance, List<PenaltyCharge> unprinted, LocalDate until) {
+        while (!unprinted.isEmpty() && !unprinted.getFirst().date().isAfter(until)) {
+            LocalDate date = unprinted.getFirst().date();
+            long sum = 0;
+            while (!unprinted.isEmpty() && unprinted.getFirst().date().equals(date)) {
+                sum = Math.addExact(sum, unprinted.removeFirst().amountMinor());
+            }
+            charge(entries, balance, date, "", "Penalties charged", sum);
+        }
     }
 
     /** The sum of a transaction's own allocation rows that move the balance; with {@code rebate} the rebate rows too. */

@@ -325,7 +325,13 @@ class LoanDocuments {
                 .map(d -> deductions(loan, d))
                 .orElse(List.of());
         LoanLedger.Statement st = LoanLedger.statement(
-                txns, repo.scheduleRows(loanId), deductions, today, b.totalOutstandingMinor(), v -> money(v, cur));
+                txns,
+                repo.scheduleRows(loanId),
+                repo.penaltyCharges(loanId),
+                deductions,
+                today,
+                b.totalOutstandingMinor(),
+                v -> money(v, cur));
         long charged = 0;
         long credited = 0;
         List<Map<String, Object>> lines = new ArrayList<>();
@@ -457,7 +463,7 @@ class LoanDocuments {
             }
         }
         model.put("allocations", rows);
-        After now = LoanLedger.after(all, items, t.id());
+        After now = LoanLedger.after(all, items, repo.penaltyCharges(loan.id()), t.id());
         Map<String, Object> after = new LinkedHashMap<>();
         after.put(
                 "outstanding",

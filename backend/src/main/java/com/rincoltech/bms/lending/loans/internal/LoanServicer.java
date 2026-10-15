@@ -770,6 +770,14 @@ class LoanServicer implements LoanServicing {
 
     // ---- Shared ---------------------------------------------------------------------------
 
+    /** FR-ARR-01: the nightly run's recompute of statuses, DPD and arrears for one loan. */
+    Position refreshPosition(UUID loanId, List<Item> items, LocalDate today) {
+        repo.saveItems(items, today);
+        Position position = Servicing.position(items, today);
+        repo.position(loanId, position, false);
+        return position;
+    }
+
     /** Item statuses, balances, arrears and DPD as of {@code today} (R-DPD). */
     private Position refresh(UUID loanId, List<Item> items, LocalDate today) {
         repo.saveItems(items, today);

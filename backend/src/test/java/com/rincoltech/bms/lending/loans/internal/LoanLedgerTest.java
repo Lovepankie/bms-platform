@@ -1,10 +1,12 @@
 package com.rincoltech.bms.lending.loans.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.rincoltech.bms.lending.loans.internal.LoanLedger.After;
 import com.rincoltech.bms.lending.loans.internal.LoanLedger.Deduction;
 import com.rincoltech.bms.lending.loans.internal.LoanLedger.Entry;
+import com.rincoltech.bms.lending.loans.internal.LoanLedger.PenaltyCharge;
 import com.rincoltech.bms.lending.loans.internal.LoanLedger.Statement;
 import com.rincoltech.bms.lending.loans.internal.Servicing.Allocation;
 import com.rincoltech.bms.lending.loans.internal.Servicing.Item;
@@ -217,9 +219,14 @@ class LoanLedgerTest {
     }
 
     static Statement statement(Book b, boolean writtenOff, long outstandingNow) {
+        return statement(b, writtenOff, outstandingNow, List.of());
+    }
+
+    static Statement statement(Book b, boolean writtenOff, long outstandingNow, List<PenaltyCharge> penalties) {
         return LoanLedger.statement(
                 b.transactions(),
                 b.scheduleRows(writtenOff),
+                penalties,
                 List.of(new Deduction("Processing fee", 24_000)),
                 LocalDate.of(2026, 12, 31),
                 outstandingNow,
@@ -319,7 +326,7 @@ class LoanLedgerTest {
         UUID p1 = b.repay(300_000, LocalDate.of(2026, 2, 15));
         List<LoanTransaction> justAfterP1 = b.transactions();
         List<ScheduleRow> itemsThen = b.scheduleRows(false);
-        After then = LoanLedger.after(justAfterP1, itemsThen, p1);
+        After then = LoanLedger.after(justAfterP1, itemsThen, List.of(), p1);
         assertThat(then.outstandingMinor()).isEqualTo(1_590_000 - 300_000);
         assertThat(then.nextDue()).isEqualTo(b.contracted.get(0).dueDate);
         assertThat(then.creditMinor()).isZero();
@@ -330,10 +337,11 @@ class LoanLedgerTest {
         b.reverse(p1, LocalDate.of(2026, 3, 5));
         List<LoanTransaction> later = b.transactions();
         List<ScheduleRow> itemsLater = b.scheduleRows(false);
-        assertThat(LoanLedger.after(later, itemsLater, p1))
+        assertThat(LoanLedger.after(later, itemsLater, List.of(), p1))
                 .as("the same after the later payment, the reversal and a changed schedule")
                 .isEqualTo(then);
-        assertThat(LoanLedger.after(later, itemsLater, later.get(3).id()).outstandingMinor())
+        assertThat(LoanLedger.after(later, itemsLater, List.of(), later.get(3).id())
+                        .outstandingMinor())
                 .as("the second payment, recorded after the first")
                 .isEqualTo(1_590_000 - 300_000 - 500_000);
     }
@@ -343,9 +351,51 @@ class LoanLedgerTest {
         Book b = new Book();
         b.disburse();
         UUID payoff = b.repay(1_590_000 + 25_000, LocalDate.of(2026, 2, 15));
-        After a = LoanLedger.after(b.transactions(), b.scheduleRows(false), payoff);
+        After a = LoanLedger.after(b.transactions(), b.scheduleRows(false), List.of(), payoff);
         assertThat(a.outstandingMinor()).isZero();
         assertThat(a.creditMinor()).isEqualTo(25_000);
         assertThat(a.nextDue()).isNull();
+    }
+
+    /**
+     * R-PEN with ADR-034: a penalty is on the statement on the business date it was charged, never at
+     * disbursement, and a receipt counts only the penalties recorded before its payment.
+     */
+    @Test
+    void penaltiesArePlacedOnTheDateTheyWereCharged() {
+        Book b = new Book();
+        b.disburse();
+        LocalDate due = b.contracted.get(0).dueDate;
+        List<PenaltyCharge> penalties = new ArrayList<>();
+        penalties.add(new PenaltyCharge(1, due.plusDays(1), b.next(), 2_000));
+        penalties.add(new PenaltyCharge(1, due.plusDays(2), b.next(), 2_000));
+        penalties.add(new PenaltyCharge(2, due.plusDays(2), b.next(), 1_000));
+        UUID p1 = b.repay(300_000, due.plusDays(2));
+        penalties.add(new PenaltyCharge(1, due.plusDays(3), b.next(), 2_000));
+
+        long outstanding = b.outstanding() + 7_000;
+        Statement st = statement(b, false, outstanding, penalties);
+        assertRunningBalance(st);
+        assertThat(st.closingMinor()).isEqualTo(outstanding);
+        assertThat(st.entries()).noneMatch(e -> e.description().startsWith("Other adjustments"));
+        List<Entry> charged = st.entries().stream()
+                .filter(e -> e.description().equals("Penalties charged"))
+                .toList();
+        assertThat(charged)
+                .extracting(Entry::date, Entry::chargedMinor)
+                .containsExactly(
+                        tuple(due.plusDays(1), 2_000L), tuple(due.plusDays(2), 3_000L), tuple(due.plusDays(3), 2_000L));
+        // The charges of a date come before that date's payment: the nightly run charges first.
+        List<String> order = st.entries().stream()
+                .filter(e -> !e.note())
+                .map(e -> e.date() + " " + e.description())
+                .toList();
+        assertThat(order.indexOf(due.plusDays(2) + " Penalties charged"))
+                .isLessThan(order.indexOf(due.plusDays(2) + " Repayment"));
+
+        assertThat(LoanLedger.after(b.transactions(), b.scheduleRows(false), penalties, p1)
+                        .outstandingMinor())
+                .as("the three penalties recorded before the payment count, the later one does not")
+                .isEqualTo(1_590_000 + 5_000 - 300_000);
     }
 }

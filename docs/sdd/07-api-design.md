@@ -661,7 +661,8 @@ and answer 202 with the pending request. `GET .../schedule` returns the items an
 (`applies_to_txn_id`, `item_no`, `component`, `amount_minor`); `GET .../payoff-quote?value_date=`
 (today by default) returns principal, interest, fees, penalties, rebate and total. `GET` of a loan
 now carries `balances` (disbursed and maturity dates, outstanding by component, arrears, DPD, next
-due date, total paid, credit balance), and the list takes `q` (loan or member number by prefix,
+due date, total paid, credit balance, and since increment 6 the PAR bucket `par_bucket` and
+`penalties_assessed_minor`, every penalty charged so far), and the list takes `q` (loan or member number by prefix,
 member name by any part) and returns the member's number and name, the outstanding total, DPD and
 the next due date. `payment_method_key` is `cash`, `bank`, `mtn_momo` or `airtel_money`. Codes (422
 unless stated): `value_date_in_future`, `before_disbursement`, `before_last_repayment`,

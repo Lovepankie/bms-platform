@@ -1,6 +1,7 @@
 package com.rincoltech.bms.lending.loans;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.kernel.BusinessClock;
@@ -2131,5 +2132,130 @@ class LoanServicingIT extends LoanFixtures {
                         1)
                 .replaceAll("\\s+", " ");
         assertThat(text).contains("Approved by a former user").doesNotContain("no checker needed");
+    }
+
+    // ---- Arrears (FR-ARR-01, FR-ARR-03, R-PEN, R-DPD) ----------------------------------------
+
+    @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("loanArrears")
+    com.github.kagkarlsson.scheduler.task.helper.RecurringTask<Void> arrearsTask;
+
+    /** The nightly job as the scheduler runs it: every active lending tenant, one transaction each. */
+    void runArrears() {
+        arrearsTask.execute(null, null);
+    }
+
+    long penaltyCharges(String loan) {
+        return TestDatabase.owner()
+                .sql("SELECT count(*) FROM lending_loan_charges WHERE loan_id = ?::uuid")
+                .param(loan)
+                .query(Long.class)
+                .single();
+    }
+
+    /**
+     * FR-ARR-01 and FR-ARR-03: worked example B disbursed a month and five days ago, so item 1 is
+     * five days overdue. The nightly job charges one 2,000 penalty per day after the due date
+     * (grace 0), sets DPD and arrears, and a rerun charges nothing more. A repayment pays the
+     * penalty first (the default allocation order) and posts it to penalty income.
+     */
+    @Test
+    void frArr01_theNightlyJobChargesPenaltiesAndSetsArrearsOnce() throws Exception {
+        Map<String, Object> penalty = new LinkedHashMap<>();
+        penalty.put("penalty_method", "flat_per_period");
+        penalty.put("penalty_period_unit", "day");
+        penalty.put("penalty_grace_days", 0);
+        penalty.put("penalty_flat_minor", 2_000);
+        String loan = approved(product("PEN", penalty, List.of()), 1_200_000, 3, 91);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+
+        runArrears();
+        JsonNode b = loan(loan).get("balances");
+        assertThat(b.get("days_past_due").asInt()).isEqualTo(5);
+        assertThat(b.get("par_bucket").asString()).isEqualTo("1_30");
+        assertThat(b.get("arrears_minor").asLong()).isEqualTo(520_000);
+        assertThat(b.get("penalties_assessed_minor").asLong()).isEqualTo(10_000);
+        assertThat(b.get("penalties_outstanding_minor").asLong()).isEqualTo(10_000);
+        assertThat(penaltyCharges(loan)).isEqualTo(5);
+        JsonNode item1 = get(loan, "/schedule").get("items").get(0);
+        assertThat(item1.get("status").asString()).isEqualTo("overdue");
+        assertThat(item1.get("penalties_due_minor").asLong()).isEqualTo(10_000);
+
+        runArrears();
+        assertThat(penaltyCharges(loan))
+                .as("a rerun the same day charges nothing")
+                .isEqualTo(5);
+        assertThat(loan(loan).get("balances").get("penalties_assessed_minor").asLong())
+                .isEqualTo(10_000);
+        // A charge is never deleted or changed, the owner included; only a waiver (T2) raises waived_minor.
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("DELETE FROM lending_loan_charges WHERE loan_id = ?::uuid")
+                        .param(loan)
+                        .update())
+                .rootCause()
+                .hasMessageContaining("may only raise waived_minor");
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("UPDATE lending_loan_charges SET amount_minor = 1 WHERE loan_id = ?::uuid")
+                        .param(loan)
+                        .update())
+                .rootCause()
+                .hasMessageContaining("may only raise waived_minor");
+
+        JsonNode paid = repaid(loan, 10_000, today).get("transaction");
+        assertThat(lines(paid.get("journal_entry_id").asString()))
+                .containsExactly("cash_on_hand:10000:0", "loan_penalty_income:0:10000");
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .isZero();
+
+        // ADR-034: the statement charges each penalty on its own date, never at disbursement.
+        byte[] statement = render(loan, "loan_statement").getBody();
+        assertReconciles(
+                statement,
+                loan(loan).get("balances").get("total_outstanding_minor").asLong());
+        assertThat(statementRows(statement))
+                .filteredOn(r -> r.line().contains("Penalties charged"))
+                .hasSize(5)
+                .allSatisfy(r -> assertThat(r.charged()).isEqualTo(2_000));
+        booksAgree();
+    }
+
+    /** FR-ARR-01: a loan that is not overdue, or a product with no penalty rule, is charged nothing. */
+    @Test
+    void frArr01_noPenaltyWithoutARuleOrBeforeTheDueDate() {
+        String loan = approved(exampleB("NOPEN"), 1_200_000, 3, 92);
+        disburse(loan, today.minusMonths(1).minusDays(3));
+        runArrears();
+        assertThat(penaltyCharges(loan)).isZero();
+        assertThat(loan(loan).get("balances").get("days_past_due").asInt()).isEqualTo(3);
+        String current = approved(exampleB("CURRENT"), 1_200_000, 3, 93);
+        disburse(current, today);
+        runArrears();
+        assertThat(loan(current).get("balances").get("par_bucket").asString()).isEqualTo("current");
+    }
+
+    /**
+     * FR-ARR-01: the nightly recompute moves DPD and statuses without a new loan version, so an
+     * approval requested the day before is not made stale by it.
+     */
+    @Test
+    void frArr01_theNightlyRunLeavesPendingApprovalsCurrent() {
+        String loan = approved(exampleB("NIGHTAPR"), 1_200_000, 3, 96);
+        disburse(loan, today.minusMonths(1).minusDays(3));
+        int version = loan(loan).get("version").asInt();
+        ResponseEntity<JsonNode> r = send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/write-off",
+                withKey(as(accountant, accountantPerms, "*", null), key()),
+                Map.of("reason", "Test borrower unreachable"));
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+
+        runArrears();
+        JsonNode after = loan(loan);
+        assertThat(after.get("balances").get("days_past_due").asInt()).isEqualTo(3);
+        assertThat(after.get("version").asInt()).isEqualTo(version);
+        ResponseEntity<JsonNode> d =
+                decide(r.getBody().get("approval_request_id").asString(), admin, adminPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(loan(loan).get("status").asString()).isEqualTo("written_off");
     }
 }

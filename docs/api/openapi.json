@@ -3571,6 +3571,15 @@
             "format" : "date",
             "type" : "string"
           },
+          "par_bucket" : {
+            "description" : "FR-ARR-03, chapter 14: current, 1_30, 31_60, 61_90 or over_90",
+            "type" : "string"
+          },
+          "penalties_assessed_minor" : {
+            "description" : "FR-ARR-03: penalties charged so far (R-PEN), paid or not",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "penalties_outstanding_minor" : {
             "format" : "int64",
             "type" : "integer"
