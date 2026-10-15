@@ -28,6 +28,7 @@ public final class FakePaymentGateway implements PaymentGateway {
         volatile String method = "";
         volatile String confirmation = "";
         volatile boolean cancelled;
+        volatile String reportedReference;
 
         FakeOrder(String providerReference, String merchantReference, long orderedMinor, String currency) {
             this.providerReference = providerReference;
@@ -111,7 +112,7 @@ public final class FakePaymentGateway implements PaymentGateway {
             return new StatusResult(
                     status,
                     order.providerReference,
-                    order.merchantReference,
+                    order.reportedReference != null ? order.reportedReference : order.merchantReference,
                     paidShape ? order.reportedMinor : order.orderedMinor,
                     paidShape ? order.reportedCurrency : order.currency,
                     paidShape ? order.method : "",
@@ -152,6 +153,11 @@ public final class FakePaymentGateway implements PaymentGateway {
         o.method = "MTN";
         o.confirmation = confirmationCode;
         o.status = Status.COMPLETED;
+    }
+
+    /** The status answer names this merchant reference instead of the order's own (a confused or hostile provider). */
+    public synchronized void reportReference(String providerReference, String merchantReference) {
+        byProviderReference.get(providerReference).reportedReference = merchantReference;
     }
 
     public synchronized void fail(String providerReference) {

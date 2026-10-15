@@ -97,6 +97,8 @@ final class PesapalGateway implements PaymentGateway {
     private final Map<Scope, Object> locks = Map.of(Scope.TENANT, new Object(), Scope.PLATFORM, new Object());
     private Instant lastRegistration;
 
+    private final Duration callBudget;
+
     PesapalGateway(
             URI base,
             PesapalSettings.Pair tenant,
@@ -106,6 +108,21 @@ final class PesapalGateway implements PaymentGateway {
             Supplier<Instant> clock,
             CircuitBreaker breaker,
             Sleeper sleeper) {
+        this(base, tenant, platform, payerReturnUrl, mapper, clock, breaker, sleeper, CALL_BUDGET);
+    }
+
+    /** As above with a shorter total time per call, for the tests of a provider that does not answer. */
+    PesapalGateway(
+            URI base,
+            PesapalSettings.Pair tenant,
+            PesapalSettings.Pair platform,
+            String payerReturnUrl,
+            ObjectMapper mapper,
+            Supplier<Instant> clock,
+            CircuitBreaker breaker,
+            Sleeper sleeper,
+            Duration callBudget) {
+        this.callBudget = callBudget;
         this.base = URI.create(base.toString().replaceAll("/+$", ""));
         this.tenant = tenant;
         this.platform = platform;
@@ -526,7 +543,7 @@ final class PesapalGateway implements PaymentGateway {
 
     private Reply send(String method, String path, String bearer, Object body) throws GatewayException {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(base + path))
-                .timeout(CALL_BUDGET)
+                .timeout(callBudget)
                 .header("Accept", "application/json");
         if (bearer != null) {
             builder.header("Authorization", "Bearer " + bearer);
@@ -546,7 +563,7 @@ final class PesapalGateway implements PaymentGateway {
         HttpResponse<byte[]> response;
         try {
             // The request timeout covers the headers; this covers the body too.
-            response = future.get(CALL_BUDGET.toNanos(), TimeUnit.NANOSECONDS);
+            response = future.get(callBudget.toNanos(), TimeUnit.NANOSECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
             throw new GatewayException(Kind.TRANSIENT, 0, "timeout");
