@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
  * by today (R-PEN, {@link Penalties}) become charges on their items, then item statuses, DPD and
  * arrears are recomputed (R-DPD). A charge is keyed by (item, period) in the database, so a rerun for
  * the same business date changes nothing. Charges are memorandum items: nothing is posted here.
+ * Last, every pending promise to pay is settled as kept or broken (FR-CLN-05).
  */
 @Service
 class ArrearsRun {
@@ -37,6 +38,7 @@ class ArrearsRun {
     private final CurrentTenant currentTenant;
     private final BusinessClock clock;
     private final AuditLog audit;
+    private final CollectionsService collections;
 
     ArrearsRun(
             JdbcClient jdbc,
@@ -46,7 +48,8 @@ class ArrearsRun {
             LoanServicer servicer,
             CurrentTenant currentTenant,
             BusinessClock clock,
-            AuditLog audit) {
+            AuditLog audit,
+            CollectionsService collections) {
         this.jdbc = jdbc;
         this.loans = loans;
         this.repo = repo;
@@ -55,9 +58,11 @@ class ArrearsRun {
         this.currentTenant = currentTenant;
         this.clock = clock;
         this.audit = audit;
+        this.collections = collections;
     }
 
-    record Result(LocalDate businessDate, int loans, int charges, long chargedMinor) {}
+    record Result(
+            LocalDate businessDate, int loans, int charges, long chargedMinor, int promisesKept, int promisesBroken) {}
 
     /** Runs inside the tenant's job transaction (TenantJobs binds the tenant). */
     @Transactional(propagation = Propagation.MANDATORY)
@@ -123,12 +128,15 @@ class ArrearsRun {
             }
             servicer.refreshPosition(id, items, today);
         }
-        Result result = new Result(today, active.size(), charges, charged);
+        CollectionsService.Settled promises = collections.settlePromises(today);
+        Result result = new Result(today, active.size(), charges, charged, promises.kept(), promises.broken());
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("business_date", today.toString());
         after.put("loans", result.loans());
         after.put("penalty_charges", result.charges());
         after.put("penalties_charged_minor", result.chargedMinor());
+        after.put("promises_kept", result.promisesKept());
+        after.put("promises_broken", result.promisesBroken());
         audit.record(
                 AuditLog.Entry.created("lending.arrears.run", "lending.arrears", null, null, after), null, "system");
         return result;

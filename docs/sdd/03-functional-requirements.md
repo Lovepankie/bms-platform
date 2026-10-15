@@ -793,6 +793,19 @@ expense credited 20,000, cash 1,020,000.
 | FR-CLN-05 | A promise to pay shall be marked `kept` when repayments between the promise and the promised date reach the promised amount, else `broken` the day after the promised date. | Nightly job tested. | MVP |
 | FR-CLN-06 | Officer performance shall be reported: portfolio, disbursements, collections due versus collected, PAR by officer. | Chapter 14. | MVP |
 
+Built in increment 6 T3 (#266): FR-CLN-01 to FR-CLN-05. A holder of `lending.collections.assign`
+moves one loan or up to 500 to an officer, all or none, audited per loan; the officer must be an
+active staff user who can create loans in each loan's branch (`officer_not_eligible`, checked
+through `core.identity`'s `StaffDirectory`), and a reassignment is not a new loan version, so a
+pending money approval stays current. Loans that are finished (closed, rejected, cancelled,
+restructured) keep their officer. Collection actions are logged on an active or written-off loan;
+every action but a promise needs a note, and a promise needs a date (today or later) and an amount.
+The due list, the arrears list (all four buckets, or one) and the promise list follow chapter 14
+section 14.4 in the caller's `lending.collections.read` scope. The nightly arrears run settles
+pending promises last: kept when repayments and recoveries not reversed, valued from the day the
+promise was made to its date, reach its amount; broken the day after its date otherwise. FR-CLN-06
+is a report (extras D3, #222).
+
 ## 3.27 Member self-service (MSS)
 
 | ID | Requirement | Acceptance criteria | Phase |

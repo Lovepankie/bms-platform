@@ -2384,4 +2384,226 @@ class LoanServicingIT extends LoanFixtures {
                 .isEqualTo(4_000);
         booksAgree();
     }
+
+    // ---- Collections (FR-CLN-01 to FR-CLN-05) ---------------------------------------------
+
+    JsonNode lending(String path) {
+        ResponseEntity<JsonNode> r = asOfficer(HttpMethod.GET, "/api/v1/lending" + path, null, null);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+        return r.getBody();
+    }
+
+    UUID staffUser(String role, UUID branch) {
+        return com.rincoltech.bms.testsupport.Api.staff(
+                t,
+                role + "-" + UUID.randomUUID() + "@example.test",
+                new com.rincoltech.bms.testsupport.Api.Role(role, branch));
+    }
+
+    /**
+     * FR-CLN-01: one loan or many move to an officer who can originate loans in their branch, all or
+     * none, audited; a cashier, an officer of another branch and a caller without the permission are
+     * refused.
+     */
+    @Test
+    void cln01_reassignIsAuditedAndAllOrNone() {
+        String a = approved(exampleB("REASSA"), 1_200_000, 3, 81);
+        disburse(a, today.minusDays(3));
+        String b = approved(exampleB("REASSB"), 1_200_000, 3, 82);
+        UUID next = staffUser("loan_officer", t.headOffice());
+        UUID cashierUser = staffUser("cashier", t.headOffice());
+        UUID elsewhere = staffUser("loan_officer", t.secondBranch());
+
+        for (UUID wrong : List.of(cashierUser, elsewhere, UUID.randomUUID())) {
+            ResponseEntity<JsonNode> r = send(
+                    HttpMethod.PUT,
+                    LOANS + "/" + a + "/officer",
+                    as(manager, managerPerms, "*", null),
+                    Map.of("officer_user_id", wrong.toString()));
+            assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(r.getBody().get("code").asString()).isEqualTo("officer_not_eligible");
+        }
+        assertThat(send(
+                                HttpMethod.POST,
+                                "/api/v1/lending/collections/reassign",
+                                as(cashier, cashierPerms, "*", null),
+                                Map.of("loan_ids", List.of(a), "officer_user_id", next.toString()))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+
+        ResponseEntity<JsonNode> moved = send(
+                HttpMethod.POST,
+                "/api/v1/lending/collections/reassign",
+                as(manager, managerPerms, "*", null),
+                Map.of("loan_ids", List.of(a, b), "officer_user_id", next.toString()));
+        assertThat(moved.getStatusCode()).as("%s", moved.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(moved.getBody().get("reassigned").asInt()).isEqualTo(2);
+        assertThat(loan(a).get("officer_user_id").asString()).isEqualTo(next.toString());
+        assertThat(loan(b).get("officer_user_id").asString()).isEqualTo(next.toString());
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM audit_log WHERE action = 'lending.loan.officer_reassigned'"
+                                + " AND entity_id = ?::uuid")
+                        .param(a)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+
+        UUID other = staffUser("loan_officer", t.headOffice());
+        ResponseEntity<JsonNode> partly = send(
+                HttpMethod.POST,
+                "/api/v1/lending/collections/reassign",
+                as(manager, managerPerms, "*", null),
+                Map.of("loan_ids", List.of(b, UUID.randomUUID().toString()), "officer_user_id", other.toString()));
+        assertThat(partly.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(loan(b).get("officer_user_id").asString()).as("all or none").isEqualTo(next.toString());
+    }
+
+    /** FR-CLN-02 and FR-CLN-03: the due list for a date or range, and the arrears list by bucket. */
+    @Test
+    void cln02_03_theDueListAndTheArrearsList() {
+        String late = approved(exampleB("DUELATE"), 1_200_000, 3, 83);
+        disburse(late, today.minusMonths(1).minusDays(3));
+        String dueToday = approved(exampleB("DUETODAY"), 1_200_000, 3, 84);
+        disburse(dueToday, today.minusMonths(1));
+
+        JsonNode todayList = lending("/collections/due-list");
+        assertThat(todayList.get("items")).hasSize(1);
+        JsonNode line = todayList.get("items").get(0);
+        assertThat(line.get("loan_id").asString()).isEqualTo(dueToday);
+        assertThat(line.get("due_minor").asLong()).isEqualTo(520_000);
+        assertThat(line.get("outstanding_minor").asLong()).isEqualTo(520_000);
+        assertThat(line.get("member_name").asString()).isEqualTo("Test Borrower 84");
+
+        JsonNode range = lending("/collections/due-list?date_from=" + today.minusDays(3) + "&date_to=" + today);
+        assertThat(range.get("items")).hasSize(2);
+        ResponseEntity<JsonNode> tooLong = asOfficer(
+                HttpMethod.GET,
+                "/api/v1/lending/collections/due-list?date_from=" + today + "&date_to=" + today.plusDays(100),
+                null,
+                null);
+        assertThat(tooLong.getBody().get("code").asString()).isEqualTo("range_too_long");
+
+        runArrears();
+        JsonNode arrears = lending("/collections/arrears");
+        assertThat(arrears.get("buckets")).hasSize(4);
+        JsonNode first = arrears.get("buckets").get(0);
+        assertThat(first.get("par_bucket").asString()).isEqualTo("1_30");
+        assertThat(first.get("loans").asInt()).isEqualTo(1);
+        assertThat(first.get("items").get(0).get("loan_id").asString()).isEqualTo(late);
+        assertThat(first.get("items").get(0).get("days_past_due").asInt()).isEqualTo(3);
+        assertThat(first.get("items").get(0).get("arrears_minor").asLong()).isEqualTo(520_000);
+        assertThat(lending("/collections/arrears?bucket=31_60")
+                        .get("buckets")
+                        .get(0)
+                        .get("loans")
+                        .asInt())
+                .isZero();
+        assertThat(asOfficer(HttpMethod.GET, "/api/v1/lending/collections/arrears?bucket=2_5", null, null)
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("invalid_bucket");
+    }
+
+    ResponseEntity<JsonNode> logAction(String loan, Map<String, Object> body) {
+        return send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/collection-actions",
+                as(officer, officerPerms, "*", null),
+                body);
+    }
+
+    static Map<String, Object> promise(LocalDate date, long amount) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("action_type", "promise_to_pay");
+        body.put("note", "Test promise");
+        body.put("promised_date", date.toString());
+        body.put("promised_amount_minor", amount);
+        return body;
+    }
+
+    /**
+     * FR-CLN-04 and FR-CLN-05: actions form an append-only timeline; the nightly run marks a promise
+     * kept once the payments since it reach its amount, broken the day after its date otherwise, and
+     * leaves one that is still open.
+     */
+    @Test
+    void cln04_05_actionsAndPromisesSettledByTheNightlyRun() {
+        String loan = approved(exampleB("PROMISE"), 1_200_000, 3, 85);
+        disburse(loan, today.minusMonths(1).minusDays(3));
+
+        assertThat(logAction(loan, Map.of("action_type", "call", "note", "Test call, no answer"))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        assertThat(logAction(loan, Map.of("action_type", "visit"))
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("note_required");
+        assertThat(logAction(loan, Map.of("action_type", "promise_to_pay"))
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("promise_incomplete");
+        assertThat(logAction(loan, promise(today.minusDays(1), 100_000))
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("promised_date_in_past");
+        assertThat(logAction(loan, Map.of("action_type", "shout", "note", "x"))
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("invalid_action_type");
+        ResponseEntity<JsonNode> soon = logAction(loan, promise(today, 100_000));
+        assertThat(soon.getStatusCode()).as("%s", soon.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(soon.getBody().get("promise_status").asString()).isEqualTo("pending");
+        String later = logAction(loan, promise(today.plusDays(2), 300_000))
+                .getBody()
+                .get("id")
+                .asString();
+        // A promise made five days ago for yesterday, with nothing paid since.
+        String missed = UUID.randomUUID().toString();
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO lending_collection_actions (id, tenant_id, loan_id, action_type, note, promised_date,
+                            promised_amount_minor, promise_status, performed_by, performed_at)
+                        VALUES (?::uuid, ?, ?::uuid, 'promise_to_pay', 'Test promise', ?, 999999, 'pending', ?,
+                                now() - interval '5 days')
+                        """)
+                .params(missed, t.tenantId(), loan, today.minusDays(1), officer)
+                .update();
+
+        JsonNode timeline = get(loan, "/collection-actions").get("items");
+        assertThat(timeline).hasSize(4);
+        assertThat(timeline.get(0).get("id").asString()).isEqualTo(later);
+
+        repaid(loan, 100_000, today);
+        runArrears();
+        assertThat(lending("/collections/promises?promise_status=kept").get("items"))
+                .singleElement()
+                .satisfies(p -> assertThat(p.get("action_id").asString())
+                        .isEqualTo(soon.getBody().get("id").asString()));
+        assertThat(lending("/collections/promises?promise_status=broken").get("items"))
+                .singleElement()
+                .satisfies(p -> assertThat(p.get("action_id").asString()).isEqualTo(missed));
+        assertThat(lending("/collections/promises").get("items"))
+                .singleElement()
+                .satisfies(p -> assertThat(p.get("action_id").asString()).isEqualTo(later));
+        JsonNode inArrears = lending("/collections/arrears?bucket=1_30")
+                .get("buckets")
+                .get(0)
+                .get("items")
+                .get(0);
+        assertThat(inArrears.get("last_action_type").asString()).isEqualTo("promise_to_pay");
+        assertThat(inArrears.get("promised_date").asString())
+                .isEqualTo(today.plusDays(2).toString());
+
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("UPDATE lending_collection_actions SET note = 'changed' WHERE loan_id = ?::uuid")
+                        .param(loan)
+                        .update())
+                .rootCause()
+                .hasMessageContaining("may only settle a pending promise");
+    }
 }

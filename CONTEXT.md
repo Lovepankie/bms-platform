@@ -24,16 +24,19 @@ switches on. Lending is the first vertical; retail was brought forward (ADR-020)
 - `backend/src/main/resources/db/migration/`: V1 to V14, V20 to V23, V26, V28, V29 and V31 (the first-run preferences, #19). The numbers in between stay unused; Flyway only needs them to increase.
 - `docs/sdd/` chapters 1 to 15, `docs/adr/`, `docs/runbooks/`, `docs/workspace.dsl`.
 
-## Current status (2026-10-08)
+## Current status (2026-10-16)
 
-- Lending increments 1 to 5 are on `main`: members, KYC documents, collateral, loan products,
-  applications, appraisal and approval, then disbursement, repayments, reversals, closure and
-  write-off with their ledger postings (#126, V29). Savings, investments and the live insights
-  dashboard are in open PRs.
-- Retail R1 to R5, the stock transfers, the catalogue management screens and the parity pass are on
-  `main`; the cash book and analytics are in open PRs.
-- Self-onboarding: the public sign-up, the operator queue and activation are live (ADR-024, V23).
-- Next lending work: arrears and collections (#109), the pilot import (#110) and reports (#111).
+- Lending increments 1 to 5 are on `main`, with savings, investments, insights and the loan
+  documents (ADR-034).
+- Lending increment 6 (#109, arrears and collections) is in three stacked PRs, merged in order:
+  T1 #270 (nightly arrears job, R-PEN penalties, PAR bucket, migration V54 with every increment 6
+  table), T2 #271 (penalty waivers, `charge_waiver`), T3 #272 (collections: officer reassignment, due,
+  arrears and promise lists, collection actions, promises settled nightly). Open question on #265:
+  a route for fee and interest waivers.
+- Retail R1 to R5, transfers, catalogue management, the parity pass, the optional trade
+  capabilities and landed cost (V48) are on `main`, as are report runs (V49), the SMS channel
+  core (V50), the AI gateway (V51), SMS settings (V52) and event SMS (V53).
+- Next lending work: the pilot import (#110) and reports (#111).
 
 ## Working rules that are easy to miss
 

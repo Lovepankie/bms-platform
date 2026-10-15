@@ -354,6 +354,14 @@ payments of that day by when it was recorded, and counts it only for the later r
 nothing changes before the checker, nothing is posted, the statement shows it and reconciles),
 refuses more than is left, waives the rest without an amount, closes the loan on payoff, and
 reverses a payment made after two waivers without undoing them.
+
+Collections (#266). `PromisesTest` covers kept, open and broken without a database.
+`LoanServicingIT` reassigns two loans at once (audited, all or none against an unknown loan,
+refusing a cashier, an officer of another branch, an unknown user and a caller without the
+permission), lists the items due today and over a range with its limit, lists arrears by bucket,
+logs actions with each refusal, and lets the nightly run keep one promise, break one and leave one
+open, with the action guard refusing a change of note. A pending approval stays current across the
+nightly run (`frArr01_theNightlyRunLeavesPendingApprovalsCurrent`).
 `-Dbms.golden.record=true` rewrites the golden files for review. `make document-samples` writes
 each document as a PDF and a PNG per page to `backend/target/document-samples`, the visual check
 of the quality bar before a template change is merged.
