@@ -1,0 +1,242 @@
+{
+  "auth-token-ok.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Auth/RequestToken",
+    "note": "Sandbox token lifetime was 3600 seconds, not the documented 5 minutes; http 200 with status string 200"
+  },
+  "auth-invalid-credentials.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Auth/RequestToken",
+    "note": "A business error is http 200 with status 500 in the body"
+  },
+  "auth-missing-parameters.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Auth/RequestToken",
+    "note": "Several messages joined by a pipe"
+  },
+  "ipn-register-get-ok.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/URLSetup/RegisterIPN",
+    "note": "Note the provider's spelling ipn_status_decription (sic); notification_type 0 is GET"
+  },
+  "ipn-register-post-ok.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/URLSetup/RegisterIPN",
+    "note": "notification_type 1 is POST; same url with another type gets a new ipn_id; same url and type returns the same ipn_id"
+  },
+  "ipn-register-rate-limited.json": {
+    "provenance": "observed",
+    "httpStatus": 409,
+    "call": "POST /api/URLSetup/RegisterIPN",
+    "note": "Two RegisterIPN calls within about 5 seconds: http 409, body is a wrapper whose message holds an escaped JSON string"
+  },
+  "ipn-register-invalid-type.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/URLSetup/RegisterIPN",
+    "note": "Accepted types are GET or POST"
+  },
+  "ipn-register-invalid-url.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/URLSetup/RegisterIPN",
+    "note": "Only a syntactically invalid url is refused; http and localhost urls were accepted"
+  },
+  "order-submit-ok.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/SubmitOrderRequest",
+    "note": "UGX order; redirect_url has no trailing slash before the query"
+  },
+  "order-submit-duplicate-reference.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/SubmitOrderRequest",
+    "note": "Same merchant reference with a different amount: http 200 and the ORIGINAL order (same tracking id), the new body is ignored"
+  },
+  "order-submit-invalid-reference-characters.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/SubmitOrderRequest",
+    "note": "Code INVALID_REFERENCE_02"
+  },
+  "order-submit-reference-too-long.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/SubmitOrderRequest",
+    "note": "A 51 character reference gets a generic decline, not a specific code"
+  },
+  "order-submit-invalid-amount.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/SubmitOrderRequest",
+    "note": "Zero and negative amounts"
+  },
+  "order-submit-invalid-currency.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/SubmitOrderRequest",
+    "note": "Unsupported currency"
+  },
+  "order-submit-invalid-ipn-id.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/SubmitOrderRequest",
+    "note": "Also the reply when an IPN id of another credential pair is used"
+  },
+  "order-submit-missing-billing-address.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/SubmitOrderRequest",
+    "note": "An empty billing_address object is accepted; a missing one is refused"
+  },
+  "order-submit-missing-callback-url.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/SubmitOrderRequest",
+    "note": "callback_url is mandatory"
+  },
+  "status-pending.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "GET /api/Transactions/GetTransactionStatus",
+    "note": "An unpaid order (and a cancelled one) answers status_code 0, INVALID, error payment_details_not_found 'Pending Payment', top-level status 500. This is PENDING, not a failure"
+  },
+  "status-unknown-order.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "GET /api/Transactions/GetTransactionStatus",
+    "note": "An unknown or malformed tracking id: error invalid_order_tracking_id, all fields null"
+  },
+  "status-other-credential-pair.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "GET /api/Transactions/GetTransactionStatus",
+    "note": "Another merchant's tracking id is refused as bad credentials"
+  },
+  "cancel-ok.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/CancelOrder",
+    "note": "Pending order cancelled"
+  },
+  "cancel-already-cancelled.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/CancelOrder",
+    "note": "Second cancel: http 200, status 500"
+  },
+  "cancel-unknown-order.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/CancelOrder",
+    "note": "Unknown tracking id"
+  },
+  "refund-rejected-not-completed.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/RefundRequest",
+    "note": "A refund for a code that is not a completed payment"
+  },
+  "refund-missing-fields.json": {
+    "provenance": "observed",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/RefundRequest",
+    "note": "Invalid API request"
+  },
+  "error-missing-token.json": {
+    "provenance": "observed",
+    "httpStatus": 401,
+    "call": "POST /api/Transactions/SubmitOrderRequest",
+    "note": "No bearer token: http 401, wrapper with escaped JSON in message"
+  },
+  "error-invalid-token.json": {
+    "provenance": "observed",
+    "httpStatus": 500,
+    "call": "POST /api/Transactions/SubmitOrderRequest",
+    "note": "Garbage bearer token: http 500"
+  },
+  "error-not-found.json": {
+    "provenance": "observed",
+    "httpStatus": 404,
+    "call": "GET /api/Transactions/GetTransactionStatus",
+    "note": "Missing query parameter: http 404, plain message"
+  },
+  "error-method-not-allowed.json": {
+    "provenance": "observed",
+    "httpStatus": 405,
+    "call": "GET /api/Transactions/CancelOrder",
+    "note": "Wrong HTTP method: http 405"
+  },
+  "ipn-list.json": {
+    "provenance": "documented",
+    "httpStatus": 200,
+    "call": "GET /api/URLSetup/GetIpnList",
+    "note": "Shape observed (status is the string 1 per row, message null); rows fabricated. The sandbox demo merchant list is shared with other developers, so never read it back as ours"
+  },
+  "status-completed-card.json": {
+    "provenance": "documented",
+    "httpStatus": 200,
+    "call": "GET /api/Transactions/GetTransactionStatus",
+    "note": "Built from the documented field list and the documented sample; field set matches the observed pending reply"
+  },
+  "status-completed-mobile-money.json": {
+    "provenance": "documented",
+    "httpStatus": 200,
+    "call": "GET /api/Transactions/GetTransactionStatus",
+    "note": "payment_method value for mobile money is documented as a family (MPESA, MTN, TIGO); exact UGX values unobserved"
+  },
+  "status-completed-overpaid.json": {
+    "provenance": "documented",
+    "httpStatus": 200,
+    "call": "GET /api/Transactions/GetTransactionStatus",
+    "note": "Paid amount above the order amount: our test case, shape documented"
+  },
+  "status-failed.json": {
+    "provenance": "documented",
+    "httpStatus": 200,
+    "call": "GET /api/Transactions/GetTransactionStatus",
+    "note": "The documented sample spells the description Failed (title case) while the field text says FAILED: the adapter must compare case-insensitively and trust status_code"
+  },
+  "status-reversed.json": {
+    "provenance": "documented",
+    "httpStatus": 200,
+    "call": "GET /api/Transactions/GetTransactionStatus",
+    "note": "Only the code table documents reversed; body invented from the same field set"
+  },
+  "status-invalid.json": {
+    "provenance": "documented",
+    "httpStatus": 200,
+    "call": "GET /api/Transactions/GetTransactionStatus",
+    "note": "INVALID with the error object empty has never been observed; the observed INVALID always carried payment_details_not_found (see status-pending)"
+  },
+  "refund-ok.json": {
+    "provenance": "documented",
+    "httpStatus": 200,
+    "call": "POST /api/Transactions/RefundRequest",
+    "note": "Documented sample only: a refund needs a completed payment, so the success path could not be reached"
+  },
+  "ipn-notification-post-body.json": {
+    "provenance": "documented",
+    "httpStatus": null,
+    "call": "IPN to our url",
+    "note": "Documented, not observed: a registered POST IPN carries this JSON body; a GET IPN carries the same three names as query parameters"
+  },
+  "ipn-acknowledgement.json": {
+    "provenance": "documented",
+    "httpStatus": 200,
+    "call": "our reply to the IPN",
+    "note": "Documented sample, not observed: JSON echoing the three identifiers, status 200 (received and processed) or 500 (received, could not process); the docs show status as a number here although the API replies use a string"
+  },
+  "callback-query.json": {
+    "provenance": "documented",
+    "httpStatus": null,
+    "call": "payer redirect to callback_url",
+    "note": "Documented, not observed: query parameters appended to callback_url when the payer returns; no status in it"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "error": {
+    "error_type": "api_error",
+    "code": "invalid_ipn_notification_type",
+    "message": "Invalid IPN Notification type.Accepted values are POST or GET"
+  },
+  "status": "500"
+}

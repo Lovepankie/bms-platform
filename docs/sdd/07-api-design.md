@@ -549,7 +549,7 @@ by its type and id only (`report-<document id>.pdf` or `.xlsx`), never by anythi
 | GET, PUT | `/payments/settings` | read / `core.settings.manage` | `collections_enabled`; 409 `merchant_not_bound_to_tenant` for any tenant but the one named by `BMS_PESAPAL_TENANT_ID`, 409 `gateway_method_unmapped` until the `gateway` payment method is mapped (ADR-035 decision 11) |
 | GET | `/payments/unallocated` | `core.payments.read` | FR-PAY-04 |
 | POST | `/payments/unallocated/{receipt_id}/allocate` | `core.payments.allocate` | **M** |
-| POST, GET | `/payments/callbacks/{provider}/{token}` | public, path token; the body is never trusted | On the callback host. Identifies the intent, queues a status query, answers 200. FR-PAY-02, FR-PAY-08 |
+| POST, GET | `/payments/callbacks/{provider}/{token}` | public, path token; the body is never trusted | On the callback host. Identifies the intent, queues a status query, answers 200 with the provider's JSON acknowledgement (spec 3.6; shape documented in 3.12). FR-PAY-02, FR-PAY-08 |
 
 ### 7.11.11 Lending: members (`/lending/members`)
 

@@ -1,0 +1,23 @@
+{
+  "payment_method": null,
+  "amount": 0.0,
+  "created_date": "0001-01-01T00:00:00",
+  "confirmation_code": null,
+  "order_tracking_id": "00000000-0000-0000-0000-000000000000",
+  "payment_status_description": null,
+  "description": null,
+  "message": null,
+  "payment_account": null,
+  "call_back_url": null,
+  "status_code": 0,
+  "merchant_reference": null,
+  "account_number": null,
+  "payment_status_code": null,
+  "currency": null,
+  "error": {
+    "error_type": "invalid_request_error",
+    "code": "invalid_order_tracking_id",
+    "message": "Invalid order id provided.Please check your id and try again"
+  },
+  "status": "500"
+}

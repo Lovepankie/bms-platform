@@ -345,7 +345,8 @@ Updating a golden file is allowed only in a pull request that explains why the e
 output changed.
 
 - **Client extras (issue #210, `docs/specs/client-extras.md` section 8).** Gateway callback tests use recorded fabricated
-  bodies and prove one booking under replay and under concurrent notification and poll; the SMS segment counter, cost parser
+  bodies (the Pesapal ones are `backend/src/test/resources/pesapal/`, whose manifest marks each file observed in the sandbox or
+  documented only) and prove one booking under replay and under concurrent notification and poll; the SMS segment counter, cost parser
   and every SMS template are golden tested; the AI `NumericValidator` has property tests and the evaluation set compares
   answers with the metrics dictionary, with a planted-name leak test at the client boundary; report PDFs are compared by
   extracted text and Excel files by cell values on fabricated datasets with hand-computed output, and the pack is cross

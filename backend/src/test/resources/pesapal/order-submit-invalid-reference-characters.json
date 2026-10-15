@@ -1,0 +1,8 @@
+{
+  "error": {
+    "error_type": "api_error",
+    "code": "INVALID_REFERENCE_02",
+    "message": "Reference value can only contain alphanumeric characters, dashes, underscores, dots, colons."
+  },
+  "status": "500"
+}

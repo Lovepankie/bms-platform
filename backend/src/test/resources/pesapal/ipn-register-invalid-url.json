@@ -1,0 +1,8 @@
+{
+  "error": {
+    "error_type": "api_error",
+    "code": "invalid_url",
+    "message": "The specified url provided is invalid"
+  },
+  "status": "500"
+}

@@ -190,7 +190,7 @@ migration) with status only, no details.
   when its values are unset. The API gets them and no other container does. Staging uses sandbox values only and the
   startup guards of `docs/specs/client-extras.md` section 8 refuse a live Pesapal URL, SMS `live` mode and any non-sandbox SMS
   provider URL or account in every SMS mode there. The staging
-  tunnel must expose the callback host for provider notifications (confirmed in the spike, issue #211). Edge rules: a
+  tunnel must expose the callback host for provider notifications (the sandbox accepts any https name and cannot prove reachability, so the first staging run of #213 does; spec section 3.12). The sandbox also needs the JVM truststore checked for the provider's intermediate certificate. Edge rules: a
   rate limit on `/api/v1/payments/callbacks/*` and `/api/v1/channels/*` on the callback host, and the provider's source
   address allow-list for SMS delivery reports where the provider publishes one; the proxy redacts the path token from its
   access log.

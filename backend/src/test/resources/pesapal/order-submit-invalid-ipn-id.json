@@ -1,0 +1,8 @@
+{
+  "error": {
+    "error_type": "api_error",
+    "code": "InvalidIpnId",
+    "message": "The specified IPN ID is invalid"
+  },
+  "status": "500"
+}

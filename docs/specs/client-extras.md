@@ -58,20 +58,21 @@ insights queries --> lending.reports --> core.reporting runner --> PDF (shared t
 
 ### 3.1 What the API supports, and what it does not
 
-Taken from the provider's public API 3.0 reference at the time of writing; section 3.12 lists what the
-sandbox spike (#211) must confirm before any code is written.
+Taken from the provider's public API 3.0 reference and checked against the sandbox in the spike (#211, run on
+2026-10-13); section 3.12 records, fact by fact, what was observed and what is only documented. Where the sandbox
+disagreed with the reference, the sandbox is written here.
 
 | Capability | Supported | Use here |
 |---|---|---|
-| Access token (key and secret in, bearer token out, valid at most five minutes) | Yes | Cached in memory per credential pair, refreshed before expiry |
-| Register an IPN URL (GET or POST type), list IPNs | Yes | One registration per environment, done by an operator command, id kept in settings |
+| Access token (key and secret in, bearer token out; the reference says at most five minutes, the sandbox issued 3600 seconds, `expiryDate` is the authority) | Yes | Cached in memory per credential pair, refreshed a minute before `expiryDate` |
+| Register an IPN URL (GET or POST type), list IPNs | Yes; registering the same url and type again returns the same id, but a second call within about five seconds is refused with http 409 | One registration per credential pair, done by an operator command with the command idempotent, id kept in settings |
 | Submit an order: our unique reference (at most 50 characters), currency, amount, description (at most 100), callback URL, IPN id, billing address with a phone or email | Yes, returns an order tracking id and a **redirect URL** to a hosted payment page | Every collection |
-| Transaction status by order tracking id: status code (0 invalid, 1 completed, 2 failed, 3 reversed), amount, currency, payment method, confirmation code, masked payer account, our reference | Yes | The only source of truth |
-| Refund request, order cancellation | Documented | Cancellation of abandoned orders; refunds are a manual back-office step for now |
+| Transaction status by order tracking id: status code (0 invalid, 1 completed, 2 failed, 3 reversed), amount, currency, payment method, confirmation code, masked payer account, our reference. **An order that has not been paid answers code 0 `INVALID` with the error `payment_details_not_found` ("Pending Payment")**, so code 0 with that error means pending (3.12) | Yes | The only source of truth |
+| Refund request, order cancellation | Cancellation observed on a pending order; refund observed only as a rejection, its success path needs a completed payment (documented) | Cancellation of abandoned orders; refunds are a manual back-office step for now |
 | Recurring payments | Documented | Out of scope (subscription auto-debit is a later idea) |
 | Server-to-wallet push prompt without a hosted page | Not in the public reference | Not used; the payer opens the link |
-| Payouts, disbursement, bulk payments | **Not documented** | Out of scope; loan disbursement and savings withdrawals stay manual |
-| Settlement report or fee per transaction through the API | **Not documented** | Operator uploads the merchant statement (3.9) |
+| Payouts, disbursement, bulk payments | **Not documented in the API reference; five guessed paths answered 404.** Pesapal sells a dashboard payout product (Openfloat); whether it has an API is a written question (3.12.2) | Out of scope; loan disbursement and savings withdrawals stay manual |
+| Settlement report or fee per transaction through the API | **Not documented; guessed paths answered 404.** A restricted "additional endpoints" page exists (a query by phone number or email); its contents are behind a login | Operator uploads the merchant statement (3.9) |
 | IPN signature | **Not documented** | The IPN is never trusted (3.6) |
 
 ### 3.2 The collection flow
@@ -90,9 +91,13 @@ sandbox spike (#211) must confirm before any code is written.
 5. Pesapal calls our IPN URL on the callback host. The handler only records the call and queues a
    status check (3.6). A poller also checks pending intents every 2 minutes for 48 hours, so a lost
    IPN costs a delay, not a payment.
-6. The status check calls `GetTransactionStatus`. On `COMPLETED` with matching reference and currency
-   the booking transaction runs (3.4); on `FAILED` or `INVALID` the intent ends `failed`; on
-   `REVERSED` after booking, 3.8 applies.
+6. The status check calls `GetTransactionStatus`. On status code 1 (`COMPLETED`) with matching reference and
+   currency the booking transaction runs (3.4); on code 2 (`FAILED`) the intent ends `failed`; on code 0
+   with the error `payment_details_not_found` ("Pending Payment") the order is simply unpaid and the intent
+   stays `pending` (the sandbox answers this for every unpaid order, so code 0 is **not** a failure); code
+   0 with any other error (`invalid_order_tracking_id`) is an anomaly that is counted and alerted and never
+   books; on code 3 (`REVERSED`) after booking, 3.8 applies. The decision reads the status code, never the
+   description, whose casing differs between the reference and the sandbox (3.12).
 7. The staff screen polls `GET /payments/intents/{id}` every 3 seconds for up to 2 minutes, then shows
    "still waiting, we will update this screen" (chapter 11 section 11.5).
 
@@ -189,15 +194,26 @@ letters, digits and dashes only. The intent id is a random version 4 UUID, so th
 guessable and carries no tenant, amount or person. `<env>` is `ST` on staging and `PR` on production
 (from `BMS_ENVIRONMENT`).
 
-**One creator, one use.** A reference is used for one `SubmitOrderRequest` only. The creating job claims
-the intent with `FOR UPDATE SKIP LOCKED` and sets `creation_lease_until`, so two workers cannot create the
-same order. If the call times out or its answer is lost, the intent ends `failed` with reason
-`creation_unknown` and the user starts a **new intent with a new reference**; the old reference is never
-retried, because what the provider answers to a duplicate reference is not documented (the spike confirms
-it) and a status query needs the tracking id that the lost answer carried. This cannot lose money: the
-payer only receives a link from a successful answer, so an order whose answer was lost has no link in
-anyone's hands. If the spike shows a lookup by merchant reference, the creator may use it to recover the
-tracking id instead.
+**One creator, one order per reference.** The creating job claims the intent with `FOR UPDATE SKIP LOCKED`
+and sets `creation_lease_until`, so two workers cannot create the same order. The sandbox spike showed that
+a second `SubmitOrderRequest` with a used reference is **not an error**: it answers http 200 with the
+original order (same tracking id and redirect url) and ignores the new body, even a different amount. There
+is no lookup by merchant reference (3.12), so this repeat is the recovery path. The rule is therefore:
+
+1. If the call times out or its answer is lost, the creator repeats the call with the **same reference and
+   the same body** (up to 3 attempts with backoff inside the lease).
+2. It accepts an answer only if `merchant_reference` equals the intent's reference, and it never trusts that
+   the body was applied: the first status query must report the intent's amount and currency, otherwise the
+   intent ends `failed` with `order_mismatch`, the order is cancelled best effort and a new intent follows.
+3. If every attempt fails, the intent ends `failed` with reason `creation_unknown` and the user starts a
+   **new intent with a new reference**. This cannot lose money: the payer only receives a link from a
+   successful answer.
+4. A reference is never reused after `cancel_order` or after the intent was failed for any reason: the
+   cancelled order stays attached to the reference and a repeat returns it (observed), so a fresh payment
+   always takes a fresh intent and reference.
+
+The duplicate-reference behaviour is observed in the sandbox only; the written question to Pesapal (3.12.2)
+asks for the live statement. Steps 2 and 4 make the code correct whichever way the live system behaves.
 
 ### 3.6 Securing the IPN endpoint
 
@@ -211,7 +227,12 @@ tracking id instead.
    merchant reference)` (ADR-016), which returns the tenant and intent or nothing. **Nothing unknown
    triggers an outbound call**, so the endpoint cannot be used to make us query arbitrary ids.
 4. It stores the `payment_callbacks` row, queues one status check for the intent and answers 200 with
-   the acknowledgement body Pesapal expects (confirmed in the spike).
+   `Content-Type: application/json` and the documented acknowledgement body, a JSON object echoing the
+   three received names in camelCase with a numeric status: `{"orderNotificationType":"IPNCHANGE",
+   "orderTrackingId":"...","orderMerchantReference":"...","status":200}` (documented, not observed: the
+   sandbox cannot call a public url from here; the first staging run confirms it). Status 500 is answered
+   only when our own store failed, so the provider has a reason to try again; an unknown identifier is
+   answered 200.
 5. The status check is throttled to one per intent per ten seconds; extra notifications are stored as
    `throttled`.
 6. The check calls the provider with our own token. The decision uses only that answer: status,
@@ -238,8 +259,10 @@ tracking id instead.
 |---|---|
 | Same IPN three times, or IPN and poller together | One booking; the others log `duplicate` |
 | IPN for an unknown order | Stored in the platform queue, 200, no provider call, counted for the alert |
-| Status `FAILED` or `INVALID` | Intent `failed`, shown to staff, nothing booked; the payer may start a new intent |
-| Order creation timed out | Intent `failed` (`creation_unknown`); a new intent with a new reference (3.5) |
+| Status code 2 (`FAILED`) | Intent `failed`, shown to staff, nothing booked; the payer may start a new intent |
+| Status code 0 (`INVALID`) with `payment_details_not_found` | Not a failure: the order is unpaid, the intent stays `pending` under the 30 minute and 48 hour rules below. A cancelled order answers the same, so nothing is read after our own cancel |
+| Status code 0 with `invalid_order_tracking_id` or a credential error | An anomaly: counted, alerted, never booked, never ends the intent by itself |
+| Order creation timed out | The same reference and body are repeated up to 3 times; if all fail the intent is `failed` (`creation_unknown`) and a new intent with a new reference follows (3.5) |
 | Status pending after 30 minutes | Intent `expired` for the screen (no new payment offered); polling continues for 48 hours |
 | Completed after the intent expired | Books normally: the money has moved; the audit note says "late" |
 | After 48 hours still pending | Best-effort `cancel_order`, intent final `expired` |
@@ -297,23 +320,97 @@ IPN id and token, and lifts the binding. Credentials are issued by Pesapal to th
 dev lead stores them in the host environment file (mode 600) and never in a chat, an issue or the
 repository.
 
-### 3.12 Facts to confirm in the sandbox spike (#211)
+### 3.12 The confirmed contract (sandbox spike, #211)
 
-| Fact | Current understanding | Confirm |
+**How it was run.** On 2026-10-13 a throwaway script outside the repository called the sandbox
+(`https://cybqa.pesapal.com/pesapalv3`) with the shared demo merchant credentials that Pesapal publishes in
+its developer documentation for the sandbox (the Ugandan demo merchant; the Kenyan one only to prove that two
+credential pairs are isolated). No live credential was used and no key, secret or token is in the repository,
+a log or a fixture. About 280 calls were made: Auth, RegisterIPN, GetIpnList, SubmitOrderRequest (UGX),
+GetTransactionStatus, RefundRequest and CancelOrder, plus error cases and burst tests. Recorded shapes are in
+`backend/src/test/resources/pesapal/` (its README and `manifest.json` mark each file observed or documented).
+
+**Legend.** *Observed* means the sandbox answered it that way. *Documented* means only the official
+reference says so: a browser, a phone or a public callback host is needed to see it, and the spike could
+not do those. Where the two disagree, the sandbox is written.
+
+| Fact | Result | Basis |
 |---|---|---|
-| Token lifetime | At most five minutes, `expiryDate` in the response | Yes |
-| IPN verb and parameters | Order tracking id, merchant reference, notification type, by GET or POST as registered | Exact names and verb |
-| IPN acknowledgement | A JSON body echoing the identifiers with status 200 | Exact body |
-| IPN retries | Not documented | Count and interval |
-| Status code and description casing | 0 to 3; description may vary in case | Exact strings |
-| Amount representation for UGX | A number; whole shillings | Decimals accepted and returned |
-| Fee, settlement, payout endpoints | None documented | Ask the provider in writing |
-| Cancel of an unpaid order | Documented | Fields and behaviour |
-| Callback host reachable from the sandbox | Needs a public HTTPS name | The staging tunnel must expose the callback host (chapter 9 section 9.13) |
-| Rate limits | Not documented | Observed and asked |
-| Reply to a second `SubmitOrderRequest` with a used merchant reference | Not documented; assumed to be an error without the tracking id | Exact reply; whether an order can be looked up by merchant reference |
-| IPN registration scope | One IPN id per merchant credential pair | Whether one id can serve two pairs (the design assumes not) |
-| Card chargeback and reversal window | Assumed up to 120 days | Ask the provider in writing |
+| Token lifetime | The sandbox issued tokens that expire **3600 seconds** after issue (`expiryDate`, UTC, with `Z`); the reference says "a maximum of 5 minutes". Two requests give two different tokens. Refresh a minute before `expiryDate`; never assume a length | Observed; reference differs |
+| Error envelope | Business errors (bad credentials, bad parameters, unknown ids, refused cancel or refund) are **http 200** with `"status":"500"` and an `error` object `{error_type, code, message}`. A missing bearer token is http 401, a garbage token http 500, an unknown route or missing query parameter http 404, a wrong verb http 405. The 401, 404 and 405 bodies are a wrapper `{"message": "<escaped JSON string>"}` or a plain message, not the `error` object. The adapter reads the body `status` and `error`, never only the http code, and parses the wrapper | Observed |
+| Observed error codes | `invalid_consumer_key_or_secret_provided`, `invalid_api_request_parameters`, `INVALID_REFERENCE_02`, `invalid_amount_provided`, `invalid_payment_currency`, `InvalidIpnId`, `missing_mandatory_billing_address`, `invalid_ipn_notification_type`, `invalid_url`, `invalid_order_tracking_id`, `payment_details_not_found`, `general_system_decline_error` | Observed |
+| IPN verb and parameters | The verb is the one chosen at registration (`ipn_notification_type` `GET` or `POST`; the registration reply carries `notification_type` 0 for GET and 1 for POST). Parameters: `OrderNotificationType` (`IPNCHANGE`, or `RECURRING` for recurring schedules), `OrderTrackingId`, `OrderMerchantReference`. A POST carries them as a JSON body, a GET as query parameters. The payer redirect to `callback_url` carries the same names with `OrderNotificationType=CALLBACKURL`. **No status, amount or signature** in either | Documented, not observed |
+| IPN acknowledgement | A JSON body echoing the three values in camelCase with a numeric status: `{"orderNotificationType":"IPNCHANGE","orderTrackingId":"...","orderMerchantReference":"...","status":200}`; `status` 200 means received and processed, 500 received but not processed. The reference does not say what happens if the body is different or empty | Documented, not observed |
+| IPN retries | Not documented: no count, no interval, no definition of "unacknowledged". The merchant dashboard (Account settings, IPN settings) has a RETRY button that re-sends pending IPNs; a payment made before the IPN was registered never triggers one. Forum guidance (older, unofficial) says the IPN host must share the subdomain of the page where the payment starts and that TLS-only hosts have been blocked | Documented in part; the rest is a written question |
+| IPN registration | The same url and type again returns the **same `ipn_id`** (the operator command is therefore safe to repeat); the same url with the other type makes a second id. `http://` and `https://localhost` urls were **accepted**, only a malformed string is refused (`invalid_url`), so the guard against non public urls is ours. The reply spells the status field `ipn_status_decription` (sic). **RegisterIPN is throttled:** a second call within about 5 seconds got http 409 `general_system_decline_error` "Request Declined.Too many requests" (wrapper body); gaps of 7 seconds and more all passed. The operator command waits 10 seconds between registrations and treats 409 as retry | Observed |
+| One IPN id for two credential pairs | **No.** Using an IPN id of one pair in the other pair's order gets `InvalidIpnId`, and the other pair's `GetIpnList` is empty. Each pair has its own id (the design assumption, ADR-035 decision 10, holds) | Observed |
+| Status codes and casing | Code 0 `INVALID`, 1 `COMPLETED`, 2 `FAILED`, 3 `REVERSED` (reference). Seen: **an unpaid order, a cancelled order and (with a different error) an unknown id all answer code 0 and `payment_status_description` `INVALID`**. An unpaid or cancelled order also carries `error.code = payment_details_not_found`, `error.message = "Pending Payment"`, a populated `merchant_reference`, `amount`, `currency` and `call_back_url`, and body `status` `"500"`; an unknown or malformed id carries `invalid_order_tracking_id`, null fields and a tracking id of all zeros; another merchant's id carries `invalid_consumer_key_or_secret_provided`. The reference's own sample shows `Failed` in title case while its text says `FAILED`. There is **no separate pending code**: pending is code 0 with `payment_details_not_found`. Decide on the code, compare the description case-insensitively | Pending, unknown, cross-pair observed; 1, 2, 3 documented |
+| Completed, failed and reversed bodies | Same field set as the pending body (plus `payment_method`, `confirmation_code`, `payment_account` masked, a null `error` object and body `status` `"200"` per the sample). Mobile money `payment_method` values are listed as a family (`MPESA`, `MTN`, `TIGO`); the exact Ugandan strings are unknown until a payment completes | Documented, not observed |
+| Amounts in UGX | `amount` is a JSON number. Accepted: 1000, 1000.55, 0.5, 1, the string `"1000"`, 50000000 and 1000000000000; refused: 0 and negative. The status reply returns it as a number with a point (`1000.0`, `1000.55`), so **the provider does not enforce whole shillings**: the adapter sends an integral value, converts the returned number with `BigDecimal` and refuses a fraction (ADR-035 decision 3 holds and is now necessary, not optional). The hosted page shows `UGX 1,000.00` | Observed |
+| Order creation rules | Allowed reference characters: letters, digits, `-`, `_`, `.`, `:` (`INVALID_REFERENCE_02` otherwise); 50 characters pass, 51 get the unhelpful `general_system_decline_error` "Unable to process your order at the moment". `BMS-ST-` plus 32 hex (39 characters) passes. A description of 101 characters, a lowercase currency code and a phone as `0700...` or `+256...` were accepted; an unsupported currency, a missing `callback_url`, an unknown `notification_id` and a missing `billing_address` object were refused; an **empty** `billing_address` object and an email only address were accepted. The reply carries `order_tracking_id`, `merchant_reference`, `redirect_url` (`.../pesapaliframe/PesapalIframe3/Index?OrderTrackingId=...`), `error` null, `status` "200" | Observed |
+| Reply to a second `SubmitOrderRequest` with a used reference | **Not an error.** http 200 with the **original** order: same `order_tracking_id`, same `redirect_url`, the new body (even another amount) ignored. The same happens after the order was cancelled (the cancelled order comes back). Uniqueness across two merchant accounts was not measured. Consequence: 3.5 | Observed (sandbox) |
+| Lookup of an order by merchant reference | **None.** `GetTransactionStatus` takes only `orderTrackingId`; the reference in that parameter answers `invalid_order_tracking_id`; four guessed routes answered 404. A restricted "additional endpoints" page mentions a query by phone number or email, behind a login. The duplicate submit above is the recovery path | Observed |
+| Cancel of an unpaid order | `POST /api/Transactions/CancelOrder` with `{"order_tracking_id": "..."}`. A pending order: http 200, `{"status":"200","message":"Order successfully cancelled."}`. A second cancel: `status "500"`, "Invalid order state. Order cannot be cancelled."; unknown id: "Invalid order request."; GET is 405. A cancelled order is afterwards indistinguishable from an unpaid one in the status reply (see above). The reference allows cancel only for failed or pending payments, once | Observed; reference for the rules |
+| Refund | `POST /api/Transactions/RefundRequest` with `confirmation_code`, `amount`, `username`, `remarks`, all required. For a code that is not a completed payment: http 200, `status "500"`, "Invalid transaction request."; missing fields: `invalid_api_request_parameters`. The reference rules: only COMPLETED payments, once per payment, never above the amount collected, cards partial or full, **mobile money full only**, same currency, the merchant must approve, then Pesapal's finance team processes; a 200 means received, not refunded; no time window is stated. Success could not be reached | Rejection observed; rules documented |
+| Fee, settlement and payout endpoints | None in the reference; five guessed routes (settlement, transaction list, payout) answered 404. Pesapal markets a payout and bulk disbursement product (Openfloat) as a dashboard; whether it has an API is unknown. Written question, 3.12.2 | Observed absence, documented absence |
+| Rate limits | None documented. Observed: 100 concurrent status queries, 10 concurrent token requests and 10 concurrent order submissions all answered http 200 with no throttle header; typical latency 0.8 s per call, GetIpnList 2 s. Only RegisterIPN was throttled. This says nothing about live limits | Observed (sandbox); live is a written question |
+| Time zones | The status reply's `created_date` is East Africa Time with no zone marker (22:48 for an order made at 19:48Z); the registration and token dates are UTC with `Z`. The adapter parses status dates as `Africa/Kampala` and prefers its own clock for the value date | Observed |
+| Callback host reachable from the sandbox | Any syntactically valid https name is accepted at registration, so the sandbox cannot prove reachability. The staging tunnel must expose the callback host (chapter 9 section 9.13) and the first staging run proves the IPN arrives. The spike registered fabricated `staging.example.test` urls and received nothing, as expected | Documented; proved in #213 |
+| Card test numbers | The sandbox's own test page lists: frictionless Visa 4761 7390 0101 0010, Mastercard 5200 0000 0000 0114, Amex 3400 000000 03961 (expiry 07/28, CVV 123, Amex 1234); 3D Secure challenge Visa 4000 0000 0000 1091, Mastercard 5200 0000 0000 0007; declined Visa 4000 0000 0000 1018. An older Pesapal article lists Visa 4111 1111 1111 1111 (CVV 962) with a warning that it may fail to authorise. These are fake cards, not secrets | Documented, not observed |
+| Mobile money test numbers | **None published.** The hosted page offers MTN and Airtel prompts that need a phone able to confirm; an old forum answer points to a demo mobile money test page. A completed mobile money payment is therefore not reproducible by the spike | Documented gap |
+| Card chargeback and reversal window | **Not published by Pesapal.** Card network practice is commonly up to 120 days, which is the figure the design assumes. A bank-hosted Pesapal FAQ says withdrawal to the merchant's bank takes 48 business hours. Written question | Not confirmed |
+| TLS chain | The sandbox host did not validate with Python's bundled CA list ("unable to get local issuer certificate") but did with the operating system's store, which suggests a missing intermediate certificate. Test with the staging JVM in #213 before relying on it, and import the intermediate into the truststore if needed | Observed from one client |
+| The demo merchant is shared | The sandbox's `GetIpnList` returns other developers' registrations (about 3.7 KB when read). Never read that list back as "ours" and register only fabricated urls. The spike left about twenty fabricated registrations on it | Observed |
+
+### 3.12.1 What this changes in the design
+
+1. **Status mapping (3.2, 3.8, ADR-035 decision 5).** Code 0 is the normal state of an unpaid order. The earlier
+   reading ("`INVALID` ends the intent failed") would have failed every payment at the first poll. Pending is code
+   0 with `payment_details_not_found`; only code 2 fails an intent.
+2. **Order creation (3.5, ADR-035 decision 2).** A repeat of the same reference returns the original order, so the
+   creator may retry the same reference and body and must then verify the amount through the status query. The
+   rule that a lost answer needs a new reference is now the last step, not the first.
+3. **Acknowledgement (3.6).** The body is fixed (documented), to be proved on staging.
+4. **Amounts (3.3, 3.7).** The adapter must reject fractional UGX itself; the provider will carry it.
+5. **Errors.** The adapter treats http 200 with body status 500 as a failure and parses the 401, 404 and 405
+   wrappers; the breaker counts these, and 409 on RegisterIPN is a retry, not a breaker failure.
+6. **Operator command (3.11).** IPN registration is idempotent, spaced 10 seconds apart, refuses a non public
+   or `http` url itself, and records the id.
+7. **No change** to the reversal window (3.9: 7 days for mobile money, 120 days for cards) until Pesapal answers.
+
+### 3.12.2 What only Pesapal can answer, and who asks
+
+These are put in writing to Pesapal (the merchant account manager, or the developer support address given at
+onboarding) by the **product owner as merchant account holder, with the dev lead drafting**, by **2026-10-16**.
+The answers are needed before the first live payment (go-live of #216), not before the build of #213 starts,
+so the build is not blocked. The draft is in the pull request description of #211; nothing was sent.
+
+| # | Question | Why it matters | Used by |
+|---|---|---|---|
+| 1 | Is there a settlement report, a fee per transaction or a statement endpoint in the API, or only the dashboard export? In what format and with which columns? | Sets whether `fetch_settlement` can replace the statement upload (3.9) | #224 |
+| 2 | What fee is charged per transaction for MTN MoMo, Airtel Money and cards in UGX, who bears it, and is it shown per transaction? | Fee posting (FR-PAY-06) | #224 |
+| 3 | Is there an API for payouts or bulk disbursement (Openfloat or other) to mobile money and banks, and what is needed to use it? | Whether loan disbursement can ever be automated (ADR-035 decision 12) | later |
+| 4 | What is the card chargeback and reversal window, and for mobile money? Is a reversal reported through the same IPN and status reply? | Reconciliation windows (3.9) | #224 |
+| 5 | How often and for how long are unacknowledged IPNs retried, and what exactly counts as an acknowledgement? | Poller cadence | #213 |
+| 6 | Does a repeated `SubmitOrderRequest` with a used merchant reference return the original order on the live host as it does on the sandbox, and is a reference unique per merchant account? | Order creation recovery (3.5) | #213 |
+| 7 | What are the live rate limits per endpoint, and are there IP allow-lists for IPN calls? | Poller and breaker settings | #213 |
+| 8 | Do the live token lifetime and the `payment_method` values for MTN and Airtel Uganda match the sandbox? | Token cache, method mapping | #213 |
+| 9 | Is a sandbox mobile money test number or test page available for Uganda? | Automated end-to-end checks | #213 |
+
+**Browser-only checks the dev lead does on the first staging run of #213** (documented, not observed here):
+pay a sandbox order with a documented test card and watch the status become code 1; pay with the declined
+card and watch code 2; confirm that the registered GET IPN arrives at the callback host with the three
+parameters and that the JSON acknowledgement of 3.6 is accepted; replace the `documented` fixtures with
+recordings. Mobile money cannot be tested without an answer to question 9.
+
+| Item the issue asked to close | State | Owner and date |
+|---|---|---|
+| Duplicate reference reply | Closed: the original order is returned (sandbox) | Live behaviour: question 6, product owner, 2026-10-16 |
+| IPN registration scope | Closed: one IPN id belongs to one credential pair | none |
+| Card reversal window | Open: not published | Question 4, product owner, 2026-10-16 |
+| Settlement, fee, payout | Open: not in the API | Questions 1 to 3, product owner, 2026-10-16 |
+| IPN retries and live rate limits | Open | Questions 5 and 7, product owner, 2026-10-16 |
+| Success paths of completed, failed, reversed, refund and IPN receipt | Documented, not observed | Dev lead, first staging run of #213 |
 
 ### 3.13 Threat model (Pesapal)
 
@@ -1087,8 +1184,10 @@ changed. Items marked (changed) altered the design during this review; the other
 21. **"ADR numbers and pending references."** 033 and 034 are taken by pull requests 200 and 205; these
     are 035 to 038; ADR-034 has merged and is cited as an accepted record; pending ADR-011 and the SMS half of pending
     ADR-013 are settled by ADR-035 and ADR-036 and USSD stays pending ADR-013.
-22. **"Provider facts are from documentation, not from the sandbox."** True for IPN format, token and
-    acknowledgement; slice #211 must close section 3.12 before booking code is written.
+22. **"Provider facts are from documentation, not from the sandbox."** (closed by #211) The sandbox spike ran on
+    2026-10-13 and overturned two assumptions (an unpaid order reads `INVALID`; a repeated reference returns
+    the original order); section 3.12 marks every fact observed or documented, and 3.12.2 names who asks
+    Pesapal what the sandbox cannot answer.
 23. **"What did you not do?"** No code, no migration, no OpenAPI change (the endpoints are in chapter 7
     as design), no real provider call, no prices, no legal opinion.
 

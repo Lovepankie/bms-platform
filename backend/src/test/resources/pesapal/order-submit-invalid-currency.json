@@ -1,0 +1,8 @@
+{
+  "error": {
+    "error_type": "api_error",
+    "code": "invalid_payment_currency",
+    "message": "The provided currency specified is not supported"
+  },
+  "status": "500"
+}

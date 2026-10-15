@@ -209,3 +209,48 @@ API; whose credentials are used; what is out of scope.
 - A merchant reference longer than 50 characters or with a character outside the allowed set is
   refused by the provider; the reference format is covered by a test.
 - Keep the secrets out of logs and out of error messages, as the outbox senders do (ADR-024).
+
+
+## Amendment (2026-10-14, issue #211): the sandbox spike
+
+Additive. The decisions above are not rewritten; where the sandbox contradicted an assumption, this section
+is the current rule. Evidence, fact by fact and marked observed or documented, is in
+`docs/specs/client-extras.md` section 3.12; the recorded shapes are in `backend/src/test/resources/pesapal/`.
+
+1. **Decision 5 (status mapping) is corrected.** An unpaid order, and a cancelled one, answer status code 0
+   with description `INVALID` and the error `payment_details_not_found` ("Pending Payment"). `INVALID` therefore
+   does not end an intent as `failed`: code 0 with that error keeps the intent `pending`; code 0 with
+   `invalid_order_tracking_id` or a credential error is an anomaly that is counted and alerted and never books or
+   fails an intent by itself; only code 2 (`FAILED`) fails an intent. The adapter decides on the status code and
+   compares the description case-insensitively, because the reference shows `Failed` and the sandbox shows
+   `INVALID`.
+2. **Decision 2 (merchant reference) is relaxed, not reversed.** The provider answers a second
+   `SubmitOrderRequest` with a used reference by returning the original order (same tracking id and redirect
+   url, new body ignored), and there is no lookup by merchant reference. The creator may therefore repeat the
+   same reference and body after a lost answer, up to 3 times, accepting an answer only if the echoed
+   reference equals the intent's and the first status query reports the intent's amount and currency; otherwise
+   the intent fails with `order_mismatch`. After every attempt fails the original rule applies: the intent ends
+   `failed` with `creation_unknown` and a new intent takes a new reference. A reference is never reused after a
+   cancel or a failure, because the cancelled order stays attached to it. This was observed on the sandbox only;
+   the live statement is a written question to Pesapal, and the two checks keep the code correct either way.
+3. **Decision 3 (money) is confirmed and becomes mandatory.** The provider accepts and returns fractional UGX
+   (1000.55, 0.5) and a numeric string; the adapter alone enforces whole shillings.
+4. **Decision 4 (the IPN is a hint) is confirmed**: the IPN and the payer redirect carry only
+   `OrderNotificationType`, `OrderTrackingId` and `OrderMerchantReference` (documented, not observed). The
+   acknowledgement is a JSON object echoing the three values in camelCase with a numeric `status` of 200
+   (documented, not observed), answered with status 500 only when our own store failed. The retry count and
+   interval are not published and are a written question; the poller of decision 8 already makes a lost IPN
+   cost a delay only.
+5. **Decision 10 (one IPN registration per credential pair) is confirmed**: an IPN id of one pair is refused
+   (`InvalidIpnId`) for another pair. Registering the same url and type again returns the same id, so the
+   operator command is idempotent; RegisterIPN is throttled (a second call within about 5 seconds is refused
+   with http 409), so the command spaces its calls by 10 seconds; the provider accepts `http` and localhost
+   urls, so the command refuses them itself.
+6. **Decision 13 (outbound calls) gains three rules**: business errors arrive as http 200 with a body status of
+   500 and must be read from the body (401, 404 and 405 come as a wrapper holding escaped JSON); the sandbox
+   token lives 3600 seconds although the reference says five minutes, so the cache follows `expiryDate`; the
+   status reply's `created_date` is East Africa Time with no zone marker.
+7. **Decisions 9 and 12 are unchanged and still open with the provider.** No settlement, fee or payout
+   endpoint exists in the reference or on guessed routes; the card chargeback and reversal window is not
+   published (the 120 days stay an assumption); the rate limits and IPN retries of the live system are
+   unknown. The questions, with an owner and a date, are in spec section 3.12.2.

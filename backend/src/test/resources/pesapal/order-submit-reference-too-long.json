@@ -1,0 +1,8 @@
+{
+  "error": {
+    "error_type": "api_error",
+    "code": "general_system_decline_error",
+    "message": "Unable to process your order at the moment.Please try again later"
+  },
+  "status": "500"
+}

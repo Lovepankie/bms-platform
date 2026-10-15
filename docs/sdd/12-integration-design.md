@@ -144,7 +144,10 @@ subscription payments. Notifications are untrusted hints, confirmed by an authen
 reference documents no signature, no settlement report endpoint and no payout endpoint, so reconciliation re-queries
 intents and uses an uploaded merchant statement for fees, and payouts are out of scope. The fee model stays a
 commercial decision outside this repository; refunds are a manual back-office step for now. Detail: spec
-`docs/specs/client-extras.md` section 3.
+`docs/specs/client-extras.md` section 3. The sandbox spike (issue #211, 2026-10-13) added to the adapter's contract: business errors
+arrive as http 200 with a body status of 500; an unpaid order reads status code 0 with `payment_details_not_found` (pending, not failed);
+a repeated merchant reference returns the original order; there is no lookup by merchant reference; RegisterIPN is throttled to about
+one call in five seconds; the token lives 3600 seconds in the sandbox. Observed and documented facts are separated in spec section 3.12.
 
 ### 12.4.5 Language model provider (ADR-037)
 

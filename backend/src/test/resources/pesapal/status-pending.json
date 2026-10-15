@@ -1,0 +1,24 @@
+{
+  "payment_method": "",
+  "amount": 1000.0,
+  "created_date": "2026-10-13T22:48:26.76",
+  "confirmation_code": "",
+  "order_tracking_id": "aaaaaaaa-0000-4000-8000-000000000003",
+  "payment_status_description": "INVALID",
+  "description": null,
+  "message": "Request processed successfully",
+  "payment_account": "",
+  "call_back_url": "https://staging.example.test/pay/return?OrderTrackingId=aaaaaaaa-0000-4000-8000-000000000003&OrderMerchantReference=BMS-ST-00000000000000000000000000000001",
+  "status_code": 0,
+  "merchant_reference": "BMS-ST-00000000000000000000000000000001",
+  "account_number": null,
+  "payment_status_code": "",
+  "currency": "UGX",
+  "error": {
+    "error_type": "api_error",
+    "code": "payment_details_not_found",
+    "message": "Pending Payment",
+    "call_back_url": "https://staging.example.test/pay/return?OrderTrackingId=aaaaaaaa-0000-4000-8000-000000000003&OrderMerchantReference=BMS-ST-00000000000000000000000000000001"
+  },
+  "status": "500"
+}

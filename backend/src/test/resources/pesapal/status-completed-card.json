@@ -1,0 +1,24 @@
+{
+  "payment_method": "Visa",
+  "amount": 1000,
+  "created_date": "2026-01-01T12:00:00",
+  "confirmation_code": "FAKECONF0001",
+  "order_tracking_id": "aaaaaaaa-0000-4000-8000-0000000000d1",
+  "payment_status_description": "COMPLETED",
+  "description": null,
+  "message": "Request processed successfully",
+  "payment_account": "476173**0010",
+  "call_back_url": "https://staging.example.test/pay/return?OrderTrackingId=aaaaaaaa-0000-4000-8000-0000000000d1&OrderMerchantReference=BMS-ST-000000000000000000000000000000d1",
+  "status_code": 1,
+  "merchant_reference": "BMS-ST-000000000000000000000000000000d1",
+  "account_number": null,
+  "payment_status_code": "",
+  "currency": "UGX",
+  "error": {
+    "error_type": null,
+    "code": null,
+    "message": null,
+    "call_back_url": null
+  },
+  "status": "200"
+}

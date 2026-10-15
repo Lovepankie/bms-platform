@@ -1,0 +1,8 @@
+{
+  "error": {
+    "error_type": "api_error",
+    "code": "missing_mandatory_billing_address",
+    "message": "Please provide billing details information on your API request."
+  },
+  "status": "500"
+}

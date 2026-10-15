@@ -1,0 +1,7 @@
+{
+  "token": "FABRICATED.TOKEN.NOT.A.REAL.JWT",
+  "expiryDate": "2026-10-13T20:47:46.933358Z",
+  "error": null,
+  "status": "200",
+  "message": "Request processed successfully"
+}

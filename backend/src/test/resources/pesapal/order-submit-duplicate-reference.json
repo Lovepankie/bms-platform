@@ -1,0 +1,7 @@
+{
+  "order_tracking_id": "aaaaaaaa-0000-4000-8000-000000000003",
+  "merchant_reference": "BMS-ST-00000000000000000000000000000001",
+  "redirect_url": "https://cybqa.pesapal.com/pesapaliframe/PesapalIframe3/Index?OrderTrackingId=aaaaaaaa-0000-4000-8000-000000000003",
+  "error": null,
+  "status": "200"
+}
