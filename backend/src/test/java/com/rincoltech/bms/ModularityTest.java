@@ -36,6 +36,7 @@ class ModularityTest {
                         "core.audit",
                         "core.documents",
                         "core.ledger",
+                        "core.payments",
                         "core.jobs",
                         "core.operations",
                         "core.notifications",

@@ -200,6 +200,32 @@ bms:
     price-output-micro-per-million: ${BMS_AI_PRICE_OUTPUT_MICRO_PER_MILLION:0}
     price-currency: ${BMS_AI_PRICE_CURRENCY:USD}
     enabled-tenants: ${BMS_AI_ENABLED_TENANTS:}
+  # JUSTIFICATION-A3: the two new configuration groups (bms.pesapal, bms.payments) for slice #213 are new settings, not wrapped code.
+  # Payment collections through Pesapal (ADR-035, spec 3.11). Nothing here collects by default: with no credentials the
+  # gateway is off, and startup refuses any base URL that could reach the live provider from outside production (only the
+  # sandbox is allowed there, in every mode) and the fake provider in production. Keys, secrets and path tokens come from
+  # the host environment only and are never logged. BMS_PESAPAL_TENANT_ID binds the merchant account to one tenant.
+  pesapal:
+    provider: ${BMS_PESAPAL_PROVIDER:}
+    base-url: ${BMS_PESAPAL_BASE_URL:}
+    consumer-key: ${BMS_PESAPAL_CONSUMER_KEY:}
+    consumer-secret: ${BMS_PESAPAL_CONSUMER_SECRET:}
+    ipn-id: ${BMS_PESAPAL_IPN_ID:}
+    ipn-token: ${BMS_PESAPAL_IPN_TOKEN:}
+    tenant-id: ${BMS_PESAPAL_TENANT_ID:}
+    callback-base-url: ${BMS_PESAPAL_CALLBACK_BASE_URL:}
+    platform:
+      consumer-key: ${BMS_PESAPAL_PLATFORM_CONSUMER_KEY:}
+      consumer-secret: ${BMS_PESAPAL_PLATFORM_CONSUMER_SECRET:}
+      ipn-id: ${BMS_PESAPAL_PLATFORM_IPN_ID:}
+      ipn-token: ${BMS_PESAPAL_PLATFORM_IPN_TOKEN:}
+  # Payment jobs and the public notification endpoints (not secrets).
+  payments:
+    poll-per-tenant: ${BMS_PAYMENTS_POLL_PER_TENANT:5}
+    poll-total: ${BMS_PAYMENTS_POLL_TOTAL:40}
+    callback-ip-per-minute: ${BMS_PAYMENTS_CALLBACK_IP_PER_MINUTE:60}
+    callback-global-per-minute: ${BMS_PAYMENTS_CALLBACK_GLOBAL_PER_MINUTE:3000}
+    max-body-bytes: ${BMS_PAYMENTS_MAX_BODY_BYTES:4096}
   # Sign-up volume bounds (chapter 7 section 7.10), counted in the database: over a bound a request
   # is answered 202 and nothing is created or sent; the global caps alert the operator once an hour.
   onboarding:
