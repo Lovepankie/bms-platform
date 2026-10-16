@@ -232,6 +232,20 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   has switched the assistant on (settings group `ai`, with the acknowledgement) and is named in `BMS_AI_ENABLED_TENANTS`; per
   call, daily tenant and platform token and cost caps are checked before any network call, an input screen refuses personal-data shapes, and a failed call keeps its reservation; no route, no permission, no screen
   (those are C2 to C5). Runbook: `docs/runbooks/ai-assistant.md`.
+- **Built (client extras C2, issue #223, ADR-037):** no migration, no route, no permission, no screen, no model call. The
+  public port `PortfolioFacts` of `lending.insights` (with `FactDisplay`): about forty figures of the metrics dictionary with
+  display forms, polarity and week-on-week and month-on-month changes, under the caller's scope (the same rules as the insights
+  endpoints) or a stored `PortfolioScope`, plus the largest branches and products from `InsightsFigures.par`; any figure over
+  one to four loans or members it is computed over, and every figure that would give it back by subtraction (nested windows,
+  the PAR levels, group remainders), replaced by `fewer than 5`; no officer dimension and no name; a scope read after midnight
+  reads the snapshot of its day. The new module `lending.advisor`: the alias mapper (`Branch 1`, `Product A`), the prompt
+  builder, and the **structured output path**: the model writes no text, it returns JSON of findings (up to three fact keys, a
+  topic, an action code from the reviewed catalogue `advisor/catalogue.json`, a priority) and a watch list; `StructuredValidator`
+  refuses any extra field or any string that is not an enum value or a key of a fact in the prompt (hidden, out of scope or of
+  the wrong topic), and our code renders every sentence from the catalogue and the facts, with a deterministic `Fallback` when
+  the answer is refused; the offline evaluation harness `AdvisorEvaluation` with its golden set. Also fixes the members
+  endpoint answering 500 for a range with no decisions. Spec `docs/specs/client-extras.md` section 5.13; runbook section 9 of
+  `docs/runbooks/ai-assistant.md`.
 - **Client extras (issue #210; slices D1, D2, B1, B3 and C1 are built):** `docs/specs/client-extras.md` specifies mobile money through Pesapal
   (ADR-035), SMS through Africa's Talking on the outbox (ADR-036), the advisory AI brief (ADR-037) and the formal
   reports pack as PDF and Excel (ADR-038), with a note on credit bureaus. The build slices are issues
@@ -337,8 +351,8 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `lending.seed` | The `seed-lending` command: fabricated loan book, savings and investments for one empty staging tenant (ADR-026, ADR-031, ADR-032) | none | none (writes 6.7 tables) | none (a command, `docs/runbooks/seed-lending.md`) |
 | `lending.savings` | Savings products, accounts, movements, end of day and interest, statements, savings reports (ADR-032) | SAV | 6.7 | 7.11.15 |
 | `lending.investments` | Investment products, investments, returns job, maturity, rollover, early withdrawal, maturity ladder (ADR-031) | INV; 3.25.1 R-INV | 6.7 | 7.11.16 |
-| `lending.insights` | The insights read model, snapshots, daily digest, panel registry (ADR-030) | INS | 6.7 | 7.11.22 |
-| `lending.advisor` (ADR-037, design) | The advisory AI brief and question box over insights facts; aggregates and aliases only | FR-AIA | 6.13 `ai_briefs` | 7.11.24 |
+| `lending.insights` | The insights read model, snapshots, daily digest, panel registry (ADR-030); the public ports `InsightsFigures` (ADR-038) and `PortfolioFacts` (ADR-037) | INS | 6.7 | 7.11.22 |
+| `lending.advisor` (ADR-037; facts, aliases, structured output and harness built, issue #223) | The advisory AI brief and question box over insights facts; aggregates and aliases only; the model returns structured JSON and our code renders every sentence from a reviewed catalogue | FR-AIA | 6.13 `ai_briefs` | 7.11.24 |
 | `lending.reports` (ADR-038; `lending.par` built in #214, `lending.portfolio_outstanding` in #217) | The definitions of the seven formal reports and the monthly pack, built on the insights figures through the public `InsightsFigures` port | RPT; chapter 14 section 14.10 | 6.5 `report_runs` | 7.11.8 |
 | `lending` collections | Due lists, arrears, actions | CLN | 6.7 | 7.11.17 |
 | Member area | Member self-service | MSS; chapter 11 | none | 7.11.18 |

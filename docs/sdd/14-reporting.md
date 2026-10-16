@@ -343,6 +343,16 @@ the end of that period; the headline for the whole range counts what was paid by
 the report runs of FR-RPT-04 exist, the insights drill-down tables are the CSV exports of these
 figures (FR-INS-06).
 
+The AI advisor (ADR-037) reads the same figures through the public port `PortfolioFacts` (issue #223): a typed list of
+facts from the dictionary (the `brief.*`, `portfolio.*`, `revenue.*` and `members.*` keys) with display forms, polarity
+and week-on-week and month-on-month changes, under the caller's scope or a stored scope, with the branch and product groups
+from `InsightsFigures.par`. A figure computed over one to four loans or members (the loans in arrears for arrears, the loans
+written off for write-offs, and so on) is replaced by `fewer than 5` together with every figure that would give it back by
+subtraction, and a branch or product under five loans is one such fact (spec 5.13). A scope read after midnight reads the
+snapshot of its day or is refused. Windows that overlap today are protected by counting distinct loans: when the loans that
+moved money on the other days of a window number one to four, the window's figure is hidden. It adds no figure of its own and no
+route.
+
 ## 14.10 The reports pack and report runs (ADR-038, issue #111)
 
 Design only. The seven formal reports are defined in sections 14.3, 14.4, 14.5 and 14.7 and are not redefined here:

@@ -1,0 +1,111 @@
+{
+  "templates": {
+    "summary": "Advisory summary as of {{asof}}, covering {{range}}. These are suggestions for the owner to check before acting; nothing has been changed.",
+    "finding": "{{priority}} priority. {{facts}}. Suggested action: {{action}}",
+    "watch": "To watch: {{facts}}.",
+    "fallback": "Key figures: {{facts}}.",
+    "nothing": "Nothing was flagged for this scope."
+  },
+  "priorities": {
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "topics": [
+    {
+      "code": "arrears_follow_up",
+      "label": "Arrears follow-up",
+      "facts": [
+        "portfolio.arrears", "portfolio.par1", "portfolio.par30", "portfolio.par60", "portfolio.par90",
+        "brief.new_arrears", "brief.new_arrears_amount", "brief.going_bad", "brief.going_bad_principal",
+        "branch.par30", "product.par30", "branch.loans", "product.loans"
+      ]
+    },
+    {
+      "code": "collections_focus",
+      "label": "Collections focus",
+      "facts": [
+        "portfolio.collection_rate", "portfolio.collected", "portfolio.expected", "portfolio.forecast_7",
+        "portfolio.forecast_30", "brief.collection_rate_today", "brief.collected_today", "brief.expected_today"
+      ]
+    },
+    {
+      "code": "disbursement_pace",
+      "label": "Disbursement pace",
+      "facts": [
+        "portfolio.disbursed", "portfolio.disbursed_count", "brief.disbursed_today", "brief.disbursed_loans_today",
+        "members.applied", "members.approved", "members.disbursed", "members.median_decision_hours"
+      ]
+    },
+    {
+      "code": "collateral_cover",
+      "label": "Collateral cover",
+      "facts": [
+        "portfolio.principal_outstanding", "portfolio.active_loans", "branch.principal_outstanding",
+        "product.principal_outstanding"
+      ]
+    },
+    {
+      "code": "concentration",
+      "label": "Concentration by branch and product",
+      "facts": [
+        "branch.loans", "branch.principal_outstanding", "branch.par30", "product.loans", "product.principal_outstanding",
+        "product.par30", "portfolio.active_loans", "portfolio.principal_outstanding"
+      ]
+    },
+    {
+      "code": "write_off_review",
+      "label": "Write-off review",
+      "facts": [
+        "portfolio.written_off", "portfolio.written_off_count", "portfolio.recovered", "revenue.write_off_expense",
+        "revenue.recovered", "portfolio.par60", "portfolio.par90"
+      ]
+    },
+    {
+      "code": "liquidity",
+      "label": "Cash flow from expected repayments",
+      "facts": [
+        "portfolio.forecast_7", "portfolio.forecast_30", "portfolio.collected", "brief.collected_today",
+        "portfolio.principal_outstanding"
+      ]
+    },
+    {
+      "code": "data_quality",
+      "label": "Data quality",
+      "facts": [
+        "members.new_members", "members.dormant", "members.applied", "members.approved", "members.disbursed",
+        "members.median_decision_hours"
+      ]
+    },
+    {
+      "code": "risk_monitoring",
+      "label": "Portfolio risk and profitability",
+      "facts": [
+        "portfolio.par1", "portfolio.par30", "portfolio.par60", "portfolio.par90", "portfolio.arrears",
+        "portfolio.yield", "portfolio.repeat_share", "revenue.interest", "revenue.fees", "revenue.penalties",
+        "revenue.contribution", "branch.par30", "product.par30"
+      ]
+    }
+  ],
+  "actions": [
+    {"code": "ARREARS_REVIEW_OLDEST", "topic": "arrears_follow_up", "text": "Review the oldest arrears cases{{where}} this week."},
+    {"code": "ARREARS_CONTACT_NEW", "topic": "arrears_follow_up", "text": "Contact the borrowers who most recently fell into arrears{{where}} before their arrears grow older."},
+    {"code": "ARREARS_WATCH_NEAR_DUE", "topic": "arrears_follow_up", "text": "Give priority to the loans that are close to becoming seriously overdue{{where}}."},
+    {"code": "COLLECTIONS_CALL_DUE", "topic": "collections_focus", "text": "Call the borrowers whose payment is due in the next days{{where}}."},
+    {"code": "COLLECTIONS_VISIT_LATE", "topic": "collections_focus", "text": "Plan field visits to the borrowers who are late{{where}}."},
+    {"code": "COLLECTIONS_REMIND", "topic": "collections_focus", "text": "Send payment reminders ahead of the due dates{{where}}."},
+    {"code": "DISBURSEMENT_CHECK_PIPELINE", "topic": "disbursement_pace", "text": "Check the pipeline of applications{{where}} and decide the ones that are ready."},
+    {"code": "DISBURSEMENT_REVIEW_LIMITS", "topic": "disbursement_pace", "text": "Review the approval limits{{where}} before approving more new loans."},
+    {"code": "COLLATERAL_CHECK_LARGEST", "topic": "collateral_cover", "text": "Check the collateral cover of the largest loans{{where}}."},
+    {"code": "COLLATERAL_REVALUE", "topic": "collateral_cover", "text": "Ask for a fresh valuation of the collateral behind the largest exposures{{where}}."},
+    {"code": "CONCENTRATION_REVIEW_SPREAD", "topic": "concentration", "text": "Review the concentration of the book{{where}}."},
+    {"code": "CONCENTRATION_LOOK_CLOSER", "topic": "concentration", "text": "Look more closely at how the loans are distributed{{where}}."},
+    {"code": "WRITE_OFF_REVIEW_PROPOSED", "topic": "write_off_review", "text": "Review the loans proposed for write-off{{where}} and the recovery steps already taken."},
+    {"code": "WRITE_OFF_PUSH_RECOVERY", "topic": "write_off_review", "text": "Follow up the recovery of loans that were already written off{{where}}."},
+    {"code": "LIQUIDITY_COMPARE_FORECAST", "topic": "liquidity", "text": "Compare the repayments expected in the coming days with the planned disbursements{{where}}."},
+    {"code": "DATA_REVIEW_IDENTITY", "topic": "data_quality", "text": "Review the member records with missing or unverified identity details{{where}}."},
+    {"code": "DATA_CONTACT_DORMANT", "topic": "data_quality", "text": "Contact the dormant members{{where}} to confirm their details and interest."},
+    {"code": "RISK_REVIEW_BY_GROUP", "topic": "risk_monitoring", "text": "Review the portfolio at risk{{where}} and compare it with the other branches and products."},
+    {"code": "RISK_KEEP_WATCHING", "topic": "risk_monitoring", "calm": true, "text": "No action is needed now; keep this under watch{{where}}."}
+  ]
+}

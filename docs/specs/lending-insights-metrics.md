@@ -119,7 +119,7 @@ Shown by product and by branch for the range, and by month for the 12 months end
 | `members.appraised` | Of those, the ones with at least one appraisal. | `lending_loan_appraisals` |
 | `members.approved` | Of those, the ones with `approved_at` set, whatever happened after. | `lending_loans` |
 | `members.disbursed` | Of those, the ones disbursed. | `lending_loans` |
-| `members.median_decision_hours` | Median of hours from `submitted_at` to `approved_at`, or to the first move to `rejected`, for decisions made in the range. | `lending_loans`, `lending_loan_status_history` |
+| `members.median_decision_hours` | Median of hours from `submitted_at` to `approved_at`, or to the first move to `rejected`, for decisions made in the range; empty (null) when none was made. | `lending_loans`, `lending_loan_status_history` |
 | `members.kyc_verified_share` | Active members with `kyc_status = verified` over all active members. | `lending_members` |
 | `members.dormant` | Active members with no active loan and no loan transaction in the last 90 days. | `lending_members`, `lending_loans`, `lending_loan_transactions` |
 

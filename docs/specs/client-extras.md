@@ -761,31 +761,18 @@ The logged and sent text is the scrubbed question. The screen and the acknowledg
 residual risk: a name no check recognises can still be typed. This is why the box ships after the
 brief. A per user daily limit applies, and facts are computed under the caller's scope (5.2).
 
-### 5.6 Prompts and the numeric validator
+### 5.6 Prompts and the validator (superseded by the structured output in 5.13)
 
-The system prompt fixes the role, the tone, English, a maximum length, the instruction to use only the
-supplied figures exactly as displayed, never to compute, estimate or round, and to answer in JSON
-`{summary, points: [{text, facts: [keys]}]}` with at most four cited facts per point. The user content is
-the fact list (aliases), the as-of time and, for a question, the scrubbed question.
-
-The validator (pure, property tested) accepts a response only if it parses, and every numeric token in
-`summary` and in each point's `text` matches the display or plain form of a fact cited by that point.
-Number words (zero to twenty, tens, hundred, thousand, million, half, third, quarter, double, triple) are
-converted to digits and checked the same way. Excluded before the check: alias labels, the as-of date,
-list ordinals.
-
-**Direction words are checked against the sign of the delta.** A point that cites a delta fact may say
-up, rose, grew, higher, increase and so on only when the delta is positive, and down, fell, dropped,
-lower, decrease only when it is negative; flat, unchanged and steady only when it is zero. Words such as
-better, improved, worse and worsened are checked against the sign and the metric's `polarity`: a falling
-PAR is better, a falling collection rate is worse. A point with a contradicting direction, or with both
-directions for one fact, fails. A model that writes "PAR rose" when the delta is negative is therefore
-rejected even though every number is right.
-
-A failure is retried once with a stricter reminder; a second failure uses the fallback.
-It checks that numbers exist among the cited facts and that stated directions agree with the data, not
-that the sentence is wise; words outside the lexicon are a residual risk the evaluation measures; the advisory label
-and the evaluation (5.8) carry that risk.
+The first design had the model write the summary and the points and a pure validator check each number and direction word in
+its prose. Four independent reviews each found wording that got through, so the decision of issue #223 (ADR-037, amended) is
+that **the model writes no text**. The system prompt fixes the role and the output shape; the model answers with one JSON
+object that chooses up to three fact keys per finding, a topic and a catalogue action code from closed sets, and a priority
+(5.13). The user content is the fact list (aliases), the as-of time and, for a question (#230), the scrubbed question, which
+is mapped to a topic and to the facts of that topic; there is no free answer. The validator accepts an answer only if it is
+exactly that shape with exactly those values; our code then renders every sentence from reviewed templates, so a number, a
+direction word and a polarity are written from the facts and cannot disagree with them. A refused answer is not retried into
+prose: the person sees the deterministic brief (5.7). The older number validator (every number re-derived from the cited
+facts) is kept as the second line over the rendering.
 
 ### 5.7 Fallback, availability and caps
 
@@ -867,15 +854,169 @@ review is a go-live condition.
 | Personal data reaches the provider | Typed fact list, aliases for branches and products, no officer dimension, groups under five suppressed, no free rows; question scrub; canary test at the client boundary; log inspection test |
 | A branch manager reads figures outside their branches | The stored brief is all-branches and shown only to all-branch users; questions are computed under the caller's scope (5.2) |
 | A tenant turns the feature on before the provider terms are on file | The platform allow-list `BMS_AI_ENABLED_TENANTS` (5.2) |
-| Model states a wrong or invented number, or the wrong direction | Cited-fact validator with number words and direction words checked against the delta sign; fallback; advisory label |
-| Prompt injection through a question | No tools, no write path, plain text output, scrubbed and length-limited input, injection test in the evaluation |
-| Injection through data (a branch named with instructions) | Names are aliases; only numbers and fixed labels are in the prompt |
+| Model states a wrong or invented number, or the wrong direction | The model writes no number, word or sentence: it chooses fact keys, a topic, a catalogue action and a priority from closed sets, anything else refuses the whole answer, and our code writes every figure, movement and polarity (5.13); second-line number re-derivation; fallback; advisory label |
+| Prompt injection through a question | No tools, no write path, a structured answer that can carry no free text (a rendered brief only), scrubbed and length-limited input, injection test in the evaluation |
+| Injection through data (a branch named with instructions or markup) | Names are aliases; only numbers and fixed labels are in the prompt; a real name written back into a sentence for the person who asked is neutralised (angle brackets, markdown characters, line breaks, ampersands removed) |
 | Cost runaway | Daily caps, `max_tokens`, one brief per day, platform ceiling, breaker |
 | Provider outage or slowness blocks users | 30 second budget, fallback, breaker; the page never depends on it |
 | Cross-tenant mix-up | Prompts are built under the tenant binding; `ai_calls` has row-level security; no shared cache of answers |
 | Users treat advice as decisions | Label on every answer, no action buttons, wording rules in the prompt |
 | Key theft | Environment only, rotation runbook, alert on 401, spend cap at the provider if available |
 | Provider changes terms or model silently | Model name pinned in configuration; the evaluation suite reruns on any change; terms re-checked each quarter |
+
+### 5.13 As built in slice #223 (differences from, and sharpenings of, the design above)
+
+The facts, the aliases, the validator and the offline evaluation harness are built (pull request for issue #223; ADR-037
+carries the Amendment). Nothing here calls a model, adds a route, a permission, a setting or a table: there is **no migration**.
+Where the build differs from, or sharpens, the text above:
+
+- **Where the code is.** `lending.insights` publishes `PortfolioFacts` and `FactDisplay` (the one place where an amount, a rate
+  or a change is turned into text). `PortfolioFactsService` calls the insights code the endpoints call (`brief`, `portfolio`,
+  `revenue`, `members`) and the public `InsightsFigures.par` for the branch and product groups, so there is one implementation
+  of every number. `lending.advisor` is a new module (it may use the kernel, `core.ai` and `lending.insights`) that holds
+  `Aliases`, `AliasedFacts`, `PromptBuilder`, `Catalogue`, `StructuredValidator`, `Phrases`, `Templates`, `Fallback`,
+  `NumberExtractor`, `NumericValidator` (the second line) and the public `AdvisorEvaluation`. The job, the stored brief, the endpoints and the screens are slices #226 and #230.
+- **Scope is the endpoints' scope.** `PortfolioFacts.forCaller()` resolves the signed-in caller's scope with
+  `InsightsFigures.scope` (permission `lending.insights.read`, the permitted branches, only the caller's own loans without
+  `lending.insights.all_officers`), and `build(PortfolioScope)` reads only that stored scope and never the principal, so a job
+  cannot widen it. A branch manager's facts are their branch's figures, equal to the endpoints' for the same caller (a test
+  compares them metric by metric); the groups listed are only the branches and products in their scope.
+- **Which facts.** Forty-one figures: the brief (only when the range ends on the business date), the portfolio, revenue and
+  member-activity figures of the dictionary that a brief needs, and, per branch and product (the ten largest by loans), the
+  loans, principal outstanding and PAR 30. Each has its key, label, kind, display form, polarity and, where defined, a
+  week-on-week and a month-on-month change.
+- **Changes.** A change is the same figure read again for the range a week earlier and a month earlier (both ends shifted),
+  and the difference taken in the figure's own units (basis points for a rate, shown as points to two decimals, which is
+  exact). A stock (outstanding, PAR, arrears, loans, borrowers) is read from the nightly snapshot of the earlier end date, a
+  flow from the transactions of the earlier range. There is no change when the earlier figure cannot be known (no snapshot
+  for that date), and none for figures that are live only (new arrears, going bad, the forecasts, dormant members). **A change
+  is also left out whenever the distinct loans behind the two figures differ by one to four, or either is one to four** (for
+  every figure with changes: write-offs, recoveries, collected, disbursed, penalties, arrears, the PAR levels, revenue and the
+  rates): write-offs of 6 loans now and 5 a week earlier would give "+1 loan" and one loan's exact amount. The figure itself
+  stays when it is over five loans or more. `PortfolioFactsSuppressionTest` sweeps every pair of loan counts from 0 to 30 for
+  every figure with changes.
+- **Small counts.** A figure is hidden when the loans it is **actually computed over** number one to four, not when the
+  book is large: arrears and PAR 1 over the loans in arrears, PAR 30, 60 and 90 over the loans more than 30, 60 and 90 days
+  late, collected over the distinct loans that paid, recovered over the loans recovered, each revenue line over the distinct
+  loans behind its ledger lines, write-offs over the loans written off, the new-arrears amount over the new arrears, the rest
+  over the active loans. Hiding one figure hides **every figure that would give it back by subtraction** (complementary
+  suppression): the write-off amount, the write-off expense and the profit contribution go together, the recovered figures and
+  the contribution, any revenue line and the contribution, collected and the collection rate, interest and fees and the
+  yield. A change is hidden with its figure, and when the earlier figure was hidden, because current minus change would give
+  it back. Zero is not small: nothing is described. A branch or product of fewer than five loans is the single fact
+  `branch.loans` or `product.loans` with the display `fewer than 5`, and no other fact; a group's PAR 30 is hidden when fewer
+  than five of its loans are more than 30 days late. **Nested windows and the PAR levels** (round 4): today sits inside the month, so the month less today is the other days'
+  figure; when the month's population exceeds today's by one to four (6 and 5) the larger window's figure is hidden, for
+  disbursed and their count (loans), collected (transactions), expected (schedule items) and the collection rate that follows;
+  the earlier windows of a change are checked the same way. The PAR levels are a partition of the late loans (1 to 30, 31 to 60,
+  61 to 90, over 90 days): the difference of two shown levels times the book is the principal of the loans between them, so a
+  level is hidden when it is small itself or when a shown earlier level differs from it by one to four loans, and the ratios
+  derived from them go with it. **Complementary suppression** (owner's rule: never expose small counts): the groups partition the book, so the total less
+  the groups shown is the hidden and left-out remainder; when that is one to four loans it is a small group's exact count,
+  principal and risk by subtraction, so the smallest other groups are hidden too until the remainder is five loans or more (or
+  nothing); the same is done for the loans more than 30 days late behind the PAR 30 of the groups shown. Groups beyond the
+  ten largest count as remainder. `PortfolioFactsIT` sweeps every product and branch scope of the fabricated year and asserts
+  the remainder is never one to four.
+- **The business date.** A scope resolved for today and read after midnight does not read the live loan tables, which by then
+  hold the next day's activity: it reads the snapshot of the day it was resolved for, and is refused with 422
+  `snapshot_unavailable` while tonight's snapshot is not written. A past date with no snapshot is refused the same way, and the
+  brief figures (live only) are left out of facts that are not for today. `PortfolioFactsIT` writes the snapshot of the 8th,
+  moves one row of it and shows the facts follow the snapshot, not the live tables.
+- **Cost.** A set of facts is twelve reads of the insights code (brief, portfolio, revenue and members, for the range and for
+  the two earlier ranges) and two of the PAR port; it is built once per brief and once per question, so the daily brief and the
+  per user question limit bound it.
+- **Names stay out.** A group is an id in the facts and its name travels apart in `FactSet.names()`, which prints nothing.
+  `Aliases` assigns `Branch 1`, `Product A` (then `AA`) in the order of the ids, so an alias tells nothing about a name or a size.
+  Group keys become `branch_1.par30`. A group the fact set does not name is left out, never sent under its id. The prompt is
+  built from `AliasedFacts` alone. The real names are not matched in an answer: they were never in the prompt, so a branch
+  called `Main` must not block every answer that uses the word; an answer can only name a group by its alias, which is
+  mapped back for the person who asked. (The evaluation plants fabricated names as forbidden strings; production plants none.)
+- **The model writes no text: it returns a structured choice (the primary control, decided after the fourth review of #223).**
+  Free prose cannot be checked reliably by patterns: four independent reviews each found wording that got through, so free
+  prose is removed from the AI path. The model returns one JSON object and nothing else:
+  `{"findings":[{"fact_keys":[...],"topic":"...","action":"...","priority":"high|medium|low"}],"watch":["..."]}`. `fact_keys`
+  holds one to three keys from the facts it was given (`portfolio.par30`, `portfolio.par30.month_change`, `branch_1.loans`);
+  `topic` is one of the nine topics of the catalogue; `action` is a code from the reviewed catalogue (`advisor/catalogue.json`)
+  that belongs to that topic; `watch` holds at most six more keys. At most six findings. The validator
+  (`StructuredValidator`) refuses the WHOLE answer, with a closed code, when: the raw text is not exactly a JSON object
+  (`not_json`, also for a fence, text before or after, a duplicate key); a field is missing or of the wrong type (`schema`) or
+  there is any extra field at the root or in a finding (`unknown_field`); a limit is passed (`too_many`, `too_long`); a topic,
+  action or priority is not exactly an enum value (`unknown_topic`, `unknown_action`, `bad_priority`; case, padding and
+  look-alike characters do not match); the action belongs to another topic (`action_topic_mismatch`); a key is not among the
+  facts given (`unknown_fact`: a real name, an invented figure, a group out of scope), is hidden (`fewer than 5`, or a group
+  left out by complementary suppression: `hidden_fact`), is of a family the topic may not cite (`fact_topic_mismatch`), or is
+  repeated (`duplicate_fact`); or the rendering fails the second line (`render_check_failed`). A defect in the validator itself
+  refuses (`validator_error`). A refused answer is never repaired and never partly shown: the person sees the deterministic
+  facts-only brief instead (`Fallback`: a fixed list of key figures and their changes, written by the same phrases). An answer
+  with no finding and nothing to watch shows the same key figures, not an empty statement. A provider failure shows it too.
+- **Our code writes every sentence.** The summary line, each finding, the watch line, the facts-only brief and the "nothing was
+  flagged" line are templates in the catalogue resource, filled by `Templates.fill` in one pass, so a value cannot contain a
+  placeholder that is filled again. A fact is written by the phrase table (`Phrases`) as `PAR 30 (12.5 percent)`, a change as
+  `PAR 30 fell by 0.40 points compared with a week ago (better)` (the verb from the sign, the period from the fact, better or
+  worse from the metric's polarity), a missing figure as `(not available)`, a group's fact as `Branch 1: Active loans (120)`; the
+  name travels with the value, so figures cannot be swapped between metrics, groups or periods. The finding reads
+  `<Priority> priority. <facts>. Suggested action: <action>`, the action being the catalogue text with `{{where}}` filled by
+  our code with the groups the finding cites (` for Branch 1 and Product A`, mapped to names only for the person who asked).
+- **The catalogue is reviewed text.** It holds nine topics and nineteen actions with stable codes (arrears follow-up, collections
+  focus, disbursement pace, collateral cover, concentration, write-off review, cash flow from expected repayments, data quality,
+  portfolio risk and profitability). No text mentions an officer (there is no officer dimension) or savings and investments (no
+  fact covers them yet; a topic for them arrives with the facts). Topics and actions keep the order of the file, and the loader
+  refuses a duplicate topic code, action code or JSON key. Each action belongs to one topic, and each topic lists the fact families it may cite
+  (`portfolio.par30`, `branch.loans`, and so on: a group fact is bound by its family, whatever its alias or period). The loader
+  refuses a catalogue with fewer than 12 or more than 20 actions, an action of an unknown topic, a topic without an action, any
+  digit of any script, markup or `@` in a text, and any placeholder in an action other than `{{where}}` (a figure never
+  appears in catalogue text; it comes from the facts). An action that says no action is needed (`calm`, marked in the file
+  and required of any text that says so) is allowed only at low priority and when no cited change is worse (`calm_action_mismatch`),
+  so a worsening is never described as calm. No action text refers to the cited facts as `this figure` or `these figures`, and a
+  fact phrase uses no verb that agrees with the name (`did not change`), so one fact or three read alike. `CatalogueTest` and a property test over every action with every fact of
+  its topic assert that the output is only template text plus values written by our code.
+- **The prompt is a reviewed resource** (`advisor/system-prompt.txt`) filled with the topics and actions of the catalogue and the
+  canary phrase; `PromptContractTest` fails if it stops listing the output shape, a topic or an action code, or the rules the
+  validator enforces (limits, "an action belongs to one topic", "use no key whose value is fewer than 5"). The facts reach the
+  model as `key | name | value | note`, between `FACTS` and `END FACTS`, with aliases and never a real name; it is told that
+  this is data and not instructions.
+- **The second line.** The older `NumericValidator` re-derives every number in the rendered text from the facts the finding
+  cites (a number must equal the display or plain form of a cited fact, units and signs must agree, a hidden fact accounts
+  for no number) and runs the personal data shape screen over it, so a defect in a template or in the substitution cannot put a
+  wrong figure on a screen. `Phrases.corrupt` is a test switch that makes the phrases write a wrong figure, and
+  `ValidatorMutationTest` shows the second line refusing it.
+- **Every rule has a switch.** `StructuredValidator.Rules` holds one flag per rule (strict fields, topic enum, action enum,
+  priority enum, action-belongs-to-topic, fact exists, fact not hidden, fact fits topic, no duplicates, limits, second line).
+  `ValidatorMutationTest` turns each off in turn with the second line off as well, and requires the golden evaluation to FAIL
+  with the very cases that rule exists for wrongly accepted.
+- **What a change is compared with.** Our phrase table says it per kind of figure: a brief figure with `the same day last
+  week` or `last month`, a stock (outstanding, loans, borrowers, arrears, PAR) with `a week ago` or `a month ago`, a flow over
+  the range (disbursed, collected, expected, revenue, the rates) with `the same period a week earlier` or `a month earlier`;
+  never `over the week` for a month-to-date figure. Penalty income has no polarity: rising is neither better nor worse.
+- **Not figures.** The dates given (the as-of date, the range, and both earlier ranges) in any written form, list markers and
+  ordinals, `PAR 1` to `PAR 90`, the names of facts that carry a digit, aliases, and a number glued to letters (`Q3`) are not
+  figures for the second line.
+- **The harness.** `AdvisorEvaluation.run(cases, source)` takes cases (a fabricated fact set, a recorded answer, the verdict
+  expected and the code a refusal must give) and a source: `recorded()` answers each from the recording client, `with(client)`
+  sends the same cases to a real client. Before the call it checks the request that would leave the platform (no real name, no
+  planted string, no phone, email, ID or UUID shape in the facts, no run of six digits, no figure for a group that has a
+  suppressed fact) and never sends one that fails. The result of a case holds the codes, what is shown if accepted (the
+  rendered brief, names mapped back) and the facts-only brief shown if refused. The golden set (`GoldenCases`) has clean
+  structured answers whose rendering is asserted word for word, the shape and limit refusals, the enum and binding refusals, and
+  for every attack of rounds 1 to 4 (`AttackCorpus`, about 110 of them: invented, derived and mis-formatted numbers, wrong
+  directions, injection through a fake field and through the model, personal data, hallucinated names, free prose) the same
+  attack expressed in each field the model controls (topic, action, priority, fact key, watch, an extra field, a legacy prose
+  answer), each refused with its code. It must pass 100 percent in every category, and every refused case has a repaired twin
+  (the same answer mended in the one place the rule looks at) that the harness accepts, so a refusal is the rule's and not
+  another check's. The report is plain text with codes and counts, never a sentence, and costs nothing. The canary test
+  (`AdvisorCanaryIT`) runs the real gateway with the recording client over a seeded book whose branches and products are named
+  with canaries and asserts that none is in the request the client got, in the call log or in the facts, that the gateway's own
+  input screen let the prompt through, that a valid structured answer comes back rendered with the real names for the person who
+  asked, and that prose, an extra field and an unknown fact key are refused.
+- **Later slices use this path (#226, #230).** The daily brief (#226) asks for the same findings and watch list for one day, and
+  stores the rendered brief. A free-text question (#230) is scrubbed on input, then mapped to a topic of the enum and to the facts
+  of that topic; the answer is the same renderer's, never a free answer. A question outside the topics is answered by the
+  facts-only brief and a pointer to the screens.
+- **Fixed on the way.** `members.median_decision_hours` made the members endpoint answer 500 for a range with no decisions
+  (the median of nothing is NULL); it is now an empty figure, as the dictionary says.
+- **Not in this slice.** Retry with a stricter reminder (#226; the facts-only fallback exists here), the question scrub and the box (#230), the
+  endpoints, the daily job and the stored brief (#226), the screens, and the run against a real provider and the comparison of
+  models (#232).
 
 ## 6. The reports pack (ADR-038)
 
@@ -1114,7 +1255,7 @@ runbook. Order is the recommended build order; slices of different areas can run
 | 10 | #220 | C1 `core.ai` port, adapter, caps, call log | none |
 | 11 | #221 | B4 Loan event SMS | B1, B3, increment 5 (#108) |
 | 12 | #222 | D3 Collections, disbursements, officer performance | D2 |
-| 13 | #223 | C2 `PortfolioFacts` (scope aware, polarity and deltas), aliasing, small-count suppression, numeric and direction validator, evaluation harness | C1 |
+| 13 | #223 | C2 `PortfolioFacts` (scope aware, polarity and deltas), aliasing, small-count suppression, numeric and direction validator, evaluation harness (**built**, no migration; see 5.13) | C1 |
 | 14 | #224 | A5 Unallocated receipts queue and allocation screen, reversals, reconciliation, statement upload | A3 (which already posts unallocated receipts) |
 | 15 | #225 | D4 Collateral register and regulator summary | D2 |
 | 16 | #226 | C3 Daily AI brief | C2 |
@@ -1163,9 +1304,10 @@ changed. Items marked (changed) altered the design during this review; the other
     from the environment, provider sandbox, startup refusal tests (4.4).
 12. **"A forged delivery report."** Path token, source allow-list, forward-only status; at worst a log
     status changes (4.7).
-13. **"The AI will invent a number, or swap two real ones."** Cited-fact validation per point, number
-    words converted, at most four cited facts per point so citing everything is impossible, retry, then
-    fallback (5.6). Residual: a sentence can be unwise; the label and evaluation carry it.
+13. **"The AI will invent a number, or swap two real ones."** The model writes no number and no sentence: it chooses fact
+    keys, a topic, a catalogue action and a priority from closed sets, everything else refuses the whole answer, and our code
+    writes the figure with its name, period and polarity (5.13). Residual: the model may choose an unwise action from the
+    catalogue; the label and the evaluation carry it.
 14. **"Aliases leak: a model writes 'Branch 1' into 'Branch 10'."** Mapping back is by whole word, longest
     alias first (5.4).
 15. **"Staff will type a borrower's name into the box."** Scrub plus the member-name token check, the
@@ -1210,7 +1352,7 @@ addressed in the spec, ADR-035 to ADR-038, the SDD, the model and the issues; wh
 | 10 | A timed-out order creation strands the intent | One locked creator; never reuse the reference; a new intent follows; spike items added | 3.5, 3.12, ADR-035 d.2 |
 | 11 | One IPN id per credential pair | Every pair has its own IPN id and path token | 3.11, ADR-035 d.10 |
 | 12 | Officer aliases are personal data; the "no personal data by design" claim | Officer dimension dropped; groups under five suppressed; the claim restated as minimisation | 5.4, 5.11, ADR-037 d.3 |
-| 13 | The validator ignores direction words | Direction and polarity checked against the delta sign | 5.6, ADR-037 d.5 |
+| 13 | The validator ignores direction words | The model writes no text; direction and polarity are written by our code from the delta sign | 5.6, 5.13, ADR-037 d.5 |
 | 14 | AI go-live needs a platform control, not a tenant switch alone | `BMS_AI_ENABLED_TENANTS` allow-list | 5.2, ADR-037 d.7 |
 | 15 | The report pack on the Pi (224 MB heap) | Query, commit, then render from a spool; one run at a time on staging; per-report PDFs merged on disk; lower caps; `ReportMemoryIT` | 6.3, ADR-038 d.2, d.5, d.7 |
 | 16 | A3 depends on A5 | The unallocated posting moves into A3; A5 keeps the queue screen, allocation, reversals, reconciliation | 3.4, section 10 |

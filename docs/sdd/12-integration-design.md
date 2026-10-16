@@ -170,7 +170,16 @@ fails after its request was sent keeps its reservation against the day, and the 
 its generation, so a late result cannot close it or free the probe slot. `BMS_AI_PROVIDER` is `off` by default; a provider with a
 missing URL, key or model, a key with whitespace, or a non-https URL is off with a warning; the recording stub is refused
 outside the dev and test profiles. Only the advisor module calls it, and only with the typed fact list and aliases (spec
-section 5.4).
+section 5.4). Built in #223 (the call itself arrives with #226): the advisor builds the request from `PortfolioFacts`
+through an alias-only structure (grouped figures, so no run of six digits reaches the input screen). The model writes no
+text (spec 5.13, ADR-037 as amended): it returns a JSON object that chooses facts by key, a topic, an action code from the
+reviewed catalogue (`advisor/catalogue.json`) and a priority, and nothing else. `StructuredValidator` refuses the whole answer
+for an extra field, a string that is not exactly an enum value or a given fact key, a hidden or out-of-scope key, a key of the
+wrong topic, an action of another topic or malformed JSON, and the person then sees the deterministic facts-only brief. Every
+sentence that is shown is rendered by our code from reviewed templates, the facts (figure, name, movement from the sign, period,
+better or worse from the polarity) and the catalogue's action text, and the older `NumericValidator` re-derives every number of
+the rendering as a second line. The daily brief (#226) and the questions (#230) use this same path. An offline evaluation harness
+runs a golden set of recorded answers, with every attack of four review rounds as a fixture, through the same chain.
 
 ## 12.5 Object storage (Cloudflare R2)
 

@@ -347,7 +347,7 @@ output changed.
 - **Client extras (issue #210, `docs/specs/client-extras.md` section 8).** Gateway callback tests use recorded fabricated
   bodies (the Pesapal ones are `backend/src/test/resources/pesapal/`, whose manifest marks each file observed in the sandbox or
   documented only) and prove one booking under replay and under concurrent notification and poll; the SMS segment counter, cost parser
-  and every SMS template are golden tested; the AI `NumericValidator` has property tests and the evaluation set compares
+  and every SMS template are golden tested; the AI `StructuredValidator` and the catalogue renderer have property tests (every action with every fact of its topic) and the evaluation set compares
   answers with the metrics dictionary, with a planted-name leak test at the client boundary; report PDFs are compared by
   extracted text and Excel files by cell values on fabricated datasets with hand-computed output, and the pack is cross
   checked against the insights values. Real adapters have sandbox contract tests in a manually triggered CI job. Staging
@@ -398,6 +398,30 @@ output changed.
   through the gateway, the log column list and a planted canary absent from every row, the update and delete guards and the
   housekeeping for suspended tenants); the
   isolation suite covers `ai_calls` through its factory row.
+  The advisor's facts, aliases, validator and harness (#223) are covered by `PortfolioFactsIT` (the facts equal the independent
+  recomputation of the insights golden model, in their display forms, with the week-on-week and month-on-month changes; a branch
+  manager's and a loan officer's facts equal the insights endpoints' figures for the same caller metric by metric; a branch or
+  product under five loans is one suppressed fact whose real figures appear nowhere; a change is left out when the earlier
+  population was small; no name of a branch, product or staff member is in any fact; no officer dimension; the Kampala date at the
+  20:59 and 21:01 UTC edge; a scope read after midnight; an empty tenant), `AdvisorCanaryIT` (a book whose branches and products
+  are named with canaries goes through the real gateway with the recording client: no canary in the request the client received,
+  in the call log or in the facts, the gateway's input screen lets the prompt through, a structured answer comes back rendered
+  with the real names, and prose, an extra field and an unknown key are refused), `StructuredValidatorTest` (the limits,
+  extras, enum near-misses such as case, padding and look-alikes, the closed codes, the rendering word for word, a property
+  test that renders every catalogue action with every fact of its topic and finds only template text plus values written by our
+  code), `CatalogueTest` (twelve to twenty actions, a topic for each, file order kept, duplicates refused, calm wording marked, no officer or savings text, no figure reference, no digit, markup or foreign placeholder in any text, the
+  loader refusing bad text, a fact bound to its topic by family), `PortfolioFactsSuppressionTest` (nested windows counted in
+  distinct loans on other days, including one loan paying six times; a change left out for every figure when the loans of the
+  two windows differ by one to four or either is one to four, swept over every pair of counts from 0 to 30, the PAR levels as a partition, figures that give each other
+  away), `ValidatorMutationTest` (each rule of the validator off in turn makes the golden evaluation fail with the cases that
+  rule exists for wrongly accepted; a corrupted phrase table is caught by the second line), `PromptContractTest` (the prompt
+  resource lists the output shape, every topic and action of the catalogue, and the rules the validator enforces),
+  `NumberExtractorTest`,
+  `AliasesTest` (a round-trip property over random groups), `PromptBuilderTest`, `FactDisplayTest` and `AdvisorEvaluationTest`
+  (the golden set, with the attacks of four review rounds as fixtures (`AttackCorpus`), offline at 100 percent in every category, a flipped set failing every case, a wrong code failing a refused
+  case, every refusal paired with a repaired twin that is accepted, no planted string in any request). `PortfolioFactsIT` also
+  covers one to four write-offs, recoveries, loans in arrears and loans over 30 days late hiding every related figure, and a
+  scope read after midnight reading the snapshot of its day.
 
 ## 15.8 Test data policy
 

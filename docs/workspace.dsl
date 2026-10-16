@@ -68,7 +68,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 lendingSeed   = component "Lending: Fabricated Seed" "The seed-lending command: fills one empty staging tenant with fabricated members, products, applications, serviced loans, savings accounts with a year of movements and investments with twelve months of history; refused in production and on a tenant holding data (ADR-026, ADR-032)." "lending" "lending"
                 insights      = component "Lending: Insights" "The insights read model (ADR-030): morning brief, portfolio, revenue from posted journal lines, member activity, drill-down tables with CSV export; the nightly per-loan snapshot until increment 6 owns it; the owner's plain-text daily digest; the panel registry savings and investments plug into." "lending" "lending"
                 collections   = component "Lending: Collections" "Due and arrears lists, officer assignment, collection actions, promises to pay." "lending" "lending"
-                advisor       = component "Lending: AI Advisor" "Advisory daily brief and question box over insights facts (ADR-037): aggregates and aliases only, number validator, fallback to the deterministic brief, off by default, advisory label." "lending" "lending"
+                advisor       = component "Lending: AI Advisor" "Advisory daily brief and question box over insights facts (ADR-037): aggregates and aliases only, structured output only (the model writes no text; findings from a reviewed catalogue are rendered by our code), fallback to the deterministic brief, off by default, advisory label. Built so far (issue #223): the alias mapper, the prompt builder, the structured validator and renderer, the catalogue and the offline evaluation harness; the job and the routes follow." "lending" "lending"
                 lendingReports = component "Lending: Reports" "The definitions of the formal reports, built on the insights figures through the public InsightsFigures port: lending.par (issue #214) and lending.portfolio_outstanding (issue #217), each as PDF, Excel, CSV and JSON; collections, disbursements, officer performance, collateral register, regulator summary and the monthly pack follow (ADR-038)." "lending" "lending"
 
                 # ---------------- retail vertical (ADR-020) ----------------
@@ -215,7 +215,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.payments    -> bms.api.jobs "Creates orders, polls pending intents for 48 hours, reconciles nightly"
         bms.api.payments    -> bms.db "Intents, notifications (identifiers only), statement rows"
         bms.web -> bms.api.advisor "Insights card: advisory brief and question box"
-        bms.api.advisor -> bms.api.insights "Reads PortfolioFacts under the caller's scope: typed aggregates, small groups suppressed, no member rows"
+        bms.api.advisor -> bms.api.insights "Reads PortfolioFacts under the caller's scope: typed aggregates with display forms, polarity and week and month changes, figures over fewer than five loans suppressed, no officer dimension, no member rows (built, issue #223)"
         bms.api.advisor -> bms.api.ai "Sends prompts of aliases and aggregates; receives validated text"
         bms.api.advisor -> bms.api.jobs "Runs the daily brief per tenant with the assistant on"
         bms.api.advisor -> bms.api.audit "Audits switching on and the acknowledgement"
