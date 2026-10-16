@@ -295,3 +295,21 @@ timer (pull), never by any runner.
 - ADR-006: the delivery pipeline this changes for staging.
 - ADR-009: the PWA, which now reads its hosts at run time.
 - ADR-016: the platform API, now served only on the configured platform host.
+
+## Amendment 2026-10-16: CI runs on the three laptop runners first, the Pi only as overflow
+
+**Context.** The single Pi runner runs one job at a time for this repository and for AGA together. A backend run takes about an hour there, 1,200
+tests with a Testcontainers database, and a queue of six to nine runs builds up on busy days. The organisation already has three more runners on
+Jerome's laptop (group `jerome-laptop`, labels `self-hosted`, `aga-heavy`, `jerome-laptop`, X64, 6 cores and 19 GB for WSL2, Docker present), which
+the owner uses for AGA.
+
+**Decision (owner).** The repository joins the `jerome-laptop` runner group. The heavy jobs prefer those three runners; the Pi is used only when all
+three are busy or offline. GitHub cannot express "prefer A, fall back to B" in labels, so the workflows read the repository variable `CI_RUNS_ON`
+(default `["self-hosted","jerome-laptop"]`) when a run is created, and `scripts/ci/pick-runner.sh` (run every minute by a launchd job on the
+maintainer's Mac) sets it from the runners' busy and online flags.
+
+**Consequences.** Better: three parallel X64 runners instead of one ARM64 runner. Worse: jobs of two repositories share the laptop runners' user and disk
+(a job can read what an earlier AGA job left in the work area), so the rule from finding H1 stands: these runners never hold a secret or a deploy
+permission, the deploy job stays on the GitHub-hosted runner, and nothing that needs a secret may target `CI_RUNS_ON`. The choice is made at the moment a
+run is created, so a run created while a laptop runner was idle can still wait if AGA takes it first. If the laptop is off, the variable moves to the Pi
+within a minute. The laptop's owner must know that this repository's CI code also runs on his machine.

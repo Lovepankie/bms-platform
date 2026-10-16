@@ -1443,7 +1443,9 @@ class MigrationOrderIT {
     }
 
     private static PostgreSQLContainer database() {
+        // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")
+                .withStartupAttempts(3)
                 .withDatabaseName("bms")
                 .withUsername("postgres")
                 .withPassword("test-superuser-password")

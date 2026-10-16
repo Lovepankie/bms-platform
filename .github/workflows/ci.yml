@@ -28,7 +28,7 @@ concurrency:
 jobs:
   backend:
     name: Backend (mvn verify)
-    runs-on: [self-hosted, hillary-pi]
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}
     timeout-minutes: 90
     defaults:
       run:
@@ -61,7 +61,7 @@ jobs:
   report-memory:
     name: Report memory proof (on request)
     if: github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted, hillary-pi]
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}
     timeout-minutes: 45
     defaults:
       run:
@@ -80,7 +80,7 @@ jobs:
 
   frontend:
     name: Frontend (types, tests, build)
-    runs-on: [self-hosted, hillary-pi]
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}
     timeout-minutes: 15
     defaults:
       run:
@@ -104,7 +104,7 @@ jobs:
 
   delivery:
     name: Workflows, scripts and compose files
-    runs-on: [self-hosted, hillary-pi]
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7

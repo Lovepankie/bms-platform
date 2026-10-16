@@ -44,7 +44,7 @@ concurrency:
 
 jobs:
   model:
-    runs-on: [self-hosted, hillary-pi]
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}
     # A stalled image pull once held the only runner for over two hours; the job normally takes
     # about five minutes.
     timeout-minutes: 15
