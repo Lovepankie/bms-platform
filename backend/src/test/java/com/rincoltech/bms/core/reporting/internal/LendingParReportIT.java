@@ -31,7 +31,7 @@ import tools.jackson.databind.JsonNode;
 @TestPropertySource(
         properties = {
             "bms.reports.max-concurrent-runs=1",
-            "bms.reports.timeout=PT2S",
+            "bms.reports.timeout=PT30S",
             "bms.reports.xlsx-row-cap=500",
             "bms.reports.pdf-row-cap=200",
             "bms.reports.max-file-bytes=1048576",

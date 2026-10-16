@@ -35,6 +35,9 @@ abstract class ReportsItSupport extends IntegrationTest {
     static final String PORTFOLIO = "lending.reports.portfolio";
     static final String PROPS = "bms.reports.";
 
+    /** How long a test waits for workers or a gate: far above any run on a loaded runner, so a wait is never the flake. */
+    static final Duration IDLE = Duration.ofSeconds(180);
+
     @Autowired
     TestRestTemplate http;
 
@@ -63,14 +66,21 @@ abstract class ReportsItSupport extends IntegrationTest {
         TestReports.gateEntered = new CountDownLatch(1);
     }
 
-    /** Nothing queued or running is left for the next test to start by accident. */
+    /**
+     * Nothing queued or running is left for the next test to start by accident, and no worker of this test is still
+     * running when the next one resets the shared gates: the open runs are cancelled, then the workers are awaited (a
+     * cancelled run stops at its next checkpoint, a fraction of a second).
+     */
     @AfterEach
-    void closeOpenRuns() {
+    void closeOpenRuns() throws InterruptedException {
         TestReports.gate.countDown();
         TestDatabase.owner()
                 .sql(
                         "UPDATE report_runs SET status = 'cancelled', finished_at = now() WHERE status IN ('queued', 'running')")
                 .update();
+        assertThat(runner.awaitIdle(IDLE))
+                .as("the workers of the test finished")
+                .isTrue();
     }
 
     TestDatabase.Fixture tenant(boolean reportsOn) {
@@ -146,9 +156,7 @@ abstract class ReportsItSupport extends IntegrationTest {
     void drain() throws InterruptedException {
         for (int i = 0; i < 60; i++) {
             runner.tick();
-            assertThat(runner.awaitIdle(Duration.ofSeconds(90)))
-                    .as("the workers finished")
-                    .isTrue();
+            assertThat(runner.awaitIdle(IDLE)).as("the workers finished").isTrue();
             Integer open = TestDatabase.owner()
                     .sql("SELECT count(*)::int FROM report_runs WHERE status IN ('queued', 'running')")
                     .query(Integer.class)
@@ -198,6 +206,13 @@ abstract class ReportsItSupport extends IntegrationTest {
                 byte[].class);
         assertThat(file.getStatusCode().value()).isEqualTo(200);
         return file.getBody();
+    }
+
+    /** A finished run is ready; when it is not, the message says how it ended (status and failure code). */
+    static void assertReady(JsonNode run, String what) {
+        assertThat(run.get("status").asString())
+                .as("%s: ended %s with error %s", what, run.get("status"), run.get("error"))
+                .isEqualTo("ready");
     }
 
     /** Queues one run, drains the queue and returns the finished run. */

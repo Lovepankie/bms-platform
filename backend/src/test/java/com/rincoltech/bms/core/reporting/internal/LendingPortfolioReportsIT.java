@@ -762,11 +762,8 @@ class LendingPortfolioReportsIT extends LendingBookSupport {
                     post(book.t(), user, PAR_PERMS, PORT, Map.of("group_by", "product"), "pdf");
             assertThat(posted.getBody().get("as_of").asString()).as(e.getKey()).isEqualTo(e.getValue());
             drain();
-            assertThat(run(book.t(), user, PAR_PERMS, posted.getBody().get("id").asString())
-                            .get("status")
-                            .asString())
-                    .as("%s is read live", e.getKey())
-                    .isEqualTo("ready");
+            assertReady(
+                    run(book.t(), user, PAR_PERMS, posted.getBody().get("id").asString()), e.getKey());
         }
     }
 

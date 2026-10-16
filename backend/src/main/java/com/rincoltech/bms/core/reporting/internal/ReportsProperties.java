@@ -73,6 +73,8 @@ class ReportsProperties {
         this.retentionDays = Math.max(1, retentionDays);
         this.cancelPoll = cancelPoll;
         this.heartbeat = heartbeat;
-        this.heartbeatStale = heartbeatStale;
+        // A run that beats every `heartbeat` must not look dead after one or two late beats.
+        this.heartbeatStale =
+                heartbeatStale.compareTo(heartbeat.multipliedBy(3)) < 0 ? heartbeat.multipliedBy(3) : heartbeatStale;
     }
 }

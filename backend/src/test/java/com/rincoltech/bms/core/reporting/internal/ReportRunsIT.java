@@ -35,7 +35,7 @@ import tools.jackson.databind.ObjectMapper;
 @TestPropertySource(
         properties = {
             "bms.reports.max-concurrent-runs=1",
-            "bms.reports.timeout=PT2S",
+            "bms.reports.timeout=PT10S",
             "bms.reports.xlsx-row-cap=500",
             "bms.reports.pdf-row-cap=200",
             "bms.reports.max-file-bytes=1048576",
@@ -222,13 +222,13 @@ class ReportRunsIT extends ReportsItSupport {
         // One run at a time (the first queued run goes first), so drain the older one, then start the gated one.
         drain1();
         runner.tick();
-        assertThat(TestReports.gateEntered.await(30, java.util.concurrent.TimeUnit.SECONDS))
+        assertThat(TestReports.gateEntered.await(IDLE.toSeconds(), java.util.concurrent.TimeUnit.SECONDS))
                 .isTrue();
         JsonNode running = run(t, user, PORTFOLIO, gatedId);
         assertThat(running.get("status").asString()).isEqualTo("running");
         assertThat(running.get("started_at").asString()).isNotEmpty();
         TestReports.gate.countDown();
-        assertThat(runner.awaitIdle(Duration.ofSeconds(60))).isTrue();
+        assertThat(runner.awaitIdle(IDLE)).isTrue();
 
         JsonNode ready = run(t, user, PORTFOLIO, queued.get("id").asString());
         assertThat(ready.get("status").asString()).isEqualTo("ready");
@@ -266,7 +266,7 @@ class ReportRunsIT extends ReportsItSupport {
     /** Runs the queue until the first queued run has finished (the gated run, queued last, is not claimed). */
     private void drain1() throws InterruptedException {
         runner.tick();
-        assertThat(runner.awaitIdle(Duration.ofSeconds(60))).isTrue();
+        assertThat(runner.awaitIdle(IDLE)).isTrue();
     }
 
     @Test
@@ -603,7 +603,7 @@ class ReportRunsIT extends ReportsItSupport {
                 call(HttpMethod.POST, "/api/v1/report-runs/" + id + "/cancel", t, user, PORTFOLIO);
         assertThat(asked.getStatusCode().value()).isEqualTo(202);
         assertThat(asked.getBody().get("cancel_requested").asBoolean()).isTrue();
-        assertThat(runner.awaitIdle(Duration.ofSeconds(30))).isTrue();
+        assertThat(runner.awaitIdle(IDLE)).isTrue();
 
         JsonNode end = run(t, user, PORTFOLIO, id);
         assertThat(end.get("status").asString()).isEqualTo("cancelled");
@@ -627,11 +627,11 @@ class ReportRunsIT extends ReportsItSupport {
                 .get("id")
                 .asString();
         runner.tick();
-        assertThat(TestReports.gateEntered.await(30, java.util.concurrent.TimeUnit.SECONDS))
+        assertThat(TestReports.gateEntered.await(IDLE.toSeconds(), java.util.concurrent.TimeUnit.SECONDS))
                 .isTrue();
         call(HttpMethod.POST, "/api/v1/report-runs/" + id + "/cancel", t, user, PORTFOLIO);
         TestReports.gate.countDown();
-        assertThat(runner.awaitIdle(Duration.ofSeconds(30))).isTrue();
+        assertThat(runner.awaitIdle(IDLE)).isTrue();
 
         assertThat(run(t, user, PORTFOLIO, id).get("status").asString()).isEqualTo("cancelled");
         assertThat(documentsOf(id))

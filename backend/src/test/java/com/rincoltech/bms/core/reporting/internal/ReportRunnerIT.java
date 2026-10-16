@@ -36,7 +36,7 @@ import tools.jackson.databind.ObjectMapper;
 @TestPropertySource(
         properties = {
             "bms.reports.max-concurrent-runs=1",
-            "bms.reports.timeout=PT2S",
+            "bms.reports.timeout=PT10S",
             "bms.reports.xlsx-row-cap=500",
             "bms.reports.pdf-row-cap=200",
             "bms.reports.max-file-bytes=1048576",
@@ -59,10 +59,11 @@ class ReportRunnerIT extends ReportsItSupport {
         assertThat(seen.get("isolation")).isEqualTo("repeatable read");
         assertThat(seen.get("read_only")).isEqualTo("on");
         // The connection starts with 60 s (a request's limit); the run lifts both to its own remaining time plus a
-        // margin (1 s for a statement, 30 s idle), so the application's 2 second deadline of the test profile fires
-        // before the server's limits do.
-        assertThat(millis(seen.get("statement_timeout"))).isBetween(1_500L, 3_100L);
-        assertThat(millis(seen.get("idle"))).isBetween(30_500L, 32_100L);
+        // margin (1 s for a statement, 30 s idle), so the application's deadline of the test profile fires before the
+        // server's limits do. The window is relative to that deadline, which is generous because the runner is shared.
+        long deadline = limits.timeout.toMillis();
+        assertThat(millis(seen.get("statement_timeout"))).isBetween(deadline - 500L + 1_000L, deadline + 1_100L);
+        assertThat(millis(seen.get("idle"))).isBetween(deadline - 1_500L + 30_000L, deadline + 30_100L);
         // Recorded on the run: when the snapshot was taken.
         assertThat(ready.get("snapshot_at").asString()).isNotEmpty();
     }
@@ -120,7 +121,7 @@ class ReportRunnerIT extends ReportsItSupport {
         assertThat(timedOut.get("error").asString()).isEqualTo("timeout");
         assertThat(Duration.ofNanos(System.nanoTime() - start))
                 .as("it stopped soon after the limit")
-                .isLessThan(Duration.ofSeconds(20));
+                .isLessThan(limits.timeout.plusSeconds(20));
         assertThat(spoolLeft(t)).isEmpty();
         // The tenant is free again: the next run is not held by the failed one.
         assertThat(runToTheEnd(t, UUID.randomUUID(), "test.rows", Map.of("n", 1), "json")
@@ -151,7 +152,8 @@ class ReportRunnerIT extends ReportsItSupport {
                 .asString();
 
         assertThat(runner.tick()).as("one place, one run started").isEqualTo(1);
-        assertThat(TestReports.gateEntered.await(30, TimeUnit.SECONDS)).isTrue();
+        assertThat(TestReports.gateEntered.await(IDLE.toSeconds(), TimeUnit.SECONDS))
+                .isTrue();
         assertThat(runner.tick()).as("the platform is full").isZero();
         assertThat(count("running", a, b)).isEqualTo(1);
         assertThat(count("queued", a, b)).isEqualTo(1);
@@ -159,9 +161,9 @@ class ReportRunnerIT extends ReportsItSupport {
         assertThat(run(b, ub, PORTFOLIO, idB).get("status").asString()).isEqualTo("queued");
 
         TestReports.gate.countDown();
-        assertThat(runner.awaitIdle(Duration.ofSeconds(60))).isTrue();
+        assertThat(runner.awaitIdle(IDLE)).isTrue();
         assertThat(runner.tick()).as("a place is free again").isEqualTo(1);
-        assertThat(runner.awaitIdle(Duration.ofSeconds(60))).isTrue();
+        assertThat(runner.awaitIdle(IDLE)).isTrue();
         assertThat(run(a, ua, PORTFOLIO, idA).get("status").asString()).isEqualTo("ready");
         assertThat(run(b, ub, PORTFOLIO, idB).get("status").asString()).isEqualTo("ready");
     }
@@ -185,7 +187,7 @@ class ReportRunnerIT extends ReportsItSupport {
         clock.set(TestReports.START);
 
         runner.tick();
-        assertThat(runner.awaitIdle(Duration.ofSeconds(60))).isTrue();
+        assertThat(runner.awaitIdle(IDLE)).isTrue();
         assertThat(run(b, ub, PORTFOLIO, earlier).get("status").asString()).isEqualTo("ready");
         assertThat(run(a, ua, PORTFOLIO, later).get("status").asString()).isEqualTo("queued");
     }
@@ -230,7 +232,7 @@ class ReportRunnerIT extends ReportsItSupport {
         UUID next = insertRun(t, user, "queued");
 
         runner.tick();
-        assertThat(runner.awaitIdle(Duration.ofSeconds(60))).isTrue();
+        assertThat(runner.awaitIdle(IDLE)).isTrue();
         assertThat(TestDatabase.owner()
                         .sql("SELECT status || ':' || coalesce(error, '') FROM report_runs WHERE id = ?")
                         .param(stale)
@@ -462,35 +464,68 @@ class ReportRunnerIT extends ReportsItSupport {
     }
 
     @Test
-    void aNewProcessFailsRunsThatStoppedBeatingAfterTwoBeatsAndLaterTicksWaitAMinute() throws Exception {
+    void aNewProcessNeverFailsALateButLiveRunOfAnotherInstanceAndFailsOneQuietForAMinute() throws Exception {
         TestDatabase.Fixture t = tenant(true);
         UUID user = UUID.randomUUID();
-        // The old process stopped beating 30 seconds ago, under another host name (a recreated container has a new
-        // one).
-        UUID dead = insertRun(t, user, "running");
-        setHeartbeat(dead, TestReports.START.minusSeconds(30));
+        // Another instance (another host name: a recreated container has a new one) beat 30 seconds ago, three beats
+        // late on a loaded host: it is slow, not dead.
+        UUID late = insertRun(t, user, "running");
+        setHeartbeat(late, TestReports.START.minusSeconds(30));
         TestDatabase.Fixture u = tenant(true);
         UUID alive = insertRun(u, user, "running");
         setHeartbeat(alive, TestReports.START);
 
         ReportRunner replacement = anotherProcess();
         try {
+            // The first tick of a process that has just started judges exactly as every later tick does.
             replacement.tick();
-            assertThat(statusOf(dead))
-                    .as("30 s without a beat is dead to a process that has just started (two beats)")
-                    .isEqualTo("failed:interrupted");
+            assertThat(statusOf(late))
+                    .as("30 s without a beat is not a minute: the run of a live peer is left alone")
+                    .isEqualTo("running:");
             assertThat(statusOf(alive)).as("a run that is beating is untouched").isEqualTo("running:");
-            // Only that first tick is quick: afterwards a run may be quiet for the stale limit (a minute) before it is
-            // failed.
-            UUID quiet = insertRun(t, user, "running");
-            setHeartbeat(quiet, TestReports.START.minusSeconds(30));
             replacement.tick();
-            assertThat(statusOf(quiet)).as("30 s is not a minute").isEqualTo("running:");
-            setHeartbeat(quiet, TestReports.START.minus(Duration.ofMinutes(2)));
+            assertThat(statusOf(late)).isEqualTo("running:");
+            // A minute without a beat, and it is gone.
+            setHeartbeat(late, TestReports.START.minus(Duration.ofMinutes(2)));
             replacement.tick();
-            assertThat(statusOf(quiet)).isEqualTo("failed:interrupted");
+            assertThat(statusOf(late)).isEqualTo("failed:interrupted");
+            assertThat(statusOf(alive)).isEqualTo("running:");
         } finally {
             replacement.stop();
+        }
+    }
+
+    @Test
+    void everyProcessHasItsOwnInstanceIdAndAStopClosesOnlyTheRunsOfTheProcessThatStops() throws Exception {
+        TestDatabase.Fixture t = tenant(true);
+        UUID user = UUID.randomUUID();
+        TestReports.gate = new CountDownLatch(1);
+        String id = post(t, user, PORTFOLIO, "test.gate", Map.of(), "json")
+                .getBody()
+                .get("id")
+                .asString();
+        ReportRunner holder = anotherProcess();
+        ReportRunner bystander = anotherProcess();
+        try {
+            assertThat(java.util.Set.of(runner.owner(), holder.owner(), bystander.owner()))
+                    .as("one instance id per runner, so a sweep or a stop can tell whose run it is")
+                    .hasSize(3);
+            assertThat(holder.tick()).isEqualTo(1);
+            assertThat(TestReports.gateEntered.await(IDLE.toSeconds(), TimeUnit.SECONDS))
+                    .isTrue();
+            // Another process, in the same JVM and database, starts, ticks and stops while the run is open.
+            bystander.tick();
+            bystander.stop();
+            assertThat(statusOf(UUID.fromString(id)))
+                    .as("the run of a live process is not touched by another's stop")
+                    .isEqualTo("running:");
+            TestReports.gate.countDown();
+            assertThat(holder.awaitIdle(IDLE)).isTrue();
+            assertThat(statusOf(UUID.fromString(id))).isEqualTo("ready:");
+        } finally {
+            TestReports.gate.countDown();
+            holder.stop();
+            bystander.stop();
         }
     }
 
@@ -504,7 +539,8 @@ class ReportRunnerIT extends ReportsItSupport {
                 .get("id")
                 .asString();
         runner.tick();
-        assertThat(TestReports.gateEntered.await(30, TimeUnit.SECONDS)).isTrue();
+        assertThat(TestReports.gateEntered.await(IDLE.toSeconds(), TimeUnit.SECONDS))
+                .isTrue();
         UUID run = UUID.fromString(id);
         assertThat(TestDatabase.owner()
                         .sql("SELECT owner FROM report_runs WHERE id = ?")
@@ -533,7 +569,7 @@ class ReportRunnerIT extends ReportsItSupport {
                 .as("the heartbeat follows the clock while the run works")
                 .isEqualTo(later);
         TestReports.gate.countDown();
-        assertThat(runner.awaitIdle(Duration.ofSeconds(60))).isTrue();
+        assertThat(runner.awaitIdle(IDLE)).isTrue();
     }
 
     @Test
@@ -547,7 +583,8 @@ class ReportRunnerIT extends ReportsItSupport {
                 .asString();
         ReportRunner process = anotherProcess();
         process.tick();
-        assertThat(TestReports.gateEntered.await(30, TimeUnit.SECONDS)).isTrue();
+        assertThat(TestReports.gateEntered.await(IDLE.toSeconds(), TimeUnit.SECONDS))
+                .isTrue();
         long start = System.nanoTime();
         process.stop();
         assertThat(Duration.ofNanos(System.nanoTime() - start))
@@ -586,14 +623,15 @@ class ReportRunnerIT extends ReportsItSupport {
                 .query(Long.class)
                 .single();
         runner.tick();
-        assertThat(TestReports.snapshotMid.await(30, TimeUnit.SECONDS)).isTrue();
+        assertThat(TestReports.snapshotMid.await(IDLE.toSeconds(), TimeUnit.SECONDS))
+                .isTrue();
         // A write by another session commits between the run's two reads.
         TestDatabase.owner()
                 .sql("INSERT INTO branches (id, tenant_id, code, name) VALUES (?, ?, 'BR9', 'Test Branch Nine')")
                 .params(UUID.randomUUID(), t.tenantId())
                 .update();
         TestReports.snapshotGo.countDown();
-        assertThat(runner.awaitIdle(Duration.ofSeconds(60))).isTrue();
+        assertThat(runner.awaitIdle(IDLE)).isTrue();
 
         JsonNode run = run(t, user, PORTFOLIO, posted.getBody().get("id").asString());
         assertThat(run.get("status").asString()).as("%s", run).isEqualTo("ready");

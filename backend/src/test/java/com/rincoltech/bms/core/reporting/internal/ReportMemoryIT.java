@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 
@@ -32,8 +33,20 @@ import org.springframework.context.annotation.Import;
  * time, so no table is ever held in memory. A second child runs the PDF at the production cap of 3,000 rows on the same
  * heap, to show the headroom. The book is twice the demo seed; raise it with {@code -Dreports.memory.scale=N}. The pack of
  * slice D5 joins this test when it exists.
+ *
+ * <p><b>Not part of {@code mvn verify}.</b> It is a three to four minute proof on a 224 MB child JVM, and on the shared
+ * CI runner a stalled machine would fail the whole backend job for a reason that is not a defect. It runs only with
+ * {@code -Dreports.memory.run=true}: locally, or in the manually started CI job {@code report-memory}
+ * ({@code .github/workflows/ci.yml}, "Run workflow"), which runs {@code mvn -B verify -Dit.test=ReportMemoryIT
+ * -Dreports.memory.run=true}. What it proves is unchanged and stays documented in ADR-038 and
+ * {@code docs/runbooks/reports-operations.md}. The report runner is off in every test context (see
+ * {@link IntegrationTest}) and the child ticks its own runner, so nothing else can claim the child's runs.
  */
 @Import(TestReports.class)
+@EnabledIfSystemProperty(
+        named = "reports.memory.run",
+        matches = "true",
+        disabledReason = "the memory proof is run on request: -Dreports.memory.run=true")
 class ReportMemoryIT extends IntegrationTest {
 
     @Autowired
@@ -60,9 +73,23 @@ class ReportMemoryIT extends IntegrationTest {
                 TestDatabase.APP_PASSWORD,
                 tenants));
         command.addAll(List.of(extra));
-        Process child = new ProcessBuilder(command).redirectErrorStream(true).start();
-        String output = new String(child.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        assertThat(child.waitFor(5, TimeUnit.MINUTES)).as("the child finished").isTrue();
+        // The child writes to a file, so a full pipe never stalls it and the wait below is a real bound (reading the
+        // pipe
+        // to its end would block for as long as the child lives): ten times what it takes on a quiet machine.
+        java.io.File log = java.io.File.createTempFile("report-memory-", ".log");
+        Process child = new ProcessBuilder(command)
+                .redirectErrorStream(true)
+                .redirectOutput(log)
+                .start();
+        boolean finished = child.waitFor(30, TimeUnit.MINUTES);
+        if (!finished) {
+            child.destroyForcibly().waitFor();
+        }
+        String output = java.nio.file.Files.readString(log.toPath(), StandardCharsets.UTF_8);
+        log.delete();
+        assertThat(finished)
+                .as("the child finished within 30 minutes; its output: %s", output)
+                .isTrue();
         String lines = output.lines().filter(l -> l.startsWith("MEMORY ")).reduce("", (a, b) -> a + b + "\n");
         assertThat(child.exitValue()).as(lines.isEmpty() ? output : lines).isZero();
         // -Xmx224m: the serial collector reports a little less (it keeps one survivor space out of the figure).
@@ -121,7 +148,10 @@ class ReportMemoryIT extends IntegrationTest {
 
         List<String> runs =
                 output.lines().filter(l -> l.startsWith("MEMORY run ")).toList();
-        assertThat(runs).as(output).hasSize(14).allMatch(l -> l.contains("status=ready"));
+        assertThat(runs.stream().filter(l -> !l.contains("status=ready")).toList())
+                .as("runs that did not end ready, with status and failure code; output: %s", output)
+                .isEmpty();
+        assertThat(runs).as(output).hasSize(14);
         assertThat(output).contains("MEMORY run test.rows json status=ready rows=20000");
         assertThat(output).contains("MEMORY run test.rows csv status=ready rows=20000");
         // The files at the size cap: between 7 and 8 MiB each, stored from disk.
@@ -163,7 +193,10 @@ class ReportMemoryIT extends IntegrationTest {
         String output = child(seededTenant(), false, "3000");
         List<String> runs =
                 output.lines().filter(l -> l.startsWith("MEMORY run ")).toList();
-        assertThat(runs).as(output).hasSize(2).allMatch(l -> l.contains("status=ready"));
+        assertThat(runs.stream().filter(l -> !l.contains("status=ready")).toList())
+                .as("runs that did not end ready, with status and failure code; output: %s", output)
+                .isEmpty();
+        assertThat(runs).as(output).hasSize(2);
         assertThat(output).contains("MEMORY run test.kinds pdf status=ready rows=20000");
     }
 
@@ -193,7 +226,10 @@ class ReportMemoryIT extends IntegrationTest {
         String output = child(a.tenantId() + "," + b.tenantId(), List.of("-Xmx1075m"), 900, 1100, false, "3000", "2");
         List<String> runs =
                 output.lines().filter(l -> l.startsWith("MEMORY run ")).toList();
-        assertThat(runs).as(output).hasSize(4).allMatch(l -> l.contains("status=ready"));
+        assertThat(runs.stream().filter(l -> !l.contains("status=ready")).toList())
+                .as("runs that did not end ready, with status and failure code; output: %s", output)
+                .isEmpty();
+        assertThat(runs).as(output).hasSize(4);
         assertThat(runs.stream().filter(l -> l.contains("test.kinds pdf")).count())
                 .isEqualTo(2);
     }

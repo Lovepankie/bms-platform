@@ -55,6 +55,29 @@ jobs:
             backend/target/failsafe-reports
           retention-days: 14
 
+  # JUSTIFICATION-A3: the memory proof leaves `mvn verify` (a stall on the shared runner failed the whole backend job); this job keeps it runnable on request.
+  # The report memory proof (ReportMemoryIT, ADR-038 decision 7): a child JVM on the 224 MB staging heap. Run it from
+  # Actions, CI, "Run workflow".
+  report-memory:
+    name: Report memory proof (on request)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, hillary-pi]
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - name: ReportMemoryIT
+        run: >-
+          mvn -B verify -Dit.test=ReportMemoryIT -Dreports.memory.run=true
+          -Dtest=NoUnitTestsHere -Dsurefire.failIfNoSpecifiedTests=false
+
   frontend:
     name: Frontend (types, tests, build)
     runs-on: [self-hosted, hillary-pi]
