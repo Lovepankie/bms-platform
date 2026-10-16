@@ -565,6 +565,8 @@ everyone what a member holds, so the default savings receipt omits the balance a
 
 ### 4.11 Events (FR-NTF-02)
 
+Built in slice #221; section 4.17 records how, and where it differs from this text.
+
 Loan disbursed, repayment received (receipt), loan closed; savings deposit and withdrawal (already
 queued, ADR-032); investment funded, maturing, paid out. Idempotency key per transaction id
 (`loan.repayment_received:<txn id>`). A rolled-back repayment sends nothing, because the enqueue
@@ -671,6 +673,70 @@ findings 4, 6 and 8 hold). Where the build differs from, or sharpens, the text a
 - **Not in this slice.** Per-event wording for the loan and investment events and the reminders (they join when their slices queue
   them), delivery reports and the per-message history screen (#215), the operator's screen for sender ids (the routes and the runbook
   exist), inbound STOP.
+
+### 4.17 As built in slice #221 (loan, savings and investment events)
+
+The events of 4.11 are built (migration `V53`, two columns, one function and three function bodies replaced; no permission, no route, no screen; ADR-036 third amendment carries the
+decisions; review answers 11.1 findings 4, 6, 7, 8 and 21 hold and are re-tested). Where the build differs from, or sharpens, the
+text above:
+
+- **One port, one guard.** `core.notifications.SmsEvents` is the only way a module queues a member event, savings receipts included.
+  It reads the number with the strict rule of 4.9, builds the key, drops the balance unless the tenant asked, adds the business name
+  and writes the outbox row. **Everything it does for a call, the lookups its suppliers make included (member phone, settings,
+  amount formatting, the check that SMS is on), runs inside a savepoint of the caller's transaction.** Any failure (a Java error, a
+  database error that aborted the PostgreSQL transaction, an exception that passed through a transactional proxy and marked the
+  transaction rollback-only) rolls back to the savepoint, is logged by event name and error class only, and the money event
+  commits; a rolled-back money event takes the row with it. `queueWhenActive` first asks whether SMS is on for the tenant (both
+  switches, no cap of 0), so a tenant without SMS costs a money event two small reads and no member lookup.
+- **The key.** `sms:<template>:<tenant>:<transaction id>:<member id>`: one row per event and member, ever. The transaction id is the
+  disbursement's, the repayment's, the funding's, the payout's or the savings movement's. `loan.closed` uses the id of the repayment
+  that settled the loan, so a loan reopened by a reversal and settled again is thanked again, once. `investment.maturing` uses the
+  investment and its maturity date (a rollover has a new date), and the nightly job also stamps the reminder on the investment.
+- **Who is texted.** Only staff events: the `LoanServicing`, `InvestmentServicing` and `SavingsServicing` ports of the fabricated
+  seed and the import send nothing, and the seed replays its nightly runs with `runDaily(date, false)`, so even the maturity
+  reminder of the replayed days is not queued (a test seeds a tenant with SMS on and asserts its outbox is empty). The register
+  import uses the public routes as staff, so two more rules apply to every event: a request may say `notify_member: false`
+  (loan disbursement and repayment, savings deposit, withdrawal and closure, investment funding, payouts and early withdrawal; kept
+  in the approval payload where a checker decides; honoured on the server; **accepted only from a holder of `core.settings.manage`,
+  the business administrator: anyone else gets 403 `notify_member_forbidden` before anything is recorded**, so a cashier cannot take
+  money out of an account and leave the member uninformed), and an event whose value date is more than
+  `BMS_SMS_EVENT_MAX_AGE_DAYS` (default 3) before the tenant's today is never texted. The runbook says to import before switching
+  SMS on. Every audit entry of a money event records `notify_member` and `sms_within_cutoff`. The maturity reminder has no value
+  date, so an investment remembers its investor may not be told (`lending_investments.notify_member`, inherited by a rollover) and
+  the nightly job skips it; the migration backfills the flag for existing investments (false for any not funded by a staff request
+  and for any funded more than 3 days ago), so switching SMS on reminds no investor of a register loaded before it. The Pesapal repayment of #216 will carry its own receipt-notice flag.
+- **Reversals.** A reversal queues no correction (the issue asks for none). It does withdraw the message of the transaction it
+  reverses while no sender holds it (`V53`, `notification_outbox_cancel_unclaimed`: every pending row whatever its attempt count,
+  so a receipt waiting for its retry goes too, except a row under a live lease; the claim records the lease in
+  `notification_outbox.leased_until`; marked failed `cancelled_reversed`, parameters cleared; hidden from the operator's "send
+  again" list), because a receipt for an entry made on the wrong account would tell the wrong person. A row a sender holds may be at
+  the provider and stays; the lease is on the database's clock, the channel looks once more immediately before the provider
+  call and does not send a row cancelled meanwhile (the residual is in ADR-036). A reversal that
+  settles a loan queues no thanks either.
+- **What each message holds.** The business name, the loan or account number and amounts and dates (`dd/MM/yyyy`). The disbursement
+  names **the amount paid out** (the principal less the fees deducted at disbursement) and the first instalment and its due date;
+  the repayment receipt the amount, the value date and the receipt number, and the balance (principal, interest, fees and penalties
+  still owed after it) only for a tenant with `include_balance` on, and then only in the default wording; a recovery on a written-off
+  loan is a receipt without a balance; the thanks only the loan number; the maturing notice the account, the principal and the date;
+  the payout the amount paid, the date and the voucher. No name of the member, no loan purpose, nobody else's number. Every default
+  fits one GSM-7 segment with realistic values; with the balance two segments are allowed, as for savings; every default passes the
+  placeholder language's own validation with a worst case of at most 4 segments, which a test checks.
+- **The maturing notice is a reminder.** Category `reminder`: held for the tenant's window (default 08:00 to 20:00 Kampala) and
+  expiring at the end of that window day, so its expiry is always after the deferral (queued at 20:59 or 21:01 UTC alike it is held
+  to 05:00 UTC the next morning and expires at 17:00 UTC); sent once per investment and maturity date; queued only when the job runs
+  for the current day. A receipt is transactional and is not held by the window; it expires an hour after it is queued.
+- **Wording.** Each event has its own placeholder whitelist and required placeholders in `SmsTemplateEvents`, so a tenant can reword
+  all eight events (`GET /notification-templates` lists them); no whitelist offers a balance.
+- **Plain text on one line, whichever wording.** The channel now cleans every value before it renders, the default or the tenant's
+  own: a line feed or tab becomes a space and control, invisible and direction-changing characters go (the business name is the only
+  free text). Markup characters and quotes are left as they are: an SMS is plain text. Another script or an emoji moves the whole
+  message to UCS-2 and the segments are counted and logged exactly.
+- **Costs stay exact for later billing.** Every message a tenant causes has one `sms_deliveries` row with its segments, the
+  provider's segments, the cost as integer minor units and the raw string; nothing here prices a message or bills anyone.
+- **Tests that do not read the wall clock.** The loan and investment event tests run on a clock fixed at 20:59 UTC on 15 October
+  2026 (23:59 in Kampala) and move it to 21:01 UTC where the Kampala date must change under them.
+- **Not in this slice.** Reminders and arrears notices (#227), the payment link (#231), a correction message for a reversal (decided
+  against), delivery reports (#215).
 
 ## 5. AI monitoring (ADR-037)
 

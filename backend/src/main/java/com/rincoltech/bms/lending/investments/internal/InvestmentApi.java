@@ -192,12 +192,24 @@ final class InvestmentApi {
             LocalDate valueDate,
 
             @NotNull @Pattern(regexp = METHODS) String paymentMethodKey,
-            @Size(max = 100) String externalReference) {}
+            @Size(max = 100) String externalReference,
+
+            @Schema(
+                    description =
+                            "False records the funding without a text message to the investor; omitted or true"
+                                    + " sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.")
+            Boolean notifyMember) {}
 
     @Schema(name = "InvestmentPaymentRequest")
     record PaymentRequest(
             @NotNull @Pattern(regexp = METHODS) String paymentMethodKey,
-            @Size(max = 100) String externalReference) {}
+            @Size(max = 100) String externalReference,
+
+            @Schema(
+                    description =
+                            "False records the payout without a text message to the investor; omitted or true"
+                                    + " sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.")
+            Boolean notifyMember) {}
 
     @Schema(name = "InvestmentRolloverRequest")
     record RolloverRequest(
@@ -208,7 +220,13 @@ final class InvestmentApi {
     record EarlyWithdrawalRequest(
             @NotNull @Pattern(regexp = METHODS) String paymentMethodKey,
             @Size(max = 100) String externalReference,
-            @NotBlank @Size(max = 500) String reason) {}
+            @NotBlank @Size(max = 500) String reason,
+
+            @Schema(
+                    description =
+                            "False records the withdrawal without a text message to the investor; omitted or true"
+                                    + " sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.")
+            Boolean notifyMember) {}
 
     @Schema(name = "InvestmentReasonRequest")
     record ReasonRequest(@NotBlank @Size(max = 500) String reason) {}

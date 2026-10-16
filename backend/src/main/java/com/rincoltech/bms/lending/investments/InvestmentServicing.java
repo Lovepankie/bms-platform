@@ -28,6 +28,12 @@ public interface InvestmentServicing {
      */
     DailyRun runDaily(LocalDate businessDate);
 
+    /**
+     * As {@link #runDaily(LocalDate)}; {@code notifyMembers} false records the maturity reminders without queueing a text
+     * to the investor. The fabricated seed replays days with it, so seeding never texts anybody.
+     */
+    DailyRun runDaily(LocalDate businessDate, boolean notifyMembers);
+
     /** Pays the return that is due and unpaid (FR-INV-04); returns the transaction id. */
     UUID payDueReturn(UUID investmentId, LocalDate valueDate, String paymentMethodKey, UUID recordedBy);
 

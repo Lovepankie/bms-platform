@@ -5512,6 +5512,8 @@ export interface components {
              */
             disbursement_date: string;
             external_reference?: string;
+            /** @description False records the disbursement without a text message to the borrower; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it. */
+            notify_member?: boolean;
             payment_method_key: string;
         };
         DownloadUrl: {
@@ -5986,11 +5988,15 @@ export interface components {
         };
         InvestmentEarlyWithdrawalRequest: {
             external_reference?: string;
+            /** @description False records the withdrawal without a text message to the investor; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it. */
+            notify_member?: boolean;
             payment_method_key: string;
             reason: string;
         };
         InvestmentFundingRequest: {
             external_reference?: string;
+            /** @description False records the funding without a text message to the investor; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it. */
+            notify_member?: boolean;
             payment_method_key: string;
             /**
              * Format: date
@@ -6065,6 +6071,8 @@ export interface components {
         };
         InvestmentPaymentRequest: {
             external_reference?: string;
+            /** @description False records the payout without a text message to the investor; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it. */
+            notify_member?: boolean;
             payment_method_key: string;
         };
         InvestmentProduct: {
@@ -7157,6 +7165,8 @@ export interface components {
             /** Format: int64 */
             amount_minor: number;
             external_reference?: string;
+            /** @description False records the repayment without a receipt text message to the borrower; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it. */
+            notify_member?: boolean;
             payment_method_key: string;
             /**
              * Format: date
@@ -11864,6 +11874,8 @@ export interface components {
         };
         SavingsCloseRequest: {
             external_reference?: string;
+            /** @description False closes the account without a text message to the member; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it. */
+            notify_member?: boolean;
             payment_method_key: string;
             reason?: string;
         };
@@ -11875,6 +11887,8 @@ export interface components {
             /** Format: int64 */
             amount_minor: number;
             external_reference?: string;
+            /** @description False records the deposit without a text message to the member; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it. */
+            notify_member?: boolean;
             payment_method_key: string;
             /**
              * Format: date
@@ -12088,6 +12102,8 @@ export interface components {
             /** Format: int64 */
             amount_minor: number;
             external_reference?: string;
+            /** @description False records the withdrawal without a text message to the member; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it. */
+            notify_member?: boolean;
             payment_method_key: string;
         };
         SchedulePreview: {

@@ -19,6 +19,7 @@ class EarlyWithdrawalAction implements ApprovalAction {
     static final String METHOD = "payment_method_key";
     static final String REFERENCE = "external_reference";
     static final String REASON = "reason";
+    static final String NOTIFY = "notify_member";
 
     private final InvestmentRepository repo;
     private final InvestmentServicer servicer;
@@ -67,6 +68,7 @@ class EarlyWithdrawalAction implements ApprovalAction {
                 (String) e.payload().get(REASON),
                 e.approvalId(),
                 e.makerId(),
-                e.checkerId());
+                e.checkerId(),
+                !Boolean.FALSE.equals(e.payload().get(NOTIFY)));
     }
 }

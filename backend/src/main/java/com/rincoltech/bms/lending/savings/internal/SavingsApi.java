@@ -178,7 +178,13 @@ final class SavingsApi {
             LocalDate valueDate,
 
             @NotNull @Pattern(regexp = METHODS) String paymentMethodKey,
-            @Size(max = 100) String externalReference) {}
+            @Size(max = 100) String externalReference,
+
+            @Schema(
+                    description =
+                            "False records the deposit without a text message to the member; omitted or true sends"
+                                    + " it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.")
+            Boolean notifyMember) {}
 
     @Schema(
             name = "SavingsWithdrawalRequest",
@@ -186,13 +192,25 @@ final class SavingsApi {
     record WithdrawalRequest(
             @NotNull @Positive @Max(MAX_MONEY_MINOR) Long amountMinor,
             @NotNull @Pattern(regexp = METHODS) String paymentMethodKey,
-            @Size(max = 100) String externalReference) {}
+            @Size(max = 100) String externalReference,
+
+            @Schema(
+                    description =
+                            "False records the withdrawal without a text message to the member; omitted or true sends"
+                                    + " it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.")
+            Boolean notifyMember) {}
 
     @Schema(name = "SavingsCloseRequest")
     record CloseRequest(
             @NotNull @Pattern(regexp = METHODS) String paymentMethodKey,
             @Size(max = 100) String externalReference,
-            @Size(max = 500) String reason) {}
+            @Size(max = 500) String reason,
+
+            @Schema(
+                    description =
+                            "False closes the account without a text message to the member; omitted or true sends it"
+                                    + " where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.")
+            Boolean notifyMember) {}
 
     @Schema(name = "SavingsReasonRequest")
     record ReasonRequest(@NotBlank @Size(max = 500) String reason) {}

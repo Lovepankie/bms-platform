@@ -22,6 +22,7 @@
             "core.ledger",
             "core.operations",
             "core.approvals",
+            "core.notifications",
             "lending.members"
         })
 package com.rincoltech.bms.lending.investments;

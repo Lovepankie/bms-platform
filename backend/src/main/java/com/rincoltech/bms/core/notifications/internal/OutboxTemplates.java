@@ -125,25 +125,68 @@ class OutboxTemplates {
      * variant a tenant that switched {@code sms_include_balance} on gets, chosen when the parameters
      * carry a balance; the channel drops the balance parameter again when the setting is off.
      */
-    private static final Map<String, Template> SMS = Map.of(
-            "savings.deposit",
-            new Template(
-                    null,
-                    "{tenant_name}: Deposit of {currency} {amount} on account {account_no}. Receipt {receipt_no}."),
-            "savings.deposit.with_balance",
-            new Template(
-                    null,
-                    "{tenant_name}: Deposit of {currency} {amount} on account {account_no}. Receipt {receipt_no}."
-                            + " Balance {currency} {balance}."),
-            "savings.withdrawal",
-            new Template(
-                    null,
-                    "{tenant_name}: Withdrawal of {currency} {amount} from account {account_no}. Voucher {receipt_no}."),
-            "savings.withdrawal.with_balance",
-            new Template(
-                    null,
-                    "{tenant_name}: Withdrawal of {currency} {amount} from account {account_no}. Voucher {receipt_no}."
-                            + " Balance {currency} {balance}."));
+    private static final Map<String, Template> SMS = Map.ofEntries(
+            Map.entry(
+                    "savings.deposit",
+                    new Template(
+                            null,
+                            "{tenant_name}: Deposit of {currency} {amount} on account {account_no}. Receipt {receipt_no}.")),
+            Map.entry(
+                    "savings.deposit.with_balance",
+                    new Template(
+                            null,
+                            "{tenant_name}: Deposit of {currency} {amount} on account {account_no}. Receipt {receipt_no}."
+                                    + " Balance {currency} {balance}.")),
+            Map.entry(
+                    "savings.withdrawal",
+                    new Template(
+                            null,
+                            "{tenant_name}: Withdrawal of {currency} {amount} from account {account_no}. Voucher {receipt_no}.")),
+            Map.entry(
+                    "savings.withdrawal.with_balance",
+                    new Template(
+                            null,
+                            "{tenant_name}: Withdrawal of {currency} {amount} from account {account_no}. Voucher {receipt_no}."
+                                    + " Balance {currency} {balance}.")),
+            // The loan and investment events of FR-NTF-02 (issue #221). Same rules as the savings receipts: no name
+            // of the member, only the business, the loan or account number and the amounts; the repayment receipt
+            // omits the balance unless the tenant asked for it. Dates are dd/MM/yyyy.
+            Map.entry(
+                    "loan.disbursed",
+                    new Template(
+                            null,
+                            "{tenant_name}: Loan {loan_no}: {currency} {amount} paid out on {date}."
+                                    + " First payment {currency} {next_amount} due {next_due_date}.")),
+            Map.entry(
+                    "loan.repayment_received",
+                    new Template(
+                            null,
+                            "{tenant_name}: Received {currency} {amount} on {date} for loan {loan_no}. Receipt {receipt_no}.")),
+            Map.entry(
+                    "loan.repayment_received.with_balance",
+                    new Template(
+                            null,
+                            "{tenant_name}: Received {currency} {amount} on {date} for loan {loan_no}. Receipt {receipt_no}."
+                                    + " Balance {currency} {balance}.")),
+            Map.entry("loan.closed", new Template(null, "{tenant_name}: Loan {loan_no} is fully paid. Thank you.")),
+            Map.entry(
+                    "investment.funded",
+                    new Template(
+                            null,
+                            "{tenant_name}: Investment {account_no} of {currency} {amount} received on {date}."
+                                    + " Matures {maturity_date}. Receipt {receipt_no}.")),
+            Map.entry(
+                    "investment.maturing",
+                    new Template(
+                            null,
+                            "{tenant_name}: Investment {account_no} of {currency} {amount} matures on {maturity_date}."
+                                    + " Please contact us about your instruction.")),
+            Map.entry(
+                    "investment.paid_out",
+                    new Template(
+                            null,
+                            "{tenant_name}: Paid {currency} {amount} on investment {account_no} on {date}."
+                                    + " Voucher {voucher_no}.")));
 
     static final String WITH_BALANCE = ".with_balance";
 

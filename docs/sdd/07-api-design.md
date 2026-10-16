@@ -475,7 +475,7 @@ endpoint.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/notification-templates` | `core.notifications.read` | **Built (#218), channel `sms` only.** `{items: [{event_key, channel, title, default_text, placeholders [{name, description, sample, max_length}], override {text, version, updated_at} or null, sample_text, measure {encoding [gsm7, ucs2], units, segments, worst_case_segments, estimated_cost_minor, currency}, max_chars, max_worst_case_segments}]}`. The events are those the application sends (`savings.deposit`, `savings.withdrawal`); the estimate is the tenant's own average cost per segment over the last 30 days and null without history or with two currencies |
+| GET | `/notification-templates` | `core.notifications.read` | **Built (#218), channel `sms` only.** `{items: [{event_key, channel, title, default_text, placeholders [{name, description, sample, max_length}], override {text, version, updated_at} or null, sample_text, measure {encoding [gsm7, ucs2], units, segments, worst_case_segments, estimated_cost_minor, currency}, max_chars, max_worst_case_segments}]}`. The events are those the application sends (`savings.deposit`, `savings.withdrawal`, and from #221 `loan.disbursed`, `loan.repayment_received`, `loan.closed`, `investment.funded`, `investment.maturing`, `investment.paid_out`, each with its own placeholder list and never a balance); the estimate is the tenant's own average cost per segment over the last 30 days and null without history or with two currencies |
 | PUT | `/notification-templates/{event_key}/{channel}` | `core.notification_templates.manage` | FR-NTF-03. **Built (#218).** `{text}` under `If-Match` on the override's version (0 while there is none; 428, 409 `version_conflict`, one winner of a race). 422 with the first problem's code on `text`: `blank`, `too_long`, `invalid_character`, `malformed_placeholder`, `unknown_placeholder`, `missing_required_placeholder`, `too_many_segments`. Line endings are normalised and the edges trimmed; the same text again writes nothing. 404 for an unknown event or a channel other than `sms`. Audited as `core.sms.template.changed` with the old and new text |
 | DELETE | `/notification-templates/{event_key}/{channel}` | `core.notification_templates.manage` | **Built (#218).** Goes back to the default wording under `If-Match`; audited as `core.sms.template.reverted` |
 | POST | `/notification-templates/{event_key}/{channel}/preview` | `core.notification_templates.manage` | Renders with fabricated sample data and the tenant's own business name. **Built (#218):** `{text?}` (omitted: the saved wording, else the default) answers `{text, measure}`; refuses what a save would refuse; saves nothing, sends nothing |
@@ -638,6 +638,13 @@ approver submitted or appraised the loan, FR-APR-03), `above_requested_principal
 `lending.loan-approval-expiry` cancels an approval older than `approval_validity_days` with
 reason `approval_expired` (FR-ORG-08), audited with actor kind `system`. Both `approved_at` and
 the expiry bound come from the business clock (AGENTS.md rule 7), never the database's `now()`.
+
+Every request that records money a member is told about takes an optional `notify_member` (boolean, default true; issue #221,
+ADR-036 third amendment): loan `POST .../disbursements` and `.../repayments`, savings `.../deposits`, `.../withdrawals` and `.../close`,
+investment `.../funding`, `.../return-payouts`, `.../payout` and `.../early-withdrawal`. False records the movement without a text
+message to the member, whatever the tenant's SMS settings (a register import sends false), and is accepted only from a holder of
+`core.settings.manage`, the business administrator: anyone else gets 403 `notify_member_forbidden` before anything is recorded; where a checker decides, the choice is kept in
+the approval's payload. An event whose value date is more than `BMS_SMS_EVENT_MAX_AGE_DAYS` (3) days old is never texted either.
 
 Built (#108, increment 5, ADR-026): disbursement, schedule, transactions, repayments, reversal,
 payoff quote and write-off. Every money-moving route requires `Idempotency-Key` (section 7.8; a

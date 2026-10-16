@@ -292,7 +292,7 @@ third attempt), `notification_outbox_record_result` (`V50`: `sent`, a clean `fai
 which gives the attempt back and holds the row until a time, `unknown` which marks it `failed` with `unknown_outcome` and
 keeps its parameters, `refused` which marks it `failed` with a reason code and clears them; an optional last argument lets a
 deferral move the expiry later, to at most 2 days after the row was queued, never earlier than it was), `notification_outbox_failures`
-(with the tenant and the category from `V50`), `notification_outbox_counts`,
+(with the tenant and the category from `V50`; `V53` hides the rows a reversal cancelled), `notification_outbox_cancel_unclaimed` (`V53`: marks the bound tenant's pending SMS rows of one event reference that no sender holds under a live lease, whatever their attempt count, failed `cancelled_reversed` with the parameters cleared; `V53` also adds `notification_outbox.leased_until`, set by the claim and released by `notification_outbox_record_result`, and `lending_investments.notify_member`, default true, false for an investment recorded without telling its investor, backfilled false for any funded by a non-staff source or more than 3 days ago), and `notification_outbox_is_pending` (`V53`: whether a row is still pending, for the channel's last look before the provider call; the lease is on the database's clock), `notification_outbox_counts`,
 `notification_outbox_retry` (only a failed row younger than 7 days, with its link not expired and
 its parameters kept; for an SMS whose delivery log row is `unknown` it also moves that row back to `failed`, the operator's
 deliberate resend) and

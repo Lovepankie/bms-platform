@@ -80,7 +80,16 @@ class SmsTemplatesIT extends LoanFixtures {
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
         List<String> keys = new java.util.ArrayList<>();
         r.getBody().get("items").forEach(i -> keys.add(i.get("event_key").asString()));
-        assertThat(keys).containsExactly("savings.deposit", "savings.withdrawal");
+        assertThat(keys)
+                .containsExactly(
+                        "savings.deposit",
+                        "savings.withdrawal",
+                        "loan.disbursed",
+                        "loan.repayment_received",
+                        "loan.closed",
+                        "investment.funded",
+                        "investment.maturing",
+                        "investment.paid_out");
 
         JsonNode dep = deposit();
         assertThat(dep.get("channel").asString()).isEqualTo("sms");

@@ -2,6 +2,7 @@ package com.rincoltech.bms.lending.loans.internal;
 
 import com.rincoltech.bms.core.approvals.Approvals;
 import com.rincoltech.bms.core.approvals.Approvals.ActionRequest;
+import com.rincoltech.bms.core.notifications.SmsEvents;
 import com.rincoltech.bms.core.operations.Idempotency;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.ApiException;
@@ -67,6 +68,7 @@ class ServicingService {
             payload.put(DisbursementAction.DATE, r.disbursementDate().toString());
             payload.put(DisbursementAction.METHOD, r.paymentMethodKey());
             payload.put(DisbursementAction.REFERENCE, r.externalReference());
+            payload.put(DisbursementAction.NOTIFY, SmsEvents.notifyMember(r.notifyMember()));
             Approvals.Outcome o = approvals.request(new ActionRequest(
                     DisbursementAction.TYPE,
                     loan.branchId(),
@@ -93,7 +95,8 @@ class ServicingService {
                     r.paymentMethodKey(),
                     blankToNull(r.externalReference()),
                     principal.userId(),
-                    "staff");
+                    "staff",
+                    SmsEvents.notifyMember(r.notifyMember()));
             return new RepaymentResult(
                     repo.transaction(id, txn).orElseThrow(),
                     loans.find(id).orElseThrow().status(),

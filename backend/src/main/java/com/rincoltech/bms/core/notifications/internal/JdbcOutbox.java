@@ -88,6 +88,15 @@ class JdbcOutbox implements Outbox {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public int cancelUnclaimed(String eventRef) {
+        return jdbc.sql("SELECT notification_outbox_cancel_unclaimed(?, ?)")
+                .params(eventRef, Timestamp.from(clock.now()))
+                .query(Integer.class)
+                .single();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public int countSince(String throttleKey, String templateKey, Instant since, Instant until) {
         return jdbc.sql("SELECT notification_outbox_count_since(?, ?, ?, ?)")
                 .params(throttleKey, templateKey, Timestamp.from(since), Timestamp.from(until))

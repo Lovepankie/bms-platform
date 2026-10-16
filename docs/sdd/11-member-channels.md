@@ -130,27 +130,32 @@ left out: the tenant colour rule and the AA checks are written for light surface
 ### 11.3.1 Events and default templates
 
 Templates are per tenant and editable (FR-NTF-03; built for the events the application sends today, the two savings
-receipts, in #218: the placeholders of each event are a fixed list, an override never carries a balance, and the
+receipts in #218 and the loan and investment events in #221: the placeholders of each event are a fixed list, an override never carries a balance, and the
 screen previews the segments and cost). Defaults, all fabricated wording, kept
 within one 160 character GSM-7 segment where possible:
 
 | Event key | When | Default text |
 |---|---|---|
-| `loan.disbursed` | Disbursement executed | `{tenant_name}: Loan {loan_no} of {currency} {amount} disbursed on {date}. First payment {next_amount} due {next_due_date}.` |
-| `loan.repayment_received` | Repayment recorded | `{tenant_name}: Received {currency} {amount} for loan {loan_no}. Receipt {receipt_no}. Balance {balance}.` |
+| `loan.disbursed` | Disbursement executed by a staff approval (issue #221), unless the request said `notify_member: false` or its date is more than 3 days old; queued in the disbursement's transaction | `{tenant_name}: Loan {loan_no}: {currency} {amount} paid out on {date}. First payment {currency} {next_amount} due {next_due_date}.` (`{amount}` is the principal less the fees deducted at disbursement: what the member receives) |
+| `loan.repayment_received` | Repayment recorded by staff (a recovery on a written-off loan too), in the repayment's transaction; a reversal queues nothing and withdraws the receipt if the sender has not claimed it | `{tenant_name}: Received {currency} {amount} on {date} for loan {loan_no}. Receipt {receipt_no}.` With the tenant setting `include_balance` on it ends ` Balance {currency} {balance}.` (what the loan still owes after it; template `loan.repayment_received.with_balance`; never for a recovery) |
 | `loan.due_in_3_days` | 3 days before a due date, inside the sending window | `{tenant_name}: Reminder, {currency} {amount} for loan {loan_no} is due on {due_date}.` |
 | `loan.due_today` | On the due date | `{tenant_name}: {currency} {amount} for loan {loan_no} is due today.` |
 | `loan.overdue_1`, `loan.overdue_7`, `loan.overdue_30` | At 1, 7 and 30 DPD | `{tenant_name}: Loan {loan_no} is {dpd} days overdue. Amount in arrears {currency} {arrears}. Please pay to avoid penalties.` |
-| `loan.closed` | Loan closed | `{tenant_name}: Loan {loan_no} is fully paid. Thank you.` |
+| `loan.closed` | The repayment that settled the loan (once per closing; a loan reopened by a reversal and paid off again is thanked again; a reversal that settles one queues nothing) | `{tenant_name}: Loan {loan_no} is fully paid. Thank you.` |
 | `savings.deposit`, `savings.withdrawal` | Transaction recorded by staff (a closure's payout too); queued in the outbox for a tenant the operator has switched on, sent by the SMS channel (ADR-032, ADR-036); expires an hour after it is queued | `{tenant_name}: Deposit of {currency} {amount} on account {account_no}. Receipt {receipt_no}.` (a withdrawal says Withdrawal and Voucher). With the tenant setting `include_balance` of the settings group `sms` on it ends ` Balance {currency} {balance}.` (template `savings.deposit.with_balance`) |
-| `investment.funded`, `investment.maturing`, `investment.paid_out` | Lifecycle | Similar pattern |
+| `investment.funded` | Funding executed by a staff approval | `{tenant_name}: Investment {account_no} of {currency} {amount} received on {date}. Matures {maturity_date}. Receipt {receipt_no}.` |
+| `investment.maturing` | The nightly job, once per investment and maturity date, when it matures within 7 days and the job runs on the day itself (a replay of past days texts nobody); a reminder, so held for the sending window | `{tenant_name}: Investment {account_no} of {currency} {amount} matures on {maturity_date}. Please contact us about your instruction.` |
+| `investment.paid_out` | A return payout, the maturity payout or an early withdrawal, in its transaction; a reversal queues nothing | `{tenant_name}: Paid {currency} {amount} on investment {account_no} on {date}. Voucher {voucher_no}.` |
 | `auth.member_otp` | Activation or PIN reset | `{code} is your {tenant_name} code. It expires in 10 minutes. Do not share it.` |
 
 ### 11.3.2 Rules
 
 - Reminders and arrears messages only inside the tenant's sending window (FR-NTF-04);
   receipts and codes immediately.
-- One message per event per schedule item (FR-NTF-06).
+- One message per event per schedule item (FR-NTF-06), and per transaction and member for the receipts and notices (FR-NTF-22).
+  A request may say `notify_member: false` (a register import does), an event dated more than `BMS_SMS_EVENT_MAX_AGE_DAYS` (3) days
+  ago is never texted, and a reversal withdraws the reversed transaction's message while the sender has not claimed it.
+  Dates in a message are `dd/MM/yyyy`; the business name is the only free text in a default and is cleaned (a line feed becomes a space).
 - Messages go to the member's primary phone; never to next of kin in the MVP (contacting
   next of kin about a debt raises privacy questions the tenant must decide; listed as an
   open question).

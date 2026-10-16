@@ -50,6 +50,7 @@ class InvestmentServicer implements InvestmentServicing {
     private final CurrentTenant currentTenant;
     private final BusinessClock clock;
     private final AuditLog audit;
+    private final InvestmentNotices notices;
 
     InvestmentServicer(
             InvestmentRepository repo,
@@ -59,7 +60,8 @@ class InvestmentServicer implements InvestmentServicing {
             TenantSequences sequences,
             CurrentTenant currentTenant,
             BusinessClock clock,
-            AuditLog audit) {
+            AuditLog audit,
+            InvestmentNotices notices) {
         this.repo = repo;
         this.members = members;
         this.books = books;
@@ -68,6 +70,7 @@ class InvestmentServicer implements InvestmentServicing {
         this.currentTenant = currentTenant;
         this.clock = clock;
         this.audit = audit;
+        this.notices = notices;
     }
 
     LocalDate today() {
@@ -108,6 +111,12 @@ class InvestmentServicer implements InvestmentServicing {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public DailyRun runDaily(LocalDate date) {
+        return runDaily(date, true);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public DailyRun runDaily(LocalDate date, boolean notifyMembers) {
         int accruals = 0;
         for (UUID id : repo.withAccrualDue(date)) {
             accruals += accrueDue(repo.lock(id).orElseThrow(), date);
@@ -146,6 +155,11 @@ class InvestmentServicer implements InvestmentServicing {
                                         inv.maturityDate().toString())),
                         null,
                         "system");
+                // Only the reminder before maturity messages the investor, and only on the day the job really runs:
+                // a replay of past dates (the fabricated history) texts nobody.
+                if (notifyMembers && before && date.equals(today()) && repo.notifyMember(inv.id())) {
+                    notices.maturing(inv);
+                }
                 reminders++;
             }
         }
@@ -243,6 +257,20 @@ class InvestmentServicer implements InvestmentServicing {
             UUID makerId,
             UUID checkerId,
             String source) {
+        fund(inv, valueDate, paymentMethodKey, externalReference, approvalId, makerId, checkerId, source, true);
+    }
+
+    /** As above; {@code notifyMember} false (a register import's request) queues no SMS. */
+    void fund(
+            Inv inv,
+            LocalDate valueDate,
+            String paymentMethodKey,
+            String externalReference,
+            UUID approvalId,
+            UUID makerId,
+            UUID checkerId,
+            String source,
+            boolean notifyMember) {
         List<Period> periods = InvestmentReturns.schedule(terms(inv, inv.principalMinor()), valueDate);
         long agreed = InvestmentReturns.total(periods);
         LocalDate maturity = periods.getLast().end();
@@ -295,6 +323,8 @@ class InvestmentServicer implements InvestmentServicing {
         after.put("payment_method_key", paymentMethodKey);
         after.put("approval_request_id", approvalId);
         after.put("checker_id", checkerId);
+        after.putAll(notices.audit(source, notifyMember, valueDate));
+        repo.notifyMember(inv.id(), InvestmentNotices.sends(source, notifyMember));
         audit.record(new AuditLog.Entry(
                 "lending.investment.funded",
                 SUBJECT,
@@ -302,6 +332,9 @@ class InvestmentServicer implements InvestmentServicing {
                 inv.branchId(),
                 Map.of("status", "pending_funding"),
                 after));
+        if (InvestmentNotices.sends(source, notifyMember)) {
+            notices.funded(inv, txnId, valueDate, maturity, receipt);
+        }
     }
 
     // ---- Accrual (FR-INV-04, FR-INV-09) ---------------------------------------------------
@@ -450,6 +483,18 @@ class InvestmentServicer implements InvestmentServicing {
             String externalReference,
             UUID recordedBy,
             String source) {
+        return payReturn(inv, valueDate, paymentMethodKey, externalReference, recordedBy, source, true);
+    }
+
+    /** As above; {@code notifyMember} false (a register import's request) queues no SMS. */
+    UUID payReturn(
+            Inv inv,
+            LocalDate valueDate,
+            String paymentMethodKey,
+            String externalReference,
+            UUID recordedBy,
+            String source,
+            boolean notifyMember) {
         requireStatus(inv, Set.of("active", "matured", "rolled_over"));
         if (valueDate.isAfter(today())) {
             throw ApiException.rule("value_date_in_future", "The value date is today or earlier.");
@@ -500,12 +545,15 @@ class InvestmentServicer implements InvestmentServicing {
                 inv.returnDueMinor(),
                 inv.returnPaidMinor() + amount,
                 inv.closedOn());
-        audit.record(AuditLog.Entry.created(
-                "lending.investment.return_paid",
-                SUBJECT,
-                inv.id(),
-                inv.branchId(),
-                Map.of("amount_minor", amount, "voucher_no", voucher, "payment_method_key", paymentMethodKey)));
+        Map<String, Object> paid = new LinkedHashMap<>();
+        paid.put("amount_minor", amount);
+        paid.put("voucher_no", voucher);
+        paid.put("payment_method_key", paymentMethodKey);
+        paid.putAll(notices.audit(source, notifyMember, valueDate));
+        audit.record(AuditLog.Entry.created("lending.investment.return_paid", SUBJECT, inv.id(), inv.branchId(), paid));
+        if (InvestmentNotices.sends(source, notifyMember)) {
+            notices.paidOut(inv, txnId, amount, valueDate, voucher);
+        }
         return txnId;
     }
 
@@ -519,6 +567,18 @@ class InvestmentServicer implements InvestmentServicing {
             String externalReference,
             UUID recordedBy,
             String source) {
+        return payout(inv, today, paymentMethodKey, externalReference, recordedBy, source, true);
+    }
+
+    /** As above; {@code notifyMember} false (a register import's request) queues no SMS. */
+    UUID payout(
+            Inv inv,
+            LocalDate today,
+            String paymentMethodKey,
+            String externalReference,
+            UUID recordedBy,
+            String source,
+            boolean notifyMember) {
         requireStatus(inv, Set.of("matured"));
         if (today.isAfter(today()) || today.isBefore(inv.maturityDate())) {
             throw ApiException.rule("value_date_out_of_range", "The value date is between maturity and today.");
@@ -575,13 +635,23 @@ class InvestmentServicer implements InvestmentServicing {
                 inv.id(),
                 inv.branchId(),
                 Map.of("status", "matured"),
-                Map.of(
-                        "status", "paid_out",
-                        "principal_minor", principal,
-                        "return_minor", ret,
-                        "voucher_no", voucher,
-                        "payment_method_key", paymentMethodKey)));
+                paidOutEntry(principal, ret, voucher, paymentMethodKey, notices.audit(source, notifyMember, today))));
+        if (InvestmentNotices.sends(source, notifyMember)) {
+            notices.paidOut(inv, txnId, total, today, voucher);
+        }
         return txnId;
+    }
+
+    private static Map<String, Object> paidOutEntry(
+            long principal, long ret, String voucher, String paymentMethodKey, Map<String, Object> smsNote) {
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("status", "paid_out");
+        after.put("principal_minor", principal);
+        after.put("return_minor", ret);
+        after.put("voucher_no", voucher);
+        after.put("payment_method_key", paymentMethodKey);
+        after.putAll(smsNote);
+        return after;
     }
 
     // ---- Rollover (FR-INV-05) -------------------------------------------------------------
@@ -698,6 +768,7 @@ class InvestmentServicer implements InvestmentServicing {
                 inv.returnPaidMinor() + ret,
                 start);
         repo.rolledOver(inv.id(), newId);
+        repo.notifyMember(newId, repo.notifyMember(inv.id()));
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("status", "rolled_over");
         after.put("mode", mode);
@@ -771,6 +842,20 @@ class InvestmentServicer implements InvestmentServicing {
             UUID approvalId,
             UUID makerId,
             UUID checkerId) {
+        return earlyWithdraw(
+                investmentId, paymentMethodKey, externalReference, reason, approvalId, makerId, checkerId, true);
+    }
+
+    /** As above; {@code notifyMember} false (a register import's request) queues no SMS. */
+    UUID earlyWithdraw(
+            UUID investmentId,
+            String paymentMethodKey,
+            String externalReference,
+            String reason,
+            UUID approvalId,
+            UUID makerId,
+            UUID checkerId,
+            boolean notifyMember) {
         LocalDate today = today();
         Inv locked = repo.lock(investmentId).orElseThrow(ApiException::notFound);
         earlyQuote(locked, today);
@@ -837,6 +922,7 @@ class InvestmentServicer implements InvestmentServicing {
         after.put("reason", reason);
         after.put("approval_request_id", approvalId);
         after.put("checker_id", checkerId);
+        after.putAll(notices.audit("staff", notifyMember, today));
         audit.record(new AuditLog.Entry(
                 "lending.investment.withdrawn_early",
                 SUBJECT,
@@ -844,6 +930,9 @@ class InvestmentServicer implements InvestmentServicing {
                 inv.branchId(),
                 Map.of("status", "active"),
                 after));
+        if (notifyMember) {
+            notices.paidOut(inv, txnId, s.cashMinor(), today, voucher);
+        }
         return txnId;
     }
 
@@ -885,6 +974,8 @@ class InvestmentServicer implements InvestmentServicing {
         InvestmentTransaction txn = repo.txn(txnId).orElseThrow(ApiException::notFound);
         Inv inv = repo.lock(txn.investmentId()).orElseThrow(ApiException::notFound);
         checkReversible(inv, txn);
+        // The message of the entry being reversed, if the sender has not taken it yet, must not go.
+        notices.reversed(txn.id());
         LocalDate today = today();
         UUID reversalId = UUID.randomUUID();
         PostedEntry entry =

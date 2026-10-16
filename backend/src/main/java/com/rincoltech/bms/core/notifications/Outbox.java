@@ -39,6 +39,13 @@ public interface Outbox {
     boolean enqueue(Message message);
 
     /**
+     * Withdraws the member SMS of one event of the bound tenant that nobody has claimed yet (pending, no attempt): the
+     * rows whose key is {@code sms:<template>:<tenant>:<eventRef>:<member>}. A row a sender has claimed may be at the
+     * provider already and is left alone. Returns the number withdrawn. Runs in the caller's transaction.
+     */
+    int cancelUnclaimed(String eventRef);
+
+    /**
      * Rows written since {@code since} with this throttle key, or, with a null key, of this
      * template: the volume bounds of the sign-up endpoints are counted in the database, not in
      * memory. Runs in the caller's transaction.

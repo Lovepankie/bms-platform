@@ -17,6 +17,7 @@ import org.flywaydb.core.api.output.MigrateResult;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.MountableFile;
 
@@ -317,6 +318,117 @@ class MigrationOrderIT {
                             .list())
                     .containsExactly("test:v47-sms");
         }
+    }
+
+    /**
+     * #221: the member event SMS migration (V53) adds {@code lending_investments.notify_member} and backfills it. A database
+     * at V52 that already holds investments (a register loaded by the seed or an import, or by staff earlier) must not have
+     * its investors sent a maturity reminder the day SMS is switched on: the flag becomes false for an investment whose
+     * funding did not come from a staff request, and for one funded more than 3 days ago on the tenant's calendar, and stays
+     * true for one funded by staff in the last 3 days (the cutoff day included) and for one still waiting for its funding.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates investments across the event SMS migration.
+     */
+    @Test
+    void eventSmsMigrationBackfillsTheNotifyFlagOfExistingInvestments() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            replayEventSmsBackfill(postgres.getJdbcUrl(), "postgres", "test-superuser-password");
+        }
+    }
+
+    /**
+     * The body of {@link #eventSmsMigrationBackfillsTheNotifyFlagOfExistingInvestments} against any empty database whose roles
+     * were made by {@code 01-roles.sh}, so that it can also be replayed where Docker is not available. The rows are
+     * fabricated as the superuser with foreign keys switched off for the session (the question is about one column, not
+     * about the ledger).
+     */
+    static void replayEventSmsBackfill(String url, String superUser, String superPassword) {
+        assertThat(flyway(url, "52").migrate().targetSchemaVersion).isEqualTo("52");
+        SingleConnectionDataSource single = new SingleConnectionDataSource(url, superUser, superPassword, true);
+        JdbcClient su = JdbcClient.create(single);
+        su.sql("SET session_replication_role = replica").update();
+        UUID tenant = UUID.randomUUID();
+        UUID branch = UUID.randomUUID();
+        su.sql(
+                        "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v53', 'Test Tenant V53', '00000000-0000-4000-8000-000000000001')")
+                .param(tenant)
+                .update();
+        record Case(String accountNo, String status, Integer daysAgo, String source, boolean expected) {}
+        List<Case> cases = List.of(
+                new Case("IV900001", "active", 0, "staff", true),
+                new Case("IV900002", "active", 3, "staff", true),
+                new Case("IV900003", "active", 4, "staff", false),
+                new Case("IV900004", "active", 400, "staff", false),
+                new Case("IV900005", "active", 0, "system", false),
+                new Case("IV900006", "active", 0, "import", false),
+                new Case("IV900007", "active", 1, "portal", false),
+                new Case("IV900008", "pending_funding", null, null, true));
+        for (Case c : cases) {
+            UUID id = UUID.randomUUID();
+            su.sql("""
+                            INSERT INTO lending_investments (id, tenant_id, branch_id, account_no, member_id, product_id,
+                                currency, status, principal_minor, return_rate_bp, return_method, term_months,
+                                payout_frequency, product_type, early_withdrawal_allowed, start_date, maturity_date,
+                                agreed_return_minor, principal_held_minor, channel)
+                            SELECT ?, ?, ?, ?, ?, ?, 'UGX', ?, 1000000, 1200, 'flat', 6, 'at_maturity', 'fixed_term',
+                                   false, d.s, d.s + 180, CASE WHEN d.s IS NULL THEN NULL ELSE 60000 END,
+                                   CASE WHEN d.s IS NULL THEN 0 ELSE 1000000 END, 'staff'
+                              FROM (SELECT (now() AT TIME ZONE 'Africa/Kampala')::date - ?::int AS s) d
+                            """)
+                    .params(
+                            id,
+                            tenant,
+                            branch,
+                            c.accountNo(),
+                            UUID.randomUUID(),
+                            UUID.randomUUID(),
+                            c.status(),
+                            c.daysAgo())
+                    .update();
+            if (c.source() != null) {
+                su.sql("""
+                                INSERT INTO lending_investment_transactions (id, tenant_id, branch_id, investment_id,
+                                    txn_type, amount_minor, principal_minor, currency, value_date, journal_entry_id,
+                                    source)
+                                VALUES (?, ?, ?, ?, 'funding', 1000000, 1000000, 'UGX',
+                                    (now() AT TIME ZONE 'Africa/Kampala')::date - ?::int, ?, ?)
+                                """)
+                        .params(UUID.randomUUID(), tenant, branch, id, c.daysAgo(), UUID.randomUUID(), c.source())
+                        .update();
+            }
+        }
+
+        MigrateResult result = DatabaseMigrator.migrate(url, "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+        assertThat(result.success).isTrue();
+        assertThat(result.migrations.stream().map(m -> m.version).toList()).contains("53");
+        JdbcClient owner =
+                JdbcClient.create(new DriverManagerDataSource(url, "bms_owner", TestDatabase.OWNER_PASSWORD));
+        for (Case c : cases) {
+            assertThat(owner.sql("SELECT notify_member FROM lending_investments WHERE account_no = ?")
+                            .param(c.accountNo())
+                            .query(Boolean.class)
+                            .single())
+                    .as("%s (%s, %s days ago, %s)", c.accountNo(), c.status(), c.daysAgo(), c.source())
+                    .isEqualTo(c.expected());
+        }
+        // A new investment is told by default, and the outbox learned its lease and the channel's last look.
+        assertThat(owner.sql(
+                                "SELECT column_default FROM information_schema.columns WHERE table_name = 'lending_investments'"
+                                        + " AND column_name = 'notify_member'")
+                        .query(String.class)
+                        .single())
+                .isEqualTo("true");
+        assertThat(owner.sql("SELECT count(*) FROM information_schema.columns WHERE table_name = 'notification_outbox'"
+                                + " AND column_name = 'leased_until'")
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+        assertThat(owner.sql("SELECT notification_outbox_is_pending(?)")
+                        .param(UUID.randomUUID())
+                        .query(Boolean.class)
+                        .single())
+                .isFalse();
     }
 
     private static List<String> clearing(JdbcClient owner, UUID tenant) {
