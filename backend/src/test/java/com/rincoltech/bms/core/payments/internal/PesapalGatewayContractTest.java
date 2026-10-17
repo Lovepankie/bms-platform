@@ -248,9 +248,10 @@ class PesapalGatewayContractTest {
             return Reply.json(fixture("auth-token-ok").replace("2026-10-13T20:47:46.933358Z", "tomorrow-ish"));
         });
         clock.set(T0);
-        gateway.queryStatus(Scope.TENANT, pending);
+        PesapalGateway second = fresh();
+        second.queryStatus(Scope.TENANT, pending);
         clock.set(T0.plus(Duration.ofSeconds(30)));
-        gateway.queryStatus(Scope.TENANT, pending);
+        second.queryStatus(Scope.TENANT, pending);
         assertThat(authCalls)
                 .as("an unreadable expiry gives a token no longer than the safety margin, so it is never reused")
                 .hasValue(2);
