@@ -914,4 +914,89 @@ class LoanEventSmsIT extends LoanFixtures {
                         .single())
                 .isZero();
     }
+
+    // ---- Reminders and arrears notices (#227) -----------------------------------------------------
+
+    @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("loanArrears")
+    com.github.kagkarlsson.scheduler.task.helper.RecurringTask<Void> arrearsTask;
+
+    /** The nightly arrears job as the scheduler runs it: every active lending tenant, one transaction each. */
+    void nightly() {
+        arrearsTask.execute(null, null);
+    }
+
+    Instant notBefore(String template) {
+        return TestDatabase.owner()
+                .sql("SELECT next_attempt_at FROM notification_outbox WHERE channel = 'sms' AND tenant_id = ?"
+                        + " AND template_key = ?")
+                .params(t.tenantId(), template)
+                .query(Timestamp.class)
+                .single()
+                .toInstant();
+    }
+
+    /**
+     * FR-NTF-02, FR-NTF-04 and FR-NTF-06: an instalment two days away gets one reminder, about that instalment, held
+     * for the tenant's window: run at 21:00 Kampala time it waits for 08:00 the next morning. Rerunning the job queues
+     * nothing new.
+     */
+    @Test
+    void frNtf06_aReminderIsQueuedOncePerInstalmentAndWaitsForTheWindow() {
+        smsOn();
+        String loan = approved(instalmentProduct("REMIND"), 1_200_000, 3, 41);
+        disburse(loan, today().minusMonths(1).plusDays(2), null);
+        rows(t).forEach(r -> assertThat(r.get("template_key")).isNotEqualTo(LoanNotices.DUE_IN_3_DAYS));
+        movable.set(Instant.parse("2026-10-15T18:00:00Z")); // 21:00 in Kampala
+        LocalDate due = today().plusDays(2);
+
+        nightly();
+        Map<String, Object> row = only(LoanNotices.DUE_IN_3_DAYS);
+        assertThat(row.get("category")).isEqualTo("reminder");
+        assertThat(row.get("recipient")).isEqualTo("+256700000141");
+        JsonNode p = params(row);
+        assertThat(p.get("loan_no").asString()).startsWith("LN");
+        assertThat(p.get("amount").asString()).isEqualTo("520,000");
+        assertThat(p.get("due_date").asString()).isEqualTo(dmy(due));
+        assertThat(notBefore(LoanNotices.DUE_IN_3_DAYS)).isEqualTo(Instant.parse("2026-10-16T05:00:00Z"));
+
+        int before = rows(t).size();
+        nightly();
+        assertThat(rows(t)).as("a rerun queues nothing new").hasSize(before);
+    }
+
+    /**
+     * FR-NTF-02: the arrears notices follow the loan's DPD, with the arrears and the days past due, in the arrears
+     * category; each step once.
+     */
+    @Test
+    void frNtf02_arrearsNoticesFollowTheStepsOnce() {
+        smsOn();
+        String loan = approved(instalmentProduct("ARREARSMS"), 1_200_000, 3, 42);
+        LocalDate disbursed = today().minusMonths(1).minusDays(1);
+        disburse(loan, disbursed, null);
+
+        nightly();
+        Map<String, Object> first = only(LoanNotices.OVERDUE_1);
+        assertThat(first.get("category")).isEqualTo("arrears");
+        assertThat(params(first).get("arrears").asString()).isEqualTo("520,000");
+        assertThat(params(first).get("dpd").asString()).isEqualTo("1");
+        nightly();
+        assertThat(templates()).filteredOn(LoanNotices.OVERDUE_1::equals).hasSize(1);
+
+        movable.set(MovableClockConfig.BEFORE_MIDNIGHT.plus(java.time.Duration.ofDays(6)));
+        nightly();
+        assertThat(params(only(LoanNotices.OVERDUE_7)).get("dpd").asString()).isEqualTo("7");
+        assertThat(templates()).doesNotContain(LoanNotices.OVERDUE_30);
+    }
+
+    /** A tenant without SMS gets no reminder from the nightly job, and the job runs as before. */
+    @Test
+    void frNtf20_noReminderIsQueuedWhileSmsIsOff() {
+        String loan = approved(instalmentProduct("NOSMSREM"), 1_200_000, 3, 43);
+        disburse(loan, today().minusMonths(1).minusDays(1), null);
+        nightly();
+        assertThat(rows(t)).isEmpty();
+        assertThat(get(loan, "").get("balances").get("days_past_due").asInt()).isEqualTo(1);
+    }
 }

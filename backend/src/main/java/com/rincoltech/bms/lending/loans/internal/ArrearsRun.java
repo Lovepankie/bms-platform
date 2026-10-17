@@ -25,7 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
  * by today (R-PEN, {@link Penalties}) become charges on their items, then item statuses, DPD and
  * arrears are recomputed (R-DPD). A charge is keyed by (item, period) in the database, so a rerun for
  * the same business date changes nothing. Charges are memorandum items: nothing is posted here.
- * Last, every pending promise to pay is settled as kept or broken (FR-CLN-05).
+ * Each loan's due reminders and arrears notices are queued after its recompute ({@link LoanNotices}, issue #227), and
+ * last, every pending promise to pay is settled as kept or broken (FR-CLN-05).
  */
 @Service
 class ArrearsRun {
@@ -39,6 +40,7 @@ class ArrearsRun {
     private final BusinessClock clock;
     private final AuditLog audit;
     private final CollectionsService collections;
+    private final LoanNotices notices;
 
     ArrearsRun(
             JdbcClient jdbc,
@@ -49,7 +51,8 @@ class ArrearsRun {
             CurrentTenant currentTenant,
             BusinessClock clock,
             AuditLog audit,
-            CollectionsService collections) {
+            CollectionsService collections,
+            LoanNotices notices) {
         this.jdbc = jdbc;
         this.loans = loans;
         this.repo = repo;
@@ -59,10 +62,17 @@ class ArrearsRun {
         this.clock = clock;
         this.audit = audit;
         this.collections = collections;
+        this.notices = notices;
     }
 
     record Result(
-            LocalDate businessDate, int loans, int charges, long chargedMinor, int promisesKept, int promisesBroken) {}
+            LocalDate businessDate,
+            int loans,
+            int charges,
+            long chargedMinor,
+            int promisesKept,
+            int promisesBroken,
+            int remindersQueued) {}
 
     /** Runs inside the tenant's job transaction (TenantJobs binds the tenant). */
     @Transactional(propagation = Propagation.MANDATORY)
@@ -72,6 +82,7 @@ class ArrearsRun {
                 .query(UUID.class)
                 .list();
         int charges = 0;
+        int reminders = 0;
         long charged = 0;
         for (UUID id : active) {
             Loan loan = loans.lock(id).orElseThrow();
@@ -126,10 +137,12 @@ class ArrearsRun {
                     items = repo.items(id);
                 }
             }
-            servicer.refreshPosition(id, items, today);
+            Servicing.Position position = servicer.refreshPosition(id, items, today);
+            reminders += notices.remind(loan, items, position, today);
         }
         CollectionsService.Settled promises = collections.settlePromises(today);
-        Result result = new Result(today, active.size(), charges, charged, promises.kept(), promises.broken());
+        Result result =
+                new Result(today, active.size(), charges, charged, promises.kept(), promises.broken(), reminders);
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("business_date", today.toString());
         after.put("loans", result.loans());
@@ -137,6 +150,7 @@ class ArrearsRun {
         after.put("penalties_charged_minor", result.chargedMinor());
         after.put("promises_kept", result.promisesKept());
         after.put("promises_broken", result.promisesBroken());
+        after.put("reminders_queued", result.remindersQueued());
         audit.record(
                 AuditLog.Entry.created("lending.arrears.run", "lending.arrears", null, null, after), null, "system");
         return result;

@@ -3,10 +3,16 @@ package com.rincoltech.bms.lending.loans.internal;
 import com.rincoltech.bms.core.notifications.Outbox;
 import com.rincoltech.bms.core.notifications.SmsEvents;
 import com.rincoltech.bms.lending.loans.internal.LoanRepository.Loan;
+import com.rincoltech.bms.lending.loans.internal.Servicing.Item;
+import com.rincoltech.bms.lending.loans.internal.Servicing.Position;
 import com.rincoltech.bms.lending.members.MemberLookup;
 import com.rincoltech.bms.lending.products.ScheduleCalculator;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -27,6 +33,15 @@ import org.springframework.stereotype.Component;
  * transaction queued if the sender has not claimed it yet; a correction is the cashier's word. The balance
  * is the outstanding principal, interest, fees and penalties after the repayment, and only for a tenant that asked for
  * it; it is computed only then.
+ *
+ * <p>The reminders and arrears notices (issue #227, FR-NTF-02, FR-NTF-06) are queued by the nightly arrears run after
+ * each active loan's recompute: {@code loan.due_in_3_days} once an unpaid instalment is three days away or less, and
+ * {@code loan.due_today} on its due date (category reminder); {@code loan.overdue_1}, {@code loan.overdue_7} and
+ * {@code loan.overdue_30} once the loan's DPD reaches the step (category arrears), keyed on the oldest unpaid
+ * instalment and carrying the loan's arrears and days past due, in the wording of chapter 11 section 11.3.1. The event reference is the schedule item, so the outbox key is (item, reminder type): a rerun,
+ * or a night when the step is still the same, queues nothing new. A night the job missed is caught up by the next one,
+ * with the step the loan has reached by then. The channel holds them for the tenant's window, expires them at its end,
+ * and applies the opt-out and the caps.
  */
 @Component
 class LoanNotices {
@@ -34,6 +49,22 @@ class LoanNotices {
     static final String DISBURSED = "loan.disbursed";
     static final String REPAYMENT = "loan.repayment_received";
     static final String CLOSED = "loan.closed";
+    static final String DUE_IN_3_DAYS = "loan.due_in_3_days";
+    static final String DUE_TODAY = "loan.due_today";
+    static final String OVERDUE_1 = "loan.overdue_1";
+    static final String OVERDUE_7 = "loan.overdue_7";
+    static final String OVERDUE_30 = "loan.overdue_30";
+
+    /**
+     * One reminder or arrears notice the nightly run owes the borrower: about this item, for this amount (what is due
+     * on it, or the loan's arrears), with the loan's days past due for an arrears notice.
+     */
+    record Reminder(String templateKey, String category, UUID itemId, long amountMinor, LocalDate dueDate, int dpd) {
+
+        boolean arrears() {
+            return Outbox.ARREARS.equals(category);
+        }
+    }
 
     private final SmsEvents sms;
     private final MemberLookup members;
@@ -90,6 +121,71 @@ class LoanNotices {
     /** @param closingTxnId the repayment that settled the loan; a loan can close, reopen and close again, once each time */
     void closed(Loan loan, UUID closingTxnId, LocalDate valueDate) {
         queue(CLOSED, loan, closingTxnId, valueDate, () -> Map.of("loan_no", loan.loanNo()));
+    }
+
+    /**
+     * The reminders the loan's position calls for on {@code today}, oldest first; pure. An instalment with nothing
+     * left to pay (paid, waived) is never reminded.
+     */
+    static List<Reminder> reminders(List<Item> items, Position position, LocalDate today) {
+        List<Item> byDue = items.stream()
+                .sorted(Comparator.comparing((Item i) -> i.dueDate).thenComparingInt(i -> i.no))
+                .toList();
+        List<Reminder> out = new ArrayList<>();
+        for (Item i : byDue) {
+            long unpaid = i.unpaidTotal();
+            long days = ChronoUnit.DAYS.between(today, i.dueDate);
+            if (unpaid <= 0 || days < 0 || days > 3) {
+                continue;
+            }
+            out.add(new Reminder(days == 0 ? DUE_TODAY : DUE_IN_3_DAYS, Outbox.REMINDER, i.id, unpaid, i.dueDate, 0));
+        }
+        int dpd = position.daysPastDue();
+        if (dpd >= 1) {
+            byDue.stream()
+                    .filter(i -> i.dueDate.isBefore(today) && i.unpaidContract() > 0)
+                    .findFirst()
+                    .ifPresent(oldest -> out.add(new Reminder(
+                            dpd >= 30 ? OVERDUE_30 : dpd >= 7 ? OVERDUE_7 : OVERDUE_1,
+                            Outbox.ARREARS,
+                            oldest.id,
+                            position.arrearsMinor(),
+                            oldest.dueDate,
+                            dpd)));
+        }
+        return out;
+    }
+
+    /**
+     * Queues what {@link #reminders} calls for; each is a no-op when it was queued before or SMS is off. Returns how
+     * many new rows were written.
+     */
+    int remind(Loan loan, List<Item> items, Position position, LocalDate today) {
+        int queued = 0;
+        for (Reminder r : reminders(items, position, today)) {
+            SmsEvents.Result result = sms.queueWhenActive(
+                    r.templateKey(),
+                    loan.memberId(),
+                    r.itemId().toString(),
+                    r.category(),
+                    null,
+                    () -> members.smsPhone(loan.memberId()).orElse(null),
+                    () -> r.arrears()
+                            ? Map.of(
+                                    "loan_no", loan.loanNo(),
+                                    "currency", loan.currency(),
+                                    "arrears", sms.amount(r.amountMinor(), loan.currency()),
+                                    "dpd", String.valueOf(r.dpd()))
+                            : Map.of(
+                                    "loan_no", loan.loanNo(),
+                                    "currency", loan.currency(),
+                                    "amount", sms.amount(r.amountMinor(), loan.currency()),
+                                    "due_date", sms.date(r.dueDate())));
+            if (result == SmsEvents.Result.QUEUED) {
+                queued++;
+            }
+        }
+        return queued;
     }
 
     /**

@@ -9,8 +9,8 @@ import java.util.Set;
 /**
  * The event types whose SMS wording a tenant may change (FR-NTF-03, spec 4.10), each with the placeholders it
  * offers. An event appears here when the application sends it today: the two savings receipts, the loan events
- * (disbursed, repayment received, closed) and the investment events (funded, maturing, paid out) of issue #221. The
- * reminders (#227) join the list when their slice queues them, with their own whitelist. The default text is the one
+ * (disbursed, repayment received, closed) and the investment events (funded, maturing, paid out) of issue #221, and
+ * the reminders and arrears notices of issue #227. The default text is the one
  * the channel sends when a tenant has no override ({@link OutboxTemplates}); a test renders every default through this
  * language so the two cannot drift.
  *
@@ -71,6 +71,22 @@ final class SmsTemplateEvents {
     private static final List<Placeholder> INVESTMENT_MATURING =
             List.of(TENANT, CURRENCY, AMOUNT, ACCOUNT_NO, MATURITY);
 
+    /** A reminder before or on a due date: what is due on the instalment, and its date. */
+    private static final List<Placeholder> LOAN_DUE = List.of(
+            TENANT,
+            CURRENCY,
+            new Placeholder("amount", "The amount due on the instalment", "120,000", 24),
+            LOAN_NO,
+            new Placeholder("due_date", "The due date, day/month/year", "15/11/2026", 10));
+
+    /** An arrears notice: the loan's arrears and its days past due. */
+    private static final List<Placeholder> LOAN_ARREARS = List.of(
+            TENANT,
+            CURRENCY,
+            new Placeholder("arrears", "The amount in arrears", "120,000", 24),
+            LOAN_NO,
+            new Placeholder("dpd", "The days past due", "7", 5));
+
     private static final List<Placeholder> INVESTMENT_PAID_OUT = List.of(
             TENANT,
             CURRENCY,
@@ -101,7 +117,12 @@ final class SmsTemplateEvents {
                     "Investment maturing",
                     INVESTMENT_MATURING,
                     Set.of("account_no", "maturity_date")),
-            event("investment.paid_out", "Investment paid out", INVESTMENT_PAID_OUT, Set.of("account_no", "amount")));
+            event("investment.paid_out", "Investment paid out", INVESTMENT_PAID_OUT, Set.of("account_no", "amount")),
+            event("loan.due_in_3_days", "Loan instalment due in 3 days", LOAN_DUE, Set.of("loan_no", "amount")),
+            event("loan.due_today", "Loan instalment due today", LOAN_DUE, Set.of("loan_no", "amount")),
+            event("loan.overdue_1", "Loan overdue (1 day)", LOAN_ARREARS, Set.of("loan_no", "arrears")),
+            event("loan.overdue_7", "Loan overdue (7 days)", LOAN_ARREARS, Set.of("loan_no", "arrears")),
+            event("loan.overdue_30", "Loan overdue (30 days)", LOAN_ARREARS, Set.of("loan_no", "arrears")));
 
     private static Event event(String key, String title, List<Placeholder> placeholders, Set<String> required) {
         return new Event(key, title, OutboxTemplates.defaultText(CHANNEL, key), placeholders, required);

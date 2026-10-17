@@ -464,7 +464,21 @@ class SmsEventsIT extends IntegrationTest {
                         "15/10/2027",
                         "voucher_no",
                         "VC-HQ-000044"));
-        Map<String, String> expected = Map.of(
+        // The reminders and arrears notices of #227.
+        Map<String, String> due =
+                Map.of("loan_no", "LN-HQ-000123", "currency", "UGX", "amount", "520,000", "due_date", "15/11/2026");
+        params.put("loan.due_in_3_days", due);
+        params.put("loan.due_today", due);
+        params.put(
+                "loan.overdue_1",
+                Map.of("loan_no", "LN-HQ-000123", "currency", "UGX", "arrears", "520,000", "dpd", "1"));
+        params.put(
+                "loan.overdue_7",
+                Map.of("loan_no", "LN-HQ-000123", "currency", "UGX", "arrears", "520,000", "dpd", "7"));
+        params.put(
+                "loan.overdue_30",
+                Map.of("loan_no", "LN-HQ-000123", "currency", "UGX", "arrears", "1,040,000", "dpd", "31"));
+        Map<String, String> expected = new java.util.HashMap<>(Map.of(
                 "loan.disbursed",
                 "Test Lender: Loan LN-HQ-000123: UGX 500,000 paid out on 15/10/2026. First payment UGX 600,000 due 15/11/2026.",
                 "loan.repayment_received",
@@ -476,11 +490,26 @@ class SmsEventsIT extends IntegrationTest {
                 "investment.maturing",
                 "Test Lender: Investment IV000007 of UGX 2,000,000 matures on 15/10/2027. Please contact us about your instruction.",
                 "investment.paid_out",
-                "Test Lender: Paid UGX 2,240,000 on investment IV000007 on 15/10/2027. Voucher VC-HQ-000044.");
+                "Test Lender: Paid UGX 2,240,000 on investment IV000007 on 15/10/2027. Voucher VC-HQ-000044."));
+        expected.put(
+                "loan.due_in_3_days", "Test Lender: Reminder, UGX 520,000 for loan LN-HQ-000123 is due on 15/11/2026.");
+        expected.put("loan.due_today", "Test Lender: UGX 520,000 for loan LN-HQ-000123 is due today.");
+        expected.put(
+                "loan.overdue_1",
+                "Test Lender: Loan LN-HQ-000123 is overdue. Amount in arrears UGX 520,000. Please pay or contact us.");
+        expected.put(
+                "loan.overdue_7",
+                "Test Lender: Loan LN-HQ-000123 is 7 days overdue. Amount in arrears UGX 520,000. Please pay or contact us.");
+        expected.put(
+                "loan.overdue_30",
+                "Test Lender: Loan LN-HQ-000123 is 31 days overdue. Amount in arrears UGX 1,040,000. Please pay or contact"
+                        + " us.");
         UUID member = UUID.randomUUID();
         int n = 0;
         for (Map.Entry<String, Map<String, String>> e : params.entrySet()) {
-            boolean reminder = e.getKey().equals("investment.maturing");
+            boolean reminder =
+                    e.getKey().equals("investment.maturing") || e.getKey().startsWith("loan.due_");
+            boolean arrears = e.getKey().startsWith("loan.overdue_");
             assertThat(queue(
                             rig,
                             t,
@@ -489,13 +518,13 @@ class SmsEventsIT extends IntegrationTest {
                             e.getKey(),
                             e.getValue(),
                             "ref-" + n++,
-                            reminder ? Outbox.REMINDER : null))
+                            reminder ? Outbox.REMINDER : arrears ? Outbox.ARREARS : null))
                     .isEqualTo(Result.QUEUED);
         }
-        // The reminder is held for the window; at 10:00 Kampala it is inside it, so all six go.
-        assertThat(rig.dispatch()).isEqualTo(6);
+        // The reminders are held for the window; at 10:00 Kampala it is inside it, so all eleven go.
+        assertThat(rig.dispatch()).isEqualTo(11);
 
-        assertThat(rig.provider.sent()).hasSize(6);
+        assertThat(rig.provider.sent()).hasSize(11);
         for (RecordingSmsProvider.Sent sent : rig.provider.sent()) {
             assertThat(sent.to()).isEqualTo("+256700000120");
             assertThat(expected.values()).contains(sent.body());
@@ -516,7 +545,7 @@ class SmsEventsIT extends IntegrationTest {
                 .param(t.tenantId())
                 .query()
                 .listOfRows();
-        assertThat(deliveries).hasSize(6);
+        assertThat(deliveries).hasSize(11);
         for (Map<String, Object> d : deliveries) {
             assertThat(d.get("status")).isEqualTo("sent");
             assertThat(d.get("segments")).isEqualTo(1);
@@ -526,7 +555,7 @@ class SmsEventsIT extends IntegrationTest {
             assertThat(d.get("recipient_masked")).isEqualTo("+256*****0120");
         }
         assertThat(deliveries.stream().map(d -> d.get("category")).distinct().toList())
-                .containsExactlyInAnyOrder("transactional", "reminder");
+                .containsExactlyInAnyOrder("transactional", "reminder", "arrears");
     }
 
     @Test

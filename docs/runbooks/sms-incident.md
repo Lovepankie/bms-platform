@@ -42,7 +42,9 @@ A tenant says its members get no text. Read `GET /api/v1/platform/tenants/{tenan
    to switch SMS on after reading the notice.
 3. **A cap of 0**, theirs or yours, stops everything including receipts; a lowered cap reached holds reminders until tomorrow
    and receipts at twice the cap. The tenant's settings page shows both caps and the use today and this month.
-4. **The window** holds reminders and arrears notices outside it; receipts are not held by it.
+4. **The window** holds reminders and arrears notices outside it; receipts are not held by it. Reminders and arrears notices
+   are queued by the nightly arrears job (`lending.loan-arrears`, 00:15 tenant time, #227), so they appear in the outbox
+   after midnight and wait for the window; the job's audit row (`lending.arrears.run`) counts `reminders_queued`.
 5. **The sender id was withdrawn**: messages still go, from the shared sender.
 6. **The member or the number is on the opt-out list** (`blocked_optout`): the business administrator lifts it from the member's page or the opt-out list, giving a reason; do it only when the person asked.
 

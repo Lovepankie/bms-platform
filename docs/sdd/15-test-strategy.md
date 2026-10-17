@@ -362,6 +362,13 @@ permission), lists the items due today and over a range with its limit, lists ar
 logs actions with each refusal, and lets the nightly run keep one promise, break one and leave one
 open, with the action guard refusing a change of note. A pending approval stays current across the
 nightly run (`frArr01_theNightlyRunLeavesPendingApprovalsCurrent`).
+
+Reminders and arrears notices (#227). `LoanRemindersTest` covers the selection without a database: from three days before a
+due date, on it, never for a paid instalment, the arrears steps by DPD on the oldest unpaid instalment. `LoanEventSmsIT` runs
+the nightly job with a fixed clock: a reminder queued at 21:00 Kampala waits for 08:00, a rerun queues nothing, the arrears
+notices step from 1 to 7 days once each, a tenant without SMS gets none. `SmsEventsIT` sends each of the five through the real
+channel with its exact default text in one segment; `SmsTemplateLanguageTest` and `SmsTemplatesIT` list them with their
+placeholders.
 `-Dbms.golden.record=true` rewrites the golden files for review. `make document-samples` writes
 each document as a PDF and a PNG per page to `backend/target/document-samples`, the visual check
 of the quality bar before a template change is merged.
