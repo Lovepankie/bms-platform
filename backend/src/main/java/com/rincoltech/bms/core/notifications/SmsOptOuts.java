@@ -44,9 +44,11 @@ public interface SmsOptOuts {
     /**
      * Opts the member out of {@code scope}, or changes the scope of the active opt-out. Doing it twice with the same
      * scope changes nothing and audits nothing. {@code phoneE164} (the member's phone, may be null) is kept only as a
-     * masked number for the screen.
+     * masked number for the screen. Narrowing {@code ALL} to {@code REMINDERS} is a partial lift: it needs the tenant
+     * administrator and a {@code reason} of 3 to 200 characters (422 {@code reason_required}), kept in the audit row;
+     * for any other change the reason is ignored.
      */
-    Entry optOut(UUID memberId, String phoneE164, Scope scope);
+    Entry optOut(UUID memberId, String phoneE164, Scope scope, String reason);
 
     /**
      * Lifts the member's active opt-out; false when there was none. Only the tenant administrator may (the opt-out is the

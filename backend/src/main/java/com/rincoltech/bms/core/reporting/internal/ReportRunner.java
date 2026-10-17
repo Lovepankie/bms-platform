@@ -44,12 +44,13 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p><b>A run knows who holds it.</b> A claim stamps the run with this process ({@code host/instance}, for the log and
  * the audit), and every {@code heartbeat} the process beats for each run it is executing. A run is failed as
- * {@code interrupted} when its heartbeat is older than {@code heartbeat-stale} (a killed process stops beating); on the
- * first tick of a new process the limit is two beats instead, because whoever was beating before it started is dead
- * (a recreated container has a new host name, so the rule does not look at who owned the run). On a clean stop the
- * workers are interrupted, given {@link #STOP_WAIT} to close their runs as {@code interrupted} themselves, and any run
- * still open is failed (and audited) here; the containers allow 30 seconds to stop, so a deploy neither blocks the
- * single staging place nor is killed halfway.
+ * {@code interrupted} when its heartbeat is older than {@code heartbeat-stale} (a killed process stops beating), the
+ * same limit on every tick including a new process's first one: a peer instance that is alive but slow (a long pause on
+ * a loaded host) must not lose a healthy run to a process that has just started, and a recreated container has a new
+ * host name, so the rule does not look at who owned the run, only at whether it still beats. On a clean stop the
+ * workers are interrupted, given {@link #STOP_WAIT} to close their runs as {@code interrupted} themselves, and only
+ * the runs this process was executing that are still open are failed (and audited) here, never another instance's;
+ * the containers allow 30 seconds to stop, so a deploy neither blocks the single staging place nor is killed halfway.
  */
 @Component
 class ReportRunner {
@@ -73,7 +74,6 @@ class ReportRunner {
     private final ThreadPoolExecutor workers;
     private final ScheduledExecutorService beat;
     private final String owner;
-    private final AtomicBoolean firstTick = new AtomicBoolean(true);
     private final AtomicBoolean stopped = new AtomicBoolean();
 
     /** The runs this process is executing, by run id, with their tenant. */
@@ -201,12 +201,12 @@ class ReportRunner {
     }
 
     /**
-     * Fails the runs whose process is gone, per tenant, audited: no heartbeat for {@code heartbeat-stale}, or, on the
-     * first tick of this process, for two beats.
+     * Fails the runs whose process is gone, per tenant, audited: no heartbeat for {@code heartbeat-stale}. The limit
+     * is the same on the first tick of a new process as on every other (earlier it was two beats on the first tick,
+     * which let a freshly started instance fail a healthy run of a live peer whose beat was a few seconds late).
      */
     private void sweepAbandoned() {
-        Duration allowed = firstTick.getAndSet(false) ? limits.heartbeat.multipliedBy(2) : limits.heartbeatStale;
-        Instant cutoff = clock.now().minus(allowed);
+        Instant cutoff = clock.now().minus(limits.heartbeatStale);
         List<UUID> tenants = jdbc.sql("SELECT app_tenants_with_stale_report_runs(?)")
                 .param(java.sql.Timestamp.from(cutoff))
                 .query(UUID.class)

@@ -106,11 +106,11 @@ class SmsOptOutService implements SmsOptOuts {
 
     @Override
     @Transactional
-    public Entry optOut(UUID memberId, String phoneE164, Scope scope) {
+    public Entry optOut(UUID memberId, String phoneE164, Scope scope, String reason) {
         // Another person may lift the row between our insert finding it and our reading it; then the insert is tried
         // again.
         for (int attempt = 0; attempt < 3; attempt++) {
-            Optional<Entry> done = tryOptOut(memberId, phoneE164, scope);
+            Optional<Entry> done = tryOptOut(memberId, phoneE164, scope, reason);
             if (done.isPresent()) {
                 return done.get();
             }
@@ -122,7 +122,7 @@ class SmsOptOutService implements SmsOptOuts {
                 "The opt-out changed while it was being saved. Try again.");
     }
 
-    private Optional<Entry> tryOptOut(UUID memberId, String phoneE164, Scope scope) {
+    private Optional<Entry> tryOptOut(UUID memberId, String phoneE164, Scope scope, String reason) {
         String masked = phoneE164 == null
                 ? null
                 : PhoneNumbers.forSms(phoneE164).map(SmsOutboxChannel::maskE164).orElse(null);
@@ -153,7 +153,8 @@ class SmsOptOutService implements SmsOptOuts {
             }
             Map<String, Object> was = found.get();
             if (!scope.key().equals(was.get("scope"))) {
-                requireMayWeaken(Scope.of((String) was.get("scope")).orElseThrow(), scope);
+                String why = requireReasonIfNarrowing(
+                        Scope.of((String) was.get("scope")).orElseThrow(), scope, reason);
                 jdbc.sql("UPDATE sms_opt_outs SET scope = ? WHERE id = ?")
                         .params(scope.key(), was.get("id"))
                         .update();
@@ -162,7 +163,9 @@ class SmsOptOutService implements SmsOptOuts {
                         (UUID) was.get("id"),
                         state("member", memberId, (String) was.get("scope"), "staff", (String)
                                 was.get("recipient_masked")),
-                        state("member", memberId, scope.key(), "staff", (String) was.get("recipient_masked")));
+                        withReason(
+                                state("member", memberId, scope.key(), "staff", (String) was.get("recipient_masked")),
+                                why));
             }
         }
         return status(memberId);
@@ -173,10 +176,29 @@ class SmsOptOutService implements SmsOptOuts {
      * only by the tenant administrator: the opt-out is the member's protection against being pestered (spec 4.14), so a
      * single click by a field officer must not undo it.
      */
-    private static void requireMayWeaken(Scope was, Scope now) {
-        if (Scope.ALL == was && Scope.REMINDERS == now) {
-            requireAdministrator();
+    private static boolean narrows(Scope was, Scope now) {
+        return Scope.ALL == was && Scope.REMINDERS == now;
+    }
+
+    /**
+     * Narrowing is a partial lift: the administrator's, and with a reason like any lift. Returns the trimmed reason, or
+     * null when the change is not a narrowing (then any reason given is ignored).
+     */
+    private static String requireReasonIfNarrowing(Scope was, Scope now, String reason) {
+        if (!narrows(was, now)) {
+            return null;
         }
+        requireAdministrator();
+        return requireReason(reason);
+    }
+
+    private static Map<String, Object> withReason(Map<String, Object> state, String reason) {
+        if (reason == null) {
+            return state;
+        }
+        Map<String, Object> out = new java.util.LinkedHashMap<>(state);
+        out.put("reason", reason);
+        return out;
     }
 
     private static void requireAdministrator() {
@@ -296,11 +318,11 @@ class SmsOptOutService implements SmsOptOuts {
 
     /** Adds a number to the list, or sets the scope of the one already there (the administrator's intent, either way). */
     @Transactional
-    Added addNumber(String rawPhone, Scope scope) {
+    Added addNumber(String rawPhone, Scope scope, String reason) {
         String e164 = PhoneNumbers.forSms(rawPhone)
                 .orElseThrow(() -> ApiException.validation(List.of(new FieldProblem(
                         "phone", "invalid_phone", "Use a Uganda mobile number such as 0700 000 001."))));
-        Upserted result = upsertNumber(e164, scope, false, "number");
+        Upserted result = upsertNumber(e164, scope, false, "number", reason);
         return new Added(item(result.id()), "added".equals(result.outcome()));
     }
 
@@ -314,11 +336,11 @@ class SmsOptOutService implements SmsOptOuts {
      * Puts a number on the list. {@code strongerOnly} (an import) never weakens a row that is already there: a
      * pasted list must not lift a block an administrator set to {@code all}.
      */
-    private Upserted upsertNumber(String e164, Scope scope, boolean strongerOnly, String source) {
+    private Upserted upsertNumber(String e164, Scope scope, boolean strongerOnly, String source, String reason) {
         // Another person may lift the row between our insert finding it and our reading it; then the insert is tried
         // again.
         for (int attempt = 0; attempt < 3; attempt++) {
-            Optional<Upserted> done = tryUpsertNumber(e164, scope, strongerOnly, source);
+            Optional<Upserted> done = tryUpsertNumber(e164, scope, strongerOnly, source, reason);
             if (done.isPresent()) {
                 return done.get();
             }
@@ -327,7 +349,8 @@ class SmsOptOutService implements SmsOptOuts {
                 HttpStatus.CONFLICT, "try_again", "Try again", "The list changed while it was being saved. Try again.");
     }
 
-    private Optional<Upserted> tryUpsertNumber(String e164, Scope scope, boolean strongerOnly, String source) {
+    private Optional<Upserted> tryUpsertNumber(
+            String e164, Scope scope, boolean strongerOnly, String source, String reason) {
         String hash = hasher.of(e164);
         String masked = SmsOutboxChannel.maskE164(e164);
         UUID created = jdbc.sql("INSERT INTO sms_opt_outs (id, tenant_id, created_at, member_id, recipient_hash,"
@@ -360,6 +383,8 @@ class SmsOptOutService implements SmsOptOuts {
         boolean stronger = Scope.ALL == scope && "reminders".equals(had);
         boolean differs = !scope.key().equals(had);
         if (differs && (!strongerOnly || stronger)) {
+            // Narrowing a number's block is a partial lift: it needs a reason (an import never narrows).
+            String why = requireReasonIfNarrowing(Scope.of(had).orElseThrow(), scope, reason);
             jdbc.sql("UPDATE sms_opt_outs SET scope = ? WHERE id = ?")
                     .params(scope.key(), id)
                     .update();
@@ -367,7 +392,7 @@ class SmsOptOutService implements SmsOptOuts {
                     "core.sms.opt_out.changed",
                     id,
                     state("number", null, had, source, masked),
-                    state("number", null, scope.key(), source, masked));
+                    withReason(state("number", null, scope.key(), source, masked), why));
             return Optional.of(new Upserted(id, "changed"));
         }
         return Optional.of(new Upserted(id, "unchanged"));
@@ -449,7 +474,7 @@ class SmsOptOutService implements SmsOptOuts {
             }
             String outcome = dryRun
                     ? previewOutcome(e164.get(), scope)
-                    : upsertNumber(e164.get(), scope, true, "import").outcome();
+                    : upsertNumber(e164.get(), scope, true, "import", null).outcome();
             switch (outcome) {
                 case "added" -> added++;
                 case "changed" -> changed++;

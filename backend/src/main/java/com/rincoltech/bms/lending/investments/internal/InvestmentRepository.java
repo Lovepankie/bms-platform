@@ -384,6 +384,20 @@ class InvestmentRepository {
                         """).params(start, maturity, agreedReturn, certificateNo, id).update();
     }
 
+    /** Whether the investor is to be texted about this investment (maturity reminders); false for a register import. */
+    boolean notifyMember(UUID id) {
+        return jdbc.sql("SELECT notify_member FROM lending_investments WHERE id = ?")
+                .param(id)
+                .query(Boolean.class)
+                .single();
+    }
+
+    void notifyMember(UUID id, boolean notify) {
+        jdbc.sql("UPDATE lending_investments SET notify_member = ? WHERE id = ?")
+                .params(notify, id)
+                .update();
+    }
+
     /** Writes the balance and status columns together; every money event ends here. */
     void balances(UUID id, String status, long principalHeld, long accrued, long due, long paid, LocalDate closedOn) {
         jdbc.sql("""

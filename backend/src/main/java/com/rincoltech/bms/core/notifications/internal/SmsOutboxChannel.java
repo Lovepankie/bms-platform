@@ -164,6 +164,12 @@ final class SmsOutboxChannel implements OutboxChannel {
             return prepared.result();
         }
 
+        // A send that ran past its lease may have been withdrawn by a reversal meanwhile: ask once more, immediately
+        // before the provider call, and do not call it for a row that is no longer waiting (ADR-036, third amendment).
+        if (!stillPending(row.outboxId())) {
+            finish(row, prepared, provider.name(), "failed", null, "cancelled_reversed");
+            return Result.refused("cancelled_reversed");
+        }
         SmsProvider.Outcome outcome;
         try {
             outcome = provider.send(prepared.to(), prepared.text(), prepared.senderId(), delivery.idempotencyKey());
@@ -193,6 +199,14 @@ final class SmsOutboxChannel implements OutboxChannel {
                 yield Result.refused(outcome.failureReason());
             }
         };
+    }
+
+    /** Platform step: whether the outbox row is still pending (a reversal may have cancelled it). */
+    private boolean stillPending(UUID outboxId) {
+        return Boolean.TRUE.equals(transactions.execute(tx -> jdbc.sql("SELECT notification_outbox_is_pending(?)")
+                .param(outboxId)
+                .query(Boolean.class)
+                .single()));
     }
 
     /** What the first transaction decided: an answer now, or the message to send. */
@@ -345,6 +359,9 @@ final class SmsOutboxChannel implements OutboxChannel {
         }
 
         Map<String, String> params = new HashMap<>(row.params());
+        // An SMS is plain text on one line: a value (the business name is the only free text) loses its control and
+        // direction-changing characters whichever wording is used, the default or the tenant's own.
+        params.replaceAll((name, value) -> SmsTemplateLanguage.clean(value));
         if (!config.includeBalance()) {
             params.remove("balance");
         }

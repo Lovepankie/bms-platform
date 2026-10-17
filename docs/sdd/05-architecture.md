@@ -125,11 +125,14 @@ lending.seed          -> lending.loans (LoanServicing), lending.savings (Savings
                          lending.insights (InsightsSnapshots)
 lending.insights      -> core.tenancy, core.audit, core.jobs, core.notifications,
                          lending.savings (SavingsMetrics), lending.investments (InvestmentMetrics)
-                         (reads the lending and ledger tables with SQL, read-only, under RLS; ADR-030)
+                         (reads the lending and ledger tables with SQL, read-only, under RLS; ADR-030; publishes the
+                         public ports InsightsFigures (ADR-038) and PortfolioFacts with FactDisplay (ADR-037, #223))
 lending.collections   -> lending.loans, lending.members
 lending.reports       -> core.reporting, lending.insights (the public InsightsFigures port, ADR-038)
 lending.advisor       -> core.ai, core.tenancy, core.audit, core.jobs, lending.insights (PortfolioFacts)
-                         (never reads member rows; sends aggregates and aliases only; ADR-037)
+                         (never reads member rows; sends aggregates and aliases only; ADR-037). Built so far (#223):
+                         the kernel, core.ai and lending.insights only; the others come with the settings, the job and
+                         the stored brief in #226
 lending.savings       -> lending.members (member lookup, the receipt SMS phone; ADR-032)
 lending.members       -> core.notifications (the member's SMS opt-out, SmsOptOuts port; ADR-036, #218)
 lending.investments   -> lending.members; lending.savings (monthly return credit) in a follow-up

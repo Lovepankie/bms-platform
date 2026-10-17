@@ -220,7 +220,7 @@ Jobs added by the client extras design (issue #210, each with its slice): `core.
 `core.reporting.report-runner` (every 15 seconds, one run per tenant, one at a time on staging and two elsewhere) and its nightly file expiry
 `core.reporting.report-expiry` (03:30, built in issue #214; `docs/runbooks/reports-operations.md`; files are deleted in batches with no
 transaction open). A report run is stamped with the process that holds it and beaten every 10 seconds (`bms.reports.heartbeat`); a run
-with no beat for a minute (`bms.reports.heartbeat-stale`; two beats on the first tick of a new process) is failed as `interrupted`,
+with no beat for a minute (`bms.reports.heartbeat-stale`; the same limit on the first tick of a new process) is failed as `interrupted`,
 and a clean stop interrupts the workers and gives them 15 seconds to close their runs (the api containers set `stop_grace_period: 30s`),
 `lending.advisor.daily-brief` (per tenant with the assistant on, idempotent by date), and a higher batch for the SMS
 channel of the outbox sender.

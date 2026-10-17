@@ -131,10 +131,4 @@ class InterestTest {
         assertThat(Interest.isPeriodEnd("quarterly", LocalDate.parse("2026-05-31")))
                 .isFalse();
     }
-
-    @Test
-    void smsAmountsUseTheCurrencyExponent() {
-        assertThat(SavingsNotices.format(1_234_567, 0)).isEqualTo("1,234,567");
-        assertThat(SavingsNotices.format(1_234_567, 2)).isEqualTo("12,345.67");
-    }
 }

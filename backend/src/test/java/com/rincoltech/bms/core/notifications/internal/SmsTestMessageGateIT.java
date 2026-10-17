@@ -16,6 +16,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -226,6 +231,87 @@ class SmsTestMessageGateIT extends IntegrationTest {
                         .query(String.class)
                         .single())
                 .isEqualTo("unknown");
+    }
+
+    /** Round-2 review: the gate, the rate limit and the reservation are one step, so a cap cannot be passed twice. */
+    @Test
+    void twoRealTestSendsAtCapMinusOneCannotBothGo() throws Exception {
+        RecordingSmsProvider real = new RecordingSmsProvider();
+        TestDatabase.Fixture t = readyTenant();
+        SmsTenants.set(t.tenantId(), Map.of("daily_cap", 2));
+        assertThat(send(real, t, "0700000611").outcome()).isEqualTo("sent");
+
+        int n = 4;
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        try {
+            CountDownLatch ready = new CountDownLatch(n);
+            CountDownLatch go = new CountDownLatch(1);
+            List<Future<Result>> results = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                results.add(pool.submit(() -> {
+                    ready.countDown();
+                    go.await();
+                    return send(real, t, "0700000611");
+                }));
+            }
+            assertThat(ready.await(30, TimeUnit.SECONDS)).isTrue();
+            go.countDown();
+            int sent = 0;
+            int capped = 0;
+            for (Future<Result> f : results) {
+                Result r = f.get(60, TimeUnit.SECONDS);
+                if ("sent".equals(r.outcome())) {
+                    sent++;
+                } else {
+                    assertThat(r.reason()).isEqualTo("cap_reached");
+                    capped++;
+                }
+            }
+            assertThat(sent).isEqualTo(1);
+            assertThat(capped).isEqualTo(n - 1);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(real.sent()).hasSize(2);
+        assertThat(deliveries(t)).isEqualTo(2);
+    }
+
+    /** Round-2 review: a message the provider accepted is never missing from the log, even if the log cannot be settled. */
+    @Test
+    void anAcceptedRealTestSendIsStillCountedWhenItsLogRowCannotBeSettled() {
+        RecordingSmsProvider real = new RecordingSmsProvider();
+        TestDatabase.Fixture t = readyTenant();
+        SmsTenants.set(t.tenantId(), Map.of("daily_cap", 1));
+        TestDatabase.owner()
+                .sql("CREATE OR REPLACE FUNCTION test_refuse_settle() RETURNS trigger LANGUAGE plpgsql AS $$"
+                        + " BEGIN RAISE EXCEPTION 'cannot settle'; END $$")
+                .update();
+        TestDatabase.owner()
+                .sql("CREATE TRIGGER test_refuse_settle BEFORE UPDATE ON sms_deliveries FOR EACH ROW"
+                        + " WHEN (NEW.tenant_id = '" + t.tenantId() + "') EXECUTE FUNCTION test_refuse_settle()")
+                .update();
+        try {
+            Result r = send(real, t, "0700000611");
+            // The provider took it: the caller is told so, and nothing throws.
+            assertThat(r.sent()).isTrue();
+            assertThat(r.outcome()).isEqualTo("sent");
+            assertThat(real.sent()).hasSize(1);
+            // The reservation made before the send is the log row, and it counts.
+            assertThat(TestDatabase.owner()
+                            .sql("SELECT status FROM sms_deliveries WHERE tenant_id = ?")
+                            .param(t.tenantId())
+                            .query(String.class)
+                            .single())
+                    .isEqualTo("queued");
+            assertThat(send(real, t, "0700000611").reason()).isEqualTo("cap_reached");
+        } finally {
+            TestDatabase.owner()
+                    .sql("DROP TRIGGER IF EXISTS test_refuse_settle ON sms_deliveries")
+                    .update();
+            TestDatabase.owner()
+                    .sql("DROP FUNCTION IF EXISTS test_refuse_settle()")
+                    .update();
+        }
     }
 
     @Test

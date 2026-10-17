@@ -24,6 +24,7 @@ class WithdrawalAction implements ApprovalAction {
     static final String REFERENCE = "external_reference";
     static final String CLOSE = "close";
     static final String REASON = "reason";
+    static final String NOTIFY = "notify_member";
 
     private final SavingsRepository repo;
     private final SavingsServicer servicer;
@@ -67,6 +68,7 @@ class WithdrawalAction implements ApprovalAction {
     public void execute(Execution e) {
         String method = (String) e.payload().get(METHOD);
         String reference = (String) e.payload().get(REFERENCE);
+        boolean notify = !Boolean.FALSE.equals(e.payload().get(NOTIFY));
         if (Boolean.TRUE.equals(e.payload().get(CLOSE))) {
             servicer.close(
                     e.subjectId(),
@@ -75,13 +77,23 @@ class WithdrawalAction implements ApprovalAction {
                     (String) e.payload().get(REASON),
                     e.approvalId(),
                     e.makerId(),
-                    e.checkerId());
+                    e.checkerId(),
+                    notify);
             return;
         }
         AccountRow a = repo.lock(e.subjectId()).orElseThrow(ApiException::notFound);
         long amount = ((Number) e.payload().get(AMOUNT)).longValue();
         servicer.checkWithdrawal(a, amount, servicer.today(), method);
         servicer.withdraw(
-                a, amount, servicer.today(), method, reference, e.approvalId(), e.makerId(), e.checkerId(), "staff");
+                a,
+                amount,
+                servicer.today(),
+                method,
+                reference,
+                e.approvalId(),
+                e.makerId(),
+                e.checkerId(),
+                "staff",
+                notify);
     }
 }

@@ -91,9 +91,10 @@ export function OptOutRows({ items, term, canManage, busy, onRemove }: {
 function AddNumber({ onAdded }: { onAdded: () => void }) {
   const [phone, setPhone] = useState('');
   const [scope, setScope] = useState('all');
+  const [reason, setReason] = useState('');
   const add = useMutation({
-    mutationFn: () => sms.addOptOut(phone, scope),
-    onSuccess: () => { setPhone(''); onAdded(); },
+    mutationFn: () => sms.addOptOut(phone, scope, reason.trim() === '' ? undefined : reason.trim()),
+    onSuccess: () => { setPhone(''); setReason(''); onAdded(); },
   });
   const error = add.error instanceof SmsError ? add.error : null;
   return (
@@ -105,12 +106,16 @@ function AddNumber({ onAdded }: { onAdded: () => void }) {
       <h2>Add a number</h2>
       <label htmlFor="sms-oo-phone">Phone number</label>
       <input id="sms-oo-phone" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => { setPhone(e.target.value); add.reset(); }} aria-invalid={error !== null} />
-      {error && <p role="alert" className="field-error">{error.fields.phone ?? error.message}</p>}
+      {error && !error.fields.reason && <p role="alert" className="field-error">{error.fields.phone ?? error.message}</p>}
       <label htmlFor="sms-oo-scope">Stop</label>
       <select id="sms-oo-scope" value={scope} onChange={(e) => setScope(e.target.value)}>
         <option value="all">{SCOPE_WORDS.all}</option>
         <option value="reminders">{SCOPE_WORDS.reminders}</option>
       </select>
+      <label htmlFor="sms-oo-reason">Why (only to make a number's block narrower)</label>
+      <input id="sms-oo-reason" autoComplete="off" maxLength={200} value={reason} onChange={(e) => { setReason(e.target.value); add.reset(); }} aria-invalid={error !== null && error.fields.reason !== undefined} />
+      <p className="field-hint">Needed only when the number is already stopped for every message and you choose reminders only. Words about why, not names or numbers.</p>
+      {error?.fields.reason && <p role="alert" className="field-error">{error.fields.reason}</p>}
       {add.isSuccess && <p role="status" className="alert alert-success">Added.</p>}
       <p>
         <button type="submit" className="rt-primary" disabled={phone.trim() === '' || add.isPending}>

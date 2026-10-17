@@ -3,6 +3,7 @@ package com.rincoltech.bms.lending.savings.internal;
 import com.rincoltech.bms.core.approvals.Approvals;
 import com.rincoltech.bms.core.approvals.Approvals.ActionRequest;
 import com.rincoltech.bms.core.audit.AuditLog;
+import com.rincoltech.bms.core.notifications.SmsEvents;
 import com.rincoltech.bms.core.operations.Idempotency;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
@@ -295,7 +296,8 @@ class SavingsService {
                     r.paymentMethodKey(),
                     blankToNull(r.externalReference()),
                     CurrentPrincipal.require().userId(),
-                    "staff");
+                    "staff",
+                    SmsEvents.notifyMember(r.notifyMember()));
             return new DepositResult(
                     repo.transaction(txn).orElseThrow(), view(repo.account(id).orElseThrow()));
         });
@@ -311,6 +313,7 @@ class SavingsService {
             payload.put(WithdrawalAction.AMOUNT, r.amountMinor());
             payload.put(WithdrawalAction.METHOD, r.paymentMethodKey());
             payload.put(WithdrawalAction.REFERENCE, blankToNull(r.externalReference()));
+            payload.put(WithdrawalAction.NOTIFY, SmsEvents.notifyMember(r.notifyMember()));
             Approvals.Outcome o = approvals.request(new ActionRequest(
                     WithdrawalAction.TYPE, a.branchId(), a.id(), a.version(), r.amountMinor(), a.currency(), payload));
             return outcome(id, o, a.txnCount(), "withdrawal");
@@ -328,6 +331,7 @@ class SavingsService {
             payload.put(WithdrawalAction.METHOD, r.paymentMethodKey());
             payload.put(WithdrawalAction.REFERENCE, blankToNull(r.externalReference()));
             payload.put(WithdrawalAction.REASON, blankToNull(r.reason()));
+            payload.put(WithdrawalAction.NOTIFY, SmsEvents.notifyMember(r.notifyMember()));
             Approvals.Outcome o = approvals.request(new ActionRequest(
                     WithdrawalAction.TYPE, a.branchId(), a.id(), a.version(), amount, a.currency(), payload));
             return outcome(id, o, a.txnCount(), "withdrawal");

@@ -5,7 +5,8 @@
 Proposed (issue #210, design only; spec `docs/specs/client-extras.md` section 5). A first test of the
 idea, not a commitment to a model or a vendor. Builds on ADR-003 (row-level security), ADR-008
 (jobs), ADR-030 (the insights read model and its metrics dictionary) and ADR-036 (the same
-fallback and cost-recording habits). Migrations are numbered when each build slice merges.
+fallback and cost-recording habits). Migrations are numbered when each build slice merges. The gateway is built by issue #220
+and the facts, aliases, validator and evaluation harness by issue #223 (see the two Amendments below).
 
 ## Context
 
@@ -189,3 +190,98 @@ they left open, and one change:
 
 The first provider is configured as DeepSeek's OpenAI-compatible API (`BMS_AI_BASE_URL=https://api.deepseek.com`) with its
 cheapest chat model, the model name being `BMS_AI_MODEL` only; no key, price or model is in the repository.
+
+## Amendment of 2026-10-14 (issue #223): the facts, the aliases, the validator and the harness, as built
+
+Slice C2 built decisions 3, 5 and 10 without a model call, a route, a table or a migration. The numbers refer to the Decision
+section above (the Context list in this file is numbered 1 to 11). Where the build sharpened or changed them:
+
+1. **Decision 3, the small-count rule has a definition.** "Fewer than five loans or members" is applied to the population each
+   figure is computed over: the loans in arrears for arrears, the loans more than 30 days late for PAR 30, the loans that paid
+   for collected, the loans behind a ledger line for a revenue figure, the loans written off for write-offs, else the active
+   loans. One to four makes the figure `fewer than 5` and removes its changes, and so does the hiding of any figure that would
+   give it back by subtraction (the contribution when any component is hidden, the collection rate when collected is hidden). A
+   change is also removed when the earlier period's population was small. Zero is not small. A branch or product under five
+   loans is one suppressed fact and nothing else. A residual risk is accepted and stated: shown groups subtracted from a total
+   give the suppressed ones' share, which item 8 closes by complementary suppression.
+2. **Decision 3, the facts are the endpoints' figures, changes included.** Changes are the same figures for the range a week
+   and a month earlier (stocks from the snapshot of that end date, flows from that range's transactions), the difference in
+   the figure's units, absent where the earlier figure is unknowable. `PortfolioFacts` takes the caller's scope from
+   `InsightsFigures.scope` and builds from the stored scope alone, like `InsightsFigures.par`, which also supplies the branch
+   and product groups. A scope resolved for today and read after midnight reads the snapshot of its day, or is refused with
+   `snapshot_unavailable`; it never reads the next day's live tables. A branch manager's facts equal the endpoints' figures for
+   that manager, proven metric by metric.
+3. **Decision 3, aliases are by id order.** `Branch 1` and `Product A` follow the order of the ids, so an alias carries no
+   information about a name or a size; the real names travel in a separate list that prints nowhere, and the prompt is built from
+   an alias-only structure. Real names are not matched in an answer: they were never in the prompt.
+4. **Decision 5, what "derivable" means.** A number passes when it equals the display or plain form of a cited fact in any
+   written form (digits of any script, separators, compact `1.2m`, number words including `twelve point five`, roman numerals,
+   fractions, percent, basis points, currency before or after), or is that figure correctly rounded to the precision shown, for
+   compact amounts and rates only and within five percent; a rate to one decimal is the display and always passes. Units must
+   agree (a number before something counted is a count), signs must agree with a change, dates must be among those given, an
+   alias must exist, and a hidden fact accounts for no number. **A number belongs to the metric it sits beside**: figures swapped
+   between metrics, or a figure of an uncited metric, fail (`metric_mismatch`); a number with no unit and no metric named may
+   only be a count. Refusals use a closed code list (spec 5.13) and never carry a sentence of the model's.
+5. **Decision 5, the personal data shape screen stays.** The text our own renderer writes, and the facts the model is given, are
+   run through the shape screen: an email, a phone number, an ID number or UUID shape fails them, and so does a planted string or a
+   repeat of the system prompt (a canary phrase); a defect in the validator itself refuses the answer (`validator_error`).
+6. **Decision 5, direction attribution is no longer the validator's job.** The older design tied a direction word in the model's
+   prose to a change fact. There is no prose to tie: the movement word, the period and better or worse are written by our phrase
+   table from the sign of the change and the metric's polarity, so a figure cannot be described as moving the wrong way.
+7. **Decision 5 revised twice, now final: the model returns a structured choice and no text at all (round 5 of the review of
+   #223).** The first versions validated figures, units, signs, periods and direction words in free prose. Round 3 replaced
+   figures with `{{placeholder}}` citations but left free prose around them. Four independent reviews each still found wording
+   that got through (a comparison, a negation, a vague quantity, a sentence that contradicted what our code wrote beside it), so
+   the owner and the coordinator decided to remove free prose from the AI path entirely rather than add a fifth layer of rules.
+   **The decision.** The model returns one JSON object,
+   `{"findings":[{"fact_keys":[up to 3 keys from the given facts],"topic":<enum>,"action":<catalogue code>,"priority":"high|medium|low"}],"watch":[fact keys]}`,
+   and nothing else. Any extra field, any string that is not exactly an enum value or a given fact key, a key that is out of
+   scope, hidden or suppressed, a key of the wrong topic, an action of another topic, a duplicate key, a number of findings or keys
+   over the limit, or malformed JSON refuses the whole answer, and the person sees the deterministic facts-only brief instead.
+   **Our code writes every sentence** from reviewed templates in `advisor/catalogue.json` using the facts (name, value, change,
+   period, better or worse) and the catalogue action text. The catalogue holds 19 actions with stable codes under nine topics
+   (arrears follow-up, collections focus, disbursement pace, collateral cover, concentration, write-off review, cash flow from
+   expected repayments, data quality, portfolio risk and profitability; no text mentions officers, savings or investments, which
+   no fact covers); each action is bound to one topic and each topic to the
+   fact families it may cite. Catalogue text has no digit of any script, no markup and no placeholder except `{{where}}`, which
+   only our code fills (with the aliases of the groups cited, mapped back to names for the person who asked); the loader refuses
+   a catalogue that breaks this, or that repeats a topic or action code. An action that says no action is needed is marked
+   `calm` and is allowed only at low priority and when no cited change is worse. A real name written back into a sentence is
+   neutralised (markup, markdown and line breaks removed). An answer with no finding shows the key figures. The system prompt is
+   a reviewed resource filled from the catalogue in the file's order, with an exact golden test of its text.
+   **Why.** A structured choice from closed sets can be checked completely: every string the model sends is compared to an
+   enumerated set, so there is nothing a clever sentence can get past. The wording a person reads is reviewed once, in a
+   resource file, instead of being re-checked on every answer.
+   **What stays.** The placeholder and fact-key checks (now exact-match checks), hidden and suppressed handling, aliases,
+   complementary suppression, scope, the midnight date rule, `PromptScreen` on input, and the older `NumericValidator`
+   (re-deriving every number in the rendered text from the facts it cites) as a second line that catches a defect in a template
+   or in the substitution. **Cost.** The brief is mechanical and can only say what the catalogue can say; a new kind of advice is a
+   reviewed catalogue entry, not a better prompt. **Tests.** Every attack of rounds 1 to 4 is kept as a fixture
+   (`AttackCorpus`), refused or rendered safely; a property test renders every catalogue action with every fact of its topic and
+   checks that the output is only template text plus code-written values; the schema refuses extras; each validator rule has a
+   mutation switch and the golden evaluation fails when one is switched off.
+   **Issues #226 (daily brief) and #230 (questions) use this structured path.** The daily brief is the same findings and watch
+   list for one day; a free-text question is mapped to a topic from the enum and to the facts of that topic, and is answered by
+   the same renderer, never by a free answer.
+8. **Decision 3, complementary suppression replaces the accepted residual risk.** The first amendment accepted that shown groups
+   subtracted from a total give a hidden group's share. The owner's rule is never to expose small counts, so it is closed: when
+   the hidden and left-out remainder is one to four loans, the smallest other groups are hidden too until it is five or more,
+   and likewise for the loans more than 30 days late behind a group's PAR 30. The same logic covers overlapping windows, counted
+   in distinct LOANS and not in transactions or schedule items: when the loans that moved money on the days of a window other than
+   today number one to four, the window's figure is hidden (disbursed, collected, expected and the rate), since it would give
+   them back by subtraction from today's figure; one loan paying six times on other days is one loan and hides the figure. The PAR
+   levels are treated as a partition of the late loans.
+9. **Decision 10, the harness exists and is offline.** `AdvisorEvaluation` runs a fixed golden set of fabricated fact sets and
+   recorded answers, adversarial ones included, through the real chain with the recording client, checks every request before
+   it would be sent, and scores by category with a gate of 100 percent. The same cases go to a real provider with
+   `AdvisorEvaluation.with(client)`; wiring that run and the model comparison is slice C5 (#232).
+10. **Decision 3, a change needs five loans on both sides and a difference of none or five (round 5).** A change was hidden only
+    when the earlier window's own figure was over a small population. Write-offs of 6 loans now and 5 a week earlier gave "+1 loan"
+    and one loan's exact amount. A change is now left out for every figure whenever the distinct loans behind the two figures
+    differ by one to four or either side is one to four; the figure itself stays when it is over five loans or more.
+
+**Better:** the claims of decisions 3 and 5 are now executable and structural: a planted name, an invented figure or a wrong
+direction cannot reach a screen because the model writes no text, and each control has a test that fails if it is removed.
+**Worse:** the brief reads mechanically and cannot say anything the catalogue does not, and an answer outside the schema is
+replaced by the facts-only brief. **Watch for:** growing the catalogue; every action needs a topic, a golden case and a review
+of its text (no digit, no claim about a figure), and a new fact family must be bound to a topic on purpose.

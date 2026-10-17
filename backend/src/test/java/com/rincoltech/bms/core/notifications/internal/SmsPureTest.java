@@ -70,13 +70,19 @@ class SmsPureTest {
     void everyDefaultTemplateFitsOneSegmentOrDeclaresTwo() {
         OutboxTemplates templates = new OutboxTemplates();
         // Fabricated values at a realistic length: a 30 character business name, a 9 digit amount.
-        Map<String, String> params = Map.of(
-                "tenant_name", "Test Lender and Savings Society",
-                "currency", "UGX",
-                "amount", "123,456,789",
-                "account_no", "SV000001",
-                "receipt_no", "RC-HQ-000001",
-                "balance", "987,654,321");
+        Map<String, String> params = Map.ofEntries(
+                Map.entry("tenant_name", "Test Lender and Savings Society"),
+                Map.entry("currency", "UGX"),
+                Map.entry("amount", "123,456,789"),
+                Map.entry("account_no", "SV000001"),
+                Map.entry("receipt_no", "RC-HQ-000001"),
+                Map.entry("balance", "987,654,321"),
+                Map.entry("loan_no", "LN-HQ-000123"),
+                Map.entry("date", "15/10/2026"),
+                Map.entry("next_amount", "123,456,789"),
+                Map.entry("next_due_date", "15/11/2026"),
+                Map.entry("maturity_date", "15/10/2027"),
+                Map.entry("voucher_no", "VC-HQ-000001"));
         // The templates that may take two segments: the ones that carry a balance.
         for (String key : OutboxTemplates.keys("sms")) {
             int segments = SmsSegments.count(
@@ -179,5 +185,13 @@ class SmsPureTest {
         assertThat(w.nextOpen(kampala("18:00"))).isEqualTo(kampala("09:30").plusSeconds(86400));
         // The day is the Kampala day, not the UTC day: 23:30 Kampala is 20:30 UTC the same date.
         assertThat(w.endOfDay(kampala("23:30"))).isEqualTo(kampala("17:00"));
+    }
+
+    @Test
+    void smsAmountsUseTheCurrencyExponent() {
+        assertThat(SmsEventsService.format(1_234_567, 0)).isEqualTo("1,234,567");
+        assertThat(SmsEventsService.format(1_234_567, 2)).isEqualTo("12,345.67");
+        assertThat(SmsEventsService.format(0, 2)).isEqualTo("0.00");
+        assertThat(SmsEventsService.format(5, 2)).isEqualTo("0.05");
     }
 }

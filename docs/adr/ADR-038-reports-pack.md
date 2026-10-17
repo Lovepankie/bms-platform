@@ -150,8 +150,8 @@ Building the framework settled five things the first text left open. None revers
    margin, so the application's own deadline fires first and the run ends with `timeout`); every timestamp is written from the
    business clock so a test can pin it. Concurrency is counted in the database (a read-only definer function), so the limit holds
    across API instances, and a run left `running` by a process that died is failed as `interrupted`: every run is stamped with its process and beaten every 10
-   seconds, a run with no beat for a minute is failed by the next runner tick (two beats on the first tick of a new process, since whatever was
-   beating before it started is dead; who owned the run does not matter, a recreated container has a new host name), and a clean stop
+   seconds, a run with no beat for a minute is failed by the next runner tick (the same limit on the first tick of a new process, so a slow live peer
+   never loses a healthy run; who owned the run does not matter, a recreated container has a new host name), and a clean stop
    interrupts the workers, gives them 15 seconds inside the containers' 30 second stop grace period, and fails and audits what is left, so
    a deploy never blocks the one place of the staging host for the length of a timeout. The figures of the port are totalled as the loans arrive in blocks (memory
    by group, not by loan) and call a checkpoint every 1,000 loans, so a cancel or a timeout does not wait for the first row. The repeat

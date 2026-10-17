@@ -300,6 +300,17 @@ final class GoldenModel {
         return total;
     }
 
+    /** The distinct loans with a schedule item due in the range, active at some point in it. */
+    long loansDue(LocalDate from, LocalDate to, Predicate<Loan> filter) {
+        return items.stream()
+                .filter(i -> between(i.due(), from, to)
+                        && activeInRange(loans.get(i.loan()), from)
+                        && filter.test(loans.get(i.loan())))
+                .map(Item::loan)
+                .distinct()
+                .count();
+    }
+
     long collectedOnDue(LocalDate from, LocalDate to, Predicate<Loan> filter) {
         Map<UUID, Item> byId = new HashMap<>();
         items.forEach(i -> byId.put(i.id(), i));

@@ -601,7 +601,7 @@ public class LendingSeeder {
             for (UUID id : fundings.getOrDefault(d, List.of())) {
                 investing.fundApproved(id, d, "cash", CASHIER, MANAGER);
             }
-            investing.runDaily(d);
+            investing.runDaily(d, false);
             for (UUID id : collected) {
                 if (returnDue(id) > 0) {
                     investing.payDueReturn(id, d, "mtn_momo", CASHIER);

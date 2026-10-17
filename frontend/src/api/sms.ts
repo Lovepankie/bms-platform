@@ -170,6 +170,7 @@ const MESSAGES: Record<string, string | undefined> = {
   rate_limited: 'Too many test messages this hour. Try again later.',
   invalid_phone: 'Use a Uganda mobile number such as 0700 000 001.',
   sender_id_taken: 'Another business already holds this sender id.',
+  reason_required: 'Say why, in 3 to 200 characters.',
 };
 
 const FIELD_CODES: Record<string, string | undefined> = {
@@ -223,8 +224,12 @@ export const sms = {
     ) as SmsOptOutPage;
   },
 
-  async addOptOut(phone: string, scope: string): Promise<SmsOptOut> {
-    return unwrap(await api.POST('/api/v1/sms/opt-outs', { body: { phone, scope } }), 'Could not add the number.') as SmsOptOut;
+  /** A reason is needed only to narrow a number already stopped for every message (3 to 200 characters, kept in the audit row). */
+  async addOptOut(phone: string, scope: string, reason?: string): Promise<SmsOptOut> {
+    return unwrap(
+      await api.POST('/api/v1/sms/opt-outs', { body: { phone, scope, reason } }),
+      'Could not add the number.',
+    ) as SmsOptOut;
   },
 
   async importOptOuts(numbers: string, scope: string, dryRun: boolean): Promise<SmsImportResult> {
@@ -292,11 +297,12 @@ export const sms = {
     ) as MemberSmsOptOut;
   },
 
-  async setMemberOptOut(memberId: string, scope: string): Promise<MemberSmsOptOut> {
+  /** Narrowing every message to reminders needs the administrator and a reason; any other change takes none. */
+  async setMemberOptOut(memberId: string, scope: string, reason?: string): Promise<MemberSmsOptOut> {
     return unwrap(
       await api.PUT('/api/v1/lending/members/{member_id}/sms-opt-out', {
         params: { path: { member_id: memberId } },
-        body: { scope },
+        body: { scope, reason },
       }),
       'Could not save the SMS choice.',
     ) as MemberSmsOptOut;

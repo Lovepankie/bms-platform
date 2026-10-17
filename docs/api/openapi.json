@@ -98,6 +98,12 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "reason" : {
+            "description" : "Required (3 to 200 characters, kept in the audit row) when this narrows a number from all to reminders; ignored otherwise",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "scope" : {
             "minLength" : 1,
             "type" : "string"
@@ -1282,6 +1288,10 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "notify_member" : {
+            "description" : "False records the disbursement without a text message to the borrower; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.",
+            "type" : "boolean"
+          },
           "payment_method_key" : {
             "pattern" : "cash|bank|mtn_momo|airtel_money",
             "type" : "string"
@@ -2457,6 +2467,10 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "notify_member" : {
+            "description" : "False records the withdrawal without a text message to the investor; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.",
+            "type" : "boolean"
+          },
           "payment_method_key" : {
             "pattern" : "cash|bank|mtn_momo|airtel_money",
             "type" : "string"
@@ -2475,6 +2489,10 @@
             "maxLength" : 100,
             "minLength" : 0,
             "type" : "string"
+          },
+          "notify_member" : {
+            "description" : "False records the funding without a text message to the investor; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.",
+            "type" : "boolean"
           },
           "payment_method_key" : {
             "pattern" : "cash|bank|mtn_momo|airtel_money",
@@ -2668,6 +2686,10 @@
             "maxLength" : 100,
             "minLength" : 0,
             "type" : "string"
+          },
+          "notify_member" : {
+            "description" : "False records the payout without a text message to the investor; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.",
+            "type" : "boolean"
           },
           "payment_method_key" : {
             "pattern" : "cash|bank|mtn_momo|airtel_money",
@@ -5261,6 +5283,10 @@
             "maxLength" : 100,
             "minLength" : 0,
             "type" : "string"
+          },
+          "notify_member" : {
+            "description" : "False records the repayment without a receipt text message to the borrower; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.",
+            "type" : "boolean"
           },
           "payment_method_key" : {
             "pattern" : "cash|bank|mtn_momo|airtel_money",
@@ -14488,6 +14514,10 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "notify_member" : {
+            "description" : "False closes the account without a text message to the member; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.",
+            "type" : "boolean"
+          },
           "payment_method_key" : {
             "pattern" : "cash|bank|mtn_momo|airtel_money",
             "type" : "string"
@@ -14522,6 +14552,10 @@
             "maxLength" : 100,
             "minLength" : 0,
             "type" : "string"
+          },
+          "notify_member" : {
+            "description" : "False records the deposit without a text message to the member; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.",
+            "type" : "boolean"
           },
           "payment_method_key" : {
             "pattern" : "cash|bank|mtn_momo|airtel_money",
@@ -14972,6 +15006,10 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "notify_member" : {
+            "description" : "False records the withdrawal without a text message to the member; omitted or true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.",
+            "type" : "boolean"
+          },
           "payment_method_key" : {
             "pattern" : "cash|bank|mtn_momo|airtel_money",
             "type" : "string"
@@ -15133,6 +15171,12 @@
       },
       "SetMemberSmsOptOutRequest" : {
         "properties" : {
+          "reason" : {
+            "description" : "Required (3 to 200 characters, kept in the audit row) when this narrows all to reminders, which only the tenant administrator may do; ignored otherwise",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "scope" : {
             "minLength" : 1,
             "type" : "string"

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.lending.seed.internal.LendingSeeder;
+import com.rincoltech.bms.testsupport.SmsTenants;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -31,6 +32,9 @@ class LendingSeedIT extends IntegrationTest {
     @Test
     void seedsAnEmptyTenantOnceWithBalancedBooks() {
         TestDatabase.Fixture t = TestDatabase.tenant("seed", true);
+        // SMS is on for this tenant (the operator's switch and its own), so a message the seed queued would show.
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
 
         LendingSeeder.Report report = seeder.seed(t.slug());
 
@@ -142,9 +146,11 @@ class LendingSeedIT extends IntegrationTest {
                         SELECT count(*) FROM lending_savings_accounts WHERE tenant_id = ?
                            AND balances_through <> (now() AT TIME ZONE 'Africa/Kampala')::date - 1
                         """)).isZero();
+        // The seed texts nobody: not a disbursement, a repayment, a deposit, a funding, a payout, nor the maturity
+        // reminder the replayed days make due (the nightly replay runs through today).
         assertThat(TestDatabase.owner()
-                        .sql("SELECT count(*) FROM notification_outbox WHERE idempotency_key LIKE ?")
-                        .param("lending.savings.sms:" + t.tenantId() + "%")
+                        .sql("SELECT count(*) FROM notification_outbox WHERE tenant_id = ?")
+                        .param(t.tenantId())
                         .query(Long.class)
                         .single())
                 .isZero();

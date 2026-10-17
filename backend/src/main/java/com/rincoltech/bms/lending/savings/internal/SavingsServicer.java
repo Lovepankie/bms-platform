@@ -170,6 +170,19 @@ class SavingsServicer implements SavingsServicing {
             String externalReference,
             UUID by,
             String source) {
+        return deposit(a, amountMinor, valueDate, paymentMethodKey, externalReference, by, source, true);
+    }
+
+    /** As above; {@code notifyMember} false (a register import's request) queues no SMS. */
+    UUID deposit(
+            AccountRow a,
+            long amountMinor,
+            LocalDate valueDate,
+            String paymentMethodKey,
+            String externalReference,
+            UUID by,
+            String source,
+            boolean notifyMember) {
         String method = books.methodAccount(paymentMethodKey, a.branchId());
         String receipt = number("RC", "receipt", a.branchId());
         UUID txnId = UUID.randomUUID();
@@ -206,14 +219,12 @@ class SavingsServicer implements SavingsServicing {
                 source,
                 by));
         repo.moved(a.id(), balance, valueDate);
-        audit.record(AuditLog.Entry.created(
-                "lending.savings.deposit_recorded",
-                SUBJECT,
-                a.id(),
-                a.branchId(),
-                movement(txnId, amountMinor, valueDate, receipt)));
-        if (source.equals("staff")) {
-            notices.receipt("savings.deposit", a, txnId, amountMinor, balance, receipt);
+        Map<String, Object> recorded = movement(txnId, amountMinor, valueDate, receipt);
+        recorded.putAll(notices.audit(source, notifyMember, valueDate));
+        audit.record(
+                AuditLog.Entry.created("lending.savings.deposit_recorded", SUBJECT, a.id(), a.branchId(), recorded));
+        if (SavingsNotices.sends(source, notifyMember)) {
+            notices.receipt("savings.deposit", a, txnId, amountMinor, balance, receipt, valueDate);
         }
         return txnId;
     }
@@ -260,6 +271,31 @@ class SavingsServicer implements SavingsServicing {
             UUID makerId,
             UUID checkerId,
             String source) {
+        return withdraw(
+                a,
+                amountMinor,
+                valueDate,
+                paymentMethodKey,
+                externalReference,
+                approvalId,
+                makerId,
+                checkerId,
+                source,
+                true);
+    }
+
+    /** As above; {@code notifyMember} false (a register import's request) queues no SMS. */
+    UUID withdraw(
+            AccountRow a,
+            long amountMinor,
+            LocalDate valueDate,
+            String paymentMethodKey,
+            String externalReference,
+            UUID approvalId,
+            UUID makerId,
+            UUID checkerId,
+            String source,
+            boolean notifyMember) {
         UUID txnId =
                 payOut(a, amountMinor, valueDate, paymentMethodKey, externalReference, approvalId, makerId, source);
         long balance = a.balanceMinor() - amountMinor;
@@ -306,11 +342,12 @@ class SavingsServicer implements SavingsServicing {
         after.put("fee_minor", fee);
         after.put("approval_request_id", approvalId);
         after.put("checker_id", checkerId);
+        after.putAll(notices.audit(source, notifyMember, valueDate));
         audit.record(
                 AuditLog.Entry.created("lending.savings.withdrawal_recorded", SUBJECT, a.id(), a.branchId(), after));
-        if (source.equals("staff")) {
+        if (SavingsNotices.sends(source, notifyMember)) {
             String voucher = repo.transaction(txnId).map(Transaction::receiptNo).orElse(null);
-            notices.receipt("savings.withdrawal", a, txnId, amountMinor, balance, voucher);
+            notices.receipt("savings.withdrawal", a, txnId, amountMinor, balance, voucher, valueDate);
         }
         return txnId;
     }
@@ -397,6 +434,8 @@ class SavingsServicer implements SavingsServicing {
         Transaction t = repo.transaction(txnId).orElseThrow(ApiException::notFound);
         AccountRow a = repo.lock(repo.accountOfTxn(txnId).orElseThrow()).orElseThrow(ApiException::notFound);
         checkReversible(a, t);
+        // The message of the movement being reversed, if the sender has not taken it yet, must not go.
+        notices.reversed(t.id());
         LocalDate today = today();
         UUID by = checkerId != null ? checkerId : makerId;
         AccountRow now = reverseOne(a, t, reason, today, approvalId, by);
@@ -520,6 +559,19 @@ class SavingsServicer implements SavingsServicing {
             UUID approvalId,
             UUID makerId,
             UUID checkerId) {
+        close(accountId, paymentMethodKey, externalReference, reason, approvalId, makerId, checkerId, true);
+    }
+
+    /** As above; {@code notifyMember} false (a register import's request) queues no SMS. */
+    void close(
+            UUID accountId,
+            String paymentMethodKey,
+            String externalReference,
+            String reason,
+            UUID approvalId,
+            UUID makerId,
+            UUID checkerId,
+            boolean notifyMember) {
         AccountRow a = repo.lock(accountId).orElseThrow(ApiException::notFound);
         checkClosable(a, paymentMethodKey);
         LocalDate today = today();
@@ -554,11 +606,12 @@ class SavingsServicer implements SavingsServicing {
         after.put("reason", reason);
         after.put("approval_request_id", approvalId);
         after.put("checker_id", by);
+        after.putAll(notices.audit("staff", notifyMember, today));
         audit.record(new AuditLog.Entry(
                 "lending.savings_account.closed", SUBJECT, a.id(), a.branchId(), Map.of("status", a.status()), after));
-        if (txnId != null) {
+        if (txnId != null && notifyMember) {
             String voucher = repo.transaction(txnId).map(Transaction::receiptNo).orElse(null);
-            notices.receipt("savings.withdrawal", a, txnId, paid, 0, voucher);
+            notices.receipt("savings.withdrawal", a, txnId, paid, 0, voucher, today);
         }
     }
 

@@ -44,8 +44,10 @@ branch --PR--> ci.yml (self-hosted hillary-pi): backend mvn verify | frontend co
 `adr-citation-guard`, `linked-issue-guard`) run on the GitHub-hosted `ubuntu-latest` runner: they
 only read the checked-out diff, hold no secret and cost seconds, and moving them keeps them from
 queueing behind the heavy build on the single Pi runner. The other read-only checks (`ci.yml`,
-`architecture-model`, `estimate-guard`) target `runs-on: [self-hosted, hillary-pi]`: the organisation runner on the ARM64 staging host, in runner
-group `hillary-pi` (two repositories, public repositories refused). It costs no Actions minutes,
+`architecture-model`, `estimate-guard`) target `runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}`: the three
+organisation runners on Jerome's laptop first (runner group `jerome-laptop`, X64, 6 cores, WSL2 with Docker), and the organisation runner on the ARM64
+staging host (runner group `hillary-pi`) only when all three laptop runners are busy or offline. `scripts/ci/pick-runner.sh` sets the repository
+variable `CI_RUNS_ON` every minute (a launchd job on the maintainer's Mac) from the runners' busy flags; both groups admit private repositories only, public repositories refused (ADR-018 amendment 2026-10-16). It costs no Actions minutes,
 which matters because the repository is private. The runner is walled from staging: its own user
 without sudo or the docker group, a rootless Docker daemon (`DOCKER_HOST` is set in the runner's
 environment, which Testcontainers picks up), a 5.5 GB memory and 300% CPU cgroup, and a firewall

@@ -15,9 +15,11 @@ export function reasonProblem(text: string): string | null {
   return null;
 }
 
-export function LiftConfirm({ what, busy, error, onConfirm, onCancel }: {
+export function LiftConfirm({ what, narrow = false, busy, error, onConfirm, onCancel }: {
   /** Who it is about, in words that hold no number: "this member" or "+256*****0601". */
   what: string;
+  /** Narrowing every message down to reminders only is a partial lift: same reason, same confirmation. */
+  narrow?: boolean;
   busy: boolean;
   error: string | null;
   onConfirm: (reason: string) => void;
@@ -27,24 +29,27 @@ export function LiftConfirm({ what, busy, error, onConfirm, onCancel }: {
   const problem = reasonProblem(reason);
   return (
     <form
-      aria-label="Lift the opt-out"
+      aria-label={narrow ? 'Narrow the opt-out' : 'Lift the opt-out'}
       className="rt-card form-stack"
       onSubmit={(e) => {
         e.preventDefault();
         if (problem === null && !busy) onConfirm(reason.trim());
       }}
     >
-      <h3>Lift the opt-out for {what}?</h3>
+      <h3>{narrow ? `Stop only reminders for ${what}?` : `Lift the opt-out for ${what}?`}</h3>
       <p role="note" className="alert alert-warning">
-        Text messages will reach {what} again. Do this only when the person has asked for it. It is recorded with your name and your reason.
+        {narrow
+          ? `Receipts and other messages will reach ${what} again; only reminders stay stopped. `
+          : `Text messages will reach ${what} again. `}
+        Do this only when the person has asked for it. It is recorded with your name and your reason.
       </p>
-      <label htmlFor="sms-lift-reason">Why is it lifted?</label>
+      <label htmlFor="sms-lift-reason">{narrow ? 'Why is it narrowed?' : 'Why is it lifted?'}</label>
       <textarea id="sms-lift-reason" rows={2} maxLength={MAX_REASON} value={reason} onChange={(e) => setReason(e.target.value)} aria-describedby="sms-lift-hint" />
       <p id="sms-lift-hint" className="field-hint">Words about why, not names or phone numbers. {reason.trim().length} of {MAX_REASON} characters.</p>
       {error && <p role="alert" className="field-error">{error}</p>}
       <p className="cluster">
         <button type="submit" className="rt-primary" disabled={problem !== null || busy}>
-          {busy ? 'Lifting' : 'Lift the opt-out'}
+          {busy ? 'Saving' : narrow ? 'Narrow the opt-out' : 'Lift the opt-out'}
         </button>
         <button type="button" className="btn-ghost" disabled={busy} onClick={onCancel}>
           Keep the opt-out

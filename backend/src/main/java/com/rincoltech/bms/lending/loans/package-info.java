@@ -20,6 +20,7 @@
             "core.ledger",
             "core.approvals",
             "core.operations",
+            "core.notifications",
             "lending.members",
             "lending.products",
             "lending.collateral"

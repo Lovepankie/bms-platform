@@ -129,21 +129,24 @@ class SmsTestService {
         if (mode == SmsSettings.Mode.LIVE) {
             return done(eventKey, mode, masked, body, measure, false, "not_sent", "live_mode_preview_only");
         }
-        // JUSTIFICATION-A3: review finding 1 (a real test send must obey the switches, opt-out and caps, and be
-        // logged).
+        // JUSTIFICATION-A3: round-2 review (a real test send is gated, reserved and sent under one lock per business).
         // Sink mode, or allowlist mode with a number that is not listed: a sink of our own, whatever the provider is.
         boolean real =
                 mode == SmsSettings.Mode.ALLOWLIST && settings.allowlist().contains(to);
+        UUID reservation = null;
         if (real) {
             // A real send costs money and reaches a phone, so it obeys everything a real message does: both switches,
-            // the
-            // opt-out list and the caps. (The sink costs nothing and reaches nobody, so it needs none of that.)
-            Optional<String> blocked = tx.execute(s -> gate(to));
-            if (blocked.isPresent()) {
-                return done(eventKey, mode, masked, body, measure, false, "not_sent", blocked.get());
+            // the opt-out list and the caps. The check, the rate limit and the reservation of its place in the delivery
+            // log are one transaction under a lock per business, so two sends at "cap minus one" cannot both pass: the
+            // second sees the first one's reservation. (The sink costs nothing and reaches nobody, so it needs none.)
+            Reserved reserved = tx.execute(s -> reserve(to, masked, body, provider.name(), eventKey));
+            if (reserved.blocked() != null) {
+                return done(eventKey, mode, masked, body, measure, false, "not_sent", reserved.blocked());
             }
+            reservation = reserved.id();
+        } else {
+            limit();
         }
-        limit();
 
         SmsProvider chosen = real ? provider : new SinkSmsProvider();
         SmsProvider.Outcome outcome;
@@ -151,23 +154,99 @@ class SmsTestService {
             outcome = chosen.send(to, body, null, "test:" + UUID.randomUUID());
         } catch (SmsProvider.Transient e) {
             log.info("SMS test message not sent: reason={}", e.getMessage());
+            finish(reservation, "failed", null, e.getMessage());
             return done(eventKey, mode, masked, body, measure, false, "not_sent", e.getMessage());
         } catch (SmsProvider.Ambiguous e) {
             // It may have gone and cost: it is logged unknown, which counts toward the caps.
             log.info("SMS test message outcome unknown: reason={}", e.getMessage());
-            record(eventKey, to, masked, body, chosen.name(), "unknown", null, e.getMessage());
+            finish(reservation, "unknown", null, e.getMessage());
             return done(eventKey, mode, masked, body, measure, false, "not_sent", e.getMessage());
+        } catch (RuntimeException e) {
+            // Whatever happened, it may have reached the provider: the reservation stays counted, as unknown.
+            finish(reservation, "unknown", null, "unexpected_error");
+            throw e;
         }
         return switch (outcome.status()) {
-            case SUNK -> done(eventKey, mode, masked, body, measure, false, "sunk", null);
+            case SUNK -> {
+                finish(reservation, "sunk", outcome, null);
+                yield done(eventKey, mode, masked, body, measure, false, "sunk", null);
+            }
             case ACCEPTED -> {
-                // A real send is in the delivery and cost log, so it counts toward the caps and the usage like any
-                // message.
-                record(eventKey, to, masked, body, outcome.provider(), "sent", outcome, null);
+                // An accepted send is never lost: the reservation already counts, and finish() cannot fail the call.
+                finish(reservation, "sent", outcome, null);
                 yield done(eventKey, mode, masked, body, measure, true, "sent", null);
             }
-            case REJECTED -> done(eventKey, mode, masked, body, measure, false, "not_sent", outcome.failureReason());
+            case REJECTED -> {
+                finish(reservation, "rejected", outcome, outcome.failureReason());
+                yield done(eventKey, mode, masked, body, measure, false, "not_sent", outcome.failureReason());
+            }
         };
+    }
+
+    private record Reserved(String blocked, UUID id) {}
+
+    /**
+     * One transaction, under the business's test lock: the gate, the rate limit, the audit of the attempt and a
+     * {@code queued} delivery row that holds the message's place against the caps until the send's outcome is known.
+     */
+    private Reserved reserve(String to, String masked, String body, String provider, String eventKey) {
+        lockTests();
+        Optional<String> blocked = gate(to);
+        if (blocked.isPresent()) {
+            return new Reserved(blocked.get(), null);
+        }
+        checkRate();
+        auditAttempt();
+        UUID id = UUID.randomUUID();
+        Instant now = clock.now();
+        String templateKey = "test." + eventKey;
+        jdbc.sql("INSERT INTO sms_deliveries (id, tenant_id, created_at, updated_at, outbox_id,"
+                        + " template_key, category, recipient_masked, recipient_hash, provider, segments, status, attempts)"
+                        + " VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, 'transactional', ?, ?, ?, ?,"
+                        + " 'queued', 1)")
+                .params(
+                        id,
+                        Timestamp.from(now),
+                        Timestamp.from(now),
+                        UUID.randomUUID(),
+                        templateKey.substring(0, Math.min(100, templateKey.length())),
+                        masked,
+                        hasher.of(to),
+                        provider,
+                        SmsSegments.count(body).segments())
+                .update();
+        return new Reserved(null, id);
+    }
+
+    /**
+     * Settles the reservation with what the provider said: cost, ids and status. It never throws: if the update fails
+     * the row stays {@code queued}, which counts toward the caps exactly like a sent one, so an accepted message is
+     * never missing from the log.
+     */
+    private void finish(UUID id, String status, SmsProvider.Outcome outcome, String reason) {
+        if (id == null) {
+            return;
+        }
+        try {
+            SmsCost.Cost cost =
+                    outcome == null ? null : SmsCost.parse(outcome.costRaw()).orElse(null);
+            tx.executeWithoutResult(s -> jdbc.sql("UPDATE sms_deliveries SET status = ?, provider_message_id = ?,"
+                            + " provider_segments = ?, cost_minor = ?, currency = ?, cost_raw = ?, failure_reason = ?,"
+                            + " updated_at = ? WHERE id = ?")
+                    .params(
+                            status,
+                            outcome == null ? null : outcome.messageId(),
+                            outcome == null ? null : outcome.providerSegments(),
+                            cost == null ? null : cost.minor(),
+                            cost == null ? null : cost.currency(),
+                            outcome == null ? null : outcome.costRaw(),
+                            reason == null ? null : reason.substring(0, Math.min(100, reason.length())),
+                            Timestamp.from(clock.now()),
+                            id)
+                    .update());
+        } catch (RuntimeException e) {
+            log.error("SMS test message {} was handled but its delivery row could not be settled", id, e);
+        }
     }
 
     /**
@@ -224,67 +303,36 @@ class SmsTestService {
         return Timestamp.from(day.atStartOfDay(BusinessClock.DEFAULT_ZONE).toInstant());
     }
 
-    /** The delivery log row of a real test send: masked number and hash, segments, cost; the text and number are not kept. */
-    private void record(
-            String eventKey,
-            String to,
-            String masked,
-            String body,
-            String provider,
-            String status,
-            SmsProvider.Outcome outcome,
-            String reason) {
-        SmsCost.Cost cost =
-                outcome == null ? null : SmsCost.parse(outcome.costRaw()).orElse(null);
-        Instant now = clock.now();
-        String templateKey = "test." + eventKey;
-        tx.executeWithoutResult(s -> jdbc.sql(
-                        "INSERT INTO sms_deliveries (id, tenant_id, created_at, updated_at, outbox_id,"
-                                + " template_key, category, recipient_masked, recipient_hash, provider, provider_message_id,"
-                                + " segments, provider_segments, cost_minor, currency, cost_raw, status, failure_reason, attempts)"
-                                + " VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, 'transactional', ?, ?, ?, ?, ?, ?,"
-                                + " ?, ?, ?, ?, ?, 1)")
-                .params(
-                        UUID.randomUUID(),
-                        Timestamp.from(now),
-                        Timestamp.from(now),
-                        UUID.randomUUID(),
-                        templateKey.substring(0, Math.min(100, templateKey.length())),
-                        masked,
-                        hasher.of(to),
-                        provider,
-                        outcome == null ? null : outcome.messageId(),
-                        SmsSegments.count(body).segments(),
-                        outcome == null ? null : outcome.providerSegments(),
-                        cost == null ? null : cost.minor(),
-                        cost == null ? null : cost.currency(),
-                        outcome == null ? null : outcome.costRaw(),
-                        status,
-                        reason == null ? null : reason.substring(0, Math.min(100, reason.length())))
-                .update());
-    }
-
-    /** At most {@value #PER_HOUR} an hour per business, counted from the audit log under a lock per business. */
+    /** A sink test: the rate limit and the audit of the attempt, in one transaction under the business's test lock. */
     private void limit() {
         tx.executeWithoutResult(s -> {
-            jdbc.sql(
-                            "SELECT pg_advisory_xact_lock(hashtextextended('sms.test:' || current_setting('app.tenant_id'), 0))")
-                    .query((rs, n) -> 1)
-                    .single();
-            long recent = jdbc.sql("SELECT count(*) FROM audit_log WHERE action = 'core.sms.test_message'"
-                            + " AND created_at > now() - interval '1 hour'")
-                    .query(Long.class)
-                    .single();
-            if (recent >= PER_HOUR) {
-                throw new ApiException(
-                        HttpStatus.TOO_MANY_REQUESTS,
-                        "rate_limited",
-                        "Too many test messages",
-                        "At most " + PER_HOUR + " test messages an hour. Try again later.");
-            }
+            lockTests();
+            checkRate();
             // The attempt is recorded before the send, in this transaction, so the limit holds under concurrent clicks.
             auditAttempt();
         });
+    }
+
+    /** One lock per business for the test messages, held to the end of the transaction. */
+    private void lockTests() {
+        jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended('sms.test:' || current_setting('app.tenant_id'), 0))")
+                .query((rs, n) -> 1)
+                .single();
+    }
+
+    /** At most {@value #PER_HOUR} an hour per business, counted from the audit log (call under the lock). */
+    private void checkRate() {
+        long recent = jdbc.sql("SELECT count(*) FROM audit_log WHERE action = 'core.sms.test_message'"
+                        + " AND created_at > now() - interval '1 hour'")
+                .query(Long.class)
+                .single();
+        if (recent >= PER_HOUR) {
+            throw new ApiException(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    "rate_limited",
+                    "Too many test messages",
+                    "At most " + PER_HOUR + " test messages an hour. Try again later.");
+        }
     }
 
     private void auditAttempt() {

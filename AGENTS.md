@@ -57,7 +57,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   ADR-032) `V30`, the first-run preferences (issue #19, ADR-025) `V31`, and lending investments
   (issue #152, ADR-031) `V32`, and lending insights (issue #153, ADR-030) `V33`. Flyway runs with
   `outOfOrder` off, so a new migration takes a number above the highest one on any open branch
-  (`V34` is the retail cash book, issue #147; `V35` is claimed by lending, issue #176; `V36` is claimed by lending payment methods, issue #160; `V37` is retail branch roles, issue #191; `V38` is the retail two-step transfer, issue #193; `V39` is units of measure, issue #194; `V40` is search, issue #241; `V41` is price lists, issue #195; `V42` is the loan reopen pledge guard, issue #176; `V43` is payment methods, issue #160; `V44` is customer accounts, issue #196; `V45` is returns, issue #201; `V46` is optional documents, issue #197; `V47` is optional purchasing, issue #198; `V48` is landed cost and supplier credit notes, issue #199; `V49` is report runs, issue #214; `V50` is the SMS channel core, issue #212; `V51` is the `core.ai` call log, issue #220; `V52` is the tenant SMS settings, issue #218). The retail analytics pass (issue #149) is reports only on existing data: no migration; its
+  (`V34` is the retail cash book, issue #147; `V35` is claimed by lending, issue #176; `V36` is claimed by lending payment methods, issue #160; `V37` is retail branch roles, issue #191; `V38` is the retail two-step transfer, issue #193; `V39` is units of measure, issue #194; `V40` is search, issue #241; `V41` is price lists, issue #195; `V42` is the loan reopen pledge guard, issue #176; `V43` is payment methods, issue #160; `V44` is customer accounts, issue #196; `V45` is returns, issue #201; `V46` is optional documents, issue #197; `V47` is optional purchasing, issue #198; `V48` is landed cost and supplier credit notes, issue #199; `V49` is report runs, issue #214; `V50` is the SMS channel core, issue #212; `V51` is the `core.ai` call log, issue #220; `V52` is the tenant SMS settings, issue #218; `V53` is the member event SMS cancel, issue #221). The retail analytics pass (issue #149) is reports only on existing data: no migration; its
   queries are in `scripts/db-bench/queries` (k01 to k15).
 - **Built (trade 1 of 10, issue #191, ADR-033):** migration `V37` (`retail_branch_roles`, the permission
   `retail.branch_role.manage`, a backfill of role `both`); the tenant settings group `retail.capabilities`
@@ -232,7 +232,21 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   has switched the assistant on (settings group `ai`, with the acknowledgement) and is named in `BMS_AI_ENABLED_TENANTS`; per
   call, daily tenant and platform token and cost caps are checked before any network call, an input screen refuses personal-data shapes, and a failed call keeps its reservation; no route, no permission, no screen
   (those are C2 to C5). Runbook: `docs/runbooks/ai-assistant.md`.
-- **Client extras (issue #210; slices D1, D2, B1, B3 and C1 are built):** `docs/specs/client-extras.md` specifies mobile money through Pesapal
+- **Built (client extras C2, issue #223, ADR-037):** no migration, no route, no permission, no screen, no model call. The
+  public port `PortfolioFacts` of `lending.insights` (with `FactDisplay`): about forty figures of the metrics dictionary with
+  display forms, polarity and week-on-week and month-on-month changes, under the caller's scope (the same rules as the insights
+  endpoints) or a stored `PortfolioScope`, plus the largest branches and products from `InsightsFigures.par`; any figure over
+  one to four loans or members it is computed over, and every figure that would give it back by subtraction (nested windows,
+  the PAR levels, group remainders), replaced by `fewer than 5`; no officer dimension and no name; a scope read after midnight
+  reads the snapshot of its day. The new module `lending.advisor`: the alias mapper (`Branch 1`, `Product A`), the prompt
+  builder, and the **structured output path**: the model writes no text, it returns JSON of findings (up to three fact keys, a
+  topic, an action code from the reviewed catalogue `advisor/catalogue.json`, a priority) and a watch list; `StructuredValidator`
+  refuses any extra field or any string that is not an enum value or a key of a fact in the prompt (hidden, out of scope or of
+  the wrong topic), and our code renders every sentence from the catalogue and the facts, with a deterministic `Fallback` when
+  the answer is refused; the offline evaluation harness `AdvisorEvaluation` with its golden set. Also fixes the members
+  endpoint answering 500 for a range with no decisions. Spec `docs/specs/client-extras.md` section 5.13; runbook section 9 of
+  `docs/runbooks/ai-assistant.md`.
+- **Client extras (issue #210; slices D1, D2, B1, B3, B4, C1 and C2 are built):** `docs/specs/client-extras.md` specifies mobile money through Pesapal
   (ADR-035), SMS through Africa's Talking on the outbox (ADR-036), the advisory AI brief (ADR-037) and the formal
   reports pack as PDF and Excel (ADR-038), with a note on credit bureaus. The build slices are issues
   #211 to #233 in the order of the spec's section 10.
@@ -257,6 +271,21 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   expressions (`/notification-templates`, previews with segments and a cost estimate from the tenant's own history) and a test
   message that reaches only the sink or the allow-list and obeys the same switches, opt-outs and caps (`/sms/test-message`); the staff screens under `/staff/sms` and the
   member page's text-message choice; no new permission.
+- **Built (extras slice B4, issue #221, ADR-036 third amendment):** migration `V53` (`notification_outbox.leased_until` set by the claim,
+  `notification_outbox_cancel_unclaimed`, `lending_investments.notify_member`, and the operator's failed list hides what a
+  reversal cancelled); no permission, route or screen. The member events of FR-NTF-02 on the outbox:
+  `loan.disbursed` (the amount paid out after deducted fees), `loan.repayment_received` (amount, date, receipt number; the balance only
+  when the tenant's `include_balance` is on), `loan.closed`, the two savings receipts (now through the same port), `investment.funded`,
+  `investment.maturing` (a reminder, held for the tenant's window) and `investment.paid_out` (a return, the maturity payout or an early
+  withdrawal). Modules queue them through the public port `core.notifications.SmsEvents` (`queueWhenActive`): the whole preparation, lookups
+  included, runs in a savepoint (nothing that goes wrong reaches the money; a rollback sends nothing), the number is read without
+  guessing, the key is `sms:<template>:<tenant>:<transaction>:<member>` (one row per event and member, ever). Only a staff event messages a
+  member: not the seed or import ports (the seed's nightly replay passes `runDaily(date, false)`), not a request with `notify_member:
+  false` (accepted only from a holder of `core.settings.manage`, else 403; audited; loan disbursement and repayment, savings deposit, withdrawal and closure, investment funding, payouts, early withdrawal), not an
+  event dated more than `BMS_SMS_EVENT_MAX_AGE_DAYS` (3) days ago. A reversal queues nothing and withdraws the reversed transaction's
+  unclaimed message. Each event has its own placeholder whitelist for the tenant's wording (`/notification-templates` lists eight
+  events). The channel cleans every value (a line feed becomes a space, invisible and direction-changing characters go) whichever
+  wording is used.
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
   Cloudflare Tunnel and pulls every green build of `main` from a `staging` pointer tag; hosts are
@@ -320,7 +349,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `core.approvals` | Maker-checker | APR | 6.5 `approval_requests` | 7.11.5 |
 | `core.platform` | Platform console: tenant creation, modules, subscriptions | TEN | 6.4, 6.5 | 7.11.3 |
 | `core.ledger` | Chart of accounts, periods, journals, reconciliation | GL | 6.6 | 7.11.6 |
-| `core.notifications` | Templates, outbox, SMS and email adapters: the platform outbox with SMTP and Telegram senders (ADR-024) and the SMS channel (ADR-036, issue #212): provider port, Africa's Talking adapter, sink, delivery and cost log, opt-out, window, caps, startup guard; the tenant's SMS settings group, sender id allow-list, opt-out list, wording and test message (issue #218) | NTF | 6.4 `notification_outbox`, SMS tables, 6.5 | 7.11.3, 7.11.7 |
+| `core.notifications` | Templates, outbox, SMS and email adapters: the platform outbox with SMTP and Telegram senders (ADR-024) and the SMS channel (ADR-036, issue #212): provider port, Africa's Talking adapter, sink, delivery and cost log, opt-out, window, caps, startup guard; the tenant's SMS settings group, sender id allow-list, opt-out list, wording and test message (issue #218); the member events port `SmsEvents` that loans, savings and investments queue through (issue #221) | NTF | 6.4 `notification_outbox`, SMS tables, 6.5 | 7.11.3, 7.11.7 |
 | `core.onboarding` | Public sign-up, applications, Verify, Needs info, Reject, Activate (ADR-024) | ONB | 6.4 `onboarding_applications` | 7.11.3 |
 | `core.documents` | PDFs, uploads, object storage, signed URLs | DOC | 6.5 `documents` | 7.11.7 |
 | `core.reporting` | Report catalogue and runs: the queue, the runner job, one snapshot transaction per run into a spool, JSON, CSV, PDF and Excel files, cancel and the 30 day expiry (ADR-038, issues #214 and #217); verticals register their reports | RPT; chapter 14 | 6.5 `report_runs` | 7.11.8 |
@@ -337,8 +366,8 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `lending.seed` | The `seed-lending` command: fabricated loan book, savings and investments for one empty staging tenant (ADR-026, ADR-031, ADR-032) | none | none (writes 6.7 tables) | none (a command, `docs/runbooks/seed-lending.md`) |
 | `lending.savings` | Savings products, accounts, movements, end of day and interest, statements, savings reports (ADR-032) | SAV | 6.7 | 7.11.15 |
 | `lending.investments` | Investment products, investments, returns job, maturity, rollover, early withdrawal, maturity ladder (ADR-031) | INV; 3.25.1 R-INV | 6.7 | 7.11.16 |
-| `lending.insights` | The insights read model, snapshots, daily digest, panel registry (ADR-030) | INS | 6.7 | 7.11.22 |
-| `lending.advisor` (ADR-037, design) | The advisory AI brief and question box over insights facts; aggregates and aliases only | FR-AIA | 6.13 `ai_briefs` | 7.11.24 |
+| `lending.insights` | The insights read model, snapshots, daily digest, panel registry (ADR-030); the public ports `InsightsFigures` (ADR-038) and `PortfolioFacts` (ADR-037) | INS | 6.7 | 7.11.22 |
+| `lending.advisor` (ADR-037; facts, aliases, structured output and harness built, issue #223) | The advisory AI brief and question box over insights facts; aggregates and aliases only; the model returns structured JSON and our code renders every sentence from a reviewed catalogue | FR-AIA | 6.13 `ai_briefs` | 7.11.24 |
 | `lending.reports` (ADR-038; `lending.par` built in #214, `lending.portfolio_outstanding` in #217) | The definitions of the seven formal reports and the monthly pack, built on the insights figures through the public `InsightsFigures` port | RPT; chapter 14 section 14.10 | 6.5 `report_runs` | 7.11.8 |
 | `lending` collections | Due lists, arrears, actions | CLN | 6.7 | 7.11.17 |
 | Member area | Member self-service | MSS; chapter 11 | none | 7.11.18 |

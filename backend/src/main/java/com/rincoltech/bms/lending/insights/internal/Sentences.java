@@ -1,6 +1,6 @@
 package com.rincoltech.bms.lending.insights.internal;
 
-import java.util.Map;
+import com.rincoltech.bms.lending.insights.FactDisplay;
 
 /**
  * The plain sentences of the morning brief and the daily digest: one per movement, in words a
@@ -8,34 +8,16 @@ import java.util.Map;
  */
 final class Sentences {
 
-    /** Currency exponents, as the currencies table seeds them (chapter 6 section 6.4). */
-    private static final Map<String, Integer> EXPONENTS = Map.of("UGX", 0, "KES", 2, "TZS", 2, "USD", 2);
-
     private Sentences() {}
 
     /** {@code UGX 1,250,000} or {@code KES 1,250.50}: no floating point touches the amount. */
     static String money(long minor, String currency) {
-        int exponent = EXPONENTS.getOrDefault(currency, 0);
-        String digits = String.valueOf(Math.abs(minor));
-        while (digits.length() < exponent + 1) {
-            digits = "0" + digits;
-        }
-        String whole = digits.substring(0, digits.length() - exponent);
-        String fraction = exponent > 0 ? "." + digits.substring(digits.length() - exponent) : "";
-        StringBuilder grouped = new StringBuilder();
-        for (int i = 0; i < whole.length(); i++) {
-            if (i > 0 && (whole.length() - i) % 3 == 0) {
-                grouped.append(',');
-            }
-            grouped.append(whole.charAt(i));
-        }
-        return (minor < 0 ? "-" : "") + currency + " " + grouped + fraction;
+        return FactDisplay.money(minor, currency);
     }
 
     /** {@code 12.5 percent} from basis points, rounded half up to one decimal (chapter 14 section 14.1). */
     static String percent(long bp) {
-        long tenths = Math.floorDiv(bp + 5, 10);
-        return (tenths / 10) + "." + Math.abs(tenths % 10) + " percent";
+        return FactDisplay.percent(bp);
     }
 
     private static String loans(long n) {

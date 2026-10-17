@@ -111,12 +111,49 @@ Staff area, SMS (`/staff/sms`; the tenant administrator, who holds `core.setting
   is not on the opt-out list and the caps are not reached; such a test is written to the delivery log and counts against the caps.
 - **Opt-outs** (`/staff/sms/opt-outs`, and on a member's own page): numbers shown masked, add one, paste up to 2000
   (checked first), lift one. Lifting is the business administrator's: it asks for a reason (3 to 200 characters, kept in the
-  audit row) and a confirmation, and so does narrowing a member's "every message" to "reminders"; other staff can only stop
+  audit row) and a confirmation, and so does narrowing "every message" to "reminders" for a member or a number; other staff can only stop
   more. A member's opt-out follows the member to any number; a number added here blocks that number
   whoever the message is about.
 
 The old flat settings `sms_sender_name`, `sms_window_start`, `sms_window_end` and `sms_include_balance` of
 `PATCH /api/v1/settings` are gone (400); migration `V52` copied a tenant's window and balance values into the group once.
+
+## Which events send a message (issue #221)
+
+With both switches on a tenant's members get a text for: a loan disbursed, a repayment received (amount, date and
+receipt number), a loan fully paid, a savings deposit and withdrawal, an investment funded, an investment about to mature
+(a reminder, so held for the sending window) and a payout of an investment (a return, the maturity payout, an early
+withdrawal). Rules to tell a tenant who asks:
+
+- The message goes to the member's own primary phone only, never a next of kin or a guarantor, and only when that
+  number is one we can read without guessing (see Numbers). A member without one simply gets no text; the money is
+  recorded all the same.
+- **A reversal sends no correction.** Telling a member about a correction is the cashier's word. But the reversal
+  withdraws the message of the entry it reverses if that message is still waiting (it marks it failed
+  `cancelled_reversed` and clears the amount and receipt number), so a receipt for an entry made on the wrong account
+  does not reach the wrong person; a message the sender has already taken may be at the provider and cannot be recalled.
+- Only what staff do sends a message. The fabricated seed and the data import commands never text a member.
+- **Load a register (an import of old loans, repayments, deposits or investments) before switching SMS on.** If the
+  data goes in through the staff screens or the API after SMS is on, each request must carry `notify_member: false`
+  (the import scripts do). **Only a business administrator may send `notify_member: false`**: from anyone else the request
+  is refused with 403 and nothing is recorded, so a cashier cannot take money out of an account and leave the member in the
+  dark; run an import as an administrator. Without the flag every entry dated within `BMS_SMS_EVENT_MAX_AGE_DAYS` (default 3) days texts the
+  member. An entry dated further back is never texted, whatever the request says. An investment recorded with the flag
+  false is never reminded of its maturity either (it remembers the choice, and a rollover inherits it); one recorded with
+  it true is reminded, even if its funding date is old, because the reminder is about a future date. When the release with
+  this feature is deployed, every investment that already exists is marked not to be reminded unless staff funded it in the
+  last 3 days, so switching SMS on afterwards reminds no investor of the register you loaded; to have one reminded, fund it
+  through the staff screens (or ask for its flag to be set).
+- The balance is in a loan receipt (and a savings receipt) only when the tenant switched `include_balance` on, and
+  never in wording the tenant wrote itself.
+- A message is written with the money, so a payment that is rolled back sends nothing and the same payment sent twice
+  sends one message. If the provider is down, the payment is not affected: the message waits in the outbox, is retried
+  after 1 and 5 minutes, and a receipt that is an hour old is dropped (`expired`) rather than sent late.
+- Over a cap a receipt is held, not sent, and expires after the hour: a tenant that reaches its cap early in the day
+  loses the receipts after twice the cap. Watch the 80 percent alert and raise the operator's cap before it bites.
+- To find what happened to one payment: the outbox row key ends with the transaction id and the member id
+  (`sms:<template>:<tenant>:<transaction>:<member>`, for savings receipts too), and `sms_deliveries` has the status, segments and
+  cost of the row with the same outbox id. Numbers and texts are in neither.
 
 ## Numbers
 

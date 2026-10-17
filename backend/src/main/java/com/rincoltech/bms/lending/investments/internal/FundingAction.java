@@ -20,6 +20,7 @@ class FundingAction implements ApprovalAction {
     static final String DATE = "value_date";
     static final String METHOD = "payment_method_key";
     static final String REFERENCE = "external_reference";
+    static final String NOTIFY = "notify_member";
 
     private final InvestmentRepository repo;
     private final InvestmentServicer servicer;
@@ -73,6 +74,7 @@ class FundingAction implements ApprovalAction {
                 e.approvalId(),
                 e.makerId(),
                 e.checkerId(),
-                "staff");
+                "staff",
+                !Boolean.FALSE.equals(e.payload().get(NOTIFY)));
     }
 }

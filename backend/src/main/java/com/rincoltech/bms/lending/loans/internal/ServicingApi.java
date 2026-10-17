@@ -29,7 +29,13 @@ final class ServicingApi {
             LocalDate disbursementDate,
 
             @NotNull @Pattern(regexp = METHODS) String paymentMethodKey,
-            @Size(max = 100) String externalReference) {}
+            @Size(max = 100) String externalReference,
+
+            @Schema(
+                    description =
+                            "False records the disbursement without a text message to the borrower; omitted or"
+                                    + " true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.")
+            Boolean notifyMember) {}
 
     @Schema(name = "RepaymentRequest")
     record RepaymentRequest(
@@ -42,7 +48,13 @@ final class ServicingApi {
             LocalDate valueDate,
 
             @NotNull @Pattern(regexp = METHODS) String paymentMethodKey,
-            @Size(max = 100) String externalReference) {}
+            @Size(max = 100) String externalReference,
+
+            @Schema(
+                    description =
+                            "False records the repayment without a receipt text message to the borrower; omitted or"
+                                    + " true sends it where the tenant has SMS on. False is accepted only from a business administrator (403 otherwise); a register import sends it.")
+            Boolean notifyMember) {}
 
     @Schema(name = "LoanReasonRequest")
     record ReasonRequest(@NotBlank @Size(max = 500) String reason) {}
