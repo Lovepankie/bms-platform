@@ -68,7 +68,14 @@ class MemberSmsOptOutController {
     }
 
     @Schema(name = "SetMemberSmsOptOutRequest")
-    record SetRequest(@NotBlank String scope) {}
+    record SetRequest(
+            @NotBlank String scope,
+
+            @Size(max = 200)
+            @Schema(
+                    description =
+                            "Required (3 to 200 characters, kept in the audit row) when this narrows all to reminders, which only the tenant administrator may do; ignored otherwise")
+            String reason) {}
 
     @GetMapping
     @RequiresPermission("lending.members.read")
@@ -91,7 +98,7 @@ class MemberSmsOptOutController {
                 .orElseThrow(() -> ApiException.validation(
                         List.of(new FieldProblem("scope", "invalid", "Use reminders or all."))));
         MemberResponse member = member(memberId, "lending.members.update");
-        optOuts.optOut(memberId, member.phoneE164(), scope);
+        optOuts.optOut(memberId, member.phoneE164(), scope, request.reason());
         return ResponseEntity.ok(Response.of(optOuts.status(memberId)));
     }
 

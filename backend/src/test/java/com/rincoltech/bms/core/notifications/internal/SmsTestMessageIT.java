@@ -64,14 +64,6 @@ class SmsTestMessageIT extends IntegrationTest {
         return t;
     }
 
-    long deliveries(TestDatabase.Fixture t) {
-        return TestDatabase.owner()
-                .sql("SELECT count(*) FROM sms_deliveries WHERE tenant_id = ?")
-                .param(t.tenantId())
-                .query(Long.class)
-                .single();
-    }
-
     @AfterEach
     void clear() {
         CurrentPrincipal.clear();

@@ -655,7 +655,7 @@ findings 4, 6 and 8 hold). Where the build differs from, or sharpens, the text a
 - **Opt-out (4.9).** Two kinds of row: about a member (from the member's page, `PUT /lending/members/{id}/sms-opt-out`; it holds
   no number and follows the member to any number) and about a number alone (the administrator adds one or pastes up to 2000;
   matched by the keyed hash, blocking the number whoever the message is about; a pasted list never weakens a block). Numbers are
-  shown masked and never stored. Stopping more is any permitted user's; lifting a row or narrowing `all` to `reminders` is the tenant
+  shown masked and never stored. Stopping more is any permitted user's; lifting a row or narrowing `all` to `reminders` (member or number) is the tenant
   administrator's, needs a reason of 3 to 200 characters kept in the audit row, and the screens ask for a confirmation first. The
   list searches as you type (ADR-039) and pages by cursor.
 - **Templates (4.10).** Overrides for the two savings receipts (the events the application sends today); each later event brings its
@@ -665,10 +665,15 @@ findings 4, 6 and 8 hold). Where the build differs from, or sharpens, the text a
   shows fabricated data with the tenant's own business name, the encoding and segments, and a cost estimate that is the average
   cost per segment of the tenant's own sent messages in the last 30 days (none without history). The test message reaches only the
   sink or the environment's allow-list and never a number in a live mode; one that would really go out obeys the operator's switch,
-  the tenant's switch, the opt-out list and the caps, and is logged as a delivery.
+  the tenant's switch, the opt-out list and the caps, and is logged as a delivery: the check and a reserved `queued` row happen
+  under one lock per business before the send, so concurrent tests cannot pass a cap together, and an accepted send is counted
+  even if its row cannot be settled afterwards.
 - **Settings moved.** `sms_sender_name`, `sms_window_start`, `sms_window_end` and `sms_include_balance` left `PATCH /settings` for
-  the group; `V52` copies the window and balance values once (a window that fails the limits is not copied). A window stored
-  outside 06:00 to 21:00 or under 60 minutes is replaced by the default on read. A row queued before the switch-on is refused by
+  the group; `V52` copies the window and balance values once, clamping the window to the limits on the way in. A window stored
+  outside the limits is clamped on read as well, by the screen and the channel alike: a start before 06:00 is raised to 06:00 and
+  an end after 21:00 is lowered to 21:00 (05:00 to 23:00 reads as 06:00 to 21:00), a side that is not `HH:mm` takes the default
+  for that side only, and the default 08:00 to 20:00 applies as a whole only when what is left is not a window (not start before
+  end, or under 60 minutes). A row queued before the switch-on is refused by
   the channel as `backlog_dropped`, including one already claimed when the switch was turned on.
 - **Not in this slice.** Per-event wording for the loan and investment events and the reminders (they join when their slices queue
   them), delivery reports and the per-message history screen (#215), the operator's screen for sender ids (the routes and the runbook

@@ -28,17 +28,24 @@ export function scopesOffered(state: Pick<MemberSmsOptOut, 'opted_out' | 'scope'
   });
 }
 
+/** Narrowing every message down to reminders only is a partial lift: it takes a reason, like lifting. */
+export const isNarrowing = (state: Pick<MemberSmsOptOut, 'opted_out' | 'scope'>, scope: string) =>
+  state.opted_out && state.scope === 'all' && scope === 'reminders';
+
 export function MemberSmsView({ state, canChange, isAdministrator = false, busy, error, onSet, onLift }: {
   state: MemberSmsOptOut;
+  /** May change the member (lending.members.update): stopping more, and narrowing for an administrator */
   canChange: boolean;
+  /** Holds core.settings.manage: lifts and narrows, with a reason, whether or not it may otherwise change the member */
   isAdministrator?: boolean;
   busy: boolean;
   error: string | null;
-  onSet: (scope: string) => void;
+  /** The reason is given only for a narrowing */
+  onSet: (scope: string, reason?: string) => void;
   /** Asked for with a reason, from the confirmation panel */
   onLift: (reason: string) => void;
 }) {
-  const [lifting, setLifting] = useState(false);
+  const [panel, setPanel] = useState<'lift' | 'narrow' | null>(null);
   return (
     <section className="rt-card stack" aria-labelledby="member-sms">
       <h2 id="member-sms">Text messages</h2>
@@ -50,27 +57,38 @@ export function MemberSmsView({ state, canChange, isAdministrator = false, busy,
         <p className="hint">Recorded when the member's number was {state.recipient_masked}. It applies to any number the member has.</p>
       )}
       {error && <p role="alert" className="field-error">{error}</p>}
-      {canChange && (
+      {(canChange || (state.opted_out && isAdministrator)) && (
         <p className="cluster">
-          {scopesOffered(state, isAdministrator).map((s) => (
-            <button key={s.value} type="button" className="btn-ghost" disabled={busy} onClick={() => onSet(s.value)}>
+          {canChange && scopesOffered(state, isAdministrator).map((s) => (
+            <button
+              key={s.value}
+              type="button"
+              className="btn-ghost"
+              disabled={busy || panel !== null}
+              onClick={() => (isNarrowing(state, s.value) ? setPanel('narrow') : onSet(s.value))}
+            >
               {state.opted_out ? `Change to: ${s.label.toLowerCase()}` : s.label}
             </button>
           ))}
           {state.opted_out && isAdministrator && (
-            <button type="button" className="rt-primary" disabled={busy || lifting} onClick={() => setLifting(true)}>
+            <button type="button" className="rt-primary" disabled={busy || panel !== null} onClick={() => setPanel('lift')}>
               Allow text messages again
             </button>
           )}
         </p>
       )}
-      {lifting && canChange && isAdministrator && (
+      {panel !== null && isAdministrator && (
         <LiftConfirm
           what="this member"
+          narrow={panel === 'narrow'}
           busy={busy}
           error={null}
-          onConfirm={(reason) => { onLift(reason); setLifting(false); }}
-          onCancel={() => setLifting(false)}
+          onConfirm={(reason) => {
+            if (panel === 'narrow') onSet('reminders', reason);
+            else onLift(reason);
+            setPanel(null);
+          }}
+          onCancel={() => setPanel(null)}
         />
       )}
     </section>
@@ -85,7 +103,8 @@ export function MemberSmsControl({ memberId }: { memberId: string }) {
   const key = ['sms', 'member', memberId];
   const read = useQuery({ queryKey: key, queryFn: () => sms.memberOptOut(memberId), enabled: held.includes('lending.members.read'), retry: false });
   const write = useMutation({
-    mutationFn: (v: { scope: string } | { lift: string }) => ('lift' in v ? sms.liftMemberOptOut(memberId, v.lift) : sms.setMemberOptOut(memberId, v.scope)),
+    mutationFn: (v: { scope: string; reason?: string } | { lift: string }) =>
+      'lift' in v ? sms.liftMemberOptOut(memberId, v.lift) : sms.setMemberOptOut(memberId, v.scope, v.reason),
     onSuccess: (next) => {
       setFailure(null);
       queryClient.setQueryData(key, next);
@@ -102,7 +121,7 @@ export function MemberSmsControl({ memberId }: { memberId: string }) {
       isAdministrator={held.includes('core.settings.manage')}
       busy={write.isPending}
       error={failure}
-      onSet={(scope) => write.mutate({ scope })}
+      onSet={(scope, reason) => write.mutate({ scope, reason })}
       onLift={(reason) => write.mutate({ lift: reason })}
     />
   );

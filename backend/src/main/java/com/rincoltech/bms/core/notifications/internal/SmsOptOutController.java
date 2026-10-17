@@ -93,7 +93,13 @@ class SmsOptOutController {
                             "A Uganda mobile number; anything we cannot read without guessing is 422 invalid_phone")
             String phone,
 
-            @NotBlank String scope) {}
+            @NotBlank String scope,
+
+            @Size(max = 200)
+            @Schema(
+                    description =
+                            "Required (3 to 200 characters, kept in the audit row) when this narrows a number from all to reminders; ignored otherwise")
+            String reason) {}
 
     @Schema(name = "ImportSmsOptOutsRequest")
     record ImportRequest(
@@ -129,7 +135,7 @@ class SmsOptOutController {
     @RequiresPermission("core.settings.manage")
     @Operation(summary = "Add a number to the SMS opt-out list, audited", operationId = "addSmsOptOut")
     ResponseEntity<ItemResponse> add(@Valid @RequestBody AddRequest request) {
-        SmsOptOutService.Added added = service.addNumber(request.phone(), scope(request.scope()));
+        SmsOptOutService.Added added = service.addNumber(request.phone(), scope(request.scope()), request.reason());
         // 201 for a new row; 200 when the number was already on the list (its scope is set as asked).
         return ResponseEntity.status(added.created() ? HttpStatus.CREATED : HttpStatus.OK)
                 .body(ItemResponse.of(added.item()));

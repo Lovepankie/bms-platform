@@ -5059,6 +5059,8 @@ export interface components {
         AddSmsOptOutRequest: {
             /** @description A Uganda mobile number; anything we cannot read without guessing is 422 invalid_phone */
             phone: string;
+            /** @description Required (3 to 200 characters, kept in the audit row) when this narrows a number from all to reminders; ignored otherwise */
+            reason?: string;
             scope: string;
         };
         ApplicantLinkRequest: {
@@ -12173,6 +12175,8 @@ export interface components {
             guarantors: components["schemas"]["LoanGuarantorInput"][];
         };
         SetMemberSmsOptOutRequest: {
+            /** @description Required (3 to 200 characters, kept in the audit row) when this narrows all to reminders, which only the tenant administrator may do; ignored otherwise */
+            reason?: string;
             scope: string;
         };
         SetPaymentMethodRequest: {

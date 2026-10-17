@@ -395,7 +395,7 @@ describe('the opt-out list', () => {
     expect(await screen.findByText('Use a Uganda mobile number such as 0700 000 001.')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '0700000601' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add to the list' }));
-    await waitFor(() => expect(api.addOptOut).toHaveBeenLastCalledWith('0700000601', 'all'));
+    await waitFor(() => expect(api.addOptOut).toHaveBeenLastCalledWith('0700000601', 'all', undefined));
     expect(await screen.findByText('Added.')).toBeTruthy();
   });
 
@@ -447,7 +447,7 @@ describe('the member\'s text-message choice', () => {
     shell(<MemberSmsControl memberId="m1" />);
     expect(await screen.findByText('This member gets text messages.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Stop reminders' }));
-    await waitFor(() => expect(api.setMemberOptOut).toHaveBeenCalledWith('m1', 'reminders'));
+    await waitFor(() => expect(api.setMemberOptOut).toHaveBeenCalledWith('m1', 'reminders', undefined));
     expect(await screen.findByText(/Reminders and arrears notices are not sent. Receipts still are/)).toBeTruthy();
     expect(screen.getByText(/Recorded when the member's number was \+256\*\*\*\*\*1201/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Stop reminders' })).toBeNull();
@@ -458,6 +458,28 @@ describe('the member\'s text-message choice', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lift the opt-out' }));
     await waitFor(() => expect(api.liftMemberOptOut).toHaveBeenCalledWith('m1', 'Member asked at the counter'));
     expect(await screen.findByText('This member gets text messages.')).toBeTruthy();
+  });
+
+  // JUSTIFICATION-A3: round-2 review: a new case (admin without members.update; narrowing needs a reason), no existing test fits.
+  it('shows an administrator who cannot change members the lift button, and asks for a reason before narrowing', async () => {
+    // core.settings.manage without lending.members.update: the server accepts a lift, so the page offers it.
+    const adminOnly = ['core.settings.manage', 'lending.members.read'];
+    api.memberOptOut.mockResolvedValue({ opted_out: true, scope: 'all', recipient_masked: null, since: '2031-03-10T07:00:00Z' });
+    shell(<MemberSmsControl memberId="m1" />, adminOnly);
+    expect(await screen.findByRole('button', { name: 'Allow text messages again' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Change to/ })).toBeNull();
+    cleanup();
+
+    // With both permissions, narrowing is a partial lift: a panel asks for the reason, and nothing is sent before it.
+    shell(<MemberSmsControl memberId="m1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Change to: stop reminders' }));
+    expect(api.setMemberOptOut).not.toHaveBeenCalled();
+    const confirm = screen.getByRole('button', { name: 'Narrow the opt-out' }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Why is it narrowed?'), { target: { value: 'Member asked for reminders only' } });
+    api.setMemberOptOut.mockResolvedValue({ opted_out: true, scope: 'reminders', recipient_masked: null, since: '2031-03-10T07:00:00Z' });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(api.setMemberOptOut).toHaveBeenCalledWith('m1', 'reminders', 'Member asked for reminders only'));
   });
 
   it('lets an officer stop more, but offers neither narrowing nor lifting', async () => {

@@ -98,6 +98,12 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "reason" : {
+            "description" : "Required (3 to 200 characters, kept in the audit row) when this narrows a number from all to reminders; ignored otherwise",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "scope" : {
             "minLength" : 1,
             "type" : "string"
@@ -15165,6 +15171,12 @@
       },
       "SetMemberSmsOptOutRequest" : {
         "properties" : {
+          "reason" : {
+            "description" : "Required (3 to 200 characters, kept in the audit row) when this narrows all to reminders, which only the tenant administrator may do; ignored otherwise",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "scope" : {
             "minLength" : 1,
             "type" : "string"

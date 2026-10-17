@@ -517,8 +517,55 @@ class SmsOptOutIT extends LoanFixtures {
                 .query(String.class)
                 .single();
         assertThat(data).contains("The member asked in person");
-        // The administrator may also narrow one.
+        // Narrowing is a partial lift: the administrator needs a reason for it too, and nothing changes without one.
         assertThat(send(HttpMethod.PUT, memberPath(other), asAdmin, Map.of("scope", "reminders"))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(send(HttpMethod.PUT, memberPath(other), asAdmin, Map.of("scope", "reminders", "reason", "ok"))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(send(HttpMethod.GET, memberPath(other), asAdmin, null)
+                        .getBody()
+                        .get("scope")
+                        .asString())
+                .isEqualTo("all");
+        assertThat(send(
+                                HttpMethod.PUT,
+                                memberPath(other),
+                                asAdmin,
+                                Map.of("scope", "reminders", "reason", "The member asked for reminders only"))
+                        .getBody()
+                        .get("scope")
+                        .asString())
+                .isEqualTo("reminders");
+        String changed = TestDatabase.owner()
+                .sql("SELECT data::text FROM audit_log WHERE tenant_id = ? AND action = 'core.sms.opt_out.changed'"
+                        + " ORDER BY created_at DESC LIMIT 1")
+                .param(t.tenantId())
+                .query(String.class)
+                .single();
+        assertThat(changed).contains("The member asked for reminders only");
+        // Widening needs no reason.
+        assertThat(send(HttpMethod.PUT, memberPath(other), asAdmin, Map.of("scope", "all"))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        // A number row narrowed through the list needs a reason as well; the same number set again as it is does not.
+        ResponseEntity<JsonNode> narrowNumber = add("0700001404", "all");
+        assertThat(narrowNumber.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(add("0700001404", "reminders").getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(add("0700001404", "all").getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(send(
+                                HttpMethod.POST,
+                                OPT_OUTS,
+                                asAdmin,
+                                Map.of(
+                                        "phone",
+                                        "0700001404",
+                                        "scope",
+                                        "reminders",
+                                        "reason",
+                                        "Number now belongs to a shop"))
                         .getBody()
                         .get("scope")
                         .asString())

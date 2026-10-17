@@ -277,19 +277,18 @@ Building the tenant side changed or sharpened these decisions; the numbers refer
   cap, and a receipt may go to twice the cap and is then held.
 - **Decision 5, the window has hard limits.** The tenant's window is on the Africa/Kampala clock, must start before it ends, be at
   least 60 minutes wide and lie between 06:00 and 21:00: a limit a tenant cannot set aside, to protect members from a message at
-  night (spec 4.14, collection harassment). The limits are held on **read** too: a stored window that is not `HH:mm`, not
-  inside 06:00 to 21:00, or shorter than 60 minutes (a flat legacy value copied by `V52`, or a hand edit) is replaced by the
-  default 08:00 to 20:00 by the settings screen and by the channel alike, and `V52` copies a legacy window only when it passes
-  the same rule.
+  night (spec 4.14, collection harassment). The limits are held on **read** too: a stored window outside them (a flat legacy value copied by `V52`, or a hand edit) is
+  clamped to the limits: a start before 06:00 is raised to 06:00 and an end after 21:00 is lowered to 21:00 (so a stored 05:00 to 23:00 reads as 06:00 to 21:00), and a side that is not `HH:mm` falls back to the default for that side only (08:00 for the start, 20:00 for the end); the default window 08:00 to 20:00 applies as a whole only when what is left is not a window (the start is not before the end, or it is under 60 minutes), by the settings screen and by the channel alike.
+  `V52` applies the same clamp while it copies a legacy window.
 - **Decision 8, two kinds of opt-out row.** A row about a **member** (staff on the member's page, or the member's own request
   later) holds no number: it blocks the member whatever number a message goes to, and does not block someone else who later has
   the same number. A row about a **number** alone (an administrator adds one, or pastes a list) blocks that number whoever the
   message is about, matched by the keyed hash; a pasted list never weakens a block that is already there. Scope `all` blocks
   every SMS including receipts (the member's right, stated in the screen); scope `reminders` blocks reminders and arrears
   notices. At most one active row per member and per number; a removal sets `removed_at` and the history stays. **Stopping more
-  is any permitted user's; stopping less is the administrator's.** Lifting a row, and narrowing a member's `all` to `reminders`,
-  need `core.settings.manage`; a lift needs a reason of 3 to 200 characters (422 `reason_required`) that goes into the audit row,
-  and the screens ask for it and for a confirmation before anything is sent. Two staff members racing to add the same row end
+  is any permitted user's; stopping less is the administrator's.** Lifting a row, and narrowing `all` to `reminders` (a partial lift, for a
+  member or for a number), need `core.settings.manage`; a lift or a narrowing needs a reason of 3 to 200 characters (422
+  `reason_required`) that goes into the audit row, and the screens ask for it and for a confirmation before anything is sent. Two staff members racing to add the same row end
   with one row (the loser retries, then 409 `try_again`). A number is
   shown masked (`+256*****1234`) and is never stored; every change is audited with the masked number only (the audit writer
   masks it further).
@@ -315,14 +314,18 @@ Building the tenant side changed or sharpened these decisions; the numbers refer
   checks the list itself and hands any other number to a fresh sink, whatever the provider is); `live` never sends one (the
   preview is the test). A test that would really go out (`allowlist`, a listed number) first passes the operator's switch, the
   tenant's switch, the opt-out list and the caps (not sent, with the reasons `operator_sms_off`, `tenant_sms_off`,
-  `blocked_optout`, `cap_reached`), and is then written to the delivery log with the template key `test.<event>` so it counts
-  against the cap and the cost record; a sink recording is not logged. It starts with `TEST: `, is not an outbox row, is limited
+  `blocked_optout`, `cap_reached`), and is written to the delivery log with the template key `test.<event>` so it counts
+  against the cap and the cost record; a sink recording is not logged. The gate, the rate limit and a `queued` delivery row
+  that holds the message's place are one transaction under a lock per business, taken before the provider is called, so two
+  sends at the cap minus one cannot both pass; the row is settled (sent, failed, rejected or unknown, with the cost) after the
+  call, and if settling fails the row stays `queued`, which counts exactly like a sent one, so a message the provider
+  accepted is never missing from the log or the caps. It starts with `TEST: `, is not an outbox row, is limited
   to 10 an hour per business and is audited with the masked number and the outcome. The staging guard of decision 4 is
   untouched.
 - **Decision 14, `sms_include_balance` moved.** It is `include_balance` in the group `sms`, with the window, and the three flat
   keys are no longer accepted by `PATCH /settings`. Migration `V52` copies a tenant's flat window and balance values into its
-  group once, for a tenant that has no group yet (a window that fails the rule of decision 5 is not copied, so the default
-  applies; the flat keys stay in place, so the containers of the previous release keep
+  group once, for a tenant that has no group yet (the legacy window is clamped to the limits of decision 5 on the way in, and
+  a side that is not `HH:mm` takes the default for that side; the flat keys stay in place, so the containers of the previous release keep
   working until the switch).
 - **Permissions: no new row.** The group is read with `core.settings.read` and changed with `core.settings.manage` (the tenant
   administrator only, which also covers the switch and the sender choice); wording and the test message need

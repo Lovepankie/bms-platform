@@ -111,7 +111,7 @@ Staff area, SMS (`/staff/sms`; the tenant administrator, who holds `core.setting
   is not on the opt-out list and the caps are not reached; such a test is written to the delivery log and counts against the caps.
 - **Opt-outs** (`/staff/sms/opt-outs`, and on a member's own page): numbers shown masked, add one, paste up to 2000
   (checked first), lift one. Lifting is the business administrator's: it asks for a reason (3 to 200 characters, kept in the
-  audit row) and a confirmation, and so does narrowing a member's "every message" to "reminders"; other staff can only stop
+  audit row) and a confirmation, and so does narrowing "every message" to "reminders" for a member or a number; other staff can only stop
   more. A member's opt-out follows the member to any number; a number added here blocks that number
   whoever the message is about.
 
