@@ -288,18 +288,23 @@ Additive; the decisions above stand. Where the build made a choice the text left
 6. **Order creation** follows the 2026-10-14 amendment: one creator per intent under a lease, the same reference and body repeated
    up to three times, an echoed reference that is not ours ends `order_mismatch` (the stray order is cancelled), a first status
    answer that does not repeat the amount and currency ends `order_mismatch`, and after the attempts `creation_unknown`.
-7. **Switch and binding.** The settings group `payments` (`collections_enabled`, optional `daily_ceiling_minor`) is written only
+7. **Switch and binding.** The settings group `payments` (`collections_enabled` and `daily_ceiling_minor`) is written only
    through `PUT /api/v1/payments/settings`; switching on is refused 409 `merchant_not_bound_to_tenant`,
    `gateway_method_unmapped`, `gateway_not_configured` or `daily_ceiling_required`, and intent creation checks the same things again.
-   A daily ceiling (minor units, over the tenant's Kampala day, counted under an advisory lock) is required to switch on and cannot be
-   removed while on: it is the bound on what one day can ask for, and a placeholder for the commercial limits, which stay parked (no
+   A daily ceiling (minor units, over the tenant's Kampala day, counted under an advisory lock) is required for collections to be on (the end state of every write is checked: switching on without one, or clearing it of a tenant that
+   is already on, is 409 `daily_ceiling_required`): it is the bound on what one day can ask for, and a placeholder for the commercial limits, which stay parked (no
    price and no billing is built).
-9. **An expired order stays payable, deliberately.** After the 30 minutes the payer is no longer offered the order, but the hosted
+8. **An expired order stays payable, deliberately.** After the 30 minutes the payer is no longer offered the order, but the hosted
    page cannot be withdrawn without a cancel that can lose a race with a payment, so a payment that completes later is booked and
    flagged `late`. A cancel by staff, or the final cancel after 48 hours, is best effort at the provider; a payment that wins that
    race still books (`cancelled` to `paid` is an allowed transition).
-10. **The payer return page** (`GET /api/v1/payments/return/pesapal`) has no token and is open to any browser: its own rate limit bucket,
+9. **The payer return page** (`GET /api/v1/payments/return/pesapal`) has no token and is open to any browser: its own rate limit bucket,
    no platform queue row and no counter for an unknown reference, tenant-scope orders only until #228. It is on the callback host.
-8. **Environments.** `BMS_PESAPAL_BASE_URL` outside production may only be the sandbox host, in every mode and whether or not
+10. **Environments.** `BMS_PESAPAL_BASE_URL` outside production may only be the sandbox host, in every mode and whether or not
    credentials are set, so staging cannot reach the live provider; production refuses the sandbox and the fake; the two
    credential pairs must have different IPN ids and path tokens.
+11. **Reversals after booking.** A booked payment is asked about again once a day for 14 days (`CheckSchedule.nextReview`), so a reversal
+   whose notification was lost is still seen; a notification asks sooner. A reversal moves the intent to `reversed_pending_review` and raises the
+   `reversal` counter. **The ledger is never touched by this slice**: the receipt stays in the books until a person reverses it by hand (the loan or
+   savings reversal), and the checker request raised by a system user is slice #224. The nightly `core.payments.reconcile` job, the statement upload and the
+   reconciliation report are not built in #213 either (#224); the built job is `core.payments.poll`, every 10 seconds.

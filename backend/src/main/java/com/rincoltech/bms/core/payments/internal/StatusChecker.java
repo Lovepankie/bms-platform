@@ -348,6 +348,10 @@ class StatusChecker {
 
     private Applied applyReversed(Intent i, Instant now, Instant started, String json) {
         String s = i.status();
+        // Defensive: a poll never starts on a paid or needs_attention row, so this is reached only when the row moved
+        // to
+        // one of them while the provider was being asked. Money was verified paid and is now reported reversed before
+        // any booking.
         if (("paid".equals(s) || "needs_attention".equals(s)) && i.verifiedAt() != null) {
             Map<String, Object> cols = settled(i, now, 0, null);
             store.update(i.id(), s, "reversed", now, cols);
@@ -410,11 +414,14 @@ class StatusChecker {
         // A paid row's next check is the booking, due now: a stale answer must never clear it.
         Instant next = "paid".equals(i.status())
                 ? now
-                : again
-                        ? now.plus(CheckSchedule.THROTTLE)
-                        : started != null && Set.of("pending", "expired").contains(i.status())
-                                ? CheckSchedule.next(now, i.createdAt(), failures)
-                                : null;
+                : Set.of("booked", "booked_unallocated").contains(i.status()) && i.paidAt() != null
+                        ? (again ? now.plus(CheckSchedule.THROTTLE) : CheckSchedule.nextReview(now, i.paidAt()))
+                        : again
+                                ? now.plus(CheckSchedule.THROTTLE)
+                                : started != null
+                                                && Set.of("pending", "expired").contains(i.status())
+                                        ? CheckSchedule.next(now, i.createdAt(), failures)
+                                        : null;
         cols.put("next_check_at", next);
         if (!again) {
             cols.put("check_requested_at", null);

@@ -318,9 +318,9 @@ class IntentStore {
     }
 
     /** Counts one round that really called the provider (a deferral because the provider is unavailable counts nothing). */
-    void countCreationAttempt(UUID id) {
-        jdbc.sql("UPDATE payment_intents SET creation_attempts = creation_attempts + 1 WHERE id = ?")
-                .param(id)
+    void countCreationAttempt(UUID id, int delta) {
+        jdbc.sql("UPDATE payment_intents SET creation_attempts = greatest(0, creation_attempts + ?) WHERE id = ?")
+                .params(delta, id)
                 .update();
     }
 
@@ -372,11 +372,11 @@ class IntentStore {
     }
 
     /** True when a notification of this intent that is still queued or was throttled arrived at or after {@code since}. */
-    boolean hasRecentOpenCallback(UUID intentId, Instant since) {
+    boolean hasRecentOpenCallback(UUID intentId, String kind, Instant since) {
         return jdbc.sql("""
                         SELECT count(*) FROM payment_callbacks
-                         WHERE intent_id = ? AND outcome IN ('queued', 'throttled') AND created_at >= ?
-                        """).params(intentId, ts(since)).query(Long.class).single() > 0;
+                         WHERE intent_id = ? AND kind = ? AND outcome IN ('queued', 'throttled') AND created_at >= ?
+                        """).params(intentId, kind, ts(since)).query(Long.class).single() > 0;
     }
 
     /** Finishes the notifications that were waiting for a check that began at {@code startedAt}; later ones wait for the next. */

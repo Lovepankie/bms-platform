@@ -927,16 +927,125 @@ class PaymentGatewayIT extends IntegrationTest {
         assertThat(audits(id, "reversal_reported")).isEqualTo(1);
     }
 
+    /** The money landed in the database while a check was still waiting for the provider's (stale) answer. */
+    private void markPaidBehindTheCheck(String id) {
+        TestDatabase.owner()
+                .sql("""
+                        UPDATE payment_intents SET status = 'paid', paid_amount_minor = 1500, paid_currency = 'UGX',
+                               confirmation_code = 'CONF-RACE001', paid_at = ?, verified_at = ?
+                         WHERE id = ? AND status = 'pending'
+                        """)
+                .params(
+                        java.sql.Timestamp.from(clock.instant()),
+                        java.sql.Timestamp.from(clock.instant()),
+                        UUID.fromString(id))
+                .update();
+    }
+
     @Test
-    void aStaleAnswerNeverClearsTheBookingRetryOfAPaidIntent() {
-        handler.explode = true;
-        JsonNode intent = create(1500);
-        pay(intent, 1500, "UGX", "CONF-STALE001");
+    void aStalePendingOrFailedAnswerThatArrivesAfterThePaymentNeverClearsTheBookingRetry() {
+        for (PaymentGateway.Status stale : List.of(PaymentGateway.Status.PENDING, PaymentGateway.Status.FAILED)) {
+            handler.reset();
+            fake.reset();
+            JsonNode intent = create(1500);
+            String id = intent.get("id").asString();
+            fake.forceStatus(stale);
+            fake.beforeQuery(() -> markPaidBehindTheCheck(id));
+            clock.set(clock.instant().plus(Duration.ofMinutes(3)));
+            tick();
+            assertThat(statusOf(id))
+                    .as("%s: the row is paid, the stale answer changed nothing", stale)
+                    .isEqualTo("paid");
+            assertThat(row(id).get("next_check_at"))
+                    .as("%s: the booking is still due, the stale answer did not clear it", stale)
+                    .isNotNull();
+            assertThat(handler.calls).hasValue(0);
+            // And the next tick books it.
+            fake.beforeQuery(null);
+            fake.forceStatus(null);
+            clock.set(clock.instant().plusSeconds(5));
+            tick();
+            assertThat(statusOf(id)).isEqualTo("booked");
+        }
+    }
+
+    @Test
+    void aBookedPaymentIsAskedAboutOnceADayForFourteenDaysSoALostReversalNotificationIsStillSeen() {
+        JsonNode intent = booked();
         String id = intent.get("id").asString();
-        clock.set(clock.instant().plus(Duration.ofMinutes(3)));
+        assertThat(row(id).get("next_check_at"))
+                .as("a booked row stays due, a day on")
+                .isNotNull();
+        fake.reverse(tracking(intent));
+        // No notification at all: only the daily review can see it.
+        clock.set(clock.instant().plus(Duration.ofHours(25)));
         tick();
+        assertThat(statusOf(id)).isEqualTo("reversed_pending_review");
+        assertThat(audits(id, "reversal_reported")).isEqualTo(1);
+        assertThat(handler.calls).hasValue(1);
+    }
+
+    @Test
+    void theDailyReviewOfABookedPaymentStopsAfterFourteenDays() {
+        JsonNode intent = booked();
+        String id = intent.get("id").asString();
+        int before = fake.queryCount();
+        for (int day = 0; day < 16; day++) {
+            clock.set(clock.instant().plus(Duration.ofHours(25)));
+            tick();
+        }
+        assertThat(row(id).get("next_check_at")).isNull();
+        int asked = fake.queryCount() - before;
+        assertThat(asked).as("about one a day for 14 days, then none").isBetween(12, 15);
+        clock.set(clock.instant().plus(Duration.ofDays(3)));
+        tick();
+        assertThat(fake.queryCount() - before).isEqualTo(asked);
+    }
+
+    @Test
+    void aPaymentThatLandsBetweenTheProvidersCancelAndOursKeepsItsStatusAndAnswers409() {
+        JsonNode intent = create(1500);
+        String id = intent.get("id").asString();
+        // The provider accepted the cancel; before the intent row is locked, the payment is recorded.
+        fake.afterCancel(() -> markPaidBehindTheCheck(id));
+        ResponseEntity<JsonNode> r =
+                call(HttpMethod.POST, "/api/v1/payments/intents/" + id + "/cancel", BOUND, staff, null, null);
+        assertThat(r.getStatusCode().value()).as("%s", r.getBody()).isEqualTo(409);
+        assertThat(r.getBody().get("code").asString()).isEqualTo("not_cancellable");
         assertThat(statusOf(id)).isEqualTo("paid");
-        assertThat(row(id).get("next_check_at")).as("the retry stays scheduled").isNotNull();
+        assertThat(audits(id, "cancelled")).isZero();
+    }
+
+    @Test
+    void anIpnAndAPayerReturnWithinTenSecondsEachLeaveTheirOwnRow() {
+        JsonNode intent = create(1500);
+        String ref = intent.get("merchant_reference").asString();
+        ipn(TOKEN, tracking(intent), ref);
+        http.getForEntity(
+                "/api/v1/payments/return/pesapal?OrderTrackingId=" + tracking(intent) + "&OrderMerchantReference="
+                        + ref,
+                String.class);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(DISTINCT kind) FROM payment_callbacks WHERE intent_id = ?")
+                        .param(UUID.fromString(intent.get("id").asString()))
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(2);
+    }
+
+    @Test
+    void enablingAndClearingTheCeilingInOneRequestOnATenantThatIsAlreadyOnIsRefusedAndNothingChanges() {
+        ensureOn();
+        JsonNode refused =
+                setSettings(BOUND, staff, Map.of("collections_enabled", true, "clear_daily_ceiling", true), 409);
+        assertThat(refused.get("code").asString()).isEqualTo("daily_ceiling_required");
+        JsonNode after = call(HttpMethod.GET, "/api/v1/payments/settings", BOUND, staff, null, null)
+                .getBody();
+        assertThat(after.get("collections_enabled").asBoolean()).isTrue();
+        assertThat(after.get("daily_ceiling_minor").isNull()).isFalse();
+        // Off plus clear in one request is fine: the end state is off.
+        setSettings(BOUND, staff, Map.of("collections_enabled", false, "clear_daily_ceiling", true), 200);
+        ensureOn();
     }
 
     @Test
@@ -953,7 +1062,7 @@ class PaymentGatewayIT extends IntegrationTest {
     }
 
     @Test
-    void aPaidIntentCannotBeCancelledAndGetsAConflictNotAServerError() {
+    void aPaidIntentIsNotCancellableAtTheOutset() {
         handler.explode = true;
         JsonNode intent = create(1500);
         pay(intent, 1500, "UGX", "CONF-PAIDCANCEL");
@@ -992,7 +1101,7 @@ class PaymentGatewayIT extends IntegrationTest {
                         .asString())
                 .isEqualTo("daily_ceiling_required");
         ensureOn();
-        setSettings(BOUND, staff, Map.of("clear_daily_ceiling", true), 422);
+        setSettings(BOUND, staff, Map.of("clear_daily_ceiling", true), 409);
     }
 
     @Test

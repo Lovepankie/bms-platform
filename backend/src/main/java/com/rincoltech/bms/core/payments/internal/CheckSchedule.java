@@ -55,6 +55,17 @@ final class CheckSchedule {
         return candidate.isAfter(last) ? last : candidate;
     }
 
+    /** A booked payment is asked about again once a day for 14 days, so a reversal whose notification was lost is still seen. */
+    static final Duration REVIEW_EVERY = Duration.ofDays(1);
+
+    static final Duration REVIEW_WINDOW = Duration.ofDays(14);
+
+    /** The next review of a booked payment, or null once the 14 days since it was paid are over. */
+    static Instant nextReview(Instant now, Instant paidAt) {
+        Instant next = now.plus(REVIEW_EVERY);
+        return next.isAfter(paidAt.plus(REVIEW_WINDOW)) ? null : next;
+    }
+
     /** Retry of a booking that failed technically: one minute, doubling to thirty. */
     static Instant nextBooking(Instant now, int technicalFailures) {
         Duration wait = Duration.ofMinutes(1).multipliedBy(1L << Math.min(Math.max(technicalFailures - 1, 0), 5));

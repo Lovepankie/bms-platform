@@ -216,8 +216,7 @@ db-scheduler runs inside the API process with its state in `scheduled_tasks` (AD
 separate worker container exists yet; `BMS_SCHEDULER_ENABLED` lets one be split out later from
 the same image.
 
-Jobs added by the client extras design (issue #210, each with its slice): `core.payments.create-order` and
-`core.payments.poll-pending` (every 2 minutes, 48 hours per intent), `core.payments.reconcile` (nightly after the end of day),
+Jobs added by the client extras design (issue #210, each with its slice): `core.payments.poll` (built in #213: every 10 seconds, it makes orders the request did not finish, asks the provider about intents whose check is due, books what is paid, and re-asks about a booked payment once a day for 14 days; it replaces the designed `create-order` and `poll-pending` jobs), `core.payments.housekeeping` (nightly 03:40, built in #213: retention of notification rows and counters) and `core.payments.reconcile` (nightly after the end of day, **not built in #213**: slice #224, with the statement upload and the reconciliation report),
 `core.reporting.report-runner` (every 15 seconds, one run per tenant, one at a time on staging and two elsewhere) and its nightly file expiry
 `core.reporting.report-expiry` (03:30, built in issue #214; `docs/runbooks/reports-operations.md`; files are deleted in batches with no
 transaction open). A report run is stamped with the process that holds it and beaten every 10 seconds (`bms.reports.heartbeat`); a run

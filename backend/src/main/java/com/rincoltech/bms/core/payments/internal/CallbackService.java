@@ -143,7 +143,7 @@ class CallbackService {
         // A repeat within the throttle window adds nothing the first row does not already say: no second row (so a
         // replay
         // flood cannot grow the table).
-        if (!store.hasRecentOpenCallback(intentId, now.minus(CheckSchedule.THROTTLE))) {
+        if (!store.hasRecentOpenCallback(intentId, kind, now.minus(CheckSchedule.THROTTLE))) {
             store.insertCallback(
                     UUID.randomUUID(),
                     intentId,

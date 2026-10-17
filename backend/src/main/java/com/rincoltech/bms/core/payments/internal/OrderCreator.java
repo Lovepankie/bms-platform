@@ -113,6 +113,10 @@ class OrderCreator {
         if (!gateway.available(scope)) {
             return defer(intent);
         }
+        // Counted BEFORE the call, so a process that dies in the middle of it still used up a round and creation cannot
+        // be
+        // retried for ever; given back below when no call was made (the breaker was open).
+        tx.executeWithoutResult(status -> store.countCreationAttempt(intent.id(), 1));
         OrderRequest request = new OrderRequest(
                 intent.id(),
                 intent.merchantReference(),
@@ -121,18 +125,16 @@ class OrderCreator {
                 intent.payerPhone(),
                 "Payment to " + tenant.profile().name());
 
-        boolean[] counted = {false};
         for (int attempt = 1; attempt <= TRIES; attempt++) {
             try {
-                var answer = gateway.createOrder(scope, request);
-                countOnce(counted, intent);
-                return accept(intent, answer, scope);
+                return accept(intent, gateway.createOrder(scope, request), scope);
             } catch (GatewayException e) {
-                if (e.kind() != GatewayException.Kind.UNAVAILABLE) {
-                    countOnce(counted, intent);
-                }
                 switch (e.kind()) {
                     case UNAVAILABLE:
+                        if (attempt == 1) {
+                            // No call was made at all: the round is given back.
+                            tx.executeWithoutResult(status -> store.countCreationAttempt(intent.id(), -1));
+                        }
                         return defer(intent);
                     case REFUSED:
                         return fail(intent, "order_refused:" + word(e.code()));
@@ -156,14 +158,6 @@ class OrderCreator {
             }
         }
         return fail(intent, "creation_unknown");
-    }
-
-    /** One round that really reached the provider counts once, however many tries it made. */
-    private void countOnce(boolean[] counted, Intent intent) {
-        if (!counted[0]) {
-            counted[0] = true;
-            tx.executeWithoutResult(status -> store.countCreationAttempt(intent.id()));
-        }
     }
 
     private Outcome accept(Intent intent, OrderResult result, Scope scope) {

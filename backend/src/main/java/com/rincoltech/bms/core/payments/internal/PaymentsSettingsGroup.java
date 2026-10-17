@@ -143,14 +143,14 @@ class PaymentsSettingsGroup implements ModuleSettingsGroup {
             if (!gatewayAvailable()) {
                 throw conflict("gateway_not_configured", "The payment provider is not configured on this host.");
             }
-            if (!out.containsKey(CEILING)) {
-                throw conflict(
-                        "daily_ceiling_required",
-                        "Set a daily limit for collections before switching them on: it bounds what one day can ask for.");
-            }
-        } else if (wasOn && !proposed.containsKey(ENABLED) && !out.containsKey(CEILING)) {
-            throw ApiException.validation(List.of(new FieldProblem(
-                    CEILING, "required", "Collections are on: the daily limit cannot be removed while they are.")));
+        }
+        // The END state decides: collections on with no daily limit is never stored, whichever way it came about
+        // (switching on, or clearing the limit of a tenant that is already on, alone or in the same request).
+        boolean endsOn = proposed.containsKey(ENABLED) ? Boolean.TRUE.equals(proposed.get(ENABLED)) : wasOn;
+        if (endsOn && !out.containsKey(CEILING)) {
+            throw conflict(
+                    "daily_ceiling_required",
+                    "Collections need a daily limit: it bounds what one day can ask for, and it cannot be removed while they are on.");
         }
         if (proposed.containsKey(ENABLED)) {
             out.put(ENABLED, proposed.get(ENABLED));

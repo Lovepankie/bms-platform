@@ -80,10 +80,19 @@ class CallbackController {
             method = {RequestMethod.GET, RequestMethod.POST})
     @PublicEndpoint
     ResponseEntity<Map<String, Object>> ipn(@PathVariable("token") String token, HttpServletRequest request) {
+        // The token is checked in memory first, so a request with a wrong one can never take a slot of the provider's
+        // bucket.
+        java.util.Optional<Scope> selected = settings.scopeOfToken(token);
+        if (selected.isEmpty()) {
+            if (!limiter.tryAcquire(CallbackLimiter.Bucket.BAD_TOKEN, RequestContext.clientIp())) {
+                return tooMany();
+            }
+            throw ApiException.notFound();
+        }
         if (!limiter.tryAcquire(CallbackLimiter.Bucket.IPN, RequestContext.clientIp())) {
             return tooMany();
         }
-        Scope scope = settings.scopeOfToken(token).orElseThrow(ApiException::notFound);
+        Scope scope = selected.get();
         Notification n = read(request, "IPNCHANGE");
         try {
             service.receive(scope, "ipn", n.type(), n.trackingId(), n.reference());

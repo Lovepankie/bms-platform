@@ -55,6 +55,7 @@ public final class FakePaymentGateway implements PaymentGateway {
     private volatile GatewayException queryFailure;
     private volatile Runnable beforeQuery = () -> {};
     private volatile Status forcedStatus;
+    private volatile Runnable afterCancel = () -> {};
 
     @Override
     public String providerKey() {
@@ -129,6 +130,7 @@ public final class FakePaymentGateway implements PaymentGateway {
             throw new GatewayException(GatewayException.Kind.REFUSED, 200, "cancel_refused");
         }
         order.cancelled = true;
+        afterCancel.run();
     }
 
     @Override
@@ -191,6 +193,11 @@ public final class FakePaymentGateway implements PaymentGateway {
         this.beforeQuery = hook == null ? () -> {} : hook;
     }
 
+    /** Runs just after a cancel was accepted: a payment that lands in the gap between the provider's answer and ours. */
+    public void afterCancel(Runnable hook) {
+        this.afterCancel = hook == null ? () -> {} : hook;
+    }
+
     public int queryCount() {
         return queries.get();
     }
@@ -214,6 +221,7 @@ public final class FakePaymentGateway implements PaymentGateway {
         queryFailure = null;
         beforeQuery = () -> {};
         forcedStatus = null;
+        afterCancel = () -> {};
         available = true;
     }
 }

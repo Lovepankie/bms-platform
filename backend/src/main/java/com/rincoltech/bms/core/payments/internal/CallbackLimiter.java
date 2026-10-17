@@ -22,7 +22,9 @@ class CallbackLimiter {
 
     enum Bucket {
         IPN,
-        RETURN
+        RETURN,
+        /** Requests with a wrong path token: they can fill their own bucket and nobody else's. */
+        BAD_TOKEN
     }
 
     private final BusinessClock clock;
