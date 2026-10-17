@@ -279,7 +279,11 @@ payments, trial, agents, the staff screen and the insights pages are all off tod
 tours cover set-up, retail selling, stock-take and the catalogue, and the loan list with its
 applications filter; page tours, started from Help, cover the sale, stock, stock-take, catalogue,
 set-up, loans and loan pages. A page tour's `page` may hold a `$name` segment that matches any one
-path segment, so one tour serves every loan. Money is formatted only in
+path segment, so one tour serves every loan. Tours start by themselves under three rules (issue #292):
+`autoTourFor` picks the first-run tour while it waits, else the next pending "New:" (capability) tour; the host
+starts at most one per page load, so the rest wait for the next visit; a user with no tour history gets only the
+first-run tour and every "New:" tour is recorded as completed for them at that moment; and "Do not show tours
+again" records the tour as dismissed plus the progress key `tours-off`, which stops every automatic tour. Money is formatted only in
 `components/`, from integer minor units and the currency exponent.
 
 ## 5.7 Where the retail vertical will fit

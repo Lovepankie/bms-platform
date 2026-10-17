@@ -62,9 +62,9 @@ describe('the spotlight card', () => {
     for (const b of buttons) expect(b).toContain('type="button"');
   });
 
-  it('offers Do not show this again only on a first-run tour, as a labelled checkbox', () => {
-    expect(card()).toMatch(/<label class="tour-remember"><input type="checkbox"\/>Do not show this again<\/label>/);
-    expect(card({ canRemember: false })).not.toContain('Do not show this again');
+  it('offers Do not show tours again only on a first-run tour, as a labelled checkbox', () => {
+    expect(card()).toMatch(/<label class="tour-remember"><input type="checkbox"\/>Do not show tours again<\/label>/);
+    expect(card({ canRemember: false })).not.toContain('Do not show tours again');
   });
 
   it('docks to the side away from the target', () => {

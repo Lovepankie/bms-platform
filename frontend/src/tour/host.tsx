@@ -7,14 +7,16 @@ import {
   type Tour,
   type TourStatus,
   type TourStep,
-  capabilityTourFor,
+  TOURS_OFF_ID,
+  autoTourFor,
+  isFresh,
+  whatsNewTours,
   cardSide,
   keyAction,
   mainTourFor,
   nextIndex,
   pageTourFor,
   samePage,
-  shouldAutoStart,
   stepsFor,
   trapFocus,
 } from './model';
@@ -23,14 +25,17 @@ import { TOURS } from './tours';
 
 // The tour runtime (issue #19, ADR-025): starts the user's first-run tour once, goes to each
 // step's page, waits for its data-tour target, lights it up, keeps focus inside the card, and
-// remembers on the server how the user left the tour. Closing without "Do not show this again"
+// remembers on the server how the user left the tour. Closing without "Do not show tours again"
 // only hides the tour until the next page load; Help replays any tour at any time.
 
 const WAIT_MS = 1500;
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 
-/** Tours closed this page load (without "Do not show this again"), so they do not start again. */
+/** Tours closed this page load (without "Do not show tours again"), so they do not start again. */
 const closedThisLoad = new Set<string>();
+
+/** Set once a tour has started by itself this page load: the rest wait for the next visit (issue #292). */
+let autoStartedThisLoad = false;
 
 interface Active {
   tour: Tour;
@@ -86,29 +91,30 @@ export function TourProvider({ me, saveProgress = true, children }: { me: Me; sa
     [me],
   );
 
-  // First run: the user's main tour starts by itself until it is finished or dismissed.
+  // At most one tour starts by itself per page load (issue #292): the first-run tour while it waits, else the
+  // next pending "New:" tour. A user with no history gets only the first-run tour, and every "New:" tour is
+  // marked seen for them at that moment, since they have nothing to compare against.
+  const autoTour = useMemo(() => autoTourFor(TOURS, me, progress), [me, progress]);
   useEffect(() => {
-    if (!mainTour || closedThisLoad.has(mainTour.id) || !shouldAutoStart(mainTour, progress)) return;
-    const timer = window.setTimeout(() => start(mainTour), 400);
+    if (!autoTour || active || autoStartedThisLoad || closedThisLoad.has(autoTour.id)) return;
+    const timer = window.setTimeout(() => {
+      if (autoStartedThisLoad) return;
+      autoStartedThisLoad = true;
+      if (autoTour === mainTour && isFresh(progress)) {
+        for (const news of whatsNewTours(TOURS)) record(news.id, news.version, 'completed');
+      }
+      start(autoTour);
+    }, 400);
     return () => window.clearTimeout(timer);
-    // Only on sign-in: progress changes when the tour ends, and must not restart it.
-  }, [mainTour]);
-
-  // A newly enabled capability: its tour starts once, after the first-run tour and never over another tour.
-  const capabilityTour = useMemo(() => capabilityTourFor(TOURS, me, progress), [me, progress]);
-  useEffect(() => {
-    if (!capabilityTour || active || closedThisLoad.has(capabilityTour.id)) return;
-    const timer = window.setTimeout(() => start(capabilityTour), 400);
-    return () => window.clearTimeout(timer);
-  }, [capabilityTour, active, start]);
+  }, [autoTour, active, start]);
 
   const record = useCallback(
-    (tour: Tour, status: TourStatus) => {
-      setProgress((p) => ({ ...p, [tour.id]: { status, version: tour.version } }));
+    (id: string, version: number, status: TourStatus) => {
+      setProgress((p) => ({ ...p, [id]: { status, version } }));
       if (!saveProgress) return;
       // Progress is a convenience: a failed save only means the tour may show once more.
       void api
-        .PUT('/api/v1/me/tours/{tour_id}', { params: { path: { tour_id: tour.id } }, body: { status, version: tour.version } })
+        .PUT('/api/v1/me/tours/{tour_id}', { params: { path: { tour_id: id } }, body: { status, version } })
         .catch(() => undefined);
     },
     [saveProgress],
@@ -117,8 +123,11 @@ export function TourProvider({ me, saveProgress = true, children }: { me: Me; sa
   const end = useCallback(
     (finished: boolean) => {
       if (!active) return;
-      if (remember) record(active.tour, 'dismissed');
-      else if (finished) record(active.tour, 'completed');
+      if (remember) {
+        // One choice for every tour, the "New:" ones included.
+        record(active.tour.id, active.tour.version, 'dismissed');
+        record(TOURS_OFF_ID, 1, 'dismissed');
+      } else if (finished) record(active.tour.id, active.tour.version, 'completed');
       else closedThisLoad.add(active.tour.id);
       setActive(null);
       setTarget(null);

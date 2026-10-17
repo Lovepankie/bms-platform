@@ -134,6 +134,35 @@ export function capabilityTourFor(tours: readonly Tour[], me: Me, progress: Prog
   );
 }
 
+/** The progress key of the one "Do not show tours again" choice; a dismissal of it holds for good. */
+export const TOURS_OFF_ID = 'tours-off';
+
+/** Whether the user chose "Do not show tours again": no tour starts by itself, Help still replays them. */
+export function toursOff(progress: Progress | undefined): boolean {
+  return progress?.[TOURS_OFF_ID]?.status === 'dismissed';
+}
+
+/** A user with no tour history at all (nothing seen, nothing dismissed) on this tenant. */
+export function isFresh(progress: Progress | undefined): boolean {
+  return !Object.values(progress ?? {}).some((seen) => seen?.status);
+}
+
+/** The "New:" what's-new tours: those of a capability. A fresh user has nothing to compare against. */
+export function whatsNewTours(tours: readonly Tour[]): Tour[] {
+  return tours.filter((tour) => tour.capability !== undefined && tour.autoStart);
+}
+
+/**
+ * The one tour that may start by itself now: none after "Do not show tours again", else the first-run
+ * tour while it waits, else the next pending "New:" tour. The host starts at most one per page load.
+ */
+export function autoTourFor(tours: readonly Tour[], me: Me, progress: Progress | undefined): Tour | undefined {
+  if (toursOff(progress)) return undefined;
+  const welcome = mainTourFor(tours, me);
+  if (welcome && shouldAutoStart(welcome, progress)) return welcome;
+  return capabilityTourFor(tours, me, progress);
+}
+
 /** The page tour for the page the user is on, if this user may see it. */
 export function pageTourFor(tours: readonly Tour[], me: Me, pathname: string): Tour | undefined {
   const path = (pathname.replace(/\/+$/, '') || '/').split('/');

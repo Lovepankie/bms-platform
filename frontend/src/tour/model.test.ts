@@ -4,7 +4,11 @@ import {
   FEATURES,
   type Tour,
   type TourStep,
+  TOURS_OFF_ID,
   announcement,
+  autoTourFor,
+  isFresh,
+  whatsNewTours,
   cardSide,
   keyAction,
   mainTourFor,
@@ -221,5 +225,70 @@ describe('copy', () => {
         }
       }
     }
+  });
+});
+
+// Issue #292: a first-time user on the trade tenant meets one tour, not five. The host starts what
+// autoTourFor returns, at most once per page load, and marks the "New:" tours seen for a fresh user.
+describe('one tour at a time', () => {
+  const CAPS = ['branch_roles', 'transfer_receipt', 'units', 'purchasing'];
+  const TRADER = me(
+    ['core.settings.manage', 'retail.sale.create', 'retail.stock.read', 'retail.stock.transfer', 'retail.purchase.create', 'retail.branch_role.manage', 'retail.catalogue.manage'],
+    {
+      module_capabilities: { retail: CAPS },
+    } as Partial<Me>,
+  );
+  const news = whatsNewTours(TOURS).filter(
+    (tour) => tour.capability && CAPS.includes(tour.capability.key) && tour.audience(TRADER) && stepsFor(tour, TRADER).length > 0,
+  );
+
+  // What the host does for one page load: start the chosen tour, then nothing more until the next load.
+  const visit = (progress: Record<string, { status: 'completed' | 'dismissed'; version: number }>) => {
+    const tour = autoTourFor(TOURS, TRADER, progress);
+    if (!tour) return { tour, progress };
+    const next = { ...progress };
+    if (tour === mainTourFor(TOURS, TRADER) && isFresh(progress)) {
+      for (const n of whatsNewTours(TOURS)) next[n.id] = { status: 'completed', version: n.version };
+    }
+    next[tour.id] = { status: 'completed', version: tour.version };
+    return { tour, progress: next };
+  };
+
+  it('has pending New tours for the trader, so the test is meaningful', () => {
+    expect(news.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('a fresh profile on /staff/retail/transfers sees exactly one tour: the Welcome tour', () => {
+    expect(isFresh({})).toBe(true);
+    const first = visit({});
+    expect(first.tour).toBe(mainTourFor(TOURS, TRADER));
+    expect(first.tour?.capability).toBeUndefined();
+    // The New tours were marked seen with it, so the next visit has nothing pending.
+    expect(autoTourFor(TOURS, TRADER, first.progress)).toBeUndefined();
+    expect(visit(first.progress).tour).toBeUndefined();
+  });
+
+  it('an existing user sees the pending New tours one per visit, in order', () => {
+    const welcome = mainTourFor(TOURS, TRADER) as Tour;
+    let progress: Record<string, { status: 'completed' | 'dismissed'; version: number }> = {
+      [welcome.id]: { status: 'completed', version: welcome.version },
+    };
+    expect(isFresh(progress)).toBe(false);
+    const seen: string[] = [];
+    for (let i = 0; i < news.length; i++) {
+      const v = visit(progress);
+      expect(v.tour?.capability).toBeDefined();
+      seen.push(v.tour?.id ?? '');
+      progress = v.progress;
+    }
+    expect(seen).toEqual(news.map((tour) => tour.id));
+    expect(visit(progress).tour).toBeUndefined();
+  });
+
+  it('Do not show tours again suppresses the Welcome tour and every New tour', () => {
+    const off = { [TOURS_OFF_ID]: { status: 'dismissed' as const, version: 1 } };
+    expect(autoTourFor(TOURS, TRADER, off)).toBeUndefined();
+    const welcome = mainTourFor(TOURS, TRADER) as Tour;
+    expect(autoTourFor(TOURS, TRADER, { ...off, [welcome.id]: { status: 'completed', version: welcome.version } })).toBeUndefined();
   });
 });

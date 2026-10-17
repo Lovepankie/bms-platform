@@ -5,7 +5,7 @@ import { announcement, swipeAction } from './model';
 
 // The spotlight card (issue #19): a modal dialog docked to the top or bottom of the screen, away
 // from the lit target, with progress dots, Back, Next or Finish, a Close button and, for a
-// first-run tour, "Do not show this again". It only draws; the host decides what it shows.
+// first-run tour, "Do not show tours again". It only draws; the host decides what it shows.
 // Everything is a CSS class (app/ui/tour.css); the hole around the target is placed by the host
 // through CSS custom properties, so no style attribute is ever written into the markup.
 
@@ -15,7 +15,7 @@ export interface CardProps {
   index: number;
   total: number;
   side: 'top' | 'bottom';
-  /** Offer "Do not show this again" (first-run tours only). */
+  /** Offer "Do not show tours again" (first-run tours only). */
   canRemember: boolean;
   remember: boolean;
   onRemember: (value: boolean) => void;
@@ -82,7 +82,7 @@ export function TourCard(props: CardProps) {
       {props.canRemember && (
         <label className="tour-remember">
           <input type="checkbox" checked={props.remember} onChange={(e) => props.onRemember(e.target.checked)} />
-          Do not show this again
+          Do not show tours again
         </label>
       )}
       <div className="tour-actions">
