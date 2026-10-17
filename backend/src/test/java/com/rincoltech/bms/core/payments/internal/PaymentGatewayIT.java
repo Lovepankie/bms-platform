@@ -222,7 +222,7 @@ class PaymentGatewayIT extends IntegrationTest {
         }
         ResponseEntity<JsonNode> now = call(HttpMethod.GET, "/api/v1/payments/settings", BOUND, staff, null, null);
         if (!now.getBody().get("collections_enabled").asBoolean()) {
-            setSettings(BOUND, staff, Map.of("collections_enabled", true), 200);
+            setSettings(BOUND, staff, Map.of("collections_enabled", true, "daily_ceiling_minor", 100000000L), 200);
         }
     }
 
@@ -859,6 +859,197 @@ class PaymentGatewayIT extends IntegrationTest {
         assertThat(handler.bookings).hasSize(1);
     }
 
+    // JUSTIFICATION-A3: new tests the attack review asked for (contradicting answers, ceiling, return page); they add
+    // cases, no mechanism.
+    // ---- answers that contradict the intent -------------------------------------------------------------
+
+    private void notifyAndCheck(JsonNode intent) {
+        ipn(TOKEN, tracking(intent), intent.get("merchant_reference").asString());
+        clock.set(clock.instant().plusSeconds(30));
+        tick();
+    }
+
+    private JsonNode booked() {
+        JsonNode intent = create(1500);
+        pay(intent, 1500, "UGX", "CONF-" + UUID.randomUUID().toString().substring(0, 8));
+        notifyAndCheck(intent);
+        assertThat(statusOf(intent.get("id").asString())).isEqualTo("booked");
+        return intent;
+    }
+
+    @Test
+    void aPendingOrFailedAnswerAfterBookingChangesNothingAndBooksNothingMore() {
+        JsonNode intent = booked();
+        String id = intent.get("id").asString();
+        Object txn = row(id).get("booked_subject_txn_id");
+        for (PaymentGateway.Status contradiction :
+                List.of(PaymentGateway.Status.PENDING, PaymentGateway.Status.FAILED)) {
+            fake.forceStatus(contradiction);
+            notifyAndCheck(intent);
+            assertThat(statusOf(id)).as("after %s", contradiction).isEqualTo("booked");
+            assertThat(row(id).get("booked_subject_txn_id")).isEqualTo(txn);
+            assertThat(handler.calls).hasValue(1);
+        }
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT count(*) FROM payment_callbacks WHERE intent_id = ? AND outcome = 'status_mismatch'")
+                        .param(UUID.fromString(id))
+                        .query(Long.class)
+                        .single())
+                .as("both were seen and recorded as mismatches")
+                .isEqualTo(2);
+    }
+
+    @Test
+    void aReversedAnswerForAnOrderThatWasNeverPaidIsAMismatchNotAReversal() {
+        JsonNode intent = create(1500);
+        String id = intent.get("id").asString();
+        fake.forceStatus(PaymentGateway.Status.REVERSED);
+        notifyAndCheck(intent);
+        assertThat(statusOf(id)).isEqualTo("pending");
+        assertThat(row(id).get("booked_subject_txn_id")).isNull();
+        assertThat(handler.calls).hasValue(0);
+        assertThat(audits(id, "reversed")).isZero();
+    }
+
+    @Test
+    void aReversalAfterBookingKeepsTheBookingAndAFurtherReversalAnswerIsADuplicate() {
+        JsonNode intent = booked();
+        String id = intent.get("id").asString();
+        Object txn = row(id).get("booked_subject_txn_id");
+        fake.reverse(tracking(intent));
+        notifyAndCheck(intent);
+        assertThat(statusOf(id)).isEqualTo("reversed_pending_review");
+        notifyAndCheck(intent);
+        assertThat(statusOf(id)).isEqualTo("reversed_pending_review");
+        assertThat(row(id).get("booked_subject_txn_id")).isEqualTo(txn);
+        assertThat(handler.calls).hasValue(1);
+        assertThat(audits(id, "reversal_reported")).isEqualTo(1);
+    }
+
+    @Test
+    void aStaleAnswerNeverClearsTheBookingRetryOfAPaidIntent() {
+        handler.explode = true;
+        JsonNode intent = create(1500);
+        pay(intent, 1500, "UGX", "CONF-STALE001");
+        String id = intent.get("id").asString();
+        clock.set(clock.instant().plus(Duration.ofMinutes(3)));
+        tick();
+        assertThat(statusOf(id)).isEqualTo("paid");
+        assertThat(row(id).get("next_check_at")).as("the retry stays scheduled").isNotNull();
+    }
+
+    @Test
+    void anOrderWhoseAnswersNeverMakeSenseIsEscalatedAfter48HoursNotLeftWithoutACheck() {
+        JsonNode intent = create(1500);
+        String id = intent.get("id").asString();
+        fake.forceStatus(PaymentGateway.Status.ANOMALY);
+        for (int i = 0; i < 9; i++) {
+            clock.set(clock.instant().plus(Duration.ofHours(7)));
+            tick();
+        }
+        assertThat(statusOf(id)).isEqualTo("needs_attention");
+        assertThat(row(id).get("refusal_code")).isEqualTo("anomaly_after_48h");
+    }
+
+    @Test
+    void aPaidIntentCannotBeCancelledAndGetsAConflictNotAServerError() {
+        handler.explode = true;
+        JsonNode intent = create(1500);
+        pay(intent, 1500, "UGX", "CONF-PAIDCANCEL");
+        clock.set(clock.instant().plus(Duration.ofMinutes(3)));
+        tick();
+        String id = intent.get("id").asString();
+        assertThat(statusOf(id)).isEqualTo("paid");
+        ResponseEntity<JsonNode> r =
+                call(HttpMethod.POST, "/api/v1/payments/intents/" + id + "/cancel", BOUND, staff, null, null);
+        assertThat(r.getStatusCode().value()).isEqualTo(409);
+        assertThat(r.getBody().get("code").asString()).isEqualTo("not_cancellable");
+        assertThat(statusOf(id)).isEqualTo("paid");
+    }
+
+    @Test
+    void aProviderThatIsDownDoesNotUseUpTheCreationAttempts() {
+        JsonNode stuck = createStuck();
+        String id = stuck.get("id").asString();
+        fake.failCreate(new GatewayException(GatewayException.Kind.UNAVAILABLE, 0, "circuit_open"));
+        for (int i = 0; i < 8; i++) {
+            assertThat(creatorFor(UUID.fromString(id))).isEqualTo(OrderCreator.Outcome.DEFERRED);
+        }
+        fake.failCreate(null);
+        assertThat(row(id).get("creation_attempts"))
+                .as("a deferral is not an attempt")
+                .isEqualTo(0);
+        assertThat(statusOf(id)).isEqualTo("created");
+    }
+
+    @Test
+    void collectionsNeedADailyCeilingToBeSwitchedOnAndItCannotBeRemovedWhileOn() {
+        setSettings(BOUND, staff, Map.of("collections_enabled", false), 200);
+        setSettings(BOUND, staff, Map.of("clear_daily_ceiling", true), 200);
+        assertThat(setSettings(BOUND, staff, Map.of("collections_enabled", true), 409)
+                        .get("code")
+                        .asString())
+                .isEqualTo("daily_ceiling_required");
+        ensureOn();
+        setSettings(BOUND, staff, Map.of("clear_daily_ceiling", true), 422);
+    }
+
+    @Test
+    void thePayerReturnPageWritesNothingForAReferenceItDoesNotKnowAndNudgesAKnownOne() {
+        String unknown = "BMS-DV-" + UUID.randomUUID().toString().replace("-", "");
+        long unmatched = TestDatabase.owner()
+                .sql("SELECT count(*) FROM payment_unmatched_callbacks")
+                .query(Long.class)
+                .single();
+        long counted = TestDatabase.owner()
+                .sql("SELECT coalesce(sum(hits), 0) FROM payment_callback_counters WHERE outcome = 'unknown_reference'")
+                .query(Long.class)
+                .single();
+        ResponseEntity<String> page = http.getForEntity(
+                "/api/v1/payments/return/pesapal?OrderTrackingId=aaaaaaaa-0000-4000-8000-0000000000bb&OrderMerchantReference="
+                        + unknown + "&OrderNotificationType=CALLBACKURL",
+                String.class);
+        assertThat(page.getStatusCode().value()).isEqualTo(200);
+        assertThat(page.getBody()).contains("Payment received");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM payment_unmatched_callbacks")
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(unmatched);
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT coalesce(sum(hits), 0) FROM payment_callback_counters WHERE outcome = 'unknown_reference'")
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(counted);
+
+        JsonNode intent = create(1500);
+        pay(intent, 1500, "UGX", "CONF-RETURN01");
+        http.getForEntity(
+                "/api/v1/payments/return/pesapal?OrderTrackingId=" + tracking(intent) + "&OrderMerchantReference="
+                        + intent.get("merchant_reference").asString() + "&OrderNotificationType=CALLBACKURL",
+                String.class);
+        clock.set(clock.instant().plusSeconds(30));
+        tick();
+        assertThat(statusOf(intent.get("id").asString())).isEqualTo("booked");
+    }
+
+    @Test
+    void aReplayWithinTenSecondsAddsNoSecondCallbackRow() {
+        JsonNode intent = create(1500);
+        String ref = intent.get("merchant_reference").asString();
+        for (int i = 0; i < 5; i++) {
+            ipn(TOKEN, tracking(intent), ref);
+        }
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM payment_callbacks WHERE intent_id = ?")
+                        .param(UUID.fromString(intent.get("id").asString()))
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+    }
+
     // ---- the database guard --------------------------------------------------------------------------
 
     @Test
@@ -1038,7 +1229,7 @@ class PaymentGatewayIT extends IntegrationTest {
             clock.set(MovableClockConfig.AFTER_MIDNIGHT);
             create(3000);
         } finally {
-            setSettings(BOUND, staff, Map.of("clear_daily_ceiling", true), 200);
+            setSettings(BOUND, staff, Map.of("daily_ceiling_minor", 100000000L), 200);
         }
     }
 

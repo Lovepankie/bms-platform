@@ -35,6 +35,12 @@ import tools.jackson.databind.ObjectMapper;
  * acknowledgement the contract documents, so the provider has no reason to retry what we have recorded. A request
  * that is not a notification gets a plain problem answer; a store that failed gets the acknowledgement with status
  * 500, which tells the provider to try again. The decision whether money moved is never made here.
+ *
+ * <p>The payer's return page carries no token and any browser can call it, so it is held to less: it has its own rate
+ * limit bucket (it can never use up the provider's), it writes nothing for a reference it does not know (no platform
+ * queue row, no alert counter), and it serves tenant-scope orders only (the platform pair's subscription payments, slice
+ * #228, will need the scope read from the order). Both paths are on the callback host: the proxy forwards
+ * {@code /api/v1/payments/callbacks/*} and {@code /api/v1/payments/return/*} there (deploy/caddy/Caddyfile).
  */
 @RestController
 @RequestMapping("/api/v1/payments")
@@ -74,7 +80,7 @@ class CallbackController {
             method = {RequestMethod.GET, RequestMethod.POST})
     @PublicEndpoint
     ResponseEntity<Map<String, Object>> ipn(@PathVariable("token") String token, HttpServletRequest request) {
-        if (!limiter.tryAcquire(RequestContext.clientIp())) {
+        if (!limiter.tryAcquire(CallbackLimiter.Bucket.IPN, RequestContext.clientIp())) {
             return tooMany();
         }
         Scope scope = settings.scopeOfToken(token).orElseThrow(ApiException::notFound);
@@ -97,7 +103,7 @@ class CallbackController {
     @GetMapping(path = "/return/pesapal")
     @PublicEndpoint
     ResponseEntity<String> payerReturn(HttpServletRequest request) {
-        if (!limiter.tryAcquire(RequestContext.clientIp())) {
+        if (!limiter.tryAcquire(CallbackLimiter.Bucket.RETURN, RequestContext.clientIp())) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .header("Retry-After", "60")
                     .contentType(MediaType.TEXT_PLAIN)

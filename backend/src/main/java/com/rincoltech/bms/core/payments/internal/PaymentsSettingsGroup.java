@@ -30,7 +30,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       variable is unset. Without the binding the first tenant administrator to switch on would receive the
  *       environment's merchant account, and the money would reach the wrong lender;
  *   <li>{@code gateway_method_unmapped}: the {@code gateway} payment method has no active ledger account yet (FR-GL-08);
- *   <li>{@code gateway_not_configured}: the host holds no complete credentials for the tenant's merchant account.
+ *   <li>{@code gateway_not_configured}: the host holds no complete credentials for the tenant's merchant account;
+ *   <li>{@code daily_ceiling_required}: no daily ceiling is set (a bound on what one day can ask for; it cannot be
+ *       removed while collections are on).
  * </ul>
  *
  * Switching off is never refused. A ceiling lower than today's use is allowed; it simply refuses the next intent.
@@ -141,6 +143,14 @@ class PaymentsSettingsGroup implements ModuleSettingsGroup {
             if (!gatewayAvailable()) {
                 throw conflict("gateway_not_configured", "The payment provider is not configured on this host.");
             }
+            if (!out.containsKey(CEILING)) {
+                throw conflict(
+                        "daily_ceiling_required",
+                        "Set a daily limit for collections before switching them on: it bounds what one day can ask for.");
+            }
+        } else if (wasOn && !proposed.containsKey(ENABLED) && !out.containsKey(CEILING)) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    CEILING, "required", "Collections are on: the daily limit cannot be removed while they are.")));
         }
         if (proposed.containsKey(ENABLED)) {
             out.put(ENABLED, proposed.get(ENABLED));

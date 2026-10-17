@@ -290,8 +290,16 @@ Additive; the decisions above stand. Where the build made a choice the text left
    answer that does not repeat the amount and currency ends `order_mismatch`, and after the attempts `creation_unknown`.
 7. **Switch and binding.** The settings group `payments` (`collections_enabled`, optional `daily_ceiling_minor`) is written only
    through `PUT /api/v1/payments/settings`; switching on is refused 409 `merchant_not_bound_to_tenant`,
-   `gateway_method_unmapped` or `gateway_not_configured`, and intent creation checks the same three things again. The daily
-   ceiling on what may be asked is a placeholder for the commercial limits, which stay parked: no price and no billing is built.
+   `gateway_method_unmapped`, `gateway_not_configured` or `daily_ceiling_required`, and intent creation checks the same things again.
+   A daily ceiling (minor units, over the tenant's Kampala day, counted under an advisory lock) is required to switch on and cannot be
+   removed while on: it is the bound on what one day can ask for, and a placeholder for the commercial limits, which stay parked (no
+   price and no billing is built).
+9. **An expired order stays payable, deliberately.** After the 30 minutes the payer is no longer offered the order, but the hosted
+   page cannot be withdrawn without a cancel that can lose a race with a payment, so a payment that completes later is booked and
+   flagged `late`. A cancel by staff, or the final cancel after 48 hours, is best effort at the provider; a payment that wins that
+   race still books (`cancelled` to `paid` is an allowed transition).
+10. **The payer return page** (`GET /api/v1/payments/return/pesapal`) has no token and is open to any browser: its own rate limit bucket,
+   no platform queue row and no counter for an unknown reference, tenant-scope orders only until #228. It is on the callback host.
 8. **Environments.** `BMS_PESAPAL_BASE_URL` outside production may only be the sandbox host, in every mode and whether or not
    credentials are set, so staging cannot reach the live provider; production refuses the sandbox and the fake; the two
    credential pairs must have different IPN ids and path tokens.

@@ -104,7 +104,7 @@ class OrderCreator {
             return Outcome.NOT_CLAIMED;
         }
         Scope scope = Scope.ofKey(intent.scope());
-        if (intent.creationAttempts() > MAX_ROUNDS) {
+        if (intent.creationAttempts() >= MAX_ROUNDS) {
             return fail(intent, "creation_unknown");
         }
         if (!clock.now().isBefore(intent.expiresAt())) {
@@ -121,10 +121,16 @@ class OrderCreator {
                 intent.payerPhone(),
                 "Payment to " + tenant.profile().name());
 
+        boolean[] counted = {false};
         for (int attempt = 1; attempt <= TRIES; attempt++) {
             try {
-                return accept(intent, gateway.createOrder(scope, request), scope);
+                var answer = gateway.createOrder(scope, request);
+                countOnce(counted, intent);
+                return accept(intent, answer, scope);
             } catch (GatewayException e) {
+                if (e.kind() != GatewayException.Kind.UNAVAILABLE) {
+                    countOnce(counted, intent);
+                }
                 switch (e.kind()) {
                     case UNAVAILABLE:
                         return defer(intent);
@@ -150,6 +156,14 @@ class OrderCreator {
             }
         }
         return fail(intent, "creation_unknown");
+    }
+
+    /** One round that really reached the provider counts once, however many tries it made. */
+    private void countOnce(boolean[] counted, Intent intent) {
+        if (!counted[0]) {
+            counted[0] = true;
+            tx.executeWithoutResult(status -> store.countCreationAttempt(intent.id()));
+        }
     }
 
     private Outcome accept(Intent intent, OrderResult result, Scope scope) {

@@ -115,6 +115,7 @@ class IntentService implements PaymentCollections {
         CurrentTenant.Profile profile = tenant.profile();
         PaymentsSettingsService.Effective effective = settings.effective();
         if (!effective.enabled()
+                || effective.dailyCeilingMinor() == null
                 || !gateway.available(Scope.TENANT)
                 || !profile.id().equals(pesapal.boundTenant())) {
             throw ApiException.rule("collections_disabled", "Collecting by mobile money or card is not switched on.");
@@ -260,8 +261,10 @@ class IntentService implements PaymentCollections {
             cols.put("failure_reason", "cancelled_by_staff");
             cols.put("next_check_at", null);
             cols.put("creation_lease_until", null);
-            if (!store.update(intentId, locked.status(), "cancelled", now, cols)
-                    || !Set.of("created", "pending", "expired").contains(locked.status())) {
+            // Status first: a paid intent is a 409 and nothing is written (the database guard would refuse it with a
+            // 500).
+            if (!Set.of("created", "pending", "expired").contains(locked.status())
+                    || !store.update(intentId, locked.status(), "cancelled", now, cols)) {
                 throw new ApiException(
                         HttpStatus.CONFLICT,
                         "not_cancellable",

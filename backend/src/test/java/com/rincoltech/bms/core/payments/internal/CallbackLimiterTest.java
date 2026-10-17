@@ -38,57 +38,82 @@ class CallbackLimiterTest {
     void anAddressMayCallUpToItsLimitInAMinuteAndNoMoreAndTheNextMinuteStartsAgain() {
         CallbackLimiter limiter = limiter(3, 1000);
         for (int i = 0; i < 3; i++) {
-            assertThat(limiter.tryAcquire("203.0.113.1")).isTrue();
+            assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "203.0.113.1"))
+                    .isTrue();
         }
-        assertThat(limiter.tryAcquire("203.0.113.1")).isFalse();
-        assertThat(limiter.tryAcquire("203.0.113.1")).isFalse();
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "203.0.113.1"))
+                .isFalse();
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "203.0.113.1"))
+                .isFalse();
         // Another address is not held back by the first.
-        assertThat(limiter.tryAcquire("203.0.113.2")).isTrue();
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "203.0.113.2"))
+                .isTrue();
         now.set(Instant.parse("2026-10-08T10:00:59Z"));
-        assertThat(limiter.tryAcquire("203.0.113.1"))
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "203.0.113.1"))
                 .as("still the same minute")
                 .isFalse();
         now.set(Instant.parse("2026-10-08T10:01:00Z"));
-        assertThat(limiter.tryAcquire("203.0.113.1")).isTrue();
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "203.0.113.1"))
+                .isTrue();
     }
 
     @Test
     void allAddressesTogetherHaveALimitToo() {
         CallbackLimiter limiter = limiter(100, 5);
         for (int i = 0; i < 5; i++) {
-            assertThat(limiter.tryAcquire("198.51.100." + i)).isTrue();
+            assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "198.51.100." + i))
+                    .isTrue();
         }
-        assertThat(limiter.tryAcquire("198.51.100.99")).isFalse();
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "198.51.100.99"))
+                .isFalse();
         now.set(Instant.parse("2026-10-08T10:02:00Z"));
-        assertThat(limiter.tryAcquire("198.51.100.99")).isTrue();
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "198.51.100.99"))
+                .isTrue();
+    }
+
+    @Test
+    void thePayerReturnPageAndTheProvidersNotificationsHaveSeparateBuckets() {
+        CallbackLimiter limiter = limiter(2, 3);
+        for (int i = 0; i < 50; i++) {
+            limiter.tryAcquire(CallbackLimiter.Bucket.RETURN, "198.51.100." + i);
+        }
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.RETURN, "198.51.100.77"))
+                .as("the return bucket is full")
+                .isFalse();
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "198.51.100.77"))
+                .as("the provider is not held back")
+                .isTrue();
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "198.51.100.78"))
+                .isTrue();
     }
 
     @Test
     void aRefusedRequestDoesNotUseUpTheOverallBudget() {
         CallbackLimiter limiter = limiter(1, 3);
-        assertThat(limiter.tryAcquire("a")).isTrue();
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "a")).isTrue();
         for (int i = 0; i < 50; i++) {
-            assertThat(limiter.tryAcquire("a")).isFalse();
+            assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "a")).isFalse();
         }
-        assertThat(limiter.tryAcquire("b")).isTrue();
-        assertThat(limiter.tryAcquire("c")).isTrue();
-        assertThat(limiter.tryAcquire("d")).isFalse();
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "b")).isTrue();
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "c")).isTrue();
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "d")).isFalse();
     }
 
     @Test
     void aFloodFromManyAddressesIsLimitedAsAWholeAndAnUnknownAddressIsCounted() {
         CallbackLimiter limiter = limiter(100, 1_000_000);
         for (int i = 0; i < CallbackLimiter.MAX_ADDRESSES; i++) {
-            assertThat(limiter.tryAcquire("addr-" + i)).isTrue();
+            assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "addr-" + i))
+                    .isTrue();
         }
-        assertThat(limiter.tryAcquire("one-more"))
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "one-more"))
                 .as("the table of addresses is full")
                 .isFalse();
-        assertThat(limiter.tryAcquire("addr-0"))
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.IPN, "addr-0"))
                 .as("a known address still has its own budget")
                 .isTrue();
         CallbackLimiter other = limiter(1, 10);
-        assertThat(other.tryAcquire(null)).isTrue();
-        assertThat(other.tryAcquire(null)).isFalse();
+        assertThat(other.tryAcquire(CallbackLimiter.Bucket.IPN, null)).isTrue();
+        assertThat(other.tryAcquire(CallbackLimiter.Bucket.IPN, null)).isFalse();
     }
 }

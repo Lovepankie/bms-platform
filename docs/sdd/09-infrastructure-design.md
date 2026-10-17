@@ -190,9 +190,10 @@ migration) with status only, no details.
   when its values are unset. The API gets them and no other container does. Staging uses sandbox values only and the
   startup guards of `docs/specs/client-extras.md` section 8 refuse a live Pesapal URL, SMS `live` mode and any non-sandbox SMS
   provider URL or account in every SMS mode there. The staging
-  tunnel must expose the callback host for provider notifications (the sandbox accepts any https name and cannot prove reachability, so the first staging run of #213 does; spec section 3.12). The sandbox also needs the JVM truststore checked for the provider's intermediate certificate. Edge rules: a
-  rate limit on `/api/v1/payments/callbacks/*` and `/api/v1/channels/*` on the callback host, and the provider's source
-  address allow-list for SMS delivery reports where the provider publishes one; the proxy redacts the path token from its
+  tunnel must expose the callback host for provider notifications (the sandbox accepts any https name and cannot prove reachability, so the first staging run of #213 does; spec section 3.12). The sandbox also needs the JVM truststore checked for the provider's intermediate certificate. Edge rules, **required before activation and not yet present** (the application's own per address and overall limit holds without them, and the Caddyfile forwards
+  `/api/v1/payments/callbacks/*`, `/api/v1/payments/return/*` and `/api/v1/channels/*` on the callback host): a
+  Cloudflare rate limit on those paths, the provider's source
+  address allow-list for SMS delivery reports where the provider publishes one, and redaction of the path token from the proxy's
   access log.
 - Edge rule for the public sign-up (ADR-024, chapter 7 section 7.10), added by the dev lead in the
   Cloudflare dashboard for the platform host: a rate limiting rule on `URI Path starts with

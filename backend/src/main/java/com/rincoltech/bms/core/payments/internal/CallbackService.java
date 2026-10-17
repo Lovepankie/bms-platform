@@ -83,6 +83,11 @@ class CallbackService {
                         rs.getString("match")))
                 .optional();
         if (resolved.isEmpty() || !"ok".equals(resolved.get().match())) {
+            if (!"ipn".equals(kind)) {
+                // The payer return carries no token and anyone can call it: it never writes to the platform queue or
+                // the alert counters.
+                return Result.UNKNOWN;
+            }
             String reason = resolved.map(Resolved::match).orElse("unknown_reference");
             jdbc.sql("SELECT app_record_unmatched_payment_callback('pesapal', ?, ?, ?, ?, ?)")
                     .params(scope.key(), reason, trackingId.toLowerCase(Locale.ROOT), reference, IntentStore.ts(now))
@@ -135,8 +140,20 @@ class CallbackService {
                 result = Result.QUEUED;
             }
         }
-        store.insertCallback(
-                UUID.randomUUID(), intentId, now, kind, type, trackingId.toLowerCase(Locale.ROOT), reference, outcome);
+        // A repeat within the throttle window adds nothing the first row does not already say: no second row (so a
+        // replay
+        // flood cannot grow the table).
+        if (!store.hasRecentOpenCallback(intentId, now.minus(CheckSchedule.THROTTLE))) {
+            store.insertCallback(
+                    UUID.randomUUID(),
+                    intentId,
+                    now,
+                    kind,
+                    type,
+                    trackingId.toLowerCase(Locale.ROOT),
+                    reference,
+                    outcome);
+        }
         return result;
     }
 

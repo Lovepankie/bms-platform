@@ -379,6 +379,17 @@ class StatusChecker {
     private Applied mismatch(Intent i, Instant now, Instant started, String json, String word, boolean anomaly) {
         int failures = i.checkFailures() + 1;
         log.warn("payment status answer disagrees with intent {}: {}", i.id(), word);
+        if (Set.of("pending", "expired").contains(i.status()) && CheckSchedule.isFinal(now, i.createdAt())) {
+            // The 48 hours are over and the answers never made sense: a person looks, the row is not left with no
+            // check.
+            Map<String, Object> cols = settled(i, now, failures, null);
+            cols.put("refusal_code", "anomaly_after_48h");
+            cols.put("next_check_at", null);
+            store.update(i.id(), i.status(), "needs_attention", now, cols);
+            audit.system(i, "needs_attention", "needs_attention", Map.of("refusal_code", "anomaly_after_48h"));
+            store.finishCallbacks(i.id(), started, now, "status_mismatch", json);
+            return new Applied(false, null, null, List.of(anomaly ? "anomaly" : "status_mismatch"));
+        }
         store.update(i.id(), i.status(), null, now, settled(i, now, failures, started));
         store.finishCallbacks(i.id(), started, now, "status_mismatch", json);
         return new Applied(false, null, null, List.of(anomaly ? "anomaly" : "status_mismatch"));
@@ -396,11 +407,14 @@ class StatusChecker {
         boolean again = started != null
                 && i.checkRequestedAt() != null
                 && i.checkRequestedAt().isAfter(started);
-        Instant next = again
-                ? now.plus(CheckSchedule.THROTTLE)
-                : started != null && Set.of("pending", "expired").contains(i.status())
-                        ? CheckSchedule.next(now, i.createdAt(), failures)
-                        : null;
+        // A paid row's next check is the booking, due now: a stale answer must never clear it.
+        Instant next = "paid".equals(i.status())
+                ? now
+                : again
+                        ? now.plus(CheckSchedule.THROTTLE)
+                        : started != null && Set.of("pending", "expired").contains(i.status())
+                                ? CheckSchedule.next(now, i.createdAt(), failures)
+                                : null;
         cols.put("next_check_at", next);
         if (!again) {
             cols.put("check_requested_at", null);

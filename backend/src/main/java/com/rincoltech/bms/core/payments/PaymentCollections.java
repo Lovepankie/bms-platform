@@ -19,7 +19,8 @@ public interface PaymentCollections {
      * be read back by id.
      *
      * @throws com.rincoltech.bms.kernel.ApiException 422 {@code collections_disabled}, {@code unknown_purpose},
-     *     {@code invalid_amount}, {@code invalid_phone}, {@code daily_ceiling_exceeded} or the purpose's own refusal
+     *     {@code validation_failed} (with the field problems {@code amount_minor}, {@code payer_phone}, {@code subject_id}),
+     *     {@code currency_not_supported}, {@code daily_ceiling_exceeded} or the purpose's own refusal
      *     ({@code subject_not_payable}, {@code exceeds_payoff}); 403 when the caller may not collect in the subject's
      *     branch
      */

@@ -309,13 +309,19 @@ class IntentStore {
      */
     boolean claimCreation(UUID id, Instant now, Instant leaseUntil) {
         return jdbc.sql("""
-                        UPDATE payment_intents SET creation_lease_until = ?, creation_attempts = creation_attempts + 1,
-                               updated_at = ?
+                        UPDATE payment_intents SET creation_lease_until = ?, updated_at = ?
                          WHERE id = (SELECT id FROM payment_intents
                                       WHERE id = ? AND status = 'created'
                                         AND (creation_lease_until IS NULL OR creation_lease_until <= ?)
                                         FOR UPDATE SKIP LOCKED)
                         """).params(ts(leaseUntil), ts(now), id, ts(now)).update() == 1;
+    }
+
+    /** Counts one round that really called the provider (a deferral because the provider is unavailable counts nothing). */
+    void countCreationAttempt(UUID id) {
+        jdbc.sql("UPDATE payment_intents SET creation_attempts = creation_attempts + 1 WHERE id = ?")
+                .param(id)
+                .update();
     }
 
     /** Takes up to {@code limit} due intents, oldest due first, and pushes their next check to the lease so no other worker takes them. */
@@ -363,6 +369,14 @@ class IntentStore {
                         """)
                 .params(id, ts(now), intentId, kind, notificationType, trackingId, merchantReference, outcome)
                 .update();
+    }
+
+    /** True when a notification of this intent that is still queued or was throttled arrived at or after {@code since}. */
+    boolean hasRecentOpenCallback(UUID intentId, Instant since) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM payment_callbacks
+                         WHERE intent_id = ? AND outcome IN ('queued', 'throttled') AND created_at >= ?
+                        """).params(intentId, ts(since)).query(Long.class).single() > 0;
     }
 
     /** Finishes the notifications that were waiting for a check that began at {@code startedAt}; later ones wait for the next. */
