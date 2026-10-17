@@ -67,7 +67,7 @@ CREATE TABLE payment_intents (
     -- is unique across every tenant so a notification can be resolved to one row without trusting the request.
     merchant_reference    text         NOT NULL CHECK (merchant_reference ~ '^BMS-(ST|PR|DV)-[0-9a-f]{32}$'),
     provider_reference    text         CHECK (provider_reference ~ '^[0-9a-fA-F-]{36}$'),
-    redirect_url          text         CHECK (redirect_url ~ '^https://[^[:space:]]{1,2000}$'),
+    redirect_url          text         CHECK (redirect_url ~ '^https://[^[:space:]]+$' AND char_length(redirect_url) <= 2000),
     status                text         NOT NULL CHECK (status IN ('created', 'pending', 'paid', 'booked', 'booked_unallocated',
                                                                  'needs_attention', 'failed', 'cancelled', 'expired',
                                                                  'reversed_pending_review', 'reversed')),

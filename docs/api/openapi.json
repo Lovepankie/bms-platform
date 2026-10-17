@@ -1167,6 +1167,27 @@
         },
         "required" : [ "full_name", "relationship" ]
       },
+      "CreatePaymentIntentRequest" : {
+        "properties" : {
+          "amount_minor" : {
+            "description" : "Whole currency units in minor units; UGX has no fraction, so 1500 is 1,500 shillings",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "payer_phone" : {
+            "description" : "The payer's mobile number: 07XXXXXXXX, 2567XXXXXXXX or +2567XXXXXXXX",
+            "type" : "string"
+          },
+          "purpose" : {
+            "description" : "What the money is for, registered by a module, for example lending.loan_repayment",
+            "type" : "string"
+          },
+          "subject_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
       "CreateRetailProductRequest" : {
         "properties" : {
           "category_id" : {
@@ -4995,6 +5016,75 @@
           }
         }
       },
+      "PaymentIntent" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "booked_transaction_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "expires_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "failure_reason" : {
+            "type" : "string"
+          },
+          "flags" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "merchant_reference" : {
+            "type" : "string"
+          },
+          "paid_amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "paid_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "payer_phone" : {
+            "type" : "string"
+          },
+          "purpose" : {
+            "type" : "string"
+          },
+          "redirect_url" : {
+            "type" : "string"
+          },
+          "refusal_code" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "subject_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "subject_type" : {
+            "type" : "string"
+          }
+        }
+      },
       "PaymentMethodMapping" : {
         "properties" : {
           "account_code" : {
@@ -5028,6 +5118,33 @@
               "$ref" : "#/components/schemas/PaymentMethodMapping"
             },
             "type" : "array"
+          }
+        }
+      },
+      "PaymentsSettings" : {
+        "properties" : {
+          "collections_enabled" : {
+            "type" : "boolean"
+          },
+          "daily_ceiling_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "gateway_available" : {
+            "description" : "The host holds the credentials for this business's merchant account",
+            "type" : "boolean"
+          },
+          "gateway_method_mapped" : {
+            "description" : "The gateway payment method posts to an active ledger account",
+            "type" : "boolean"
+          },
+          "merchant_bound" : {
+            "description" : "This business is the one the platform's merchant account is bound to",
+            "type" : "boolean"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         }
       },
@@ -16167,6 +16284,23 @@
           }
         }
       },
+      "UpdatePaymentsSettingsRequest" : {
+        "properties" : {
+          "clear_daily_ceiling" : {
+            "description" : "Remove the daily ceiling",
+            "type" : "boolean"
+          },
+          "collections_enabled" : {
+            "description" : "Switch collections by mobile money and card on or off (off by default)",
+            "type" : "boolean"
+          },
+          "daily_ceiling_minor" : {
+            "description" : "The most the business may ask to collect in a day, in minor units; 1 or more. A fraction is refused, never rounded",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
       "UpdateRetailCapabilitiesRequest" : {
         "properties" : {
           "branch_roles" : {
@@ -21865,6 +21999,153 @@
         },
         "summary" : "Render wording with fabricated sample data: text, encoding, segments, cost estimate",
         "tags" : [ "notifications" ]
+      }
+    },
+    "/api/v1/payments/intents" : {
+      "post" : {
+        "operationId" : "createPaymentIntent",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreatePaymentIntentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentIntent"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Start a collection by mobile money or card: writes the intent, asks the provider for the order (FR-PAY-01)",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/intents/{intent_id}" : {
+      "get" : {
+        "operationId" : "getPaymentIntent",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "intent_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentIntent"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One intent: its status and the redirect url; the initiator, or a holder of core.payments.read",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/intents/{intent_id}/cancel" : {
+      "post" : {
+        "operationId" : "cancelPaymentIntent",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "intent_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentIntent"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cancel an intent that is not paid; the order is cancelled at the provider first",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/settings" : {
+      "get" : {
+        "operationId" : "getPaymentsSettings",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentsSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's payments settings and what the host offers (ADR-035)",
+        "tags" : [ "payments" ]
+      },
+      "put" : {
+        "operationId" : "updatePaymentsSettings",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdatePaymentsSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentsSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change the tenant's payments settings, audited with before and after (ADR-035)",
+        "tags" : [ "payments" ]
       }
     },
     "/api/v1/platform/applications" : {

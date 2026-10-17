@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -12,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * {@code PENDING}; an unknown id is an anomaly), records every call, and can be told to fail, to apply an order but lose
  * the answer, to change an order's state, or to run a hook just before it answers a status query (a barrier for a race
  * test). It is refused in production by {@code PesapalSettings}, because an answer it invented must never stand for a
- * payer's money. Nothing it holds is real: references are counters, the redirect is on a reserved test domain.
+ * payer's money. Nothing it holds is real: order ids are random, the redirect is on a reserved test domain.
  */
 public final class FakePaymentGateway implements PaymentGateway {
 
@@ -47,7 +48,6 @@ public final class FakePaymentGateway implements PaymentGateway {
     private final Map<String, FakeOrder> byProviderReference = new LinkedHashMap<>();
     private final Map<String, FakeOrder> byMerchantReference = new LinkedHashMap<>();
     private final List<String> calls = new ArrayList<>();
-    private final AtomicInteger counter = new AtomicInteger();
     private final AtomicInteger queries = new AtomicInteger();
     private volatile boolean available = true;
     private volatile GatewayException createFailure;
@@ -78,7 +78,7 @@ public final class FakePaymentGateway implements PaymentGateway {
         }
         FakeOrder order = byMerchantReference.get(request.merchantReference());
         if (order == null) {
-            String id = String.format("aaaaaaaa-0000-4000-8000-%012x", counter.incrementAndGet());
+            String id = UUID.randomUUID().toString();
             order = new FakeOrder(id, request.merchantReference(), request.amountMinor(), request.currency());
             byProviderReference.put(id, order);
             byMerchantReference.put(request.merchantReference(), order);
