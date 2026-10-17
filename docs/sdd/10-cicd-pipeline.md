@@ -40,11 +40,11 @@ branch --PR--> ci.yml (self-hosted hillary-pi): backend mvn verify | frontend co
 
 ## 10.3 Continuous integration (`.github/workflows/ci.yml`)
 
-**Where jobs run (ADR-018, finding H1).** The three small text guards (`dash-guard`,
-`adr-citation-guard`, `linked-issue-guard`) run on the GitHub-hosted `ubuntu-latest` runner: they
-only read the checked-out diff, hold no secret and cost seconds, and moving them keeps them from
-queueing behind the heavy build on the single Pi runner. The other read-only checks (`ci.yml`,
-`architecture-model`, `estimate-guard`) target `runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}`: the three
+**Where jobs run (ADR-018, finding H1 and its amendment 2026-10-18).** The three small text guards (`dash-guard`,
+`adr-citation-guard`, `linked-issue-guard`) only read the checked-out diff, hold no secret and cost seconds. They ran on the GitHub-hosted
+`ubuntu-latest` runner until the organisation's Actions budget ran out (the job then does not start at all and every pull request fails the
+three checks); they now target the same `CI_RUNS_ON` runners as the other read-only checks. The deploy workflow stays hosted: it holds the
+signing and registry secrets. The read-only checks (`ci.yml`, `architecture-model`, `estimate-guard` and the three guards) target `runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}`: the three
 organisation runners on Jerome's laptop first (runner group `jerome-laptop`, X64, 6 cores, WSL2 with Docker), and the organisation runner on the ARM64
 staging host (runner group `hillary-pi`) only when all three laptop runners are busy or offline. `scripts/ci/pick-runner.sh` sets the repository
 variable `CI_RUNS_ON` every minute (a launchd job on the maintainer's Mac) from the runners' busy flags; both groups admit private repositories only, public repositories refused (ADR-018 amendment 2026-10-16). It costs no Actions minutes,

@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   dash-guard:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}
     steps:
       - uses: actions/checkout@v7
         with:

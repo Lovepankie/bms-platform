@@ -313,3 +313,15 @@ maintainer's Mac) sets it from the runners' busy and online flags.
 permission, the deploy job stays on the GitHub-hosted runner, and nothing that needs a secret may target `CI_RUNS_ON`. The choice is made at the moment a
 run is created, so a run created while a laptop runner was idle can still wait if AGA takes it first. If the laptop is off, the variable moves to the Pi
 within a minute. The laptop's owner must know that this repository's CI code also runs on his machine.
+
+## Amendment 2026-10-18: the three text guards leave the hosted runner
+
+**Context.** The organisation's GitHub Actions budget for hosted runners ran out on 2026-10-17. A hosted job then does not start ("an Actions budget is
+preventing further use"), so `dash-guard`, `adr-citation-guard` and `linked-issue-guard` failed on every pull request within seconds and nothing could
+merge. These guards only read the checked-out diff, hold no secret and cost seconds.
+
+**Decision.** The three guards use `runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}`, like `ci.yml`. The deploy
+workflow stays on `ubuntu-latest` (finding H1): it holds the signing key and registry credentials, which never go on a shared runner.
+
+**Consequences.** Better: the guards no longer spend or depend on hosted minutes. Worse: they now wait for a laptop or Pi runner, and the repository
+still needs a hosted budget for deploys. The rule from the 2026-10-16 amendment stands: these runners never hold a secret or a deploy credential.
