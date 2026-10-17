@@ -460,6 +460,8 @@ adapter. FR-PAY-07 to FR-PAY-11 add the rules that Pesapal's hosted order and un
 | FR-MEM-12 | A member statement shall list all loans, savings and investment accounts with balances as at a date, and all transactions in a range. | PDF and screen views agree. | P2 |
 | FR-MEM-13 | A tenant admin shall flag a member as `blacklisted` with a reason; a blacklisted member's applications cannot be approved. | Approval of a blacklisted member's loan fails with `member_blacklisted`. | MVP |
 
+Staff screens for FR-MEM-01 to FR-MEM-10 (issue #280, frontend only): the member list and the member's page, add and change forms, next of kin and ID photos; see `docs/specs/lending-ui-notes.md`, section "Members and collateral". The form normalises phones as FR-MEM-02, shows likely duplicates before saving (FR-MEM-04) and holds the save for a registered national ID or an unconfirmed shared phone.
+
 ## 3.17 Loan products (PRD)
 
 | ID | Requirement | Acceptance criteria | Phase |
@@ -658,6 +660,8 @@ with no allocation rows. The closure SMS is deferred to increment 6.
 | FR-COL-04 | Release shall be a maker-checker action allowed only when every loan it secures is `closed`, `cancelled` or `rejected`; release records who collected the item and when. | Release while a linked loan is active fails with `collateral_secures_open_loan`. Built as the `collateral_release` approval action; the open-loan check joins with loans (increment 4). Enforced since #41: `collateral_secures_open_loan` while a draft, submitted, appraised, approved or active loan holds the item. | MVP |
 | FR-COL-05 | The tenant shall be able to disable collateral types it does not accept (setting). | A disabled type cannot be registered. | MVP |
 | FR-COL-06 | A collateral register report shall list items by status, type, branch and linked loan status, including items `in_custody` on closed loans (release overdue). | Chapter 14. | MVP |
+
+Staff screens for FR-COL-01 to FR-COL-05 (issue #280, frontend only): the register, the registration and change forms, photos, valuations, custody changes, and the release request that a second person decides in the approvals inbox; see `docs/specs/lending-ui-notes.md`.
 
 ## 3.24 Savings (SAV)
 

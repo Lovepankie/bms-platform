@@ -560,7 +560,7 @@ Built so far (the reference slice, `lending.members`): `POST /lending/members`,
 `POST .../kyc/verify` and `POST .../blacklist`. The PATCH and the two state changes require
 `If-Match` (section 7.9) and return the new `ETag`. Loan number search waits for loans
 (increment 4). Then (#11) the next of kin routes and `GET .../relationships`, and (#12) the member
-document routes. The rest of this table is to be built.
+document routes. The rest of this table is to be built. `POST /lending/members` and `POST /lending/collateral` do not read `Idempotency-Key` (they move no money, section 7.8); the staff screens still send one per form, and look the record up after an answer that may have been lost before allowing another save.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|

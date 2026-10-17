@@ -287,3 +287,110 @@
     break-inside: avoid;
   }
 }
+
+/* Member and collateral forms (issue #280): one column, grouped inputs, a save bar stuck to the bottom of a phone. */
+.mf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+.mf-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.mf-req {
+  font-weight: var(--weight-regular);
+  color: var(--color-text-muted);
+}
+
+.mf-group {
+  margin: 0;
+}
+
+.mf-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  padding: var(--space-3) var(--space-4);
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+
+.mf-savebar-note {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.mf-savebar-row {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.mf-savebar-row > * {
+  flex: 1;
+  min-height: var(--tap);
+  text-align: center;
+}
+
+/* Photos: the camera and file buttons side by side, the chosen picture under them. */
+.ph-slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.ph-label {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+}
+
+.ph-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ph-buttons > button {
+  flex: 1 1 140px;
+}
+
+.ph-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ph-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+
+.ph-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ph-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+}
+
+@media (min-width: 720px) {
+  .mf {
+    max-width: 640px;
+  }
+}

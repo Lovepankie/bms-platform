@@ -6,10 +6,35 @@ import { branchFilter } from '../../auth/branch';
 import { formatMinor } from '../../components/money';
 import { EmptyState, SkeletonList } from '../../components/states';
 import { useStaff } from './context';
+import { useCollateralApi } from '../../api/lending-context';
+import { custodyWords, typeWords } from './lending/collateral-state';
+import { money as lendingMoney } from './lending/loan-state';
 
 // The approvals inbox (FR-APR-05, FR-APR-06): pending requests the user may decide or made, in
 // the active branch. Approve executes the action at once; reject needs a note. The maker sees
 // their own requests and may cancel them, but never decide them (FR-APR-02).
+
+/**
+ * What a request is, in words a checker can decide on. A collateral release names the item, what it is worth and where it is now, read
+ * from the item itself (the list carries no payload, so who collects it is not shown here); other types keep their identifier until their screen gives them words.
+ */
+export function What({ item }: { item: Approval }) {
+  const api = useCollateralApi();
+  const release = item.action_type === 'collateral_release';
+  const detail = useQuery({ queryKey: ['collateral', 'one', item.subject_id], queryFn: () => api.get(item.subject_id ?? ''), enabled: release && !!item.subject_id, retry: false });
+  if (!release) return <>{item.action_type}</>;
+  const c = detail.data?.item;
+  return (
+    <>
+      <strong>Give collateral back</strong>
+      {c ? (
+        <span className="hint">
+          {' '}{typeWords(c.collateral_type)}: {c.description}. Worth about {lendingMoney(c.collateral_value_minor ?? c.estimated_value_minor, c.currency)}. Now: {custodyWords(c.custody_status)}.
+        </span>
+      ) : detail.isError ? <span className="hint"> The item could not be loaded here. Open the collateral register to see it before you decide.</span> : null}
+    </>
+  );
+}
 
 function Row({ item, id }: { item: Approval; id: string }) {
   const queryClient = useQueryClient();
@@ -37,7 +62,7 @@ function Row({ item, id }: { item: Approval; id: string }) {
 
   return (
     <tr>
-      <td data-label="Action">{item.action_type}</td>
+      <td data-label="Action"><What item={item} /></td>
       <td data-label="Amount" className="num">{item.amount_minor != null && item.currency ? formatMinor(item.amount_minor, item.currency) : ''}</td>
       <td data-label="Requested by">{item.requested_by_name ?? item.requested_by}</td>
       <td data-label="Requested at">{item.requested_at ? new Date(item.requested_at).toLocaleString() : ''}</td>

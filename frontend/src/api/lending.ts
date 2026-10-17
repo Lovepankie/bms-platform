@@ -86,11 +86,11 @@ function executed(outcome: LoanActionOutcome, status: number): boolean {
 const key = (k: string) => ({ 'Idempotency-Key': k });
 
 export const lending = {
-  async listLoans(q: { q?: string; status?: string; branchIds?: string[]; cursor?: string; signal?: AbortSignal }): Promise<LoanPage> {
+  async listLoans(q: { q?: string; status?: string; memberId?: string; branchIds?: string[]; cursor?: string; signal?: AbortSignal }): Promise<LoanPage> {
     return unwrap(
       await api.GET('/api/v1/lending/loans', {
         params: {
-          query: { q: q.q || undefined, status: q.status ? [q.status] : undefined, branch_id: q.branchIds, limit: 25, cursor: q.cursor },
+          query: { q: q.q || undefined, status: q.status ? [q.status] : undefined, member_id: q.memberId, branch_id: q.branchIds, limit: 25, cursor: q.cursor },
         },
         signal: q.signal,
       }),

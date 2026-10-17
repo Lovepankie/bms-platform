@@ -12,6 +12,7 @@ import { BranchPicker, useActiveBranch } from './branch-picker';
 import { StaffContext } from './context';
 import { showInsights } from './insights/permissions';
 import { showInvestments } from './lending/investment-state';
+import { showCollateral, showMembers } from './lending/member-permissions';
 import { showLending } from './lending/permissions';
 import { showSavings } from './lending/savings-permissions';
 import { showReports } from './reports/permissions';
@@ -116,6 +117,8 @@ export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: 
         <Link to="/staff" activeOptions={{ exact: true }}>Home</Link>
         {permissions.includes('core.approvals.read') && <Link to="/staff/approvals" data-tour="nav-approvals">Approvals</Link>}
         {showLending(me) && <Link to="/staff/lending" activeOptions={{ exact: true }} data-tour="nav-lending">Loans</Link>}
+        {showMembers(me) && <Link to="/staff/lending/members" data-tour="nav-members">Members</Link>}
+        {!showMembers(me) && showCollateral(me) && <Link to="/staff/lending/collateral">Collateral</Link>}
         {showSavings(me) && <Link to="/staff/lending/savings">Savings</Link>}
         {showInvestments(me) && <Link to="/staff/lending/investments">Investments</Link>}
         {showInsights(me) && <Link to="/staff/insights" data-tour="nav-insights">Insights</Link>}

@@ -1,5 +1,6 @@
 import type { Me } from '../api/client';
 import type { Tour, TourStep } from './model';
+import { CUSTOMER_TOURS } from './tours-customers';
 
 // The tours themselves (issue #19). Copy rules: plain English, short sentences, no jargon, say
 // what to tap. Every target is a data-tour attribute on a screen; tours.test.tsx renders each
@@ -1082,5 +1083,5 @@ export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage,
+  purchasingCapability, purchasingPage, landedCostsPage, ...CUSTOMER_TOURS,
 ];

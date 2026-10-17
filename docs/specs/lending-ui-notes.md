@@ -84,11 +84,41 @@ number they have already loaded. See `docs/specs/retail-ui-notes.md`, section "B
 
 - Member self-service savings screens (increment 11), USSD and online payments (phase 2), transfers between accounts.
 - A savings receipt or statement PDF (with the loan documents follow-up).
-- Loan origination screens (application, appraisal, decision), waivers, restructures and credit refunds.
+- Loan origination screens (application, appraisal, decision; issue #280 slices 3 and 4), waivers, restructures and credit refunds. The member and collateral screens are built (section "Members and collateral").
 - A pending reversal or write-off is not marked on the loan page; the server refuses a second request with
   `approval_already_pending`.
 - Printing or sending a receipt, a member statement, and a mock switch like `VITE_RETAIL_MOCK`.
 - The tests render static markup (no DOM); a browser walk against the real API is still to do.
+
+## Members and collateral (issue #280, slices 1 and 2)
+
+**Requirements:** FR-MEM-01 to FR-MEM-10, FR-COL-01 to FR-COL-05 · **API:** `docs/sdd/07-api-design.md` sections 7.11.11 and 7.11.14 · no backend change
+
+Phone-first staff screens on the generated client (`src/api/members.ts`, `src/api/collateral.ts`, typed by `schema.d.ts`; the screens use the `MembersApi` and `CollateralApi` interfaces through `LendingApiContext`, so the in-memory `members-mock.ts` stands in for them in tests). Styled in `lending.css` (`mf-` form classes, `ph-` photo classes). The staff header shows **Members** with `lending.members.read` (and **Collateral** to a user who may read collateral but not members); both screens carry the small Members and Collateral menu.
+
+| Route | Screen | Permissions needed |
+|---|---|---|
+| `/staff/lending/members` | Members: live search by number, name, phone or national ID (never in the address), status filter, "Load more", Add a member, empty state | `lending.members.read` (add: `lending.members.create`) |
+| `/staff/lending/members/new` | Add a member: branch, name, phone, ID, date of birth, gender, marital status, work, income, address, ID photos | `lending.members.create` in the chosen branch |
+| `/staff/lending/members/$memberId` | The member's page: details, checking the details (what is missing; accept or refuse), next of kin, documents, who names the member as kin, loans, collateral, savings and investments links, text-message choice | `lending.members.read`; changes `lending.members.update`; the check `lending.members.verify_kyc` |
+| `/staff/lending/members/$memberId/edit` | Change details, and the member's status | `lending.members.update` in the member's branch |
+| `/staff/lending/collateral` | The register: search over the loaded items, filter by kind and by who keeps it, Register collateral | `lending.collateral.read` (register: `lending.collateral.manage`) |
+| `/staff/lending/collateral/new` | Register collateral: member (found by searching; `?memberId=` from the member's page), kind, description, title, logbook or plate number, owner, estimate, who keeps it, photos | `lending.collateral.manage` |
+| `/staff/lending/collateral/$collateralId` | One item: facts, photos and scans, valuations (add), history of custody and the changes allowed from where it is now | read; changes `lending.collateral.manage`; release `lending.collateral.release_request` |
+| `/staff/lending/collateral/$collateralId/edit` | Change details | `lending.collateral.manage` |
+
+- **Branch scope.** Offered actions follow `me.permission_scopes` per permission and branch (`member-permissions.ts`, `holds`), not only the permission name; the API stays the authority.
+- **Phone.** The form normalises as the server does (`PhoneNumbers.normaliseUganda`: `07...`, `+256 7...`, `2567...`) and is stricter in one way: a bare nine digits is refused with a hint to start with 0 or +256, since it cannot be told from a number missing a digit. The shared cases of chapter 13 section 13.6 are in `member-state.test.ts`.
+- **Duplicates before saving (FR-MEM-04).** After a short pause the form asks `duplicate-check` for the typed phone, national ID and name and lists likely matches (masked, with why). The same national ID stops the save; a shared phone stops it until the person ticks that it is a different person, which sends `confirmed_not_duplicate`. A refusal from the server (`duplicate_nin`, `duplicate_phone`) shows on its own input with the other member's number.
+- **Editing.** An edit sends the version it loaded as `If-Match` and only the fields that changed. A stale version (409) keeps what was typed and offers to reload the other version. "Not said" for gender and marital status is sent as `unspecified` and `unknown`; a saved date of birth or income cannot be emptied (the server keeps an omitted field), so the form says so instead of doing nothing.
+- **Idempotency and a lost answer.** One `Idempotency-Key` per form instance, stable across retries. The member and collateral create routes do not read it today (they are not money routes, chapter 7 section 7.8), and a collateral item with no reference number, a next of kin and a valuation have nothing on the server that stops a second one. So the clients wrap every failure as a `FormError` (`guarded` in `lending-forms.ts`): a dropped connection, a timeout or a stopped request is status 0, and a 5xx is also an unknown outcome (`unknownOutcome`). After one, the screen (`save-guard.tsx`) looks the record up (a duplicate check by phone for a member, the member's collateral, the member's next of kin, the item's valuations) and blocks every further save until that look has SUCCEEDED: found says it is already saved and links to it, not found frees the save, and a look that itself failed keeps the block with "Check again". Tests use the real clients with a fetch that rejects (`members-real.test.ts`).
+- **Photos.** `photo-queue.tsx` and `image-prep.ts`: "Take a photo" opens the phone camera (`capture`), "Choose a file" the gallery or files (JPEG, PNG, WebP, PDF; HEIC is not offered because most browsers cannot draw it). A wrong kind, an empty file, a PDF over 5 MB or a file over 30 MB is refused in words; a photo is drawn at most 2000 pixels on its longest side and written as JPEG under the server's 5 MB, trying smaller until it fits. Progress shows while sending; a failed send keeps the shrunk picture, so "Send again" does not shrink or ask again, and a second tap while one is on its way sends nothing more. A new member's ID photos are held and sent after the member is saved; if one fails, the member stays saved and the page offers to send it again. ID images are listed by the server only to staff holding `lending.members.verify_kyc`; others see a line saying so.
+- **Release.** "Ask to give it back" only sends the request (`collateral_release`, FR-COL-04). A second person agrees or refuses in the approvals inbox; the item stays held until then. A loan that the item secures blocks it (`collateral_secures_open_loan`). Linking collateral to a loan is slice 3.
+- **Errors** are in plain words (`src/api/lending-forms.ts`); each field problem shows under its input, tied with `aria-describedby`, with `aria-invalid`, and focus moves to the first one. No phone, national ID or name is logged or sent anywhere but the API.
+- **Tours** (`src/tour/tours-customers.ts`, each a page tour from Help, audience by permission): `page-members`, `page-member-new`, `page-member`, `page-collateral`, `page-collateral-new`, `page-collateral-item`. `tours.test.tsx` renders each anchor.
+- **Shared phone.** The "different person who shares the phone" box shows from the check's candidates or from the server's `duplicate_phone` refusal (an update-only user gets no check, as that route needs `lending.members.create`); on an edit it applies only when the phone was changed. Phone and national ID are sent normalised, not as typed.
+- **Approvals inbox.** A `collateral_release` request shows the item (kind, description, estimate, where it is) instead of its identifier. The list carries no payload and no member name; those are a follow-up.
+- **Deferred:** the tenant's currency instead of UGX on these forms (a follow-up), collateral free-text search on the server (the register filters the loaded items on the device), a member statement, moving a member to another branch (FR-BR-06), HEIC photos, and the loan application, appraisal and decision screens (issue #280 slices 3 and 4).
 
 ## Investments (increment 10, issue #152)
 

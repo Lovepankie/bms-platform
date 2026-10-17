@@ -168,7 +168,7 @@ Empty CUSTOMER PHONE on a `data` row: blocking `PHONE_MISSING`.
 
 ### 13.6.2 National ID (CUSTOMER ID, NEXT OF KIN ID)
 
-Upper case, remove spaces and hyphens. Valid when it matches `^C[MF][A-Z0-9]{12}$`.
+Upper case, remove white space (the member API and the staff form remove white space only, so a hyphen makes a NIN invalid there; an import that wants hyphens removed does it before the check). Valid when it matches `^C[MF][A-Z0-9]{12}$`.
 Invalid and non-empty: warning `NIN_INVALID`; the raw value is kept as `other_id_number`
 with `id_type = other`. Empty: info `NIN_MISSING` (the member is created with
 `id_type = none`, which keeps KYC `incomplete`).

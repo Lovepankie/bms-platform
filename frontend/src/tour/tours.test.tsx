@@ -9,6 +9,12 @@ import { mockMe } from '../api/retail-mock';
 import { router as appRouter } from '../app/router';
 import { StaffContext } from '../areas/staff/context';
 import { StaffHome } from '../areas/staff/home';
+import { CollateralForm } from '../areas/staff/lending/collateral-form';
+import { CollateralList } from '../areas/staff/lending/collateral';
+import { CollateralView } from '../areas/staff/lending/collateral-page';
+import { MemberForm } from '../areas/staff/lending/member-form';
+import { MemberView } from '../areas/staff/lending/member-page';
+import { Members } from '../areas/staff/lending/members';
 import { LoanView } from '../areas/staff/lending/loan';
 import { Loans } from '../areas/staff/lending/loans';
 import { BranchRoles } from '../areas/staff/retail/branch-roles';
@@ -106,6 +112,18 @@ function screen(path: string | undefined): ReactElement {
       return <LandedCostsPage />;
     case '/staff/lending':
       return <Loans />;
+    case '/staff/lending/members':
+      return <Members />;
+    case '/staff/lending/members/new':
+      return <MemberForm />;
+    case '/staff/lending/members/$memberId':
+      return <MemberView member={{ id: 'm1', branch_id: branches?.[0]?.id, member_no: 'M000001', full_name: 'Test Member 01', kyc_status: 'incomplete', status: 'active', id_type: 'nin', version: 1 }} />;
+    case '/staff/lending/collateral':
+      return <CollateralList />;
+    case '/staff/lending/collateral/new':
+      return <CollateralForm />;
+    case '/staff/lending/collateral/$collateralId':
+      return <CollateralView collateralId="c1" detail={{ item: { id: 'c1', branch_id: branches?.[0]?.id, member_id: 'm1', collateral_type: 'land_title', description: 'Test plot', custody_status: 'pledged', currency: 'UGX', version: 1 }, valuations: [], events: [] }} />;
     case '/staff/lending/loans/$loanId':
       return (
         <>
@@ -181,6 +199,18 @@ const OFFICER: Me = {
   branches,
 } as Me;
 
+// A loan officer who adds members and collateral, and a branch manager who also checks the details and asks for a release.
+const CLERK: Me = {
+  ...OFFICER,
+  full_name: 'Test Clerk 01',
+  // A payload without scopes counts as every branch.
+  permission_scopes: undefined,
+  permissions: [
+    ...(OFFICER.permissions ?? []), 'lending.members.create', 'lending.members.update', 'lending.collateral.read', 'lending.collateral.manage', 'lending.collateral.release_request',
+  ],
+};
+const CHECKER: Me = { ...CLERK, full_name: 'Test Checker 01', permissions: [...(CLERK.permissions ?? []), 'lending.members.verify_kyc'] };
+
 // A wholesaler's manager: the trade capabilities are on (ADR-033).
 const TRADER: Me = { ...MANAGER, full_name: 'Test Trader 01', module_capabilities: { retail: ['branch_roles', 'transfer_receipt'] } };
 
@@ -199,6 +229,12 @@ const RETURNER: Me = { ...ADMIN, full_name: 'Test Returner 01', module_capabilit
 const BUYER: Me = { ...ADMIN, full_name: 'Test Buyer 01', module_capabilities: { retail: ['branch_roles', 'purchasing'] } };
 
 const AUDIENCE: Record<string, Me[]> = {
+  'page-members': [CLERK, OFFICER],
+  'page-member-new': [CLERK],
+  'page-member': [CLERK, CHECKER],
+  'page-collateral': [CLERK],
+  'page-collateral-new': [CLERK],
+  'page-collateral-item': [CLERK],
   'admin-welcome': [ADMIN],
   'retail-sales': [SELLER, MANAGER],
   'staff-welcome': [CASHIER, OFFICER],

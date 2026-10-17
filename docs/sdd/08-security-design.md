@@ -231,6 +231,8 @@ platform API and holds no tenant permissions.
 | `retail.purchase.approve` | Y | | | | | | | |
 | `retail.document.issue` | Y | | | | | | | |
 
+The staff member and collateral screens (issue #280) offer an action only when the session holds its permission in the record's branch, from `permission_scopes`; the API remains the authority. An ID image is listed and opened only with `lending.members.verify_kyc`. No permission was added.
+
 Notes:
 
 - A loan officer running `lending.reports.collections` sees only loans where they are

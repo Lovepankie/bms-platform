@@ -176,6 +176,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   user in; the PWA walks a new user through password, an optional second factor and recovery codes;
   role aware spotlight tours (`frontend/src/tour/`) start once and replay from Help, with per-user
   progress in `users.preferences` (`V31`). A new screen adds `data-tour` anchors and its steps.
+- **Built (lending staff screens 1 and 2, issue #280):** PWA only, no migration: Members (list with live search, add, change, the member's page with the check of the details, next of kin, ID photos, relationships, loans) and the collateral register (register, change, valuations, custody changes, photos, the release request), phone-first, with a tour each (`docs/specs/lending-ui-notes.md`, section "Members and collateral"). Loan application, appraisal and decision are slices 3 and 4.
 - **Built (increment 9, savings, issue #151, ADR-032):** migration `V30` (savings products,
   accounts, transactions, end-of-day balances, interest postings; the outbox accepts `sms`);
   products with interest rules, minimum and opening balances, withdrawal fee and limits, dormancy;

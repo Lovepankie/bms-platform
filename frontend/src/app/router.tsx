@@ -160,6 +160,21 @@ const savingsStatementRoute = lendingScreen('/savings/accounts/$accountId/statem
   import('../areas/staff/lending/savings-statement').then((m) => m.Route),
 );
 const memberSavingsRoute = lendingScreen('/members/$memberId/savings', 'Member savings').lazy(() => import('../areas/staff/lending/member-savings').then((m) => m.Route));
+// Members, next of kin, KYC documents and the collateral register (issue #280).
+const membersRoute = lendingScreen('/members', 'Members').lazy(() => import('../areas/staff/lending/members').then((m) => m.Route));
+const memberNewRoute = lendingScreen('/members/new', 'New member').lazy(() => import('../areas/staff/lending/member-form').then((m) => m.NewRoute));
+const lendingMemberRoute = lendingScreen('/members/$memberId', 'Member').lazy(() => import('../areas/staff/lending/member-page').then((m) => m.Route));
+const memberEditRoute = lendingScreen('/members/$memberId/edit', 'Change details').lazy(() => import('../areas/staff/lending/member-form').then((m) => m.EditRoute));
+const collateralRoute = lendingScreen('/collateral', 'Collateral').lazy(() => import('../areas/staff/lending/collateral').then((m) => m.Route));
+const collateralNewRoute = createRoute({
+  getParentRoute: () => staffLendingRoute,
+  path: '/collateral/new',
+  staticData: { crumb: 'Register collateral' },
+  // The member to start from, as an id (never a phone or an ID number).
+  validateSearch: (s: Record<string, unknown>): { memberId?: string } => ({ memberId: typeof s.memberId === 'string' ? s.memberId : undefined }),
+}).lazy(() => import('../areas/staff/lending/collateral-form').then((m) => m.NewRoute));
+const collateralItemRoute = lendingScreen('/collateral/$collateralId', 'Item').lazy(() => import('../areas/staff/lending/collateral-page').then((m) => m.Route));
+const collateralEditRoute = lendingScreen('/collateral/$collateralId/edit', 'Change details').lazy(() => import('../areas/staff/lending/collateral-form').then((m) => m.EditRoute));
 const investmentsRoute = lendingScreen('/investments', 'Investments').lazy(() => import('../areas/staff/lending/investments').then((m) => m.Route));
 const investmentNewRoute = lendingScreen('/investments/new', 'New investment').lazy(() => import('../areas/staff/lending/investment-new').then((m) => m.Route));
 const investmentMaturitiesRoute = lendingScreen('/investments/maturities', 'Maturities').lazy(() => import('../areas/staff/lending/maturities').then((m) => m.Route));
@@ -286,6 +301,14 @@ export const router = createRouter({
         savingsProductsRoute,
         savingsAccountRoute,
         savingsStatementRoute,
+        membersRoute,
+        memberNewRoute,
+        lendingMemberRoute,
+        memberEditRoute,
+        collateralRoute,
+        collateralNewRoute,
+        collateralItemRoute,
+        collateralEditRoute,
         memberSavingsRoute,
         investmentsRoute,
         investmentNewRoute,
