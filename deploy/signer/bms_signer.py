@@ -6,10 +6,10 @@ holds the key. Every pass it asks GitHub for the latest deploy runs and signs th
 run only when ALL of these hold:
 
   * the run is this repository's `.github/workflows/deploy.yml`, event `push`, branch `main` (the runner
-    group that serves `bms-deploy-pi` also admits nothing else);
+    group that serves `bms-deploy-laptop` also admits nothing else);
   * its head commit is on main (an ancestor of, or equal to, main);
   * the three `Build and push <image>` jobs finished with success, ran on the dedicated runner
-    (`bms-deploy-pi`) and at that commit;
+    (`bms-deploy-laptop`) and at that commit;
   * each job's own LOG holds exactly one `bms-image-digest image=... digest=... revision=...` line, and the
     revision is the run's head commit. A log cannot be edited after the fact and no other run can write to it;
     annotations are not used because a check run can be updated through the API;
@@ -50,7 +50,7 @@ from pathlib import Path
 
 REPO = "RincolTech-Solutions-ltd/bms-platform"
 WORKFLOW_PATH = ".github/workflows/deploy.yml"
-RUNNER_NAME = "bms-deploy-pi"
+RUNNER_NAME = "bms-deploy-laptop"   # the deploy runner on Jerome's laptop (ADR-040, amendment 2026-10-18)
 IMAGE_PREFIX = "ghcr.io/rincoltech-solutions-ltd/bms-platform"
 IMAGES = ("api", "web", "proxy")
 MAX_RUN_AGE_SECONDS = 48 * 3600

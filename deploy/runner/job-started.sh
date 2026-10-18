@@ -1,7 +1,7 @@
 #!/bin/bash
 # /usr/local/lib/bms-deploy/job-started.sh  (BMS ADR-040)
 #
-# ACTIONS_RUNNER_HOOK_JOB_STARTED for bms-deploy-pi. Root-owned 0755 in a root-owned 0755 directory and
+# ACTIONS_RUNNER_HOOK_JOB_STARTED for the BMS deploy runner. Root-owned 0755 in a root-owned 0755 directory and
 # wired by Environment= in the root-owned unit, so a job cannot edit or disable it. Runs as bmsdeploy.
 #
 # Any job of this repository that targets the `bms-deploy` label can run here, a pull request job
@@ -13,8 +13,8 @@ set -u
 log() { logger -t bms-deploy-hook -- "$*"; }
 log "job-started: repo=${GITHUB_REPOSITORY:-unknown} event=${GITHUB_EVENT_NAME:-unknown} ref=${GITHUB_REF:-unknown}"
 
-export DOCKER_HOST="${DOCKER_HOST:-unix:///run/user/1002/docker.sock}"
-HOME_BD=/home/bmsdeploy
+export DOCKER_HOST="${DOCKER_HOST:-unix:///run/user/$(id -u)/docker.sock}"
+HOME_BD="${HOME:-/home/bmsdeploy}"
 
 # Second line behind the organisation runner group (which already admits only deploy.yml on main): refuse any
 # job that is not this repository's deploy workflow at refs/heads/main on a push. A non-zero exit fails the
@@ -23,7 +23,7 @@ HOME_BD=/home/bmsdeploy
 if [ "${GITHUB_WORKFLOW_REF:-}" != "RincolTech-Solutions-ltd/bms-platform/.github/workflows/deploy.yml@refs/heads/main" ] \
    || [ "${GITHUB_EVENT_NAME:-}" != "push" ]; then
   log "REFUSED: workflow ref '${GITHUB_WORKFLOW_REF:-unset}' event '${GITHUB_EVENT_NAME:-unset}'"
-  echo "bms-deploy-pi runs only deploy.yml on main (ADR-040)" >&2
+  echo "the BMS deploy runner runs only deploy.yml on main (ADR-040)" >&2
   exit 1
 fi
 

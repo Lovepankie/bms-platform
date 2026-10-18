@@ -20,7 +20,8 @@ name: Deploy
 # so code from a fork never runs with these secrets or with package write access.
 #
 # Where the jobs run (ADR-040, which supersedes the hosted-runner rule of ADR-018 finding H1):
-#   * meta, build, staging-pointer and promote run on `bms-deploy-pi`, a repository-scoped runner on the
+#   * meta, build, staging-pointer and promote run on `bms-deploy-laptop`, a runner on Jerome's laptop (the Pi hard-resets under
+#     heavy work, ADR-040 amendment 2026-10-18), in an organisation runner group that admits only this workflow, on the
 #     staging host under its OWN user (`bmsdeploy`): rootless Docker wiped before and after every job, a
 #     network wall, a memory cap, no sudo, no deploy secret (deploy/runner/). The organisation's hosted
 #     Actions budget is exhausted and will not be raised, so nothing here may depend on hosted minutes.

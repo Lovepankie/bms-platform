@@ -160,3 +160,28 @@ native build elsewhere or is dropped until a production VM exists); Docker Hub 4
 
 Rollback: `deprovision.sh` removes the runner; deleting the group and reverting this change restores the hosted
 jobs, which work again only if a budget exists.
+
+## Amendment 2026-10-18 (2): the build runner moves from the Pi to Jerome's laptop
+
+**Context.** The first real deploys under this ADR worked end to end on the Pi (build, signing on the Mac, the Pi's puller
+verifying with the new key). But the Pi hard-reset repeatedly: 7 boots in 42 hours since 16 October, always with no shutdown
+log, power flags clean and no disk, memory or hardware error in the logs; two resets came during CI jobs and deploys before
+the deploy runner existed, and the last one in the middle of the web build, killing the run. Each reset takes the OpenEMS edge
+of the NFE field test down with it. The Pi is not a safe place for heavy work until its resets are understood. The owner said
+any available machine is fine and that work should not queue when resources exist.
+
+**Decision.** The deploy runner runs on Jerome's laptop: a new user `bmsdeploy` (uid 1006) in its WSL Ubuntu, next to the five
+existing runner users and touching none of them, with its own wall, caps (5 GB, 400% CPU), rootless Docker, root-owned hooks
+and umask 0022, registered as `bms-deploy-laptop` in the same organisation runner group `bms-deploy`. Everything else in this
+ADR stands unchanged: the group admits only `deploy.yml` on `main`, the hook refuses anything else, no secret is on the runner,
+the Mac signs only digests logged by a `main` run on this runner (the signer's accepted runner name is now `bms-deploy-laptop`),
+and the pointer job waits for the signature. The Pi still pulls and deploys staging; only the build moved. A dedicated runner
+process means a deploy never queues behind the CI runners, only behind another deploy.
+
+**Consequences.** Better: 6 cores and 19 GB instead of 4 cores and a host that resets; the NFE edge is no longer exposed to
+builds. Worse, and accepted by the owner: the laptop belongs to the Kyma project, Dennis has administrator SSH to it and its
+Windows password was still weak at the time (AGA task #627). The signature trust equals the runner's trust (threat model, row on
+the runner's credentials), so anyone with administrator access to that machine can influence what the Mac signs. The mitigations
+are the group restriction, the signer's merged-pull-request check and the review of `main`; the machine's own hardening is Kyma's.
+The Pi runner `bms-deploy-pi` is removed. Builds cross-compile the arm64 images on x86: every `RUN` is pinned to the build
+platform, so no emulation is needed (as before).

@@ -1,5 +1,5 @@
 # /etc/systemd/system/bmsdeploy-actions-runner.service
-# GitHub Actions self-hosted runner `bms-deploy-pi`, registered in the organisation runner group `bms-deploy`:
+# GitHub Actions self-hosted runner `bms-deploy-pi` (Pi) or `bms-deploy-laptop` (laptop), registered in the organisation runner group `bms-deploy`:
 # visible to bms-platform only and restricted to `deploy.yml` on `refs/heads/main` (labels self-hosted,Linux,ARM64,bms-deploy). BMS ADR-040, derived from the AGA
 # ADR-030 unit of `ghrunner` on the same host. It runs the deploy workflow's build, pointer and
 # promote jobs; it holds no signing key and no deploy secret. Walls, the controls that matter:

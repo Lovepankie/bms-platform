@@ -1,14 +1,14 @@
 #!/bin/bash
 # /usr/local/lib/bms-deploy/job-completed.sh  (BMS ADR-040)
 #
-# ACTIONS_RUNNER_HOOK_JOB_COMPLETED for bms-deploy-pi: the same wipe as job-started.sh, run again at the
+# ACTIONS_RUNNER_HOOK_JOB_COMPLETED for the BMS deploy runner: the same wipe as job-started.sh, run again at the
 # end so a registry credential written by docker/login-action does not sit on disk until the next job,
 # plus the downloaded tool and action caches of the job's work area. The job's own _temp is left for the
 # runner to clean. Always exits 0: a failed cleanup must not turn a green build red.
 set -u
 log() { logger -t bms-deploy-hook -- "$*"; }
-export DOCKER_HOST="${DOCKER_HOST:-unix:///run/user/1002/docker.sock}"
-HOME_BD=/home/bmsdeploy
+export DOCKER_HOST="${DOCKER_HOST:-unix:///run/user/$(id -u)/docker.sock}"
+HOME_BD="${HOME:-/home/bmsdeploy}"
 log "job-completed: repo=${GITHUB_REPOSITORY:-unknown} event=${GITHUB_EVENT_NAME:-unknown}"
 
 if docker info >/dev/null 2>&1; then

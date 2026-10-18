@@ -1,14 +1,18 @@
-# Runbook: the deploy runner on the staging host
+# Runbook: the deploy runner (Jerome's laptop)
 
-ADR-040. `bms-deploy-pi` is a GitHub Actions runner on the staging Pi (`nfetestpi1`), under its own user
-`bmsdeploy`, in the organisation runner group `bms-deploy`: visible to this repository only and restricted to
-`deploy.yml` at `refs/heads/main`. It runs the build, pointer and promote jobs of
-`deploy.yml`. It holds no signing key and no deploy secret; the Mac signs (docs/runbooks/deploy-signer.md).
+ADR-040 and its amendment of 2026-10-18. `bms-deploy-laptop` is a GitHub Actions runner in the WSL Ubuntu of Jerome's laptop,
+under its own user `bmsdeploy` (uid 1006) beside the other runner users (`ghrunner` to `ghrunner5`, which it never touches),
+in the organisation runner group `bms-deploy`: visible to this repository only and restricted to `deploy.yml` at
+`refs/heads/main`. It runs the build, pointer and promote jobs of `deploy.yml`. It holds no signing key and no deploy secret;
+the Mac signs (docs/runbooks/deploy-signer.md).
+
+It moved here from the staging Pi (`bms-deploy-pi`) on 2026-10-18 because the Pi hard-reset three times during or right after
+deploy work (7 resets in 42 hours, with no shutdown logs) and each reset takes the NFE edge down with it. The Pi variant
+(`provision.sh`) is retired; `provision-laptop.sh` derives the laptop variant from the same files.
 
 ## Install (once, or after any change to deploy/runner/)
 
-Once, on the maintainer's machine, create the runner group (it exists: id 5; re-create it only if it was
-deleted) and check it:
+Once, on the maintainer's machine, create the runner group (it exists: id 5; re-create it only if it was deleted) and check it:
 
 ```sh
 O=RincolTech-Solutions-ltd
@@ -17,29 +21,25 @@ gh api -X POST orgs/$O/actions/runner-groups -f name=bms-deploy -f visibility=se
 gh api orgs/$O/actions/runner-groups --jq '.runner_groups[]|select(.name=="bms-deploy")|{visibility,restricted_to_workflows,selected_workflows}'
 ```
 
-Then the registration token and the files:
+Then the files and the registration token. The laptop's SSH lands in Windows (cmd.exe), so stream the files into WSL on stdin and
+send a small script instead of quoting a command line:
 
 ```sh
-gh api -X POST orgs/RincolTech-Solutions-ltd/actions/runners/registration-token --jq .token
-scp -r deploy/runner nfetestpi1@<host>:/tmp/bms-deploy-runner
+tar czf - -C deploy/runner . | ssh HP-PC@<zerotier ip> 'wsl -d Ubuntu-24.04 -u root -e bash -c "rm -rf /tmp/bmsrun && mkdir -m 700 /tmp/bmsrun && tar xzf - -C /tmp/bmsrun && chmod +x /tmp/bmsrun/*.sh"'
+TOK=$(gh api -X POST orgs/RincolTech-Solutions-ltd/actions/runners/registration-token --jq .token)
+printf 'cd /tmp/bmsrun\nRUNNER_TOKEN=%s ./provision-laptop.sh\n' "$TOK" | ssh HP-PC@<zerotier ip> 'wsl -d Ubuntu-24.04 -u root -e bash -s'
 ```
 
-On the Pi:
-
-```sh
-sudo RUNNER_TOKEN=<the token> /tmp/bms-deploy-runner/provision.sh
-rm -rf /tmp/bms-deploy-runner
-```
-
-`provision.sh` is idempotent. It creates the user (uid 1002, no sudo, no docker group), the nftables wall
-and the 3.5 GB memory cap (and a 5.5 GB cap over all user slices), rootless Docker, the root-owned job hooks and the locked runner install. It never
-touches `ghrunner` (the AGA runner), the bms staging stack or the OpenEMS edge. The runner shows as
-`bms-deploy-pi`, label `bms-deploy`, in the runner group `bms-deploy` of the organisation.
+`provision-laptop.sh` is idempotent. It creates the user (no sudo, no docker group), the nftables wall (its DNS rule is taken from the
+host's resolver at every boot, as the other users' walls do), a 5 GB and 400% CPU cap, rootless Docker, the root-owned job hooks
+and the locked x64 runner install. It touches no other user. The runner shows as `bms-deploy-laptop`, label `bms-deploy`, in the
+runner group `bms-deploy`. Installed on 2026-10-18; tested from the runner user: the public internet answers; the WSL gateway, the
+LAN, ZeroTier, loopback sshd and all IPv6 do not; rootless Docker 29.9.1 pulls through the wall; the other five runners stayed active.
 
 ## Check it
 
 ```sh
-gh api orgs/RincolTech-Solutions-ltd/actions/runners --jq '.runners[]|select(.name=="bms-deploy-pi")|"\(.name) \(.status) busy=\(.busy)"'
+gh api orgs/RincolTech-Solutions-ltd/actions/runners --jq '.runners[]|select(.name=="bms-deploy-laptop")|"\(.name) \(.status) busy=\(.busy)"'
 ssh nfetestpi1@<host> 'systemctl is-active bmsdeploy-actions-runner bmsdeploy-netwall; sudo nft list table inet bmsdeploy_wall | head -3; journalctl -t bms-deploy-hook -n 10 --no-pager'
 ```
 
@@ -49,7 +49,7 @@ holds no image, container or volume: `sudo -u bmsdeploy env XDG_RUNTIME_DIR=/run
 ## Prove the group restriction (after every change to the group)
 
 Push a throwaway branch with a workflow `on: push` and `runs-on: [self-hosted, bms-deploy]` that only echoes.
-It must stay queued and never start on `bms-deploy-pi`; delete the branch afterwards. If it starts, the group
+It must stay queued and never start on `bms-deploy-laptop`; delete the branch afterwards. If it starts, the group
 setting failed open: stop the runner and fix the group before any deploy.
 
 ## Operate
@@ -70,7 +70,7 @@ setting failed open: stop the runner and fix the group before any deploy.
 ## Do not re-run provision.sh during a deploy
 
 Re-running it restarts the wall (`Requires=` also restarts the user manager and the runner) when a file changed. Check
-`gh api orgs/RincolTech-Solutions-ltd/actions/runners --jq '.runners[]|select(.name=="bms-deploy-pi").busy'` is false first.
+`gh api orgs/RincolTech-Solutions-ltd/actions/runners --jq '.runners[]|select(.name=="bms-deploy-laptop").busy'` is false first.
 
 ## Remove
 

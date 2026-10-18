@@ -1,4 +1,7 @@
 #!/bin/bash
+# RETIRED 2026-10-18 (ADR-040 amendment): the staging Pi hard-resets under heavy work, so the deploy runner runs on Jerome's
+# laptop now (provision-laptop.sh). This is the Pi variant and the source the laptop script derives from; do not run it on the Pi again
+# unless the Pi's resets are understood. Original header:
 # Installs the BMS deploy runner on the staging host (nfetestpi1), ADR-040. Run as root, once, and again
 # after any change to the files next to it (idempotent). It does NOT touch the `ghrunner` AGA runner,
 # the bms staging stack or the OpenEMS edge: it adds a separate user, wall, cap, Docker and runner.

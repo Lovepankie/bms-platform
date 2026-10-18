@@ -7,7 +7,7 @@ the image digests a deploy run built; no GitHub runner can sign.
 
 Every 30 seconds `deploy/signer/bms_signer.py` lists the latest `deploy.yml` runs of this repository
 (push to `main`). For a run whose three `Build and push api|web|proxy` jobs succeeded on the runner
-`bms-deploy-pi`, it reads each job's own log for the one `bms-image-digest image=... digest=... revision=...`
+`bms-deploy-laptop`, it reads each job's own log for the one `bms-image-digest image=... digest=... revision=...`
 line and signs `image@digest` with the Keychain key (`cosign sign --tlog-upload=false`). Before signing it
 checks that the commit is on `main`, the revision is the run's commit, the image labels name that commit on
 both platforms, and the public half of the Keychain key equals `deploy/cosign.pub` on main. The commit must also have come through a merged pull request (a direct push to `main` is refused; set
