@@ -553,6 +553,29 @@ export const retailSettingsPage: Tour = {
 // A tour per capability (ADR-033): it starts once, the first time a user it is for signs in with the
 // capability on. A capability whose screens are not released has none yet; the slice that releases its
 // screens adds the tour here and sets `ready` in capabilities-state.ts (tours.test.tsx checks both).
+export const assistantPage: Tour = {
+  id: 'page-assistant',
+  version: 1,
+  title: 'This page: AI assistant',
+  audience: (me) => held(me, 'lending.advisor.configure'),
+  autoStart: false,
+  page: '/staff/assistant',
+  steps: [
+    {
+      id: 'switch',
+      target: 'assistant-switch',
+      title: 'Switch it on or off',
+      body: 'The assistant is off until an administrator reads the notice and switches it on. While it is off nothing leaves your business.',
+    },
+    {
+      id: 'limit',
+      target: 'assistant-caps',
+      title: 'The daily limit',
+      body: 'This is the most the assistant may use in a day. At the limit, the Insights page shows the automatic summary instead.',
+    },
+  ],
+};
+
 export const branchRolesCapability: Tour = {
   id: 'capability-branch-roles',
   version: 1,
@@ -1083,5 +1106,5 @@ export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage, ...CUSTOMER_TOURS,
+  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, ...CUSTOMER_TOURS,
 ];

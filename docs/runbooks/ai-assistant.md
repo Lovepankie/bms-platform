@@ -62,9 +62,9 @@ stub: the application refuses to start with it outside the dev and test profiles
 ## 4. Switching a tenant on
 
 1. Name the tenant in `BMS_AI_ENABLED_TENANTS` by its id (the `id` of its row in `tenants`), restart the API, and tell the tenant's administrator.
-2. The administrator switches the assistant on in the settings. There is no route or screen for it yet: they arrive with slice C3
-   (`GET` and `PUT /lending/advisor/settings`), so until then nothing can switch a tenant on from outside the code. The switch
-   records who, when and which text version they acknowledged, and is audited as `core.ai.settings.changed`.
+2. The administrator switches the assistant on at `/staff/assistant` (menu entry "AI assistant"; the API is `GET` and `PUT
+   /lending/advisor/settings`), reading the notice and ticking the box. The switch records who, when and which text version they
+   acknowledged, and is audited as `core.ai.settings.changed`. A tenant that is not in the list gets 403 `advisor_not_available`.
 3. To change a tenant's caps: the tenant administrator or the operator sets `daily_token_cap` and `daily_cost_cap_micro`; both
    must be at most the platform ceiling, and the lower of the two always applies. A cap of **0 means stop**: every call is refused
    before the network. A negative cap, or a zero or negative per call limit or budget in the environment, fails startup instead of
@@ -161,3 +161,26 @@ second, so it runs in every build. Fabricated data only: nothing here reads a te
    against the configured provider, records tokens and cost per brief and compares two models is slice C5 (#232). Run it on
    fabricated data (`seed-lending --insights-demo`) and never on a tenant's own figures before the provider's written terms are on
    file (section 3, step 1).
+
+## 10. The daily brief (slice C3, issue #226)
+
+Each morning (from 06:00 Kampala time, checked every 15 minutes) the job `lending.advisor-daily-brief` makes one brief per tenant
+that has the assistant on, over every branch, and stores it in `lending_ai_briefs`; the Insights page shows it to the users who may
+see every branch and the automatic summary to everyone else. Nothing is made, and no call is sent, for a tenant that has it off or is not on `BMS_AI_ENABLED_TENANTS`, and its Insights page shows no card (the route answers 204).
+
+```sql
+-- What was stored today and why, per tenant (the text is never the model's own words).
+SELECT tenant_id, brief_date, source, reason, facts_as_of, generated_at, call_id
+  FROM lending_ai_briefs WHERE brief_date >= current_date - 7 ORDER BY brief_date DESC, tenant_id;
+```
+
+| Sign | Likely cause | Do |
+|---|---|---|
+| `source = fallback`, `reason = validation` | The model's structured answer was refused (outside the schema, an unknown fact key) | Nothing for one day. If it repeats, report it to the dev lead with the date and the `call_id` (the answer is not stored); the call was paid for |
+| `reason = timeout`, `provider_error`, `rate_limited` | The provider failed after a call was paid for | Section 5a; the day stays the automatic summary, there is no retry for that date |
+| No row while the breaker was open or the provider off | A refusal that sent nothing is not stored | Nothing: the next 15 minute tick tries again |
+| `reason = tenant_token_cap` and similar | A cap was spent before the morning run | Raise the tenant's cap in `/staff/assistant` (at most the platform ceiling) for tomorrow |
+| No row for a date, the tenant being on | A run of that date came after midnight, before the night's snapshot was written (nothing is stored then) | Nothing: the card says "not ready" and shows the automatic summary; the next day's run makes its brief |
+| A user says they see the automatic summary | Their scope does not cover every branch, or they lack `lending.insights.all_officers`: reason `scope` | Expected. A branch manager never receives the all-branches brief |
+
+To remove one day's brief (for example after a wrong switch-on), delete the row as the owner role; the next run of that date makes it again.

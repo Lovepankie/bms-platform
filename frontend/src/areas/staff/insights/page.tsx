@@ -15,7 +15,8 @@ import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { BarList, ColumnChart, LineChart, type BarRow } from './charts';
 import { formatValue, presetRange, words } from './format';
-import { canExport, canManageDigest, ownPortfolioOnly, showInsights } from './permissions';
+import { AdvisorCard } from './advisor';
+import { canExport, canManageDigest, canUseAdvisor, ownPortfolioOnly, showInsights } from './permissions';
 import { MetricCard, MetricGrid, drillOf, type DrillTarget } from './ui';
 
 // Insights (#153, expectation 7): the morning brief, the loan portfolio, revenue from the ledger
@@ -69,6 +70,7 @@ function InsightsPage() {
   const [productId, setProductId] = useState('');
   const [officerId, setOfficerId] = useState('');
   const [drill, setDrill] = useState<DrillTarget | null>(null);
+  const [drillFilter, setDrillFilter] = useState<InsightsFilter | null>(null);
   const own = ownPortfolioOnly(me);
 
   const filter: InsightsFilter = {
@@ -107,6 +109,29 @@ function InsightsPage() {
       const r = presetRange(value, new Date());
       setFrom(r.from);
       setTo(r.to);
+    }
+  }
+
+  // Any other card opens its rows for the page's own range.
+  function openDrill(target: DrillTarget) {
+    setDrillFilter(null);
+    setDrill(target);
+  }
+
+  // A chip of the assistant card opens the rows behind its metric for the brief's own range (the month so far, ending on
+  // the date of its figures, over the caller's whole scope), which can differ from the range chosen on this page.
+  async function openMetric(key: string, factsAsOf: string | null) {
+    if (!factsAsOf) return;
+    const range: InsightsFilter = { from: `${factsAsOf.slice(0, 7)}-01`, to: factsAsOf };
+    try {
+      const figures = await insights.portfolio(range);
+      const target = drillOf((figures.metrics ?? []).find((m) => m.key === key) ?? {});
+      if (target) {
+        setDrillFilter(range);
+        setDrill(target);
+      }
+    } catch {
+      // A chip that cannot open its rows does nothing; the figure itself is still on the card.
     }
   }
 
@@ -198,11 +223,12 @@ function InsightsPage() {
 
       {tab === 'brief' && (
         <section aria-label="Morning brief">
+          {canUseAdvisor(me) && <AdvisorCard onChip={openMetric} />}
           <Problem error={brief.error} />
           {brief.data && (
             <>
               <h2>Morning brief, {brief.data.as_of}</h2>
-              <BriefCards brief={brief.data} onDrill={setDrill} />
+              <BriefCards brief={brief.data} onDrill={openDrill} />
             </>
           )}
           {portfolio.data && (
@@ -210,16 +236,16 @@ function InsightsPage() {
               <h2>Portfolio at a glance</h2>
               <MetricGrid
                 metrics={portfolio.data.metrics ?? []}
-                onDrill={setDrill}
+                onDrill={openDrill}
                 keys={['portfolio.principal_outstanding', 'portfolio.par30', 'portfolio.collection_rate', 'portfolio.forecast_7']}
               />
             </>
           )}
         </section>
       )}
-      {tab === 'portfolio' && <PortfolioView query={portfolio} onDrill={setDrill} />}
-      {tab === 'revenue' && <RevenueView query={revenue} onDrill={setDrill} />}
-      {tab === 'members' && <MembersView query={members} onDrill={setDrill} />}
+      {tab === 'portfolio' && <PortfolioView query={portfolio} onDrill={openDrill} />}
+      {tab === 'revenue' && <RevenueView query={revenue} onDrill={openDrill} />}
+      {tab === 'members' && <MembersView query={members} onDrill={openDrill} />}
       {tab.startsWith('panel:') &&
         (panels.data?.panels ?? [])
           .filter((p) => `panel:${p.key}` === tab)
@@ -231,7 +257,7 @@ function InsightsPage() {
           ))}
       {tab === 'digest' && <DigestSettings />}
 
-      {drill && <DrillPanel target={drill} filter={filter} exportable={canExport(me)} onClose={() => setDrill(null)} />}
+      {drill && <DrillPanel target={drill} filter={drillFilter ?? filter} exportable={canExport(me)} onClose={() => { setDrill(null); setDrillFilter(null); }} />}
     </main>
   );
 }

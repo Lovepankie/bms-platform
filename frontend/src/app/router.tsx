@@ -133,6 +133,10 @@ const lendingLoansRoute = createRoute({ getParentRoute: () => staffLendingRoute,
 const staffInsightsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/insights', staticData: { crumb: 'Insights' } }).lazy(() =>
   import('../areas/staff/insights/page').then((m) => m.Route),
 );
+// The AI assistant's settings (extras slice C3, issue #226).
+const staffAssistantRoute = createRoute({ getParentRoute: () => staffRoute, path: '/assistant', staticData: { crumb: 'AI assistant' } }).lazy(() =>
+  import('../areas/staff/assistant/page').then((m) => m.Route),
+);
 const staffReportsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/reports', staticData: { crumb: 'Reports' } }).lazy(() =>
   import('../areas/staff/reports/page').then((m) => m.Route),
 );
@@ -318,7 +322,7 @@ export const router = createRouter({
         memberInvestmentNewRoute,
         investmentRoute,
         investmentCertificateRoute,
-      ]), staffInsightsRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
+      ]), staffInsightsRoute, staffAssistantRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
     memberRoute,
     styleRoute,
     signUpRoute,

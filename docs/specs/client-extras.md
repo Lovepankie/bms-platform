@@ -1089,6 +1089,53 @@ Where the build differs from, or sharpens, the text above:
   endpoints, the daily job and the stored brief (#226), the screens, and the run against a real provider and the comparison of
   models (#232).
 
+### 5.14 As built in slice #226 (the daily brief, the stored brief, the card and the settings)
+
+Migration `V55` (the number is taken above main and every open pull request and renumbered by the coordinator at merge): the table
+`lending_ai_briefs` and the permissions `lending.advisor.use` (tenant admin, branch manager, accountant, auditor) and
+`lending.advisor.configure` (tenant admin). Where the build differs from, or sharpens, the text above:
+
+- **The job.** `lending.advisor-daily-brief` runs every 15 minutes and does nothing before 06:00 on the Africa/Kampala clock. It reads
+  the business date ONCE per run, from the time the run was due (db-scheduler's execution time), so a run queued at 23:50 and served
+  after midnight is the earlier date's, and hands that date to every tenant. For each active lending tenant whose assistant is active (its own switch on AND the tenant named in `BMS_AI_ENABLED_TENANTS`; one cheap settings read, no usage sums) it
+  reads the facts of that date for every branch and every officer (`PortfolioScope(first of month, date, date, all, all, all)`, no
+  principal), builds the prompt, calls the gateway with purpose `brief`, validates with `StructuredValidator`, renders from the
+  catalogue and stores one row by `ON CONFLICT DO NOTHING`. Because the scope carries its own date, a run after midnight reads that
+  day's snapshot (422 `snapshot_unavailable` before the night's snapshot is written: nothing is stored and a later run of the same
+  date may retry, which in practice means the day gets no AI brief). With the assistant off (the switch, or the list) a tenant costs that read: no facts, no request, no row.
+- **What is stored.** `source` `model` (the rendered text of an accepted answer) or `fallback` (the facts-only brief) with the reason:
+  `validation` when the structured answer was refused, otherwise the gateway's own word (`timeout`, `provider_error`, `breaker_open`,
+  `tenant_token_cap`, `not_allowed`, and so on). Aliases are mapped back to branch and product names, since the row is shown only to
+  people who may see every branch. A fallback made after a PAID call that gave no usable answer
+  (validation, a timeout, a provider error, a cap) is final for the day. A refusal that sent nothing and paid for nothing (the
+  switch or the list changed mid run, no provider, an open breaker, an internal error) is NOT stored, so the day is not locked and
+  the next tick (15 minutes) tries again: one breaker blip at 06:00 cannot decide the day for every tenant. `model` and `call_id` are
+  kept only when a network call was made (an answered call or a failed one). If the insert fails after the paid call, a minimal
+  facts-only row is written so the next tick does not pay again. Two instances at once may both pay; the primary key keeps one row.
+- **Who gets it.** `GET /lending/advisor/brief` returns the stored brief only when the caller holds `lending.insights.all_officers` and
+  their scope for `lending.advisor.use`, `lending.insights.read` and `lending.insights.all_officers` each covers every branch of the
+  tenant (all branches, or a list that contains every branch id). Otherwise the automatic summary for the caller's own scope is
+  computed on the spot (`PortfolioFacts.forCaller`, never stored or shared) with reason `scope`, or `not_ready` before the day's job
+  has run. **While the assistant is off (its switch, or the platform list) the route answers 204 and reads nothing**: the card is not
+  drawn, and Insights pays no extra figure reads for a tenant that never opted in (the permission is granted to four roles in every
+  tenant). Where it is active the route answers 200 on every path (a failure to read the figures is a summary that says so; 403 for a
+  caller without `lending.insights.read`). The scope check counts every ACTIVE branch of the tenant (`Branches`): an inactive branch
+  has no user scoped to it, so counting it would keep a branch-list scope from ever passing.
+- **The card.** The Insights page's Today tab carries a card for users with `lending.advisor.use`, while the assistant is active: the label (`AI assistant (advisory)`
+  or `Automatic summary`), the as-of time, the summary and points, chips for the figures used (a chip with an insights metric opens
+  that metric's rows), the reason when it is the automatic summary, and the line "Generated from your portfolio figures. Check
+  before acting. It does not change any record." (for the automatic summary: "Written from your portfolio figures by fixed rules. No
+  AI was used."). The server sends the label and the line, so every AI text carries them.
+- **The settings.** `GET` and `PUT /lending/advisor/settings` and the screen `/staff/assistant` (menu entry "AI assistant" for
+  `lending.advisor.configure`): the switch with the notice and its tick box (the notice's version is stored with the user and the
+  time), the daily token cap, and today's use. Not built: the cost cap box, the call list, the question box (#230).
+- **Tests.** `DailyBriefIT` (no call and no row with the switch off; the allow-list, the acknowledgement and the permissions; an
+  accepted answer stored as rendered text and never the model's, and a rerun that changes nothing; a refused answer stored as the
+  facts-only brief with reason `validation` and still counted in tokens, cost and the daily cap; the fallback on a provider error,
+  a timeout, a network failure, a rate limit, a bad response, an open breaker, a cap and an input the screen refuses; the call log
+  holding no prompt, response, fact value or name; a job queued before midnight and served after it; the 20:59 and 21:01 UTC edge;
+  who may read the stored brief; a tenant switched on but not on the list; a switch flipped mid run; no facts for the queued date at 00:01; a poison tenant; two instances at once; the real task with db-scheduler's Execution; the routes over HTTP with If-Match), `BriefBuilderTest`, `AdvisorJobsTest`, and the card and settings markup tests.
+
 ## 6. The reports pack (ADR-038)
 
 ### 6.1 Summary

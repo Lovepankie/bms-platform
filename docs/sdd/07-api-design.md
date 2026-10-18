@@ -1161,23 +1161,34 @@ in `docs/specs/lending-insights-metrics.md`.
 
 ### 7.11.24 Lending: AI assistant (`/lending/advisor`, ADR-037, off by default)
 
-No route exists yet: the gateway, the call log and the settings group behind `/lending/advisor/settings` are built in
-#220 (`core.ai`, no endpoint, no permission); the facts, the aliases, the numeric validator and the offline evaluation harness
-(`PortfolioFacts` in `lending.insights`, `lending.advisor`) are built in #223 and add no route, no permission and no table; the
-routes below arrive with #226 and #230.
+Built in #220 (the gateway, the call log and the settings group), #223 (the facts, the aliases, the structured validator and
+renderer and the offline harness) and #226 (the daily brief, the stored brief, the two routes below and the settings routes). The
+question box and the call list are #230 and a later slice.
 
-Refused with 404 `advisor_disabled` unless the tenant has switched the assistant on. Responses carry
-`Cache-Control: no-store`. Every answer body has `advisory: true`, `as_of`, `source` (`model` or `fallback`), the text,
-and `facts` (keys with display values). The text is written by our code from a structured model answer (findings that
-choose facts, a topic, a catalogue action and a priority; spec 5.13), never taken from the model. Provider errors and
-refused answers never reach the client; the deterministic facts-only brief is returned instead.
+Responses carry `Cache-Control: no-store`. A brief body has `advisory: true`, `as_of` (when it was made), `facts_as_of` (the
+business date of the figures), `source` (`model` or `fallback`), a `label` (`AI assistant (advisory)` or `Automatic summary`),
+`summary`, `points` (the text), `facts` (chips: key, label, display value and the insights `metric` whose rows open from it) and
+`note` (the line under the card). The text is written by our code from a structured model answer (findings that choose facts, a
+topic, a catalogue action and a priority; spec 5.13), never taken from the model. Provider errors and refused answers never reach
+the client; the deterministic facts-only brief is returned instead, labelled `Automatic summary`.
+
+**Decision of #226 (the coordinator's).** The assistant is invisible while it is off. `GET /lending/advisor/brief` answers **204 No
+Content** when the assistant is not active for the tenant, that is when its own switch is off OR the tenant is not named in
+`BMS_AI_ENABLED_TENANTS` (a tenant removed from the list while on is off at once, and an old stored model brief is not served).
+Nothing is read for a 204 (no figures of the caller), and the card is not drawn. For a tenant where it is active the route answers
+200 on every path, with the automatic summary when there is no model brief for the caller, so the page loads. The design's 404
+`advisor_disabled` is not used for the brief.
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/lending/advisor/brief` | `lending.advisor.use` | Today's brief; the model brief is returned only to a user whose scope covers every branch and who holds `lending.insights.all_officers`; otherwise (and when the model was not used) `source: fallback` with `reason` (`provider_down`, `cap`, `validation`, `off`, `scope`) |
-| POST | `/lending/advisor/questions` | `lending.advisor.use` | `{question}` up to 300 characters, answered from the caller's scope; 422 `question_refused` with a reason class (`too_long`, `digits`, `email`, `id_pattern`, `series_number`, `member_name`), 429 `daily_limit`. FR-AIA-07 |
-| GET, PUT | `/lending/advisor/settings` | `lending.advisor.configure` (read), `core.settings.manage` (switch on with `acknowledged: true`) | `enabled`, `daily_token_cap`, acknowledgement record; audited; 403 `advisor_not_available` when the tenant is not in `BMS_AI_ENABLED_TENANTS` |
-| GET | `/lending/advisor/calls` | `lending.advisor.configure` | The call log without personal data, 90 days |
+| GET | `/lending/advisor/brief` | `lending.advisor.use` | Today's brief. The stored model brief (one per tenant and day, over every branch) is returned only to a caller whose branch scope covers every branch in `lending.advisor.use`, `lending.insights.read` and `lending.insights.all_officers` and who holds the last; anyone else, and every case where no model brief exists, gets `source: fallback` computed for their own scope with `reason`: `scope`, `not_ready` (the day's job has not run), `validation`, `provider_down` (provider error, timeout, an open breaker), `cap`, or `unavailable` (the figures could not be read); 204 when the assistant is off. Needs `lending.insights.read` for the figures (403 otherwise). A branch manager holds all officers but only for their own branches, so they never receive the all-branches brief |
+| GET | `/lending/advisor/settings` | `lending.advisor.configure` | `enabled`, `allowed` (named in `BMS_AI_ENABLED_TENANTS`), `provider_configured`, the two daily caps with their currency, today's use, the acknowledgement record (user, time, text version), the notice text and its version, and `version` as the `ETag` |
+| PUT | `/lending/advisor/settings` | `lending.advisor.configure`; `core.settings.manage` as well to switch on or off | `If-Match` the version read. `enabled: true` needs `acknowledged_text_version` equal to the notice's version (422 `acknowledgement_required`), is refused with 403 `advisor_not_available` when the tenant is not in `BMS_AI_ENABLED_TENANTS`, and stores who, when and which text; `daily_token_cap` and `daily_cost_cap_micro` are at most the platform ceiling (422 `above_platform_ceiling`) and 0 stops every call; 409 `version_conflict`, 428 `precondition_required`; audited as `core.ai.settings.changed` with before and after |
+| POST | `/lending/advisor/questions` | `lending.advisor.use` | Not built (#230). `{question}` up to 300 characters, answered from the caller's scope; 422 `question_refused` with a reason class (`too_long`, `digits`, `email`, `id_pattern`, `series_number`, `member_name`), 429 `daily_limit`. FR-AIA-07 |
+| GET | `/lending/advisor/calls` | `lending.advisor.configure` | Not built. The call log without personal data, 90 days |
+
+The daily job `lending.advisor-daily-brief` is not a route: every 15 minutes it makes, for each active lending tenant with the
+assistant on and on the platform list, the brief of the Africa/Kampala business date its run was due on (not before 06:00), once per tenant and date.
 
 ## 7.12 Example: record a repayment
 

@@ -111,6 +111,149 @@
         },
         "required" : [ "phone", "scope" ]
       },
+      "AdvisorAcknowledgement" : {
+        "description" : "The text to show before switching on, and its version",
+        "properties" : {
+          "text" : {
+            "type" : "string"
+          },
+          "text_version" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AdvisorBrief" : {
+        "properties" : {
+          "advisory" : {
+            "description" : "Always true: every text here is advisory",
+            "type" : "boolean"
+          },
+          "as_of" : {
+            "description" : "When the brief was made (a stored brief) or computed (the caller's own summary)",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "facts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AdvisorFact"
+            },
+            "type" : "array"
+          },
+          "facts_as_of" : {
+            "description" : "The business date the figures stand at",
+            "format" : "date",
+            "type" : "string"
+          },
+          "label" : {
+            "description" : "The label the card carries: AI assistant (advisory) or Automatic summary",
+            "type" : "string"
+          },
+          "note" : {
+            "description" : "The line shown under the text",
+            "type" : "string"
+          },
+          "points" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AdvisorPoint"
+            },
+            "type" : "array"
+          },
+          "reason" : {
+            "description" : "Why the automatic summary is shown: off, scope, validation, provider_down, cap, not_ready or unavailable; null for a model brief",
+            "type" : "string"
+          },
+          "source" : {
+            "description" : "model: rendered from an accepted structured model answer. fallback: the automatic summary",
+            "type" : "string"
+          },
+          "summary" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AdvisorFact" : {
+        "description" : "A figure the brief rests on; metric is the insights metric that opens its drill-down, or null",
+        "properties" : {
+          "display" : {
+            "type" : "string"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "metric" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AdvisorPoint" : {
+        "description" : "One point of the brief, written by our code from the reviewed catalogue",
+        "properties" : {
+          "facts" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "text" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AdvisorSettings" : {
+        "properties" : {
+          "acknowledged_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "acknowledged_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "acknowledged_text_version" : {
+            "type" : "string"
+          },
+          "acknowledgement" : {
+            "$ref" : "#/components/schemas/AdvisorAcknowledgement"
+          },
+          "allowed" : {
+            "description" : "The tenant is named in BMS_AI_ENABLED_TENANTS; switching on is refused otherwise",
+            "type" : "boolean"
+          },
+          "cost_currency" : {
+            "type" : "string"
+          },
+          "cost_used_today_micro" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "daily_cost_cap_micro" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "daily_token_cap" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "provider_configured" : {
+            "description" : "A provider is configured on the platform; false means every brief is the automatic summary",
+            "type" : "boolean"
+          },
+          "tokens_used_today" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
       "ApplicantLinkRequest" : {
         "properties" : {
           "token" : {
@@ -16067,6 +16210,33 @@
         },
         "required" : [ "status" ]
       },
+      "UpdateAdvisorSettingsRequest" : {
+        "description" : "Omitted fields are unchanged",
+        "properties" : {
+          "acknowledged_text_version" : {
+            "description" : "The version of the acknowledgement text that was shown; required when switching on",
+            "maxLength" : 40,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "daily_cost_cap_micro" : {
+            "description" : "Estimated cost a day in millionths of the cost currency, at most the platform ceiling",
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "daily_token_cap" : {
+            "description" : "Tokens a day for this business, at most the platform ceiling; 0 stops every call",
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "enabled" : {
+            "description" : "Switch the assistant on or off; needs core.settings.manage as well",
+            "type" : "boolean"
+          }
+        }
+      },
       "UpdateBranchRequest" : {
         "description" : "Omitted fields are unchanged. The code never changes.",
         "properties" : {
@@ -17498,6 +17668,79 @@
         },
         "summary" : "Return a payment method to its default account for the tenant or a branch (FR-GL-08)",
         "tags" : [ "ledger" ]
+      }
+    },
+    "/api/v1/lending/advisor/brief" : {
+      "get" : {
+        "operationId" : "getAdvisorBrief",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AdvisorBrief"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Today's brief: the stored AI brief for a caller who may see every branch, else the automatic summary",
+        "tags" : [ "lending-advisor" ]
+      }
+    },
+    "/api/v1/lending/advisor/settings" : {
+      "get" : {
+        "operationId" : "getAdvisorSettings",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AdvisorSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The AI assistant's settings, limits and use today",
+        "tags" : [ "lending-advisor" ]
+      },
+      "put" : {
+        "operationId" : "updateAdvisorSettings",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateAdvisorSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AdvisorSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Switch the assistant on (with the acknowledgement) or off, or set its daily caps; audited",
+        "tags" : [ "lending-advisor" ]
       }
     },
     "/api/v1/lending/collateral" : {

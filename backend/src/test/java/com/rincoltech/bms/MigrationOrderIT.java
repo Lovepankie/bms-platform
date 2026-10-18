@@ -1458,7 +1458,10 @@ class MigrationOrderIT {
         assertThat(owner.sql(columns).query(String.class).single())
                 .as("the existing tables keep their shape")
                 .isEqualTo(before);
-        assertThat(owner.sql("SELECT count(*) FROM permissions")
+        // V48 adds no permission; V55 (the AI assistant, #226) adds the two advisor ones, which are not V48's to answer
+        // for.
+        assertThat(owner.sql(
+                                "SELECT count(*) FROM permissions WHERE key NOT IN ('lending.advisor.use', 'lending.advisor.configure')")
                         .query(Long.class)
                         .single())
                 .as("no permission is added")

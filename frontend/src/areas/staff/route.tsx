@@ -10,7 +10,7 @@ import { icons } from '../../components/icons';
 import { BrandLoader } from '../../components/states';
 import { BranchPicker, useActiveBranch } from './branch-picker';
 import { StaffContext } from './context';
-import { showInsights } from './insights/permissions';
+import { canConfigureAdvisor, showInsights } from './insights/permissions';
 import { showInvestments } from './lending/investment-state';
 import { showCollateral, showMembers } from './lending/member-permissions';
 import { showLending } from './lending/permissions';
@@ -122,6 +122,7 @@ export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: 
         {showSavings(me) && <Link to="/staff/lending/savings">Savings</Link>}
         {showInvestments(me) && <Link to="/staff/lending/investments">Investments</Link>}
         {showInsights(me) && <Link to="/staff/insights" data-tour="nav-insights">Insights</Link>}
+        {canConfigureAdvisor(me) && <Link to="/staff/assistant">AI assistant</Link>}
         {showReports(me) && <Link to="/staff/reports">Reports</Link>}
         {showRetail(me) && <Link to="/staff/retail" data-tour="nav-retail">Retail</Link>}
         {showSms(me) && <Link to="/staff/sms">SMS</Link>}

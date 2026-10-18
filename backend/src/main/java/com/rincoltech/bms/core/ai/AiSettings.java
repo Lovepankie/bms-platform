@@ -14,6 +14,13 @@ public interface AiSettings {
     Status status();
 
     /**
+     * True when the assistant is really on for the bound tenant: the tenant's own switch is on AND the tenant is named in
+     * {@code BMS_AI_ENABLED_TENANTS}. A cheap read (two lookups, no usage sums), for callers that ask on every request or
+     * every job tick; "off" for a caller means this is false, whichever of the two is the reason.
+     */
+    boolean active();
+
+    /**
      * Switches the assistant on after the administrator read what is sent and where. The user and
      * the time come from the request and the kernel clock, and are stored with the text version.
      * Refused with 403 {@code advisor_not_available} when the tenant is not on the platform's

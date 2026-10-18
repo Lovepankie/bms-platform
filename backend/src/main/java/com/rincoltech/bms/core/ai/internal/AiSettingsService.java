@@ -60,6 +60,11 @@ class AiSettingsService implements AiSettings {
     }
 
     @Override
+    public boolean active() {
+        return effective().enabled() && allowList.allows(tenant.profile());
+    }
+
+    @Override
     public Status status() {
         Map<String, Object> group = settings.group(AiSettingsGroup.KEY);
         CurrentTenant.Profile profile = tenant.profile();

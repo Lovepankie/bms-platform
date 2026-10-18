@@ -13,7 +13,7 @@
 @ApplicationModule(
         id = "lending.advisor",
         displayName = "Lending: AI advisor",
-        allowedDependencies = {"kernel", "core.ai", "lending.insights"})
+        allowedDependencies = {"kernel", "core.ai", "core.jobs", "core.tenancy", "lending.insights"})
 package com.rincoltech.bms.lending.advisor;
 
 import org.springframework.modulith.ApplicationModule;

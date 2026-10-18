@@ -801,6 +801,15 @@ class RlsIsolationIT {
                                               cost_counted_micro, latency_ms, attempts)
                         VALUES (?, ?, now(), 'brief', ?, 'test-model', repeat('a', 64), 'ok', 10, 20, 30, 5, 5, 120, 1)
                         """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        // The stored daily AI brief (migration V55, #226): the rendered text and the facts-only fallback, never model
+        // text.
+        // JUSTIFICATION-A3: a fixture row for the new table; the isolation test needs one row per tenant table.
+        owner.sql("""
+                        INSERT INTO lending_ai_briefs (tenant_id, brief_date, source, reason, summary, points, chips,
+                                                       facts_as_of, generated_at)
+                        VALUES (?, current_date, 'fallback', 'validation', 'Summary for a fabricated day.', '[]'::jsonb,
+                                '[]'::jsonb, current_date, now())
+                        """).params(t.tenantId()).update();
         // A payment intent and the notification that named it (migration V54, #213). JUSTIFICATION-A3: one factory row
         // per tenant table.
         UUID intent = UUID.randomUUID();

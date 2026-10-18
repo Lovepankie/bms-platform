@@ -35,6 +35,7 @@ import { StockPage } from '../areas/staff/retail/stock';
 import { StockByLocationPage } from '../areas/staff/retail/stock-by-location';
 import { StocktakePage } from '../areas/staff/retail/stocktake';
 import { StaffBar } from '../areas/staff/route';
+import { AssistantSettingsPage } from '../areas/staff/assistant/page';
 import { Setup } from '../areas/staff/setup';
 import { FEATURES, type Tour, stepsFor } from './model';
 import { TOURS } from './tours';
@@ -110,6 +111,8 @@ function screen(path: string | undefined): ReactElement {
       return <PurchaseOrdersPage />;
     case '/staff/retail/landed-costs':
       return <LandedCostsPage />;
+    case '/staff/assistant':
+      return <AssistantSettingsPage />;
     case '/staff/lending':
       return <Loans />;
     case '/staff/lending/members':
@@ -228,7 +231,11 @@ const RETURNER: Me = { ...ADMIN, full_name: 'Test Returner 01', module_capabilit
 // An administrator of a business that switched optional purchasing on (ADR-033, issue #198).
 const BUYER: Me = { ...ADMIN, full_name: 'Test Buyer 01', module_capabilities: { retail: ['branch_roles', 'purchasing'] } };
 
+// An administrator of a business with lending, who may configure the AI assistant (extras slice C3, issue #226).
+const ASSISTANT: Me = { ...ADMIN, full_name: 'Test Assistant Admin 01', permissions: [...(ADMIN.permissions ?? []), 'lending.advisor.configure'], modules: ['retail', 'lending'] } as Me;
+
 const AUDIENCE: Record<string, Me[]> = {
+  'page-assistant': [ASSISTANT],
   'page-members': [CLERK, OFFICER],
   'page-member-new': [CLERK],
   'page-member': [CLERK, CHECKER],

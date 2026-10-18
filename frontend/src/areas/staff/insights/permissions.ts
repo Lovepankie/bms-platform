@@ -29,3 +29,18 @@ export function canExport(me: Pick<Me, 'permissions'>): boolean {
 export function canManageDigest(me: Pick<Me, 'permissions'>): boolean {
   return held(me).includes(SETTINGS_MANAGE);
 }
+
+export const ADVISOR_USE = 'lending.advisor.use';
+export const ADVISOR_CONFIGURE = 'lending.advisor.configure';
+
+/** The AI assistant card on the Insights page: the tenant has lending and the user holds lending.advisor.use. */
+export function canUseAdvisor(me: Pick<Me, 'permissions'> & { modules?: string[] }): boolean {
+  if (me.modules && !me.modules.includes('lending')) return false;
+  return held(me).includes(ADVISOR_USE);
+}
+
+/** The assistant's settings page: switch, acknowledgement and daily caps. */
+export function canConfigureAdvisor(me: Pick<Me, 'permissions'> & { modules?: string[] }): boolean {
+  if (me.modules && !me.modules.includes('lending')) return false;
+  return held(me).includes(ADVISOR_CONFIGURE);
+}

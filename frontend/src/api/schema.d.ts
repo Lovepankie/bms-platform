@@ -415,6 +415,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/advisor/brief": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Today's brief: the stored AI brief for a caller who may see every branch, else the automatic summary */
+        get: operations["getAdvisorBrief"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/advisor/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The AI assistant's settings, limits and use today */
+        get: operations["getAdvisorSettings"];
+        /** Switch the assistant on (with the acknowledgement) or off, or set its daily caps; audited */
+        put: operations["updateAdvisorSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/collateral": {
         parameters: {
             query?: never;
@@ -5131,6 +5166,72 @@ export interface components {
             /** @description Required (3 to 200 characters, kept in the audit row) when this narrows a number from all to reminders; ignored otherwise */
             reason?: string;
             scope: string;
+        };
+        /** @description The text to show before switching on, and its version */
+        AdvisorAcknowledgement: {
+            text?: string;
+            text_version?: string;
+        };
+        AdvisorBrief: {
+            /** @description Always true: every text here is advisory */
+            advisory?: boolean;
+            /**
+             * Format: date-time
+             * @description When the brief was made (a stored brief) or computed (the caller's own summary)
+             */
+            as_of?: string;
+            facts?: components["schemas"]["AdvisorFact"][];
+            /**
+             * Format: date
+             * @description The business date the figures stand at
+             */
+            facts_as_of?: string;
+            /** @description The label the card carries: AI assistant (advisory) or Automatic summary */
+            label?: string;
+            /** @description The line shown under the text */
+            note?: string;
+            points?: components["schemas"]["AdvisorPoint"][];
+            /** @description Why the automatic summary is shown: off, scope, validation, provider_down, cap, not_ready or unavailable; null for a model brief */
+            reason?: string;
+            /** @description model: rendered from an accepted structured model answer. fallback: the automatic summary */
+            source?: string;
+            summary?: string;
+        };
+        /** @description A figure the brief rests on; metric is the insights metric that opens its drill-down, or null */
+        AdvisorFact: {
+            display?: string;
+            key?: string;
+            label?: string;
+            metric?: string;
+        };
+        /** @description One point of the brief, written by our code from the reviewed catalogue */
+        AdvisorPoint: {
+            facts?: string[];
+            text?: string;
+        };
+        AdvisorSettings: {
+            /** Format: date-time */
+            acknowledged_at?: string;
+            /** Format: uuid */
+            acknowledged_by?: string;
+            acknowledged_text_version?: string;
+            acknowledgement?: components["schemas"]["AdvisorAcknowledgement"];
+            /** @description The tenant is named in BMS_AI_ENABLED_TENANTS; switching on is refused otherwise */
+            allowed?: boolean;
+            cost_currency?: string;
+            /** Format: int64 */
+            cost_used_today_micro?: number;
+            /** Format: int64 */
+            daily_cost_cap_micro?: number;
+            /** Format: int64 */
+            daily_token_cap?: number;
+            enabled?: boolean;
+            /** @description A provider is configured on the platform; false means every brief is the automatic summary */
+            provider_configured?: boolean;
+            /** Format: int64 */
+            tokens_used_today?: number;
+            /** Format: int32 */
+            version?: number;
         };
         ApplicantLinkRequest: {
             token: string;
@@ -12637,6 +12738,23 @@ export interface components {
              */
             version?: number;
         };
+        /** @description Omitted fields are unchanged */
+        UpdateAdvisorSettingsRequest: {
+            /** @description The version of the acknowledgement text that was shown; required when switching on */
+            acknowledged_text_version?: string;
+            /**
+             * Format: int32
+             * @description Estimated cost a day in millionths of the cost currency, at most the platform ceiling
+             */
+            daily_cost_cap_micro?: number;
+            /**
+             * Format: int32
+             * @description Tokens a day for this business, at most the platform ceiling; 0 stops every call
+             */
+            daily_token_cap?: number;
+            /** @description Switch the assistant on or off; needs core.settings.manage as well */
+            enabled?: boolean;
+        };
         /** @description Omitted fields are unchanged. The code never changes. */
         UpdateBranchRequest: {
             location?: string;
@@ -13510,6 +13628,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentMethodMappingList"];
+                };
+            };
+        };
+    };
+    getAdvisorBrief: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvisorBrief"];
+                };
+            };
+        };
+    };
+    getAdvisorSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvisorSettings"];
+                };
+            };
+        };
+    };
+    updateAdvisorSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAdvisorSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvisorSettings"];
                 };
             };
         };

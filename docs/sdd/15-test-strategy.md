@@ -399,6 +399,13 @@ output changed.
   through the gateway, the log column list and a planted canary absent from every row, the update and delete guards and the
   housekeeping for suspended tenants); the
   isolation suite covers `ai_calls` through its factory row.
+  The daily brief (#226) is covered by `DailyBriefIT` (the switch and its acknowledgement; no call and no row while off; the stored brief
+  is the rendered text and never the model's; a refused answer is the facts-only brief with reason `validation` and still counts toward
+  the tokens, the cost and the daily cap; the fallback on every failure path that was paid for (a provider error, a timeout, a network failure, a rate limit, a bad response, a cap; the 30 second budget itself is tested in `OpenAiCompatibleClientTest`, and here a timeout is the client's TIMEOUT failure), a state refusal such as an open breaker or a switch flipped mid run storing nothing,
+  with the page still loading under the label Automatic summary; the gateway's input screen letting the real prompt through and refusing a
+  phone, an ID, an email and a digit run; the call log holding no text for an accepted, a refused and a failed call; the queued job after
+  midnight and the 20:59 and 21:01 UTC edge; a branch manager never receiving the all-branches brief), a tenant switched on but not on the platform list making no facts read, no call and no row, a poison tenant not blocking the rest, no facts for the queued date at 00:01, two instances at once, the real task driven by db-scheduler's own `Execution`, and the brief and settings routes over HTTP (204 while off, 403, 428, 409, the ETag), `BriefBuilderTest`,
+  `AdvisorJobsTest` and the frontend markup tests of the card and the settings.
   The advisor's facts, aliases, validator and harness (#223) are covered by `PortfolioFactsIT` (the facts equal the independent
   recomputation of the insights golden model, in their display forms, with the week-on-week and month-on-month changes; a branch
   manager's and a loan officer's facts equal the insights endpoints' figures for the same caller metric by metric; a branch or

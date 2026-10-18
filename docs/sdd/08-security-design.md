@@ -194,6 +194,8 @@ platform API and holds no tenant permissions.
 | `lending.insights.read` | Y | Y | Y | | Y | Y | | |
 | `lending.insights.all_officers` | Y | Y | | | Y | Y | | |
 | `lending.insights.export` | Y | Y | Y | | Y | Y | | |
+| `lending.advisor.use` | Y | Y | | | Y | Y | | |
+| `lending.advisor.configure` | Y | | | | | | | |
 | `member.self.read` | | | | | | | Y | |
 | `member.self.apply` | | | | | | | Y | |
 | `member.self.pay` | | | | | | | Y | |
@@ -244,14 +246,12 @@ Notes:
   table as CSV, audited as `lending.insights.exported`; a member name in an export is reduced to
   initials unless the user holds `lending.members.read`, and no insights table carries a phone or
   an ID number. The daily digest settings need `core.settings.manage`.
-- Client extras (issue #210), **design only: the permissions `core.payments.manage`, `lending.advisor.use` and
-  `lending.advisor.configure` are not in the matrix above yet; the migration of the slice that needs each adds its row**
-  (`core.payments.manage` with #224, the two advisor permissions with #226), with the grants stated here: `core.payments.manage`
+- Client extras (issue #210): the permissions `lending.advisor.use` and `lending.advisor.configure` are in the matrix above (migration `V55`, issue #226); `core.payments.manage` is not yet (its migration adds the row, with #224). The grants: `core.payments.manage`
   to the tenant admin and accountant, `lending.advisor.use` to the tenant admin, branch manager, accountant and auditor,
   `lending.advisor.configure` to the tenant admin. `core.payments.collect` starts a gateway collection and `core.payments.manage` uploads the
   merchant statement and reads the reconciliation (ADR-035); switching collections on needs `core.settings.manage`. The
   AI assistant (ADR-037) needs `lending.advisor.use` to read the brief and ask, `lending.advisor.configure` to read the
-  call log and set caps, and `core.settings.manage` to switch it on after the acknowledgement. The tenant's SMS settings (its own switch with the acknowledgement, the sender
+  call log and set caps, and `core.settings.manage` to switch it on after the acknowledgement. The stored daily brief covers every branch, so it is returned only to a user whose scope covers every branch of the tenant in `lending.advisor.use`, `lending.insights.read` and `lending.insights.all_officers` and who holds the last (a branch manager holds all officers for their own branches only, so is not one); everyone else gets the automatic summary computed for their own scope. The tenant's SMS settings (its own switch with the acknowledgement, the sender
   choice, the window, the lowered caps, the balance switch, the opt-out list and its import) need `core.settings.manage`, which only the tenant
   administrator holds, and are read with `core.settings.read` (the lists with `core.notifications.read`); the SMS wording, its
   preview and the test message need `core.notification_templates.manage` (the tenant administrator). The operator's switch, the
