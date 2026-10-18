@@ -53,7 +53,7 @@ jobs:
           path: |
             backend/target/surefire-reports
             backend/target/failsafe-reports
-          retention-days: 14
+          retention-days: 3
 
   # JUSTIFICATION-A3: the memory proof leaves `mvn verify` (a stall on the shared runner failed the whole backend job); this job keeps it runnable on request.
   # The report memory proof (ReportMemoryIT, ADR-038 decision 7): a child JVM on the 224 MB staging heap. Run it from

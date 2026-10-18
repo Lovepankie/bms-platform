@@ -86,4 +86,4 @@ jobs:
           name: sdd-static-site
           path: docs/build/site
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1

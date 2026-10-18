@@ -114,6 +114,11 @@ jobs:
       # `staging` pointer to find the release and the commit of its host files (ADR-018).
       - id: push
         uses: docker/build-push-action@v7
+        env:
+          # The organisation's free artifact quota (500 MB) is shared by every repository: the build action's per-build
+          # record and summary artifacts (about 200 of them, 90 day expiry) helped fill it and blocked AGA's deploys.
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
+          DOCKER_BUILD_SUMMARY: "false"
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file || format('{0}/Dockerfile', matrix.context) }}
