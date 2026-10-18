@@ -2,3 +2,4 @@
 self-hosted-runner:
   labels:
     - hillary-pi
+    - bms-deploy

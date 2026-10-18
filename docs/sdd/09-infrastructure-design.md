@@ -14,7 +14,7 @@ puts releases on these hosts is chapter 10 and ADR-006. The step-by-step procedu
 | Environment | Where | Deployed by | Data |
 |---|---|---|---|
 | Local | A developer's machine, `docker-compose.yml` at the repository root (`make dev`) | The developer | Fabricated; the `demo` tenant from `make seed` |
-| CI | GitHub-hosted Ubuntu runners; PostgreSQL 16 in Testcontainers | Every pull request and push to `main` | Fabricated, per test |
+| CI | Self-hosted runners (Jerome's laptop first, the staging Pi as overflow; ADR-018 amendment 2026-10-16) and, for the deploy jobs only, the dedicated deploy runner on the staging host (ADR-040); PostgreSQL 16 in Testcontainers | Every pull request and push to `main` | Fabricated, per test |
 | Staging | A shared ARM64 host at a Rincol home site (Raspberry Pi 4, Debian 13), `/opt/bms`, behind a Cloudflare Tunnel (section 9.13, ADR-018) | Every green build of `main`: the host pulls the `staging` pointer | Fabricated tenants only (chapter 15 section 15.8) |
 | Production | One cloud VM (Hetzner Cloud, Ubuntu LTS), `/opt/bms` | A `vX.Y.Z` tag, after the dev lead approves | Real tenants |
 

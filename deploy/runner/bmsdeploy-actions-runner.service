@@ -1,0 +1,69 @@
+# /etc/systemd/system/bmsdeploy-actions-runner.service
+# GitHub Actions self-hosted runner `bms-deploy-pi`, registered in the organisation runner group `bms-deploy`:
+# visible to bms-platform only and restricted to `deploy.yml` on `refs/heads/main` (labels self-hosted,Linux,ARM64,bms-deploy). BMS ADR-040, derived from the AGA
+# ADR-030 unit of `ghrunner` on the same host. It runs the deploy workflow's build, pointer and
+# promote jobs; it holds no signing key and no deploy secret. Walls, the controls that matter:
+#   - user bmsdeploy: no sudo, not in docker/dialout, cron denied, its own uid 1002
+#   - Docker is bmsdeploy's ROOTLESS daemon (user@1002.service, walled by its own drop-in), and the job
+#     hooks wipe ALL of its state (containers, images, volumes, build cache) before and after every job
+#   - Slice=user-1002.slice: one combined cap with that daemon (MemoryMax=3500M, CPUQuota=300%)
+#   - network: bmsdeploy-netwall.service (nftables owner match on uid 1002): public internet only
+#   - the sandbox below
+[Unit]
+Description=GitHub Actions runner bms-deploy-pi (BMS deploy, walled)
+Documentation=https://github.com/RincolTech-Solutions-ltd/bms-platform/blob/main/docs/adr/ADR-040-build-on-the-staging-host-sign-on-the-maintainers-mac.md
+Requires=bmsdeploy-netwall.service user@1002.service
+After=network-online.target bmsdeploy-netwall.service user@1002.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bmsdeploy
+Group=bmsdeploy
+Slice=user-1002.slice
+WorkingDirectory=/home/bmsdeploy/actions-runner
+ExecStart=/home/bmsdeploy/actions-runner/bin/runsvc.sh
+Environment=XDG_RUNTIME_DIR=/run/user/1002
+Environment=DOCKER_HOST=unix:///run/user/1002/docker.sock
+# Root-owned job hooks: a PR job cannot disable or rewrite them (the unit and the hooks are root-owned).
+Environment=ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/lib/bms-deploy/job-started.sh
+Environment=ACTIONS_RUNNER_HOOK_JOB_COMPLETED=/usr/local/lib/bms-deploy/job-completed.sh
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=5min
+Restart=always
+RestartSec=15
+UMask=0077
+
+# Filesystem
+ProtectSystem=strict
+ProtectHome=tmpfs
+BindPaths=/home/bmsdeploy /run/user/1002
+ReadWritePaths=/home/bmsdeploy /run/user/1002
+InaccessiblePaths=-/opt -/root -/media -/mnt -/srv -/boot -/etc/docker -/var/lib/docker -/run/docker.sock -/run/containerd -/var/lib/containerd -/var/lib/zerotier-one -/etc/NetworkManager/system-connections -/var/log -/etc/systemd -/etc/sudoers.d
+PrivateTmp=yes
+
+# Devices: none but the pseudo devices, so no /dev/ttyUSB*, GPIO, SD card or audio.
+PrivateDevices=yes
+DevicePolicy=closed
+
+# Privileges and kernel
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

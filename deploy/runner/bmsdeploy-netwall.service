@@ -1,0 +1,17 @@
+[Unit]
+Description=Network wall for the bmsdeploy deploy-runner user (nftables owner match, BMS ADR-040)
+Documentation=https://github.com/RincolTech-Solutions-ltd/bms-platform/blob/main/docs/adr/ADR-040-build-on-the-staging-host-sign-on-the-maintainers-mac.md
+DefaultDependencies=no
+After=local-fs.target
+Wants=network-pre.target
+Before=network-pre.target user@1002.service bmsdeploy-actions-runner.service shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/nftables.d/bmsdeploy-wall.nft
+ExecStop=/usr/sbin/nft delete table inet bmsdeploy_wall
+
+[Install]
+WantedBy=multi-user.target

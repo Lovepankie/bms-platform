@@ -6,7 +6,7 @@
 
 | Target | How |
 |---|---|
-| Staging | Merge a pull request to `main`. `deploy.yml` builds `sha-<7>` and moves the `staging` pointer to it; the staging host's timer notices within two minutes and deploys it (pull model, ADR-018). |
+| Staging | Merge a pull request to `main`. `deploy.yml` builds `sha-<7>` on the deploy runner (docs/runbooks/deploy-runner.md), the signer on the maintainer's Mac signs the three digests (docs/runbooks/deploy-signer.md), and only then `staging-pointer` moves the pointer; the staging host's timer notices within two minutes and deploys it (pull model, ADR-018, ADR-040). Release tags are not deployable through the runner group yet (it admits only `refs/heads/main`; ADR-040). The Mac must be on: if the signatures do not appear within 20 minutes the pointer job fails and staging stays on the last release. |
 | Production | On a commit already green on staging: `git tag vX.Y.Z <commit>` then `git push origin vX.Y.Z`. Approve the `production` deployment in the Actions run when asked. |
 
 Then check:

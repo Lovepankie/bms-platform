@@ -24,7 +24,9 @@ ARG TARGETARCH
 RUN GOOS=$TARGETOS GOARCH=$TARGETARCH xcaddy build --output /out/caddy \
         --with github.com/caddy-dns/cloudflare@v0.2.4
 
-FROM caddy:2.11.4-builder-alpine AS empty
+# Pinned to the build platform like the stage above: its RUN must never execute under emulation (ADR-040: the
+# deploy runner's rootless Docker has no binfmt, so a non-native RUN would fail the linux/amd64 build).
+FROM --platform=$BUILDPLATFORM caddy:2.11.4-builder-alpine AS empty
 RUN mkdir -p /empty
 
 FROM caddy:2.11.4-alpine

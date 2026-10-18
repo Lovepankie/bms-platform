@@ -564,6 +564,11 @@ Accepted (this list is the ADR index):
 - ADR-039 One search convention: a shared kernel matcher (folded text, AND of terms, phone digits, ranked, rank in the
   cursor), `bms_fold` and `bms_digits` in V40 and no search index (none is usable under row-level security), one
   live search hook in the PWA (proposed, #241; spec `docs/specs/search.md`)
+- ADR-040 Build on a dedicated runner on the staging host, sign on the maintainer's Mac: the deploy jobs run on
+  `bms-deploy-pi` in an org runner group that admits only `deploy.yml` on main (own user, wall, caps, wiped state,
+  no secret), the cosign key lives only in the Keychain and a launchd signer (cosign v2.4.1) signs the digests a
+  main run logged; the staging pointer waits for the signatures (hosted minutes are not used and the budget is
+  not raised; proposed, #296; `deploy/runner/`, `deploy/signer/`)
 
 Pending (cite only as "pending ADR-NNN"):
 

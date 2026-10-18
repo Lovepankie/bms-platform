@@ -85,8 +85,8 @@ host's `bms` user logs in to GHCR once with a token scoped to `read:packages` on
 `deploy.sh` reuse it for every pull and every cosign verification. The production deploy still logs
 in with the workflow's own short-lived token.
 
-Also add repository secrets `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD` (ADR-018 finding H2): see
-section 8.1a for how to generate them.
+The signing key is no longer a repository secret (ADR-040): it lives in the maintainer's Keychain and the
+signer on the Mac uses it (docs/runbooks/deploy-signer.md). Section 8.1a still says how to generate a pair.
 
 ## 6. First deploy
 
@@ -146,10 +146,10 @@ Then:
 
 1. Commit the generated `cosign.pub` as `deploy/cosign.pub` in a pull request (it replaces the
    placeholder that says, in the file itself, that it is not a real key and must fail closed).
-2. Add repository secrets `COSIGN_PRIVATE_KEY` (the full contents of `cosign.key`) and
-   `COSIGN_PASSWORD` (the password chosen above), so `deploy.yml`'s build job can sign every image
-   it pushes. Delete the local `cosign.key` once the secret is stored; keep the password in the
-   team's secret manager, not in this repository.
+2. Store `cosign.key` (base64) and its password in the maintainer's Keychain as `bms-cosign-key` and
+   `bms-cosign-password` (ADR-040): the signer on the Mac signs every image digest the deploy run built.
+   Do NOT add them as repository secrets and do not give them to a runner. Delete the local `cosign.key`
+   once stored.
 3. Copy the same `cosign.pub` onto the staging host, outside any release (the puller must verify a
    release's signature against a key that release cannot supply):
 

@@ -3,7 +3,7 @@ name: Deploy
 # The delivery pipeline of ADR-006 and ADR-018 (docs/sdd/10-cicd-pipeline.md):
 #
 #   push to main  -> build api, web and proxy images ONCE, for linux/amd64 and linux/arm64, tag
-#                    sha-<short>, push to GHCR, sign each pushed digest with cosign
+#                    sha-<short>, push to GHCR; the maintainer's signer signs each pushed digest (ADR-040)
 #                 -> move the `staging` pointer tag to those images. The ARM64 staging host sits
 #                    behind a Cloudflare Tunnel and cannot be reached from here: its systemd timer
 #                    (deploy/pull-staging.sh) sees the pointer move, verifies the cosign signatures
@@ -19,14 +19,18 @@ name: Deploy
 # Only pushes to this repository's main branch and version tags trigger it. Pull requests never do,
 # so code from a fork never runs with these secrets or with package write access.
 #
-# Every job below runs on the GitHub-hosted `ubuntu-latest` runner: a fresh, ephemeral virtual
-# machine that is destroyed after the job. The self-hosted `hillary-pi` runner, which lives on the
-# staging host itself, runs only the read-only checks in ci.yml, dash-guard.yml,
-# adr-citation-guard.yml, architecture-model.yml, linked-issue-guard.yml and estimate-guard.yml. It
-# never sees `packages: write`, a registry credential or a deploy secret (pending ADR-018 amendment,
-# finding H1 of docs/reviews/pr-21-adversarial-review.md): a persistent runner that also executes
-# unreviewed pull request code cannot be trusted with a token that a job on the same machine, on a
-# later push, could read back out of its own state.
+# Where the jobs run (ADR-040, which supersedes the hosted-runner rule of ADR-018 finding H1):
+#   * meta, build, staging-pointer and promote run on `bms-deploy-pi`, a repository-scoped runner on the
+#     staging host under its OWN user (`bmsdeploy`): rootless Docker wiped before and after every job, a
+#     network wall, a memory cap, no sudo, no deploy secret (deploy/runner/). The organisation's hosted
+#     Actions budget is exhausted and will not be raised, so nothing here may depend on hosted minutes.
+#   * Nothing on that runner can sign. The cosign private key lives only in the maintainer's Keychain; a
+#     launchd job on the maintainer's Mac (deploy/signer/bms_signer.py) signs the three image digests that
+#     the build jobs write in a `bms-image-digest` log line, and only for a run on main. The pointer
+#     job moves `staging` only after cosign verifies those signatures with deploy/cosign.pub, because the
+#     staging host's puller marks a release failed for good when a signature does not verify.
+#   * deploy-production keeps `ubuntu-latest`: it holds the production SSH key, which never goes on a
+#     shared runner, and it only runs on a release tag after the production VM exists (ADR-040).
 
 on:
   push:
@@ -43,7 +47,7 @@ jobs:
   meta:
     name: Resolve tags
     if: github.repository == 'RincolTech-Solutions-ltd/bms-platform'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, bms-deploy]
     outputs:
       sha_tag: ${{ steps.tags.outputs.sha_tag }}
       version: ${{ steps.tags.outputs.version }}
@@ -72,13 +76,14 @@ jobs:
     name: Build and push ${{ matrix.image }}
     needs: meta
     if: github.ref_type == 'branch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: [self-hosted, bms-deploy]
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
     strategy:
       fail-fast: true
+      max-parallel: 1
       matrix:
         include:
           - image: api
@@ -90,15 +95,10 @@ jobs:
             file: deploy/caddy/Dockerfile
     steps:
       - uses: actions/checkout@v7
-      # Every Dockerfile compiles in a stage pinned to $BUILDPLATFORM (Maven, npm and a Go
-      # cross-compile run natively where possible), and the per-target runtime stages have no RUN
-      # step, so no emulated code ever executes. This hosted runner is amd64 only, so QEMU is
-      # registered to let buildx assemble the linux/arm64 manifest (layer copies only, still no
-      # emulated RUN); unlike the walled Pi runner, the hosted one is allowed the privilege
-      # (owner decision H1, pending ADR-018 amendment).
-      - uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
+      # Every Dockerfile compiles in a stage pinned to $BUILDPLATFORM (Maven, npm and a Go cross-compile
+      # run natively), and the per-target runtime stages have no RUN step, so no emulated code ever
+      # executes and no QEMU or privileged binfmt registration is needed: the runner's Docker is
+      # rootless (ADR-040). The matrix runs one image at a time to stay inside the runner's memory cap.
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -123,30 +123,24 @@ jobs:
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,scope=${{ matrix.image }},mode=max
-      # H2: sign the pushed manifest by digest with a private key. --tlog-upload=false keeps the
-      # signature out of the public Rekor transparency log (a public log entry would name this
-      # private repository's images and commit shas). The signature is an OCI artifact pushed next
-      # to the image in GHCR, so it needs the same packages: write used to push the image.
-      - name: Sign the image digest with cosign
-        uses: sigstore/cosign-installer@v3
-        with:
-          cosign-release: "v2.4.1"
-      - env:
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+      # H2, as amended by ADR-040: this job does NOT sign. It records the pushed digest in its own log
+      # (a run's log cannot be edited from another run), and the signer on the maintainer's Mac signs
+      # image@digest after checking the run: main, this runner, this commit, labels naming this commit.
+      - name: Record the pushed digest for the signer
+        env:
+          IMAGE: ${{ matrix.image }}
           DIGEST: ${{ steps.push.outputs.digest }}
         run: |
-          echo "$COSIGN_PRIVATE_KEY" > cosign.key
-          cosign sign --key cosign.key --tlog-upload=false --yes \
-            "${IMAGE_PREFIX}-${{ matrix.image }}@${DIGEST}"
-          rm -f cosign.key
+          printf '%s' "$DIGEST" | grep -Eq '^sha256:[0-9a-f]{64}$' || { echo "::error::no digest from the push"; exit 1; }
+          # The signer reads this line from the job's own log (not an annotation another workflow could edit).
+          echo "::notice title=bms-image-digest::bms-image-digest image=${IMAGE} digest=${DIGEST} revision=${GITHUB_SHA}"
 
   staging-pointer:
     name: Point staging at ${{ needs.meta.outputs.sha_tag }}
     needs: [meta, build]
     if: github.ref_type == 'branch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: [self-hosted, bms-deploy]
+    timeout-minutes: 30
     concurrency:
       group: staging-pointer
       cancel-in-progress: false
@@ -163,6 +157,35 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # ADR-040: the signature is made on the maintainer's Mac a few seconds after the build. The staging
+      # host marks a release failed for good when a signature does not verify, so the pointer moves only
+      # after cosign verifies all three digests here with the same public key the host trusts. If the
+      # signer is off, this job times out and the pointer stays where it was: fail closed.
+      - uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: "v2.4.1"
+      - name: Wait for the signatures
+        env:
+          SHA_TAG: ${{ needs.meta.outputs.sha_tag }}
+        run: |
+          : > verified-digests.txt
+          deadline=$((SECONDS + 1500))   # one shared 25 minute budget for all three images
+          for image in api web proxy; do
+            ref="${IMAGE_PREFIX}-${image}:${SHA_TAG}"
+            digest="$(docker buildx imagetools inspect "$ref" --format '{{ .Manifest.Digest }}')"
+            printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$' || { echo "::error::no digest for $ref"; exit 1; }
+            ok=""
+            while [ "$SECONDS" -lt "$deadline" ]; do
+              if err="$(cosign verify --key deploy/cosign.pub --insecure-ignore-tlog=true "${IMAGE_PREFIX}-${image}@${digest}" 2>&1 > /dev/null)"; then ok=yes; break; fi
+              sleep 20
+            done
+            if [ -z "$ok" ]; then
+              echo "::error::${image}@${digest} was not signed in time (last cosign message: $(printf '%s' "$err" | tail -1 | cut -c1-160)): is the signer on the maintainer's Mac running? (docs/runbooks/deploy-signer.md)"
+              exit 1
+            fi
+            echo "${image} ${digest}" >> verified-digests.txt
+            echo "::notice::${image} signed: ${digest}"
+          done
       - name: Move the staging tag to the images just built (no rebuild)
         env:
           SHA_TAG: ${{ needs.meta.outputs.sha_tag }}
@@ -189,16 +212,18 @@ jobs:
           # or re-push content, so the cosign signature made against the sha-<short> digest in the
           # build job already covers whatever tag names that same digest, staging included. Nothing
           # to re-sign here.
-          for image in api web proxy; do
-            docker buildx imagetools create --tag "${IMAGE_PREFIX}-${image}:staging" "${IMAGE_PREFIX}-${image}:${SHA_TAG}"
-          done
+          # Created from the DIGESTS verified above, never from the mutable sha tag: a tag swapped after the
+          # verification cannot reach the pointer (ADR-040).
+          while read -r image digest; do
+            docker buildx imagetools create --tag "${IMAGE_PREFIX}-${image}:staging" "${IMAGE_PREFIX}-${image}@${digest}" < /dev/null
+          done < verified-digests.txt
           echo "::notice title=Staging pointer::staging now names ${SHA_TAG}; the staging host deploys it within a few minutes (docs/runbooks/deploy.md)."
 
   promote:
     name: Retag ${{ needs.meta.outputs.sha_tag }} as ${{ needs.meta.outputs.version }}
     needs: meta
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, bms-deploy]
     timeout-minutes: 10
     permissions:
       contents: read

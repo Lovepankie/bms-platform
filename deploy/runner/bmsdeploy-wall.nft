@@ -1,0 +1,74 @@
+#!/usr/sbin/nft -f
+# Network wall for the BMS deploy runner user `bmsdeploy` (uid 1002), ADR-040. Derived from the AGA
+# ADR-030 wall of the `ghrunner` user on the same host. Any job of this repository that targets the
+# `bms-deploy` label runs as this uid, and so do its
+# rootless Docker containers (slirp4netns and the rootlesskit port driver run as bmsdeploy),
+# so one owner match covers the runner, its jobs and their containers.
+# It matches ONLY meta skuid 1002: root, docker, the OpenEMS edge (uid 911), zerotier-one, every
+# other user and every socketless kernel packet are accepted by the output chain's policy.
+# Own table: never `flush ruleset` here, Docker's iptables-nft tables live in the same kernel.
+# Loaded by bmsdeploy-netwall.service, which user@1002.service and the runner require.
+
+table inet bmsdeploy_wall
+delete table inet bmsdeploy_wall
+
+table inet bmsdeploy_wall {
+	# Private, CGNAT, link-local, multicast and reserved IPv4: the LAN, ZeroTier (10.135.127.0/24),
+	# the docker0 bridge and anything else that is not the public internet.
+	set blocked4 {
+		type ipv4_addr
+		flags interval
+		elements = { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 169.254.0.0/16,
+			     172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 240.0.0.0/4 }
+	}
+
+	# The NFE OpenEMS backend's public addresses (edge.openems.nearlyfreeenergy.com and the VM).
+	set nfe_backend4 {
+		type ipv4_addr
+		elements = { 78.47.197.154, 89.167.121.193 }
+	}
+
+	# Host services reachable on loopback that CI has no business with: sshd, rpcbind, Modbus TCP,
+	# cups, VNC, the OpenEMS edge (Felix console 8080 and its other API ports), InfluxDB, ZeroTier.
+	set host_lo_tcp {
+		type inet_service
+		elements = { 22, 111, 502, 631, 5900, 8079, 8080, 8081, 8084, 8085, 8086, 9993, 41019 }
+	}
+	set host_lo_udp {
+		type inet_service
+		elements = { 111, 5353, 9993 }
+	}
+
+	# Only packets whose owning socket belongs to uid 1002 enter the wall. A positive match matters:
+	# packets with no owning socket (kernel ICMP replies, IGMP/MLD, IPv6 neighbour discovery, RSTs)
+	# must never be caught, and `meta skuid != 1002` does not match them, so it would let them fall
+	# through into the drops below.
+	chain output {
+		type filter hook output priority filter - 10; policy accept;
+		meta skuid 1002 jump bmsdeploy
+	}
+
+	chain bmsdeploy {
+		# Loopback: rootless Docker and Testcontainers need it; the host's own services are denied.
+		ip daddr 127.0.0.0/8 tcp dport @host_lo_tcp counter drop
+		ip daddr 127.0.0.0/8 udp dport @host_lo_udp counter drop
+		ip daddr 127.0.0.0/8 counter accept
+		ip6 daddr ::1 tcp dport @host_lo_tcp counter drop
+		ip6 daddr ::1 udp dport @host_lo_udp counter drop
+		ip6 daddr ::1 counter accept
+
+		# DNS to the box's configured resolver only (/etc/resolv.conf, NetworkManager/DHCP).
+		ip daddr 192.168.1.1 meta l4proto { tcp, udp } th dport 53 counter accept
+
+		oifname "zt*" counter drop
+		ip daddr @blocked4 counter drop
+		ip daddr @nfe_backend4 counter drop
+
+		# All non-loopback IPv6 is refused: the LAN has a global /64, so a prefix list cannot wall
+		# it off, and every service CI needs is reachable over IPv4. Reject, not drop, so clients
+		# fall back to IPv4 at once.
+		meta nfproto ipv6 counter reject with icmpv6 type admin-prohibited
+
+		counter accept
+	}
+}

@@ -323,5 +323,7 @@ merge. These guards only read the checked-out diff, hold no secret and cost seco
 **Decision.** The three guards use `runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}`, like `ci.yml`. The deploy
 workflow stays on `ubuntu-latest` (finding H1): it holds the signing key and registry credentials, which never go on a shared runner.
 
+**Deploy jobs.** The hosted deploy jobs cannot run either; ADR-040 (proposed) moves them to a dedicated runner on the staging host, in a runner group that admits only `deploy.yml` on `main`, and moves signing to the maintainer's Mac, superseding finding H1 for `deploy.yml` and amending finding H2.
+
 **Consequences.** Better: the guards no longer spend or depend on hosted minutes. Worse: they now wait for a laptop or Pi runner, and the repository
 still needs a hosted budget for deploys. The rule from the 2026-10-16 amendment stands: these runners never hold a secret or a deploy credential.
