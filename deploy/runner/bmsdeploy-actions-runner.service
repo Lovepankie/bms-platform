@@ -33,7 +33,10 @@ KillSignal=SIGTERM
 TimeoutStopSec=5min
 Restart=always
 RestartSec=15
-UMask=0077
+# 0022, not 0077: COPY keeps the file modes of the build checkout, so with 0077 the first real deploy built web and proxy
+# images whose Caddyfiles were mode 600 and the non-root Caddy could not read them (a crash loop on staging). Hosted runners
+# use 0022. Nothing is exposed by it: /home/bmsdeploy and _work are 0700.
+UMask=0022
 
 # Filesystem
 ProtectSystem=strict

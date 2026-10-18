@@ -100,6 +100,10 @@ jobs:
       # executes and no QEMU or privileged binfmt registration is needed: the runner's Docker is
       # rootless (ADR-040). The matrix runs one image at a time to stay inside the runner's memory cap.
       - uses: docker/setup-buildx-action@v4
+        with:
+          # Pinned: the runner host's own buildx (Debian 0.13.1) ignores `imagetools inspect --format`, which the pointer
+          # job relies on. The action installs this version per job into ~/.docker, which the hooks wipe (ADR-040).
+          version: v0.38.0
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -153,6 +157,10 @@ jobs:
         with:
           fetch-depth: 0
       - uses: docker/setup-buildx-action@v4
+        with:
+          # Pinned: the runner host's own buildx (Debian 0.13.1) ignores `imagetools inspect --format`, which the pointer
+          # job relies on. The action installs this version per job into ~/.docker, which the hooks wipe (ADR-040).
+          version: v0.38.0
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -231,6 +239,10 @@ jobs:
       packages: write
     steps:
       - uses: docker/setup-buildx-action@v4
+        with:
+          # Pinned: the runner host's own buildx (Debian 0.13.1) ignores `imagetools inspect --format`, which the pointer
+          # job relies on. The action installs this version per job into ~/.docker, which the hooks wipe (ADR-040).
+          version: v0.38.0
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io

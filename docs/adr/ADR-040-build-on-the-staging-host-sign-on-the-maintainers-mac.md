@@ -147,6 +147,12 @@ being measured. Deploys depend on the Mac being on and logged in (it is set neve
 the single Pi runner, which cannot run two deploys at once. Maintaining a runner (runner version, disk, the
 wall) is now ours.
 
+What the first real deploys found (2026-10-18), all fixed: the GitHub Actions cache service failed an otherwise good build
+(cache removed); the host's Debian buildx 0.13.1 ignores `imagetools inspect --format` (buildx pinned to v0.38.0 per job);
+and the runner service's `UMask=0077` made the build checkout's files owner-only, which `COPY` copied into the web and
+proxy images, so the non-root Caddy could not read its config and staging crash-looped until the puller's readiness gate
+rolled it back (umask 0022 on the runner, explicit `--chmod` on the Caddyfile copies).
+
 To watch: the first real deploy under this ADR (record the duration in the runbook); the throwaway-workflow
 test that proves the group restriction; disk use of the rootless Docker store between wipes; whether `docker
 buildx` assembles the `linux/amd64` manifest without QEMU as designed (if not, the amd64 target moves to a

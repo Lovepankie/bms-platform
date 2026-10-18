@@ -15,7 +15,7 @@ COPY . .
 RUN npm run build && mkdir -p /empty
 
 FROM caddy:2.11-alpine AS runtime
-COPY Caddyfile /etc/caddy/Caddyfile
+COPY --chmod=644 Caddyfile /etc/caddy/Caddyfile
 # Caddy's official image runs as root by default; this one does not need to.
 COPY --chown=10001:10001 --from=build /src/dist /srv
 COPY --chown=10001:10001 --from=build /empty /config
