@@ -1,0 +1,38 @@
+package com.rincoltech.bms.core.payments.internal;
+
+import com.github.kagkarlsson.scheduler.task.helper.RecurringTask;
+import com.github.kagkarlsson.scheduler.task.helper.Tasks;
+import com.github.kagkarlsson.scheduler.task.schedule.Schedules;
+import com.rincoltech.bms.kernel.BusinessClock;
+import java.time.Duration;
+import java.time.LocalTime;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * The payment jobs (ADR-008): the poller every 10 seconds and the nightly retention. The poller is switched off by
+ * {@code bms.payments.poller-enabled=false}, which the integration tests set so that they drive
+ * {@link PaymentPoller#tick} themselves and a scheduler tick cannot race them; it is on everywhere else. (The scheduler
+ * itself polls for due tasks every 10 seconds, so a notification is acted on within about 20 seconds.)
+ */
+@Configuration(proxyBeanMethods = false)
+class PaymentJobs {
+
+    static final String POLL = "core.payments.poll";
+    static final String HOUSEKEEPING = "core.payments.housekeeping";
+
+    @Bean
+    @ConditionalOnProperty(name = "bms.payments.poller-enabled", havingValue = "true", matchIfMissing = true)
+    RecurringTask<Void> paymentPollTask(PaymentPoller poller) {
+        return Tasks.recurring(POLL, Schedules.fixedDelay(Duration.ofSeconds(10)))
+                .execute((instance, context) -> poller.tick());
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "bms.payments.poller-enabled", havingValue = "true", matchIfMissing = true)
+    RecurringTask<Void> paymentHousekeepingTask(PaymentPoller poller) {
+        return Tasks.recurring(HOUSEKEEPING, Schedules.daily(BusinessClock.DEFAULT_ZONE, LocalTime.of(3, 40)))
+                .execute((instance, context) -> poller.housekeeping());
+    }
+}

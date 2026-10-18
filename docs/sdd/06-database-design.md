@@ -662,7 +662,7 @@ mapping is removed to return the method to its default).
 
 `UNIQUE (provider, provider_reference)`.
 
-Columns added by ADR-035 (migration number taken when slice #213 merges): `merchant_reference text NOT NULL UNIQUE`
+As built in slice #213 (migration `V54__payment_gateway_core.sql`; the status set is the ADR-035 amendment of 2026-10-17: `created`, `pending`, `paid`, `booked`, `booked_unallocated`, `needs_attention`, `failed`, `cancelled`, `expired`, `reversed_pending_review`, `reversed`, moves guarded by a trigger, unique `(tenant_id, initiated_by, idempotency_key)`, `paid_currency`, `verified_at`, `next_check_at`, `check_requested_at`, `check_failures`, `order_verified_at`, and no delete grant); `payment_callbacks` holds identifiers and a closed outcome and no body, header or address; the platform tables `payment_unmatched_callbacks` and `payment_callback_counters` are reached only through definer functions (`app_resolve_payment_intent(provider, scope, tracking_id, reference)`, `app_tenants_with_due_payment_checks`, `app_record_unmatched_payment_callback`, `app_count_payment_callback`, `payments_housekeeping`). Columns added by ADR-035: `merchant_reference text NOT NULL UNIQUE`
 (`BMS-<env>-<32 hex>`), `redirect_url text`, `scope text NOT NULL DEFAULT 'tenant'` [`tenant`, `platform`],
 `paid_amount_minor bigint`, `confirmation_code text`, `reported_method text`, `last_checked_at timestamptz`,
 `final_status text` [`booked`, `booked_unallocated`, `needs_attention`, `failed`, `expired`], `refusal_code text`,

@@ -254,3 +254,57 @@ is the current rule. Evidence, fact by fact and marked observed or documented, i
    endpoint exists in the reference or on guessed routes; the card chargeback and reversal window is not
    published (the 120 days stay an assumption); the rate limits and IPN retries of the live system are
    unknown. The questions, with an owner and a date, are in spec section 3.12.2.
+
+
+## Amendment (2026-10-17, issue #213): the gateway core as built
+
+Additive; the decisions above stand. Where the build made a choice the text left open, this section is the current rule.
+
+1. **States.** Intents are `created`, `pending`, `paid`, `booked`, `booked_unallocated`, `needs_attention`, `failed`,
+   `cancelled`, `expired`, `reversed_pending_review` and `reversed`. `paid` is new: the checker stores the verified
+   answer (amount, currency, confirmation code, time) in one transaction and the booker books it in the next, so a worker
+   that dies between them leaves a row the poller finishes. The allowed transitions are enforced by a trigger on
+   `payment_intents` (migration V54), which also forbids changing what was asked (amount, currency, subject, reference,
+   expiry) and anything the provider reported once it is written. Intents are never deleted.
+2. **Status mapping (decision 5) stands as amended.** The adapter decides on the numeric code. Anything it cannot map (an unknown
+   order, a credential error, a status code outside 0 to 3, a fraction of a shilling, a tracking id that is not the one
+   asked for) is an anomaly: counted, never booked, never ends an intent. A COMPLETED answer whose merchant reference or
+   currency is not the intent's, or whose amount is not a positive whole number, ends the intent `needs_attention` and books
+   nothing. An order still unpaid 48 hours after creation is cancelled at the provider and the intent ends `cancelled`.
+3. **Handler refusals (decision 14).** `before_last_repayment` is retried once dated today (Africa/Kampala). Any other business
+   refusal ends the intent `needs_attention` with the refusal code and the amount stored. The posting to unallocated
+   receipts that turns it `booked_unallocated` belongs to slice #216, which owns the `gateway_clearing` postings; the
+   state exists in the database now and nothing writes it yet. Five consecutive technical failures end `needs_attention`.
+4. **Notifications.** `GET` or `POST /api/v1/payments/callbacks/pesapal/{token}` and the payer's
+   `GET /api/v1/payments/return/pesapal`. The token selects the credential pair (constant time over digests); the request is read
+   for two identifiers only, whatever its content type; the tenant is found from the merchant reference by a definer function
+   that also checks the pair; unknown references and tracking ids that do not match are acknowledged, counted and kept in a bounded
+   platform table; past an in-application limit per address and overall the answer is 429. The acknowledgement is the
+   documented JSON body with status 200, or status 500 only when our own store failed.
+5. **Where checks run.** A notification does not call the provider: it moves the intent's next check to now (at least ten
+   seconds after the last check) and the poller, every 10 seconds, takes due intents fairly across tenants (5 per tenant, 40
+   per tick, `FOR UPDATE SKIP LOCKED` with a lease). One path serves a notification, a lost notification, the creation of an
+   order a request did not finish and the retry of a booking.
+6. **Order creation** follows the 2026-10-14 amendment: one creator per intent under a lease, the same reference and body repeated
+   up to three times, an echoed reference that is not ours ends `order_mismatch` (the stray order is cancelled), a first status
+   answer that does not repeat the amount and currency ends `order_mismatch`, and after the attempts `creation_unknown`.
+7. **Switch and binding.** The settings group `payments` (`collections_enabled` and `daily_ceiling_minor`) is written only
+   through `PUT /api/v1/payments/settings`; switching on is refused 409 `merchant_not_bound_to_tenant`,
+   `gateway_method_unmapped`, `gateway_not_configured` or `daily_ceiling_required`, and intent creation checks the same things again.
+   A daily ceiling (minor units, over the tenant's Kampala day, counted under an advisory lock) is required for collections to be on (the end state of every write is checked: switching on without one, or clearing it of a tenant that
+   is already on, is 409 `daily_ceiling_required`): it is the bound on what one day can ask for, and a placeholder for the commercial limits, which stay parked (no
+   price and no billing is built).
+8. **An expired order stays payable, deliberately.** After the 30 minutes the payer is no longer offered the order, but the hosted
+   page cannot be withdrawn without a cancel that can lose a race with a payment, so a payment that completes later is booked and
+   flagged `late`. A cancel by staff, or the final cancel after 48 hours, is best effort at the provider; a payment that wins that
+   race still books (`cancelled` to `paid` is an allowed transition).
+9. **The payer return page** (`GET /api/v1/payments/return/pesapal`) has no token and is open to any browser: its own rate limit bucket,
+   no platform queue row and no counter for an unknown reference, tenant-scope orders only until #228. It is on the callback host.
+10. **Environments.** `BMS_PESAPAL_BASE_URL` outside production may only be the sandbox host, in every mode and whether or not
+   credentials are set, so staging cannot reach the live provider; production refuses the sandbox and the fake; the two
+   credential pairs must have different IPN ids and path tokens.
+11. **Reversals after booking.** A booked payment is asked about again once a day for 14 days (`CheckSchedule.nextReview`), so a reversal
+   whose notification was lost is still seen; a notification asks sooner. A reversal moves the intent to `reversed_pending_review` and raises the
+   `reversal` counter. **The ledger is never touched by this slice**: the receipt stays in the books until a person reverses it by hand (the loan or
+   savings reversal), and the checker request raised by a system user is slice #224. The nightly `core.payments.reconcile` job, the statement upload and the
+   reconciliation report are not built in #213 either (#224); the built job is `core.payments.poll`, every 10 seconds.

@@ -190,9 +190,10 @@ migration) with status only, no details.
   when its values are unset. The API gets them and no other container does. Staging uses sandbox values only and the
   startup guards of `docs/specs/client-extras.md` section 8 refuse a live Pesapal URL, SMS `live` mode and any non-sandbox SMS
   provider URL or account in every SMS mode there. The staging
-  tunnel must expose the callback host for provider notifications (the sandbox accepts any https name and cannot prove reachability, so the first staging run of #213 does; spec section 3.12). The sandbox also needs the JVM truststore checked for the provider's intermediate certificate. Edge rules: a
-  rate limit on `/api/v1/payments/callbacks/*` and `/api/v1/channels/*` on the callback host, and the provider's source
-  address allow-list for SMS delivery reports where the provider publishes one; the proxy redacts the path token from its
+  tunnel must expose the callback host for provider notifications (the sandbox accepts any https name and cannot prove reachability, so the first staging run of #213 does; spec section 3.12). The sandbox also needs the JVM truststore checked for the provider's intermediate certificate. Edge rules, **required before activation and not yet present** (the application's own per address and overall limit holds without them, and the Caddyfile forwards
+  `/api/v1/payments/callbacks/*`, `/api/v1/payments/return/*` and `/api/v1/channels/*` on the callback host): a
+  Cloudflare rate limit on those paths, the provider's source
+  address allow-list for SMS delivery reports where the provider publishes one, and redaction of the path token from the proxy's
   access log.
 - Edge rule for the public sign-up (ADR-024, chapter 7 section 7.10), added by the dev lead in the
   Cloudflare dashboard for the platform host: a rate limiting rule on `URI Path starts with
@@ -215,8 +216,7 @@ db-scheduler runs inside the API process with its state in `scheduled_tasks` (AD
 separate worker container exists yet; `BMS_SCHEDULER_ENABLED` lets one be split out later from
 the same image.
 
-Jobs added by the client extras design (issue #210, each with its slice): `core.payments.create-order` and
-`core.payments.poll-pending` (every 2 minutes, 48 hours per intent), `core.payments.reconcile` (nightly after the end of day),
+Jobs added by the client extras design (issue #210, each with its slice): `core.payments.poll` (built in #213: every 10 seconds, it makes orders the request did not finish, asks the provider about intents whose check is due, books what is paid, and re-asks about a booked payment once a day for 14 days; it replaces the designed `create-order` and `poll-pending` jobs), `core.payments.housekeeping` (nightly 03:40, built in #213: retention of notification rows and counters) and `core.payments.reconcile` (nightly after the end of day, **not built in #213**: slice #224, with the statement upload and the reconciliation report),
 `core.reporting.report-runner` (every 15 seconds, one run per tenant, one at a time on staging and two elsewhere) and its nightly file expiry
 `core.reporting.report-expiry` (03:30, built in issue #214; `docs/runbooks/reports-operations.md`; files are deleted in batches with no
 transaction open). A report run is stamped with the process that holds it and beaten every 10 seconds (`bms.reports.heartbeat`); a run

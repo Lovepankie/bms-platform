@@ -801,6 +801,48 @@ class RlsIsolationIT {
                                               cost_counted_micro, latency_ms, attempts)
                         VALUES (?, ?, now(), 'brief', ?, 'test-model', repeat('a', 64), 'ok', 10, 20, 30, 5, 5, 120, 1)
                         """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        // A payment intent and the notification that named it (migration V54, #213). JUSTIFICATION-A3: one factory row
+        // per tenant table.
+        UUID intent = UUID.randomUUID();
+        String hex = intent.toString().replace("-", "");
+        owner.sql("""
+                        INSERT INTO payment_intents (id, tenant_id, branch_id, purpose, subject_type, subject_id, payer_phone_e164,
+                                                     amount_minor, currency, merchant_reference, status, initiated_by,
+                                                     idempotency_key, expires_at)
+                        VALUES (?, ?, ?, 'test.payment', 'test_subject', ?, '+256700000001', 1500, 'UGX', ?, 'created', ?,
+                                'rls-factory-key', now() + interval '30 minutes')
+                        """)
+                .params(intent, t.tenantId(), t.headOffice(), UUID.randomUUID(), "BMS-DV-" + hex, user)
+                .update();
+        owner.sql("""
+                        INSERT INTO payment_callbacks (id, tenant_id, intent_id, provider, kind, merchant_reference)
+                        VALUES (?, ?, ?, 'pesapal', 'ipn', ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), intent, "BMS-DV-" + hex)
+                .update();
+    }
+
+    /** The two platform payment tables have no grant for the application role: only the definer functions reach them (V54). */
+    @Test
+    void paymentPlatformTablesAreClosedToTheApplicationRole() throws SQLException {
+        for (String table : List.of("payment_unmatched_callbacks", "payment_callback_counters")) {
+            assertThatThrownBy(() -> asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM " + table)))
+                    .as("SELECT on %s", table)
+                    .hasStackTraceContaining("permission denied");
+            assertThatThrownBy(() -> asApp(
+                            a.tenantId(),
+                            c -> count(c, "WITH d AS (DELETE FROM " + table + " RETURNING 1) SELECT count(*) FROM d")))
+                    .as("DELETE on %s", table)
+                    .hasStackTraceContaining("permission denied");
+            assertThatThrownBy(() -> asApp(a.tenantId(), c -> {
+                        try (PreparedStatement ps = c.prepareStatement("UPDATE " + table + " SET hits = 0")) {
+                            ps.execute();
+                            return null;
+                        }
+                    }))
+                    .as("UPDATE on %s", table)
+                    .hasStackTraceContaining("permission denied");
+        }
     }
 
     static String randomHash() {

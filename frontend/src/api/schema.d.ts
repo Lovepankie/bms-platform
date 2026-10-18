@@ -1967,6 +1967,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments/intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a collection by mobile money or card: writes the intent, asks the provider for the order (FR-PAY-01) */
+        post: operations["createPaymentIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/intents/{intent_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One intent: its status and the redirect url; the initiator, or a holder of core.payments.read */
+        get: operations["getPaymentIntent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/intents/{intent_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel an intent that is not paid; the order is cancelled at the provider first */
+        post: operations["cancelPaymentIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The tenant's payments settings and what the host offers (ADR-035) */
+        get: operations["getPaymentsSettings"];
+        /** Change the tenant's payments settings, audited with before and after (ADR-035) */
+        put: operations["updatePaymentsSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/applications": {
         parameters: {
             query?: never;
@@ -5469,6 +5538,19 @@ export interface components {
             /** @description The original wording, for example from the import */
             relationship_text?: string;
         };
+        CreatePaymentIntentRequest: {
+            /**
+             * Format: int64
+             * @description Whole currency units in minor units; UGX has no fraction, so 1500 is 1,500 shillings
+             */
+            amount_minor?: number;
+            /** @description The payer's mobile number: 07XXXXXXXX, 2567XXXXXXXX or +2567XXXXXXXX */
+            payer_phone?: string;
+            /** @description What the money is for, registered by a module, for example lending.loan_repayment */
+            purpose?: string;
+            /** Format: uuid */
+            subject_id?: string;
+        };
         CreateRetailProductRequest: {
             /** Format: uuid */
             category_id: string;
@@ -7050,6 +7132,34 @@ export interface components {
             enabled_channels?: string[];
             failures?: components["schemas"]["OutboxFailure"][];
         };
+        PaymentIntent: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: uuid */
+            booked_transaction_id?: string;
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            /** Format: date-time */
+            expires_at?: string;
+            failure_reason?: string;
+            flags?: string[];
+            /** Format: uuid */
+            id?: string;
+            merchant_reference?: string;
+            /** Format: int64 */
+            paid_amount_minor?: number;
+            /** Format: date-time */
+            paid_at?: string;
+            payer_phone?: string;
+            purpose?: string;
+            redirect_url?: string;
+            refusal_code?: string;
+            status?: string;
+            /** Format: uuid */
+            subject_id?: string;
+            subject_type?: string;
+        };
         PaymentMethodMapping: {
             account_code?: string;
             /**
@@ -7066,6 +7176,19 @@ export interface components {
         };
         PaymentMethodMappingList: {
             items?: components["schemas"]["PaymentMethodMapping"][];
+        };
+        PaymentsSettings: {
+            collections_enabled?: boolean;
+            /** Format: int64 */
+            daily_ceiling_minor?: number;
+            /** @description The host holds the credentials for this business's merchant account */
+            gateway_available?: boolean;
+            /** @description The gateway payment method posts to an active ledger account */
+            gateway_method_mapped?: boolean;
+            /** @description This business is the one the platform's merchant account is bound to */
+            merchant_bound?: boolean;
+            /** Format: int32 */
+            version?: number;
         };
         /** @description R-PAYOFF as at value_date; rebate is interest not charged */
         PayoffQuote: {
@@ -12582,6 +12705,17 @@ export interface components {
             relationship?: string;
             relationship_text?: string;
         };
+        UpdatePaymentsSettingsRequest: {
+            /** @description Remove the daily ceiling */
+            clear_daily_ceiling?: boolean;
+            /** @description Switch collections by mobile money and card on or off (off by default) */
+            collections_enabled?: boolean;
+            /**
+             * Format: int32
+             * @description The most the business may ask to collect in a day, in minor units; 1 or more. A fraction is refused, never rounded
+             */
+            daily_ceiling_minor?: number;
+        };
         UpdateRetailCapabilitiesRequest: {
             branch_roles?: boolean;
             customer_accounts?: boolean;
@@ -16233,6 +16367,122 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SmsTemplatePreview"];
+                };
+            };
+        };
+    };
+    createPaymentIntent: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentIntentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentIntent"];
+                };
+            };
+        };
+    };
+    getPaymentIntent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentIntent"];
+                };
+            };
+        };
+    };
+    cancelPaymentIntent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentIntent"];
+                };
+            };
+        };
+    };
+    getPaymentsSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentsSettings"];
+                };
+            };
+        };
+    };
+    updatePaymentsSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePaymentsSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentsSettings"];
                 };
             };
         };

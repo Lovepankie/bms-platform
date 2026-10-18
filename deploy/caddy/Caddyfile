@@ -51,7 +51,7 @@
 	# The callback host carries provider callbacks only (chapter 7 section 7.2).
 	@callbackHost host {$BMS_CALLBACK_HOST}
 	handle @callbackHost {
-		@callbacks path /api/v1/payments/callbacks/* /api/v1/channels/*
+		@callbacks path /api/v1/payments/callbacks/* /api/v1/payments/return/* /api/v1/channels/*
 		handle @callbacks {
 			reverse_proxy api:8080
 		}
