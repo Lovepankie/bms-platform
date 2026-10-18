@@ -121,8 +121,9 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.meta.outputs.sha_tag }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+          # No layer cache on purpose (ADR-040): the GitHub Actions cache is a hosted service (it answered "Our
+          # services aren't available right now" and failed the first deploy at the export step), and a registry
+          # cache is writable by any workflow with packages: write, so a poisoned layer could enter a signed image.
       # H2, as amended by ADR-040: this job does NOT sign. It records the pushed digest in its own log
       # (a run's log cannot be edited from another run), and the signer on the maintainer's Mac signs
       # image@digest after checking the run: main, this runner, this commit, labels naming this commit.

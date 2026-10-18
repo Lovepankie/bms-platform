@@ -138,9 +138,12 @@ Better: no dependency on hosted minutes or on a budget; one place for the signin
 signature is the only trust anchor and only `deploy.yml` on `main` can reach the runner, so a pull request
 cannot ship an image the host will run; deploys keep the build-once, promote-by-retag flow.
 
-Worse: a deploy now takes longer than a hosted one. Every local build is cold and serial on a 4-core Pi (the
-remote layer cache of `docker/build-push-action` still applies); the estimate is 25 to 40 minutes per commit
-and it is not measured yet. Deploys depend on the Mac being on and logged in (it is set never to sleep) and on
+Worse: a deploy now takes longer than a hosted one. Every build is cold and serial on a 4-core Pi, with no layer cache of any kind: the GitHub Actions cache is a hosted
+service (during the first real deploy on 2026-10-18 it answered with an HTML error page at the export step and failed
+an otherwise good build: the api image had built for both platforms and pushed), and a registry cache is writable by
+any workflow with `packages: write`, so a poisoned layer could enter an image the Mac then signs. The first api
+build alone took about 11 minutes; the estimate is 25 to 40 minutes per commit for all three images and is still
+being measured. Deploys depend on the Mac being on and logged in (it is set never to sleep) and on
 the single Pi runner, which cannot run two deploys at once. Maintaining a runner (runner version, disk, the
 wall) is now ours.
 

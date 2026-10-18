@@ -110,7 +110,9 @@ unless `BMS_SMS_CONTRACT=true`, so it does nothing in `mvn verify`.
   the images that ship never execute anything under emulation. The deploy runner is ARM64 with rootless
   Docker, so it cannot register QEMU (a privileged binfmt step) and does not need to: Buildx assembles
   the `linux/amd64` manifest from layer copies, never a `RUN` (ADR-040). The matrix builds one image at
-  a time (`max-parallel: 1`) to stay inside the runner's memory cap.
+  a time (`max-parallel: 1`) to stay inside the runner's memory cap. The build uses no layer cache: the GitHub
+  Actions cache is a hosted service that failed the first real deploy, and a registry cache could carry a layer
+  poisoned by any workflow with `packages: write` into a signed image (ADR-040).
 - **Signing (ADR-018 finding H2, as amended by ADR-040).** The private key lives only in the
   maintainer's Keychain (items `bms-cosign-key`, `bms-cosign-password`); it is no longer a repository
   secret and no runner ever sees it. Each build job writes `image`, `digest` and `revision` in a
