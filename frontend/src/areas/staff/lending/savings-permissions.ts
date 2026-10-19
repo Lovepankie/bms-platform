@@ -7,10 +7,11 @@ import type { Me } from '../../../api/client';
 
 export const SAVINGS_READ = 'lending.savings.read';
 
-export type SavingsAction = 'deposit' | 'withdraw' | 'close' | 'freeze' | 'unfreeze' | 'reactivate';
+export type SavingsAction = 'deposit' | 'collect' | 'withdraw' | 'close' | 'freeze' | 'unfreeze' | 'reactivate';
 
 const NEEDS: Record<SavingsAction, string> = {
   deposit: 'lending.savings.deposit',
+  collect: 'core.payments.collect',
   withdraw: 'lending.savings.withdraw',
   close: 'lending.savings.withdraw',
   freeze: 'lending.savings.withdraw_approve',
@@ -22,6 +23,8 @@ const NEEDS: Record<SavingsAction, string> = {
 // dormant or frozen account too; money leaves only an active one.
 const STATUSES: Record<SavingsAction, string[]> = {
   deposit: ['active', 'dormant', 'frozen'],
+  // A frozen account takes no gateway deposit: the money would be held as an unallocated receipt (issue #219).
+  collect: ['active', 'dormant'],
   withdraw: ['active'],
   close: ['active'],
   freeze: ['active', 'dormant'],
@@ -44,7 +47,7 @@ export function maySave(me: Pick<Me, 'permissions'>, action: SavingsAction): boo
 
 /** The actions offered on an account in `status`, in the order the page shows them. */
 export function savingsActionsFor(me: Pick<Me, 'permissions'>, status: string | undefined): SavingsAction[] {
-  const order: SavingsAction[] = ['deposit', 'withdraw', 'reactivate', 'unfreeze', 'freeze', 'close'];
+  const order: SavingsAction[] = ['deposit', 'collect', 'withdraw', 'reactivate', 'unfreeze', 'freeze', 'close'];
   return order.filter((a) => maySave(me, a) && STATUSES[a].includes(status ?? ''));
 }
 
@@ -57,8 +60,10 @@ export const mayManageProducts = (me: Pick<Me, 'permissions'>): boolean => held(
 export function canReverseSavings(
   me: Pick<Me, 'permissions'>,
   status: string | undefined,
-  txn: { txn_type?: string; reversed_by_txn_id?: string },
+  txn: { txn_type?: string; reversed_by_txn_id?: string; payment_method_key?: string },
 ): boolean {
+  // A deposit collected by mobile money is reviewed with the payment provider, not reversed by staff (issue #219, #224).
+  if (txn.payment_method_key === 'gateway') return false;
   if (!maySave(me, 'withdraw') || status === 'closed' || txn.reversed_by_txn_id) return false;
   return txn.txn_type === 'deposit' || txn.txn_type === 'withdrawal';
 }

@@ -44,3 +44,20 @@ describe('savings permission gating', () => {
     expect(canReverseSavings(officer, 'active', { txn_type: 'deposit' })).toBe(false);
   });
 });
+
+describe('collecting a savings deposit by mobile money', () => {
+  const collector = { permissions: [READ, 'core.payments.collect'] };
+
+  it('is offered with core.payments.collect on an active or dormant account, never on a frozen or closed one', () => {
+    expect(savingsActionsFor(collector, 'active')).toEqual(['collect']);
+    expect(savingsActionsFor(collector, 'dormant')).toEqual(['collect']);
+    expect(savingsActionsFor(collector, 'frozen')).toEqual([]);
+    expect(savingsActionsFor(collector, 'closed')).toEqual([]);
+    expect(savingsActionsFor(cashier, 'active')).not.toContain('collect');
+  });
+
+  it('does not offer reversal of a deposit collected by mobile money: it is reviewed with the provider', () => {
+    expect(canReverseSavings(cashier, 'active', { txn_type: 'deposit', payment_method_key: 'cash' })).toBe(true);
+    expect(canReverseSavings(cashier, 'active', { txn_type: 'deposit', payment_method_key: 'gateway' })).toBe(false);
+  });
+});

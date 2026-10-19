@@ -33,9 +33,12 @@ class SavingsNotices {
         this.members = members;
     }
 
-    /** Whether a movement with this {@code source} messages the member: a staff movement does, unless its request said not to. */
+    /**
+     * Whether a movement with this {@code source} messages the member: a staff movement does, and so does a gateway
+     * booking (the member paid and is told the receipt), unless the request said not to; the seed and the import never.
+     */
     static boolean sends(String source, boolean notifyMember) {
-        return "staff".equals(source) && notifyMember;
+        return ("staff".equals(source) || "gateway".equals(source)) && notifyMember;
     }
 
     /** What the audit entry of a money event records about the text: whether the member was to be told, and the cutoff. */

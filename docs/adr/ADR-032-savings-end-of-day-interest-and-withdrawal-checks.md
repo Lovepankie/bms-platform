@@ -135,3 +135,31 @@ so the insights page can add the savings panel with a one-line adapter once #156
   module through a port on this module; the withdrawal checks already subtract it.
 - Investments (FR-INV-04, #152) credit monthly returns to a member's savings account: that needs a
   `transfer_in` movement through this module's port, not a write to its tables.
+
+## Amendment (2026-10-19, issue #219): gateway deposits through the port
+
+Additive; the decisions above stand. `SavingsServicing` was written for callers without a request principal (the seed, the later
+import). It now also serves the payments module booking a verified gateway payment (ADR-035, spec 3.4.1):
+
+- `deposit(accountId, amountMinor, valueDate, paymentMethodKey, recordedBy, externalReference, origin, queueReceiptNotice)` is a second
+  overload. It runs the same code as the cash deposit (the same checks, receipt number `RC-`, journal Dr payment method Cr
+  `member_savings`, running balance and audit), so a deposit paid on a phone is indistinguishable in the books from one a cashier typed,
+  apart from the account the money came in on (the mapping of the `gateway` method, normally `gateway_clearing`) and the transaction's
+  `source` (`gateway`).
+- Idempotent for the method `gateway`: a second call with the same `externalReference` (the provider's order tracking id, unique per
+  payment; a short confirmation code is not) for the same account and amount returns the first transaction and writes nothing, under the
+  account row lock; the same reference for another account or amount is `duplicate_reference`. A unique partial index over (tenant,
+  method, reference) for deposits backs it (migration V60). A reversal row carries neither the method nor the reference.
+- `origin` becomes the transaction's `source`. `queueReceiptNotice` queues the savings receipt text in the same transaction (the existing
+  `savings.deposit` template, only for a tenant with SMS events on); the seed and the import pass false and still message nobody. A gateway
+  booking tells the member: `SavingsNotices.sends` now accepts the source `gateway`.
+- The rule "a movement is dated after the last end of day written" (this record) is unchanged for a gateway deposit. A payment whose day
+  is on or before the last end of day, or before the account opened, cannot be dated so: the purpose handler refuses it with the retry
+  word and the payments module books it dated today (a payment cannot be back-dated into a written day).
+- A frozen account takes no gateway deposit (`account_frozen`), nor a closed one (`account_closed`): staff decide what happens to money
+  for an account they have stopped, so the amount is held as an unallocated receipt (ADR-035 decision 14). A dormant account takes it, as
+  it takes a cash deposit. A first deposit below the product's minimum opening balance is refused at creation and, if it arrives so
+  anyway (a partial payment), held as an unallocated receipt.
+- Staff cannot reverse a gateway deposit (`gateway_reversal_pending`) until the provider review of #224: the clearing debit and the
+  payment's reference would be left behind.
+- The javadoc of the port now says "the seed, the import and gateway bookings".

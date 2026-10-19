@@ -73,7 +73,10 @@ public interface PurposeHandler {
             UUID initiatedBy,
             boolean late) {}
 
-    /** The code a handler uses when a repayment cannot be dated before the loan's last one; retried once dated today. */
+    /**
+     * The code a handler uses when a payment cannot be dated on its payment day (before the loan's last repayment, or into a
+     * savings day whose balances are written, issue #219); the booker retries it once dated today.
+     */
     String BEFORE_LAST_REPAYMENT = "before_last_repayment";
 
     /** A business refusal. The code is a closed lower case word; it is stored on the intent and shown to staff. */

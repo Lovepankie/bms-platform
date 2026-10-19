@@ -9,8 +9,9 @@
  * savings reports of chapter 14 section 14.5. Every movement posts a balanced journal through
  * {@code post_entry} in the same transaction (member savings are a liability, account 2010).
  * {@link com.rincoltech.bms.lending.savings.SavingsServicing} is the port for callers without a
- * request principal (the fabricated seed, later the import), and
- * {@link com.rincoltech.bms.lending.savings.SavingsMetrics} the figures the insights page reads.
+ * request principal (the fabricated seed, later the import, gateway bookings), and
+ * {@link com.rincoltech.bms.lending.savings.SavingsMetrics} the figures the insights page reads. It also
+ * registers the {@code lending.savings_deposit} payment purpose (ADR-035, issue #219).
  */
 @ApplicationModule(
         id = "lending.savings",
@@ -24,6 +25,7 @@
             "core.operations",
             "core.approvals",
             "core.notifications",
+            "core.payments",
             "lending.members"
         })
 package com.rincoltech.bms.lending.savings;

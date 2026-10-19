@@ -1308,6 +1308,11 @@ is reversed at most once), `journal_entry_id uuid NOT NULL`, `approval_request_i
 `idempotency_key varchar(100)`, `source text NOT NULL` [`staff`, `portal`, `gateway`, `import`,
 `system`], `recorded_by uuid`.
 
+As built in slice #219 (migration `V60__savings_deposit_by_gateway.sql`), `payment_method_key` also accepts `gateway` (the check is replaced by a superset; the staff routes
+still accept only the four cash methods, so a cashier cannot book a `gateway` deposit by hand) and the partial unique index `lending_savings_transactions_gateway_reference` over
+(`tenant_id`, `payment_method_key`, `external_reference`) where the method is `gateway`, the reference is not null and the type is `deposit` makes one order tracking id book one
+deposit (spec 3.4.1). A reversal row carries neither the method nor the reference. `unallocated_receipts` and the one-booking-per-intent index come from `V59` and serve savings unchanged.
+
 ### `lending_savings_daily_balances` (append-only)
 
 `tenant_id`, `account_id`, `business_date`, `closing_balance_minor bigint NOT NULL` (`>= 0`).

@@ -63,3 +63,21 @@ describe('the amount offered first', () => {
     expect(suggestedAmount({ total_outstanding_minor: 250_000 }, undefined)).toBe(250_000);
   });
 });
+
+describe('the same words for a savings deposit', () => {
+  it('names the account, not the loan', () => {
+    expect(statusWords({ status: 'booked' }, 'savings')).toBe('Paid and recorded on the account.');
+    expect(statusWords({ status: 'paid' }, 'savings')).toContain('deposit');
+    expect(statusWords({ status: 'booked' })).toBe('Paid and recorded on the loan.');
+  });
+
+  it('says plainly why a deposit is held as an unallocated receipt', () => {
+    const frozen = statusWords({ status: 'booked_unallocated', refusal_code: 'account_frozen' }, 'savings');
+    expect(frozen).toContain('the account is frozen');
+    expect(frozen).toContain('unallocated receipt');
+    expect(refusalWords('account_closed', 'savings')).toBe('the account is closed');
+    expect(refusalWords('below_minimum_opening', 'savings')).toContain('minimum opening balance');
+    expect(refusalWords(undefined, 'savings')).toBe('the account could not take it');
+    expect(refusalWords('invalid_status_transition')).toBe('the loan is closed or no longer takes repayments');
+  });
+});

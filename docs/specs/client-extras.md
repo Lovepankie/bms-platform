@@ -472,6 +472,29 @@ recordings. Mobile money cannot be tested without an answer to question 9.
 - **Not built here.** The non-login system user (spec 3.4, decision 16) is created by the slice that first acts as it, the reversal approval request (#224). A payment in another
   currency than the intent's still ends `needs_attention` (the status checker never hands it to booking).
 
+### 3.15 As built in slice #219 (savings deposit by mobile money; differences from, and sharpenings of, the design above)
+
+The twin of 3.14; only what differs is listed.
+
+- **Purpose and screen.** `lending.savings_deposit` is registered by `lending.savings` (`SavingsDepositPurpose`). The staff action "Collect by mobile money or card" is on an
+  active or dormant savings account for a holder of `core.payments.collect` and `lending.savings.read`: amount, the payer's mobile number, then the link with a QR code and a copy
+  button and a live status (every 3 seconds for 2 minutes, then every 15 seconds). When the deposit is recorded the screen shows its receipt number and the provider's payment
+  code; the payer's number leaves the tab as soon as the link exists. Cancel is offered while nothing has been paid. A frozen or closed account is not offered the action.
+- **The own-account rule** is the same: no verified own merchant account gives 422 `merchant_account_not_verified`, no provider call and no row.
+- **Describe.** The account must be visible to the caller, `active` or `dormant` and in the tenant's currency (else `subject_not_payable`); a first deposit below the product's minimum
+  opening balance is `below_minimum_opening`. The branch permission is checked first. A deposit has no cap by balance: the tenant's daily ceiling for collections (3.11) is the only limit.
+- **Booking** is `SavingsServicing.deposit(accountId, amount, valueDate, "gateway", recordedBy, orderTrackingId, "gateway", true)` (3.4.1): the same receipt (`RC-`), journal
+  (debit the account `gateway` is mapped to, normally `gateway_clearing`; credit `member_savings`), running balance, audit and receipt text as a cashier's deposit. The external
+  reference is the **order tracking id**, never the confirmation code; idempotent for the same account and amount, `duplicate_reference` for another (held as an unallocated receipt); unique
+  index `lending_savings_transactions_gateway_reference` (V60). The deposit's own audit row carries `origin` and `external_reference`; the confirmation code is on the intent's audit row and on the
+  unallocated receipt.
+- **The account must still take it.** A deposit onto an account that became frozen or closed meanwhile is refused in `book()` (`account_frozen`, `account_closed`) and posted to unallocated
+  receipts exactly as in 3.14. A payment dated on or before the last end of day written (or before the account opened) is booked dated today (note "dated today"); a closed period is retried
+  dated today. Only the allow-listed business refusals become receipts; any other error is retried.
+- **Reversal.** Staff cannot reverse a gateway deposit (`gateway_reversal_pending`) until #224, and the screen hides Reverse.
+- **Not built here.** The same as 3.14 (the system user and the reversal request of #224, a payment in another currency, allocation and refund of a receipt, FR-PAY-04). The savings
+  transaction list does not yet show the provider's payment code (it is on the collect screen and the intent).
+
 ## 4. SMS (ADR-036)
 
 ### 4.1 Summary

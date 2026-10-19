@@ -465,3 +465,33 @@ Additive; nothing above is rewritten.
     payment in another currency than the intent's still ends `needs_attention` (decision 4; decision 31 concerns the loan's currency, which the handler refuses, and the
     posting throws if the payment's currency is not the accounts' own); posting it to unallocated receipts needs
     the status checker to hand over a row that is not `paid` and is left to the slice that builds the allocation screen.
+
+## Amendment (2026-10-19, slice A4, issue #219): savings deposit by mobile money into the lender's own account
+
+Additive; nothing above is rewritten. The twin of the amendment for #216: the same rules, a different subject.
+
+34. **The purpose `lending.savings_deposit`** is registered by `lending.savings` (`SavingsDepositPurpose`). Creating the intent goes
+    through the same tenant-account path (decision 28): a tenant without a verified own merchant account gets 422
+    `merchant_account_not_verified` and no provider call. The branch permission (`core.payments.collect` in the account's branch) is
+    checked before the handler describes the account. The describe step refuses an account that is not active or dormant, or in another
+    currency than the tenant's (`subject_not_payable`), and a first deposit below the product's minimum opening balance
+    (`below_minimum_opening`).
+35. **Booking is the cash deposit.** The handler calls the `SavingsServicing.deposit` overload (ADR-032 amendment of the same date) with
+    the method `gateway`, the **order tracking id** as the external reference and origin `gateway` (decision 30: never the confirmation
+    code, which two genuine payments can share; the code stays in the intent's audit row and on the unallocated receipt). Receipt number,
+    journal, running balance, audit and the receipt text are those of a cashier's deposit. Idempotent on the reference for the same account
+    and amount; the same reference for another account or amount is `duplicate_reference`, held as an unallocated receipt (migration V60,
+    unique partial index over deposits).
+36. **The account must still be depositable when the money arrives.** `book()` refuses a frozen account (`account_frozen`), a closed one
+    (`account_closed`) and any other status that cannot take a deposit, so the money goes to unallocated receipts (decision 31) instead of
+    onto an account staff have stopped. Only an allow-list of business refusal codes (`account_closed`, `account_frozen`,
+    `account_dormant`, `value_date_in_future`, `before_opening`, `value_date_closed`, `below_minimum_opening`, `payment_method_unmapped`,
+    `invalid_status_transition`, `duplicate_reference`, `period_closed`) becomes an unallocated receipt; any other error propagates and is
+    retried (five in a row end `needs_attention`). A payment dated on or before the last end of day written, or before the account opened,
+    is retried once dated today (`before_last_repayment`, the handler's word for a date a later day cures, note "dated today"); a closed
+    period is retried dated today as for a repayment. The receipt debits the account the `gateway` method is mapped to at the branch, as in
+    decision 31.
+37. **Reversal.** Staff cannot reverse a gateway deposit (`gateway_reversal_pending`, and the screen does not offer Reverse) until the
+    provider review of #224, which will use the maker-checker `savings_reversal` (its negative-balance guard, spec 3.8, is unchanged).
+38. **The payment code** (the provider's confirmation code) is shown on the collect screen. Savings has no receipt document of its own (the
+    receipt is the receipt number on the transaction and in the text), so the code is not printed on one.

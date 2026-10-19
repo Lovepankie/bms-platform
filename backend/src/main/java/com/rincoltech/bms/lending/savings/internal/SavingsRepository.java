@@ -456,6 +456,22 @@ class SavingsRepository {
               LEFT JOIN lending_savings_transactions r ON r.reverses_txn_id = t.id
             """;
 
+    /** The deposit a gateway payment reference (order tracking id) already booked: spec 3.4.1, idempotent at the port. */
+    record GatewayDeposit(UUID id, UUID accountId, long amountMinor) {}
+
+    Optional<GatewayDeposit> gatewayDeposit(String externalReference) {
+        return jdbc.sql("""
+                        SELECT id, account_id, amount_minor FROM lending_savings_transactions
+                         WHERE payment_method_key = 'gateway' AND external_reference = ? AND txn_type = 'deposit'
+                        """)
+                .param(externalReference)
+                .query((rs, n) -> new GatewayDeposit(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("account_id", UUID.class),
+                        rs.getLong("amount_minor")))
+                .optional();
+    }
+
     Optional<Transaction> transaction(UUID id) {
         return jdbc.sql(TXN + " WHERE t.id = ?")
                 .param(id)

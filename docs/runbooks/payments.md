@@ -79,8 +79,8 @@ check the notification arrived and the order booked.
    (`PUT /payments/settings`, `If-Match`). With no provider or callback address on the host the answer is 409
    `gateway_not_configured`; with no ceiling 409 `daily_ceiling_required` (it cannot be removed while on).
 4. Collecting a **loan repayment** (slice #216) is offered on the loan page as "Collect by mobile money or card" to staff with
-   `core.payments.collect`; see section 4d for what to watch. Savings deposits arrive with slice #219; until then only the loan
-   repayment purpose (and the test purpose of the dev and test profiles) exists.
+   `core.payments.collect`; see section 4d for what to watch. Collecting a **savings deposit** (slice #219) is offered the same way on an active or
+   dormant savings account; see section 4e.
 5. **Before the first live repayment:** ask KTA to confirm the own-account model (ADR-035 amendment of 2026-10-18). It is a gate on
    live money, not on staging with the sandbox.
 
@@ -114,6 +114,25 @@ confirms it with an authenticated status query, and the booker records it as a r
    reverse a gateway repayment (`gateway_reversal_pending`) until #224. If a cashier also entered
    the same mobile money receipt by hand it is a second repayment: the reconciliation report flags it (slice #224).
 6. **Receipt text.** Queued in the same transaction for a business with SMS events on (`sms-setup.md`); a business with SMS off sends none.
+
+## 4e. Savings deposits by mobile money: operating them
+
+The same as 4d with a savings account as the subject; read 4d first. The payer pays into **the lender's own** Pesapal account, the notification or the poller
+confirms it, and the booker records a deposit (method `gateway`, the account the mapping of `gateway`, normally `gateway_clearing`) exactly like a cashier's, with an `RC-` receipt
+number, the running balance and the receipt text.
+
+1. **Switch on** exactly as 4d step 1; the savings action appears for staff holding `core.payments.collect` and `lending.savings.read`, on an active or dormant account.
+2. **A completed payment the account could not take.** An account that was frozen or closed after the link was made, a first deposit below the product's minimum opening balance, a
+   closed period with nowhere to retry or an unmapped method does not leave the money unbooked: it is posted out of the account `gateway` is mapped to at the branch into
+   `unallocated_receipts`, the intent ends `booked_unallocated` and a row is written with the refusal code (`account_frozen`, `account_closed`, `below_minimum_opening`, ...). The list query,
+   the alert counter, the rule about not clearing a receipt by a manual journal and the mapped-account rule are those of 4d step 3. Money for a frozen account is a decision for the
+   branch manager: leave the receipt open until the allocation screen ships (FR-PAY-04).
+3. **Dated today.** A payment whose day is on or before the last end of day written is booked dated today (the audit note says "dated_today"); staff cannot back-date a savings
+   movement past the nightly run (ADR-032), and neither can a payment.
+4. **Repeats and reversal.** As 4d step 5: the order tracking id, never the confirmation code, is the reference; a repeat for the same account and amount returns the first deposit, another account
+   or amount is `duplicate_reference` and is held as an unallocated receipt. Staff cannot reverse a gateway deposit (`gateway_reversal_pending`) until #224. If a cashier also keyed the same mobile
+   money receipt by hand it is a second deposit; the reconciliation report flags it (slice #224).
+5. **Five technical failures in a row** end the intent `needs_attention`: as 4d step 4.
 
 ## 4a. Rotating the data key
 

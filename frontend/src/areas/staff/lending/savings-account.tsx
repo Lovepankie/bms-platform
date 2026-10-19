@@ -5,6 +5,7 @@ import { savings, type SavingsAccount, type SavingsTransaction } from '../../../
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
+import { SavingsCollectPanel } from './collect';
 import { methodWords, money, words } from './loan-state';
 import { CloseForm, MoneyForm, ReverseSavingsForm, StatusForm } from './savings-forms';
 import { SavingsGate, savingsBadge } from './savings';
@@ -17,6 +18,7 @@ import { canReverseSavings, savingsActionsFor, type SavingsAction } from './savi
 
 export const SAVINGS_ACTION_LABELS: Record<SavingsAction, string> = {
   deposit: 'Deposit',
+  collect: 'Collect by mobile money or card',
   withdraw: 'Withdraw',
   close: 'Close account',
   freeze: 'Freeze',
@@ -153,6 +155,7 @@ export function AccountView({ account }: { account: SavingsAccount }) {
         <section aria-label={SAVINGS_ACTION_LABELS[open]} className="rt-card">
           <h2>{SAVINGS_ACTION_LABELS[open]}</h2>
           {open === 'deposit' && <MoneyForm account={account} kind="deposit" />}
+          {open === 'collect' && <SavingsCollectPanel account={account} />}
           {open === 'withdraw' && <MoneyForm account={account} kind="withdraw" />}
           {open === 'close' && <CloseForm account={account} />}
           {(open === 'freeze' || open === 'unfreeze' || open === 'reactivate') && <StatusForm account={account} change={open} />}

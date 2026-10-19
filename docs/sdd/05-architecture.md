@@ -133,7 +133,7 @@ lending.advisor       -> core.ai, core.tenancy, core.audit, core.jobs, lending.i
                          (never reads member rows; sends aggregates and aliases only; ADR-037). Built so far (#223):
                          the kernel, core.ai and lending.insights only; the others come with the settings, the job and
                          the stored brief in #226
-lending.savings       -> lending.members (member lookup, the receipt SMS phone; ADR-032)
+lending.savings       -> lending.members (member lookup, the receipt SMS phone; ADR-032), core.payments (the PurposeHandler interface it implements for lending.savings_deposit, #219; the payments module imports nothing of lending)
 lending.members       -> core.notifications (the member's SMS opt-out, SmsOptOuts port; ADR-036, #218)
 lending.investments   -> lending.members; lending.savings (monthly return credit) in a follow-up
                          (increment 10 pays due returns in cash, ADR-031)
@@ -159,7 +159,7 @@ registers into through its manifest at startup:
 | Approval actions | One `ApprovalAction` bean per action type it owns (ADR-015) | `loan_disbursement` executes the disbursement |
 | Branch deactivation guards | Whether a branch still has open accounts of the module | Loans, savings, investments |
 | Import templates | Parser, classifier, normaliser, committer | `pilot_loan_register_v1` |
-| Payment purposes | Booking handler per purpose | `lending.loan_repayment` books a repayment (built in #216: `LoanRepaymentPurpose` in `lending.loans`, through `LoanServicing`) |
+| Payment purposes | Booking handler per purpose | `lending.loan_repayment` books a repayment (built in #216: `LoanRepaymentPurpose` in `lending.loans`, through `LoanServicing`); `lending.savings_deposit` books a deposit (built in #219: `SavingsDepositPurpose` in `lending.savings`, through `SavingsServicing`) |
 | Report definitions | Report key, parameters, permission, query | `lending.par` |
 | Scheduled jobs | Job key, schedule, handler | `lending.nightly_arrears` |
 

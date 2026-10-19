@@ -184,6 +184,8 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.savings     -> bms.api.ledger "Posts deposit, withdrawal, fee, interest and reversal journals in the same transaction"
         bms.api.savings     -> bms.api.approvals "Raises savings_withdrawal and savings_reversal requests"
         bms.api.savings     -> bms.api.notifications "Queues the savings receipt SMS through the outbox (SmsEvents), withdraws it when its movement is reversed"
+        bms.api.savings     -> bms.api.payments "Registers the lending.savings_deposit purpose (PurposeHandler, issue #219): describes a savings account for a collection and books a verified payment through SavingsServicing with method gateway; the handler is a bean the payments registry finds, so the core still imports no vertical"
+        bms.web -> bms.api.savings "Savings account page: Collect by mobile money or card (link, QR code, live status, receipt, payment code) through POST /payments/intents with purpose lending.savings_deposit; money goes only into the lender's own merchant account"
         bms.api.savings     -> bms.api.audit "Writes audit rows"
         bms.api.savings     -> bms.api.jobs "Runs the nightly savings end of day per tenant"
         bms.api.savings     -> bms.db "Reads and writes savings products, accounts, transactions, end-of-day balances and interest postings"

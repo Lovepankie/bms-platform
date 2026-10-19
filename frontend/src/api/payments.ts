@@ -52,7 +52,8 @@ const MESSAGES: Record<string, string | undefined> = {
   merchant_account_not_verified:
     "This business has not connected and tested its own payment account yet, so nothing can be collected. A business administrator does that under Receive payments. The money always goes to the business's own account.",
   exceeds_payoff: 'That is more than the loan still owes. Ask for the amount to be paid, up to the full payoff.',
-  subject_not_payable: 'This loan cannot take a payment now. Reload the loan to see its status.',
+  subject_not_payable: 'This account cannot take a payment now. Reload the page to see its status.',
+  below_minimum_opening: "A first deposit must be at least the product's minimum opening balance.",
   daily_ceiling_exceeded: "The business's daily limit for collections would be exceeded. Try a smaller amount or try again tomorrow.",
   currency_not_supported: 'Collections are offered in Uganda shillings only.',
   unknown_purpose: 'This kind of payment is not available.',
@@ -82,6 +83,9 @@ export type PaymentIntent = components['schemas']['PaymentIntent'];
 /** The purpose of a loan repayment collected through the gateway; the subject is the loan. */
 export const LOAN_REPAYMENT_PURPOSE = 'lending.loan_repayment';
 
+/** The purpose of a savings deposit collected through the gateway (issue #219); the subject is the savings account. */
+export const SAVINGS_DEPOSIT_PURPOSE = 'lending.savings_deposit';
+
 export const payments = {
   /** Starts a collection for a loan. The same key returns the same intent, so a retry never makes a second link. */
   async startLoanRepayment(loanId: string, amountMinor: number, payerPhone: string, idempotencyKey: string): Promise<PaymentIntent> {
@@ -89,6 +93,17 @@ export const payments = {
       await api.POST('/api/v1/payments/intents', {
         params: { header: { 'Idempotency-Key': idempotencyKey } },
         body: { purpose: LOAN_REPAYMENT_PURPOSE, subject_id: loanId, amount_minor: amountMinor, payer_phone: payerPhone },
+      }),
+      'Could not start the payment.',
+    );
+  },
+
+  /** Starts a collection for a savings account. The same key returns the same intent, so a retry never makes a second link. */
+  async startSavingsDeposit(accountId: string, amountMinor: number, payerPhone: string, idempotencyKey: string): Promise<PaymentIntent> {
+    return unwrap(
+      await api.POST('/api/v1/payments/intents', {
+        params: { header: { 'Idempotency-Key': idempotencyKey } },
+        body: { purpose: SAVINGS_DEPOSIT_PURPOSE, subject_id: accountId, amount_minor: amountMinor, payer_phone: payerPhone },
       }),
       'Could not start the payment.',
     );

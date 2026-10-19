@@ -17,6 +17,7 @@ import com.rincoltech.bms.lending.savings.internal.SavingsRepository.Txn;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -37,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 class SavingsServicer implements SavingsServicing {
 
     static final String SUBJECT = "lending.savings_account";
+    static final String GATEWAY = "gateway";
 
     private static final Logger log = LoggerFactory.getLogger(SavingsServicer.class);
 
@@ -92,6 +94,45 @@ class SavingsServicer implements SavingsServicing {
         AccountRow a = repo.lock(accountId).orElseThrow(ApiException::notFound);
         checkDeposit(a, amountMinor, valueDate, paymentMethodKey);
         return deposit(a, amountMinor, valueDate, paymentMethodKey, null, by, "system");
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public UUID deposit(
+            UUID accountId,
+            long amountMinor,
+            LocalDate valueDate,
+            String paymentMethodKey,
+            UUID by,
+            String externalReference,
+            String origin,
+            boolean queueReceiptNotice) {
+        if (!Set.of("gateway", "system", "import", "portal").contains(origin)) {
+            throw new IllegalArgumentException("unknown origin " + origin);
+        }
+        AccountRow a = repo.lock(accountId).orElseThrow(ApiException::notFound);
+        if (GATEWAY.equals(paymentMethodKey) && externalReference != null) {
+            // The account row is locked, so two callers for one account meet here one after the other. A reference
+            // presented for two different accounts is not serialised by either lock: the unique index
+            // lending_savings_transactions_gateway_reference decides it (the loser fails and is retried as a replay).
+            Optional<SavingsRepository.GatewayDeposit> first = repo.gatewayDeposit(externalReference);
+            if (first.isPresent()) {
+                SavingsRepository.GatewayDeposit d = first.get();
+                if (d.accountId().equals(accountId) && d.amountMinor() == amountMinor) {
+                    return d.id();
+                }
+                // The same reference for another account or amount is not a replay: never hand back someone else's
+                // deposit.
+                throw ApiException.rule(
+                        "duplicate_reference", "That payment reference already booked a different payment.");
+            }
+        }
+        if (GATEWAY.equals(paymentMethodKey) && "frozen".equals(a.status())) {
+            // Staff decide what happens to money for a frozen account: the payments module holds it unallocated.
+            throw ApiException.rule("account_frozen", "The account is frozen.");
+        }
+        checkDeposit(a, amountMinor, valueDate, paymentMethodKey);
+        return deposit(a, amountMinor, valueDate, paymentMethodKey, externalReference, by, origin, queueReceiptNotice);
     }
 
     @Override
@@ -221,6 +262,12 @@ class SavingsServicer implements SavingsServicing {
         repo.moved(a.id(), balance, valueDate);
         Map<String, Object> recorded = movement(txnId, amountMinor, valueDate, receipt);
         recorded.putAll(notices.audit(source, notifyMember, valueDate));
+        if (GATEWAY.equals(source)) {
+            // The order and the merchant account are on the payment intent's own audit row, written in this
+            // transaction.
+            recorded.put("origin", GATEWAY);
+            recorded.put("external_reference", externalReference);
+        }
         audit.record(
                 AuditLog.Entry.created("lending.savings.deposit_recorded", SUBJECT, a.id(), a.branchId(), recorded));
         if (SavingsNotices.sends(source, notifyMember)) {
@@ -410,6 +457,13 @@ class SavingsServicer implements SavingsServicing {
     Transaction checkReversible(AccountRow a, Transaction t) {
         if (a.status().equals("closed")) {
             throw closed();
+        }
+        if (GATEWAY.equals(t.paymentMethodKey())) {
+            // The clearing debit and the payment's reference would be left behind; the reversal of a gateway payment
+            // is the payments module's review (issue #224).
+            throw ApiException.rule(
+                    "gateway_reversal_pending",
+                    "A deposit collected by mobile money cannot be reversed here yet; it is reviewed with the payment provider.");
         }
         if (!REVERSIBLE.contains(t.txnType())) {
             throw ApiException.rule(
