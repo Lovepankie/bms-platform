@@ -2,9 +2,9 @@ package com.rincoltech.bms.core.payments.internal;
 
 import com.rincoltech.bms.core.payments.GatewayException;
 import com.rincoltech.bms.core.payments.PaymentGateway;
+import com.rincoltech.bms.core.payments.PaymentGateway.Account;
 import com.rincoltech.bms.core.payments.PaymentGateway.OrderRequest;
 import com.rincoltech.bms.core.payments.PaymentGateway.OrderResult;
-import com.rincoltech.bms.core.payments.PaymentGateway.Scope;
 import com.rincoltech.bms.core.payments.internal.IntentStore.Intent;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.BusinessClock;
@@ -103,7 +103,7 @@ class OrderCreator {
         if (intent == null) {
             return Outcome.NOT_CLAIMED;
         }
-        Scope scope = Scope.ofKey(intent.scope());
+        Account scope = Account.forIntent(intent.scope(), intent.tenantId(), intent.purpose(), intent.merchantId());
         if (intent.creationAttempts() >= MAX_ROUNDS) {
             return fail(intent, "creation_unknown");
         }
@@ -160,7 +160,7 @@ class OrderCreator {
         return fail(intent, "creation_unknown");
     }
 
-    private Outcome accept(Intent intent, OrderResult result, Scope scope) {
+    private Outcome accept(Intent intent, OrderResult result, Account scope) {
         if (!intent.merchantReference().equals(result.merchantReference())) {
             cancelQuietly(scope, result.providerReference());
             return fail(intent, "order_mismatch");
@@ -220,7 +220,7 @@ class OrderCreator {
         return Outcome.FAILED;
     }
 
-    private void cancelQuietly(Scope scope, String providerReference) {
+    private void cancelQuietly(Account scope, String providerReference) {
         try {
             gateway.cancelOrder(scope, providerReference);
         } catch (GatewayException e) {

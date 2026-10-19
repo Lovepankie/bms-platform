@@ -298,27 +298,41 @@ queue (`core.payments.allocate`). The member's own screen waits for the member p
 
 ### 3.11 Credentials, tenancy and environments
 
+**Revised 18 October 2026 (decision of Hillary, ADR-035 amendment, issue #233): money owed to a tenant lands only in that tenant's own
+merchant account.** A lender's credentials are not in the environment any more. The environment holds:
+
 | Variable | Purpose |
 |---|---|
-| `BMS_PESAPAL_BASE_URL` | Sandbox or live API base. The sandbox URL is refused on the production profile and the live URL on staging |
-| `BMS_PESAPAL_CONSUMER_KEY`, `BMS_PESAPAL_CONSUMER_SECRET` | The merchant credentials used for tenant collections |
-| `BMS_PESAPAL_IPN_ID`, `BMS_PESAPAL_IPN_TOKEN` | The IPN registration of that credential pair and the random path token of 3.6 that selects it |
-| `BMS_PESAPAL_TENANT_ID` | The one tenant this merchant account is bound to |
-| `BMS_PESAPAL_PLATFORM_CONSUMER_KEY`, `BMS_PESAPAL_PLATFORM_CONSUMER_SECRET` | The platform operator's own merchant for subscription payments; absent means subscription payments stay manual |
-| `BMS_PESAPAL_PLATFORM_IPN_ID`, `BMS_PESAPAL_PLATFORM_IPN_TOKEN` | The same two values for the platform pair: **an IPN registration belongs to one credential pair**, so every pair (the platform's, each later per-tenant account) has its own IPN id and its own path token |
+| `BMS_PESAPAL_PROVIDER`, `BMS_PESAPAL_BASE_URL` | The provider mode and the sandbox or live API base. The sandbox URL is refused on the production profile and the live URL on staging |
+| `BMS_PESAPAL_CALLBACK_BASE_URL` | The public https origin of the callback host. A lender's account cannot be tested without it (the notification address is built from it). With it set and no provider named, the provider is `pesapal` |
+| `BMS_PESAPAL_PLATFORM_CONSUMER_KEY`, `BMS_PESAPAL_PLATFORM_CONSUMER_SECRET`, `BMS_PESAPAL_PLATFORM_IPN_ID`, `BMS_PESAPAL_PLATFORM_IPN_TOKEN` | The platform operator's own merchant for subscription payments (slice A6); absent means subscription payments stay manual. The platform pair is used for platform purposes only |
+| `BMS_DATA_KEY`, `BMS_DATA_KEY_ID`, `BMS_DATA_KEY_PREVIOUS` | The application data key that seals the lenders' credentials (and TOTP secrets), its id, and during a rotation the retired keys as `id:base64` pairs |
 
-**The merchant is bound to a named tenant.** `payments.collections_enabled` (`core.settings.manage`,
-default off) can be switched on only for the tenant named in `BMS_PESAPAL_TENANT_ID`. For every other
-tenant, and for all tenants while the variable is unset, the route answers 409
-`merchant_not_bound_to_tenant`. Without the binding, whichever tenant admin switched collections on
-first would receive the environment's merchant account, and the money would reach the wrong lender. The
-account that receives the money must be that lender's own; a platform account collecting for several
-lenders raises licensing and fund-flow questions that need a decision of their own. Switching on is also
-refused (409 `gateway_method_unmapped`) until the `gateway` payment method is mapped to a ledger account.
-Slice #233 adds per tenant credentials stored encrypted with the application data key, each with its own
-IPN id and token, and lifts the binding. Credentials are issued by Pesapal to the account holder; the
-dev lead stores them in the host environment file (mode 600) and never in a chat, an issue or the
-repository.
+`BMS_PESAPAL_CONSUMER_KEY`, `BMS_PESAPAL_CONSUMER_SECRET`, `BMS_PESAPAL_IPN_ID`, `BMS_PESAPAL_IPN_TOKEN` and `BMS_PESAPAL_TENANT_ID` are removed:
+there is no environment-level merchant to bind and none for any tenant admin to receive by switching on first.
+
+**Each lender connects its own account** (screen "Receive payments", `/api/v1/payments/merchant-account`; runbook
+`docs/runbooks/connect-lender-pesapal-account.md`). Only the tenant administrator (permission `core.payment_account.manage`, not the general settings
+permission) may change it, saving and removing ask for a code from the administrator's authenticator, and the other administrators are emailed; the
+platform's own consumer key and a key another tenant already uses are refused (409 `merchant_account_in_use`). The tenant administrator enters the consumer key and secret; the secret is write-only.
+Test connection asks the provider for a token and registers this account's notification address, with a new random path token whose only
+stored form is its SHA-256, and the account becomes verified. The status is `not_connected`, `verified` or `failed`, with the time of the last
+test; the platform operator sees the status and the time only. `payments.collections_enabled` (`core.settings.manage`, default off) can be
+switched on only while the tenant's account is verified, else 409 `merchant_account_not_verified`; and 409 `gateway_not_configured` when the
+host has no provider or callback address, 409 `gateway_method_unmapped` until the `gateway` payment method is mapped, 409
+`daily_ceiling_required` without a daily ceiling. Starting a payment checks the same things again: 422 `merchant_account_not_verified`, never a
+fallback to the platform account.
+
+**Why.** Holding and passing on a third party's money looks like a payment service under the National Payment Systems Act 2020 (a Bank of
+Uganda licence). A lender collecting its own money through Pesapal is an ordinary merchant. KTA's confirmation is still to be asked before
+the first live repayment.
+
+**The guard.** The gateway port names an account (`Account`): a tenant account carries its tenant, the platform account carries none, and the
+credentials come from the account alone. A stored intent is given its own tenant's account; the platform account is refused for any purpose that
+is not a platform purpose (and a platform purpose is never paid into a lender's account), in code (`Account.forIntent`) and in the database (`payment_intents_scope_purpose`, V56 and V57).
+Credentials are sealed with the application data key; the data key can be rotated and the job `core.payments.reseal-accounts` re-seals rows
+(ADR-035 amendment, items 5 and 6). Credentials are issued by Pesapal to the lender's own account holder, who enters them; the dev lead
+never handles a lender's secret, and none is in a chat, an issue or the repository.
 
 ### 3.12 The confirmed contract (sandbox spike, #211)
 
@@ -430,7 +444,7 @@ recordings. Mobile money cannot be tested without an answer to question 9.
 | Provider outage | Breaker, retries, poller; payments are delayed, never lost |
 | Chargeback or reversal after booking | Alert plus a checker request made by a system user; never automatic; card payments watched for 120 days |
 | A handler refuses a completed payment and it retries for ever | Savepoint, then an unallocated receipt and an alert; five technical failures end in `needs_attention` (3.4) |
-| A tenant admin switches collections on and receives another lender's merchant account | The merchant is bound to one named tenant; every other tenant gets 409 (3.11) |
+| A tenant admin switches collections on and receives another lender's merchant account | There is no shared merchant: each tenant enters and tests its own account, switching on needs it verified, and the platform account is refused for tenant money in code and by a database check (3.11) |
 | A lost order-creation answer strands an intent or double-creates an order | One locked creator; the old reference is never reused; a new intent follows (3.5) |
 
 ## 4. SMS (ADR-036)
@@ -1383,7 +1397,7 @@ runbook. Order is the recommended build order; slices of different areas can run
 | 20 | #230 | C4 Ask about my portfolio | C3 |
 | 21 | #231 | B6 Payment link by SMS | B4, A3 |
 | 22 | #232 | C5 Evaluation run and model comparison | C2, C3 |
-| 23 | #233 | A7 Per-tenant merchant credentials | A3, A6 |
+| 23 | #233 | A7 Each lender's own merchant account (**built**, migration V56; decision of 18 October 2026: **now before A3 and A4**, depends on A2 only; A3 and A4 refuse a tenant with no verified account of its own, see 3.11 and the ADR-035 amendment) | A2 |
 
 Pilot readiness for each area: mobile money after A5 (the money is reconcilable); SMS after B4 (receipts
 and events) and B5 once the arrears job exists; AI brief after C3 and C5's go note; the pack after D5.
@@ -1407,8 +1421,8 @@ changed. Items marked (changed) altered the design during this review; the other
    recently booked intent nightly and uses the uploaded statement for fees and settled amounts; the
    gap is stated, not hidden (3.1, 3.9). Asking the provider in writing is part of the spike.
 6. **"One merchant account for several lenders puts the platform in the flow of funds."** (changed)
-   Collections are bound to one named tenant (`BMS_PESAPAL_TENANT_ID`) until per-tenant credentials exist (3.11,
-   #233); the platform pair is separate and only for subscriptions.
+   Every tenant's money lands only in that tenant's own merchant account, connected by the tenant (3.11, #233, ADR-035 amendment of
+   18 October 2026); the platform pair is separate and only for subscriptions.
 7. **"Reversals after booking are routine in mobile money."** Handled: alert plus a checker request,
    never automatic, so the maker-checker rule holds (3.8).
 8. **"SMS rows have no tenant; per-tenant sender, window and cost are impossible."** (changed) The
@@ -1460,7 +1474,7 @@ addressed in the spec, ADR-035 to ADR-038, the SDD, the model and the issues; wh
 |---|---|---|---|
 | 1 | A completed payment the handler refuses is retried for 48 hours with no final state | Savepoint; `before_last_repayment` retried dated today; any other business refusal posts an unallocated receipt and alerts; technical failures end in `needs_attention` after five tries | 3.4, ADR-035 d.14 |
 | 2 | The servicing ports take no key or reference, queue no receipt SMS, and say they serve only seed and import | Port overloads with external reference, origin and a receipt-notice flag; unique index; javadocs and an Amendment to ADR-026 and ADR-032 in slices #216 and #219 | 3.4.1, ADR-035 d.6 and d.15 |
-| 3 | Any tenant admin switching on first gets the environment's merchant | `BMS_PESAPAL_TENANT_ID` binds the merchant to one tenant; 409 `merchant_not_bound_to_tenant` for all others | 3.11, ADR-035 d.11 |
+| 3 | Any tenant admin switching on first gets the environment's merchant | Superseded (18 October 2026, #233): per-tenant accounts, 409 `merchant_account_not_verified` until the tenant's own account is verified | 3.11, ADR-035 d.11 |
 | 4 | Staging could text real phones in allowlist mode on the live URL | Staging refuses any non-sandbox URL or username in every mode; startup test | 4.4, ADR-036 d.4 |
 | 5 | The daily AI brief ignores branch scope | One all-branch brief for all-branch users only; questions and other users use the caller's scope | 5.2, ADR-037 d.7 |
 | 6 | The SMS retry model does not match the outbox code | Result type and a new record function; attempts 0, 1 and 5 minutes; the 30 minute step dropped; SMS client time under a quarter of the lease | 4.6, ADR-036 d.6 |

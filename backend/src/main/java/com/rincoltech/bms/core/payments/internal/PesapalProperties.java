@@ -1,6 +1,7 @@
 package com.rincoltech.bms.core.payments.internal;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 /**
  * The Pesapal gateway's environment values (ADR-035 decision 10, spec 3.11, 9.1). Raw strings exactly as the host
@@ -9,28 +10,27 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * printed: {@code toString} names no value.
  *
  * @param provider {@code BMS_PESAPAL_PROVIDER}: {@code pesapal}, {@code fake} (an in-process stand-in, refused in
- *     production) or {@code off}; empty means {@code pesapal} when the tenant pair below is complete, else off
+ *     production) or {@code off}; empty means {@code pesapal} when the callback origin is set or the platform pair is
+ *     complete, else off
  * @param baseUrl {@code BMS_PESAPAL_BASE_URL}: the sandbox or the live API base; outside production only the sandbox
- * @param consumerKey {@code BMS_PESAPAL_CONSUMER_KEY}
- * @param consumerSecret {@code BMS_PESAPAL_CONSUMER_SECRET}
- * @param ipnId {@code BMS_PESAPAL_IPN_ID}: the registration of this credential pair; one IPN id never serves two pairs
- * @param ipnToken {@code BMS_PESAPAL_IPN_TOKEN}: the random path token that selects this pair on the callback host
- * @param tenantId {@code BMS_PESAPAL_TENANT_ID}: the one tenant this merchant account is bound to (ADR-035 decision 11)
  * @param callbackBaseUrl {@code BMS_PESAPAL_CALLBACK_BASE_URL}: the public https origin of the callback host
- * @param platform the platform operator's own pair, for subscription payments (slice #228)
+ * @param refusedKeyDigests {@code BMS_PESAPAL_REFUSED_KEY_DIGESTS}: comma separated SHA-256 digests (lower case hex) of every consumer
+ *     key the platform operator owns, current and retired, which no lender may enter as its own account, whether or not the
+ *     platform pair is in use here. Production refuses to start with the gateway on and this empty
+ * @param platform the platform operator's own pair, for subscription payments (slice #228). A lender's own merchant
+ *     account is not here: it is entered by the lender's administrator, stored encrypted per tenant and never read from
+ *     the environment (ADR-035 amendment of 2026-10-18, issue #233)
  */
 @ConfigurationProperties("bms.pesapal")
 record PesapalProperties(
-        String provider,
-        String baseUrl,
-        String consumerKey,
-        String consumerSecret,
-        String ipnId,
-        String ipnToken,
-        String tenantId,
-        String callbackBaseUrl,
-        Platform platform) {
+        String provider, String baseUrl, String callbackBaseUrl, Platform platform, String refusedKeyDigests) {
 
+    /** Without a refused-key list (development, tests). */
+    PesapalProperties(String provider, String baseUrl, String callbackBaseUrl, Platform platform) {
+        this(provider, baseUrl, callbackBaseUrl, platform, null);
+    }
+
+    @ConstructorBinding
     PesapalProperties {
         platform = platform == null ? new Platform(null, null, null, null) : platform;
     }

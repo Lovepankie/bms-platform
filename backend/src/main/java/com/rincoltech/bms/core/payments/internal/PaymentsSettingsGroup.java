@@ -1,9 +1,6 @@
 package com.rincoltech.bms.core.payments.internal;
 
 import com.rincoltech.bms.core.ledger.PaymentMethods;
-import com.rincoltech.bms.core.payments.PaymentGateway;
-import com.rincoltech.bms.core.payments.PaymentGateway.Scope;
-import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.ModuleSettingsGroup;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
@@ -26,11 +23,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  * the rules hold whoever calls: switching on is refused with 409 when
  *
  * <ul>
- *   <li>{@code merchant_not_bound_to_tenant}: this tenant is not the one {@code BMS_PESAPAL_TENANT_ID} names, or the
- *       variable is unset. Without the binding the first tenant administrator to switch on would receive the
- *       environment's merchant account, and the money would reach the wrong lender;
+ *   <li>{@code merchant_account_not_verified}: this tenant has not connected and tested its own merchant account
+ *       ({@code Receive payments}, issue #233). Money owed to a tenant lands only in that tenant's own account, so there is
+ *       nothing to switch on until it exists; the platform's account is never a substitute;
  *   <li>{@code gateway_method_unmapped}: the {@code gateway} payment method has no active ledger account yet (FR-GL-08);
- *   <li>{@code gateway_not_configured}: the host holds no complete credentials for the tenant's merchant account;
+ *   <li>{@code gateway_not_configured}: the host has no payment provider or callback address, so no account can be tested;
  *   <li>{@code daily_ceiling_required}: no daily ceiling is set (a bound on what one day can ask for; it cannot be
  *       removed while collections are on).
  * </ul>
@@ -46,21 +43,18 @@ class PaymentsSettingsGroup implements ModuleSettingsGroup {
     private static final Set<String> KEYS = Set.of(ENABLED, CEILING);
 
     private final PesapalSettings pesapal;
-    private final CurrentTenant tenant;
+    private final VerifiedAccounts merchantAccounts;
     private final PaymentMethods methods;
-    private final PaymentGateway gateway;
     private final TransactionTemplate isolated;
 
     PaymentsSettingsGroup(
             PesapalSettings pesapal,
-            CurrentTenant tenant,
+            VerifiedAccounts merchantAccounts,
             PaymentMethods methods,
-            PaymentGateway gateway,
             PlatformTransactionManager transactions) {
         this.pesapal = pesapal;
-        this.tenant = tenant;
+        this.merchantAccounts = merchantAccounts;
         this.methods = methods;
-        this.gateway = gateway;
         this.isolated = new TransactionTemplate(transactions);
         this.isolated.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.isolated.setReadOnly(true);
@@ -76,14 +70,14 @@ class PaymentsSettingsGroup implements ModuleSettingsGroup {
         return "core.payments.settings.changed";
     }
 
-    /** True when the tenant is the one the merchant account is bound to. */
-    boolean merchantBound() {
-        return pesapal.boundTenant() != null
-                && pesapal.boundTenant().equals(tenant.profile().id());
+    /** True when this tenant has connected and tested its own merchant account (read in the caller's transaction). */
+    boolean merchantAccountVerified() {
+        return merchantAccounts.verified();
     }
 
+    /** True when the host can serve a lender's own account at all (a provider and a callback address). */
     boolean gatewayAvailable() {
-        return gateway.available(Scope.TENANT);
+        return pesapal.tenantAccountsEnabled();
     }
 
     /**
@@ -130,18 +124,18 @@ class PaymentsSettingsGroup implements ModuleSettingsGroup {
         }
         boolean switchingOn = Boolean.TRUE.equals(proposed.get(ENABLED)) && !wasOn;
         if (switchingOn) {
-            if (!merchantBound()) {
+            if (!gatewayAvailable()) {
+                throw conflict("gateway_not_configured", "The payment provider is not configured on this host.");
+            }
+            if (!merchantAccountVerified()) {
                 throw conflict(
-                        "merchant_not_bound_to_tenant",
-                        "The payment provider account is not bound to this business, so collections cannot be switched on.");
+                        "merchant_account_not_verified",
+                        "Connect and test your own payment account (Receive payments) before switching collections on.");
             }
             if (!gatewayMethodMapped()) {
                 throw conflict(
                         "gateway_method_unmapped",
                         "Map the gateway payment method to a ledger account before switching collections on.");
-            }
-            if (!gatewayAvailable()) {
-                throw conflict("gateway_not_configured", "The payment provider is not configured on this host.");
             }
         }
         // The END state decides: collections on with no daily limit is never stored, whichever way it came about

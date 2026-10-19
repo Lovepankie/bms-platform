@@ -528,7 +528,10 @@ class OutboxIT extends IntegrationTest {
                 Map.entry("scope", "platform"),
                 Map.entry("state", "80 percent"),
                 Map.entry("cap", "2000"),
-                Map.entry("reason", "provider_auth_failed"));
+                Map.entry("reason", "provider_auth_failed"),
+                Map.entry("change", "saved"),
+                Map.entry("who", "Test Administrator"),
+                Map.entry("when", "18 Oct 2026 10:00 UTC"));
         for (String channel : List.of("email", "telegram", "sms")) {
             for (String key : OutboxTemplates.keys(channel)) {
                 OutboxTemplates.Rendered rendered = templates.render(channel, key, params);

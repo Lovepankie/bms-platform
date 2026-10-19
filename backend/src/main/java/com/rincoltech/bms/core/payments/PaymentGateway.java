@@ -8,7 +8,7 @@ import java.util.UUID;
  * only evidence of payment is {@link #queryStatus}. Amounts are integer minor units at this boundary; the adapter
  * converts to the provider's decimal and back, once, and refuses a value its currency cannot hold.
  *
- * <p>Every method names the credential {@link Scope} the call is made for: an IPN registration, an order and a token
+ * <p>Every method names the {@link Account} the call is made for: an IPN registration, an order and a token
  * belong to one credential pair, and a pair's id is useless to another. Calls take no database transaction and must not
  * be made inside one (spec principle 4). {@code read_notification} of the spec is not on this port: a notification is
  * read by the endpoint, which takes two identifiers from it and nothing else.
@@ -41,27 +41,101 @@ public interface PaymentGateway {
         }
     }
 
+    /**
+     * The merchant account a call is made for. A tenant account is that lender's own and nothing else: there is no way
+     * to ask for "the platform's account on behalf of a tenant", because the platform scope carries no tenant and the
+     * tenant scope must carry one (ADR-035 amendment of 2026-10-18, issue #233). An adapter resolves the credentials from
+     * the account alone and never falls back from one scope to the other.
+     */
+    record Account(Scope scope, UUID tenantId, UUID merchantId) {
+
+        /** Any merchant account of the tenant (a connection test, a new order): the tenant's current one. */
+        public Account(Scope scope, UUID tenantId) {
+            this(scope, tenantId, null);
+        }
+
+        public Account {
+            if (scope == null) {
+                throw new IllegalArgumentException("an account needs a scope");
+            }
+            if (scope == Scope.TENANT && tenantId == null) {
+                throw new IllegalArgumentException("a tenant account belongs to a tenant");
+            }
+            if (scope == Scope.PLATFORM && (tenantId != null || merchantId != null)) {
+                throw new IllegalArgumentException("the platform account belongs to no tenant");
+            }
+        }
+
+        public static Account tenant(UUID tenantId) {
+            return new Account(Scope.TENANT, tenantId);
+        }
+
+        /**
+         * The tenant's account as it was when an order was made: credentials resolve only while the stored account is
+         * still that same merchant account (same consumer key); a different one is "no credentials", never a guess.
+         */
+        public static Account tenant(UUID tenantId, UUID merchantId) {
+            return new Account(Scope.TENANT, tenantId, merchantId);
+        }
+
+        public static Account platform() {
+            return new Account(Scope.PLATFORM, null);
+        }
+
+        /**
+         * The account that may receive the money of a stored intent: a tenant intent only ever uses its own tenant's
+         * account, and the platform's account is used only for a platform purpose (spec 3.11, the own-account rule).
+         * Anything else is refused here, in code, whatever the row says.
+         */
+        public static Account forIntent(String scopeKey, UUID tenantId, String purpose) {
+            return forIntent(scopeKey, tenantId, purpose, null);
+        }
+
+        /** As above, bound to the merchant account the intent was created under (null for an intent made before that was recorded). */
+        public static Account forIntent(String scopeKey, UUID tenantId, String purpose, UUID merchantId) {
+            Scope scope = Scope.ofKey(scopeKey);
+            if (scope == Scope.PLATFORM) {
+                if (purpose == null || !purpose.startsWith("platform.")) {
+                    throw new IllegalStateException("the platform account is only for platform purposes");
+                }
+                return platform();
+            }
+            return tenant(tenantId, merchantId);
+        }
+
+        @Override
+        public String toString() {
+            return "Account[" + scope.key() + "]";
+        }
+    }
+
     /** The adapter's key, stored on the intent ({@code pesapal}). */
     String providerKey();
 
-    /** True when calls for this scope can be made: the host environment holds everything the scope needs. */
-    boolean available(Scope scope);
+    /** True when calls for this account can be made: the platform's pair is in the host environment, or the lender's own credentials are saved and usable. */
+    boolean available(Account account);
 
     /**
      * Creates the hosted order. The same merchant reference and body repeated after a lost answer returns the original
      * order (observed, spec 3.12), so a caller may repeat it; it must still check {@link OrderResult#merchantReference}
      * and the first status answer.
      */
-    OrderResult createOrder(Scope scope, OrderRequest request) throws GatewayException;
+    OrderResult createOrder(Account account, OrderRequest request) throws GatewayException;
 
     /** The truth about an order: asked with our own credentials, decided on the status code, never on a description. */
-    StatusResult queryStatus(Scope scope, String providerReference) throws GatewayException;
+    StatusResult queryStatus(Account account, String providerReference) throws GatewayException;
 
     /** Best effort; the provider allows it for a pending or failed order, once. */
-    void cancelOrder(Scope scope, String providerReference) throws GatewayException;
+    void cancelOrder(Account account, String providerReference) throws GatewayException;
 
-    /** Registers the notification url for the scope's pair (an operator command). Idempotent at the provider. */
-    IpnRegistration registerIpn(Scope scope, String url, IpnType type) throws GatewayException;
+    /**
+     * Asks the provider for a fresh token with the account's own credentials and does nothing else: do they work? Used to test an
+     * account whose notification address is already registered, so the address orders were made with stays valid.
+     */
+    void checkCredentials(Account account) throws GatewayException;
+
+    /** Registers the notification url for the account's pair (an operator command). Idempotent at the provider. */
+    IpnRegistration registerIpn(Account account, String url, IpnType type) throws GatewayException;
 
     /**
      * @param merchantReference our unique reference, at most 50 characters from the provider's alphabet

@@ -212,18 +212,48 @@ class AuthFlow {
         return new Outcome(Step.SIGNED_IN, null, null, null, codes);
     }
 
+    /**
+     * A second-factor re-entry for one sensitive action by a signed-in user (step-up, issue #233): the current TOTP code
+     * of the user's own enrolment, each code usable once. A wrong code counts toward the account's lockout like any other.
+     */
+    @Transactional(noRollbackFor = ApiException.class)
+    void confirmTotp(Accounts accounts, UUID userId, String code) {
+        Instant now = clock.now();
+        Account account = accounts.byIdForUpdate(userId).orElseThrow(AuthFlow::invalidCredentials);
+        if (account.lockedAt(now)) {
+            // Too many wrong codes: a stolen session cannot go on guessing a code for a sensitive action.
+            accounts.audit("core.auth.step_up_refused_locked", account.id(), Map.of());
+            throw locked();
+        }
+        if (!account.mfaEnabled() || account.totpSecret() == null) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT, "mfa_not_enrolled", "MFA not enrolled", "Enrol a second factor first.");
+        }
+        OptionalLong step =
+                Totp.verify(box.open(account.totpSecret()), code == null ? "" : code, now, account.totpLastStep());
+        if (step.isEmpty() || !accounts.advanceTotpStep(userId, step.getAsLong())) {
+            fail(accounts, account, now, "core.mfa.failed", true);
+            throw invalidCode(HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+    }
+
     /** New recovery codes replace every old one; needs a current TOTP code (FR-IAM-11). */
     @Transactional(noRollbackFor = ApiException.class)
     List<String> regenerateRecoveryCodes(Accounts accounts, UUID userId, String code) {
         Instant now = clock.now();
         Account account = accounts.byIdForUpdate(userId).orElseThrow(AuthFlow::invalidCredentials);
+        if (account.lockedAt(now)) {
+            // Too many wrong codes: a stolen session cannot go on guessing a code for a sensitive action.
+            accounts.audit("core.auth.step_up_refused_locked", account.id(), Map.of());
+            throw locked();
+        }
         if (!account.mfaEnabled() || account.totpSecret() == null) {
             throw new ApiException(
                     HttpStatus.CONFLICT, "mfa_not_enrolled", "MFA not enrolled", "Enrol a second factor first.");
         }
         OptionalLong step = Totp.verify(box.open(account.totpSecret()), code, now, account.totpLastStep());
         if (step.isEmpty() || !accounts.advanceTotpStep(userId, step.getAsLong())) {
-            fail(accounts, account, now, "core.mfa.failed");
+            fail(accounts, account, now, "core.mfa.failed", true);
             throw invalidCode(HttpStatus.UNPROCESSABLE_CONTENT);
         }
         List<String> codes = issueRecoveryCodes(accounts, userId);
@@ -359,11 +389,25 @@ class AuthFlow {
      * and the lock come back from one atomic statement, so parallel failures cannot be lost.
      */
     private void fail(Accounts accounts, Account account, Instant now, String action) {
+        fail(accounts, account, now, action, false);
+    }
+
+    /**
+     * @param endSessionsAtLock true only for a failure of a step-up code by a signed-in session: reaching the lock then ends all
+     *     the user's sessions. A wrong password is unauthenticated (anyone who knows a login name can send one), so it locks but
+     *     never ends a session: otherwise a stranger could log a lender's staff out at will.
+     */
+    private void fail(Accounts accounts, Account account, Instant now, String action, boolean endSessionsAtLock) {
         Accounts.Failures failures = accounts.recordFailure(account.id(), now, MAX_FAILURES, now.plus(LOCK));
         accounts.audit(action, account.id(), Map.of("consecutive_failures", failures.consecutive()));
         // Only the failure that reached the threshold set the lock; later ones keep it.
         if (failures.consecutive() == MAX_FAILURES) {
             accounts.audit("core.auth.account_locked", account.id(), Map.of("locked_minutes", LOCK.toMinutes()));
+            // A lock ends every session of the user: whoever holds one (a stolen session guessing codes) signs in
+            // again.
+            if (endSessionsAtLock) {
+                accounts.sessions().revokeAllOf(account.id(), "admin", now);
+            }
         }
     }
 

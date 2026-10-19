@@ -29,7 +29,7 @@ import tools.jackson.databind.ObjectMapper;
  * {@code GET} or {@code POST /api/v1/payments/callbacks/pesapal/{token}} for the provider's IPN and
  * {@code GET /api/v1/payments/return/pesapal} for the payer coming back to the order's callback url. Public by design,
  * no session, no tenant from the host (the tenant comes from the merchant reference). They do not trust the request:
- * the path token only keeps noise out (it selects the credential pair, compared in constant time), two identifiers are
+ * the path token only keeps noise out (it selects the account: the platform's compared in constant time, a lender's by the digest of its token), two identifiers are
  * read and shape checked and nothing else, a body over the limit is refused, the rate limit comes first, an unknown
  * order is acknowledged and counted without any outbound call, and the answer to a notification is always the exact
  * acknowledgement the contract documents, so the provider has no reason to retry what we have recorded. A request
@@ -54,6 +54,7 @@ class CallbackController {
             + "<body><p>Thank you. Your payment is being confirmed. You can close this page.</p></body></html>";
 
     private final PesapalSettings settings;
+    private final AccountTokens tokens;
     private final CallbackService service;
     private final CallbackLimiter limiter;
     private final PaymentsProperties properties;
@@ -62,12 +63,14 @@ class CallbackController {
 
     CallbackController(
             PesapalSettings settings,
+            AccountTokens tokens,
             CallbackService service,
             CallbackLimiter limiter,
             PaymentsProperties properties,
             PaymentCounters counters,
             ObjectMapper mapper) {
         this.settings = settings;
+        this.tokens = tokens;
         this.service = service;
         this.limiter = limiter;
         this.properties = properties;
@@ -80,9 +83,15 @@ class CallbackController {
             method = {RequestMethod.GET, RequestMethod.POST})
     @PublicEndpoint
     ResponseEntity<Map<String, Object>> ipn(@PathVariable("token") String token, HttpServletRequest request) {
-        // The token is checked in memory first, so a request with a wrong one can never take a slot of the provider's
-        // bucket.
-        java.util.Optional<Scope> selected = settings.scopeOfToken(token);
+        // The token is resolved first (the platform's in memory, a lender's by one indexed lookup of its digest), so a
+        // request with a wrong one can never take a slot of the provider's bucket.
+        // An address that has already sent its quota of wrong tokens this minute is not looked up at all, so a flood of
+        // random tokens cannot become a flood of database lookups.
+        if (!settings.isPlatformToken(token)
+                && limiter.exhausted(CallbackLimiter.Bucket.BAD_TOKEN, RequestContext.clientIp())) {
+            return tooMany();
+        }
+        java.util.Optional<AccountTokens.Selected> selected = tokens.resolve(token);
         if (selected.isEmpty()) {
             if (!limiter.tryAcquire(CallbackLimiter.Bucket.BAD_TOKEN, RequestContext.clientIp())) {
                 return tooMany();
@@ -92,10 +101,10 @@ class CallbackController {
         if (!limiter.tryAcquire(CallbackLimiter.Bucket.IPN, RequestContext.clientIp())) {
             return tooMany();
         }
-        Scope scope = selected.get();
+        Scope scope = selected.get().scope();
         Notification n = read(request, "IPNCHANGE");
         try {
-            service.receive(scope, "ipn", n.type(), n.trackingId(), n.reference());
+            service.receive(scope, selected.get().tenantId(), "ipn", n.type(), n.trackingId(), n.reference());
         } catch (RuntimeException e) {
             // Only the type is logged: a database message can quote a value. 500 tells the provider to try again.
             log.error(
@@ -121,7 +130,7 @@ class CallbackController {
         try {
             Notification n = NotificationReader.read(
                     request, mapper, properties.maxBodyBytes(), settings.environment(), "CALLBACKURL");
-            service.receive(Scope.TENANT, "return", n.type(), n.trackingId(), n.reference());
+            service.receive(Scope.TENANT, null, "return", n.type(), n.trackingId(), n.reference());
         } catch (Malformed | TooLarge e) {
             // The payer sees the same page; nothing is recorded.
         } catch (RuntimeException e) {

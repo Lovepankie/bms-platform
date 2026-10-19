@@ -66,16 +66,19 @@ class CallbackService {
     }
 
     /**
+     * @param tokenTenant the lender whose notification url this arrived on, or null (the platform's url, the payer's
+     *     return): an order of any other tenant is a scope mismatch, never matched
      * @param kind {@code ipn} or {@code return}
      * @param notificationType the provider's word, already checked for shape (for example {@code IPNCHANGE})
      * @param trackingId a GUID, already checked for shape
      * @param reference a merchant reference of this environment, already checked for shape
      */
-    Result receive(Scope scope, String kind, String notificationType, String trackingId, String reference) {
+    Result receive(
+            Scope scope, UUID tokenTenant, String kind, String notificationType, String trackingId, String reference) {
         Instant now = clock.now();
         Optional<Resolved> resolved = jdbc.sql("SELECT tenant_id, intent_id, tenant_status, match"
-                        + " FROM app_resolve_payment_intent('pesapal', ?, ?, ?)")
-                .params(scope.key(), trackingId.toLowerCase(Locale.ROOT), reference)
+                        + " FROM app_resolve_payment_intent('pesapal', ?, ?, ?, ?::uuid)")
+                .params(scope.key(), trackingId.toLowerCase(Locale.ROOT), reference, tokenTenant)
                 .query((rs, n) -> new Resolved(
                         rs.getObject("tenant_id", UUID.class),
                         rs.getObject("intent_id", UUID.class),

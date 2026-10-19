@@ -50,7 +50,34 @@ class KeyMaterial {
             new SecureRandom().nextBytes(random);
             return new SecretBox(random, "ephemeral");
         }
-        return new SecretBox(Base64.getDecoder().decode(key), properties.dataKeyId());
+        return new SecretBox(Base64.getDecoder().decode(key), properties.dataKeyId(), retiredKeys(properties));
+    }
+
+    /** {@code id:base64,id2:base64}: a malformed entry stops the start, naming the variable and never a value. */
+    static java.util.Map<String, byte[]> retiredKeys(AuthProperties properties) {
+        String raw = properties.previousDataKeys();
+        java.util.Map<String, byte[]> keys = new java.util.LinkedHashMap<>();
+        if (raw == null || raw.isBlank()) {
+            return keys;
+        }
+        for (String entry : raw.split(",")) {
+            int colon = entry.indexOf(':');
+            if (colon < 1) {
+                throw new IllegalStateException("BMS_DATA_KEY_PREVIOUS must be id:base64 pairs separated by commas");
+            }
+            try {
+                String id = entry.substring(0, colon).trim();
+                if (keys.containsKey(id)) {
+                    throw new IllegalStateException("BMS_DATA_KEY_PREVIOUS names the same key id twice");
+                }
+                keys.put(
+                        id,
+                        Base64.getDecoder().decode(entry.substring(colon + 1).trim()));
+            } catch (IllegalArgumentException e) {
+                throw new IllegalStateException("BMS_DATA_KEY_PREVIOUS holds a key that is not base64");
+            }
+        }
+        return keys;
     }
 
     /** A new P-256 signing key with a key id, for tests and the ephemeral dev and test key. */

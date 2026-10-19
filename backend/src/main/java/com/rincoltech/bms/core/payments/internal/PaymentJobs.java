@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * The payment jobs (ADR-008): the poller every 10 seconds and the nightly retention. The poller is switched off by
+ * The payment jobs (ADR-008): the poller every 10 seconds, the nightly retention and the nightly re-seal of stored credentials after a data key rotation. The poller is switched off by
  * {@code bms.payments.poller-enabled=false}, which the integration tests set so that they drive
  * {@link PaymentPoller#tick} themselves and a scheduler tick cannot race them; it is on everywhere else. (The scheduler
  * itself polls for due tasks every 10 seconds, so a notification is acted on within about 20 seconds.)
@@ -21,12 +21,21 @@ class PaymentJobs {
 
     static final String POLL = "core.payments.poll";
     static final String HOUSEKEEPING = "core.payments.housekeeping";
+    static final String RESEAL = "core.payments.reseal-accounts";
 
     @Bean
     @ConditionalOnProperty(name = "bms.payments.poller-enabled", havingValue = "true", matchIfMissing = true)
     RecurringTask<Void> paymentPollTask(PaymentPoller poller) {
         return Tasks.recurring(POLL, Schedules.fixedDelay(Duration.ofSeconds(10)))
                 .execute((instance, context) -> poller.tick());
+    }
+
+    /** Re-seals lenders' stored credentials with the current data key after a rotation; a no-op when none is left. */
+    @Bean
+    @ConditionalOnProperty(name = "bms.payments.poller-enabled", havingValue = "true", matchIfMissing = true)
+    RecurringTask<Void> paymentAccountResealTask(AccountKeyRotation rotation) {
+        return Tasks.recurring(RESEAL, Schedules.daily(BusinessClock.DEFAULT_ZONE, LocalTime.of(3, 50)))
+                .execute((instance, context) -> rotation.run());
     }
 
     @Bean

@@ -137,6 +137,10 @@ const staffInsightsRoute = createRoute({ getParentRoute: () => staffRoute, path:
 const staffAssistantRoute = createRoute({ getParentRoute: () => staffRoute, path: '/assistant', staticData: { crumb: 'AI assistant' } }).lazy(() =>
   import('../areas/staff/assistant/page').then((m) => m.Route),
 );
+// Receive payments: the business's own Pesapal account (extras slice A7, issue #233).
+const staffPaymentsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/payments', staticData: { crumb: 'Receive payments' } }).lazy(() =>
+  import('../areas/staff/payments/page').then((m) => m.Route),
+);
 const staffReportsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/reports', staticData: { crumb: 'Reports' } }).lazy(() =>
   import('../areas/staff/reports/page').then((m) => m.Route),
 );
@@ -322,7 +326,7 @@ export const router = createRouter({
         memberInvestmentNewRoute,
         investmentRoute,
         investmentCertificateRoute,
-      ]), staffInsightsRoute, staffAssistantRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
+      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
     memberRoute,
     styleRoute,
     signUpRoute,

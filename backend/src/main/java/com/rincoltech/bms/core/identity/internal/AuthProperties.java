@@ -15,6 +15,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param dataKey the application data key, 32 bytes, base64 ({@code BMS_DATA_KEY}); encrypts TOTP
  *     secrets
  * @param dataKeyId identifies the data key inside each ciphertext ({@code BMS_DATA_KEY_ID})
+ * @param previousDataKeys retired data keys still needed to open old ciphertext during a rotation, as
+ *     {@code id:base64} pairs separated by commas ({@code BMS_DATA_KEY_PREVIOUS}); they never seal
  * @param argon2MemoryKib argon2id memory cost; 65536 (64 MiB) outside tests
  * @param argon2Iterations argon2id iterations; 3 outside tests
  */
@@ -24,6 +26,7 @@ record AuthProperties(
         String signingJwk,
         String dataKey,
         String dataKeyId,
+        String previousDataKeys,
         Integer argon2MemoryKib,
         Integer argon2Iterations) {
 

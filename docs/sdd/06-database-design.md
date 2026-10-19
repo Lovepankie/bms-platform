@@ -395,7 +395,7 @@ write. Keys and defaults:
 | `module_groups.sms` (the settings group `sms`, built in #218, written only by `PUT /settings/sms`: `enabled`, `acknowledged_by`, `acknowledged_at`, `acknowledged_text_version`, `sender_id`, `window_start`, `window_end`, `daily_cap`, `monthly_cap`, `include_balance`) | boolean, user, time, text, string or absent, `HH:MM`, `HH:MM`, integer or absent, integer or absent, boolean | false; absent; absent; absent; no sender (the shared sender); `08:00`; `20:00`; absent (the operator's cap applies); absent; false. Switching on needs the acknowledgement. The sender must be one the operator approved for the tenant (`platform_sms_sender_ids`). The window is at least 60 minutes and inside 06:00 to 21:00. A cap is at most its ceiling (the operator's daily cap for the tenant, and 31 times that for a month) and **0 means stop, never the default** | ADR-036, FR-NTF-02, FR-NTF-04, FR-NTF-17, FR-NTF-20 |
 | `sms_sender_name`, `sms_window_start`, `sms_window_end`, `sms_include_balance` (flat keys before #218) | no longer read or written: `PATCH /settings` refuses them (400); migration `V52` copied the window (clamped to 06:00 to 21:00 on the way in) and balance values of a tenant that had set them into its group once (the sender name was never approved and is not copied) | | ADR-036 |
 | `sms_daily_cap` | not a tenant setting: the operator's cap and the on/off switch are in the platform table `platform_sms_controls`, set by the platform operator only; the tenant's own `daily_cap` in the group above can only lower it | 200 until set; off | ADR-036, FR-NTF-20 |
-| `payments.collections_enabled` | boolean | false; settable only for the tenant named by `BMS_PESAPAL_TENANT_ID` while credentials are environment-level | ADR-035 |
+| `payments.collections_enabled` | boolean | false; settable only while the tenant's own payment account is verified (`payment_gateway_accounts`, V56), else 409 `merchant_account_not_verified` | ADR-035 |
 | `module_groups.ai` (the settings group `ai`: `enabled`, `daily_token_cap`, `daily_cost_cap_micro`, `acknowledged_by`, `acknowledged_at`, `acknowledged_text_version`) | boolean, integer, integer, user, time, text | false, `BMS_AI_TENANT_DAILY_TOKENS` (20,000), `BMS_AI_TENANT_DAILY_COST_MICRO` (500,000), null; a cap is at most the platform ceiling; switching on needs the acknowledgement and a tenant named in `BMS_AI_ENABLED_TENANTS` (403 `advisor_not_available`), enforced in the group's validation (built in #220) | ADR-037 |
 | `approval_thresholds_minor` | map of action type to integer | every action 0 | FR-APR-04 |
 | `approval_validity_days` | integer | 14 | FR-ORG-08 |
@@ -669,6 +669,37 @@ As built in slice #213 (migration `V54__payment_gateway_core.sql`; the status se
 `creation_lease_until timestamptz`, `technical_failures integer`. `payment_callbacks` stores identifiers only and its `outcome` also takes `unknown_reference` and
 `throttled`. The definer function `app_resolve_payment_intent(provider, provider_reference, merchant_reference)` returns the
 tenant and intent id or nothing (ADR-016).
+
+### `payment_gateway_accounts` (RLS, built in slice #233, migration `V56`)
+
+One row per tenant and provider: the lender's own payment provider account (ADR-035 amendment of 2026-10-18). Money owed to a tenant is
+collected only into this account, never into the platform's.
+
+| Column | Type | Notes |
+|---|---|---|
+| (std) | | `UNIQUE (tenant_id, provider)` |
+| `provider` | `text NOT NULL` | `pesapal` |
+| `consumer_key_enc`, `consumer_secret_enc` | `bytea NOT NULL` | AES-256-GCM boxes sealed with the application data key (`BMS_DATA_KEY`, chapter 8 section 8.7); never selected by any API, never logged, never in an audit row |
+| `merchant_id` | `uuid NOT NULL DEFAULT gen_random_uuid()` | Which merchant account this is: new when the consumer key changes (not when only the secret does); recorded on each intent (`payment_intents.merchant_id`, nullable, null for intents before V56) so an order is never checked with another merchant's credentials |
+| `consumer_key_hmac` | `char(64) NOT NULL UNIQUE` | HMAC-SHA256 (hex) of the consumer key under a key derived from the data key: no two tenants can be connected to one merchant account; recomputed on re-seal |
+| `key_hint` | `varchar(4) NOT NULL` | The last four characters of the consumer key, for display |
+| `data_key_id` | `varchar(64) NOT NULL` | Which data key sealed the boxes; the rotation job (`core.payments.reseal-accounts`) re-seals rows whose id is not the current one |
+| `status` | `text NOT NULL` | [`saved`, `verified`, `failed`]; the API shows `saved` as `not_connected` with `credentials_saved` true |
+| `ipn_id` | `text` | The provider's registration of this account's notification address; set by Test connection |
+| `ipn_token_hash` | `char(64) UNIQUE` | The SHA-256 of the random path token of that address; the token itself is never stored |
+| `ipn_registered_at`, `last_checked_at` | `timestamptz` | |
+| `failure_reason` | `varchar(60)` | A closed word: `invalid_credentials` or `registration_refused` |
+| `updated_by` | `uuid NOT NULL` | The tenant user who last saved or tested it |
+
+Checks: `verified` needs the registration and the check time, `failed` needs a reason and the check time, `saved` carries no registration. A
+trigger forbids changing the id, tenant, creation time or provider. `bms_app` holds SELECT, INSERT, UPDATE and DELETE (the row is removed
+when a lender disconnects, only while no payment needs it). Definer functions (ADR-016): `app_resolve_payment_account(provider, token_hash)`
+returns the tenant and account of a notification address; `app_tenants_with_sealed_secrets_to_reseal(current_key_id, limit)` is the
+rotation job's worklist (payment accounts and second-factor seeds, active and suspended tenants) and `app_count_sealed_secrets_to_reseal(current_key_id)` the number still to re-seal; `app_payment_account_key_in_use(provider, key_hmacs text[], tenant_id)` says whether another tenant holds the key under any of the digests (current and retired keys); `app_release_payment_account(tenant_id)` is the operator's override (answers only to a connection with no tenant bound, like `app_payment_account_status`); `app_payment_account_status(tenant_id)` returns status words and times for the platform console and no credential
+column; `app_resolve_payment_intent(provider, scope, tracking_id, reference, tenant_id)` adds the tenant of the notification address, so one
+lender's address can never match another lender's order (the four-argument form of V54 is dropped). `payment_intents` gained the CHECK `payment_intents_scope_purpose`
+(added NOT VALID in `V56`, validated by `V57`): a platform-scope intent carries a purpose starting `platform.` and a tenant-scope intent does not. `V57` also seeds the permission
+`core.payment_account.manage` for the tenant admin.
 
 ### `payment_callbacks` (RLS, append-only)
 

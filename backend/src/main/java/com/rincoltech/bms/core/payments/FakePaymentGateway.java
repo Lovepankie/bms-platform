@@ -56,6 +56,9 @@ public final class FakePaymentGateway implements PaymentGateway {
     private volatile Runnable beforeQuery = () -> {};
     private volatile Status forcedStatus;
     private volatile Runnable afterCancel = () -> {};
+    private final List<Account> accountsUsed = new ArrayList<>();
+    private volatile GatewayException registerFailure;
+    private final Map<Account, String> registeredUrls = new LinkedHashMap<>();
 
     @Override
     public String providerKey() {
@@ -63,7 +66,7 @@ public final class FakePaymentGateway implements PaymentGateway {
     }
 
     @Override
-    public boolean available(Scope scope) {
+    public boolean available(Account account) {
         return available;
     }
 
@@ -72,8 +75,9 @@ public final class FakePaymentGateway implements PaymentGateway {
     }
 
     @Override
-    public synchronized OrderResult createOrder(Scope scope, OrderRequest request) throws GatewayException {
+    public synchronized OrderResult createOrder(Account account, OrderRequest request) throws GatewayException {
         calls.add("create:" + request.merchantReference());
+        accountsUsed.add(account);
         if (createFailure != null) {
             throw createFailure;
         }
@@ -95,7 +99,7 @@ public final class FakePaymentGateway implements PaymentGateway {
     }
 
     @Override
-    public StatusResult queryStatus(Scope scope, String providerReference) throws GatewayException {
+    public StatusResult queryStatus(Account account, String providerReference) throws GatewayException {
         beforeQuery.run();
         queries.incrementAndGet();
         synchronized (this) {
@@ -123,7 +127,7 @@ public final class FakePaymentGateway implements PaymentGateway {
     }
 
     @Override
-    public synchronized void cancelOrder(Scope scope, String providerReference) throws GatewayException {
+    public synchronized void cancelOrder(Account account, String providerReference) throws GatewayException {
         calls.add("cancel:" + providerReference);
         FakeOrder order = byProviderReference.get(providerReference);
         if (order == null || order.status != Status.PENDING) {
@@ -134,8 +138,22 @@ public final class FakePaymentGateway implements PaymentGateway {
     }
 
     @Override
-    public synchronized IpnRegistration registerIpn(Scope scope, String url, IpnType type) {
+    public synchronized void checkCredentials(Account account) throws GatewayException {
+        calls.add("check");
+        accountsUsed.add(account);
+        if (registerFailure != null) {
+            throw registerFailure;
+        }
+    }
+
+    @Override
+    public synchronized IpnRegistration registerIpn(Account account, String url, IpnType type) throws GatewayException {
         calls.add("register:" + type);
+        accountsUsed.add(account);
+        if (registerFailure != null) {
+            throw registerFailure;
+        }
+        registeredUrls.put(account, url);
         return new IpnRegistration("aaaaaaaa-0000-4000-8000-0000000000f0", url, type);
     }
 
@@ -173,6 +191,21 @@ public final class FakePaymentGateway implements PaymentGateway {
     /** Every status answer is this, whatever the order (a hostile or confused provider). */
     public void forceStatus(Status status) {
         this.forcedStatus = status;
+    }
+
+    /** The next registrations (Test connection) fail like this, until cleared with null. */
+    public void failRegister(GatewayException failure) {
+        this.registerFailure = failure;
+    }
+
+    /** Every account an order or a registration was made for, in order: a test asserts which merchant was used. */
+    public synchronized List<Account> accountsUsed() {
+        return List.copyOf(accountsUsed);
+    }
+
+    /** The notification url last registered for an account (it ends in the account's path token), or null. */
+    public synchronized String registeredUrl(Account account) {
+        return registeredUrls.get(account);
     }
 
     public void failCreate(GatewayException failure) {
@@ -215,6 +248,9 @@ public final class FakePaymentGateway implements PaymentGateway {
         byProviderReference.clear();
         byMerchantReference.clear();
         calls.clear();
+        accountsUsed.clear();
+        registeredUrls.clear();
+        registerFailure = null;
         queries.set(0);
         createFailure = null;
         loseCreateAnswers = 0;

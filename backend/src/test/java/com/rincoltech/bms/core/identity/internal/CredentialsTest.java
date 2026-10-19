@@ -60,8 +60,35 @@ class CredentialsTest {
     }
 
     @Test
+    void aRetiredKeyOpensOldBoxesButNeverSealsAndARotationCanTellWhichBoxesNeedRewrapping() {
+        byte[] oldKey = new byte[32];
+        oldKey[0] = 7;
+        byte[] newKey = new byte[32];
+        newKey[0] = 9;
+        byte[] sealedOld = new SecretBox(oldKey, "k1").seal("fabricated".getBytes(StandardCharsets.UTF_8));
+
+        SecretBox rotated = new SecretBox(newKey, "k2", java.util.Map.of("k1", oldKey));
+        assertThat(new String(rotated.open(sealedOld), StandardCharsets.UTF_8)).isEqualTo("fabricated");
+        assertThat(rotated.keyIdOf(sealedOld)).isEqualTo("k1");
+        assertThat(rotated.needsRewrap(sealedOld)).isTrue();
+
+        byte[] resealed = rotated.seal(rotated.open(sealedOld));
+        assertThat(rotated.keyIdOf(resealed)).isEqualTo("k2");
+        assertThat(rotated.needsRewrap(resealed)).isFalse();
+        assertThat(new String(rotated.open(resealed), StandardCharsets.UTF_8)).isEqualTo("fabricated");
+
+        // With the retired key dropped, the old box is unreadable and the new one still opens.
+        SecretBox dropped = new SecretBox(newKey, "k2");
+        assertThatThrownBy(() -> dropped.open(sealedOld)).hasMessageContaining("another data key");
+        assertThat(new String(dropped.open(resealed), StandardCharsets.UTF_8)).isEqualTo("fabricated");
+        // A key with the wrong id in the ring is not accepted for a box that names another id.
+        SecretBox wrongRing = new SecretBox(newKey, "k2", java.util.Map.of("k1", newKey));
+        assertThatThrownBy(() -> wrongRing.open(sealedOld)).hasMessageContaining("decryption failed");
+    }
+
+    @Test
     void passwordsAreArgon2idAndWeakOnesAreRefused() {
-        Passwords passwords = new Passwords(new AuthProperties("none", null, null, null, 4096, 2));
+        Passwords passwords = new Passwords(new AuthProperties("none", null, null, null, null, 4096, 2));
         String hash = passwords.hash("Fabricated-Pass-2026");
         assertThat(hash).startsWith("$argon2id$v=19$m=4096,t=2,p=1$");
         assertThat(passwords.matches("Fabricated-Pass-2026", hash)).isTrue();

@@ -34,12 +34,11 @@ class PaymentsConfiguration {
     PesapalSettings pesapalSettings(PesapalProperties properties, @Value("${bms.environment:}") String environment) {
         PesapalSettings settings = PesapalSettings.resolve(environment, properties);
         log.info(
-                "Payment gateway: environment={} provider={} tenant-credentials={} platform-credentials={} bound-tenant={}",
+                "Payment gateway: environment={} provider={} tenant-accounts={} platform-credentials={}",
                 settings.environment().isBlank() ? "unset" : settings.environment(),
                 settings.provider().name().toLowerCase(java.util.Locale.ROOT),
-                settings.tenantPair().complete() ? "set" : "unset",
-                settings.platformPair().complete() ? "set" : "unset",
-                settings.boundTenant() == null ? "unset" : "set");
+                settings.tenantAccountsEnabled() ? "enabled" : "off",
+                settings.platformPair().complete() ? "set" : "unset");
         return settings;
     }
 
@@ -56,15 +55,19 @@ class PaymentsConfiguration {
 
     @Bean
     PaymentGateway paymentGateway(
-            PesapalSettings settings, ObjectMapper mapper, BusinessClock clock, CircuitBreaker breaker, Pauser pauser) {
+            PesapalSettings settings,
+            AccountCredentials credentials,
+            ObjectMapper mapper,
+            BusinessClock clock,
+            CircuitBreaker breaker,
+            Pauser pauser) {
         return switch (settings.provider()) {
             case OFF -> new UnavailableGateway();
             case FAKE -> new FakePaymentGateway();
             case PESAPAL ->
                 new PesapalGateway(
                         settings.baseUrl(),
-                        settings.tenantPair(),
-                        settings.platformPair(),
+                        credentials,
                         settings.callbackBase() == null ? null : settings.callbackBase() + PAYER_RETURN_PATH,
                         mapper,
                         clock::now,
@@ -82,27 +85,32 @@ class PaymentsConfiguration {
         }
 
         @Override
-        public boolean available(Scope scope) {
+        public boolean available(Account account) {
             return false;
         }
 
         @Override
-        public OrderResult createOrder(Scope scope, OrderRequest request) throws GatewayException {
+        public OrderResult createOrder(Account account, OrderRequest request) throws GatewayException {
             throw unavailable();
         }
 
         @Override
-        public StatusResult queryStatus(Scope scope, String providerReference) throws GatewayException {
+        public StatusResult queryStatus(Account account, String providerReference) throws GatewayException {
             throw unavailable();
         }
 
         @Override
-        public void cancelOrder(Scope scope, String providerReference) throws GatewayException {
+        public void cancelOrder(Account account, String providerReference) throws GatewayException {
             throw unavailable();
         }
 
         @Override
-        public IpnRegistration registerIpn(Scope scope, String url, IpnType type) throws GatewayException {
+        public void checkCredentials(Account account) throws GatewayException {
+            throw unavailable();
+        }
+
+        @Override
+        public IpnRegistration registerIpn(Account account, String url, IpnType type) throws GatewayException {
             throw unavailable();
         }
 

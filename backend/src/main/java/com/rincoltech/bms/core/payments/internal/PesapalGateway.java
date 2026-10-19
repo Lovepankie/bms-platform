@@ -46,7 +46,11 @@ import tools.jackson.databind.ObjectMapper;
  *       order reads, so it is {@code PENDING}; any other code 0 is an anomaly; the description is never read.
  *   <li><b>Money.</b> The provider carries fractions of a shilling, so every amount in and out goes through
  *       {@link MinorUnits}, which refuses a fraction.
- *   <li><b>Token.</b> Cached per credential pair until a minute before the {@code expiryDate} the provider returned
+ *   <li><b>Accounts.</b> Every call names the {@link Account} it is made for and the credentials are looked up from it
+ *       alone ({@link Credentials}): the platform's pair from the environment, a lender's own from its stored, encrypted
+ *       row, never one for the other. A lender whose credentials the provider refuses never counts against the shared
+ *       breaker, so one lender's wrong secret cannot stop the others from collecting.
+ *   <li><b>Token.</b> Cached per account (and per credential value, so a replaced secret is used at once) until a minute before the {@code expiryDate} the provider returned
  *       (3600 seconds in the sandbox although the reference says five minutes); a refused token is dropped and the call
  *       repeated once; a failed token request is not repeated for 30 seconds.
  *   <li><b>Safety.</b> Redirects are never followed, bodies are capped, the redirect URL of an order must be on the
@@ -79,43 +83,47 @@ final class PesapalGateway implements PaymentGateway {
     private static final Pattern CURRENCY = Pattern.compile("^[A-Z]{3}$");
     private static final String PAYMENT_PENDING = "payment_details_not_found";
 
-    private record Token(String value, Instant expires) {}
+    /** Where the credentials of an account come from; empty means the account has none that can be used. */
+    interface Credentials {
+        Optional<PesapalSettings.Pair> find(Account account);
+    }
+
+    private record Token(String value, Instant expires, String fingerprint) {}
+
+    private record Backoff(Instant until, String fingerprint) {}
 
     private record Reply(int http, JsonNode json) {}
 
     private final URI base;
-    private final PesapalSettings.Pair tenant;
-    private final PesapalSettings.Pair platform;
+    private final Credentials credentials;
     private final String payerReturnUrl;
     private final ObjectMapper mapper;
     private final Supplier<Instant> clock;
     private final CircuitBreaker breaker;
     private final Sleeper sleeper;
     private final HttpClient http;
-    private final Map<Scope, Token> tokens = new ConcurrentHashMap<>();
-    private final Map<Scope, Instant> authBackoff = new ConcurrentHashMap<>();
-    private final Map<Scope, Object> locks = Map.of(Scope.TENANT, new Object(), Scope.PLATFORM, new Object());
+    private final Map<Account, Token> tokens = new ConcurrentHashMap<>();
+    private final Map<Account, Backoff> authBackoff = new ConcurrentHashMap<>();
+    private final Map<Account, Object> locks = new ConcurrentHashMap<>();
     private Instant lastRegistration;
 
     private final Duration callBudget;
 
     PesapalGateway(
             URI base,
-            PesapalSettings.Pair tenant,
-            PesapalSettings.Pair platform,
+            Credentials credentials,
             String payerReturnUrl,
             ObjectMapper mapper,
             Supplier<Instant> clock,
             CircuitBreaker breaker,
             Sleeper sleeper) {
-        this(base, tenant, platform, payerReturnUrl, mapper, clock, breaker, sleeper, CALL_BUDGET);
+        this(base, credentials, payerReturnUrl, mapper, clock, breaker, sleeper, CALL_BUDGET);
     }
 
     /** As above with a shorter total time per call, for the tests of a provider that does not answer. */
     PesapalGateway(
             URI base,
-            PesapalSettings.Pair tenant,
-            PesapalSettings.Pair platform,
+            Credentials credentials,
             String payerReturnUrl,
             ObjectMapper mapper,
             Supplier<Instant> clock,
@@ -124,8 +132,7 @@ final class PesapalGateway implements PaymentGateway {
             Duration callBudget) {
         this.callBudget = callBudget;
         this.base = URI.create(base.toString().replaceAll("/+$", ""));
-        this.tenant = tenant;
-        this.platform = platform;
+        this.credentials = credentials;
         this.payerReturnUrl = payerReturnUrl;
         this.mapper = mapper;
         this.clock = clock;
@@ -143,20 +150,29 @@ final class PesapalGateway implements PaymentGateway {
         return "pesapal";
     }
 
-    private PesapalSettings.Pair pair(Scope scope) {
-        return scope == Scope.PLATFORM ? platform : tenant;
+    @Override
+    public boolean available(Account account) {
+        return payerReturnUrl != null
+                && credentials.find(account).filter(PesapalGateway::orderable).isPresent();
     }
 
-    @Override
-    public boolean available(Scope scope) {
-        return pair(scope).complete() && payerReturnUrl != null;
+    /** Credentials that can make an order: a key, a secret and the registration of a notification url. */
+    private static boolean orderable(PesapalSettings.Pair pair) {
+        return pair.usable() && present(pair.ipnId());
+    }
+
+    private static boolean present(String s) {
+        return s != null && !s.isBlank();
     }
 
     // ---- the four calls -------------------------------------------------------------------------
 
     @Override
-    public OrderResult createOrder(Scope scope, OrderRequest request) throws GatewayException {
-        PesapalSettings.Pair pair = requirePair(scope);
+    public OrderResult createOrder(Account account, OrderRequest request) throws GatewayException {
+        PesapalSettings.Pair pair = requirePair(account);
+        if (!orderable(pair)) {
+            throw new GatewayException(Kind.UNAVAILABLE, 0, "not_configured");
+        }
         if (request.merchantReference() == null
                 || !REFERENCE.matcher(request.merchantReference()).matches()) {
             throw new GatewayException(Kind.REFUSED, 0, "invalid_reference");
@@ -180,7 +196,7 @@ final class PesapalGateway implements PaymentGateway {
         billing.put("country_code", "UG");
         body.put("billing_address", billing);
 
-        JsonNode reply = authenticated(scope, "POST", "/api/Transactions/SubmitOrderRequest", body);
+        JsonNode reply = authenticated(account, pair, "POST", "/api/Transactions/SubmitOrderRequest", body);
         requireOk(reply, "order_refused");
         String tracking = str(reply.get("order_tracking_id"));
         String reference = str(reply.get("merchant_reference"));
@@ -192,31 +208,45 @@ final class PesapalGateway implements PaymentGateway {
     }
 
     @Override
-    public StatusResult queryStatus(Scope scope, String providerReference) throws GatewayException {
-        requirePair(scope);
+    public StatusResult queryStatus(Account account, String providerReference) throws GatewayException {
+        PesapalSettings.Pair pair = requirePair(account);
         if (providerReference == null || !GUID.matcher(providerReference).matches()) {
             throw new GatewayException(Kind.REFUSED, 0, "invalid_provider_reference");
         }
         String path = "/api/Transactions/GetTransactionStatus?orderTrackingId="
                 + URLEncoder.encode(providerReference, StandardCharsets.UTF_8);
-        JsonNode reply = authenticated(scope, "GET", path, null);
+        JsonNode reply = authenticated(account, pair, "GET", path, null);
         return statusOf(reply, providerReference);
     }
 
     @Override
-    public void cancelOrder(Scope scope, String providerReference) throws GatewayException {
-        requirePair(scope);
+    public void cancelOrder(Account account, String providerReference) throws GatewayException {
+        PesapalSettings.Pair pair = requirePair(account);
         if (providerReference == null || !GUID.matcher(providerReference).matches()) {
             throw new GatewayException(Kind.REFUSED, 0, "invalid_provider_reference");
         }
         JsonNode reply = authenticated(
-                scope, "POST", "/api/Transactions/CancelOrder", Map.of("order_tracking_id", providerReference));
+                account, pair, "POST", "/api/Transactions/CancelOrder", Map.of("order_tracking_id", providerReference));
         requireOk(reply, "cancel_refused");
     }
 
     @Override
-    public synchronized IpnRegistration registerIpn(Scope scope, String url, IpnType type) throws GatewayException {
-        requirePair(scope);
+    public void checkCredentials(Account account) throws GatewayException {
+        PesapalSettings.Pair pair = requirePair(account);
+        // A fresh token, never the cached one: this answers "do the credentials work now?", and the cache must not.
+        // Under the
+        // account's own lock, as the token fetch is, so a check never interleaves with another fetch for the same
+        // account.
+        synchronized (locks.computeIfAbsent(account, a -> new Object())) {
+            tokens.remove(account);
+            authBackoff.remove(account);
+            token(account, pair);
+        }
+    }
+
+    @Override
+    public synchronized IpnRegistration registerIpn(Account account, String url, IpnType type) throws GatewayException {
+        PesapalSettings.Pair pair = requirePair(account);
         URI target;
         try {
             target = URI.create(url);
@@ -237,7 +267,8 @@ final class PesapalGateway implements PaymentGateway {
             lastRegistration = clock.get();
             try {
                 JsonNode reply = authenticated(
-                        scope,
+                        account,
+                        pair,
                         "POST",
                         "/api/URLSetup/RegisterIPN",
                         Map.of("url", url, "ipn_notification_type", type.name()));
@@ -406,23 +437,25 @@ final class PesapalGateway implements PaymentGateway {
 
     // ---- the wire -------------------------------------------------------------------------------
 
-    private PesapalSettings.Pair requirePair(Scope scope) throws GatewayException {
-        PesapalSettings.Pair pair = pair(scope);
-        if (!pair.complete() || payerReturnUrl == null) {
+    /** The credentials of the account, or an unavailable answer: no call is made, and no other account is ever tried. */
+    private PesapalSettings.Pair requirePair(Account account) throws GatewayException {
+        PesapalSettings.Pair pair = credentials.find(account).orElse(null);
+        if (pair == null || !pair.usable() || payerReturnUrl == null) {
             throw new GatewayException(Kind.UNAVAILABLE, 0, "not_configured");
         }
         return pair;
     }
 
     /** One authenticated call; a refused token is dropped and the call repeated once with a fresh one. */
-    private JsonNode authenticated(Scope scope, String method, String path, Object body) throws GatewayException {
+    private JsonNode authenticated(Account account, PesapalSettings.Pair pair, String method, String path, Object body)
+            throws GatewayException {
         for (int attempt = 0; ; attempt++) {
-            String bearer = token(scope);
+            String bearer = token(account, pair);
             try {
-                return exchange(method, path, bearer, body);
+                return exchange(account, method, path, bearer, body);
             } catch (GatewayException e) {
                 if (e.kind() == Kind.AUTH && attempt == 0) {
-                    tokens.remove(scope);
+                    tokens.remove(account);
                     continue;
                 }
                 throw e;
@@ -430,47 +463,59 @@ final class PesapalGateway implements PaymentGateway {
         }
     }
 
-    private String token(Scope scope) throws GatewayException {
-        Token cached = tokens.get(scope);
-        if (usable(cached)) {
+    private String token(Account account, PesapalSettings.Pair pair) throws GatewayException {
+        String fingerprint = fingerprint(pair);
+        Token cached = tokens.get(account);
+        if (usable(cached, fingerprint)) {
             return cached.value();
         }
-        synchronized (locks.get(scope)) {
-            cached = tokens.get(scope);
-            if (usable(cached)) {
+        synchronized (locks.computeIfAbsent(account, a -> new Object())) {
+            cached = tokens.get(account);
+            if (usable(cached, fingerprint)) {
                 return cached.value();
             }
-            Instant blockedUntil = authBackoff.get(scope);
-            if (blockedUntil != null && clock.get().isBefore(blockedUntil)) {
+            Backoff blocked = authBackoff.get(account);
+            if (blocked != null
+                    && blocked.fingerprint().equals(fingerprint)
+                    && clock.get().isBefore(blocked.until())) {
                 throw new GatewayException(Kind.AUTH, 0, "auth_backoff");
             }
-            PesapalSettings.Pair pair = pair(scope);
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("consumer_key", pair.key());
             body.put("consumer_secret", pair.secret());
             Token fresh;
             try {
-                JsonNode reply = exchange("POST", "/api/Auth/RequestToken", null, body);
+                JsonNode reply = exchange(account, "POST", "/api/Auth/RequestToken", null, body);
                 requireOk(reply, "auth_refused");
                 String value = str(reply.get("token"));
                 if (value == null) {
                     throw new GatewayException(Kind.BAD_RESPONSE, 200, "no_token");
                 }
-                fresh = new Token(value, expiry(str(reply.get("expiryDate"))));
+                fresh = new Token(value, expiry(str(reply.get("expiryDate"))), fingerprint);
             } catch (GatewayException e) {
                 if (e.kind() == Kind.AUTH) {
-                    authBackoff.put(scope, clock.get().plus(AUTH_BACKOFF));
+                    authBackoff.put(account, new Backoff(clock.get().plus(AUTH_BACKOFF), fingerprint));
                 }
                 throw e;
             }
-            authBackoff.remove(scope);
-            tokens.put(scope, fresh);
+            authBackoff.remove(account);
+            tokens.put(account, fresh);
             return fresh.value();
         }
     }
 
-    private boolean usable(Token token) {
-        return token != null && clock.get().isBefore(token.expires().minus(TOKEN_MARGIN));
+    private boolean usable(Token token, String fingerprint) {
+        return token != null
+                && token.fingerprint().equals(fingerprint)
+                && clock.get().isBefore(token.expires().minus(TOKEN_MARGIN));
+    }
+
+    /** A digest of the credential values, kept in memory only: a token is valid for the credentials that fetched it. */
+    private static String fingerprint(PesapalSettings.Pair pair) {
+        // Length-prefixed, so no pair of values can give the same input as another (a credential may contain any
+        // character).
+        return java.util.HexFormat.of()
+                .formatHex(PesapalSettings.sha256(pair.key().length() + ":" + pair.key() + pair.secret()));
     }
 
     /** The provider's {@code expiryDate} (UTC, with {@code Z}), capped; a missing or odd one gives a minute. */
@@ -494,7 +539,8 @@ final class PesapalGateway implements PaymentGateway {
      * business: an unreachable host, a 5xx, a 404 or 405 (our configuration is wrong) and a refused token count
      * against it; a 200 with a business error, a 409 throttle and a good answer do not.
      */
-    private JsonNode exchange(String method, String path, String bearer, Object body) throws GatewayException {
+    private JsonNode exchange(Account account, String method, String path, String bearer, Object body)
+            throws GatewayException {
         Optional<CircuitBreaker.Permit> permit = breaker.tryAcquire();
         if (permit.isEmpty()) {
             throw new GatewayException(Kind.UNAVAILABLE, 0, "circuit_open");
@@ -513,7 +559,11 @@ final class PesapalGateway implements PaymentGateway {
             GatewayException failure = classify(reply);
             if (failure == null) {
                 breaker.recordSuccess(permit.get());
-            } else if (failure.kind() == Kind.THROTTLED || failure.kind() == Kind.REFUSED) {
+            } else if (failure.kind() == Kind.THROTTLED
+                    || failure.kind() == Kind.REFUSED
+                    || (failure.kind() == Kind.AUTH && account.scope() == Scope.TENANT)) {
+                // The provider answered. A lender's own credentials being refused is that lender's problem, never the
+                // shared breaker's: one wrong secret must not stop every other lender from collecting.
                 breaker.recordSuccess(permit.get());
             } else {
                 breaker.recordFailure(permit.get());

@@ -62,6 +62,7 @@ docker run --rm ghcr.io/<owner>/bms-platform-api:<tag> keys
 # BMS_TOKEN_SIGNING_JWK='{"kty":"EC",...}'
 # BMS_DATA_KEY=...
 # BMS_DATA_KEY_ID=k1
+# Only while rotating the data key: BMS_DATA_KEY_PREVIOUS=k0:<old base64> (docs/runbooks/payments.md section 4a)
 ```
 
 The API refuses to start without them. Generate them per environment and never copy them between

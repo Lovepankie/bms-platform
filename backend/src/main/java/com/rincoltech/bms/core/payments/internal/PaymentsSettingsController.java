@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
  * {@code /api/v1/payments/settings} (chapter 7 section 7.11.10, ADR-035 decision 11): the tenant's switch for collecting
  * by mobile money or card, and a daily ceiling. One version for the whole tenant settings row, sent back as the
  * {@code ETag} and required as {@code If-Match} on every change. Switching on is refused with 409
- * {@code merchant_not_bound_to_tenant}, {@code gateway_method_unmapped} or {@code gateway_not_configured}.
+ * {@code merchant_account_not_verified}, {@code gateway_method_unmapped} or {@code gateway_not_configured}.
  */
 @RestController
 @RequestMapping(path = "/api/v1/payments/settings", produces = MediaType.APPLICATION_JSON_VALUE)

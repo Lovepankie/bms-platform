@@ -7,13 +7,24 @@
  * intent to paid; the poller that does the same for intents whose notification never came; and the purpose handler
  * registry ({@link com.rincoltech.bms.core.payments.PurposeHandler}) through which the owning module books the money
  * (loan repayments and savings deposits arrive in slices #216 and #219). Off unless the host environment configures
- * a gateway, the operator binds the merchant account to one tenant and that tenant switches collections on.
+ * a gateway and a callback address, the tenant connects and tests its own merchant account ({@code Receive payments}:
+ * credentials sealed with the application data key, one account per tenant, never the platform's) and the tenant switches
+ * collections on. Money owed to a tenant lands only in that tenant's own account (ADR-035 amendment of 2026-10-18, issue #233).
  * Depends on no vertical.
  */
 @ApplicationModule(
         id = "core.payments",
         displayName = "Core: Payments",
-        allowedDependencies = {"kernel", "core.tenancy", "core.audit", "core.jobs", "core.ledger", "core.operations"})
+        allowedDependencies = {
+            "kernel",
+            "core.tenancy",
+            "core.audit",
+            "core.jobs",
+            "core.ledger",
+            "core.operations",
+            "core.identity",
+            "core.notifications"
+        })
 package com.rincoltech.bms.core.payments;
 
 import org.springframework.modulith.ApplicationModule;

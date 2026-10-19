@@ -177,9 +177,8 @@ migration) with status only, no details.
   not the Africa's Talking sandbox host or the account is not `sandbox`, when the mode is `live` outside production, and in
   production when the mode is `sink` or the provider is the fake. Outbound traffic is HTTPS to the provider; nothing is
   opened inbound until the delivery report slice (#215).
-- Client extras (issue #210, design): Pesapal `BMS_PESAPAL_BASE_URL`, `BMS_PESAPAL_CONSUMER_KEY`,
-  `BMS_PESAPAL_CONSUMER_SECRET`, `BMS_PESAPAL_IPN_ID`, `BMS_PESAPAL_IPN_TOKEN`, `BMS_PESAPAL_TENANT_ID` (the one tenant the
-  merchant account is bound to), `BMS_PESAPAL_PLATFORM_CONSUMER_KEY`, `BMS_PESAPAL_PLATFORM_CONSUMER_SECRET`,
+- Client extras (issue #210, design): Pesapal `BMS_PESAPAL_PROVIDER`, `BMS_PESAPAL_BASE_URL`, `BMS_PESAPAL_CALLBACK_BASE_URL` (a lender's own account is entered by the lender and
+  stored encrypted, so there is no per-lender variable; the consumer key, secret, IPN id, token and tenant id variables of #213 are gone, #233), `BMS_DATA_KEY_PREVIOUS` (retired data keys during a rotation), `BMS_PESAPAL_PLATFORM_CONSUMER_KEY`, `BMS_PESAPAL_PLATFORM_CONSUMER_SECRET`,
   `BMS_PESAPAL_PLATFORM_IPN_ID`, `BMS_PESAPAL_PLATFORM_IPN_TOKEN` (an IPN registration belongs to one credential pair); SMS `BMS_SMS_PROVIDER`, `BMS_SMS_MODE` (`off` default, `sink` on staging),
   `BMS_SMS_ALLOWLIST`, `BMS_SMS_AT_BASE_URL`, `BMS_SMS_AT_USERNAME`, `BMS_SMS_AT_API_KEY`, `BMS_SMS_CALLBACK_TOKEN`, `BMS_SMS_PLATFORM_DAILY_CAP`; AI (built in #220, `docs/runbooks/ai-assistant.md`)
   `BMS_AI_PROVIDER` (`off` by default, `openai_compatible`, or `recording` in dev and test only), `BMS_AI_BASE_URL`, `BMS_AI_API_KEY`, `BMS_AI_MODEL`, `BMS_AI_ENABLED_TENANTS` (the platform allow-list), `BMS_AI_PLATFORM_DAILY_TOKENS`, `BMS_AI_PLATFORM_DAILY_COST_MICRO`, `BMS_AI_PRICE_INPUT_MICRO_PER_MILLION`, `BMS_AI_PRICE_OUTPUT_MICRO_PER_MILLION`, `BMS_AI_PRICE_CURRENCY` and the tuning values of the spec's section 9.1; an incomplete provider setting is off, never a startup failure; reports `BMS_REPORTS_MAX_CONCURRENT_RUNS`,

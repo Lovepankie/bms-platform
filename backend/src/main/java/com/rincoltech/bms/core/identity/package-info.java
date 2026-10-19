@@ -5,7 +5,9 @@
  * route permission check, staff invitations, role assignments with branch scope, {@code /me}.
  * The principal types themselves live in the kernel, so every module can read them. Public API:
  * {@link com.rincoltech.bms.core.identity.TenantAdmins}, for the platform console, and
- * {@link com.rincoltech.bms.core.identity.ProvisioningKeys}, for provisioning a host.
+ * {@link com.rincoltech.bms.core.identity.ProvisioningKeys}, for provisioning a host, and
+ * {@link com.rincoltech.bms.core.identity.DataKeys}, the application data key for any module that keeps a secret it must read
+ * back (a lender's payment provider credentials, issue #233).
  */
 @ApplicationModule(
         id = "core.identity",

@@ -87,6 +87,20 @@ class OutboxTemplates {
 
                     Open the operator portal: {portal_url}
                     """),
+            // A change to the business's own payment account (issue #233, ADR-035 amendment): tells the other
+            // administrators
+            // that where repayments are paid was touched. Carries no key, secret or account detail.
+            "payments.account_changed",
+            new Template("The payment account of {business_name} was changed", """
+                    Hello,
+
+                    The payment account that receives your members' payments for {business_name} was changed by {who}: {change}, on {when}.
+
+                    If you or another administrator did this, nothing more is needed. If you do not know about it, open
+                    Receive payments in BMS now, check the account, and change your password.
+
+                    Rincoltech
+                    """),
             // The insights digest (ADR-030): the text is built by lending.insights as plain text
             // from the tenant's own figures, ready for a WhatsApp relay later.
             "insights.daily_digest",

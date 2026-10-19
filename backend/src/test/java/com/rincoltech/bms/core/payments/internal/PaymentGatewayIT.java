@@ -37,8 +37,6 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import tools.jackson.databind.JsonNode;
 
@@ -62,19 +60,28 @@ import tools.jackson.databind.JsonNode;
             "bms.payments.callback-ip-per-minute=100000",
             "bms.payments.callback-global-per-minute=1000000",
             "bms.pesapal.provider=fake",
-            "bms.pesapal.ipn-token=" + PaymentGatewayIT.TOKEN
+            "bms.pesapal.callback-base-url=https://callbacks.example.test",
+            "bms.pesapal.platform.consumer-key=invented-platform-key",
+            "bms.pesapal.platform.consumer-secret=invented-platform-secret",
+            "bms.pesapal.platform.ipn-id=aaaaaaaa-0000-4000-8000-000000000002",
+            "bms.pesapal.platform.ipn-token=" + PaymentGatewayIT.PLATFORM_TOKEN,
+            "bms.pesapal.refused-key-digests=fd7b571e25333d58599ee989f5fe9b901bead180a0d1b8d839c2bb59d078db49"
         })
 class PaymentGatewayIT extends IntegrationTest {
 
-    static final String TOKEN = "invented-ipn-path-token-for-the-it-0001";
-    static final String PERMS = "core.payments.read,core.payments.collect,core.settings.read,core.settings.manage";
+    static final String PLATFORM_TOKEN = "invented-platform-path-token-for-the-it-0001";
+    static final String PERMS =
+            "core.payments.read,core.payments.collect,core.settings.read,core.settings.manage,core.payment_account.manage";
     static final TestDatabase.Fixture BOUND = TestDatabase.tenant("pay-bound", true);
     static final TestDatabase.Fixture OTHER = TestDatabase.tenant("pay-other", true);
     static final String PURPOSE = "test.payment";
 
-    @DynamicPropertySource
-    static void bind(DynamicPropertyRegistry registry) {
-        registry.add("bms.pesapal.tenant-id", () -> BOUND.tenantId().toString());
+    /** The path token of each connected tenant's notification url, read from the registration the fake saw. */
+    static final Map<UUID, String> TOKENS = new ConcurrentHashMap<>();
+
+    /** The path token of the notification url of the BOUND tenant's own account. */
+    static String token() {
+        return TOKENS.get(BOUND.tenantId());
     }
 
     /** The handler for the test purpose: books by recording, and can be told to refuse or break. */
@@ -125,11 +132,45 @@ class PaymentGatewayIT extends IntegrationTest {
         }
     }
 
+    /** The step-up of the real identity module needs a signed-in user with an authenticator; the test accepts 000000. */
+    static final class StubSecurity implements com.rincoltech.bms.core.identity.AdminSecurity {
+        final List<String> rejected = new CopyOnWriteArrayList<>();
+        volatile List<Holder> holders = List.of();
+
+        @Override
+        public void requireTotp(String code) {
+            if (!"000000".equals(code)) {
+                rejected.add(String.valueOf(code));
+                throw new com.rincoltech.bms.kernel.ApiException(
+                        org.springframework.http.HttpStatus.UNPROCESSABLE_CONTENT,
+                        "invalid_code",
+                        "Invalid code",
+                        "That code is not valid.");
+            }
+        }
+
+        @Override
+        public List<Holder> holders(String permission) {
+            return holders;
+        }
+
+        @Override
+        public String actorName() {
+            return "Test Administrator";
+        }
+    }
+
     @TestConfiguration
     static class Config {
         @Bean
         TestHandler testHandler() {
             return new TestHandler();
+        }
+
+        @Bean
+        @Primary
+        StubSecurity stubSecurity() {
+            return new StubSecurity();
         }
 
         @Bean
@@ -152,6 +193,9 @@ class PaymentGatewayIT extends IntegrationTest {
     PaymentPoller poller;
 
     @Autowired
+    MerchantAccountService merchantAccounts;
+
+    @Autowired
     MovableClock clock;
 
     FakePaymentGateway fake;
@@ -163,6 +207,7 @@ class PaymentGatewayIT extends IntegrationTest {
     void setUp() {
         fake = (FakePaymentGateway) gateway;
         fake.reset();
+        merchantAccounts.forgetTests();
         handler.reset();
         clock.set(MovableClockConfig.BEFORE_MIDNIGHT);
         // Nothing left due from an earlier test: only this test's intents are checked.
@@ -206,7 +251,44 @@ class PaymentGatewayIT extends IntegrationTest {
         return http.exchange(path, method, new HttpEntity<>(body, h), JsonNode.class);
     }
 
+    /** Connects and tests the tenant's own account through the API, as its administrator would; returns the token. */
+    String connect(TestDatabase.Fixture t, UUID user) {
+        String suffix = t.slug().substring(t.slug().length() - 8);
+        ResponseEntity<JsonNode> saved = call(
+                HttpMethod.PUT,
+                "/api/v1/payments/merchant-account",
+                t,
+                user,
+                Map.of(
+                        "consumer_key",
+                        "invented-key-" + suffix,
+                        "consumer_secret",
+                        "invented-secret-" + suffix,
+                        "totp_code",
+                        "000000"),
+                null);
+        assertThat(saved.getStatusCode().value()).as("%s", saved.getBody()).isEqualTo(200);
+        ResponseEntity<JsonNode> tested =
+                call(HttpMethod.POST, "/api/v1/payments/merchant-account/test", t, user, null, null);
+        assertThat(tested.getStatusCode().value()).as("%s", tested.getBody()).isEqualTo(200);
+        assertThat(tested.getBody().get("status").asString()).isEqualTo("verified");
+        String url = fake.registeredUrl(PaymentGateway.Account.tenant(t.tenantId()));
+        String token = url.substring(url.lastIndexOf('/') + 1);
+        TOKENS.put(t.tenantId(), token);
+        merchantAccounts.forgetTests();
+        return token;
+    }
+
+    void ensureConnected(TestDatabase.Fixture t, UUID user) {
+        JsonNode now = call(HttpMethod.GET, "/api/v1/payments/merchant-account", t, user, null, null)
+                .getBody();
+        if (!"verified".equals(now.get("status").asString()) || !TOKENS.containsKey(t.tenantId())) {
+            connect(t, user);
+        }
+    }
+
     void ensureOn() {
+        ensureConnected(BOUND, staff);
         boolean mapped = TestDatabase.owner()
                         .sql("SELECT count(*) FROM payment_methods WHERE tenant_id = ? AND method_key = 'gateway'")
                         .param(BOUND.tenantId())
@@ -397,7 +479,7 @@ class PaymentGatewayIT extends IntegrationTest {
         pay(intent, 1500, "UGX", "CONF-0001");
         String ref = intent.get("merchant_reference").asString();
         for (int i = 0; i < 3; i++) {
-            ResponseEntity<JsonNode> r = ipn(TOKEN, tracking(intent), ref);
+            ResponseEntity<JsonNode> r = ipn(token(), tracking(intent), ref);
             assertThat(r.getStatusCode().value()).isEqualTo(200);
             assertThat(r.getHeaders().getContentType().toString()).startsWith("application/json");
             assertThat(r.getBody().get("orderNotificationType").asString()).isEqualTo("IPNCHANGE");
@@ -428,7 +510,7 @@ class PaymentGatewayIT extends IntegrationTest {
         JsonNode intent = create(1500);
         String ref = intent.get("merchant_reference").asString();
         ResponseEntity<JsonNode> r = http.exchange(
-                "/api/v1/payments/callbacks/pesapal/" + TOKEN + "?OrderTrackingId=" + tracking(intent)
+                "/api/v1/payments/callbacks/pesapal/" + token() + "?OrderTrackingId=" + tracking(intent)
                         + "&OrderMerchantReference=" + ref
                         + "&OrderNotificationType=IPNCHANGE&status=COMPLETED&amount=1500&payment_status_description=Completed&status_code=1",
                 HttpMethod.GET,
@@ -441,7 +523,7 @@ class PaymentGatewayIT extends IntegrationTest {
         assertThat(handler.calls).hasValue(0);
         // The provider says failed: the intent fails and still nothing is booked.
         fake.fail(tracking(intent));
-        ipn(TOKEN, tracking(intent), ref);
+        ipn(token(), tracking(intent), ref);
         clock.set(clock.instant().plusSeconds(30));
         tick();
         assertThat(statusOf(intent.get("id").asString())).isEqualTo("failed");
@@ -452,10 +534,10 @@ class PaymentGatewayIT extends IntegrationTest {
     void anUnknownReferenceIsAcknowledgedCountedAndMakesNoCallToTheProvider() {
         String unknown = "BMS-DV-" + UUID.randomUUID().toString().replace("-", "");
         int before = fake.queryCount();
-        ResponseEntity<JsonNode> r = ipn(TOKEN, "aaaaaaaa-0000-4000-8000-0000000000aa", unknown);
+        ResponseEntity<JsonNode> r = ipn(token(), "aaaaaaaa-0000-4000-8000-0000000000aa", unknown);
         assertThat(r.getStatusCode().value()).isEqualTo(200);
         assertThat(r.getBody().get("status").asInt()).isEqualTo(200);
-        ipn(TOKEN, "aaaaaaaa-0000-4000-8000-0000000000aa", unknown);
+        ipn(token(), "aaaaaaaa-0000-4000-8000-0000000000aa", unknown);
         tick();
         assertThat(fake.queryCount()).isEqualTo(before);
         assertThat(TestDatabase.owner()
@@ -477,7 +559,7 @@ class PaymentGatewayIT extends IntegrationTest {
         JsonNode intent = create(1500);
         pay(intent, 1500, "UGX", "CONF-0002");
         String ref = intent.get("merchant_reference").asString();
-        ipn(TOKEN, "aaaaaaaa-0000-4000-8000-0000000000ee", ref);
+        ipn(token(), "aaaaaaaa-0000-4000-8000-0000000000ee", ref);
         clock.set(clock.instant().plusSeconds(30));
         tick();
         assertThat(statusOf(intent.get("id").asString()))
@@ -506,19 +588,19 @@ class PaymentGatewayIT extends IntegrationTest {
                 .isEqualTo(404);
         assertThat(ipn("x", tracking(intent), ref).getStatusCode().value()).isEqualTo(404);
         assertThat(http.exchange(
-                                "/api/v1/payments/callbacks/pesapal/" + TOKEN,
+                                "/api/v1/payments/callbacks/pesapal/" + token(),
                                 HttpMethod.GET,
                                 HttpEntity.EMPTY,
                                 JsonNode.class)
                         .getStatusCode()
                         .value())
                 .isEqualTo(400);
-        assertThat(ipn(TOKEN, "not-a-guid", ref).getStatusCode().value()).isEqualTo(400);
+        assertThat(ipn(token(), "not-a-guid", ref).getStatusCode().value()).isEqualTo(400);
         HttpHeaders json = new HttpHeaders();
         json.setContentType(org.springframework.http.MediaType.TEXT_PLAIN);
         String big = "{\"OrderTrackingId\":\"" + tracking(intent) + "\",\"pad\":\"" + "x".repeat(6000) + "\"}";
         ResponseEntity<JsonNode> huge = http.exchange(
-                "/api/v1/payments/callbacks/pesapal/" + TOKEN,
+                "/api/v1/payments/callbacks/pesapal/" + token(),
                 HttpMethod.POST,
                 new HttpEntity<>(big, json),
                 JsonNode.class);
@@ -527,7 +609,7 @@ class PaymentGatewayIT extends IntegrationTest {
         String ok = "{\"OrderNotificationType\":\"IPNCHANGE\",\"OrderTrackingId\":\"" + tracking(intent)
                 + "\",\"OrderMerchantReference\":\"" + ref + "\"}";
         ResponseEntity<JsonNode> posted = http.exchange(
-                "/api/v1/payments/callbacks/pesapal/" + TOKEN,
+                "/api/v1/payments/callbacks/pesapal/" + token(),
                 HttpMethod.POST,
                 new HttpEntity<>(ok, json),
                 JsonNode.class);
@@ -544,7 +626,7 @@ class PaymentGatewayIT extends IntegrationTest {
         JsonNode intent = create(1500);
         HttpHeaders none = new HttpHeaders();
         ResponseEntity<JsonNode> r = http.exchange(
-                "/api/v1/payments/callbacks/pesapal/" + TOKEN + "?OrderTrackingId=" + tracking(intent)
+                "/api/v1/payments/callbacks/pesapal/" + token() + "?OrderTrackingId=" + tracking(intent)
                         + "&OrderMerchantReference="
                         + intent.get("merchant_reference").asString(),
                 HttpMethod.GET,
@@ -560,7 +642,7 @@ class PaymentGatewayIT extends IntegrationTest {
     void aCompletedPaymentInAnotherCurrencyOrWithAnotherReferenceNeverBooks() {
         JsonNode usd = create(1500);
         pay(usd, 1500, "USD", "CONF-0003");
-        ipn(TOKEN, tracking(usd), usd.get("merchant_reference").asString());
+        ipn(token(), tracking(usd), usd.get("merchant_reference").asString());
         tick();
         // The adapter reads only whole shillings in UGX; the fake answers what a confused provider might.
         assertThat(statusOf(usd.get("id").asString())).isIn("needs_attention", "pending");
@@ -569,7 +651,7 @@ class PaymentGatewayIT extends IntegrationTest {
         JsonNode other = create(1500);
         pay(other, 1500, "UGX", "CONF-0004");
         fake.reportReference(tracking(other), "BMS-DV-" + "0".repeat(32));
-        ipn(TOKEN, tracking(other), other.get("merchant_reference").asString());
+        ipn(token(), tracking(other), other.get("merchant_reference").asString());
         tick();
         assertThat(statusOf(other.get("id").asString())).isEqualTo("needs_attention");
         assertThat(row(other.get("id").asString()).get("refusal_code")).isEqualTo("reference_mismatch");
@@ -580,11 +662,11 @@ class PaymentGatewayIT extends IntegrationTest {
     void aPartialAndAnOverPaymentAreBookedAtTheConfirmedAmountWithAFlag() {
         JsonNode less = create(2000);
         pay(less, 1500, "UGX", "CONF-0005");
-        ipn(TOKEN, tracking(less), less.get("merchant_reference").asString());
+        ipn(token(), tracking(less), less.get("merchant_reference").asString());
         tick();
         JsonNode more = create(2000);
         pay(more, 2600, "UGX", "CONF-0006");
-        ipn(TOKEN, tracking(more), more.get("merchant_reference").asString());
+        ipn(token(), tracking(more), more.get("merchant_reference").asString());
         tick();
         assertThat(handler.bookings)
                 .extracting(PurposeHandler.Booking::amountMinor)
@@ -641,7 +723,7 @@ class PaymentGatewayIT extends IntegrationTest {
         for (int i = 0; i < 4; i++) {
             work.add(pool.submit(() -> {
                 go.await();
-                ipn(TOKEN, track, ref);
+                ipn(token(), track, ref);
                 return null;
             }));
         }
@@ -852,7 +934,7 @@ class PaymentGatewayIT extends IntegrationTest {
         String id = intent.get("id").asString();
         assertThat(statusOf(id)).isEqualTo("booked");
         fake.reverse(tracking(intent));
-        ipn(TOKEN, tracking(intent), intent.get("merchant_reference").asString());
+        ipn(token(), tracking(intent), intent.get("merchant_reference").asString());
         clock.set(clock.instant().plus(Duration.ofMinutes(1)));
         tick();
         assertThat(statusOf(id)).isEqualTo("reversed_pending_review");
@@ -864,7 +946,7 @@ class PaymentGatewayIT extends IntegrationTest {
     // ---- answers that contradict the intent -------------------------------------------------------------
 
     private void notifyAndCheck(JsonNode intent) {
-        ipn(TOKEN, tracking(intent), intent.get("merchant_reference").asString());
+        ipn(token(), tracking(intent), intent.get("merchant_reference").asString());
         clock.set(clock.instant().plusSeconds(30));
         tick();
     }
@@ -1020,7 +1102,7 @@ class PaymentGatewayIT extends IntegrationTest {
     void anIpnAndAPayerReturnWithinTenSecondsEachLeaveTheirOwnRow() {
         JsonNode intent = create(1500);
         String ref = intent.get("merchant_reference").asString();
-        ipn(TOKEN, tracking(intent), ref);
+        ipn(token(), tracking(intent), ref);
         http.getForEntity(
                 "/api/v1/payments/return/pesapal?OrderTrackingId=" + tracking(intent) + "&OrderMerchantReference="
                         + ref,
@@ -1149,7 +1231,7 @@ class PaymentGatewayIT extends IntegrationTest {
         JsonNode intent = create(1500);
         String ref = intent.get("merchant_reference").asString();
         for (int i = 0; i < 5; i++) {
-            ipn(TOKEN, tracking(intent), ref);
+            ipn(token(), tracking(intent), ref);
         }
         assertThat(TestDatabase.owner()
                         .sql("SELECT count(*) FROM payment_callbacks WHERE intent_id = ?")
@@ -1197,7 +1279,7 @@ class PaymentGatewayIT extends IntegrationTest {
     @Test
     void theApplicationRoleCannotDeleteAnIntentOrRewriteACallbackRow() {
         JsonNode intent = create(1500);
-        ipn(TOKEN, tracking(intent), intent.get("merchant_reference").asString());
+        ipn(token(), tracking(intent), intent.get("merchant_reference").asString());
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> deleteAsApp("DELETE FROM payment_intents"))
                 .hasMessageContaining("permission denied");
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> TestDatabase.owner()
@@ -1232,7 +1314,7 @@ class PaymentGatewayIT extends IntegrationTest {
                 null);
         assertThat(r.getStatusCode().value()).isEqualTo(404);
         JsonNode refused = setSettings(OTHER, staffOther, Map.of("collections_enabled", true), 409);
-        assertThat(refused.get("code").asString()).isEqualTo("merchant_not_bound_to_tenant");
+        assertThat(refused.get("code").asString()).isEqualTo("merchant_account_not_verified");
         ResponseEntity<JsonNode> off = call(HttpMethod.GET, "/api/v1/payments/settings", OTHER, staffOther, null, null);
         assertThat(off.getBody().get("collections_enabled").asBoolean()).isFalse();
         // And it cannot start a payment against the bound tenant's subject either.
@@ -1373,7 +1455,7 @@ class PaymentGatewayIT extends IntegrationTest {
     void noPhoneNumberOrProviderBodyIsInTheAuditRowsOrTheCallbackRows() {
         JsonNode intent = create(1500);
         pay(intent, 1500, "UGX", "CONF-0013");
-        ipn(TOKEN, tracking(intent), intent.get("merchant_reference").asString());
+        ipn(token(), tracking(intent), intent.get("merchant_reference").asString());
         clock.set(clock.instant().plus(Duration.ofMinutes(3)));
         tick();
         String id = intent.get("id").asString();
@@ -1392,5 +1474,1166 @@ class PaymentGatewayIT extends IntegrationTest {
                 .query(String.class)
                 .list();
         assertThat(callbacks).isNotEmpty().allMatch(c -> c.length() < 80);
+    }
+
+    // ---- the lender's own merchant account (issue #233) ---------------------------------------------------
+
+    static final String SECRET_TEXT = "invented-secret-for-the-leak-check-0001";
+    static final String KEY_TEXT = "invented-key-for-the-leak-check-0001";
+
+    Map<String, Object> creds(String key, String secret) {
+        return Map.of("consumer_key", key, "consumer_secret", secret, "totp_code", "000000");
+    }
+
+    ResponseEntity<JsonNode> as(
+            HttpMethod method, String path, TestDatabase.Fixture t, UUID user, String permissions, Object body) {
+        return http.exchange(path, method, new HttpEntity<>(body, headers(t, user, permissions)), JsonNode.class);
+    }
+
+    @Test
+    void twoTenantsCollectThroughTwoMerchantsAndNeitherSeesTheOther() {
+        TestDatabase.Fixture second = TestDatabase.tenant("pay-second", true);
+        UUID staffSecond = user(second);
+        TestDatabase.owner()
+                .sql(
+                        "INSERT INTO payment_methods (id, tenant_id, method_key, gl_account_id) VALUES (?, ?, 'gateway', ?)")
+                .params(UUID.randomUUID(), second.tenantId(), second.account("gateway_clearing"))
+                .update();
+        UUID secondSubject = UUID.randomUUID();
+        handler.branches.put(secondSubject, second.headOffice());
+        String secondToken = connect(second, staffSecond);
+        setSettings(second, staffSecond, Map.of("collections_enabled", true, "daily_ceiling_minor", 100000000L), 200);
+        fake.reset();
+
+        JsonNode mine = create(1500);
+        ResponseEntity<JsonNode> theirs = call(
+                HttpMethod.POST,
+                "/api/v1/payments/intents",
+                second,
+                staffSecond,
+                Map.of(
+                        "purpose",
+                        PURPOSE,
+                        "subject_id",
+                        secondSubject,
+                        "amount_minor",
+                        2500,
+                        "payer_phone",
+                        "0700000456"),
+                "key-" + UUID.randomUUID());
+        assertThat(theirs.getStatusCode().value()).as("%s", theirs.getBody()).isEqualTo(201);
+
+        // Each order was made for its own tenant's account, and no call ever named the platform's.
+        assertThat(fake.accountsUsed().stream()
+                        .map(PaymentGateway.Account::tenantId)
+                        .toList())
+                .containsExactly(BOUND.tenantId(), second.tenantId());
+        assertThat(fake.accountsUsed())
+                .allMatch(a -> a.scope() == PaymentGateway.Scope.TENANT && a.merchantId() != null);
+        assertThat(row(mine.get("id").asString()).get("scope")).isEqualTo("tenant");
+        assertThat(row(theirs.getBody().get("id").asString()).get("scope")).isEqualTo("tenant");
+
+        // Each administrator sees their own account and nobody else's, and never a secret.
+        JsonNode viewMine = call(HttpMethod.GET, "/api/v1/payments/merchant-account", BOUND, staff, null, null)
+                .getBody();
+        JsonNode viewTheirs = call(HttpMethod.GET, "/api/v1/payments/merchant-account", second, staffSecond, null, null)
+                .getBody();
+        assertThat(viewMine.get("key_hint").asString())
+                .isNotEqualTo(viewTheirs.get("key_hint").asString());
+        assertThat(call(
+                                HttpMethod.GET,
+                                "/api/v1/payments/intents/" + mine.get("id").asString(),
+                                second,
+                                staffSecond,
+                                null,
+                                null)
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(404);
+
+        // A notification sent to one lender's own url cannot be matched to the other lender's order, in either
+        // direction.
+        String theirRef = theirs.getBody().get("merchant_reference").asString();
+        String myRef = mine.get("merchant_reference").asString();
+        long unmatchedBefore = unmatched("scope_mismatch");
+        ipn(token(), fake.orderFor(theirRef).providerReference, theirRef);
+        ipn(secondToken, fake.orderFor(myRef).providerReference, myRef);
+        assertThat(unmatched("scope_mismatch")).isGreaterThan(unmatchedBefore);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM payment_callbacks WHERE intent_id IN (?, ?)")
+                        .params(
+                                UUID.fromString(mine.get("id").asString()),
+                                UUID.fromString(theirs.getBody().get("id").asString()))
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        // Each lender's own url does reach its own order.
+        ipn(token(), fake.orderFor(myRef).providerReference, myRef);
+        ipn(secondToken, fake.orderFor(theirRef).providerReference, theirRef);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM payment_callbacks WHERE intent_id = ?")
+                        .param(UUID.fromString(mine.get("id").asString()))
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+        assertThat(token()).isNotEqualTo(secondToken).isNotEqualTo(PLATFORM_TOKEN);
+    }
+
+    long unmatched(String reason) {
+        return TestDatabase.owner()
+                .sql("SELECT coalesce(sum(hits), 0) FROM payment_unmatched_callbacks WHERE reason = ?")
+                .param(reason)
+                .query(Long.class)
+                .single();
+    }
+
+    @Test
+    void theSecretIsWriteOnlyNoEndpointNoAuditRowAndNoColumnHoldsIt() {
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-secret", true);
+        UUID admin = user(t);
+        ResponseEntity<JsonNode> saved =
+                as(HttpMethod.PUT, "/api/v1/payments/merchant-account", t, admin, PERMS, creds(KEY_TEXT, SECRET_TEXT));
+        assertThat(saved.getStatusCode().value()).isEqualTo(200);
+        assertThat(saved.getBody().get("status").asString()).isEqualTo("not_connected");
+        assertThat(saved.getBody().get("credentials_saved").asBoolean()).isTrue();
+        assertThat(saved.getBody().get("key_hint").asString()).isEqualTo("0001");
+        ResponseEntity<JsonNode> tested =
+                as(HttpMethod.POST, "/api/v1/payments/merchant-account/test", t, admin, PERMS, null);
+        ResponseEntity<JsonNode> read = as(HttpMethod.GET, "/api/v1/payments/merchant-account", t, admin, PERMS, null);
+        for (ResponseEntity<JsonNode> r : List.of(saved, tested, read)) {
+            assertThat(r.getBody().toString()).doesNotContain(SECRET_TEXT).doesNotContain(KEY_TEXT);
+            assertThat(r.getHeaders().getCacheControl()).contains("no-store");
+        }
+        assertThat(new java.util.ArrayList<>(read.getBody().propertyNames()))
+                .noneMatch(f -> f.contains("secret") || f.equals("consumer_key"));
+        // The stored boxes are ciphertext: neither value appears in any column, and the audit log is clean.
+        Map<String, Object> raw = TestDatabase.owner()
+                .sql("SELECT * FROM payment_gateway_accounts WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .query()
+                .singleRow();
+        assertThat(raw.toString()).doesNotContain(SECRET_TEXT).doesNotContain(KEY_TEXT);
+        assertThat(new String((byte[]) raw.get("consumer_secret_enc"), java.nio.charset.StandardCharsets.ISO_8859_1))
+                .doesNotContain(SECRET_TEXT);
+        assertThat(new String((byte[]) raw.get("consumer_key_enc"), java.nio.charset.StandardCharsets.ISO_8859_1))
+                .doesNotContain(KEY_TEXT);
+        assertThat(raw.get("data_key_id")).isNotNull();
+        assertThat(raw.get("ipn_token_hash").toString())
+                .hasSize(64)
+                .doesNotContain(fake.registeredUrl(PaymentGateway.Account.tenant(t.tenantId()))
+                        .substring(fake.registeredUrl(PaymentGateway.Account.tenant(t.tenantId()))
+                                        .lastIndexOf('/')
+                                + 1));
+        List<String> audit = TestDatabase.owner()
+                .sql(
+                        "SELECT action || ' ' || data::text FROM audit_log WHERE tenant_id = ? AND action LIKE 'core.payments.account.%'")
+                .param(t.tenantId())
+                .query(String.class)
+                .list();
+        assertThat(audit).hasSize(2);
+        assertThat(String.join(" ", audit)).doesNotContain(SECRET_TEXT).doesNotContain(KEY_TEXT);
+        // The credentials are readable only by the code that decrypts them for the tenant: the gateway sees them.
+        assertThat(String.join(" ", audit))
+                .contains("core.payments.account.saved")
+                .contains("core.payments.account.verified");
+    }
+
+    @Test
+    void onlyAnAdministratorMayChangeTheAccountAndAnInvalidValueIsRefused() {
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-perm", true);
+        UUID admin = user(t);
+        String readOnly = "core.settings.read,core.payments.read";
+        assertThat(as(
+                                HttpMethod.PUT,
+                                "/api/v1/payments/merchant-account",
+                                t,
+                                admin,
+                                readOnly,
+                                creds(KEY_TEXT, SECRET_TEXT))
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(403);
+        assertThat(as(HttpMethod.POST, "/api/v1/payments/merchant-account/test", t, admin, readOnly, null)
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(403);
+        assertThat(as(
+                                HttpMethod.DELETE,
+                                "/api/v1/payments/merchant-account",
+                                t,
+                                admin,
+                                readOnly,
+                                Map.of("totp_code", "000000"))
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(403);
+        assertThat(as(HttpMethod.GET, "/api/v1/payments/merchant-account", t, admin, "core.payments.read", null)
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(403);
+        assertThat(as(HttpMethod.GET, "/api/v1/payments/merchant-account", t, admin, readOnly, null)
+                        .getBody()
+                        .get("status")
+                        .asString())
+                .isEqualTo("not_connected");
+        for (Map<String, Object> bad :
+                List.of(creds("short", SECRET_TEXT), creds(KEY_TEXT, "has a space in the secret"), creds("", ""))) {
+            ResponseEntity<JsonNode> r = as(HttpMethod.PUT, "/api/v1/payments/merchant-account", t, admin, PERMS, bad);
+            assertThat(r.getStatusCode().value()).isEqualTo(422);
+            assertThat(r.getBody().toString()).doesNotContain(SECRET_TEXT);
+        }
+        // Testing with nothing saved is a conflict, not a call.
+        long before = fake.calls().size();
+        assertThat(as(HttpMethod.POST, "/api/v1/payments/merchant-account/test", t, admin, PERMS, null)
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(409);
+        assertThat(fake.calls()).hasSize((int) before);
+    }
+
+    @Test
+    void aFailedTestMarksTheAccountFailedStopsCollectingAndAPassingTestRestoresIt() {
+        fake.failRegister(
+                new GatewayException(GatewayException.Kind.AUTH, 200, "invalid_consumer_key_or_secret_provided"));
+        ResponseEntity<JsonNode> failed =
+                call(HttpMethod.POST, "/api/v1/payments/merchant-account/test", BOUND, staff, null, null);
+        assertThat(failed.getStatusCode().value()).isEqualTo(200);
+        assertThat(failed.getBody().get("status").asString()).isEqualTo("failed");
+        assertThat(failed.getBody().get("failure_reason").asString()).isEqualTo("invalid_credentials");
+        assertThat(failed.getBody().get("last_checked_at").isNull()).isFalse();
+        // A failed account collects nothing, and says so in plain terms; the platform's account is never tried.
+        ResponseEntity<JsonNode> refused = call(
+                HttpMethod.POST,
+                "/api/v1/payments/intents",
+                BOUND,
+                staff,
+                Map.of("purpose", PURPOSE, "subject_id", subject, "amount_minor", 1500, "payer_phone", "0700000123"),
+                "key-" + UUID.randomUUID());
+        assertThat(refused.getStatusCode().value()).isEqualTo(422);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("merchant_account_not_verified");
+        assertThat(fake.creates()).isZero();
+        // The operator sees the status and nothing else.
+        assertThat(operatorStatus(BOUND).status()).isEqualTo("failed");
+        // A second test within half a minute is refused, whatever the first said.
+        fake.failRegister(null);
+        ResponseEntity<JsonNode> tooSoon =
+                call(HttpMethod.POST, "/api/v1/payments/merchant-account/test", BOUND, staff, null, null);
+        assertThat(tooSoon.getStatusCode().value()).isEqualTo(429);
+        assertThat(tooSoon.getBody().get("code").asString()).isEqualTo("test_too_soon");
+        // A passing test restores it.
+        merchantAccounts.forgetTests();
+        ResponseEntity<JsonNode> ok =
+                call(HttpMethod.POST, "/api/v1/payments/merchant-account/test", BOUND, staff, null, null);
+        assertThat(ok.getBody().get("status").asString()).isEqualTo("verified");
+        assertThat(operatorStatus(BOUND).status()).isEqualTo("verified");
+        assertThat(create(1500).get("status").asString()).isEqualTo("pending");
+    }
+
+    String tokenFromFake(TestDatabase.Fixture t) {
+        String url = fake.registeredUrl(PaymentGateway.Account.tenant(t.tenantId()));
+        return url.substring(url.lastIndexOf('/') + 1);
+    }
+
+    @Autowired
+    MerchantAccountOperatorController operator;
+
+    MerchantAccountOperatorController.Status operatorStatus(TestDatabase.Fixture t) {
+        return operator.get(t.tenantId(), new org.springframework.mock.web.MockHttpServletResponse());
+    }
+
+    @Test
+    void aProviderThatCannotBeReachedMarksNothingAndALendersBadSecretNeverOpensTheSharedBreaker() {
+        fake.failRegister(new GatewayException(GatewayException.Kind.TRANSIENT, 0, "timeout"));
+        ResponseEntity<JsonNode> down =
+                call(HttpMethod.POST, "/api/v1/payments/merchant-account/test", BOUND, staff, null, null);
+        assertThat(down.getStatusCode().value()).isEqualTo(502);
+        assertThat(down.getBody().get("code").asString()).isEqualTo("provider_unreachable");
+        // Nothing changed: the account is still verified and still collects.
+        assertThat(call(HttpMethod.GET, "/api/v1/payments/merchant-account", BOUND, staff, null, null)
+                        .getBody()
+                        .get("status")
+                        .asString())
+                .isEqualTo("verified");
+        fake.failRegister(null);
+        assertThat(create(1500).get("status").asString()).isEqualTo("pending");
+    }
+
+    @Test
+    void credentialsAreNotReplacedOrRemovedWhileAPaymentNeedsThemUnlessOnlyTheSecretChanges() {
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-inflight", true);
+        UUID admin = user(t);
+        TestDatabase.owner()
+                .sql(
+                        "INSERT INTO payment_methods (id, tenant_id, method_key, gl_account_id) VALUES (?, ?, 'gateway', ?)")
+                .params(UUID.randomUUID(), t.tenantId(), t.account("gateway_clearing"))
+                .update();
+        UUID s = UUID.randomUUID();
+        handler.branches.put(s, t.headOffice());
+        connect(t, admin);
+        setSettings(t, admin, Map.of("collections_enabled", true, "daily_ceiling_minor", 100000000L), 200);
+        ResponseEntity<JsonNode> made = call(
+                HttpMethod.POST,
+                "/api/v1/payments/intents",
+                t,
+                admin,
+                Map.of("purpose", PURPOSE, "subject_id", s, "amount_minor", 1500, "payer_phone", "0700000123"),
+                "key-" + UUID.randomUUID());
+        assertThat(made.getStatusCode().value()).isEqualTo(201);
+        String suffix = t.slug().substring(t.slug().length() - 8);
+        // Another merchant account while an order is pending: refused.
+        ResponseEntity<JsonNode> other = as(
+                HttpMethod.PUT,
+                "/api/v1/payments/merchant-account",
+                t,
+                admin,
+                PERMS,
+                creds("another-key-0000001", "another-secret-0000001"));
+        assertThat(other.getStatusCode().value()).isEqualTo(409);
+        assertThat(other.getBody().get("code").asString()).isEqualTo("payments_in_flight");
+        assertThat(as(
+                                HttpMethod.DELETE,
+                                "/api/v1/payments/merchant-account",
+                                t,
+                                admin,
+                                PERMS,
+                                Map.of("totp_code", "000000"))
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(409);
+        // The same consumer key with a new secret (a rotation at the provider) is allowed, and needs a new test.
+        ResponseEntity<JsonNode> rotated = as(
+                HttpMethod.PUT,
+                "/api/v1/payments/merchant-account",
+                t,
+                admin,
+                PERMS,
+                creds("invented-key-" + suffix, "a-new-invented-secret-" + suffix));
+        assertThat(rotated.getStatusCode().value()).isEqualTo(200);
+        assertThat(rotated.getBody().get("status").asString()).isEqualTo("not_connected");
+        // With nothing in flight (the order is cancelled) the account can be removed.
+        String id = made.getBody().get("id").asString();
+        assertThat(call(HttpMethod.POST, "/api/v1/payments/intents/" + id + "/cancel", t, admin, null, null)
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(200);
+        ResponseEntity<JsonNode> removed = as(
+                HttpMethod.DELETE, "/api/v1/payments/merchant-account", t, admin, PERMS, Map.of("totp_code", "000000"));
+        assertThat(removed.getStatusCode().value()).isEqualTo(200);
+        assertThat(removed.getBody().get("status").asString()).isEqualTo("not_connected");
+        assertThat(removed.getBody().get("credentials_saved").asBoolean()).isFalse();
+    }
+
+    @Test
+    void anIntentOfThePlatformScopeCanNeverCarryALendersPurposeAndTheCodeRefusesThePlatformAccountForIt() {
+        // The database: a platform-scope intent must have a platform purpose.
+        UUID fresh = UUID.randomUUID();
+        String insert = """
+                INSERT INTO payment_intents (id, tenant_id, branch_id, purpose, subject_type, subject_id, payer_phone_e164,
+                                             amount_minor, currency, scope, merchant_reference, status, initiated_by,
+                                             idempotency_key, expires_at)
+                VALUES (?, ?, ?, ?, 'test_subject', ?, '+256700000001', 1500, 'UGX', 'platform', ?, 'created', ?,
+                        'scope-guard-key', now() + interval '30 minutes')
+                """;
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql(insert)
+                        .params(
+                                fresh,
+                                BOUND.tenantId(),
+                                BOUND.headOffice(),
+                                "loans.repayment",
+                                UUID.randomUUID(),
+                                "BMS-DV-" + fresh.toString().replace("-", ""),
+                                staff)
+                        .update())
+                .rootCause()
+                .hasMessageContaining("payment_intents_scope_purpose");
+        UUID platformOk = UUID.randomUUID();
+        assertThat(TestDatabase.owner()
+                        .sql(insert)
+                        .params(
+                                platformOk,
+                                BOUND.tenantId(),
+                                BOUND.headOffice(),
+                                "platform.subscription",
+                                UUID.randomUUID(),
+                                "BMS-DV-" + platformOk.toString().replace("-", ""),
+                                staff)
+                        .update())
+                .isEqualTo(1);
+        // The code: the account for a stored intent is the tenant's own; the platform's is for platform purposes only.
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> PaymentGateway.Account.forIntent("platform", BOUND.tenantId(), PURPOSE))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(PaymentGateway.Account.forIntent("tenant", BOUND.tenantId(), PURPOSE))
+                .isEqualTo(PaymentGateway.Account.tenant(BOUND.tenantId()));
+        // Everything the fake saw for this tenant was its own account.
+        create(1500);
+        assertThat(fake.accountsUsed()).allMatch(a -> a.scope() == PaymentGateway.Scope.TENANT);
+    }
+
+    @Autowired
+    AccountKeyRotation rotation;
+
+    @Test
+    void aRowSealedWithARetiredKeyIsResealedWithTheCurrentOneAndStillOpens() {
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-rotate", true);
+        UUID admin = user(t);
+        connect(t, admin);
+        // The stored key id says "old": what a row sealed before a rotation looks like to the job's worklist.
+        TestDatabase.owner()
+                .sql("UPDATE payment_gateway_accounts SET data_key_id = 'old-key' WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .update();
+        // This tenant only: rows left by other runs of a shared database were sealed by another process's ephemeral
+        // key.
+        assertThat(tenantJobs.callForTenant(t.tenantId(), () -> rotation.resealHere(currentKeyId())))
+                .isEqualTo(1);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT data_key_id FROM payment_gateway_accounts WHERE tenant_id = ?")
+                        .param(t.tenantId())
+                        .query(String.class)
+                        .single())
+                .isNotEqualTo("old-key");
+        // A second pass finds nothing for this tenant, and the credentials still open for the gateway.
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT app_tenants_with_sealed_secrets_to_reseal(?, 10)")
+                        .param(currentKeyId())
+                        .query(UUID.class)
+                        .list())
+                .doesNotContain(t.tenantId());
+    }
+
+    @Autowired
+    com.rincoltech.bms.core.identity.DataKeys dataKeys;
+
+    String currentKeyId() {
+        return dataKeys.currentKeyId();
+    }
+
+    @Test
+    void theTenantTokenIsStoredOnlyAsADigestAndSelectsOnlyItsOwnTenant() {
+        String stored = TestDatabase.owner()
+                .sql("SELECT ipn_token_hash FROM payment_gateway_accounts WHERE tenant_id = ?")
+                .param(BOUND.tenantId())
+                .query(String.class)
+                .single();
+        assertThat(stored).isEqualTo(AccountTokens.digest(token())).isNotEqualTo(token());
+        JdbcClientHolder h = new JdbcClientHolder();
+        assertThat(h.resolve(stored)).isEqualTo(BOUND.tenantId());
+        assertThat(h.resolve(AccountTokens.digest("a-token-nobody-ever-registered-0001")))
+                .isNull();
+    }
+
+    /** The definer function the callback host uses, called as the application role. */
+    static final class JdbcClientHolder {
+        UUID resolve(String digest) {
+            return org.springframework.jdbc.core.simple.JdbcClient.create(TestDatabase.appDataSource())
+                    .sql("SELECT tenant_id FROM app_resolve_payment_account('pesapal', ?)")
+                    .param(digest)
+                    .query(UUID.class)
+                    .optional()
+                    .orElse(null);
+        }
+    }
+
+    // ---- the review of #308: what the surrounding code must also hold
+    // -------------------------------------------------
+
+    @Autowired
+    StubSecurity security;
+
+    @Autowired
+    org.springframework.jdbc.core.simple.JdbcClient appJdbc;
+
+    @Test
+    void theAccountsNeedTheTenantAdminsPermissionAndASecondFactorCode() {
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-stepup", true);
+        UUID admin = user(t);
+        String manager = "core.payments.read,core.settings.read,core.settings.manage";
+        // The general settings permission is not enough to redirect where repayments are paid.
+        assertThat(as(
+                                HttpMethod.PUT,
+                                "/api/v1/payments/merchant-account",
+                                t,
+                                admin,
+                                manager,
+                                creds(KEY_TEXT, SECRET_TEXT))
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(403);
+        assertThat(as(HttpMethod.POST, "/api/v1/payments/merchant-account/test", t, admin, manager, null)
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(403);
+        // A wrong second-factor code saves nothing; a right one does.
+        Map<String, Object> wrong =
+                Map.of("consumer_key", KEY_TEXT, "consumer_secret", SECRET_TEXT, "totp_code", "123456");
+        ResponseEntity<JsonNode> refused =
+                as(HttpMethod.PUT, "/api/v1/payments/merchant-account", t, admin, PERMS, wrong);
+        assertThat(refused.getStatusCode().value()).isEqualTo(422);
+        assertThat(security.rejected).contains("123456");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM payment_gateway_accounts WHERE tenant_id = ?")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        Map<String, Object> missing = Map.of("consumer_key", KEY_TEXT, "consumer_secret", SECRET_TEXT);
+        assertThat(as(HttpMethod.PUT, "/api/v1/payments/merchant-account", t, admin, PERMS, missing)
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(422);
+        // Removing needs the code too.
+        connect(t, admin);
+        assertThat(as(
+                                HttpMethod.DELETE,
+                                "/api/v1/payments/merchant-account",
+                                t,
+                                admin,
+                                PERMS,
+                                Map.of("totp_code", "999999"))
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(422);
+        // Someone who may only read settings sees neither the key's last four characters nor the host's state.
+        JsonNode readerView = as(
+                        HttpMethod.GET, "/api/v1/payments/merchant-account", t, admin, "core.settings.read", null)
+                .getBody();
+        assertThat(readerView.get("status").asString()).isEqualTo("verified");
+        assertThat(readerView.get("key_hint").isNull()).isTrue();
+        assertThat(readerView.get("host_ready").asBoolean()).isFalse();
+    }
+
+    @Test
+    void everyChangeTellsTheOtherAdministratorsAndNoNoticeCarriesAKeyOrSecret() {
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-notice", true);
+        UUID admin = user(t);
+        security.holders = List.of(new com.rincoltech.bms.core.identity.AdminSecurity.Holder(
+                UUID.randomUUID(), "other-admin@example.test"));
+        try {
+            connect(t, admin);
+            List<String> rows = TestDatabase.owner()
+                    .sql(
+                            "SELECT recipient || ' ' || template_key || ' ' || coalesce(params::text, '') FROM notification_outbox WHERE tenant_id = ? AND template_key = 'payments.account_changed'")
+                    .param(t.tenantId())
+                    .query(String.class)
+                    .list();
+            assertThat(rows).hasSize(2);
+            assertThat(String.join(" ", rows))
+                    .contains("other-admin@example.test")
+                    .contains("saved")
+                    .doesNotContain("invented-key")
+                    .doesNotContain("invented-secret");
+            assertThat(TestDatabase.owner()
+                            .sql(
+                                    "SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action LIKE 'core.payments.account.%'")
+                            .param(t.tenantId())
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(2);
+        } finally {
+            security.holders = List.of();
+        }
+    }
+
+    @Test
+    void theConsumerKeyOfThePlatformOrOfAnotherLenderIsRefused() {
+        TestDatabase.Fixture a = TestDatabase.tenant("pay-dup-a", true);
+        TestDatabase.Fixture b = TestDatabase.tenant("pay-dup-b", true);
+        UUID adminA = user(a);
+        UUID adminB = user(b);
+        String shared = "shared-merchant-key-" + a.slug().substring(a.slug().length() - 8);
+        // The platform's own key (the property of this test context) is refused before anything is stored.
+        ResponseEntity<JsonNode> platform = as(
+                HttpMethod.PUT,
+                "/api/v1/payments/merchant-account",
+                a,
+                adminA,
+                PERMS,
+                creds("invented-platform-key", SECRET_TEXT));
+        assertThat(platform.getStatusCode().value()).isEqualTo(409);
+        assertThat(platform.getBody().get("code").asString()).isEqualTo("merchant_account_in_use");
+        assertThat(platform.getBody().get("detail").asString()).contains("already connected elsewhere");
+        // One lender takes a key; another lender cannot take the same one, whatever tenant it is.
+        assertThat(as(HttpMethod.PUT, "/api/v1/payments/merchant-account", a, adminA, PERMS, creds(shared, SECRET_TEXT))
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(200);
+        ResponseEntity<JsonNode> clash =
+                as(HttpMethod.PUT, "/api/v1/payments/merchant-account", b, adminB, PERMS, creds(shared, SECRET_TEXT));
+        assertThat(clash.getStatusCode().value()).isEqualTo(409);
+        assertThat(clash.getBody().get("code").asString()).isEqualTo("merchant_account_in_use");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM payment_gateway_accounts WHERE tenant_id = ?")
+                        .param(b.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        // The same tenant saving its own key again is not a clash.
+        assertThat(as(
+                                HttpMethod.PUT,
+                                "/api/v1/payments/merchant-account",
+                                a,
+                                adminA,
+                                PERMS,
+                                creds(shared, "a-newer-secret-0002"))
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(200);
+    }
+
+    @Test
+    void
+            oneLendersTokenWithAnotherLendersReferenceIsAScopeMismatchAndATenantWithNoAccountNeverUsesThePlatformAccount() {
+        TestDatabase.Fixture none = TestDatabase.tenant("pay-noacct", true);
+        UUID adminNone = user(none);
+        TestDatabase.owner()
+                .sql(
+                        "INSERT INTO payment_methods (id, tenant_id, method_key, gl_account_id) VALUES (?, ?, 'gateway', ?)")
+                .params(UUID.randomUUID(), none.tenantId(), none.account("gateway_clearing"))
+                .update();
+        UUID s = UUID.randomUUID();
+        handler.branches.put(s, none.headOffice());
+        // Collections cannot even be switched on with no account of its own, and a payment cannot be started.
+        JsonNode refused = setSettings(
+                none, adminNone, Map.of("collections_enabled", true, "daily_ceiling_minor", 100000000L), 409);
+        assertThat(refused.get("code").asString()).isEqualTo("merchant_account_not_verified");
+        ResponseEntity<JsonNode> r = call(
+                HttpMethod.POST,
+                "/api/v1/payments/intents",
+                none,
+                adminNone,
+                Map.of("purpose", PURPOSE, "subject_id", s, "amount_minor", 1500, "payer_phone", "0700000123"),
+                "key-" + UUID.randomUUID());
+        assertThat(r.getStatusCode().value()).isEqualTo(422);
+        // Even a forced intent row is never made an order of, nor checked with, the platform account.
+        assertThat(fake.accountsUsed()).noneMatch(a -> a.scope() == PaymentGateway.Scope.PLATFORM);
+        // Tenant A's own token with tenant B's merchant reference is a scope mismatch and matches nothing.
+        JsonNode mine = create(1500);
+        String myRef = mine.get("merchant_reference").asString();
+        String fakeRef = "BMS-DV-" + UUID.randomUUID().toString().replace("-", "");
+        long before = unmatched("scope_mismatch") + unmatched("unknown_reference");
+        ipn(token(), "aaaaaaaa-0000-4000-8000-0000000000bb", fakeRef);
+        assertThat(unmatched("scope_mismatch") + unmatched("unknown_reference")).isGreaterThan(before);
+        assertThat(myRef).isNotEqualTo(fakeRef);
+    }
+
+    @Test
+    void anIntentWhoseAccountHasNoReadableCredentialsIsSkippedAndNeverClosed() {
+        JsonNode intent = create(1500);
+        String id = intent.get("id").asString();
+        TestDatabase.owner()
+                .sql("UPDATE payment_intents SET next_check_at = ? WHERE id = ?")
+                .params(
+                        java.sql.Timestamp.from(MovableClockConfig.BEFORE_MIDNIGHT.minusSeconds(5)),
+                        UUID.fromString(id))
+                .update();
+        // The real adapter reports "not_configured" for an account with no credentials; the fake is told the same.
+        fake.failQuery(new GatewayException(GatewayException.Kind.UNAVAILABLE, 0, "not_configured"));
+        // Past the whole window in which an unreachable provider would close the intent as unpaid.
+        clock.set(MovableClockConfig.BEFORE_MIDNIGHT.plus(Duration.ofDays(5)));
+        tick();
+        assertThat(statusOf(id)).isIn("pending", "expired");
+        assertThat(row(id).get("check_failures")).isEqualTo(0);
+        assertThat(row(id).get("next_check_at")).isNotNull();
+        // The credentials come back (the account is connected): the same intent is checked and booked as paid.
+        fake.failQuery(null);
+        pay(intent, 1500, "UGX", "CONF-NOCRED-1");
+        clock.set(MovableClockConfig.BEFORE_MIDNIGHT.plus(Duration.ofDays(5)).plus(Duration.ofHours(2)));
+        TestDatabase.owner()
+                .sql("UPDATE payment_intents SET next_check_at = ? WHERE id = ?")
+                .params(java.sql.Timestamp.from(MovableClockConfig.BEFORE_MIDNIGHT), UUID.fromString(id))
+                .update();
+        tick();
+        assertThat(statusOf(id)).isIn("paid", "booked");
+    }
+
+    @Autowired
+    AccountCredentials credentials;
+
+    @Test
+    void theStoredCredentialsAreReadThroughTheDatabaseForTheBoundTenantOnly() {
+        // The adapter's own read (a transaction of its own, bound to the tenant of the thread): the decrypted pair of
+        // the
+        // bound tenant, and nothing for another tenant's account asked for from this tenant's thread.
+        String suffix = BOUND.slug().substring(BOUND.slug().length() - 8);
+        var own = tenantJobs.callAs(
+                BOUND.tenantId(), () -> credentials.find(PaymentGateway.Account.tenant(BOUND.tenantId())));
+        assertThat(own).isPresent();
+        assertThat(own.get().key()).isEqualTo("invented-key-" + suffix);
+        assertThat(own.get().ipnId()).isNotBlank();
+        var theirs = tenantJobs.callAs(
+                BOUND.tenantId(), () -> credentials.find(PaymentGateway.Account.tenant(OTHER.tenantId())));
+        assertThat(theirs).isEmpty();
+        // With no tenant bound at all, nothing either (and no error).
+        assertThat(credentials.find(PaymentGateway.Account.tenant(BOUND.tenantId())))
+                .isEmpty();
+    }
+
+    @Test
+    void theOperatorsStatusAndReleaseAnswerOnlyToAConnectionWithNoTenantBound() throws Exception {
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-operator", true);
+        UUID admin = user(t);
+        connect(t, admin);
+        org.springframework.jdbc.core.simple.JdbcClient app =
+                org.springframework.jdbc.core.simple.JdbcClient.create(TestDatabase.appDataSource());
+        assertThat(app.sql("SELECT status FROM app_payment_account_status(?)")
+                        .param(t.tenantId())
+                        .query(String.class)
+                        .list())
+                .containsExactly("verified");
+        // From inside a tenant's own transaction (any tenant) the same functions return nothing and delete nothing.
+        try (java.sql.Connection c = TestDatabase.appDataSource().getConnection()) {
+            c.setAutoCommit(false);
+            try (java.sql.Statement st = c.createStatement()) {
+                st.execute("SELECT set_config('app.tenant_id', '" + BOUND.tenantId() + "', true)");
+                try (java.sql.ResultSet rs =
+                        st.executeQuery("SELECT * FROM app_payment_account_status('" + t.tenantId() + "')")) {
+                    assertThat(rs.next()).isFalse();
+                }
+                try (java.sql.ResultSet rs =
+                        st.executeQuery("SELECT app_release_payment_account('" + t.tenantId() + "')")) {
+                    assertThat(rs.next() && rs.getString(1) == null).isTrue();
+                }
+            }
+            c.rollback();
+        }
+        assertThat(count(t)).isEqualTo(1);
+        // The platform's connection releases it and is told what it was.
+        assertThat(app.sql("SELECT app_release_payment_account(?)")
+                        .param(t.tenantId())
+                        .query(String.class)
+                        .single())
+                .isEqualTo("verified");
+        assertThat(count(t)).isZero();
+        assertThat(app.sql("SELECT app_release_payment_account(?)")
+                        .param(t.tenantId())
+                        .query(String.class)
+                        .optional())
+                .isEmpty();
+    }
+
+    long count(TestDatabase.Fixture t) {
+        return TestDatabase.owner()
+                .sql("SELECT count(*) FROM payment_gateway_accounts WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .query(Long.class)
+                .single();
+    }
+
+    @Test
+    void aProviderRefusalOfTheLendersCredentialsNeverClosesOrCancelsAnIntentTheBorrowerMayHavePaid() {
+        JsonNode intent = create(1500);
+        String id = intent.get("id").asString();
+        TestDatabase.owner()
+                .sql("UPDATE payment_intents SET next_check_at = ? WHERE id = ?")
+                .params(
+                        java.sql.Timestamp.from(MovableClockConfig.BEFORE_MIDNIGHT.minusSeconds(5)),
+                        UUID.fromString(id))
+                .update();
+        // The lender rotated its secret at Pesapal: every status query is refused as an authentication error.
+        fake.failQuery(
+                new GatewayException(GatewayException.Kind.AUTH, 200, "invalid_consumer_key_or_secret_provided"));
+        // Past the 48 hours after which an unreachable provider would end the intent unpaid and cancel the order.
+        clock.set(MovableClockConfig.BEFORE_MIDNIGHT.plus(Duration.ofDays(5)));
+        tick();
+        assertThat(statusOf(id)).isIn("pending", "expired");
+        assertThat(row(id).get("next_check_at")).isNotNull();
+        assertThat(fake.calls()).noneMatch(c -> c.startsWith("cancel:"));
+        // The same after the backoff the adapter reports on the next pass.
+        fake.failQuery(new GatewayException(GatewayException.Kind.AUTH, 0, "auth_backoff"));
+        clock.set(MovableClockConfig.BEFORE_MIDNIGHT.plus(Duration.ofDays(5)).plus(Duration.ofHours(2)));
+        TestDatabase.owner()
+                .sql("UPDATE payment_intents SET next_check_at = ? WHERE id = ?")
+                .params(java.sql.Timestamp.from(MovableClockConfig.BEFORE_MIDNIGHT), UUID.fromString(id))
+                .update();
+        tick();
+        assertThat(statusOf(id)).isIn("pending", "expired");
+        assertThat(fake.calls()).noneMatch(c -> c.startsWith("cancel:"));
+        // The credentials work again: the payment the borrower made is found and booked.
+        fake.failQuery(null);
+        pay(intent, 1500, "UGX", "CONF-AUTH-1");
+        clock.set(MovableClockConfig.BEFORE_MIDNIGHT.plus(Duration.ofDays(6)));
+        TestDatabase.owner()
+                .sql("UPDATE payment_intents SET next_check_at = ? WHERE id = ?")
+                .params(java.sql.Timestamp.from(MovableClockConfig.BEFORE_MIDNIGHT), UUID.fromString(id))
+                .update();
+        tick();
+        assertThat(statusOf(id)).isIn("paid", "booked");
+    }
+
+    @Test
+    void aKeyOnTheOperatorsRefusedListIsRefusedEvenThoughItIsNotThePlatformPairAndOnlyAfterTheCode() {
+        // "rincol-owned-key-0000001" is on the list (its SHA-256) but is not the configured platform pair.
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-refused", true);
+        UUID admin = user(t);
+        ResponseEntity<JsonNode> refused = as(
+                HttpMethod.PUT,
+                "/api/v1/payments/merchant-account",
+                t,
+                admin,
+                PERMS,
+                creds("rincol-owned-key-0000001", SECRET_TEXT));
+        assertThat(refused.getStatusCode().value()).isEqualTo(409);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("merchant_account_in_use");
+        assertThat(count(t)).isZero();
+        // Someone who has not passed the second factor is told nothing about the key.
+        ResponseEntity<JsonNode> noCode = as(
+                HttpMethod.PUT,
+                "/api/v1/payments/merchant-account",
+                t,
+                admin,
+                PERMS,
+                Map.of(
+                        "consumer_key",
+                        "rincol-owned-key-0000001",
+                        "consumer_secret",
+                        SECRET_TEXT,
+                        "totp_code",
+                        "111111"));
+        assertThat(noCode.getStatusCode().value()).isEqualTo(422);
+        assertThat(noCode.getBody().get("code").asString()).isEqualTo("invalid_code");
+    }
+
+    @Test
+    void aKeyHeldByAnotherTenantUnderARetiredKeysDigestIsStillACLash() {
+        // A row sealed before a rotation keeps the digest of its old key: the lookup passes the digests under the
+        // current
+        // key and under each retired one, and finds it.
+        TestDatabase.Fixture a = TestDatabase.tenant("pay-rot-a", true);
+        UUID adminA = user(a);
+        String oldDigest = "ab".repeat(32);
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO payment_gateway_accounts (id, tenant_id, consumer_key_enc, consumer_secret_enc,
+                                                              consumer_key_hmac, key_hint, data_key_id, status, updated_by)
+                        VALUES (?, ?, ?, ?, ?, 'abcd', 'old-key', 'saved', ?)
+                        """)
+                .params(UUID.randomUUID(), a.tenantId(), new byte[40], new byte[40], oldDigest, adminA)
+                .update();
+        org.springframework.jdbc.core.simple.JdbcClient app =
+                org.springframework.jdbc.core.simple.JdbcClient.create(TestDatabase.appDataSource());
+        UUID someoneElse = UUID.randomUUID();
+        String currentDigest = "cd".repeat(32);
+        assertThat(app.sql("SELECT app_payment_account_key_in_use('pesapal', ARRAY[?, ?], ?)")
+                        .params(currentDigest, oldDigest, someoneElse)
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
+        assertThat(app.sql("SELECT app_payment_account_key_in_use('pesapal', ARRAY[?], ?)")
+                        .params(currentDigest, someoneElse)
+                        .query(Boolean.class)
+                        .single())
+                .isFalse();
+        // Its own tenant is never a clash with itself.
+        assertThat(app.sql("SELECT app_payment_account_key_in_use('pesapal', ARRAY[?], ?)")
+                        .params(oldDigest, a.tenantId())
+                        .query(Boolean.class)
+                        .single())
+                .isFalse();
+    }
+
+    @Test
+    void testingAnAccountThatIsAlreadyRegisteredKeepsItsNotificationAddressAndMakesNoNewRegistration() {
+        String hashBefore = TestDatabase.owner()
+                .sql("SELECT ipn_token_hash FROM payment_gateway_accounts WHERE tenant_id = ?")
+                .param(BOUND.tenantId())
+                .query(String.class)
+                .single();
+        String ipnBefore = TestDatabase.owner()
+                .sql("SELECT ipn_id FROM payment_gateway_accounts WHERE tenant_id = ?")
+                .param(BOUND.tenantId())
+                .query(String.class)
+                .single();
+        fake.reset();
+        merchantAccounts.forgetTests();
+        ResponseEntity<JsonNode> again =
+                call(HttpMethod.POST, "/api/v1/payments/merchant-account/test", BOUND, staff, null, null);
+        assertThat(again.getStatusCode().value()).isEqualTo(200);
+        assertThat(again.getBody().get("status").asString()).isEqualTo("verified");
+        // Only the credentials were checked: no new address was registered, and the one orders were made with still
+        // stands.
+        assertThat(fake.calls()).contains("check").noneMatch(c -> c.startsWith("register:"));
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT ipn_token_hash FROM payment_gateway_accounts WHERE tenant_id = ?")
+                        .param(BOUND.tenantId())
+                        .query(String.class)
+                        .single())
+                .isEqualTo(hashBefore);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT ipn_id FROM payment_gateway_accounts WHERE tenant_id = ?")
+                        .param(BOUND.tenantId())
+                        .query(String.class)
+                        .single())
+                .isEqualTo(ipnBefore);
+        // The address still reaches its order.
+        JsonNode intent = create(1500);
+        ipn(token(), tracking(intent), intent.get("merchant_reference").asString());
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM payment_callbacks WHERE intent_id = ?")
+                        .param(UUID.fromString(intent.get("id").asString()))
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void anIntentIsBoundToTheMerchantAccountItWasMadeUnderAndIsNeverCheckedWithAnothersCredentials() {
+        JsonNode intent = create(1500);
+        UUID merchant = TestDatabase.owner()
+                .sql("SELECT merchant_id FROM payment_gateway_accounts WHERE tenant_id = ?")
+                .param(BOUND.tenantId())
+                .query(UUID.class)
+                .single();
+        assertThat(row(intent.get("id").asString()).get("merchant_id")).isEqualTo(merchant);
+        // While the account is still that merchant account the credentials resolve for the intent's account...
+        PaymentGateway.Account forIntent =
+                PaymentGateway.Account.forIntent("tenant", BOUND.tenantId(), PURPOSE, merchant);
+        assertThat(tenantJobs.callAs(BOUND.tenantId(), () -> credentials.find(forIntent)))
+                .isPresent();
+        // ...and once the stored account is another merchant account (a different consumer key, or after a release and
+        // a
+        // new connection) they do not: "no credentials", so the intent is skipped, never checked with the new
+        // merchant's.
+        UUID before = merchant;
+        TestDatabase.owner()
+                .sql("UPDATE payment_gateway_accounts SET merchant_id = gen_random_uuid() WHERE tenant_id = ?")
+                .param(BOUND.tenantId())
+                .update();
+        try {
+            assertThat(tenantJobs.callAs(BOUND.tenantId(), () -> credentials.find(forIntent)))
+                    .isEmpty();
+            // A current order (no merchant given) resolves the tenant's present account as before.
+            assertThat(tenantJobs.callAs(
+                            BOUND.tenantId(), () -> credentials.find(PaymentGateway.Account.tenant(BOUND.tenantId()))))
+                    .isPresent();
+        } finally {
+            TestDatabase.owner()
+                    .sql("UPDATE payment_gateway_accounts SET merchant_id = ? WHERE tenant_id = ?")
+                    .params(before, BOUND.tenantId())
+                    .update();
+        }
+    }
+
+    @Test
+    void aReleaseNeedsAReasonOfRealLength() {
+        jakarta.validation.Validator v =
+                jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator();
+        assertThat(v.validate(new MerchantAccountOperatorController.ReleaseRequest("short")))
+                .isNotEmpty();
+        assertThat(v.validate(new MerchantAccountOperatorController.ReleaseRequest(" ")))
+                .isNotEmpty();
+        assertThat(v.validate(new MerchantAccountOperatorController.ReleaseRequest(null)))
+                .isNotEmpty();
+        assertThat(v.validate(new MerchantAccountOperatorController.ReleaseRequest("The merchant key was exposed.")))
+                .isEmpty();
+    }
+
+    @Autowired
+    VerifiedAccounts verifiedAccounts;
+
+    /** A verified account row for a tenant, with a consumer key sealed with the data key, inserted as the owner. */
+    void insertVerified(TestDatabase.Fixture t, UUID user, String consumerKey, UUID merchantId) {
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO payment_gateway_accounts (id, tenant_id, merchant_id, consumer_key_enc, consumer_secret_enc,
+                                consumer_key_hmac, key_hint, data_key_id, status, ipn_id, ipn_token_hash, ipn_registered_at,
+                                last_checked_at, updated_by)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'verified', ?, ?, now(), now(), ?)
+                        """)
+                .params(
+                        UUID.randomUUID(),
+                        t.tenantId(),
+                        merchantId,
+                        dataKeys.seal(consumerKey.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                        dataKeys.seal("an-invented-secret-0001".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                        UUID.randomUUID().toString().replace("-", "")
+                                + UUID.randomUUID().toString().replace("-", ""),
+                        consumerKey.substring(consumerKey.length() - 4),
+                        dataKeys.currentKeyId(),
+                        UUID.randomUUID().toString(),
+                        UUID.randomUUID().toString().replace("-", "")
+                                + UUID.randomUUID().toString().replace("-", ""),
+                        user)
+                .update();
+    }
+
+    @Test
+    void aKeySavedBeforeTheRefusedListNamedItIsRefusedWhenTestedAndWhenUsed() {
+        // "rincol-owned-key-0000001" is on the operator's refused list of this context. Saved while the list was empty
+        // (or the
+        // gateway off) it was accepted; now that the list names it, nothing may use it.
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-early", true);
+        UUID admin = user(t);
+        insertVerified(t, admin, "rincol-owned-key-0000001", UUID.randomUUID());
+        // Used: not a verified account any more (so collections cannot be switched on and no intent can be made)...
+        assertThat(tenantJobs.callForTenant(t.tenantId(), () -> verifiedAccounts.merchant()))
+                .isEmpty();
+        assertThat(tenantJobs.callForTenant(t.tenantId(), () -> verifiedAccounts.verified()))
+                .isFalse();
+        // ...its credentials resolve to nothing, so no order is made or checked with it...
+        assertThat(tenantJobs.callAs(t.tenantId(), () -> credentials.find(PaymentGateway.Account.tenant(t.tenantId()))))
+                .isEmpty();
+        // ...switching collections on is refused...
+        TestDatabase.owner()
+                .sql(
+                        "INSERT INTO payment_methods (id, tenant_id, method_key, gl_account_id) VALUES (?, ?, 'gateway', ?)")
+                .params(UUID.randomUUID(), t.tenantId(), t.account("gateway_clearing"))
+                .update();
+        assertThat(setSettings(t, admin, Map.of("collections_enabled", true, "daily_ceiling_minor", 100000000L), 409)
+                        .get("code")
+                        .asString())
+                .isEqualTo("merchant_account_not_verified");
+        // ...and a test marks it failed, with no call to the provider.
+        long before = fake.calls().size();
+        ResponseEntity<JsonNode> tested =
+                as(HttpMethod.POST, "/api/v1/payments/merchant-account/test", t, admin, PERMS, null);
+        assertThat(tested.getStatusCode().value()).isEqualTo(200);
+        assertThat(tested.getBody().get("status").asString()).isEqualTo("failed");
+        assertThat(tested.getBody().get("failure_reason").asString()).isEqualTo("account_not_allowed");
+        assertThat(fake.calls()).hasSize((int) before);
+        // A control: an ordinary key on the same kind of row is a verified account.
+        TestDatabase.Fixture ok = TestDatabase.tenant("pay-early-ok", true);
+        insertVerified(ok, user(ok), "an-ordinary-key-0000001", UUID.randomUUID());
+        assertThat(tenantJobs.callForTenant(ok.tenantId(), () -> verifiedAccounts.verified()))
+                .isTrue();
+    }
+
+    @Test
+    void theSameKeyIsTheSameMerchantAfterAReleaseAndAnotherKeyRetiresTheOldMerchantsIntentsInsteadOfBlockingForEver() {
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-merchant", true);
+        UUID admin = user(t);
+        String key = "merchant-key-" + t.slug().substring(t.slug().length() - 8);
+        String path = "/api/v1/payments/merchant-account";
+        java.util.function.Supplier<UUID> merchant = () -> TestDatabase.owner()
+                .sql("SELECT merchant_id FROM payment_gateway_accounts WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .query(UUID.class)
+                .single();
+        assertThat(as(HttpMethod.PUT, path, t, admin, PERMS, creds(key, "first-secret-0000001"))
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(200);
+        UUID first = merchant.get();
+        // Test it (a new registration), then change only the secret: the registered address stays, the account needs no
+        // new registration, and the test only checks the credentials.
+        assertThat(as(HttpMethod.POST, path + "/test", t, admin, PERMS, null)
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(200);
+        String ipnBefore = TestDatabase.owner()
+                .sql("SELECT ipn_id FROM payment_gateway_accounts WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .query(String.class)
+                .single();
+        assertThat(as(HttpMethod.PUT, path, t, admin, PERMS, creds(key, "second-secret-000002"))
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(200);
+        assertThat(merchant.get()).isEqualTo(first);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT ipn_id FROM payment_gateway_accounts WHERE tenant_id = ?")
+                        .param(t.tenantId())
+                        .query(String.class)
+                        .single())
+                .as("the same merchant keeps its notification address across a new secret")
+                .isEqualTo(ipnBefore);
+        merchantAccounts.forgetTests();
+        fake.reset();
+        assertThat(as(HttpMethod.POST, path + "/test", t, admin, PERMS, null)
+                        .getBody()
+                        .get("status")
+                        .asString())
+                .isEqualTo("verified");
+        assertThat(fake.calls()).noneMatch(c -> c.startsWith("register:"));
+
+        // An order made under the first merchant, still scheduled.
+        UUID intent = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO payment_intents (id, tenant_id, branch_id, purpose, subject_type, subject_id, payer_phone_e164,
+                                amount_minor, currency, merchant_reference, status, initiated_by, idempotency_key, expires_at,
+                                provider_reference, redirect_url, next_check_at, merchant_id)
+                        VALUES (?, ?, ?, 'test.payment', 'test_subject', ?, '+256700000001', 1500, 'UGX', ?, 'pending', ?, 'merchant-key-1',
+                                now() + interval '30 minutes', ?, 'https://pay.fake.example.test/x', now() + interval '1 hour', ?)
+                        """)
+                .params(
+                        intent,
+                        t.tenantId(),
+                        t.headOffice(),
+                        UUID.randomUUID(),
+                        "BMS-DV-" + intent.toString().replace("-", ""),
+                        admin,
+                        UUID.randomUUID().toString(),
+                        first)
+                .update();
+        // While it is scheduled, another merchant account is refused (it could not check it)...
+        assertThat(as(HttpMethod.PUT, path, t, admin, PERMS, creds("another-merchant-" + key, "third-secret-0000003"))
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(409);
+        // ...the operator releases the account (the owner stands in for the console)...
+        TestDatabase.owner()
+                .sql("DELETE FROM payment_gateway_accounts WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .update();
+        // ...and the SAME key again is the same merchant, so that order is still its own and still checked.
+        assertThat(as(HttpMethod.PUT, path, t, admin, PERMS, creds(key, "fourth-secret-000004"))
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(200);
+        assertThat(merchant.get()).isEqualTo(first);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT status FROM payment_intents WHERE id = ?")
+                        .param(intent)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("pending");
+        // Another key after another release: the old merchant's order is handed to a person, not left waiting for
+        // ever...
+        TestDatabase.owner()
+                .sql("DELETE FROM payment_gateway_accounts WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .update();
+        assertThat(as(HttpMethod.PUT, path, t, admin, PERMS, creds("another-merchant-" + key, "fifth-secret-0000005"))
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(200);
+        Map<String, Object> retired = TestDatabase.owner()
+                .sql("SELECT status, refusal_code, next_check_at FROM payment_intents WHERE id = ?")
+                .param(intent)
+                .query()
+                .singleRow();
+        assertThat(retired.get("status")).isEqualTo("needs_attention");
+        assertThat(retired.get("refusal_code")).isEqualTo("merchant_changed");
+        assertThat(retired.get("next_check_at")).isNull();
+        // ...and it no longer blocks a later change of key.
+        assertThat(as(HttpMethod.PUT, path, t, admin, PERMS, creds("yet-another-" + key, "sixth-secret-0000006"))
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(200);
+    }
+
+    @Test
+    void aSuspendedTenantsAdministratorsStillHearOfAnOperatorRelease() {
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-suspended", true);
+        security.holders = List.of(new com.rincoltech.bms.core.identity.AdminSecurity.Holder(
+                UUID.randomUUID(), "suspended-admin@example.test"));
+        try {
+            TestDatabase.owner()
+                    .sql("UPDATE tenants SET status = 'suspended' WHERE id = ?")
+                    .param(t.tenantId())
+                    .update();
+            merchantAccounts.notifyReleased(t.tenantId(), UUID.randomUUID());
+            assertThat(TestDatabase.owner()
+                            .sql(
+                                    "SELECT count(*) FROM notification_outbox WHERE tenant_id = ? AND template_key = 'payments.account_changed' AND recipient = 'suspended-admin@example.test'")
+                            .param(t.tenantId())
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(1);
+        } finally {
+            security.holders = List.of();
+        }
     }
 }

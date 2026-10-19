@@ -116,4 +116,31 @@ class CallbackLimiterTest {
         assertThat(other.tryAcquire(CallbackLimiter.Bucket.IPN, null)).isTrue();
         assertThat(other.tryAcquire(CallbackLimiter.Bucket.IPN, null)).isFalse();
     }
+
+    @Test
+    void theWrongTokenPreCheckLooksAtTheAddressesOwnCountOnlyNotTheBucketsOverallTotal() {
+        CallbackLimiter limiter = limiter(3, 4);
+        // Four different addresses use up the bucket's overall total with one wrong token each.
+        for (int i = 1; i <= 4; i++) {
+            assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.BAD_TOKEN, "203.0.113." + i))
+                    .isTrue();
+        }
+        assertThat(limiter.tryAcquire(CallbackLimiter.Bucket.BAD_TOKEN, "203.0.113.9"))
+                .isFalse();
+        // A genuine lender's address, with no wrong token of its own, is still looked up: a flood from elsewhere does
+        // not
+        // shut the door on it.
+        assertThat(limiter.exhausted(CallbackLimiter.Bucket.BAD_TOKEN, "198.51.100.7"))
+                .isFalse();
+        // An address that has itself used its quota is held back before any lookup.
+        CallbackLimiter own = limiter(2, 1000);
+        own.tryAcquire(CallbackLimiter.Bucket.BAD_TOKEN, "203.0.113.1");
+        assertThat(own.exhausted(CallbackLimiter.Bucket.BAD_TOKEN, "203.0.113.1"))
+                .isFalse();
+        own.tryAcquire(CallbackLimiter.Bucket.BAD_TOKEN, "203.0.113.1");
+        assertThat(own.exhausted(CallbackLimiter.Bucket.BAD_TOKEN, "203.0.113.1"))
+                .isTrue();
+        assertThat(own.exhausted(CallbackLimiter.Bucket.BAD_TOKEN, "203.0.113.2"))
+                .isFalse();
+    }
 }

@@ -28,7 +28,7 @@ class IntentStore {
             + " failure_reason, refusal_code, initiated_by, expires_at, paid_amount_minor, paid_currency, confirmation_code,"
             + " reported_method, paid_at, verified_at, booked_subject_txn_id, booked_at, last_checked_at, next_check_at,"
             + " check_requested_at, check_failures, technical_failures, creation_lease_until, creation_attempts,"
-            + " order_verified_at";
+            + " order_verified_at, merchant_id";
 
     /** The columns {@link #update} may set: the ones that move with the intent's life, never the request. */
     private static final Set<String> SETTABLE = Set.of(
@@ -92,7 +92,8 @@ class IntentStore {
             int technicalFailures,
             Instant creationLeaseUntil,
             int creationAttempts,
-            Instant orderVerifiedAt) {
+            Instant orderVerifiedAt,
+            UUID merchantId) {
 
         /** A new intent as the first transaction writes it: created, nothing yet known from the provider. */
         static Intent created(
@@ -109,7 +110,8 @@ class IntentStore {
                 String scope,
                 String merchantReference,
                 UUID initiatedBy,
-                Instant expiresAt) {
+                Instant expiresAt,
+                UUID merchantId) {
             return new Intent(
                     id,
                     tenantId,
@@ -145,7 +147,8 @@ class IntentStore {
                     0,
                     null,
                     0,
-                    null);
+                    null,
+                    merchantId);
         }
 
         @Override
@@ -205,7 +208,8 @@ class IntentStore {
                 rs.getInt("technical_failures"),
                 instant(rs, "creation_lease_until"),
                 rs.getInt("creation_attempts"),
-                instant(rs, "order_verified_at"));
+                instant(rs, "order_verified_at"),
+                rs.getObject("merchant_id", UUID.class));
     }
 
     // ---- reads ----------------------------------------------------------------------------------
@@ -248,9 +252,9 @@ class IntentStore {
         jdbc.sql("""
                         INSERT INTO payment_intents (id, tenant_id, created_at, updated_at, branch_id, purpose, subject_type,
                                subject_id, payer_phone_e164, amount_minor, currency, provider, scope, merchant_reference,
-                               status, initiated_by, idempotency_key, expires_at, next_check_at)
+                               status, initiated_by, idempotency_key, expires_at, next_check_at, merchant_id)
                         VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pesapal', ?, ?,
-                                'created', ?, ?, ?, ?)
+                                'created', ?, ?, ?, ?, ?)
                         """)
                 .params(
                         i.id(),
@@ -270,7 +274,8 @@ class IntentStore {
                         ts(i.expiresAt()),
                         // The creation job looks at a created intent a minute later if the request itself did not
                         // finish it.
-                        ts(i.createdAt().plusSeconds(60)))
+                        ts(i.createdAt().plusSeconds(60)),
+                        i.merchantId())
                 .update();
     }
 

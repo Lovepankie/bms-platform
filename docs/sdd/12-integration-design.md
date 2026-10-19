@@ -138,8 +138,9 @@ is the MVP path and works before any gateway is chosen.
 
 ### 12.4.4 What ADR-035 settles
 
-The gateway is Pesapal v3. The merchant relationship is the lender's own account (bound to the one tenant named by `BMS_PESAPAL_TENANT_ID` while
-credentials are environment-level; per-tenant credentials, each with its own IPN id and token, in slice #233); the platform's own merchant account is used only for
+The gateway is Pesapal v3. The merchant relationship is the lender's own account: each tenant enters and tests its own Pesapal credentials (stored sealed with the application data key, each
+account with its own IPN id and path token, slice #233), money owed to a tenant is collected only into that tenant's account and never into the platform's (a licensing
+rule, ADR-035 amendment of 2026-10-18; KTA's confirmation is pending before the first live repayment); the platform's own merchant account is used only for
 subscription payments. Notifications are untrusted hints, confirmed by an authenticated status query. The public
 reference documents no signature, no settlement report endpoint and no payout endpoint, so reconciliation re-queries
 intents and uses an uploaded merchant statement for fees, and payouts are out of scope. The fee model stays a

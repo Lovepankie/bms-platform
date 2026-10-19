@@ -4915,6 +4915,35 @@
           }
         }
       },
+      "MerchantAccount" : {
+        "properties" : {
+          "credentials_saved" : {
+            "description" : "Credentials are saved but not yet tested",
+            "type" : "boolean"
+          },
+          "failure_reason" : {
+            "description" : "A closed word saying why the last test failed: invalid_credentials or registration_refused",
+            "type" : "string"
+          },
+          "host_ready" : {
+            "description" : "The host can make the calls a test needs (given to those who may change the account only)",
+            "type" : "boolean"
+          },
+          "key_hint" : {
+            "description" : "The last four characters of the consumer key, or null (given to those who may change the account only)",
+            "type" : "string"
+          },
+          "last_checked_at" : {
+            "description" : "When the last test was made, or null",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "not_connected, verified or failed",
+            "type" : "string"
+          }
+        }
+      },
       "MfaConfirmRequest" : {
         "properties" : {
           "code" : {
@@ -5274,15 +5303,15 @@
             "type" : "integer"
           },
           "gateway_available" : {
-            "description" : "The host holds the credentials for this business's merchant account",
+            "description" : "The host can serve a business's own payment account (a provider and a callback address)",
             "type" : "boolean"
           },
           "gateway_method_mapped" : {
             "description" : "The gateway payment method posts to an active ledger account",
             "type" : "boolean"
           },
-          "merchant_bound" : {
-            "description" : "This business is the one the platform's merchant account is bound to",
+          "merchant_account_verified" : {
+            "description" : "This business has connected and tested its own payment account (Receive payments)",
             "type" : "boolean"
           },
           "version" : {
@@ -5527,6 +5556,27 @@
             "type" : "string"
           },
           "relationship" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ReleasePaymentAccountRequest" : {
+        "properties" : {
+          "reason" : {
+            "description" : "Why the account is released (10 to 300 characters); written to the platform audit log",
+            "maxLength" : 300,
+            "minLength" : 10,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "RemoveMerchantAccountRequest" : {
+        "properties" : {
+          "totp_code" : {
+            "description" : "A current code of the signed-in administrator's own authenticator (step-up), used once",
+            "maxLength" : 20,
+            "minLength" : 0,
             "type" : "string"
           }
         }
@@ -14553,6 +14603,29 @@
           }
         }
       },
+      "SaveMerchantAccountRequest" : {
+        "properties" : {
+          "consumer_key" : {
+            "description" : "The consumer key of the lender's own Pesapal merchant account",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "consumer_secret" : {
+            "description" : "The consumer secret. Write-only: it is sealed on arrival and never returned",
+            "format" : "password",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "totp_code" : {
+            "description" : "A current code of the signed-in administrator's own authenticator (step-up), used once",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
       "SaveSmsTemplateRequest" : {
         "properties" : {
           "text" : {
@@ -16058,6 +16131,22 @@
           }
         },
         "required" : [ "modules" ]
+      },
+      "TenantPaymentAccountStatus" : {
+        "properties" : {
+          "failure_reason" : {
+            "description" : "A closed word: invalid_credentials or registration_refused",
+            "type" : "string"
+          },
+          "last_checked_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "not_connected, verified or failed",
+            "type" : "string"
+          }
+        }
       },
       "TenantSettings" : {
         "properties" : {
@@ -22337,6 +22426,98 @@
         "tags" : [ "payments" ]
       }
     },
+    "/api/v1/payments/merchant-account" : {
+      "delete" : {
+        "operationId" : "removeMerchantAccount",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RemoveMerchantAccountRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MerchantAccount"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove the saved account; refused while payments still need it",
+        "tags" : [ "payments" ]
+      },
+      "get" : {
+        "operationId" : "getMerchantAccount",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MerchantAccount"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether this business receives payments into its own account (status only, never the secret)",
+        "tags" : [ "payments" ]
+      },
+      "put" : {
+        "operationId" : "saveMerchantAccount",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SaveMerchantAccountRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MerchantAccount"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Save the consumer key and secret of this business's own account; no call is made to the provider",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/merchant-account/test" : {
+      "post" : {
+        "operationId" : "testMerchantAccount",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MerchantAccount"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Test connection: get a token and register this account's notification address",
+        "tags" : [ "payments" ]
+      }
+    },
     "/api/v1/payments/settings" : {
       "get" : {
         "operationId" : "getPaymentsSettings",
@@ -23072,6 +23253,72 @@
           }
         },
         "summary" : "Switch modules on or off; data is kept (FR-TEN-03)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/payment-account" : {
+      "get" : {
+        "operationId" : "platformGetTenantPaymentAccount",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantPaymentAccountStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether a tenant has connected its own payment account (status only)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/payment-account/release" : {
+      "post" : {
+        "operationId" : "platformReleaseTenantPaymentAccount",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReleasePaymentAccountRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantPaymentAccountStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove a tenant's saved payment account although payments are in flight (audited override)",
         "tags" : [ "platform" ]
       }
     },

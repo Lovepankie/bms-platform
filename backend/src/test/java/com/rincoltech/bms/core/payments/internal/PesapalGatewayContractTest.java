@@ -9,11 +9,11 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.rincoltech.bms.core.payments.GatewayException;
 import com.rincoltech.bms.core.payments.GatewayException.Kind;
+import com.rincoltech.bms.core.payments.PaymentGateway.Account;
 import com.rincoltech.bms.core.payments.PaymentGateway.IpnRegistration;
 import com.rincoltech.bms.core.payments.PaymentGateway.IpnType;
 import com.rincoltech.bms.core.payments.PaymentGateway.OrderRequest;
 import com.rincoltech.bms.core.payments.PaymentGateway.OrderResult;
-import com.rincoltech.bms.core.payments.PaymentGateway.Scope;
 import com.rincoltech.bms.core.payments.PaymentGateway.Status;
 import com.rincoltech.bms.core.payments.PaymentGateway.StatusResult;
 import com.sun.net.httpserver.HttpExchange;
@@ -30,6 +30,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -65,6 +66,13 @@ class PesapalGatewayContractTest {
     static final String SECRET = "invented-consumer-secret-0001";
     static final String PLATFORM_KEY = "invented-platform-key-0002";
     static final String IPN_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+    static final Account TENANT = Account.tenant(UUID.fromString("00000000-0000-4000-8000-0000000000a1"));
+    static final Account PLATFORM = Account.platform();
+    static final Account SECOND = Account.tenant(UUID.fromString("00000000-0000-4000-8000-0000000000a2"));
+
+    /** The credentials each account has, as the stored rows of the lenders would give them. */
+    final Map<Account, PesapalSettings.Pair> accounts = new ConcurrentHashMap<>();
+
     static final String RETURN_URL = "https://callbacks.example.test/api/v1/payments/return/pesapal";
     static final String PHONE = "+256700000123";
     static final String D1 = "aaaaaaaa-0000-4000-8000-0000000000d1";
@@ -106,6 +114,7 @@ class PesapalGatewayContractTest {
             return Reply.json(fixture("auth-token-ok").replace("FABRICATED.TOKEN.NOT.A.REAL.JWT", "FAB.TOKEN." + n));
         });
         breaker = new CircuitBreaker(5, Duration.ofSeconds(60), clock::get);
+        accounts.put(TENANT, new PesapalSettings.Pair(KEY, SECRET, IPN_ID, null));
         gateway = gateway(Duration.ofSeconds(3));
         Logger logger = (Logger) LoggerFactory.getLogger(PesapalGateway.class);
         logger.setLevel(Level.DEBUG);
@@ -124,8 +133,7 @@ class PesapalGatewayContractTest {
     PesapalGateway gateway(Duration budget) {
         return new PesapalGateway(
                 base,
-                new PesapalSettings.Pair(KEY, SECRET, IPN_ID, "invented-tenant-path-token-0001"),
-                new PesapalSettings.Pair(null, null, null, null),
+                account -> Optional.ofNullable(accounts.get(account)),
                 RETURN_URL,
                 mapper,
                 clock::get,
@@ -200,7 +208,7 @@ class PesapalGatewayContractTest {
 
     StatusResult statusOf(String fixtureName, String requested) throws GatewayException {
         status(fixture(fixtureName));
-        return gateway.queryStatus(Scope.TENANT, requested);
+        return gateway.queryStatus(TENANT, requested);
     }
 
     // ---- the token ----------------------------------------------------------------------------------------------
@@ -208,20 +216,20 @@ class PesapalGatewayContractTest {
     @Test
     void theTokenIsCachedUntilAMinuteBeforeTheExpiryTheProviderReturnedAndThenRefreshed() throws Exception {
         route("GET /pesapalv3/api/Transactions/GetTransactionStatus", "status-pending");
-        gateway.queryStatus(Scope.TENANT, "aaaaaaaa-0000-4000-8000-000000000003");
-        gateway.queryStatus(Scope.TENANT, "aaaaaaaa-0000-4000-8000-000000000003");
+        gateway.queryStatus(TENANT, "aaaaaaaa-0000-4000-8000-000000000003");
+        gateway.queryStatus(TENANT, "aaaaaaaa-0000-4000-8000-000000000003");
         // The reference says a token lives five minutes at most; the sandbox said 3600 seconds. The expiry date rules.
         clock.set(T0.plus(Duration.ofMinutes(30)));
-        gateway.queryStatus(Scope.TENANT, "aaaaaaaa-0000-4000-8000-000000000003");
+        gateway.queryStatus(TENANT, "aaaaaaaa-0000-4000-8000-000000000003");
         assertThat(authCalls).hasValue(1);
         assertThat(requests.getLast().headers()).containsEntry("authorization", "Bearer FAB.TOKEN.1");
 
         // expiryDate is 20:47:46.93Z: a minute before it, the token is still used; inside the last minute it is not.
         clock.set(Instant.parse("2026-10-13T20:46:46Z"));
-        gateway.queryStatus(Scope.TENANT, "aaaaaaaa-0000-4000-8000-000000000003");
+        gateway.queryStatus(TENANT, "aaaaaaaa-0000-4000-8000-000000000003");
         assertThat(authCalls).hasValue(1);
         clock.set(Instant.parse("2026-10-13T20:46:48Z"));
-        gateway.queryStatus(Scope.TENANT, "aaaaaaaa-0000-4000-8000-000000000003");
+        gateway.queryStatus(TENANT, "aaaaaaaa-0000-4000-8000-000000000003");
         assertThat(authCalls).hasValue(2);
         assertThat(requests.getLast().headers()).containsEntry("authorization", "Bearer FAB.TOKEN.2");
     }
@@ -234,12 +242,12 @@ class PesapalGatewayContractTest {
             return Reply.json(fixture("auth-token-ok").replace("2026-10-13T20:47:46.933358Z", "2099-01-01T00:00:00Z"));
         });
         String pending = "aaaaaaaa-0000-4000-8000-000000000003";
-        gateway.queryStatus(Scope.TENANT, pending);
+        gateway.queryStatus(TENANT, pending);
         clock.set(T0.plus(Duration.ofHours(23)));
-        gateway.queryStatus(Scope.TENANT, pending);
+        gateway.queryStatus(TENANT, pending);
         assertThat(authCalls).hasValue(1);
         clock.set(T0.plus(Duration.ofHours(25)));
-        gateway.queryStatus(Scope.TENANT, pending);
+        gateway.queryStatus(TENANT, pending);
         assertThat(authCalls).hasValue(2);
 
         authCalls.set(0);
@@ -249,9 +257,9 @@ class PesapalGatewayContractTest {
         });
         clock.set(T0);
         PesapalGateway second = fresh();
-        second.queryStatus(Scope.TENANT, pending);
+        second.queryStatus(TENANT, pending);
         clock.set(T0.plus(Duration.ofSeconds(30)));
-        second.queryStatus(Scope.TENANT, pending);
+        second.queryStatus(TENANT, pending);
         assertThat(authCalls)
                 .as("an unreadable expiry gives a token no longer than the safety margin, so it is never reused")
                 .hasValue(2);
@@ -266,7 +274,7 @@ class PesapalGatewayContractTest {
         for (int i = 0; i < 8; i++) {
             results.add(pool.submit(() -> {
                 go.await();
-                return gateway.queryStatus(Scope.TENANT, "aaaaaaaa-0000-4000-8000-000000000003");
+                return gateway.queryStatus(TENANT, "aaaaaaaa-0000-4000-8000-000000000003");
             }));
         }
         go.countDown();
@@ -280,18 +288,17 @@ class PesapalGatewayContractTest {
     @Test
     void badCredentialsAreAnAuthFailureThatIsNotRepeatedForThirtySeconds() {
         route("POST /pesapalv3/api/Auth/RequestToken", "auth-invalid-credentials");
-        assertThatThrownBy(() -> gateway.queryStatus(Scope.TENANT, D1))
-                .isInstanceOfSatisfying(GatewayException.class, e -> {
-                    assertThat(e.kind()).isEqualTo(Kind.AUTH);
-                    assertThat(e.code()).isEqualTo("invalid_consumer_key_or_secret_provided");
-                });
+        assertThatThrownBy(() -> gateway.queryStatus(TENANT, D1)).isInstanceOfSatisfying(GatewayException.class, e -> {
+            assertThat(e.kind()).isEqualTo(Kind.AUTH);
+            assertThat(e.code()).isEqualTo("invalid_consumer_key_or_secret_provided");
+        });
         long afterFirst = hits("POST /pesapalv3/api/Auth/RequestToken");
-        assertThatThrownBy(() -> gateway.queryStatus(Scope.TENANT, D1))
+        assertThatThrownBy(() -> gateway.queryStatus(TENANT, D1))
                 .isInstanceOfSatisfying(
                         GatewayException.class, e -> assertThat(e.code()).isEqualTo("auth_backoff"));
         assertThat(hits("POST /pesapalv3/api/Auth/RequestToken")).isEqualTo(afterFirst);
         clock.set(T0.plusSeconds(31));
-        assertThatThrownBy(() -> gateway.queryStatus(Scope.TENANT, D1)).isInstanceOf(GatewayException.class);
+        assertThatThrownBy(() -> gateway.queryStatus(TENANT, D1)).isInstanceOf(GatewayException.class);
         assertThat(hits("POST /pesapalv3/api/Auth/RequestToken")).isEqualTo(afterFirst + 1);
         // No order call was ever made without a token.
         assertThat(hits("GET /pesapalv3/api/Transactions/GetTransactionStatus")).isZero();
@@ -299,9 +306,9 @@ class PesapalGatewayContractTest {
 
     @Test
     void anUnconfiguredScopeMakesNoCallAtAll() {
-        assertThat(gateway.available(Scope.TENANT)).isTrue();
-        assertThat(gateway.available(Scope.PLATFORM)).isFalse();
-        assertThatThrownBy(() -> gateway.queryStatus(Scope.PLATFORM, D1))
+        assertThat(gateway.available(TENANT)).isTrue();
+        assertThat(gateway.available(PLATFORM)).isFalse();
+        assertThatThrownBy(() -> gateway.queryStatus(PLATFORM, D1))
                 .isInstanceOfSatisfying(
                         GatewayException.class, e -> assertThat(e.kind()).isEqualTo(Kind.UNAVAILABLE));
         assertThat(requests).isEmpty();
@@ -312,7 +319,7 @@ class PesapalGatewayContractTest {
     @Test
     void anOrderIsSentWithAWholeShillingAmountTheIpnIdAndTheReturnUrlAndNothingElseAboutThePayer() throws Exception {
         route("POST /pesapalv3/api/Transactions/SubmitOrderRequest", "order-submit-ok");
-        OrderResult result = gateway.createOrder(Scope.TENANT, order());
+        OrderResult result = gateway.createOrder(TENANT, order());
 
         assertThat(result.providerReference()).isEqualTo("aaaaaaaa-0000-4000-8000-000000000003");
         assertThat(result.merchantReference()).isEqualTo(REF_1);
@@ -349,8 +356,8 @@ class PesapalGatewayContractTest {
     @Test
     void aRepeatedReferenceReturnsTheOriginalOrderAndIsNotAnError() throws Exception {
         route("POST /pesapalv3/api/Transactions/SubmitOrderRequest", "order-submit-duplicate-reference");
-        OrderResult again = gateway.createOrder(
-                Scope.TENANT, new OrderRequest(UUID.randomUUID(), REF_1, 999, "UGX", PHONE, "Payment"));
+        OrderResult again =
+                gateway.createOrder(TENANT, new OrderRequest(UUID.randomUUID(), REF_1, 999, "UGX", PHONE, "Payment"));
         assertThat(again.providerReference()).isEqualTo("aaaaaaaa-0000-4000-8000-000000000003");
         assertThat(again.merchantReference()).isEqualTo(REF_1);
     }
@@ -369,7 +376,7 @@ class PesapalGatewayContractTest {
             route("POST /pesapalv3/api/Transactions/SubmitOrderRequest", name);
             String expected =
                     mapper.readTree(fixture(name)).get("error").get("code").asString();
-            assertThatThrownBy(() -> gateway.createOrder(Scope.TENANT, order()))
+            assertThatThrownBy(() -> gateway.createOrder(TENANT, order()))
                     .as(name)
                     .isInstanceOfSatisfying(GatewayException.class, e -> {
                         assertThat(e.kind()).isEqualTo(Kind.REFUSED);
@@ -393,7 +400,7 @@ class PesapalGatewayContractTest {
                 ok.replace("\"merchant_reference\": \"" + REF_1 + "\",", ""),
                 ok.replace("\"status\": \"200\"", "\"status\": \"500\""))) {
             routes.put("POST /pesapalv3/api/Transactions/SubmitOrderRequest", r -> Reply.json(bad));
-            assertThatThrownBy(() -> gateway.createOrder(Scope.TENANT, order()))
+            assertThatThrownBy(() -> gateway.createOrder(TENANT, order()))
                     .as(bad)
                     .isInstanceOf(GatewayException.class);
         }
@@ -413,7 +420,7 @@ class PesapalGatewayContractTest {
                 new OrderRequest(good.intentId(), REF_1, 1500, "UGX", " ", "p"),
                 new OrderRequest(good.intentId(), null, 1500, "UGX", PHONE, "p"));
         for (OrderRequest r : bad) {
-            assertThatThrownBy(() -> gateway.createOrder(Scope.TENANT, r))
+            assertThatThrownBy(() -> gateway.createOrder(TENANT, r))
                     .as("%s", r)
                     .isInstanceOfSatisfying(
                             GatewayException.class, e -> assertThat(e.kind()).isEqualTo(Kind.REFUSED));
@@ -421,8 +428,8 @@ class PesapalGatewayContractTest {
         for (String id : new String[] {
             null, "", "not-a-guid", "../admin", D1 + "/../x", D1 + "?x=1", " " + D1, D1.replace('a', 'g')
         }) {
-            assertThatThrownBy(() -> gateway.queryStatus(Scope.TENANT, id)).isInstanceOf(GatewayException.class);
-            assertThatThrownBy(() -> gateway.cancelOrder(Scope.TENANT, id)).isInstanceOf(GatewayException.class);
+            assertThatThrownBy(() -> gateway.queryStatus(TENANT, id)).isInstanceOf(GatewayException.class);
+            assertThatThrownBy(() -> gateway.cancelOrder(TENANT, id)).isInstanceOf(GatewayException.class);
         }
         assertThat(requests).as("nothing went to the provider").isEmpty();
     }
@@ -431,7 +438,7 @@ class PesapalGatewayContractTest {
     void theDescriptionHasNoControlCharactersAndIsAtMostAHundredCharacters() throws Exception {
         route("POST /pesapalv3/api/Transactions/SubmitOrderRequest", "order-submit-ok");
         gateway.createOrder(
-                Scope.TENANT,
+                TENANT,
                 new OrderRequest(UUID.randomUUID(), REF_1, 1500, "UGX", PHONE, "Line\none\u0007" + "x".repeat(200)));
         String description =
                 mapper.readTree(requests.getLast().body()).get("description").asString();
@@ -471,14 +478,12 @@ class PesapalGatewayContractTest {
             status(completedBody
                     .replace("\"status_code\": 1", "\"status_code\": 2")
                     .replace("\"COMPLETED\"", "\"" + description + "\""));
-            assertThat(gateway.queryStatus(Scope.TENANT, D1).status())
-                    .as(description)
-                    .isEqualTo(Status.FAILED);
+            assertThat(gateway.queryStatus(TENANT, D1).status()).as(description).isEqualTo(Status.FAILED);
         }
         status(completedBody.replace("\"COMPLETED\"", "\"INVALID\""));
-        assertThat(gateway.queryStatus(Scope.TENANT, D1).status()).isEqualTo(Status.COMPLETED);
+        assertThat(gateway.queryStatus(TENANT, D1).status()).isEqualTo(Status.COMPLETED);
         status(completedBody.replace("\"status_code\": 1", "\"status_code\": \"1\""));
-        assertThat(gateway.queryStatus(Scope.TENANT, D1).status())
+        assertThat(gateway.queryStatus(TENANT, D1).status())
                 .as("a numeric string is read")
                 .isEqualTo(Status.COMPLETED);
     }
@@ -513,7 +518,7 @@ class PesapalGatewayContractTest {
         mutations.forEach((word, body) -> {
             status(body);
             try {
-                StatusResult r = gateway.queryStatus(Scope.TENANT, D1);
+                StatusResult r = gateway.queryStatus(TENANT, D1);
                 assertThat(r.status()).as(word).isEqualTo(Status.ANOMALY);
                 assertThat(r.anomaly()).as(word).isEqualTo(word);
             } catch (GatewayException e) {
@@ -527,15 +532,13 @@ class PesapalGatewayContractTest {
         String completed = fixture("status-completed-mobile-money");
         for (String amount : List.of("1000.55", "0.5", "1000.01", "999.999", "\"1000.5\"")) {
             status(completed.replace("\"amount\": 1000,", "\"amount\": " + amount + ","));
-            StatusResult r = gateway.queryStatus(Scope.TENANT, D1);
+            StatusResult r = gateway.queryStatus(TENANT, D1);
             assertThat(r.status()).as(amount).isEqualTo(Status.ANOMALY);
             assertThat(r.amountMinor()).as(amount).isNull();
         }
         for (String amount : List.of("1000", "1000.0", "1000.00", "\"1000\"", "1E+3")) {
             status(completed.replace("\"amount\": 1000,", "\"amount\": " + amount + ","));
-            assertThat(gateway.queryStatus(Scope.TENANT, D1).amountMinor())
-                    .as(amount)
-                    .isEqualTo(1000);
+            assertThat(gateway.queryStatus(TENANT, D1).amountMinor()).as(amount).isEqualTo(1000);
         }
     }
 
@@ -545,7 +548,7 @@ class PesapalGatewayContractTest {
                 .replace("\"MTN\"", "\"<script>alert(1)</script> MTN " + "x".repeat(80) + "\"")
                 .replace("FAKECONF0002", "C".repeat(300));
         status(completed);
-        StatusResult r = gateway.queryStatus(Scope.TENANT, D1);
+        StatusResult r = gateway.queryStatus(TENANT, D1);
         assertThat(r.paymentMethod())
                 .hasSizeLessThanOrEqualTo(40)
                 .doesNotContain("<")
@@ -559,14 +562,14 @@ class PesapalGatewayContractTest {
     @Test
     void aPendingOrderIsCancelledAndASecondCancelOrAnUnknownOrderIsARefusal() throws Exception {
         route("POST /pesapalv3/api/Transactions/CancelOrder", "cancel-ok");
-        gateway.cancelOrder(Scope.TENANT, D1);
+        gateway.cancelOrder(TENANT, D1);
         assertThat(mapper.readTree(requests.getLast().body())
                         .get("order_tracking_id")
                         .asString())
                 .isEqualTo(D1);
         for (String name : List.of("cancel-already-cancelled", "cancel-unknown-order")) {
             route("POST /pesapalv3/api/Transactions/CancelOrder", name);
-            assertThatThrownBy(() -> gateway.cancelOrder(Scope.TENANT, D1))
+            assertThatThrownBy(() -> gateway.cancelOrder(TENANT, D1))
                     .as(name)
                     .isInstanceOfSatisfying(GatewayException.class, e -> {
                         assertThat(e.kind()).isEqualTo(Kind.REFUSED);
@@ -581,7 +584,7 @@ class PesapalGatewayContractTest {
     void anIpnRegistrationReturnsTheIdAndCarriesTheUrlAndTheType() throws Exception {
         route("POST /pesapalv3/api/URLSetup/RegisterIPN", "ipn-register-get-ok");
         IpnRegistration r = gateway.registerIpn(
-                Scope.TENANT, "https://callbacks.example.test/api/v1/payments/callbacks/pesapal/TOKEN", IpnType.GET);
+                TENANT, "https://callbacks.example.test/api/v1/payments/callbacks/pesapal/TOKEN", IpnType.GET);
         assertThat(r.ipnId()).isEqualTo("aaaaaaaa-0000-4000-8000-000000000001");
         JsonNode sent = mapper.readTree(requests.getLast().body());
         assertThat(sent.get("url").asString()).endsWith("/callbacks/pesapal/TOKEN");
@@ -596,7 +599,7 @@ class PesapalGatewayContractTest {
         routes.put(
                 "POST /pesapalv3/api/URLSetup/RegisterIPN",
                 r -> calls.incrementAndGet() <= 2 ? new Reply(409, throttled, Map.of()) : Reply.json(ok));
-        IpnRegistration r = gateway.registerIpn(Scope.TENANT, "https://callbacks.example.test/x", IpnType.GET);
+        IpnRegistration r = gateway.registerIpn(TENANT, "https://callbacks.example.test/x", IpnType.GET);
         assertThat(r.ipnId()).isNotBlank();
         assertThat(calls).hasValue(3);
         assertThat(sleeps).containsExactly(Duration.ofSeconds(10), Duration.ofSeconds(10));
@@ -605,7 +608,7 @@ class PesapalGatewayContractTest {
         // It never loops for ever.
         sleeps.clear();
         routes.put("POST /pesapalv3/api/URLSetup/RegisterIPN", rq -> new Reply(409, throttled, Map.of()));
-        assertThatThrownBy(() -> gateway.registerIpn(Scope.TENANT, "https://callbacks.example.test/x", IpnType.GET))
+        assertThatThrownBy(() -> gateway.registerIpn(TENANT, "https://callbacks.example.test/x", IpnType.GET))
                 .isInstanceOfSatisfying(GatewayException.class, e -> {
                     assertThat(e.kind()).isEqualTo(Kind.THROTTLED);
                     assertThat(e.code()).isEqualTo("general_system_decline_error");
@@ -616,14 +619,14 @@ class PesapalGatewayContractTest {
     @Test
     void twoRegistrationsAreSpacedByTenSecondsOnTheClockAndAnOldEnoughOneWaitsNot() throws Exception {
         route("POST /pesapalv3/api/URLSetup/RegisterIPN", "ipn-register-get-ok");
-        gateway.registerIpn(Scope.TENANT, "https://callbacks.example.test/a", IpnType.GET);
+        gateway.registerIpn(TENANT, "https://callbacks.example.test/a", IpnType.GET);
         assertThat(sleeps).isEmpty();
         clock.set(T0.plusSeconds(4));
-        gateway.registerIpn(Scope.TENANT, "https://callbacks.example.test/b", IpnType.POST);
+        gateway.registerIpn(TENANT, "https://callbacks.example.test/b", IpnType.POST);
         assertThat(sleeps).containsExactly(Duration.ofSeconds(6));
         sleeps.clear();
         clock.set(T0.plusSeconds(60));
-        gateway.registerIpn(Scope.TENANT, "https://callbacks.example.test/c", IpnType.GET);
+        gateway.registerIpn(TENANT, "https://callbacks.example.test/c", IpnType.GET);
         assertThat(sleeps).isEmpty();
     }
 
@@ -637,7 +640,7 @@ class PesapalGatewayContractTest {
                 "https://192.168.0.7/x",
                 "not a url",
                 "https://u:p@callbacks.example.test/x")) {
-            assertThatThrownBy(() -> gateway.registerIpn(Scope.TENANT, url, IpnType.GET))
+            assertThatThrownBy(() -> gateway.registerIpn(TENANT, url, IpnType.GET))
                     .as(url)
                     .isInstanceOfSatisfying(
                             GatewayException.class, e -> assertThat(e.kind()).isEqualTo(Kind.REFUSED));
@@ -649,7 +652,7 @@ class PesapalGatewayContractTest {
     void aRefusedRegistrationKeepsTheProvidersCode() {
         for (String name : List.of("ipn-register-invalid-url", "ipn-register-invalid-type")) {
             route("POST /pesapalv3/api/URLSetup/RegisterIPN", name);
-            assertThatThrownBy(() -> gateway.registerIpn(Scope.TENANT, "https://callbacks.example.test/x", IpnType.GET))
+            assertThatThrownBy(() -> gateway.registerIpn(TENANT, "https://callbacks.example.test/x", IpnType.GET))
                     .as(name)
                     .isInstanceOfSatisfying(
                             GatewayException.class, e -> assertThat(e.kind()).isEqualTo(Kind.REFUSED));
@@ -663,30 +666,28 @@ class PesapalGatewayContractTest {
         String path = "GET /pesapalv3/api/Transactions/GetTransactionStatus";
 
         routes.put(path, r -> new Reply(401, fixture("error-missing-token"), Map.of()));
-        assertThatThrownBy(() -> fresh().queryStatus(Scope.TENANT, D1))
-                .isInstanceOfSatisfying(GatewayException.class, e -> {
-                    assertThat(e.kind()).isEqualTo(Kind.AUTH);
-                    assertThat(e.code()).isEqualTo("invalid_api_credentials_provided");
-                });
+        assertThatThrownBy(() -> fresh().queryStatus(TENANT, D1)).isInstanceOfSatisfying(GatewayException.class, e -> {
+            assertThat(e.kind()).isEqualTo(Kind.AUTH);
+            assertThat(e.code()).isEqualTo("invalid_api_credentials_provided");
+        });
         assertThat(authCalls)
                 .as("the refused token was dropped and one fresh one tried")
                 .hasValue(2);
         assertThat(hits(path)).isEqualTo(2);
 
         routes.put(path, r -> new Reply(500, fixture("error-invalid-token"), Map.of()));
-        assertThatThrownBy(() -> fresh().queryStatus(Scope.TENANT, D1))
+        assertThatThrownBy(() -> fresh().queryStatus(TENANT, D1))
                 .isInstanceOfSatisfying(
                         GatewayException.class, e -> assertThat(e.kind()).isEqualTo(Kind.AUTH));
 
         routes.put(path, r -> new Reply(404, fixture("error-not-found"), Map.of()));
-        assertThatThrownBy(() -> fresh().queryStatus(Scope.TENANT, D1))
-                .isInstanceOfSatisfying(GatewayException.class, e -> {
-                    assertThat(e.kind()).isEqualTo(Kind.BAD_RESPONSE);
-                    assertThat(e.code()).isEqualTo("http_404");
-                });
+        assertThatThrownBy(() -> fresh().queryStatus(TENANT, D1)).isInstanceOfSatisfying(GatewayException.class, e -> {
+            assertThat(e.kind()).isEqualTo(Kind.BAD_RESPONSE);
+            assertThat(e.code()).isEqualTo("http_404");
+        });
 
         routes.put(path, r -> new Reply(405, fixture("error-method-not-allowed"), Map.of()));
-        assertThatThrownBy(() -> fresh().queryStatus(Scope.TENANT, D1))
+        assertThatThrownBy(() -> fresh().queryStatus(TENANT, D1))
                 .isInstanceOfSatisfying(
                         GatewayException.class, e -> assertThat(e.code()).isEqualTo("http_405"));
     }
@@ -695,7 +696,7 @@ class PesapalGatewayContractTest {
     void aServerErrorOrAnUnreadableAnswerIsTransientAndMeansTheOutcomeIsUnknown() {
         String path = "POST /pesapalv3/api/Transactions/SubmitOrderRequest";
         routes.put(path, r -> new Reply(503, "{\"message\":\"down\"}", Map.of()));
-        assertThatThrownBy(() -> fresh().createOrder(Scope.TENANT, order()))
+        assertThatThrownBy(() -> fresh().createOrder(TENANT, order()))
                 .isInstanceOfSatisfying(GatewayException.class, e -> {
                     assertThat(e.kind()).isEqualTo(Kind.TRANSIENT);
                     assertThat(e.httpStatus()).isEqualTo(503);
@@ -705,7 +706,7 @@ class PesapalGatewayContractTest {
                 new String[] {"", "not json", "{\"order_tracking_id\":", "[]", "\"text\"", "<html>Bad gateway</html>"
                 }) {
             routes.put(path, r -> Reply.json(body));
-            assertThatThrownBy(() -> fresh().createOrder(Scope.TENANT, order()))
+            assertThatThrownBy(() -> fresh().createOrder(TENANT, order()))
                     .as(body)
                     .isInstanceOfSatisfying(GatewayException.class, e -> {
                         assertThat(e.kind()).isEqualTo(Kind.BAD_RESPONSE);
@@ -713,7 +714,7 @@ class PesapalGatewayContractTest {
                     });
         }
         routes.put(path, r -> Reply.json("{\"order_tracking_id\":\"" + "x".repeat(2_000_000) + "\"}"));
-        assertThatThrownBy(() -> fresh().createOrder(Scope.TENANT, order()))
+        assertThatThrownBy(() -> fresh().createOrder(TENANT, order()))
                 .as("a body over 1 MiB is cut and so unreadable")
                 .isInstanceOf(GatewayException.class);
     }
@@ -723,7 +724,7 @@ class PesapalGatewayContractTest {
         String path = "POST /pesapalv3/api/Transactions/SubmitOrderRequest";
         routes.put(path, r -> new Reply(302, "", Map.of("Location", "/pesapalv3/elsewhere")));
         routes.put("POST /pesapalv3/elsewhere", r -> Reply.json("{}"));
-        assertThatThrownBy(() -> gateway.createOrder(Scope.TENANT, order()))
+        assertThatThrownBy(() -> gateway.createOrder(TENANT, order()))
                 .isInstanceOfSatisfying(
                         GatewayException.class, e -> assertThat(e.code()).isEqualTo("http_302"));
         assertThat(hits("POST /pesapalv3/elsewhere")).isZero();
@@ -742,7 +743,7 @@ class PesapalGatewayContractTest {
             return Reply.json(fixture("status-pending"));
         });
         PesapalGateway impatient = gateway(Duration.ofMillis(300));
-        assertThatThrownBy(() -> impatient.queryStatus(Scope.TENANT, D1))
+        assertThatThrownBy(() -> impatient.queryStatus(TENANT, D1))
                 .isInstanceOfSatisfying(GatewayException.class, e -> {
                     assertThat(e.kind()).isEqualTo(Kind.TRANSIENT);
                     assertThat(e.code()).isEqualTo("timeout");
@@ -751,16 +752,144 @@ class PesapalGatewayContractTest {
         release.countDown();
 
         routes.put("GET /pesapalv3/api/Transactions/GetTransactionStatus", r -> null);
-        assertThatThrownBy(() -> gateway.queryStatus(Scope.TENANT, D1))
+        assertThatThrownBy(() -> gateway.queryStatus(TENANT, D1))
                 .isInstanceOfSatisfying(
                         GatewayException.class, e -> assertThat(e.kind()).isEqualTo(Kind.TRANSIENT));
 
         server.stop(0);
-        assertThatThrownBy(() -> gateway.queryStatus(Scope.TENANT, D1))
-                .isInstanceOfSatisfying(GatewayException.class, e -> {
-                    assertThat(e.kind()).isEqualTo(Kind.TRANSIENT);
-                    assertThat(e.code()).isEqualTo("connect");
-                });
+        assertThatThrownBy(() -> gateway.queryStatus(TENANT, D1)).isInstanceOfSatisfying(GatewayException.class, e -> {
+            assertThat(e.kind()).isEqualTo(Kind.TRANSIENT);
+            assertThat(e.code()).isEqualTo("connect");
+        });
+    }
+
+    // ---- a lender's own account: connect and test connection (issue #233) -------------------------------------------
+
+    @Test
+    void testConnectionGetsATokenWithTheLendersOwnKeyAndRegistersItsNotificationAddress() throws Exception {
+        accounts.put(
+                SECOND, new PesapalSettings.Pair("second-lender-key-0001", "second-lender-secret-0001", null, null));
+        route("POST /pesapalv3/api/URLSetup/RegisterIPN", "ipn-register-get-ok");
+        IpnRegistration r = gateway.registerIpn(
+                SECOND, "https://callbacks.example.test/api/v1/payments/callbacks/pesapal/LENDERTOKEN", IpnType.GET);
+        assertThat(r.ipnId()).isEqualTo("aaaaaaaa-0000-4000-8000-000000000001");
+        Recorded tokenRequest = requests.stream()
+                .filter(q -> q.route().equals("POST /pesapalv3/api/Auth/RequestToken"))
+                .findFirst()
+                .orElseThrow();
+        JsonNode sent = mapper.readTree(tokenRequest.body());
+        assertThat(sent.get("consumer_key").asString()).isEqualTo("second-lender-key-0001");
+        assertThat(sent.get("consumer_secret").asString()).isEqualTo("second-lender-secret-0001");
+        assertThat(requests.getLast().headers()).containsEntry("authorization", "Bearer FAB.TOKEN.1");
+        // No log line carries either value.
+        assertThat(logs.list.stream().map(Object::toString).toList())
+                .noneMatch(l -> l.contains("second-lender-secret-0001") || l.contains("second-lender-key-0001"));
+    }
+
+    @Test
+    void eachAccountHasItsOwnTokenAndAReplacedSecretIsUsedAtOnce() throws Exception {
+        accounts.put(
+                SECOND, new PesapalSettings.Pair("second-lender-key-0001", "second-lender-secret-0001", IPN_ID, null));
+        status(fixture("status-pending"));
+        gateway.queryStatus(TENANT, D1);
+        gateway.queryStatus(SECOND, D1);
+        assertThat(authCalls).hasValue(2);
+        gateway.queryStatus(TENANT, D1);
+        gateway.queryStatus(SECOND, D1);
+        assertThat(authCalls).hasValue(2);
+        // The second lender pastes a new secret: the cached token belongs to the old one and is not used again.
+        accounts.put(
+                SECOND, new PesapalSettings.Pair("second-lender-key-0001", "a-replaced-secret-0002", IPN_ID, null));
+        gateway.queryStatus(SECOND, D1);
+        assertThat(authCalls).hasValue(3);
+        assertThat(requests.stream()
+                        .filter(q -> q.route().equals("POST /pesapalv3/api/Auth/RequestToken"))
+                        .map(q -> q.body())
+                        .filter(b -> b.contains("a-replaced-secret-0002"))
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void aLendersRefusedCredentialsAreAnAuthFailureThatNeverOpensTheSharedBreakerOrStopsAnotherLender()
+            throws Exception {
+        accounts.put(SECOND, new PesapalSettings.Pair("wrong-key-000000001", "wrong-secret-000000001", null, null));
+        routes.put(
+                "POST /pesapalv3/api/Auth/RequestToken",
+                r -> r.body().contains("wrong-key-000000001")
+                        ? Reply.json(fixture("auth-invalid-credentials"))
+                        : Reply.json(fixture("auth-token-ok")));
+        route("POST /pesapalv3/api/URLSetup/RegisterIPN", "ipn-register-get-ok");
+        for (int i = 0; i < 8; i++) {
+            clock.updateAndGet(t -> t.plusSeconds(40));
+            assertThatThrownBy(() -> gateway.registerIpn(SECOND, "https://callbacks.example.test/x", IpnType.GET))
+                    .isInstanceOfSatisfying(GatewayException.class, e -> {
+                        assertThat(e.kind()).isEqualTo(Kind.AUTH);
+                        assertThat(e.code()).isEqualTo("invalid_consumer_key_or_secret_provided");
+                    });
+        }
+        assertThat(breaker.state()).isEqualTo(CircuitBreaker.State.CLOSED);
+        // Another lender collects as before.
+        assertThat(gateway.registerIpn(TENANT, "https://callbacks.example.test/y", IpnType.GET)
+                        .ipnId())
+                .isNotBlank();
+    }
+
+    @Test
+    void anAccountWithNoCredentialsMakesNoCallAndNeverBorrowsAnotherAccountsOrThePlatforms() {
+        accounts.put(
+                PLATFORM, new PesapalSettings.Pair("platform-key-0000001", "platform-secret-0000001", IPN_ID, "x"));
+        Account none = Account.tenant(UUID.fromString("00000000-0000-4000-8000-0000000000a3"));
+        assertThat(gateway.available(none)).isFalse();
+        assertThat(gateway.available(PLATFORM)).isTrue();
+        assertThatThrownBy(() -> gateway.createOrder(none, order()))
+                .isInstanceOfSatisfying(
+                        GatewayException.class, e -> assertThat(e.kind()).isEqualTo(Kind.UNAVAILABLE));
+        assertThatThrownBy(() -> gateway.queryStatus(none, D1)).isInstanceOf(GatewayException.class);
+        assertThatThrownBy(() -> gateway.registerIpn(none, "https://callbacks.example.test/x", IpnType.GET))
+                .isInstanceOf(GatewayException.class);
+        assertThat(requests).isEmpty();
+        // A saved but untested account (no notification registration yet) can be tested but cannot make an order.
+        accounts.put(
+                SECOND, new PesapalSettings.Pair("second-lender-key-0001", "second-lender-secret-0001", null, null));
+        assertThat(gateway.available(SECOND)).isFalse();
+        assertThatThrownBy(() -> gateway.createOrder(SECOND, order()))
+                .isInstanceOfSatisfying(
+                        GatewayException.class, e -> assertThat(e.kind()).isEqualTo(Kind.UNAVAILABLE));
+        assertThat(requests).isEmpty();
+    }
+
+    @Test
+    void checkingCredentialsAsksForAFreshTokenWithTheAccountsOwnKeyAndRegistersNothing() throws Exception {
+        accounts.put(
+                SECOND, new PesapalSettings.Pair("second-lender-key-0001", "second-lender-secret-0001", IPN_ID, null));
+        gateway.checkCredentials(SECOND);
+        assertThat(requests).hasSize(1);
+        assertThat(requests.getFirst().route()).isEqualTo("POST /pesapalv3/api/Auth/RequestToken");
+        assertThat(mapper.readTree(requests.getFirst().body())
+                        .get("consumer_key")
+                        .asString())
+                .isEqualTo("second-lender-key-0001");
+        // Each check is a fresh token, never the cached one.
+        gateway.checkCredentials(SECOND);
+        assertThat(authCalls).hasValue(2);
+        assertThat(hits("POST /pesapalv3/api/URLSetup/RegisterIPN")).isZero();
+    }
+
+    @Test
+    void checkingRefusedCredentialsIsAnAuthFailureAndAnAccountWithNoneMakesNoCall() {
+        accounts.put(SECOND, new PesapalSettings.Pair("wrong-key-000000001", "wrong-secret-000000001", IPN_ID, null));
+        route("POST /pesapalv3/api/Auth/RequestToken", "auth-invalid-credentials");
+        assertThatThrownBy(() -> gateway.checkCredentials(SECOND)).isInstanceOfSatisfying(GatewayException.class, e -> {
+            assertThat(e.kind()).isEqualTo(Kind.AUTH);
+            assertThat(e.code()).isEqualTo("invalid_consumer_key_or_secret_provided");
+        });
+        requests.clear();
+        Account none = Account.tenant(UUID.fromString("00000000-0000-4000-8000-0000000000a3"));
+        assertThatThrownBy(() -> gateway.checkCredentials(none))
+                .isInstanceOfSatisfying(
+                        GatewayException.class, e -> assertThat(e.kind()).isEqualTo(Kind.UNAVAILABLE));
+        assertThat(requests).isEmpty();
     }
 
     // ---- the breaker --------------------------------------------------------------------------------------------
@@ -770,24 +899,23 @@ class PesapalGatewayContractTest {
         String path = "GET /pesapalv3/api/Transactions/GetTransactionStatus";
         routes.put(path, r -> new Reply(503, "{}", Map.of()));
         for (int i = 0; i < 5; i++) {
-            assertThatThrownBy(() -> gateway.queryStatus(Scope.TENANT, D1)).isInstanceOf(GatewayException.class);
+            assertThatThrownBy(() -> gateway.queryStatus(TENANT, D1)).isInstanceOf(GatewayException.class);
         }
         long before = requests.size();
-        assertThatThrownBy(() -> gateway.queryStatus(Scope.TENANT, D1))
-                .isInstanceOfSatisfying(GatewayException.class, e -> {
-                    assertThat(e.kind()).isEqualTo(Kind.UNAVAILABLE);
-                    assertThat(e.code()).isEqualTo("circuit_open");
-                    assertThat(e.outcomeUnknown()).isFalse();
-                });
+        assertThatThrownBy(() -> gateway.queryStatus(TENANT, D1)).isInstanceOfSatisfying(GatewayException.class, e -> {
+            assertThat(e.kind()).isEqualTo(Kind.UNAVAILABLE);
+            assertThat(e.code()).isEqualTo("circuit_open");
+            assertThat(e.outcomeUnknown()).isFalse();
+        });
         assertThat(requests.size()).as("no call while open").isEqualTo(before);
 
         clock.set(T0.plusSeconds(61));
         // The probe fails: open again for another minute.
-        assertThatThrownBy(() -> gateway.queryStatus(Scope.TENANT, D1)).isInstanceOf(GatewayException.class);
+        assertThatThrownBy(() -> gateway.queryStatus(TENANT, D1)).isInstanceOf(GatewayException.class);
         assertThat(breaker.state()).isEqualTo(CircuitBreaker.State.OPEN);
         clock.set(T0.plusSeconds(125));
         route(path, "status-pending");
-        assertThat(gateway.queryStatus(Scope.TENANT, "aaaaaaaa-0000-4000-8000-000000000003")
+        assertThat(gateway.queryStatus(TENANT, "aaaaaaaa-0000-4000-8000-000000000003")
                         .status())
                 .isEqualTo(Status.PENDING);
         assertThat(breaker.state()).isEqualTo(CircuitBreaker.State.CLOSED);
@@ -826,7 +954,7 @@ class PesapalGatewayContractTest {
             shape.run();
             clock.set(clock.get().plusSeconds(120));
             try {
-                fresh().createOrder(Scope.TENANT, order());
+                fresh().createOrder(TENANT, order());
                 throw new AssertionError("expected a failure");
             } catch (GatewayException e) {
                 failures.add(e);

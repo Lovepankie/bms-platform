@@ -18,6 +18,7 @@ import { showSavings } from './lending/savings-permissions';
 import { showReports } from './reports/permissions';
 import { RetailNav } from './retail/nav';
 import { canSeeProfit, showRetail } from './retail/permissions';
+import { showReceivePayments } from './payments/state';
 import { showSms } from './sms/state';
 
 // The staff area layout: restores the session from the refresh cookie, shows who is signed in,
@@ -126,6 +127,7 @@ export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: 
         {showReports(me) && <Link to="/staff/reports">Reports</Link>}
         {showRetail(me) && <Link to="/staff/retail" data-tour="nav-retail">Retail</Link>}
         {showSms(me) && <Link to="/staff/sms">SMS</Link>}
+        {showReceivePayments(me) && <Link to="/staff/payments">Receive payments</Link>}
         {permissions.includes('core.settings.manage') && <Link to="/staff/setup">Business set-up</Link>}
       </nav>
     </header>

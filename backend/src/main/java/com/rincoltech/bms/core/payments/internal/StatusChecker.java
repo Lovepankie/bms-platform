@@ -2,7 +2,7 @@ package com.rincoltech.bms.core.payments.internal;
 
 import com.rincoltech.bms.core.payments.GatewayException;
 import com.rincoltech.bms.core.payments.PaymentGateway;
-import com.rincoltech.bms.core.payments.PaymentGateway.Scope;
+import com.rincoltech.bms.core.payments.PaymentGateway.Account;
 import com.rincoltech.bms.core.payments.PaymentGateway.StatusResult;
 import com.rincoltech.bms.core.payments.internal.IntentStore.Intent;
 import com.rincoltech.bms.kernel.BusinessClock;
@@ -50,10 +50,13 @@ class StatusChecker {
     /** What the tick budgets for creating one order (the job path; a request uses 15 seconds). */
     static final Duration JOB_CREATE_BUDGET = Duration.ofSeconds(45);
 
+    /** How long an intent whose account has no readable credentials waits before it is looked at again. */
+    static final Duration NO_CREDENTIALS_RETRY = Duration.ofHours(1);
+
     private static final Set<String> PERIODIC = Set.of("created", "pending", "expired", "paid");
 
     /** What applying an answer decided, to be done after the transaction has committed. */
-    private record Applied(boolean bookNext, String cancelReference, Scope scope, List<String> counts) {
+    private record Applied(boolean bookNext, String cancelReference, Account scope, List<String> counts) {
         static Applied none() {
             return new Applied(false, null, null, List.of());
         }
@@ -129,11 +132,24 @@ class StatusChecker {
             // The payer is no longer offered the order, whether or not the provider can be reached now.
             intent = expire(intent, started);
         }
-        Scope scope = Scope.ofKey(intent.scope());
+        Account scope = Account.forIntent(intent.scope(), intent.tenantId(), intent.purpose(), intent.merchantId());
         StatusResult result;
         try {
             result = gateway.queryStatus(scope, intent.providerReference());
         } catch (GatewayException e) {
+            if (e.kind() == GatewayException.Kind.AUTH && "tenant".equals(intent.scope())) {
+                // The provider refused a lender's own credentials (rotated or revoked at Pesapal, or a backoff after
+                // that). That is the lender's to fix, never evidence the borrower did not pay: the intent is neither
+                // closed nor cancelled at the provider, and is asked again until the credentials work.
+                noCredentials(intent, started, "provider_auth");
+                return;
+            }
+            if (e.kind() == GatewayException.Kind.UNAVAILABLE && "not_configured".equals(e.code())) {
+                // Nothing was asked: the account has no credentials we can read (not connected yet, removed, or its key
+                // was dropped). That is not the provider being down and never closes an intent that may have been paid.
+                noCredentials(intent, started, "no_credentials");
+                return;
+            }
             unreachable(intent, e, started);
             return;
         }
@@ -163,6 +179,24 @@ class StatusChecker {
         });
     }
 
+    /**
+     * The intent's account has no credentials we can read, so no question could be put to the provider. The intent is left
+     * exactly as it is and looked at again in an hour: it is neither closed nor counted as a failure (a payment the payer
+     * made is still waiting to be found), and the counter {@code no_credentials} rises so someone connects the account.
+     */
+    private void noCredentials(Intent intent, Instant started, String counter) {
+        tx.executeWithoutResult(status -> {
+            Instant now = clock.now();
+            Intent i = store.lock(intent.id()).orElse(intent);
+            Map<String, Object> cols = new HashMap<>();
+            cols.put("next_check_at", now.plus(NO_CREDENTIALS_RETRY));
+            store.update(i.id(), i.status(), null, now, cols);
+            store.finishCallbacks(i.id(), started, now, "rejected", "{\"status\":\"" + counter + "\"}");
+        });
+        counters.count(counter);
+        log.warn("payment status check skipped, the account has no readable credentials: intent={}", intent.id());
+    }
+
     /** The provider could not be asked. The wait grows; at the end of the 48 hours an unpaid intent still ends. */
     private void unreachable(Intent intent, GatewayException e, Instant started) {
         log.warn("payment status check could not reach the provider: intent={} kind={}", intent.id(), e.kind());
@@ -190,7 +224,9 @@ class StatusChecker {
         });
         if (Boolean.TRUE.equals(cancel)) {
             try {
-                gateway.cancelOrder(Scope.ofKey(intent.scope()), intent.providerReference());
+                gateway.cancelOrder(
+                        Account.forIntent(intent.scope(), intent.tenantId(), intent.purpose(), intent.merchantId()),
+                        intent.providerReference());
             } catch (GatewayException ignored) {
                 // Best effort, and the provider was just unreachable.
             }
@@ -265,14 +301,22 @@ class StatusChecker {
                 audit.system(i, "failed", "failed", Map.of("reason", "order_mismatch"));
                 store.finishCallbacks(i.id(), started, now, "status_mismatch", json);
                 log.warn("payment intent {} failed: the order is not the one asked for", i.id());
-                return new Applied(false, i.providerReference(), Scope.ofKey(i.scope()), List.of("order_mismatch"));
+                return new Applied(
+                        false,
+                        i.providerReference(),
+                        Account.forIntent(i.scope(), i.tenantId(), i.purpose(), i.merchantId()),
+                        List.of("order_mismatch"));
             }
             extra.put("order_verified_at", now);
         }
         if (CheckSchedule.isFinal(now, i.createdAt())) {
             closeUnpaid(i, now);
             store.finishCallbacks(i.id(), started, now, "unchanged", json);
-            return new Applied(false, i.providerReference(), Scope.ofKey(i.scope()), List.of());
+            return new Applied(
+                    false,
+                    i.providerReference(),
+                    Account.forIntent(i.scope(), i.tenantId(), i.purpose(), i.merchantId()),
+                    List.of());
         }
         Map<String, Object> cols = settled(i, now, 0, started);
         cols.putAll(extra);

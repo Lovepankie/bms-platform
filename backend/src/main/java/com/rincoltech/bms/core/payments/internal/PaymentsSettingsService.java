@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Reads and writes the tenant's payments settings group through the core's settings store, so a change is versioned
  * under {@code If-Match}, audited with before and after, and held to the group's own rules on every path
- * ({@link PaymentsSettingsGroup}: the merchant binding, the mapped gateway method, the configured gateway).
+ * ({@link PaymentsSettingsGroup}: the tenant's own verified account, the mapped gateway method, the configured gateway).
  */
 @Service
 class PaymentsSettingsService {
@@ -24,11 +24,13 @@ class PaymentsSettingsService {
             boolean collectionsEnabled,
             Long dailyCeilingMinor,
 
-            @Schema(description = "The host holds the credentials for this business's merchant account")
+            @Schema(
+                    description =
+                            "The host can serve a business's own payment account (a provider and a callback address)")
             boolean gatewayAvailable,
 
-            @Schema(description = "This business is the one the platform's merchant account is bound to")
-            boolean merchantBound,
+            @Schema(description = "This business has connected and tested its own payment account (Receive payments)")
+            boolean merchantAccountVerified,
 
             @Schema(description = "The gateway payment method posts to an active ledger account")
             boolean gatewayMethodMapped,
@@ -61,7 +63,7 @@ class PaymentsSettingsService {
                 e.enabled(),
                 e.dailyCeilingMinor(),
                 group.gatewayAvailable(),
-                group.merchantBound(),
+                group.merchantAccountVerified(),
                 group.gatewayMethodMapped(),
                 settings.version());
     }
