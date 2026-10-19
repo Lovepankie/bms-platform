@@ -7325,6 +7325,8 @@ export interface components {
             amount_minor?: number;
             /** Format: uuid */
             booked_transaction_id?: string;
+            /** @description The provider's confirmation code once the payment is confirmed; not unique across payments */
+            confirmation_code?: string;
             /** Format: date-time */
             created_at?: string;
             currency?: string;

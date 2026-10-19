@@ -839,6 +839,18 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), new byte[40], new byte[40], hex64(t.tenantId()), user)
                 .update();
+        // Money a purpose handler refused, held for a cashier (migration V59, #216). JUSTIFICATION-A3: one factory row
+        // per
+        // tenant table; it points at the fixture intent and the fixture journal entry above.
+        owner.sql("""
+                        INSERT INTO unallocated_receipts (id, tenant_id, branch_id, intent_id, purpose, subject_type, subject_id,
+                                                          amount_minor, currency, value_date, confirmation_code, refusal_code,
+                                                          journal_entry_id)
+                        VALUES (?, ?, ?, ?, 'test.payment', 'test_subject', ?, 1500, 'UGX', DATE '2026-01-15', 'RLS-CONF-1',
+                                'loan_closed', ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), t.headOffice(), intent, UUID.randomUUID(), entry)
+                .update();
     }
 
     /** The two platform payment tables have no grant for the application role: only the definer functions reach them (V54). */

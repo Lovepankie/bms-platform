@@ -42,3 +42,11 @@ describe('lending permission gating', () => {
     expect(canReverse(viewer, 'active', repayment)).toBe(false);
   });
 });
+
+describe('reversing a gateway payment', () => {
+  it('is not offered: a payment collected by mobile money is reviewed with the provider', () => {
+    const me = { permissions: ['lending.loans.read', 'lending.repayments.reverse_request'] };
+    expect(canReverse(me, 'active', { txn_type: 'repayment', payment_method_key: 'cash' })).toBe(true);
+    expect(canReverse(me, 'active', { txn_type: 'repayment', payment_method_key: 'gateway' })).toBe(false);
+  });
+});

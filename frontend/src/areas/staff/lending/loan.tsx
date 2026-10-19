@@ -5,6 +5,7 @@ import { lending, type Loan, type LoanSchedule, type LoanTransaction, type Repay
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
+import { CollectPanel } from './collect';
 import { DisburseForm, PayoffQuotePanel, RepaymentForm, RepaymentReceipt, ReverseForm, WriteOffForm } from './actions';
 import { LendingGate } from './loans';
 import { methodWords, money, statusBadge, txnWords, words } from './loan-state';
@@ -18,6 +19,7 @@ import { showSavings } from './savings-permissions';
 const ACTION_LABELS: Record<LoanAction, string> = {
   disburse: 'Disburse',
   repay: 'Record repayment',
+  collect: 'Collect by mobile money or card',
   payoff: 'Payoff quote',
   write_off: 'Request write-off',
   reverse: 'Reverse',
@@ -228,6 +230,7 @@ export function LoanView({ loan, memberName }: { loan: Loan; memberName?: string
             ) : (
               <RepaymentForm key={round} loan={loan} onDone={setReceipt} />
             ))}
+          {open === 'collect' && <CollectPanel loan={loan} schedule={schedule.data} />}
           {open === 'disburse' && <DisburseForm loan={loan} />}
           {open === 'payoff' && <PayoffQuotePanel loan={loan} />}
           {open === 'write_off' && <WriteOffForm loan={loan} />}

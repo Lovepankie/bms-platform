@@ -15,6 +15,7 @@
           <tr><td class="k">Value date</td><td th:text="${txn.valueDate}">Date</td></tr>
           <tr><td class="k">Payment method</td><td th:text="${txn.method}">Cash</td></tr>
           <tr th:if="${txn.reference != null}"><td class="k">Reference</td><td th:text="${txn.reference}">Ref</td></tr>
+          <tr th:if="${txn.confirmationCode != null}"><td class="k">Payment code</td><td th:text="${txn.confirmationCode}">Code</td></tr>
         </table>
       </td>
       <td style="text-align: right;"><div class="verify"></div></td>

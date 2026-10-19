@@ -34,6 +34,15 @@ class JdbcPaymentMethods implements PaymentMethods {
     @Override
     @Transactional(readOnly = true)
     public String accountRef(String methodKey, UUID branchId) {
+        return accountRefIfMapped(methodKey, branchId)
+                .orElseThrow(() -> ApiException.rule(
+                        "payment_method_unmapped",
+                        "The payment method " + methodKey + " has no active ledger account."));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> accountRefIfMapped(String methodKey, UUID branchId) {
         Optional<Mapping> mapping = jdbc.sql("""
                         SELECT gl_account_id, is_active FROM payment_methods
                          WHERE method_key = :key AND (branch_id = CAST(:branch AS uuid) OR branch_id IS NULL)
@@ -45,10 +54,6 @@ class JdbcPaymentMethods implements PaymentMethods {
                 .optional();
         String ref = mapping.map(m -> m.active() ? JdbcLedgerAccounts.ACCOUNT_REF + m.accountId() : null)
                 .orElseGet(() -> mapping.isPresent() ? null : DEFAULT_ACCOUNTS.get(methodKey));
-        if (ref == null || accounts.byRef(ref).isEmpty()) {
-            throw ApiException.rule(
-                    "payment_method_unmapped", "The payment method " + methodKey + " has no active ledger account.");
-        }
-        return ref;
+        return ref == null || accounts.byRef(ref).isEmpty() ? Optional.empty() : Optional.of(ref);
     }
 }

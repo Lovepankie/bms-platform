@@ -20,6 +20,15 @@ public interface PurposeHandler {
     String purpose();
 
     /**
+     * The branch the subject belongs to, if the caller can see it: asked first, so the permission check is made before
+     * {@link #describe} says anything about the subject (a limit on the amount would otherwise tell an unauthorised
+     * caller).
+     */
+    default java.util.Optional<UUID> branchOf(UUID subjectId) {
+        return java.util.Optional.empty();
+    }
+
+    /**
      * Called when an intent is created. Checks that the subject exists, is visible to the caller and can take this
      * amount, and says which branch the money belongs to. Refuses with a {@link PurposeRefusal} (the codes of chapter 7
      * section 7.11.10: {@code subject_not_payable}, {@code exceeds_payoff}); the caller turns it into a 422.
@@ -29,7 +38,8 @@ public interface PurposeHandler {
     /**
      * Books a verified payment: the registered module posts the repayment, the deposit or the confirmation, and returns
      * the id of the transaction it created. Called at most once per intent with success; an implementation must still
-     * be idempotent on {@link Booking#confirmationCode} (spec 3.4.1), because the first call may have committed with its
+     * be idempotent on {@link Booking#providerReference} (the order tracking id, unique per intent, spec 3.4.1; the
+     * confirmation code is not unique), because the first call may have committed with its
      * answer lost.
      *
      * @throws PurposeRefusal a business refusal (a closed loan, a value date in the future): the transaction part of

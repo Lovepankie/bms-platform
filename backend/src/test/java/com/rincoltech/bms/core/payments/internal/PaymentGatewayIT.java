@@ -887,19 +887,58 @@ class PaymentGatewayIT extends IntegrationTest {
     }
 
     @Test
-    void anyOtherBusinessRefusalNeverStrandsTheMoneyItEndsNeedsAttentionWithTheCode() {
+    void aRepaymentRefusedAsPeriodClosedIsRetriedOnceDatedToday() {
+        handler.refuseFirstOnly = "period_closed";
+        JsonNode intent = create(1500);
+        pay(intent, 1500, "UGX", "CONF-0012");
+        clock.set(clock.instant().plus(Duration.ofMinutes(3)));
+        tick();
+        assertThat(statusOf(intent.get("id").asString())).isEqualTo("booked");
+        assertThat(handler.calls).hasValue(2);
+        assertThat(handler.bookings.getFirst().valueDate()).isEqualTo(LocalDate.of(2026, 10, 16));
+    }
+
+    @Test
+    void anyOtherBusinessRefusalNeverStrandsTheMoneyItIsPostedToUnallocatedReceipts() {
         handler.refuse = "loan_closed";
         JsonNode intent = create(1500);
         pay(intent, 1500, "UGX", "CONF-0010");
         clock.set(clock.instant().plus(Duration.ofMinutes(3)));
         tick();
         String id = intent.get("id").asString();
-        assertThat(statusOf(id)).isEqualTo("needs_attention");
+        assertThat(statusOf(id)).isEqualTo("booked_unallocated");
         assertThat(row(id).get("refusal_code")).isEqualTo("loan_closed");
         assertThat(row(id).get("paid_amount_minor")).isEqualTo(1500L);
         assertThat(handler.bookings).isEmpty();
-        // Not retried for ever: nothing is due.
-        assertThat(row(id).get("next_check_at")).isNull();
+        // One receipt for the intent, and a balanced journal: debit gateway_clearing, credit unallocated_receipts.
+        var receipt = TestDatabase.owner()
+                .sql(
+                        "SELECT amount_minor, refusal_code, status, journal_entry_id, confirmation_code FROM unallocated_receipts WHERE intent_id = ?")
+                .param(UUID.fromString(id))
+                .query((rs, n) -> new Object[] {
+                    rs.getLong(1), rs.getString(2), rs.getString(3), rs.getObject(4, UUID.class), rs.getString(5)
+                })
+                .single();
+        assertThat(receipt[0]).isEqualTo(1500L);
+        assertThat(receipt[1]).isEqualTo("loan_closed");
+        assertThat(receipt[2]).isEqualTo("open");
+        assertThat(receipt[4]).isEqualTo("CONF-0010");
+        var lines = TestDatabase.owner()
+                .sql(
+                        "SELECT a.system_key, l.debit, l.credit FROM journal_lines l JOIN gl_accounts a ON a.id = l.account_id WHERE l.entry_id = ? ORDER BY l.debit DESC")
+                .param(receipt[3])
+                .query((rs, n) -> rs.getString(1) + ":" + rs.getLong(2) + ":" + rs.getLong(3))
+                .list();
+        assertThat(lines).containsExactly("gateway_clearing:1500:0", "unallocated_receipts:0:1500");
+        // Booked once: another tick, or the same completion again, adds no receipt and no second journal.
+        clock.set(clock.instant().plus(Duration.ofHours(1)));
+        tick();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM unallocated_receipts WHERE intent_id = ?")
+                        .param(UUID.fromString(id))
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1L);
     }
 
     @Test

@@ -47,6 +47,17 @@ const MESSAGES: Record<string, string | undefined> = {
   mfa_not_enrolled: 'Turn on two-step sign-in first: this change asks for a code from your authenticator app.',
   merchant_account_in_use: 'This merchant account is already connected elsewhere. Use your own Pesapal account.',
   test_too_soon: 'A test was made a moment ago. Wait half a minute before testing again.',
+  collections_disabled:
+    'Collecting by mobile money or card is not switched on for this business. A business administrator turns it on under Receive payments.',
+  merchant_account_not_verified:
+    "This business has not connected and tested its own payment account yet, so nothing can be collected. A business administrator does that under Receive payments. The money always goes to the business's own account.",
+  exceeds_payoff: 'That is more than the loan still owes. Ask for the amount to be paid, up to the full payoff.',
+  subject_not_payable: 'This loan cannot take a payment now. Reload the loan to see its status.',
+  daily_ceiling_exceeded: "The business's daily limit for collections would be exceeded. Try a smaller amount or try again tomorrow.",
+  currency_not_supported: 'Collections are offered in Uganda shillings only.',
+  unknown_purpose: 'This kind of payment is not available.',
+  not_cancellable: 'This payment can no longer be cancelled. It may have been paid: check its status.',
+  cancel_failed: 'The payment could not be cancelled. It may have been paid: check its status.',
 };
 
 function fail(error: unknown, status: number, fallback: string): never {
@@ -63,7 +74,34 @@ function unwrap<T>(result: { data?: T; error?: unknown; response: Response }, fa
   return result.data;
 }
 
+// A collection by mobile money or card started by staff (extras slice A3, issue #216; chapter 7 section 7.11.10): the intent, its
+// status and the link the payer opens. Money goes only into the business's own merchant account; a business without a verified one is
+// refused (merchant_account_not_verified) before any order is made.
+export type PaymentIntent = components['schemas']['PaymentIntent'];
+
+/** The purpose of a loan repayment collected through the gateway; the subject is the loan. */
+export const LOAN_REPAYMENT_PURPOSE = 'lending.loan_repayment';
+
 export const payments = {
+  /** Starts a collection for a loan. The same key returns the same intent, so a retry never makes a second link. */
+  async startLoanRepayment(loanId: string, amountMinor: number, payerPhone: string, idempotencyKey: string): Promise<PaymentIntent> {
+    return unwrap(
+      await api.POST('/api/v1/payments/intents', {
+        params: { header: { 'Idempotency-Key': idempotencyKey } },
+        body: { purpose: LOAN_REPAYMENT_PURPOSE, subject_id: loanId, amount_minor: amountMinor, payer_phone: payerPhone },
+      }),
+      'Could not start the payment.',
+    );
+  },
+
+  async intent(id: string): Promise<PaymentIntent> {
+    return unwrap(await api.GET('/api/v1/payments/intents/{intent_id}', { params: { path: { intent_id: id } } }), 'Could not load the payment.');
+  },
+
+  async cancelIntent(id: string): Promise<PaymentIntent> {
+    return unwrap(await api.POST('/api/v1/payments/intents/{intent_id}/cancel', { params: { path: { intent_id: id } } }), 'Could not cancel the payment.');
+  },
+
   async account(): Promise<MerchantAccount> {
     return unwrap(await api.GET('/api/v1/payments/merchant-account'), 'Could not load your payment account.') as MerchantAccount;
   },

@@ -81,8 +81,8 @@ API; whose credentials are used; what is out of scope.
    `lending.savings_deposit`, the subscription confirmation for `platform.subscription_payment`. The
    payment method is `gateway` (account `gateway_clearing`). Idempotency is enforced twice: by the
    intent (`UNIQUE (provider, provider_reference)`, the stored `booked_subject_txn_id`, the row lock)
-   and by the servicing port, which records the provider's confirmation code as the transaction's
-   external reference under a unique index, so a second record for the same reference is a no-op that
+   and by the servicing port, which records the provider's reference as the transaction's
+   external reference under a unique index (as built in #216 this is the order tracking id, not the confirmation code; see the amendment of 2026-10-19), so a second record for the same reference, loan and amount is a no-op that
    returns the first transaction. The two existing ports take no key or reference today and are
    extended in the build slices (decision 15).
 
@@ -272,9 +272,9 @@ Additive; the decisions above stand. Where the build made a choice the text left
    currency is not the intent's, or whose amount is not a positive whole number, ends the intent `needs_attention` and books
    nothing. An order still unpaid 48 hours after creation is cancelled at the provider and the intent ends `cancelled`.
 3. **Handler refusals (decision 14).** `before_last_repayment` is retried once dated today (Africa/Kampala). Any other business
-   refusal ends the intent `needs_attention` with the refusal code and the amount stored. The posting to unallocated
-   receipts that turns it `booked_unallocated` belongs to slice #216, which owns the `gateway_clearing` postings; the
-   state exists in the database now and nothing writes it yet. Five consecutive technical failures end `needs_attention`.
+   refusal ends the intent `needs_attention` with the refusal code and the amount stored (as built in #213; slice #216 replaced
+   this by the posting to unallocated receipts and the state `booked_unallocated`, see the amendment of 2026-10-19 below). Five
+   consecutive technical failures end `needs_attention`.
 4. **Notifications.** `GET` or `POST /api/v1/payments/callbacks/pesapal/{token}` and the payer's
    `GET /api/v1/payments/return/pesapal`. The token selects the credential pair (constant time over digests); the request is read
    for two identifiers only, whatever its content type; the tenant is found from the merchant reference by a definer function
@@ -432,3 +432,36 @@ environment, bound to a named tenant"; the rest of the ADR stands.
 28. **Fail closed, and lock the row.** An account whose key box cannot be opened is treated as refused. Intent creation reads the account row
     `FOR SHARE`, so it cannot be created under a merchant a concurrent key change is replacing.
 
+## Amendment (2026-10-19, slice A3, issue #216): loan repayment by mobile money into the lender's own account
+
+Additive; nothing above is rewritten.
+
+29. **The purpose `lending.loan_repayment`** is registered by `lending.loans` (`LoanRepaymentPurpose`). Creating the intent goes only
+    through the existing tenant-account path of `IntentService`: collections on for the tenant, the host able to call the provider, and a
+    **verified own merchant account** read `FOR SHARE` (decision 28). A tenant without one gets 422 `merchant_account_not_verified`
+    and no provider call; the platform account is never a substitute (decision 3 of the amendment of 2026-10-18). The intent records
+    that account's `merchant_id`, and the booked intent's audit row names it with the order tracking id, so a booked repayment is
+    attributable to the merchant account that received the money. The describe step refuses a loan that is not active, a currency other
+    than the loan's (`subject_not_payable`) and an amount above today's payoff quote (`exceeds_payoff`).
+30. **Booking is the cash repayment.** The handler calls the `LoanServicing.recordRepayment` overload (ADR-026 amendment of the same date)
+    with the method `gateway`, the **order tracking id** as the external reference (unique per intent; the confirmation code is kept in the intent's audit row) and origin `gateway`.
+    Allocation order, receipt number, journal and audit are those of a cashier's repayment; the receipt text is queued in the same
+    transaction. Partial and larger payments follow spec 3.7: what was paid is booked, and the excess on a settled loan is the loan's
+    credit balance (R-ALLOC step 4).
+31. **Refusals never strand money, as built.** The booker retries `before_last_repayment` once dated today. Any other business refusal
+    (a closed or written-off loan, `value_date_in_future`, `payment_method_unmapped`, `duplicate_reference`, a loan currency other than the payment's) rolls the handler's
+    savepoint back, then in the same transaction posts the confirmed amount debit the account the `gateway` method is mapped to at the branch (`gateway_clearing` by system key only when it is unmapped, so an unmapped
+    method cannot block it) credit `unallocated_receipts`, inserts the `unallocated_receipts` row (migration V59), stores the refusal code
+    and ends the intent `booked_unallocated`, audited with the receipt id and the merchant. It is dated the payment's day, or today when
+    that period is closed; the debit is the account the `gateway` method is mapped to at the branch, `gateway_clearing` only when it is unmapped (a lookup that cannot refuse, so it never marks the booking rollback-only). A `period_closed` refusal is retried once dated today, like
+    `before_last_repayment`. Idempotency is by loan and amount: the same reference for another loan or amount is `duplicate_reference`, never a replay. Staff cannot reverse a gateway
+    repayment (`gateway_reversal_pending`) until #224. The branch permission is checked before the handler describes the loan. A failure of that posting is a technical failure (retried, five in a row end `needs_attention`), never a
+    lost payment. Allocating or refunding a receipt (FR-PAY-04) is a later slice; the table is append-only until then.
+32. **Duplicates.** One booking per intent (row lock and status check, as before) and one repayment per order tracking id (the port's
+    idempotency and the unique index), so a replayed notification, a poll that finds the same completed order and a retry after a lost
+    answer end in one repayment. A payment that completes after the link expired books normally and is flagged `late`.
+33. **Not built here.** The per-tenant non-login system user is created by the slice that first needs it, the reversal request of a
+    booked payment (#224), since nothing in this slice acts as it; the audit actor of a booking stays the intent's initiator (spec 3.4). A
+    payment in another currency than the intent's still ends `needs_attention` (decision 4; decision 31 concerns the loan's currency, which the handler refuses, and the
+    posting throws if the payment's currency is not the accounts' own); posting it to unallocated receipts needs
+    the status checker to hand over a row that is not `paid` and is left to the slice that builds the allocation screen.

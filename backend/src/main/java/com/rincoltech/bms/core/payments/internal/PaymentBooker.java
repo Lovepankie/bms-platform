@@ -28,9 +28,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * row lock serialises them and the status check makes the later ones a no-op.
  *
  * <p>A handler refusal never strands the money. {@code before_last_repayment} is retried once with the value date moved
- * to today. Any other business refusal rolls the savepoint back and ends the intent {@code needs_attention} with the
- * refusal's code, for a person to look at (the unallocated receipt posting that makes it {@code booked_unallocated}
- * arrives with slice #216, which owns the gateway clearing account's postings). An unexpected exception rolls the whole
+ * to today. Any other business refusal rolls the savepoint back, posts the amount to unallocated receipts (debit
+ * the account {@code gateway} is mapped to at the branch, credit {@code unallocated_receipts}, issue #216) and ends the intent {@code booked_unallocated}
+ * with the refusal's code, for a cashier to allocate. An unexpected exception rolls the whole
  * booking back and counts a technical failure in a transaction of its own; the poller retries with a growing wait, and
  * the fifth failure in a row ends the intent {@code needs_attention}, so nothing completed is retried for ever.
  */
@@ -56,6 +56,7 @@ class PaymentBooker {
     private final BusinessClock clock;
     private final CurrentTenant tenant;
     private final PaymentCounters counters;
+    private final UnallocatedReceipts unallocated;
     private final TransactionTemplate tx;
     private final TransactionTemplate savepoint;
 
@@ -66,6 +67,7 @@ class PaymentBooker {
             BusinessClock clock,
             CurrentTenant tenant,
             PaymentCounters counters,
+            UnallocatedReceipts unallocated,
             PlatformTransactionManager transactions) {
         this.store = store;
         this.audit = audit;
@@ -73,6 +75,7 @@ class PaymentBooker {
         this.clock = clock;
         this.tenant = tenant;
         this.counters = counters;
+        this.unallocated = unallocated;
         this.tx = new TransactionTemplate(transactions);
         this.savepoint = new TransactionTemplate(transactions);
         this.savepoint.setPropagationBehavior(TransactionDefinition.PROPAGATION_NESTED);
@@ -111,15 +114,15 @@ class PaymentBooker {
         try {
             transactionId = attempt(handler.get(), intent, paidOn, late);
         } catch (PurposeRefusal first) {
-            if (!PurposeHandler.BEFORE_LAST_REPAYMENT.equals(first.code())) {
-                return refused(intent, now, first);
+            if (!PurposeHandler.BEFORE_LAST_REPAYMENT.equals(first.code()) && !"period_closed".equals(first.code())) {
+                return refused(intent, now, first, paidOn, zone);
             }
             // A repayment cannot be dated before the loan's last one: the money came today as far as the books go.
             try {
                 transactionId = attempt(handler.get(), intent, LocalDate.ofInstant(now, zone), late);
                 note = "dated_today";
             } catch (PurposeRefusal second) {
-                return refused(intent, now, second);
+                return refused(intent, now, second, paidOn, zone);
             }
         }
         Map<String, Object> cols = new HashMap<>();
@@ -133,6 +136,13 @@ class PaymentBooker {
         Map<String, Object> extra = new HashMap<>();
         extra.put("booked_subject_txn_id", transactionId.toString());
         extra.put("paid_amount_minor", intent.paidAmountMinor());
+        if (intent.confirmationCode() != null) {
+            extra.put("confirmation_code", intent.confirmationCode());
+        }
+        if (intent.merchantId() != null) {
+            // Whose merchant account the money went into: the tenant's own, bound at creation (ADR-035 amendment).
+            extra.put("merchant_id", intent.merchantId().toString());
+        }
         if (note != null) {
             extra.put("note", note);
         }
@@ -169,15 +179,29 @@ class PaymentBooker {
         });
     }
 
-    private Outcome refused(Intent intent, Instant now, PurposeRefusal refusal) {
+    private Outcome refused(Intent intent, Instant now, PurposeRefusal refusal, LocalDate paidOn, ZoneId zone) {
+        // The savepoint is rolled back, the intent row is intact. The money is real: it goes to unallocated receipts in
+        // this same transaction (a failure to post it is a technical failure, retried, never a lost payment).
+        UUID receiptId = unallocated.post(intent, paidOn, LocalDate.ofInstant(now, zone), refusal.code());
         Map<String, Object> cols = new HashMap<>();
         cols.put("refusal_code", refusal.code());
-        cols.put("next_check_at", null);
-        if (!store.update(intent.id(), "paid", "needs_attention", now, cols)) {
+        cols.put("next_check_at", CheckSchedule.nextReview(now, intent.paidAt()));
+        cols.put("technical_failures", 0);
+        if (!store.update(intent.id(), "paid", "booked_unallocated", now, cols)) {
             throw new IllegalStateException("the intent changed under its own row lock");
         }
-        audit.system(intent, "booking_refused", "needs_attention", Map.of("refusal_code", refusal.code()));
-        log.warn("payment intent {} not booked, the handler refused: {}", intent.id(), refusal.code());
+        Map<String, Object> extra = new HashMap<>();
+        extra.put("refusal_code", refusal.code());
+        extra.put("unallocated_receipt_id", receiptId.toString());
+        extra.put("paid_amount_minor", intent.paidAmountMinor());
+        if (intent.merchantId() != null) {
+            extra.put("merchant_id", intent.merchantId().toString());
+        }
+        audit.system(intent, "booked_unallocated", "booked_unallocated", extra);
+        log.warn(
+                "payment intent {} not booked, the handler refused: {}; posted to unallocated receipts",
+                intent.id(),
+                refusal.code());
         return Outcome.REFUSED;
     }
 

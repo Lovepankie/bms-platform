@@ -87,6 +87,7 @@ class LoanDocuments {
     private final CurrentTenant currentTenant;
     private final BusinessClock clock;
     private final JdbcClient jdbc;
+    private final com.rincoltech.bms.core.payments.PaymentCollections collections;
     private final TransactionTemplate reading;
     private final TransactionTemplate writing;
 
@@ -101,6 +102,7 @@ class LoanDocuments {
             CurrentTenant currentTenant,
             BusinessClock clock,
             JdbcClient jdbc,
+            com.rincoltech.bms.core.payments.PaymentCollections collections,
             PlatformTransactionManager transactions) {
         this.loans = loans;
         this.repo = repo;
@@ -112,6 +114,7 @@ class LoanDocuments {
         this.currentTenant = currentTenant;
         this.clock = clock;
         this.jdbc = jdbc;
+        this.collections = collections;
         // One snapshot for everything a document reads: a statement is built from several queries, and a
         // repayment committing between them would otherwise show as a false "Other adjustments" line.
         this.reading = new TransactionTemplate(transactions);
@@ -424,6 +427,10 @@ class LoanDocuments {
         m.put("valueDate", date(t.valueDate()));
         m.put("method", METHODS.getOrDefault(t.paymentMethodKey(), String.valueOf(t.paymentMethodKey())));
         m.put("reference", t.externalReference());
+        if ("gateway".equals(t.paymentMethodKey())) {
+            // The provider's code next to the order tracking id (the reference), for the payer who quotes it.
+            m.put("confirmationCode", collections.confirmationCodeOf(t.id()).orElse(null));
+        }
         m.put("recordedBy", userName(t.recordedBy()));
         m.put("recordedOn", date(dateOf(t.createdAt())));
         return m;

@@ -20,8 +20,8 @@ import org.springframework.stereotype.Component;
  * events). The message goes to the borrower's own primary phone and to nobody else: never a next of kin, never a
  * guarantor. It names the business and the loan number and carries no name of the member and no loan purpose.
  *
- * <p>Only a staff event sends. A caller without a request principal (the fabricated seed, the import port) never
- * messages a member (a source other than {@code staff}); a staff request can also say {@code notify_member: false}, as a
+ * <p>Only a staff event or a gateway booking sends. A caller without a request principal (the fabricated seed, the
+ * import port) never messages a member (a source other than {@code staff} or {@code gateway}); a staff request can also say {@code notify_member: false}, as a
  * register import through the public routes does; and an event whose value date is more than the cutoff days old
  * ({@code BMS_SMS_EVENT_MAX_AGE_DAYS}, 3) is never texted. A reversal sends nothing new and withdraws what the reversed
  * transaction queued if the sender has not claimed it yet; a correction is the cashier's word. The balance
@@ -44,11 +44,12 @@ class LoanNotices {
     }
 
     /**
-     * Whether an event with this {@code source} messages the member: a staff event does, the seed and the import port do not,
-     * and a staff request that said {@code notify_member: false} does not.
+     * Whether an event with this {@code source} messages the member: a staff event and a gateway booking do (the member
+     * paid, and is told the receipt), the seed and the import port do not, and a request that said
+     * {@code notify_member: false} does not.
      */
     static boolean sends(String source, boolean notifyMember) {
-        return "staff".equals(source) && notifyMember;
+        return ("staff".equals(source) || "gateway".equals(source)) && notifyMember;
     }
 
     /** What the audit entry of a money event records about the text: whether the member was to be told, and the cutoff. */

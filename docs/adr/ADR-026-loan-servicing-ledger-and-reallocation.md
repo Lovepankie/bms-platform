@@ -139,3 +139,25 @@ Also decided here, within the rules of chapter 3:
   needs retail to post and read through `PaymentMethods` (#236). A correction credits the account the original entry
   debited, never the method's mapping at the time of the correction. A request is checked at the
   branch of the loan, account or investment, the same row that execution resolves.
+
+## Amendment (2026-10-19, issue #216): gateway repayments through the port
+
+Additive; the decisions above stand. `LoanServicing` was written for callers without a request principal (the seed, the
+import). It now also serves the payments module booking a verified gateway payment (ADR-035, spec 3.4.1):
+
+- `recordRepayment(loanId, amountMinor, valueDate, paymentMethodKey, recordedBy, externalReference, origin, queueReceiptNotice)` is a
+  second overload. It runs the same code as the cash repayment (the same checks, allocation order R-ALLOC, receipt number,
+  journal and audit), so a repayment paid on a phone is indistinguishable in the books from one a cashier typed, apart from the
+  account the money came in on (the mapping of the `gateway` method, normally `gateway_clearing`) and the transaction's `source`
+  (`gateway`).
+- Idempotent for the method `gateway`: a second call with the same `externalReference` (the provider's order tracking id, unique per payment; a short confirmation code is not) for the same loan and amount returns
+  the first transaction and writes nothing, under the loan row lock; a unique partial index over (tenant, method, reference) for
+  repayments and recoveries backs it (migration V59). A reversal copies the method but never the reference.
+- `origin` becomes the transaction's `source` (`gateway`, `system`, `import`, `portal`). `queueReceiptNotice` queues the repayment
+  receipt text in the same transaction (issue #221's event, only for a tenant with SMS events on); the seed and the import pass
+  false and still message nobody. A gateway booking tells the member; `LoanNotices.sends` now accepts the source `gateway`.
+- Business refusals are the cash route's `ApiException` codes (`before_last_repayment`, `value_date_in_future`,
+  `payment_method_unmapped`, `invalid_status_transition`). The registered purpose handler turns them into a refusal the payments
+  module does not strand: `before_last_repayment` is retried once dated today, anything else posts the amount to unallocated
+  receipts (ADR-035 decision 14).
+- The javadoc of the port now says "the seed, the import and gateway bookings".

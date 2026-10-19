@@ -58,7 +58,7 @@ const TXN_WORDS: Record<string, string> = {
 
 export const txnWords = (type: string | undefined): string => (type ? TXN_WORDS[type] ?? words(type) : '');
 
-const METHOD_WORDS: Record<string, string> = { cash: 'Cash', bank: 'Bank', mtn_momo: 'MTN Mobile Money', airtel_money: 'Airtel Money' };
+const METHOD_WORDS: Record<string, string> = { cash: 'Cash', bank: 'Bank', mtn_momo: 'MTN Mobile Money', airtel_money: 'Airtel Money', gateway: 'Mobile money or card' };
 
 export const methodWords = (key: string | undefined): string => (key ? METHOD_WORDS[key] ?? words(key) : '');
 

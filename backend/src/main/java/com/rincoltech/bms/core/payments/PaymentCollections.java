@@ -29,6 +29,9 @@ public interface PaymentCollections {
     /** The intent, for its initiator or a holder of {@code core.payments.read}; 404 for anyone else. */
     IntentView get(UUID intentId);
 
+    /** The provider confirmation code of the intent whose booking created this subject transaction, if any (for a receipt). */
+    java.util.Optional<String> confirmationCodeOf(UUID bookedTransactionId);
+
     /** Cancels an order that is not paid (best effort at the provider) and ends the intent {@code cancelled}. */
     IntentView cancel(UUID intentId);
 
@@ -73,5 +76,10 @@ public interface PaymentCollections {
             List<String> flags,
             String failureReason,
             String refusalCode,
-            UUID bookedTransactionId) {}
+            UUID bookedTransactionId,
+
+            @Schema(
+                    description =
+                            "The provider's confirmation code once the payment is confirmed; not unique across payments")
+            String confirmationCode) {}
 }

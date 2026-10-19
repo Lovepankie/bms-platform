@@ -5198,6 +5198,10 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "confirmation_code" : {
+            "description" : "The provider's confirmation code once the payment is confirmed; not unique across payments",
+            "type" : "string"
+          },
           "created_at" : {
             "format" : "date-time",
             "type" : "string"

@@ -120,8 +120,12 @@ API (no tenant yet): verify_callback -> parse -> app_resolve_payment_intent(prov
 worker: every 2 minutes, query_status for intents pending over 2 minutes; expire after 30
 ```
 
-Booking a gateway receipt posts to the `gateway_clearing` account (payment method
-`gateway`). The daily settlement job (FR-PAY-05) matches settled amounts and fees: fees
+Booking a gateway receipt posts to the account the payment method `gateway` is mapped to
+(normally `gateway_clearing`). For a loan repayment (slice #216) that is `LoanServicing.recordRepayment`
+with method `gateway`, the same code as a cashier's repayment. A completed payment the handler refuses
+(a closed loan, an unmapped method) is posted debit `gateway_clearing` (by its system key) credit
+`unallocated_receipts` in the same transaction, the intent ends `booked_unallocated`, and the amount
+waits in `unallocated_receipts` for a cashier (FR-PAY-04); the money is never left unbooked. The daily settlement job (FR-PAY-05) matches settled amounts and fees: fees
 post as gateway charges (FR-PAY-06), and the net settlement moves from
 `gateway_clearing` to `bank` when the tenant records the bank credit.
 

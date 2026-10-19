@@ -170,19 +170,14 @@ class IntentService implements PaymentCollections {
         if (!MinorUnits.supported(currency)) {
             throw ApiException.rule("currency_not_supported", "Collections are offered in Uganda shillings only.");
         }
+        denyUnlessMayCollect(principal, handler.branchOf(request.subjectId()).orElse(null));
         Subject subject;
         try {
             subject = handler.describe(request.subjectId(), request.amountMinor(), currency);
         } catch (PurposeRefusal refusal) {
             throw ApiException.rule(refusal.code(), "This payment cannot be taken for that account.");
         }
-        if (!principal.may("core.payments.collect", subject.branchId())) {
-            throw new ApiException(
-                    HttpStatus.FORBIDDEN,
-                    "permission_denied",
-                    "Permission denied",
-                    "You do not have permission to collect payments for this branch.");
-        }
+        denyUnlessMayCollect(principal, subject.branchId());
         Instant now = clock.now();
         if (effective.dailyCeilingMinor() != null) {
             // One request at a time per tenant through the sum below, so two together cannot both fit into the last of
@@ -221,6 +216,24 @@ class IntentService implements PaymentCollections {
         audit.created(intent, request.subjectId());
         log.info("payment intent {} created", id);
         return view(intent);
+    }
+
+    private static void denyUnlessMayCollect(Principal principal, UUID branchId) {
+        if (branchId != null && !principal.may("core.payments.collect", branchId)) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "permission_denied",
+                    "Permission denied",
+                    "You do not have permission to collect payments for this branch.");
+        }
+    }
+
+    @Override
+    public java.util.Optional<String> confirmationCodeOf(UUID bookedTransactionId) {
+        return jdbc.sql("SELECT confirmation_code FROM payment_intents WHERE booked_subject_txn_id = ?")
+                .param(bookedTransactionId)
+                .query(String.class)
+                .optional();
     }
 
     @Override
@@ -317,6 +330,7 @@ class IntentService implements PaymentCollections {
                 flags,
                 i.failureReason(),
                 i.refusalCode(),
-                i.bookedTxnId());
+                i.bookedTxnId(),
+                i.confirmationCode());
     }
 }

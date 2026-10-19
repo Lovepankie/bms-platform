@@ -119,7 +119,7 @@ core.reporting        -> core.tenancy, core.audit, core.documents, core.jobs, co
                          core.tenancy, the Excel by a streaming writer of its own; verticals register reports, it names none; ADR-038)
 core.ai               -> core.tenancy (the settings group ai), the kernel (no vertical; ADR-037, built in #220); its retention job is a database function
 lending               -> any core module
-lending.loans         -> lending.members, lending.products, lending.collateral, lending.savings (transfer)
+lending.loans         -> lending.members, lending.products, lending.collateral, lending.savings (transfer), core.payments (the PurposeHandler interface it implements for lending.loan_repayment, #216; the payments module imports nothing of lending)
 lending.seed          -> lending.loans (LoanServicing), lending.savings (SavingsServicing),
                          lending.investments (InvestmentServicing),
                          lending.insights (InsightsSnapshots)
@@ -159,7 +159,7 @@ registers into through its manifest at startup:
 | Approval actions | One `ApprovalAction` bean per action type it owns (ADR-015) | `loan_disbursement` executes the disbursement |
 | Branch deactivation guards | Whether a branch still has open accounts of the module | Loans, savings, investments |
 | Import templates | Parser, classifier, normaliser, committer | `pilot_loan_register_v1` |
-| Payment purposes | Booking handler per purpose | `lending.loan_repayment` books a repayment |
+| Payment purposes | Booking handler per purpose | `lending.loan_repayment` books a repayment (built in #216: `LoanRepaymentPurpose` in `lending.loans`, through `LoanServicing`) |
 | Report definitions | Report key, parameters, permission, query | `lending.par` |
 | Scheduled jobs | Job key, schedule, handler | `lending.nightly_arrears` |
 

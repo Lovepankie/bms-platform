@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -47,6 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 class LoanServicer implements LoanServicing {
 
     static final String SUBJECT = "lending.loan";
+    static final String GATEWAY = "gateway";
 
     private final LoanRepository loans;
     private final ServicingRepository repo;
@@ -110,6 +112,47 @@ class LoanServicer implements LoanServicing {
         Loan loan = loans.lock(loanId).orElseThrow(ApiException::notFound);
         checkRepayable(loan, valueDate, paymentMethodKey);
         return repay(loan, amountMinor, valueDate, paymentMethodKey, null, recordedBy, "system");
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public UUID recordRepayment(
+            UUID loanId,
+            long amountMinor,
+            LocalDate valueDate,
+            String paymentMethodKey,
+            UUID recordedBy,
+            String externalReference,
+            String origin,
+            boolean queueReceiptNotice) {
+        if (!Set.of("gateway", "system", "import", "portal").contains(origin)) {
+            throw new IllegalArgumentException("unknown origin " + origin);
+        }
+        Loan loan = loans.lock(loanId).orElseThrow(ApiException::notFound);
+        if (GATEWAY.equals(paymentMethodKey) && externalReference != null) {
+            // The loan row is locked, so two callers with one payment reference meet here one after the other.
+            Optional<Txn> first = repo.gatewayRepayment(externalReference);
+            if (first.isPresent()) {
+                Txn t = first.get();
+                if (t.loanId().equals(loanId) && t.amountMinor() == amountMinor) {
+                    return t.id();
+                }
+                // The same reference for another loan or amount is not a replay: never hand back someone else's
+                // repayment.
+                throw ApiException.rule(
+                        "duplicate_reference", "That payment reference already booked a different payment.");
+            }
+        }
+        checkRepayable(loan, valueDate, paymentMethodKey);
+        return repay(
+                loan,
+                amountMinor,
+                valueDate,
+                paymentMethodKey,
+                externalReference,
+                recordedBy,
+                origin,
+                queueReceiptNotice);
     }
 
     // ---- Disbursement (FR-DIS-01 to FR-DIS-03) --------------------------------------------
@@ -364,6 +407,12 @@ class LoanServicer implements LoanServicing {
         after.put("value_date", valueDate.toString());
         after.put("receipt_no", receipt);
         after.putAll(notices.audit(source, notifyMember, valueDate));
+        if (GATEWAY.equals(source)) {
+            // The order and the merchant account are on the payment intent's own audit row, written in this
+            // transaction.
+            after.put("origin", GATEWAY);
+            after.put("external_reference", externalReference);
+        }
         if (!recovery) {
             repo.insertAllocations(txnId, txnId, applied.allocations());
             repo.saveItems(items, today);
@@ -431,6 +480,13 @@ class LoanServicer implements LoanServicing {
     Txn checkReversible(Loan loan, Txn txn) {
         if (!txn.loanId().equals(loan.id())) {
             throw ApiException.notFound();
+        }
+        if ("gateway".equals(txn.paymentMethodKey())) {
+            // The clearing debit and the confirmation code would be left behind; the reversal of a gateway payment is
+            // the payments module's review (issue #224).
+            throw ApiException.rule(
+                    "gateway_reversal_pending",
+                    "A payment collected by mobile money cannot be reversed here yet; it is reviewed with the payment provider.");
         }
         if (!Set.of("repayment", "recovery").contains(txn.txnType())) {
             throw ApiException.rule("not_reversible", "Only a repayment or a recovery is reversed here.");

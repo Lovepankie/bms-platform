@@ -3,14 +3,17 @@ import type { Me } from '../../../api/client';
 // Which loan actions a session is offered. The API is the authority (it checks the permission
 // and the loan's status on every call); this only decides what the menu and the loan page show,
 // from the /me permissions and the loan's status. Each action names the permission its API route
-// declares (docs/sdd/08-security-design.md, chapter 7 section 7.11.13).
+// declares (docs/sdd/08-security-design.md, chapter 7 section 7.11.13). Collecting by mobile money or card (issue #216) is
+// the payments permission `core.payments.collect`; whether the business has switched collections on and connected its own
+// account is the server's word, given as a plain refusal when the form is sent.
 
 export const LOANS_READ = 'lending.loans.read';
 
-export type LoanAction = 'repay' | 'disburse' | 'payoff' | 'reverse' | 'write_off';
+export type LoanAction = 'repay' | 'collect' | 'disburse' | 'payoff' | 'reverse' | 'write_off';
 
 const NEEDS: Record<LoanAction, string> = {
   repay: 'lending.repayments.create',
+  collect: 'core.payments.collect',
   disburse: 'lending.disbursements.request',
   payoff: LOANS_READ,
   reverse: 'lending.repayments.reverse_request',
@@ -21,6 +24,7 @@ const NEEDS: Record<LoanAction, string> = {
 // written-off loan is recorded as a recovery.
 const STATUSES: Record<LoanAction, string[]> = {
   repay: ['active', 'written_off'],
+  collect: ['active'],
   disburse: ['approved'],
   payoff: ['active'],
   reverse: ['active', 'closed', 'written_off'],
@@ -43,7 +47,7 @@ export function mayDo(me: Pick<Me, 'permissions'>, action: LoanAction): boolean 
 
 /** The actions offered on a loan in `status`, in the order the page shows them. */
 export function actionsFor(me: Pick<Me, 'permissions'>, status: string | undefined): LoanAction[] {
-  const order: LoanAction[] = ['disburse', 'repay', 'payoff', 'write_off'];
+  const order: LoanAction[] = ['disburse', 'repay', 'collect', 'payoff', 'write_off'];
   return order.filter((a) => mayDo(me, a) && STATUSES[a].includes(status ?? ''));
 }
 
@@ -54,8 +58,10 @@ export function actionsFor(me: Pick<Me, 'permissions'>, status: string | undefin
 export function canReverse(
   me: Pick<Me, 'permissions'>,
   loanStatus: string | undefined,
-  txn: { txn_type?: string; reversed_by_txn_id?: string },
+  txn: { txn_type?: string; reversed_by_txn_id?: string; payment_method_key?: string },
 ): boolean {
+  // A payment collected by mobile money is reviewed with the payment provider, not reversed by staff (issue #216, #224).
+  if (txn.payment_method_key === 'gateway') return false;
   if (!mayDo(me, 'reverse') || txn.reversed_by_txn_id) return false;
   if (txn.txn_type === 'recovery') return true;
   return txn.txn_type === 'repayment' && ['active', 'closed'].includes(loanStatus ?? '');

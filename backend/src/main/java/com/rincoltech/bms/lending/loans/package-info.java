@@ -6,7 +6,8 @@
  * writes {@code lending_loan_status_history}. Every money event posts through {@code post_entry}
  * (ADR-004) and the maker-checker actions are registered here (ADR-015, ADR-026).
  * {@link com.rincoltech.bms.lending.loans.LoanServicing} is the port for callers without a request
- * principal (the fabricated seed, later the import).
+ * principal (the fabricated seed, the import, gateway bookings). It also registers the
+ * {@code lending.loan_repayment} payment purpose (ADR-035, issue #216).
  */
 @ApplicationModule(
         id = "lending.loans",
@@ -21,6 +22,7 @@
             "core.approvals",
             "core.operations",
             "core.notifications",
+            "core.payments",
             "lending.members",
             "lending.products",
             "lending.collateral"

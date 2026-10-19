@@ -17,4 +17,10 @@ public interface PaymentMethods {
      * @param branchId the branch the money moves at, or {@code null} for the tenant's mapping
      */
     String accountRef(String methodKey, UUID branchId);
+
+    /**
+     * As {@link #accountRef}, but empty instead of refusing when the method is unmapped, switched off or its account is
+     * not postable. For a caller that has a fallback and must not mark its transaction rollback-only by a refusal.
+     */
+    java.util.Optional<String> accountRefIfMapped(String methodKey, UUID branchId);
 }

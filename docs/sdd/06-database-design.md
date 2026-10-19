@@ -719,6 +719,17 @@ lender's address can never match another lender's order (the four-argument form 
 `allocated_by uuid`, `allocated_at timestamptz`, `receipt_journal_entry_id uuid NOT NULL`,
 `allocation_journal_entry_id uuid`. FR-PAY-04.
 
+As built in slice #216 (migration `V59__loan_repayment_by_gateway.sql`), a subset of the columns above, append-only for now (`bms_app` holds SELECT and INSERT; the
+allocation slice adds the update and its guard): `id`, `tenant_id`, `created_at`, `branch_id`, `intent_id uuid NOT NULL` (the payment intent whose money this is, `UNIQUE (tenant_id, intent_id)`
+and a foreign key to `payment_intents`), `purpose`, `subject_type`, `subject_id` (what the payer meant to pay), `amount_minor bigint NOT NULL`, `currency`, `value_date date NOT NULL`,
+`confirmation_code varchar(100)`, `refusal_code varchar(60) NOT NULL` (why the purpose handler refused: a closed vocabulary of lower case words), `status text NOT NULL DEFAULT 'open'`
+[`open`, `allocated`, `refunded`], `journal_entry_id uuid NOT NULL` (debit `gateway_clearing`, credit `unallocated_receipts`, posted in the same transaction that ends the intent
+`booked_unallocated`). The payer's phone is not copied (it stays on the intent). The columns of allocation (`allocated_subject_*`, `allocated_by`, `allocated_at`,
+`allocation_journal_entry_id`) arrive with the slice that allocates a receipt (FR-PAY-04). The same migration lets `lending_loan_transactions.payment_method_key` take `gateway`
+(the check is replaced by a superset, added `NOT VALID` and validated) and adds the partial unique index `lending_loan_transactions_gateway_reference` over
+(`tenant_id`, `payment_method_key`, `external_reference`) where the method is `gateway`, the reference is not null and the type is `repayment` or `recovery`, so one order tracking id books
+one repayment (spec 3.4.1).
+
 ### Import tables (RLS)
 
 Specified in full in chapter 13 section 13.4; listed here for completeness:
