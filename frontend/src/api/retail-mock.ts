@@ -508,6 +508,29 @@ export function createMockRetail(): RetailApi {
       return found ? delay(visibleSale(found)) : Promise.reject(new RetailError('That could not be found.', 404, 'not_found'));
     },
 
+    paySale: (saleId, body, key) =>
+      run(() => once(`pay|${key}`, { saleId, body }, () => {
+        const sale = sales.find((x) => x.id === saleId) ?? refuse(404, 'not_found', 'That could not be found.');
+        if (sale.payment_method !== 'credit' || sale.status !== 'completed') refuse(422, 'sale_not_payable', 'Only a completed credit sale takes payments.');
+        if (body.amount_minor > (sale.balance_minor ?? 0)) refuse(422, 'payment_exceeds_balance', 'The payment is larger than the balance.');
+        const paidOn = body.paid_on ?? today();
+        if (paidOn > today() || paidOn < (sale.sale_date ?? '')) refuse(422, 'validation_failed', 'A payment is dated between the sale and today.');
+        sale.paid_minor = (sale.paid_minor ?? 0) + body.amount_minor;
+        sale.balance_minor = (sale.total_minor ?? 0) - sale.paid_minor;
+        return { payment: { id: nextId('pay'), sale_id: saleId, amount_minor: body.amount_minor, method: body.method, paid_on: paidOn, currency: 'UGX' }, sale_paid_minor: sale.paid_minor, sale_balance_minor: sale.balance_minor };
+      })),
+
+    voidSale: (saleId, reason) =>
+      run(() => {
+        const sale = sales.find((x) => x.id === saleId) ?? refuse(404, 'not_found', 'That could not be found.');
+        if (sale.status === 'voided') refuse(409, 'sale_voided', 'This sale has been voided already.');
+        if (sale.payment_method === 'credit' && (sale.paid_minor ?? 0) > 0) refuse(422, 'sale_has_payments', 'A credit sale with payments against it cannot be voided.');
+        (sale.lines ?? []).forEach((l) => move(sale.branch_id ?? BRANCH_A, l.product_id ?? '', toMilli(l.qty ?? '0')));
+        sale.status = 'voided';
+        sale.void_reason = reason.trim();
+        return visibleSale(sale);
+      }),
+
     listCustomers: () =>
       delay(customers.map((c) => ({ ...c, ...figures(c.id), balance_minor: sales.filter((x) => x.payment_method === 'credit' && x.status === 'completed' && x.buyer_name === c.name).reduce((sum, x) => sum + (x.balance_minor ?? 0), 0) }))),
     listCustomerPage: ({ query, cursor }) => {

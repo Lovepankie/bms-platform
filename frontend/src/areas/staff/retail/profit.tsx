@@ -23,7 +23,7 @@ function Headline({ sums }: { sums: Sums }) {
     <div className="table-wrap"><table>
       <tbody>
         {withCost && <tr><td>At cost</td><td className="num">{money(sums.cost ?? 0)}</td></tr>}
-        <tr><td>At selling price</td><td className="num">{money(sums.sales ?? 0)}</td></tr>
+        <tr><td>At price</td><td className="num">{money(sums.sales ?? 0)}</td></tr>
         {withCost && <tr><td>Expected profit</td><td className="num">{money(sums.profit ?? 0)}</td></tr>}
         {withCost && <tr><td>Expected profit % (over cost)</td><td className="num">{showPercent(sums.bp)}</td></tr>}
       </tbody>

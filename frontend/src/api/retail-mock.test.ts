@@ -204,6 +204,30 @@ describe('retail mock adapter (real response shapes)', () => {
     await expect(api.getSale('nope')).rejects.toMatchObject({ status: 404 });
   });
 
+  it('takes a payment on a credit sale once per key, refuses more than the balance, and voids with stock back', async () => {
+    setMockProfitAccess(true);
+    const api = createMockRetail();
+    const owing = (await api.listSales({ paymentMethod: 'credit', owing: 'owing' })).items?.[0] as { id: string; balance_minor: number; paid_minor: number; sale_date: string };
+    const part = Math.floor(owing.balance_minor / 2);
+    const first = await api.paySale(owing.id, { amount_minor: part, method: 'cash' }, 'pay-key-1');
+    const again = await api.paySale(owing.id, { amount_minor: part, method: 'cash' }, 'pay-key-1');
+    expect(again).toEqual(first);
+    expect(first.sale_balance_minor).toBe(owing.balance_minor - part);
+    expect((await api.getSale(owing.id)).paid_minor).toBe(owing.paid_minor + part);
+    await expect(api.paySale(owing.id, { amount_minor: owing.balance_minor, method: 'cash' }, 'pay-key-2')).rejects.toMatchObject({ code: 'payment_exceeds_balance' });
+    await expect(api.paySale(owing.id, { amount_minor: 1, method: 'cash', paid_on: '2999-01-01' }, 'pay-key-3')).rejects.toMatchObject({ status: 422 });
+    await expect(api.voidSale(owing.id, 'Wrong buyer')).rejects.toMatchObject({ code: 'sale_has_payments' });
+    const products = await api.listProducts({ branchId: branch });
+    const product = products[0];
+    const before = (await api.listStock({ branchId: branch })).find((r) => r.product_id === product?.id)?.qty;
+    const sold = await api.createSale(cash(product?.id ?? '', '1.000'), 'void-sale-key');
+    const voided = await api.voidSale(sold.id ?? '', ' Rang up twice ');
+    expect(voided).toMatchObject({ status: 'voided', void_reason: 'Rang up twice' });
+    expect((await api.listStock({ branchId: branch })).find((r) => r.product_id === product?.id)?.qty).toBe(before);
+    await expect(api.voidSale(sold.id ?? '', 'Again')).rejects.toMatchObject({ code: 'sale_voided' });
+    await expect(api.paySale(sold.id ?? '', { amount_minor: 1, method: 'cash' }, 'pay-key-4')).rejects.toMatchObject({ code: 'sale_not_payable' });
+  });
+
   it('hides cost and profit from the sales lists without retail.profit.read', async () => {
     setMockProfitAccess(false);
     const api = createMockRetail();

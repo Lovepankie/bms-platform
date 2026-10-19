@@ -39,8 +39,8 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
         {showQty(r.qty ?? '0')} {r.unit}
         {r.negative && <div className="rt-flag">Negative</div>}
       </td>
-      <td className="num">{money(r.sell_minor ?? 0)}</td>
       {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
+      <td className="num">{money(r.sell_minor ?? 0)}</td>
     </tr>
   );
   return (
@@ -52,8 +52,8 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
           <th>Item</th>
           {!phone && !g.active && <th>Category</th>}
           <th className="num">In stock</th>
-          <th className="num">Price</th>
           {showCost && <th className="num">Cost</th>}
+          <th className="num">Price</th>
         </tr>
       </thead>
       {g.active ? <GroupedBodies state={g} colSpan={3 + (showCost ? 1 : 0)} renderRow={row} /> : <tbody>{rows.map(row)}</tbody>}
@@ -89,8 +89,8 @@ export function AllBranchesTable({ data, showCost: mayCost, searching = false, f
       {(r.balances ?? []).map((c) => (
         <td key={c.branch_id} className="num"><Qty qty={c.qty ?? '0'} negative={c.negative} /></td>
       ))}
-      <td className="num">{money(r.sell_minor ?? 0)}</td>
       {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
+      <td className="num">{money(r.sell_minor ?? 0)}</td>
     </tr>
   );
   return (
@@ -102,8 +102,8 @@ export function AllBranchesTable({ data, showCost: mayCost, searching = false, f
           <th>Item</th>
           <th className="num">Total</th>
           {data.branches.map((b) => <th key={b.id} className="num">{branchName(b)}</th>)}
-          <th className="num">Price</th>
           {showCost && <th className="num">Cost</th>}
+          <th className="num">Price</th>
         </tr>
       </thead>
       {g.active ? <GroupedBodies state={g} colSpan={3 + data.branches.length + (showCost ? 1 : 0)} renderRow={row} /> : <tbody>{data.items.map(row)}</tbody>}
@@ -130,7 +130,7 @@ export function AllBranchesList({ data, showCost, searching = false, filterKey =
               </span>
               <span className="num"><strong>Total <Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} /></strong></span>
             </div>
-            <p className="hint">{money(r.sell_minor ?? 0)} each{showCost && r.cost_minor !== undefined ? `, cost ${money(r.cost_minor)}` : ''}</p>
+            <p className="hint">{showCost && r.cost_minor !== undefined ? `Cost ${money(r.cost_minor)}, price` : 'Price'} {money(r.sell_minor ?? 0)} each</p>
             <button type="button" className="btn-sm" aria-expanded={expanded} onClick={() => setOpen({ ...open, [id]: !expanded })}>
               {expanded ? 'Hide branches' : 'Show branches'}
             </button>

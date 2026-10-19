@@ -15,7 +15,7 @@ yet), **out of scope** (with the reason). Screens are under `frontend/src/areas/
 | AppSheet view | Equivalent screen | Status | What remains |
 |---|---|---|---|
 | Record a sale (cash or credit, buyer, proposed payment date) | Record a sale (`sale`) | done | Nothing. The category shows beside each item in the picker (#145) |
-| Edit a credit sale | Replaced on purpose by payments against the sale (FR-RET-05, behaviour spec section 8) | partly | The API takes payments (`POST /retail/sales/{id}/payments`); the PWA has no "Record a payment" form yet, so a credit sale can be read (Credit sales) but not paid from the screens |
+| Edit a credit sale | Replaced on purpose by payments against the sale (FR-RET-05, behaviour spec section 8) | done | An opened credit sale, the Credit sales list and the All sales list take "Record payment" and "Mark as fully paid" (`POST /retail/sales/{id}/payments`, issue #326); an imported sale shows a note instead |
 | Credit sales (sales where the type is Credit) | Credit sales (`credit-sales`): buyer, date, amount, due date, state (Unpaid, Part paid, Overdue, Paid); filter by buyer and by what is owed; open a sale for its lines | done | Nothing for the list. Payment history on a sale is not shown yet |
 | Sales list and history | All sales (`sales`): filters by date range, branch (the Branch box), buyer, payment method and item; open a sale for its lines | done | Nothing for the list |
 | Sales by cash and by profit margin, grouped by shop, year and month | Sales analysis (`sales-analysis`): by day, week or month, by shop, category, item and seller; Margins (`margins`): profit and margin percent by item and category; Daily profit (`profit`) per branch and day | done | Nothing for the grouping and the margin. The year is a range of up to 366 days. The cash against credit split of a day is on the retail home dashboard; there is no "by cash" cut of the profit report |
@@ -71,7 +71,7 @@ The pilot owner was promised better analytics than the AppSheet app. These scree
 | Sales by day, week, month, shop, category, item, seller; top sellers; slow movers; items with no sale | Sales analysis (`sales-analysis`) | done | Nothing |
 | Profit and margin by item and category; items sold below a target; what a price change did | Margins (`margins`), profit reader only | done | Nothing |
 | Days of cover, what to reorder, dead stock, shrinkage and damage cost by shop | Stock health (`stock-health`) | done | A reorder suggestion is a number of units at the pace of 30 days; no supplier or lead time per item |
-| Who owes, how late, what was paid | Credit control (`credit-control`) | done | The "Record a payment" form is still missing (see Sales) |
+| Who owes, how late, what was paid | Credit control (`credit-control`) | done | Payments are recorded from Credit sales and the opened sale (issue #326) |
 | Expected profit of the stock and a run rate | Business evaluation (`evaluation`), profit reader only; an estimate, not a forecast | done | The exact formula the AppSheet app used is still to be agreed with the owner (issue #149 item 7); these are the stated formulas |
 | Cash view per shop per day (takings, expenses, banked, withdrawn, savings, difference) | None | out of scope | The cash book |
 | Export to PDF and Excel; a daily summary on WhatsApp | None | out of scope | Report runs (SDD 7.11.8) and the notification outbox |

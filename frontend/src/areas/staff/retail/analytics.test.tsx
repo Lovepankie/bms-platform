@@ -319,6 +319,8 @@ describe('owner dashboard', () => {
     expect(html).toContain('Profit today');
     expect(html).toContain('UGX 1,200');
     expect(html).toContain('Stock at cost');
+    expect(html.indexOf('Stock at cost')).toBeLessThan(html.indexOf('Stock at price'));
+    expect(html).not.toContain('selling price');
     expect(html).toContain('Head office');
     expect(html).toContain('Last 7 days');
     expect(html).toContain('Last 30 days');
@@ -337,7 +339,7 @@ describe('owner dashboard', () => {
   it('shows the sales and stock parts and nothing of cost or profit to a seller', () => {
     const html = renderToString(<DashboardView data={seller()} nameOf={nameOf} />);
     expect(html).toContain('UGX 3,600');
-    expect(html).toContain('Stock at selling price');
+    expect(html).toContain('Stock at price');
     expect(html).not.toMatch(/profit|cost/i);
     expect(html).not.toContain('1,200');
     expect(html).not.toContain('31,100');
@@ -352,7 +354,7 @@ describe('owner dashboard', () => {
   it('shows only the sales parts when stock is not readable', () => {
     const html = renderToString(<DashboardView data={{ ...seller(), stock: undefined, shops: [{ branch_id: 'b1', today_sales_minor: 2100, last7_sales_minor: 5100, last30_sales_minor: 6000 }] }} nameOf={nameOf} />);
     expect(html).toContain('Sales today');
-    expect(html).not.toContain('Stock at selling price');
+    expect(html).not.toContain('Stock at price');
     expect(html).not.toContain('Out / low');
   });
 });

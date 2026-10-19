@@ -27,7 +27,7 @@ function PositionTable({ p }: { p: Position }) {
       <tbody>
         <tr><td>Profit in the period</td><td className="num">{money(p.period?.profit_minor ?? 0)}</td></tr>
         <tr><td>Stock at cost</td><td className="num">{money(p.stock?.at_cost_minor ?? 0)}</td></tr>
-        <tr><td>Stock at selling price</td><td className="num">{money(p.stock?.at_price_minor ?? 0)}</td></tr>
+        <tr><td>Stock at price</td><td className="num">{money(p.stock?.at_price_minor ?? 0)}</td></tr>
         <tr><td>Expected profit on the stock</td><td className="num">{money(p.stock?.expected_profit_minor ?? 0)}</td></tr>
         <tr><td>Expected profit over cost</td><td className="num">{percentOrNone(p.stock?.over_cost_bp) || 'n/a'}</td></tr>
         <tr><td>Sales a day, last 30 days</td><td className="num">{money(run?.avg_daily_sales_minor ?? 0)}</td></tr>

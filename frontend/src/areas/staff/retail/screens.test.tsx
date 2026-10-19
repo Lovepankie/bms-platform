@@ -94,6 +94,25 @@ describe('stock screen', () => {
     expect(admin).toContain('UGX 3,500');
   });
 
+  it('says Price and puts Cost before it (issue #330), and says only Price without the permission', () => {
+    const admin = renderToString(<StockTable rows={rows} showCost />);
+    expect(admin.indexOf('>Cost<')).toBeGreaterThan(-1);
+    expect(admin.indexOf('>Cost<')).toBeLessThan(admin.indexOf('>Price<'));
+    expect(admin.indexOf('UGX 3,500')).toBeLessThan(admin.indexOf('UGX 6,000'));
+    expect(admin).not.toContain('Selling price');
+    const sales = renderToString(<StockTable rows={rows} showCost={false} />);
+    expect(sales).toContain('>Price<');
+    expect(sales).not.toContain('Selling');
+  });
+
+  it('shows cost then price on the all-branches table and the phone cards', () => {
+    const data = { branches: [{ id: 'b1', code: 'BR1', name: 'Test Branch A' }], items: [{ product_id: 'p1', description: 'Test Item 01', unit: 'piece', total_qty: '3.000', sell_minor: 6000, cost_minor: 3500, balances: [{ branch_id: 'b1', qty: '3.000' }] }] } as AllBranchesStock;
+    const table = renderToString(<AllBranchesTable data={data} showCost />);
+    expect(table.indexOf('>Cost<')).toBeLessThan(table.indexOf('>Price<'));
+    expect(renderToString(<AllBranchesList data={data} showCost />)).toContain('Cost UGX 3,500, price UGX 6,000 each');
+    expect(renderToString(<AllBranchesList data={data} showCost={false} />)).toContain('Price UGX 6,000 each');
+  });
+
   it('shows the category of each item in a Category column when the list is not grouped', () => {
     vi.stubGlobal('localStorage', { getItem: () => 'off', setItem: () => undefined });
     const html = renderToString(<StockTable rows={rows.map((r) => ({ ...r, category: 'Lighting' }))} showCost={false} />);
@@ -512,7 +531,7 @@ describe('All branches (#144)', () => {
     expect(html).toContain('Test Branch A');
     expect(html).toContain('UGX 12,000');
     expect(html).toContain('UGX 6,000');
-    expect(html).toContain('<td>At selling price</td><td class="num">UGX 18,000</td>');
+    expect(html).toContain('<td>At price</td><td class="num">UGX 18,000</td>');
   });
 
   it('Daily profit shows each branch and the total of every branch per day', () => {

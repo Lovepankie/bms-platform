@@ -1,6 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Highlight, NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { businessToday, daysBefore, retail, type Sale, type SalePayment, type SalesQuery } from '../../../api/retail';
@@ -13,6 +13,7 @@ import { settledWords } from './returns-state';
 import { showDate } from './transfers';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone, useProfitAccess } from './ui';
 import { SaleDocuments } from './documents-ui';
+import { PaySaleAction, VoidSaleAction } from './sale-actions';
 
 // Credit sales and All sales (#145): the lists the pilot's app has, 'Credit sales' and the sales
 // history, read from the sales list API in the branch chosen at the top of the page (every branch the
@@ -39,7 +40,7 @@ export function saleState(sale: Sale, today: string): SaleState {
 }
 
 /** One sale as a card: buyer, date, amount, and for credit the due date and what is still owed, with an Open button. */
-export function SaleList({ items, today, onOpen, credit, branchOf, term = '' }: {
+export function SaleList({ items, today, onOpen, credit, branchOf, term = '', action }: {
   items: Sale[];
   today: string;
   onOpen: (id: string) => void;
@@ -47,6 +48,11 @@ export function SaleList({ items, today, onOpen, credit, branchOf, term = '' }: 
   branchOf?: (id: string | undefined) => string;
   /** The words searched for, marked in the buyer's name. */
   term?: string;
+  /**
+   * Shown under each sale's Open button. Every list of sales passes the record-payment buttons here (issue #326, tested in
+   * sale-actions.dom.test.tsx): a list that renders SaleList, or rows of its own, without it has no way to take a payment.
+   */
+  action?: (sale: Sale) => ReactNode;
 }) {
   if (items.length === 0) return <p className="empty-state">{credit ? 'No credit sales found.' : 'No sales found.'}</p>;
   return (
@@ -72,6 +78,7 @@ export function SaleList({ items, today, onOpen, credit, branchOf, term = '' }: 
             <button type="button" className="btn-sm" aria-label={`Open the sale of ${showDate(s.sale_date)}${s.buyer_name ? ` to ${s.buyer_name}` : ''}`} onClick={() => onOpen(s.id ?? '')}>
               Open
             </button>
+            {action?.(s)}
           </li>
         );
       })}
@@ -153,10 +160,12 @@ function OpenSale({ id, onClose }: { id: string; onClose: () => void }) {
       {sale.isPending && <p className="loading">Loading</p>}
       <Problem error={sale.error} />
       {sale.data && <SaleDetail sale={sale.data} today={businessToday()} branchName={nameOf(sale.data.branch_id)} />}
+      {sale.data && <PaySaleAction sale={sale.data} today={businessToday()} />}
       {sale.data?.id && <SaleDocuments saleId={sale.data.id} status={sale.data.status} branchId={sale.data.branch_id} />}
       {sale.data && mayReturn && sale.data.status === 'completed' && (
         <p><Link className="btn-sm" to="/staff/retail/returns/new/$saleId" params={{ saleId: id }}>Return goods</Link></p>
       )}
+      {sale.data && <VoidSaleAction sale={sale.data} branchName={nameOf(sale.data.branch_id)} />}
       {mayReturn && (returns.data ?? []).length > 0 && (
         <section aria-label="Returns of this sale" data-testid="sale-returns">
           <h3>Returns of this sale</h3>
@@ -214,7 +223,7 @@ const OWING: { value: Owing; label: string }[] = [
   { value: 'paid', label: 'Paid' },
 ];
 
-function CreditSales() {
+export function CreditSales() {
   const { all, branchId, branchName } = useBranchView();
   const nameOf = useBranchName();
   const search = useLiveSearch();
@@ -238,7 +247,7 @@ function CreditSales() {
           <Problem error={query.error} />
           {query.data && (
             <SearchResults fetching={fetching}>
-              {items.length === 0 && search.term ? <NoResults term={search.term} onClear={search.clear} noun="credit sales" /> : <SaleList items={items} today={today} credit onOpen={setOpen} branchOf={all ? nameOf : undefined} term={search.term} />}
+              {items.length === 0 && search.term ? <NoResults term={search.term} onClear={search.clear} noun="credit sales" /> : <SaleList items={items} today={today} credit onOpen={setOpen} branchOf={all ? nameOf : undefined} term={search.term} action={(s) => <PaySaleAction compact sale={s} today={today} />} />}
             </SearchResults>
           )}
           <More query={query} />
@@ -248,7 +257,7 @@ function CreditSales() {
   );
 }
 
-function AllSales() {
+export function AllSales() {
   const { all, branchId, branchName } = useBranchView();
   const nameOf = useBranchName();
   const today = businessToday();
@@ -298,7 +307,7 @@ function AllSales() {
           <Problem error={query.error} />
           {query.data && (
             <SearchResults fetching={fetching}>
-              {items.length === 0 && search.term ? <NoResults term={search.term} onClear={search.clear} noun="sales" /> : <SaleList items={items} today={today} onOpen={setOpen} branchOf={all ? nameOf : undefined} term={search.term} />}
+              {items.length === 0 && search.term ? <NoResults term={search.term} onClear={search.clear} noun="sales" /> : <SaleList items={items} today={today} onOpen={setOpen} branchOf={all ? nameOf : undefined} term={search.term} action={(s) => <PaySaleAction compact sale={s} today={today} />} />}
             </SearchResults>
           )}
           <More query={query} />
