@@ -136,11 +136,84 @@ class MerchantAccountStepUpIT extends IntegrationTest {
                         .value())
                 .isEqualTo(401);
         assertThat(TestDatabase.owner()
-                        .sql("SELECT locked_until IS NOT NULL FROM users WHERE id = ?")
+                        .sql("SELECT step_up_locked_until IS NOT NULL AND locked_until IS NULL FROM users WHERE id = ?")
                         .param(admin)
                         .query(Boolean.class)
                         .single())
+                .as("step-up is locked on its own counter; the password lock is untouched")
                 .isTrue();
+    }
+
+    @Test
+    void fourWrongCodesAndOneWrongPasswordDoNotHideAGuessingSession() {
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-mix-a", true);
+        String email = "admin-mix-a-" + UUID.randomUUID() + "@example.test";
+        UUID admin = Api.staff(t, email, new Role("tenant_admin", null));
+        Api api = Api.tenant(http, t.slug());
+        Session s = api.signIn(admin, email, Api.PASSWORD, null);
+        String path = "/api/v1/payments/merchant-account";
+        for (int i = 0; i < 4; i++) {
+            assertThat(api.call(HttpMethod.PUT, path, body(KEY, "00000" + i), s.accessToken())
+                            .getStatusCode()
+                            .value())
+                    .isEqualTo(422);
+        }
+        // One wrong password: with a shared counter this would have been the fifth failure of the streak.
+        assertThat(api.login(email, "not-the-password").getStatusCode().value()).isEqualTo(401);
+        assertThat(api.call(HttpMethod.GET, path, null, s.accessToken())
+                        .getStatusCode()
+                        .value())
+                .as("nothing has reached a threshold yet")
+                .isEqualTo(200);
+        // The session holder's fifth wrong code reaches the step-up threshold: every session of the user ends.
+        assertThat(api.call(HttpMethod.PUT, path, body(KEY, "000009"), s.accessToken())
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(422);
+        assertThat(api.call(HttpMethod.GET, path, null, s.accessToken())
+                        .getStatusCode()
+                        .value())
+                .as("the guessing session was ended")
+                .isEqualTo(401);
+        assertThat(count(t)).isZero();
+    }
+
+    @Test
+    void fourWrongPasswordsAndOneWrongCodeNeverLogStaffOut() {
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-mix-b", true);
+        String email = "admin-mix-b-" + UUID.randomUUID() + "@example.test";
+        UUID admin = Api.staff(t, email, new Role("tenant_admin", null));
+        Api api = Api.tenant(http, t.slug());
+        Session s = api.signIn(admin, email, Api.PASSWORD, null);
+        String path = "/api/v1/payments/merchant-account";
+        // A stranger's wrong passwords, unauthenticated...
+        for (int i = 0; i < 4; i++) {
+            assertThat(api.login(email, "not-the-password-" + i).getStatusCode().value())
+                    .isEqualTo(401);
+        }
+        // ...and one slip by the real administrator's step-up: with a shared counter this was the fifth failure.
+        assertThat(api.call(HttpMethod.PUT, path, body(KEY, "000000"), s.accessToken())
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(422);
+        assertThat(api.call(HttpMethod.GET, path, null, s.accessToken())
+                        .getStatusCode()
+                        .value())
+                .as("the real session survives")
+                .isEqualTo(200);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT locked_until IS NULL AND step_up_failed_count = 1 FROM users WHERE id = ?")
+                        .param(admin)
+                        .query(Boolean.class)
+                        .single())
+                .as("the slip counted on the step-up counter only")
+                .isTrue();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM auth_sessions WHERE user_id = ? AND revoked_at IS NOT NULL")
+                        .param(admin)
+                        .query(Long.class)
+                        .single())
+                .isZero();
     }
 
     @Test

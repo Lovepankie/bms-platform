@@ -198,6 +198,14 @@ class MerchantAccountService {
         return verifiedAccounts.merchant();
     }
 
+    /**
+     * As {@link #verifiedMerchant()} for a caller that records the merchant in the transaction it is in (an intent): the
+     * account row is share-locked until that transaction ends, so a key change cannot slip in between (issue #309).
+     */
+    java.util.Optional<UUID> verifiedMerchantForShare() {
+        return verifiedAccounts.merchantForShare();
+    }
+
     /** Saves the credentials sealed with the data key. Makes no call to the provider. */
     View save(Credentials input) {
         String key = input.consumerKey() == null ? "" : input.consumerKey().trim();
@@ -224,7 +232,7 @@ class MerchantAccountService {
             throw inUse();
         }
         UUID user = CurrentPrincipal.require().userId();
-        String hmac = keys.blindIndex(KEY_INDEX, key);
+        String hmac = keys.blindIndex(KEY_INDEX, PesapalSettings.fold(key));
         View saved;
         try {
             saved = tx.execute(status -> {
@@ -232,8 +240,7 @@ class MerchantAccountService {
                 // The same consumer key (a new secret for the account) is the same merchant; another key is another
                 // one.
                 UUID merchantId = merchantIdOf(tenant.profile().id(), key);
-                if (store.keyInUseElsewhere(
-                        keys.blindIndexes(KEY_INDEX, key), tenant.profile().id())) {
+                if (store.keyInUseElsewhere(keyDigests(key), tenant.profile().id())) {
                     throw inUse();
                 }
                 if (before != null
@@ -281,6 +288,16 @@ class MerchantAccountService {
         }
         log.info("payment account credentials saved");
         return saved;
+    }
+
+    /**
+     * The digests a stored key could be found by: the case-folded form (what is stored since #309) and, for a row saved before
+     * that, the key exactly as entered, each under the current data key and every retired one.
+     */
+    private List<String> keyDigests(String key) {
+        List<String> all = new ArrayList<>(keys.blindIndexes(KEY_INDEX, PesapalSettings.fold(key)));
+        all.addAll(keys.blindIndexes(KEY_INDEX, key));
+        return all;
     }
 
     private static ApiException inUse() {

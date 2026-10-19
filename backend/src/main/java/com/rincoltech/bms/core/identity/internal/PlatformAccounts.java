@@ -90,6 +90,30 @@ class PlatformAccounts implements Accounts {
     }
 
     @Override
+    public Failures recordStepUpFailure(UUID id, Instant now, int maxFailures, Instant lockUntil) {
+        return jdbc.sql(Accounts.failureSql("platform_users", "step_up_failed_count", "step_up_locked_until"))
+                .params(Timestamp.from(now), Timestamp.from(now), maxFailures, Timestamp.from(lockUntil), id)
+                .query(Accounts::failures)
+                .single();
+    }
+
+    @Override
+    public boolean stepUpLockedAt(UUID id, Instant now) {
+        return jdbc.sql("SELECT coalesce(step_up_locked_until > ?, false) FROM platform_users WHERE id = ?")
+                .params(Timestamp.from(now), id)
+                .query(Boolean.class)
+                .single();
+    }
+
+    @Override
+    public void clearStepUpFailures(UUID id) {
+        jdbc.sql(
+                        "UPDATE platform_users SET step_up_failed_count = 0, step_up_locked_until = NULL WHERE id = ? AND (step_up_failed_count <> 0 OR step_up_locked_until IS NOT NULL)")
+                .param(id)
+                .update();
+    }
+
+    @Override
     public void recordSuccess(UUID id, Instant at) {
         jdbc.sql(
                         "UPDATE platform_users SET failed_login_count = 0, locked_until = NULL, last_login_at = ? WHERE id = ?")

@@ -421,3 +421,14 @@ environment, bound to a named tenant"; the rest of the ADR stands.
     key keeps the registered notification address (V56 no longer forbids a saved account carrying a registration). The operator's release notice reaches a suspended
     tenant's administrators and a failure to queue it is logged.
 
+### Review round 4 (PR #308, follow-ups of issue #309), decisions added
+
+26. **Step-up has its own failure counter.** Wrong codes entered by a signed-in session count on `step_up_failed_count` / `step_up_locked_until`
+    (migration V58), apart from the password counter. The fifth locks step-up for 15 minutes and ends every session of the user; password
+    failures never end a session and never count there, and a step-up slip never counts toward the password lock.
+27. **Letter case of a consumer key.** No recorded evidence (fixtures, docs) says Pesapal treats it as significant, so the refused-key check and
+    the cross-tenant uniqueness digest use the lower cased key; the key sent to Pesapal is never altered. Operators list the digest of the lower
+    cased form of each platform key too (runbook `payments.md` section 4c).
+28. **Fail closed, and lock the row.** An account whose key box cannot be opened is treated as refused. Intent creation reads the account row
+    `FOR SHARE`, so it cannot be created under a merchant a concurrent key change is replacing.
+

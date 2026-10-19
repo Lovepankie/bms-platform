@@ -61,6 +61,14 @@ class AccountStore {
                 .optional();
     }
 
+    /** The bound tenant's account, read with a share lock held to the end of the transaction (waits for a change in progress). */
+    Optional<Account> findForShare() {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM payment_gateway_accounts WHERE provider = ? FOR SHARE")
+                .param(PROVIDER)
+                .query(AccountStore::map)
+                .optional();
+    }
+
     /** The row, locked for the rest of the transaction. */
     Optional<Account> lock() {
         return jdbc.sql("SELECT " + COLUMNS + " FROM payment_gateway_accounts WHERE provider = ? FOR UPDATE")

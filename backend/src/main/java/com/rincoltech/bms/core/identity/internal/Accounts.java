@@ -46,6 +46,18 @@ interface Accounts {
 
     void recordSuccess(UUID id, Instant at);
 
+    /**
+     * The same atomic count-and-lock as {@link #recordFailure}, on the separate step-up counter (issue #309): wrong codes
+     * entered by a signed-in session. Never touches the password counter.
+     */
+    Failures recordStepUpFailure(UUID id, Instant now, int maxFailures, Instant lockUntil);
+
+    /** Whether step-up is locked for this account at {@code now}. Read under the row lock {@link #byIdForUpdate} took. */
+    boolean stepUpLockedAt(UUID id, Instant now);
+
+    /** A correct step-up code: the step-up count starts again. */
+    void clearStepUpFailures(UUID id);
+
     void setPendingTotp(UUID id, byte[] sealedSecret);
 
     void enableTotp(UUID id, byte[] sealedSecret, long usedStep);
@@ -77,15 +89,20 @@ interface Accounts {
      * statement re-evaluates against the committed count.
      */
     static String failureSql(String table) {
+        return failureSql(table, "failed_login_count", "locked_until");
+    }
+
+    /** The same statement over another pair of columns: the step-up counter and lock. */
+    static String failureSql(String table, String count, String lock) {
         return """
-                UPDATE %s SET
-                       failed_login_count = CASE WHEN locked_until <= ? THEN 1 ELSE failed_login_count + 1 END,
-                       locked_until = CASE WHEN locked_until > ? THEN locked_until
-                                           WHEN locked_until IS NULL AND failed_login_count + 1 >= ? THEN ?
+                UPDATE %1$s SET
+                       %2$s = CASE WHEN %3$s <= ? THEN 1 ELSE %2$s + 1 END,
+                       %3$s = CASE WHEN %3$s > ? THEN %3$s
+                                           WHEN %3$s IS NULL AND %2$s + 1 >= ? THEN ?
                                            ELSE NULL END
                  WHERE id = ?
-                RETURNING failed_login_count, locked_until
-                """.formatted(table);
+                RETURNING %2$s AS failed_login_count, %3$s AS locked_until
+                """.formatted(table, count, lock);
     }
 
     static Failures failures(ResultSet rs, int n) throws SQLException {

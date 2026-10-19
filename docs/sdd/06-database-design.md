@@ -217,6 +217,7 @@ Seeded from the matrix in chapter 8 by migration V2, with the two platform permi
 key; MFA is mandatory and enrolled at first sign-in), `totp_last_step bigint`,
 `mfa_enabled boolean NOT NULL DEFAULT false`, `is_active boolean NOT NULL DEFAULT true`,
 `failed_login_count integer NOT NULL DEFAULT 0`, `locked_until timestamptz`,
+`step_up_failed_count integer NOT NULL DEFAULT 0`, `step_up_locked_until timestamptz` (`V58`),
 `setup_token_hash char(64) UNIQUE`, `setup_token_expires_at timestamptz`, `created_at`,
 `updated_at`, `last_login_at`.
 
@@ -425,7 +426,8 @@ after values. Older logos stay in `documents` (rows are never deleted).
 (std) `kind text NOT NULL` [`staff`, `member`], `full_name text NOT NULL`,
 `email varchar(320)`, `phone_e164 varchar(16)`, `status text NOT NULL` [`invited`,
 `active`, `deactivated`], `failed_login_count integer NOT NULL DEFAULT 0`,
-`locked_until timestamptz`, `mfa_enabled boolean NOT NULL DEFAULT false`,
+`locked_until timestamptz`, `step_up_failed_count integer NOT NULL DEFAULT 0`,
+`step_up_locked_until timestamptz` (`V58`), `mfa_enabled boolean NOT NULL DEFAULT false`,
 `last_login_at timestamptz`, `preferences jsonb NOT NULL DEFAULT '{}'` (`V31`, ADR-025; CHECK it is
 an object). `preferences.tours` maps a guided tour id to `{status: completed | dismissed, version, at}`
 (FR-IAM-14); it holds only what the user chose for themselves, never anything a permission reads.

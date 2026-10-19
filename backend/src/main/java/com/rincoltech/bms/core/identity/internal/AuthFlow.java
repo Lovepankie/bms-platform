@@ -220,7 +220,7 @@ class AuthFlow {
     void confirmTotp(Accounts accounts, UUID userId, String code) {
         Instant now = clock.now();
         Account account = accounts.byIdForUpdate(userId).orElseThrow(AuthFlow::invalidCredentials);
-        if (account.lockedAt(now)) {
+        if (account.lockedAt(now) || accounts.stepUpLockedAt(account.id(), now)) {
             // Too many wrong codes: a stolen session cannot go on guessing a code for a sensitive action.
             accounts.audit("core.auth.step_up_refused_locked", account.id(), Map.of());
             throw locked();
@@ -232,9 +232,10 @@ class AuthFlow {
         OptionalLong step =
                 Totp.verify(box.open(account.totpSecret()), code == null ? "" : code, now, account.totpLastStep());
         if (step.isEmpty() || !accounts.advanceTotpStep(userId, step.getAsLong())) {
-            fail(accounts, account, now, "core.mfa.failed", true);
+            failStepUp(accounts, account, now);
             throw invalidCode(HttpStatus.UNPROCESSABLE_CONTENT);
         }
+        accounts.clearStepUpFailures(userId);
     }
 
     /** New recovery codes replace every old one; needs a current TOTP code (FR-IAM-11). */
@@ -242,7 +243,7 @@ class AuthFlow {
     List<String> regenerateRecoveryCodes(Accounts accounts, UUID userId, String code) {
         Instant now = clock.now();
         Account account = accounts.byIdForUpdate(userId).orElseThrow(AuthFlow::invalidCredentials);
-        if (account.lockedAt(now)) {
+        if (account.lockedAt(now) || accounts.stepUpLockedAt(account.id(), now)) {
             // Too many wrong codes: a stolen session cannot go on guessing a code for a sensitive action.
             accounts.audit("core.auth.step_up_refused_locked", account.id(), Map.of());
             throw locked();
@@ -253,9 +254,10 @@ class AuthFlow {
         }
         OptionalLong step = Totp.verify(box.open(account.totpSecret()), code, now, account.totpLastStep());
         if (step.isEmpty() || !accounts.advanceTotpStep(userId, step.getAsLong())) {
-            fail(accounts, account, now, "core.mfa.failed", true);
+            failStepUp(accounts, account, now);
             throw invalidCode(HttpStatus.UNPROCESSABLE_CONTENT);
         }
+        accounts.clearStepUpFailures(userId);
         List<String> codes = issueRecoveryCodes(accounts, userId);
         accounts.audit("core.mfa.recovery_codes_regenerated", userId, Map.of("recovery_codes_issued", codes.size()));
         return codes;
@@ -389,25 +391,27 @@ class AuthFlow {
      * and the lock come back from one atomic statement, so parallel failures cannot be lost.
      */
     private void fail(Accounts accounts, Account account, Instant now, String action) {
-        fail(accounts, account, now, action, false);
-    }
-
-    /**
-     * @param endSessionsAtLock true only for a failure of a step-up code by a signed-in session: reaching the lock then ends all
-     *     the user's sessions. A wrong password is unauthenticated (anyone who knows a login name can send one), so it locks but
-     *     never ends a session: otherwise a stranger could log a lender's staff out at will.
-     */
-    private void fail(Accounts accounts, Account account, Instant now, String action, boolean endSessionsAtLock) {
         Accounts.Failures failures = accounts.recordFailure(account.id(), now, MAX_FAILURES, now.plus(LOCK));
         accounts.audit(action, account.id(), Map.of("consecutive_failures", failures.consecutive()));
         // Only the failure that reached the threshold set the lock; later ones keep it.
         if (failures.consecutive() == MAX_FAILURES) {
             accounts.audit("core.auth.account_locked", account.id(), Map.of("locked_minutes", LOCK.toMinutes()));
-            // A lock ends every session of the user: whoever holds one (a stolen session guessing codes) signs in
-            // again.
-            if (endSessionsAtLock) {
-                accounts.sessions().revokeAllOf(account.id(), "admin", now);
-            }
+        }
+    }
+
+    /**
+     * A wrong code entered by a signed-in session for a sensitive action (issue #309). It counts on its own counter, never the
+     * password's, and the failure that reaches the threshold locks step-up and ends every session of the user: whoever holds
+     * one (a stolen session guessing codes) signs in again. Password failures are unauthenticated (anyone who knows a login
+     * name can send one), so they neither count here nor end a session; and a step-up failure never counts toward the password
+     * lock, so a stranger's wrong passwords plus one real slip cannot log staff out.
+     */
+    private void failStepUp(Accounts accounts, Account account, Instant now) {
+        Accounts.Failures failures = accounts.recordStepUpFailure(account.id(), now, MAX_FAILURES, now.plus(LOCK));
+        accounts.audit("core.mfa.failed", account.id(), Map.of("consecutive_failures", failures.consecutive()));
+        if (failures.consecutive() == MAX_FAILURES) {
+            accounts.audit("core.auth.step_up_locked", account.id(), Map.of("locked_minutes", LOCK.toMinutes()));
+            accounts.sessions().revokeAllOf(account.id(), "admin", now);
         }
     }
 

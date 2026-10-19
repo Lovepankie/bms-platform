@@ -124,7 +124,7 @@ class IntentService implements PaymentCollections {
         // The own-account rule (ADR-035 amendment of 2026-10-18): money owed to this business lands only in this
         // business's own merchant account. With none connected and tested there is nothing to collect into, and the
         // platform's account is never a substitute.
-        UUID merchantId = accounts.verifiedMerchant()
+        UUID merchantId = accounts.verifiedMerchantForShare()
                 .orElseThrow(() -> ApiException.rule(
                         "merchant_account_not_verified",
                         "Connect and test your own payment account (Receive payments) before collecting."));

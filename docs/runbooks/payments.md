@@ -15,7 +15,7 @@ secret or token is ever written in the repository, a chat or an issue.
 | `BMS_PESAPAL_BASE_URL` | Empty or the provider's API base. Outside production only the sandbox is accepted |
 | `BMS_PESAPAL_CALLBACK_BASE_URL` | The public https origin of the callback host, no path. **Needed before any lender can test its account**: the notification address is built from it |
 | `BMS_PESAPAL_PLATFORM_*` | The operator's own pair for subscription payments (slice #228); leave empty until then. Never used for a lender's money |
-| `BMS_PESAPAL_REFUSED_KEY_DIGESTS` | **Required in production whenever the gateway is on** (startup refuses otherwise): comma separated SHA-256 digests (lower case hex) of **every** consumer key the platform operator owns, current and retired, so no lender can enter one as its own account, whether or not `BMS_PESAPAL_PLATFORM_*` is in use. Compute one with `printf %s "$CONSUMER_KEY" \| shasum -a 256`. Add a key's digest before it is ever used anywhere, and keep the digests of retired keys. Development and tests may leave it empty |
+| `BMS_PESAPAL_REFUSED_KEY_DIGESTS` | **Required in production whenever the gateway is on** (startup refuses otherwise): comma separated SHA-256 digests (lower case hex) of **every** consumer key the platform operator owns, current and retired, so no lender can enter one as its own account, whether or not `BMS_PESAPAL_PLATFORM_*` is in use. Compute one with `printf %s "$CONSUMER_KEY" \| shasum -a 256`, **and a second one over the key in lower case** (`printf %s "$CONSUMER_KEY" \| tr 'A-Z' 'a-z' \| shasum -a 256`; the same digest when the key has no capital letters): a key is compared without regard to letter case (see section 4c), so a lender entering your key with a letter's case changed is caught by the lower case digest. Add a key's digest before it is ever used anywhere, and keep the digests of retired keys. Development and tests may leave it empty |
 | `BMS_DATA_KEY`, `BMS_DATA_KEY_ID` | The application data key (32 bytes, base64) that seals the lenders' stored credentials (and TOTP secrets), and its id |
 | `BMS_DATA_KEY_PREVIOUS` | Only during a data key rotation: the retired keys as `id:base64` pairs, comma separated (section 4a) |
 
@@ -165,3 +165,21 @@ as late; an expired order stays payable on purpose), `needs_attention`, `reverse
 
 Alerts to wire (spec 9.2): notifications per hour, unknown references, `status_mismatch`, intents `paid` but not booked over 10
 minutes, pending over 24 hours, provider 401 or 5xx rate, breaker open, reversals.
+
+## 4c. How a consumer key is compared (issue #309)
+
+- **Letter case.** Nothing recorded in this repository (the sandbox fixtures, ADR-035, the Pesapal reference) says whether Pesapal treats the
+  letter case of a consumer key as significant, so the two checks that decide whether two keys are the same account assume it may not: the
+  refused-key check (the configured platform key, and the digests listed in `BMS_PESAPAL_REFUSED_KEY_DIGESTS`) and the cross-tenant uniqueness
+  check (`consumer_key_hmac`) both use the lower cased key. "AbC..." and "abc..." are one key to them. The key sent to Pesapal, and the one
+  stored sealed, is always exactly what the lender pasted. If a sandbox call ever shows Pesapal refuses a case-changed key, the choice stays
+  harmless (it only refuses more), so nothing needs undoing. Accounts saved before this change hold the digest of the key as entered: they
+  are matched when the same case is entered again, and are re-digested in the folded form by the next data key rotation re-seal or the next
+  save of that account.
+- **A key that cannot be read is refused.** If a saved account's key box cannot be opened (a data key dropped from `BMS_DATA_KEY_PREVIOUS` before
+  the re-seal finished, or a damaged row) the account counts as refused: it is not a verified account, no intent is created for it, a test marks
+  it `failed` (`account_not_allowed`), and the host logs one line `a payment account's consumer key could not be opened`. Restore the key in
+  `BMS_DATA_KEY_PREVIOUS` (section 4a) and the lender tests again.
+- **Intent creation and a key change.** An intent reads the lender's account row `FOR SHARE` in the transaction that records it; saving a new
+  key holds the same row `FOR UPDATE`. So an intent is created under the merchant that is current when it commits, never under the one a key
+  change is replacing.

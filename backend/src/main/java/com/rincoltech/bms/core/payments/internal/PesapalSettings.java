@@ -34,14 +34,34 @@ record PesapalSettings(
         URI callbackBase,
         java.util.Set<String> refusedKeyDigests) {
 
-    /** True when the consumer key is one of the platform operator's own (by SHA-256), so no lender may enter it. */
+    /**
+     * The form of a consumer key that is compared and digested to decide whether two keys are the same account (issue #309): lower
+     * cased. Nothing recorded in this repository (the sandbox fixtures, the ADR, the Pesapal reference we hold) says whether
+     * Pesapal treats a key's letter case as significant, so we assume it may not: "AbC" and "abc" must not be two lenders' keys,
+     * and a platform key must not get past the refused list by changing a letter's case. Only the refused-list check and the
+     * cross-tenant uniqueness check use this; the key sent to Pesapal is always exactly what the lender pasted.
+     */
+    static String fold(String consumerKey) {
+        return consumerKey.toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /**
+     * True when the consumer key is one of the platform operator's own, so no lender may enter it. Compared without regard to
+     * letter case (see {@link #fold}): the configured platform key by its folded bytes, the refused digests by the SHA-256 of
+     * the key as entered and of its folded form (an operator lists the digest of the key exactly as issued; add the folded
+     * form's digest too, runbook payments.md).
+     */
     boolean isRefusedKey(String consumerKey) {
-        return consumerKey != null
-                && (refusedKeyDigests.contains(java.util.HexFormat.of().formatHex(sha256(consumerKey)))
-                        || (platformPair.key() != null
-                                && MessageDigest.isEqual(
-                                        platformPair.key().getBytes(StandardCharsets.UTF_8),
-                                        consumerKey.getBytes(StandardCharsets.UTF_8))));
+        if (consumerKey == null) {
+            return false;
+        }
+        String folded = fold(consumerKey);
+        return refusedKeyDigests.contains(java.util.HexFormat.of().formatHex(sha256(consumerKey)))
+                || refusedKeyDigests.contains(java.util.HexFormat.of().formatHex(sha256(folded)))
+                || (platformPair.key() != null
+                        && MessageDigest.isEqual(
+                                fold(platformPair.key()).getBytes(StandardCharsets.UTF_8),
+                                folded.getBytes(StandardCharsets.UTF_8)));
     }
 
     static final String SANDBOX_HOST = "cybqa.pesapal.com";

@@ -139,7 +139,7 @@ class AccountKeyRotation {
                     clock.now(),
                     keyBox,
                     secretBox,
-                    keys.blindIndex(MerchantAccountService.KEY_INDEX, key),
+                    keys.blindIndex(MerchantAccountService.KEY_INDEX, PesapalSettings.fold(key)),
                     current);
             count++;
         }

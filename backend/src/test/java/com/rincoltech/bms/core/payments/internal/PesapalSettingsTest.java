@@ -321,6 +321,21 @@ class PesapalSettingsTest {
         // The configured platform key is refused too, with or without the list.
         assertThat(PesapalSettings.resolve("staging", props("pesapal", null)).isRefusedKey("invented-platform-key"))
                 .isTrue();
+        // Issue #309: letter case does not get a key past the list: the platform key in another case, and the digest of
+        // the
+        // folded (lower case) form of a listed key.
+        assertThat(PesapalSettings.resolve("staging", props("pesapal", null)).isRefusedKey("Invented-PLATFORM-Key"))
+                .isTrue();
+        PesapalSettings foldedList = PesapalSettings.resolve(
+                "staging",
+                new PesapalProperties(
+                        "pesapal",
+                        null,
+                        "https://callbacks.example.test",
+                        new PesapalProperties.Platform(null, null, null, null),
+                        OWNED_DIGEST));
+        assertThat(foldedList.isRefusedKey("Invented-Owned-Key-0001")).isTrue();
+        assertThat(PesapalSettings.fold("AbC-1")).isEqualTo("abc-1");
         for (String bad : new String[] {"not-hex", "abc", "z".repeat(64)}) {
             PesapalProperties p = new PesapalProperties(
                     "pesapal", null, null, new PesapalProperties.Platform(null, null, null, null), bad);

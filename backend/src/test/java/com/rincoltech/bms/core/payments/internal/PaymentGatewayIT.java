@@ -2063,6 +2063,15 @@ class PaymentGatewayIT extends IntegrationTest {
                 as(HttpMethod.PUT, "/api/v1/payments/merchant-account", b, adminB, PERMS, creds(shared, SECRET_TEXT));
         assertThat(clash.getStatusCode().value()).isEqualTo(409);
         assertThat(clash.getBody().get("code").asString()).isEqualTo("merchant_account_in_use");
+        // Issue #309: a key that differs only in letter case is the same account as far as these checks go, for another
+        // lender
+        // and for the platform's own key; what Pesapal is sent is never changed.
+        for (String variant : new String[] {shared.toUpperCase(java.util.Locale.ROOT), "Invented-Platform-Key"}) {
+            ResponseEntity<JsonNode> cased = as(
+                    HttpMethod.PUT, "/api/v1/payments/merchant-account", b, adminB, PERMS, creds(variant, SECRET_TEXT));
+            assertThat(cased.getStatusCode().value()).as(variant).isEqualTo(409);
+            assertThat(cased.getBody().get("code").asString()).isEqualTo("merchant_account_in_use");
+        }
         assertThat(TestDatabase.owner()
                         .sql("SELECT count(*) FROM payment_gateway_accounts WHERE tenant_id = ?")
                         .param(b.tenantId())
@@ -2497,6 +2506,90 @@ class PaymentGatewayIT extends IntegrationTest {
         insertVerified(ok, user(ok), "an-ordinary-key-0000001", UUID.randomUUID());
         assertThat(tenantJobs.callForTenant(ok.tenantId(), () -> verifiedAccounts.verified()))
                 .isTrue();
+    }
+
+    @Test
+    void anAccountWhoseKeyCannotBeOpenedIsTreatedAsRefusedNotAsAllowed() {
+        // Issue #309: refused() used to fail open when the box could not be opened.
+        TestDatabase.Fixture t = TestDatabase.tenant("pay-unopenable", true);
+        UUID admin = user(t);
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO payment_gateway_accounts (id, tenant_id, merchant_id, consumer_key_enc, consumer_secret_enc,
+                                consumer_key_hmac, key_hint, data_key_id, status, ipn_id, ipn_token_hash, ipn_registered_at,
+                                last_checked_at, updated_by)
+                        VALUES (?, ?, ?, ?, ?, ?, 'abcd', 'dropped-key', 'verified', ?, ?, now(), now(), ?)
+                        """)
+                .params(
+                        UUID.randomUUID(),
+                        t.tenantId(),
+                        UUID.randomUUID(),
+                        new byte[40],
+                        new byte[40],
+                        UUID.randomUUID().toString().replace("-", "")
+                                + UUID.randomUUID().toString().replace("-", ""),
+                        UUID.randomUUID().toString(),
+                        UUID.randomUUID().toString().replace("-", "")
+                                + UUID.randomUUID().toString().replace("-", ""),
+                        admin)
+                .update();
+        assertThat(tenantJobs.callForTenant(t.tenantId(), () -> verifiedAccounts.merchant()))
+                .isEmpty();
+        assertThat(tenantJobs.callForTenant(t.tenantId(), () -> verifiedAccounts.verified()))
+                .isFalse();
+    }
+
+    @Test
+    void anIntentWaitsForAKeyChangeInProgressAndThenSeesTheNewState() throws Exception {
+        // Issue #309: intent creation reads the verified merchant FOR SHARE, so it cannot read the old merchant while a
+        // key
+        // change (which holds the row FOR UPDATE) is still in progress.
+        java.sql.Connection change = TestDatabase.ownerDataSource().getConnection();
+        change.setAutoCommit(false);
+        try (var st =
+                change.prepareStatement("SELECT 1 FROM payment_gateway_accounts WHERE tenant_id = ? FOR UPDATE")) {
+            st.setObject(1, BOUND.tenantId());
+            assertThat(st.executeQuery().next()).isTrue();
+        }
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            java.util.concurrent.Future<ResponseEntity<JsonNode>> attempt = pool.submit(() -> call(
+                    HttpMethod.POST,
+                    "/api/v1/payments/intents",
+                    BOUND,
+                    staff,
+                    Map.of(
+                            "purpose",
+                            PURPOSE,
+                            "subject_id",
+                            subject,
+                            "amount_minor",
+                            1500L,
+                            "payer_phone",
+                            "0700000123"),
+                    "key-" + UUID.randomUUID()));
+            Thread.sleep(1500);
+            assertThat(attempt.isDone())
+                    .as("the intent waits for the key change instead of reading the old merchant")
+                    .isFalse();
+            try (var st = change.prepareStatement(
+                    "UPDATE payment_gateway_accounts SET status = 'saved' WHERE tenant_id = ?")) {
+                st.setObject(1, BOUND.tenantId());
+                st.executeUpdate();
+            }
+            change.commit();
+            ResponseEntity<JsonNode> r = attempt.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(r.getStatusCode().value()).as("%s", r.getBody()).isEqualTo(422);
+            assertThat(r.getBody().get("code").asString()).isEqualTo("merchant_account_not_verified");
+        } finally {
+            change.rollback();
+            change.close();
+            pool.shutdownNow();
+            TestDatabase.owner()
+                    .sql("UPDATE payment_gateway_accounts SET status = 'verified' WHERE tenant_id = ?")
+                    .param(BOUND.tenantId())
+                    .update();
+        }
     }
 
     @Test
