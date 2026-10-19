@@ -23,8 +23,8 @@ export const FEATURES = {
   trial: false,
   /** Agents and commissions (issue #92). */
   agents: false,
-  /** The staff screen: invite a person, give them roles (no issue yet; the API exists). */
-  staffAdmin: false,
+  /** The staff screen: invite a person, give them roles (issue #319). */
+  staffAdmin: true,
 } satisfies Record<string, boolean>;
 
 export type Feature = keyof typeof FEATURES;

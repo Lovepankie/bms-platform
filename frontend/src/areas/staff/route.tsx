@@ -20,6 +20,7 @@ import { RetailNav } from './retail/nav';
 import { canSeeProfit, showRetail } from './retail/permissions';
 import { showReceivePayments } from './payments/state';
 import { showSms } from './sms/state';
+import { showUsers } from './users/state';
 
 // The staff area layout: restores the session from the refresh cookie, shows who is signed in,
 // and holds the branch switcher (FR-BR-03). Switching the branch changes what lists show without
@@ -128,6 +129,7 @@ export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: 
         {showRetail(me) && <Link to="/staff/retail" data-tour="nav-retail">Retail</Link>}
         {showSms(me) && <Link to="/staff/sms">SMS</Link>}
         {showReceivePayments(me) && <Link to="/staff/payments">Receive payments</Link>}
+        {showUsers(me) && <Link to="/staff/users" data-tour="nav-users">Users</Link>}
         {permissions.includes('core.settings.manage') && <Link to="/staff/setup">Business set-up</Link>}
       </nav>
     </header>

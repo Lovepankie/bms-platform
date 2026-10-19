@@ -63,3 +63,11 @@ does not type beyond "an object" (the identity module validates writes, and caps
 words); tours growing long (keep each under about a dozen steps and use page tours for detail);
 #93 removing `roles.mfa_required` for tenant admins, after which the first run offers the second
 factor to them too with no change here.
+
+## Amendment (2026-10-19, issue #319)
+
+The staff Users screen (`/staff/users`) is built, so the `staffAdmin` flag in `frontend/src/tour/model.ts`
+is switched on and the welcome tour's "Add your staff" step (which now needs `core.users.manage`) is
+shown; the welcome tour is version 4. The page has its own page tour, `page-users`, started from Help.
+Billing, payments, trial and agents stay behind their flags. No new ADR: nothing about how tours work
+changed.

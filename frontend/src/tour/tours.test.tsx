@@ -37,6 +37,7 @@ import { StocktakePage } from '../areas/staff/retail/stocktake';
 import { StaffBar } from '../areas/staff/route';
 import { AssistantSettingsPage } from '../areas/staff/assistant/page';
 import { Setup } from '../areas/staff/setup';
+import { UsersScreen } from '../areas/staff/users/page';
 import { FEATURES, type Tour, stepsFor } from './model';
 import { TOURS } from './tours';
 
@@ -74,6 +75,8 @@ function screen(path: string | undefined): ReactElement {
       return <StaffHome />;
     case '/staff/setup':
       return <Setup />;
+    case '/staff/users':
+      return <UsersScreen />;
     case '/staff/retail':
       return (
         <>
@@ -151,6 +154,10 @@ function render(me: Me, path: string | undefined): string {
   current = me;
   const client = new QueryClient();
   client.setQueryData(['settings'], settings);
+  // What the Users page reads, so its list and search are in the static markup.
+  client.setQueryData(['staff-users'], [{ id: 'u1', full_name: 'Test Seller 02', status: 'invited', roles: [{ role_key: 'retail_sales' }] }]);
+  client.setQueryData(['staff-roles'], []);
+  client.setQueryData(['staff-branches'], []);
   // What the retail settings screens read, so their targets are in the static markup.
   client.setQueryData(['retail', 'capabilities'], { capabilities: { profile: 'shop' }, version: 1 });
   client.setQueryData(['retail', 'branch-roles'], (me.branches ?? []).map((b) => ({ branch_id: b.id, code: b.code, name: b.name, role: 'both', can_sell: true })));
@@ -236,6 +243,7 @@ const ASSISTANT: Me = { ...ADMIN, full_name: 'Test Assistant Admin 01', permissi
 
 const AUDIENCE: Record<string, Me[]> = {
   'page-assistant': [ASSISTANT],
+  'page-users': [ADMIN],
   'page-members': [CLERK, OFFICER],
   'page-member-new': [CLERK],
   'page-member': [CLERK, CHECKER],
@@ -297,12 +305,18 @@ describe('every tour target exists on its screen', () => {
 
 describe('steps waiting for a feature', () => {
   it('point at a page that does not exist yet, so switching the flag on needs the screen first', () => {
-    const waiting = TOURS.flatMap((t) => t.steps).filter((s) => s.feature);
+    const waiting = TOURS.flatMap((t) => t.steps).filter((s) => s.feature && !FEATURES[s.feature]);
     expect(waiting.length).toBeGreaterThan(0);
     for (const step of waiting) {
-      expect(FEATURES[step.feature!]).toBe(false);
       expect(step.target).toBeTruthy();
       expect(appRouter.routesByPath[step.route as keyof typeof appRouter.routesByPath], step.id).toBeUndefined();
+    }
+  });
+
+  it('are only switched on once their page is routed (staff users, issue #319)', () => {
+    expect(FEATURES.staffAdmin).toBe(true);
+    for (const step of TOURS.flatMap((t) => t.steps).filter((s) => s.feature && FEATURES[s.feature])) {
+      expect(appRouter.routesByPath[step.route as keyof typeof appRouter.routesByPath], step.id).toBeDefined();
     }
   });
 });

@@ -275,10 +275,10 @@ runtime in the staff layout and the Help entry in the staff bar). A step anchors
 `data-tour="<id>"` attribute on a screen, never a CSS class; `tours.test.tsx` renders each step's
 screen and fails when the anchor is gone. A new module adds its steps to `tours.ts`; a feature not
 built yet keeps its steps behind a flag in `FEATURES` until its slice switches it on (billing,
-payments, trial, agents, the staff screen and the insights pages are all off today). The first-run
+payments, trial and agents are off today; the staff Users screen, issue #319, is on). The first-run
 tours cover set-up, retail selling, stock-take and the catalogue, and the loan list with its
 applications filter; page tours, started from Help, cover the sale, stock, stock-take, catalogue,
-set-up, loans and loan pages. A page tour's `page` may hold a `$name` segment that matches any one
+set-up, loans and loan pages, and the staff Users page (`page-users`). A page tour's `page` may hold a `$name` segment that matches any one
 path segment, so one tour serves every loan. Tours start by themselves under three rules (issue #292):
 `autoTourFor` picks the first-run tour while it waits, else the next pending "New:" (capability) tour; the host
 starts at most one per page load, so the rest wait for the next visit; a user with no tour history gets only the

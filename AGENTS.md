@@ -176,6 +176,11 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   user in; the PWA walks a new user through password, an optional second factor and recovery codes;
   role aware spotlight tours (`frontend/src/tour/`) start once and replay from Help, with per-user
   progress in `users.preferences` (`V31`). A new screen adds `data-tour` anchors and its steps.
+- **Built (staff Users screen, issue #319):** PWA only, no migration, no API change: `/staff/users` (list with search, roles with branch,
+  status invited, active or deactivated) and `/staff/users/new` (phone-first invite, role pick-list with plain descriptions, branch
+  pick-list unless the role is the administrator). The one-time invitation link is shown once with Copy and Send on WhatsApp; resend,
+  change roles and deactivate follow the existing `/users` routes. Visible to `core.users.read`, actions to `core.users.manage`; the
+  `staffAdmin` tour flag is on (`docs/sdd/07-api-design.md` section 7.11.4, UI notes).
 - **Built (lending staff screens 1 and 2, issue #280):** PWA only, no migration: Members (list with live search, add, change, the member's page with the check of the details, next of kin, ID photos, relationships, loans) and the collateral register (register, change, valuations, custody changes, photos, the release request), phone-first, with a tour each (`docs/specs/lending-ui-notes.md`, section "Members and collateral"). Loan application, appraisal and decision are slices 3 and 4.
 - **Built (increment 9, savings, issue #151, ADR-032):** migration `V30` (savings products,
   accounts, transactions, end-of-day balances, interest postings; the outbox accepts `sms`);

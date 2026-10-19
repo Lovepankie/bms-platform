@@ -81,7 +81,7 @@ const branch: TourStep = {
 // the set-up checklist after the first run, and this tour starts there.
 export const adminWelcome: Tour = {
   id: 'admin-welcome',
-  version: 3,
+  version: 4,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -125,8 +125,9 @@ export const adminWelcome: Tour = {
       route: '/staff/users',
       target: 'staff-invite',
       feature: 'staffAdmin',
+      needs: ['core.users.manage'],
       title: 'Add your staff',
-      body: 'Invite each person by email or phone. Give them a role, like Sales or Cashier. They only see what their role allows.',
+      body: 'Tap Invite someone. Type the name and the phone, pick a role like Sales person or Cashier, and send them the link. They only see what their role allows.',
     },
     {
       id: 'modules',
@@ -572,6 +573,38 @@ export const assistantPage: Tour = {
       target: 'assistant-caps',
       title: 'The daily limit',
       body: 'This is the most the assistant may use in a day. At the limit, the Insights page shows the automatic summary instead.',
+    },
+  ],
+};
+
+// The Users page (issue #319): a page tour for whoever may read the staff list; the steps about changing people need the manage permission.
+export const usersPage: Tour = {
+  id: 'page-users',
+  version: 1,
+  title: 'This page: staff users',
+  audience: (me) => held(me, 'core.users.read'),
+  autoStart: false,
+  page: '/staff/users',
+  steps: [
+    {
+      id: 'invite',
+      target: 'staff-invite',
+      needs: ['core.users.manage'],
+      title: 'Invite someone',
+      body: 'Tap here to add a person. You type their name and phone, choose what they do, and get a link to send them. The link is shown once.',
+    },
+    {
+      id: 'search',
+      target: 'staff-search',
+      title: 'Find a person',
+      body: 'Type a name, a phone number or an email. The list narrows as you type.',
+    },
+    {
+      id: 'list',
+      target: 'staff-list',
+      optional: true,
+      title: 'Who has joined',
+      body: 'Invited means the person has not opened their link yet. On their card you can send a new link, change their roles, or deactivate them when they leave.',
     },
   ],
 };
@@ -1106,5 +1139,5 @@ export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, ...CUSTOMER_TOURS,
+  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, ...CUSTOMER_TOURS,
 ];

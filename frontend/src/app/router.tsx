@@ -141,6 +141,13 @@ const staffAssistantRoute = createRoute({ getParentRoute: () => staffRoute, path
 const staffPaymentsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/payments', staticData: { crumb: 'Receive payments' } }).lazy(() =>
   import('../areas/staff/payments/page').then((m) => m.Route),
 );
+// Staff users: who works in the business, invite and roles (issue #319).
+const staffUsersRoute = createRoute({ getParentRoute: () => staffRoute, path: '/users', staticData: { crumb: 'Staff users' } }).lazy(() =>
+  import('../areas/staff/users/page').then((m) => m.Route),
+);
+const staffUserInviteRoute = createRoute({ getParentRoute: () => staffRoute, path: '/users/new', staticData: { crumb: 'Invite someone' } }).lazy(() =>
+  import('../areas/staff/users/invite').then((m) => m.Route),
+);
 const staffReportsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/reports', staticData: { crumb: 'Reports' } }).lazy(() =>
   import('../areas/staff/reports/page').then((m) => m.Route),
 );
@@ -326,7 +333,7 @@ export const router = createRouter({
         memberInvestmentNewRoute,
         investmentRoute,
         investmentCertificateRoute,
-      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
+      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffUsersRoute, staffUserInviteRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
     memberRoute,
     styleRoute,
     signUpRoute,

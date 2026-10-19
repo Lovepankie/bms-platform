@@ -385,6 +385,11 @@ Notes:
 - The matrix is seeded by migration V2 and `PermissionMatrixIT` asserts the seeded
   `role_permissions` equal this table, read from this file (FR-IAM-02). Changing a cell is a
   pull request that changes this chapter and a new migration together.
+- The staff Users screen (issue #319, section 7.11.4) follows the two rows above without changing a
+  cell: `core.users.read` shows the screen, the staff menu entry and the list (tenant admin, branch
+  manager, auditor); `core.users.manage` alone shows Invite someone, Send a new link, Change roles and
+  Deactivate (tenant admin). The API still decides every call; the screen only hides what a user
+  cannot do, from the permissions in `/me`.
 
 Platform permissions, held only by platform operators (super admins) on the platform host,
 never by a tenant role:

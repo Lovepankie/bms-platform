@@ -84,8 +84,8 @@ describe('step filtering', () => {
 
   it('keeps the admin tour free of steps for features that are not built yet', () => {
     const ids = stepsFor(adminWelcome, ADMIN).map((s) => s.id);
-    for (const hidden of ['staff', 'billing', 'trial', 'pay', 'agent']) expect(ids).not.toContain(hidden);
-    for (const shown of ['welcome', 'logo', 'colour', 'modules', 'branch', 'retail', 'lending', 'approvals', 'help']) {
+    for (const hidden of ['billing', 'trial', 'pay', 'agent']) expect(ids).not.toContain(hidden);
+    for (const shown of ['welcome', 'logo', 'colour', 'staff', 'modules', 'branch', 'retail', 'lending', 'approvals', 'help']) {
       expect(ids).toContain(shown);
     }
   });
@@ -93,7 +93,8 @@ describe('step filtering', () => {
   it('registers a step for each pending feature, so its slice only switches the flag on', () => {
     const flagged = new Set(TOURS.flatMap((t) => t.steps).map((s) => s.feature).filter(Boolean));
     for (const feature of Object.keys(FEATURES)) expect(flagged.has(feature as keyof typeof FEATURES)).toBe(true);
-    expect(Object.values(FEATURES).every((on) => on === false)).toBe(true);
+    // Only the staff screen (issue #319) is built; the billing, trial and agent screens are still off.
+    expect(Object.entries(FEATURES).filter(([, on]) => on).map(([name]) => name)).toEqual(['staffAdmin']);
   });
 });
 

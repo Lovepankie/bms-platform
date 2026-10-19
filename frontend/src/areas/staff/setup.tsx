@@ -268,6 +268,15 @@ export function Setup() {
           </label>
         </fieldset>
 
+        {permissions.includes('core.users.read') && (
+          <fieldset>
+            <legend>Staff</legend>
+            <p>
+              <Link to="/staff/users">Users</Link>: invite your staff, give each person a role, and see who has not joined yet.
+            </p>
+          </fieldset>
+        )}
+
         <fieldset>
           <legend>Text messages</legend>
           <p>
