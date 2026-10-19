@@ -2,7 +2,9 @@ import type {
   AllBranchesRow, Category, CapabilitiesRead, Pack, Customer, InFlightReport, LocationRow, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockByLocation, StockRow,
   Supplier, Transfer, Unit, Usage, Valuation, ValuationRow,
 } from './retail';
+import type { SalesQuery } from './retail';
 import { RetailError, businessToday, daysBefore } from './retail';
+import { summariseSales } from './retail-summary-mock';
 import { retailMessage } from './retail-errors';
 import type { Me } from './client';
 import { createCashbookMock } from './retail-cashbook-mock';
@@ -490,18 +492,14 @@ export function createMockRetail(): RetailApi {
         return cost({ product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor }, { cost_minor: p.costMinor });
       }).filter((r) => (!negativeOnly || r.negative) && atLevel(Number(r.qty), level))),
 
-    listSales: ({ branchId, from, to, buyer, paymentMethod, productId, status, owing, cursor }) => {
-      const wanted = [...sales].reverse().filter((x) =>
-        (!branchId || x.branch_id === branchId) && (!from || (x.sale_date ?? '') >= from) && (!to || (x.sale_date ?? '') <= to)
-        && (!buyer || (x.buyer_name ?? '').toLowerCase().includes(buyer.trim().toLowerCase()))
-        && (!paymentMethod || x.payment_method === paymentMethod) && (!productId || (x.lines ?? []).some((l) => l.product_id === productId))
-        && (!status || x.status === status)
-        && (!owing || (x.payment_method === 'credit' && x.status === 'completed' && (owing === 'paid' ? (x.balance_minor ?? 0) <= 0
-          : (x.balance_minor ?? 0) > 0 && (owing === 'owing' || (x.due_date ?? '9999') < businessToday())))));
+    listSales: ({ cursor, ...q }) => {
+      const wanted = [...sales].reverse().filter((x) => saleMatches(x, q));
       const start = cursor ? Number(cursor) : 0;
       const items = wanted.slice(start, start + 50).map(visibleSale);
       return delay({ items, ...(start + 50 < wanted.length ? { next_cursor: String(start + 50) } : {}) });
     },
+
+    salesSummary: (q) => delay(summariseSales(sales.filter((x) => saleMatches(x, q)), q.level, profitAccess)),
 
     getSale: (id) => {
       const found = sales.find((x) => x.id === id);
@@ -902,6 +900,16 @@ export function createMockRetail(): RetailApi {
   };
   self = mock;
   return mock;
+}
+
+/** The list's filters (branch, dates, buyer, method, item, status, owing) applied to one stored sale. */
+function saleMatches(x: Sale, { branchId, from, to, buyer, paymentMethod, productId, status, owing }: Omit<SalesQuery, 'cursor' | 'signal'>): boolean {
+  return (!branchId || x.branch_id === branchId) && (!from || (x.sale_date ?? '') >= from) && (!to || (x.sale_date ?? '') <= to)
+    && (!buyer || (x.buyer_name ?? '').toLowerCase().includes(buyer.trim().toLowerCase()))
+    && (!paymentMethod || x.payment_method === paymentMethod) && (!productId || (x.lines ?? []).some((l) => l.product_id === productId))
+    && (!status || x.status === status)
+    && (!owing || (x.payment_method === 'credit' && x.status === 'completed' && (owing === 'paid' ? (x.balance_minor ?? 0) <= 0
+      : (x.balance_minor ?? 0) > 0 && (owing === 'owing' || (x.due_date ?? '9999') < businessToday()))));
 }
 
 /** A sale as the session may see it: cost and profit only with retail.profit.read. */

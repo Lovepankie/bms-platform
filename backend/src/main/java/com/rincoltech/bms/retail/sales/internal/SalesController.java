@@ -17,6 +17,7 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.SalePage;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.UpdateCustomerRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.VoidRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesSummaryApi.Summary;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -46,8 +47,11 @@ class SalesController {
 
     private final SalesService service;
 
-    SalesController(SalesService service) {
+    private final SalesSummaryService summaryService;
+
+    SalesController(SalesService service, SalesSummaryService summaryService) {
         this.service = service;
+        this.summaryService = summaryService;
     }
 
     @PostMapping("/sales")
@@ -96,6 +100,25 @@ class SalesController {
                 newestFirst,
                 limit,
                 cursor);
+    }
+
+    // JUSTIFICATION-A3: a new read route is one handler; the grouped query lives in its own service (issue #328).
+    @GetMapping("/sales/summary")
+    @RequiresPermission("retail.sale.read")
+    @Operation(
+            summary = "Sales grouped by year, month or day with a summary per group (issue #328)",
+            operationId = "summariseRetailSales")
+    Summary summary(
+            @RequestParam(name = "group_by") String groupBy,
+            @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
+            @RequestParam(name = "from", required = false) LocalDate from,
+            @RequestParam(name = "to", required = false) LocalDate to,
+            @RequestParam(name = "customer_id", required = false) UUID customerId,
+            @RequestParam(name = "payment_method", required = false) String paymentMethod,
+            @RequestParam(name = "product_id", required = false) UUID productId,
+            @RequestParam(name = "buyer", required = false) String buyer,
+            @RequestParam(name = "owing", required = false) String owing) {
+        return summaryService.summary(groupBy, branchIds, from, to, customerId, paymentMethod, productId, buyer, owing);
     }
 
     @GetMapping("/sales/{sale_id}")

@@ -106,10 +106,44 @@ class SalesRepository {
             int limit) {
         StringBuilder sql = new StringBuilder(SELECT_SALE + " WHERE true");
         Map<String, Object> params = new LinkedHashMap<>();
+        if (branchIds != null && branchIds.isEmpty()) {
+            return List.of();
+        }
+        appendFilters(
+                sql, params, branchIds, from, to, customerId, paymentMethod, productId, buyer, status, owing, today);
+        if (afterCreated != null) {
+            sql.append(newestFirst ? " AND (created_at, id) < " : " AND (created_at, id) > ")
+                    .append("(:afterCreated, :afterId)");
+            params.put("afterCreated", Timestamp.from(afterCreated));
+            params.put("afterId", afterId);
+        }
+        sql.append(newestFirst ? " ORDER BY created_at DESC, id DESC" : " ORDER BY created_at, id")
+                .append(" LIMIT :limit");
+        params.put("limit", limit);
+        return withLines(jdbc.sql(sql.toString())
+                .params(params)
+                .query((rs, n) -> header(rs))
+                .list());
+    }
+
+    /**
+     * The filters the sales list and the sales summary share (issue #328): one definition, so a grouped figure and the
+     * list under it always agree. An empty {@code branchIds} must be answered by the caller (no rows).
+     */
+    static void appendFilters(
+            StringBuilder sql,
+            Map<String, Object> params,
+            List<UUID> branchIds,
+            LocalDate from,
+            LocalDate to,
+            UUID customerId,
+            String paymentMethod,
+            UUID productId,
+            Search.Query buyer,
+            String status,
+            String owing,
+            LocalDate today) {
         if (branchIds != null) {
-            if (branchIds.isEmpty()) {
-                return List.of();
-            }
             sql.append(" AND branch_id IN (:branchIds)");
             params.put("branchIds", branchIds);
         }
@@ -154,19 +188,6 @@ class SalesRepository {
                 default -> sql.append(" AND total_minor <= paid_minor");
             }
         }
-        if (afterCreated != null) {
-            sql.append(newestFirst ? " AND (created_at, id) < " : " AND (created_at, id) > ")
-                    .append("(:afterCreated, :afterId)");
-            params.put("afterCreated", Timestamp.from(afterCreated));
-            params.put("afterId", afterId);
-        }
-        sql.append(newestFirst ? " ORDER BY created_at DESC, id DESC" : " ORDER BY created_at, id")
-                .append(" LIMIT :limit");
-        params.put("limit", limit);
-        return withLines(jdbc.sql(sql.toString())
-                .params(params)
-                .query((rs, n) -> header(rs))
-                .list());
     }
 
     void insert(Sale s) {

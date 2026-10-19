@@ -36,6 +36,18 @@ function screenOf(node: ReactElement) {
   );
 }
 
+// The lists are grouped by year, month and day (issue #328): a day's sales load when the day is opened. Opens every group until
+// the sales themselves show, as a person would by tapping down the list.
+async function openEveryGroup() {
+  await waitFor(() => expect(document.querySelector('.rt-group-head')).not.toBeNull());
+  await waitFor(() => {
+    const shut = [...document.querySelectorAll('.rt-group-head[aria-expanded="false"]')];
+    shut.forEach((b) => fireEvent.click(b));
+    expect(shut).toHaveLength(0);
+    expect(document.querySelector('.loading')).toBeNull();
+  });
+}
+
 describe('SaleList passes each sale to its action', () => {
   const rows: Sale[] = [
     { id: 'a', sale_no: 'S-1', payment_method: 'credit', status: 'completed', sale_date: '2026-10-10', total_minor: 100, paid_minor: 0, balance_minor: 100 },
@@ -57,6 +69,7 @@ describe('the Credit sales list', () => {
   it('offers Record payment on the rows that owe, and refreshes the list after a payment', async () => {
     const list = vi.spyOn(retail, 'listSales');
     screenOf(<CreditSales />);
+    await openEveryGroup();
     const buttons = await screen.findAllByRole('button', { name: 'Record payment' });
     expect(buttons.length).toBeGreaterThan(0);
     const calls = list.mock.calls.length;
@@ -71,6 +84,7 @@ describe('the Credit sales list', () => {
 
   it('opens a sale with its payment buttons', async () => {
     screenOf(<CreditSales />);
+    await openEveryGroup();
     const owing = (await screen.findAllByRole('button', { name: 'Record payment' }))[0]?.closest('li') as HTMLElement;
     fireEvent.click(within(owing).getByRole('button', { name: /^Open the sale/ }));
     expect(await screen.findByRole('button', { name: 'Mark as fully paid' })).toBeTruthy();
@@ -80,11 +94,13 @@ describe('the Credit sales list', () => {
 describe('the All sales list', () => {
   it('offers Record payment on its credit rows', async () => {
     screenOf(<AllSales />);
+    await openEveryGroup();
     expect((await screen.findAllByRole('button', { name: 'Record payment' })).length).toBeGreaterThan(0);
   });
 
   it('shows Void this sale on an opened cash sale, and Voided with the reason after it is voided', async () => {
     screenOf(<AllSales />);
+    await openEveryGroup();
     const rows = (await screen.findAllByRole('button', { name: /^Open the sale/ })).map((b) => b.closest('li') as HTMLElement);
     const cashRow = rows.find((li) => within(li).queryByText('Cash', { selector: 'strong' })) as HTMLElement;
     fireEvent.click(within(cashRow).getByRole('button', { name: /^Open the sale/ }));

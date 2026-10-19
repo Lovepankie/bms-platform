@@ -4243,6 +4243,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/sales/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sales grouped by year, month or day with a summary per group (issue #328) */
+        get: operations["summariseRetailSales"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/sales/{sale_id}": {
         parameters: {
             query?: never;
@@ -10790,6 +10807,66 @@ export interface components {
             sale_count?: number;
             /** Format: int64 */
             sales_minor?: number;
+        };
+        RetailSalesSummary: {
+            /** @description The tenant's currency; a retail tenant keeps its books in one currency */
+            currency?: string;
+            group_by?: string;
+            /** @description True when older periods remain: ask again with to = next_to */
+            has_more?: boolean;
+            items?: components["schemas"]["RetailSalesSummaryGroup"][];
+            /**
+             * Format: date
+             * @description The day before the oldest period shown
+             */
+            next_to?: string;
+        };
+        RetailSalesSummaryGroup: {
+            by_method?: components["schemas"]["RetailSalesSummaryMethods"];
+            /**
+             * Format: date
+             * @description First calendar day of the period; not narrowed by the from filter of the request
+             */
+            from?: string;
+            /** @description 2026, 2026-10 or 2026-10-19, by group_by */
+            period?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the figures cover
+             */
+            profit_minor?: number;
+            /**
+             * Format: int64
+             * @description Completed sales; voided sales are not counted
+             */
+            sales_count?: number;
+            /**
+             * Format: date
+             * @description Last calendar day of the period; not narrowed by the to filter of the request
+             */
+            to?: string;
+            /**
+             * Format: int64
+             * @description Total of the completed sales
+             */
+            total_minor?: number;
+            /**
+             * Format: int64
+             * @description Voided sales in the period, kept out of every other figure
+             */
+            voided_count?: number;
+        };
+        RetailSalesSummaryMethod: {
+            /** Format: int64 */
+            count?: number;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailSalesSummaryMethods: {
+            bank?: components["schemas"]["RetailSalesSummaryMethod"];
+            cash?: components["schemas"]["RetailSalesSummaryMethod"];
+            credit?: components["schemas"]["RetailSalesSummaryMethod"];
+            mobile_money?: components["schemas"]["RetailSalesSummaryMethod"];
         };
         RetailSavings: {
             /**
@@ -20642,6 +20719,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSale"];
+                };
+            };
+        };
+    };
+    summariseRetailSales: {
+        parameters: {
+            query: {
+                group_by: string;
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                customer_id?: string;
+                payment_method?: string;
+                product_id?: string;
+                buyer?: string;
+                owing?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSalesSummary"];
                 };
             };
         };

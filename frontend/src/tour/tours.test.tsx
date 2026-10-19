@@ -32,6 +32,7 @@ import { RecordSale } from '../areas/staff/retail/sale';
 import { InTransitPage } from '../areas/staff/retail/in-transit';
 import { RetailSettings } from '../areas/staff/retail/settings';
 import { StockPage } from '../areas/staff/retail/stock';
+import { AllSales, CreditSales } from '../areas/staff/retail/sales';
 import { StockByLocationPage } from '../areas/staff/retail/stock-by-location';
 import { StocktakePage } from '../areas/staff/retail/stocktake';
 import { StaffBar } from '../areas/staff/route';
@@ -88,6 +89,10 @@ function screen(path: string | undefined): ReactElement {
       return <RecordSale />;
     case '/staff/retail/stock':
       return <StockPage />;
+    case '/staff/retail/sales':
+      return <AllSales />;
+    case '/staff/retail/credit-sales':
+      return <CreditSales />;
     case '/staff/retail/stocktake':
       return <StocktakePage />;
     case '/staff/retail/stock-by-location':
@@ -255,6 +260,8 @@ const AUDIENCE: Record<string, Me[]> = {
   'staff-welcome': [CASHIER, OFFICER],
   'page-sale': [SELLER],
   'page-stock': [SELLER],
+  'page-sales': [SELLER],
+  'page-credit-sales': [SELLER],
   'page-setup': [ADMIN],
   'page-loans': [OFFICER, ADMIN],
   'page-loan': [OFFICER],

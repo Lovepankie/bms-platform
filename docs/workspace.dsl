@@ -244,7 +244,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.retailCatalogue -> bms.api.tenancy "Reads the tenant currency and the units capability"
         bms.api.retailCatalogue -> bms.db "Products, the append-only price history, pack sizes, price lists and their items"
         bms.web -> bms.api.retailStock "Stock by branch, stock by store and shop, movements, stock-takes, usage and damage reports, stock transfers with receive and cancel, transfers in flight"
-        bms.web -> bms.api.retailSales "POST /retail/sales with Idempotency-Key; voids; credit buyers"
+        bms.web -> bms.api.retailSales "POST /retail/sales with Idempotency-Key; voids; credit buyers; the sales list and its year, month and day summary"
         bms.api.retailSales -> bms.api.retailCatalogue "Reads the current cost and sell price to snapshot, the pack size of a product, and the price lists and customer groups that price a line"
         bms.api.retailSales -> bms.api.retailStock "Moves stock; posts through the retail books"
         bms.api.retailStock -> bms.api.retailCatalogue "Reads the product cost for stock-take valuation"

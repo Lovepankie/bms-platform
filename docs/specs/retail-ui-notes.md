@@ -14,8 +14,8 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 | `/staff/retail/sale` | Record a sale, then the receipt summary | `retail.sale.create` |
 | `/staff/retail/restock` | Restock: supplier, lines, per-branch quantities | `retail.purchase.create` |
 | `/staff/retail/usage` | Usage and damage | `retail.usage.report` |
-| `/staff/retail/credit-sales` | Credit sales: buyer, date, amount, due date, state; open a sale | `retail.sale.read` |
-| `/staff/retail/sales` | All sales: filters by dates, buyer, paid by and item; open a sale | `retail.sale.read` |
+| `/staff/retail/credit-sales` | Credit sales, grouped by year, month and day (issue #328): buyer, date, amount, due date, state; open a sale | `retail.sale.read` |
+| `/staff/retail/sales` | All sales, grouped by year, month and day (issue #328): filters by dates, buyer, paid by and item; open a sale | `retail.sale.read` |
 | `/staff/retail/stock` | Stock per branch or All branches, search, category filter, Out of stock and Low stock tabs, negative flag | `retail.stock.read` |
 | `/staff/retail/stocktake` | Count, review variance, commit | `retail.stocktake.commit` and `retail.stock.read` |
 | `/staff/retail/transfer` | Move stock: to which branch, items with the source's stock, date and note | `retail.stock.transfer` and `retail.stock.read` |
@@ -644,6 +644,46 @@ there is no new permission. The tiles Landed costs and Supplier credit notes sit
 - The tour `capability-purchasing` (now version 2) gains the two tiles, and the Help page tour `page-landed-costs` explains the landed costs page.
   The mock (`retail-purchasing-mock.ts`) holds the same rules in small, with a second fabricated supplier row for the forwarder.
 
+## Sales lists grouped by year, month and day (issue #328)
+
+All sales and Credit sales are no longer one flat newest-first list. Each is a set of collapsible groups, year then month then
+day, and every header is a figure the server summed (`GET /retail/sales/summary`, chapter 7 section 7.11.20), never a sum of
+pages in the browser.
+
+- **A header** shows the period in words (2026, October 2026, Monday 19 October 2026), the total, the number of sales, the
+  profit when the server sent it (`retail.profit.read` in every branch shown; absent otherwise, so nothing is drawn), a note
+  of voided sales that are not counted (All sales only), and on All sales the payment methods used with their counts and
+  amounts (cash, mobile money, bank, credit). The header is the whole button, at least a tap high, with `aria-expanded`.
+- **Opening a group** lists the level below it, asked for with the group's own days inside the range the screen is showing, so
+  the figures above never change when a month or a day is opened. The current month is open by default, so the days of this
+  month are listed; the year is open too. A day loads its sales only when it is opened, from the existing list endpoint with a
+  single-day range and the screen's filters, 50 at a time with Show more, in the same sale cards as before; tapping a sale
+  opens it and the way back finds the same groups open (what is open is kept by the screen, `useOpenGroups`).
+- **Breadcrumbs.** An open day shows where it sits, All sales (or Credit sales), the year, the month, the day. Tapping a place
+  shuts what is inside it and shows that place again. The staff bar crumbs for the sale itself are unchanged.
+- **The choices still work.** All sales keeps From and To (From is empty to start with, so every year shows, and To is today; the old 30 day start would have cut the year and month figures short), the buyer search, Paid by and the
+  item search; Credit sales keeps the buyer search and Show (all, still owing, overdue, paid) and covers every date. Each
+  level is asked with the same filters, so a group and the sales under it agree. A period of more than the server's bound (20
+  years, 12 months, 31 days) ends with Show earlier years, months or days, which asks again from the server's `next_to`.
+- **Payment buttons stay.** The sales of an opened day, and the sales of the Still owing list, are the same cards with the same
+  `PaySaleAction` under each (`action` on `DaySales`, as on `SaleList`; issue #326): Record payment and Mark as fully paid on an
+  owing live credit sale, a note and no button on an imported one, nothing on a paid sale. `sales-lists-actions.dom.test.tsx`
+  renders both grouped lists and fails if a day stops passing the action. The tours `retail-sales` (version 4) and `admin-welcome`
+  (version 6) say "open the day of the sale, then tap Record payment".
+- **Debts are not hidden in a collapsed month.** On Credit sales, when Show is Still owing or Overdue the grouping steps aside
+  and every such sale is listed together, 50 at a time (a debt from an old month would otherwise sit inside a closed group);
+  All credit sales and Paid stay grouped. The search box shows the sales counted by the top level (the years' sales counts).
+- **Plain words for the odd cases.** While a level loads it says Loading; a failed level shows the message and Try again; a
+  level with nothing says "No sales found." (or "No credit sales found."), "No sales in this month." or "No sales on this day.";
+  a search with no match keeps the screen's no-results box with its Clear button.
+- **Mobile first.** Headers are laid out for a 360px phone (period and total on one line, the figures under it) and need no sideways
+  scroll; not yet checked on a device or in a browser, and the styles are the `rt-group` classes in `retail.css` on the shared tokens.
+- **Files.** `sales-grouped-state.ts` (pure rules: what is open, titles, the days a group asks for, the methods of a group),
+  `sales-grouped.tsx` (the groups; the day's sales are supplied by `sales.tsx` as `renderDay`), the mock in
+  `api/retail-summary-mock.ts`, and tests `sales-grouped-state.test.ts`, `sales-grouped.dom.test.tsx` and
+  `retail-summary-mock.test.ts`.
+- **Tours.** Help pages `page-sales` (the day range, the groups) and `page-credit-sales` (Show, the groups), shown from the
+  Help menu on each page for anyone who may read sales.
 ## Sale actions: record a payment, void a sale, Price and Cost (#326, #327, #330)
 
 Frontend only: the routes `POST /retail/sales/{id}/payments` and `POST /retail/sales/{id}/void` already existed (FR-RET-05, FR-RET-04). The forms are

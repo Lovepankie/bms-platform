@@ -459,3 +459,86 @@ th[scope='rowgroup'] .cat-head {
     transition: none;
   }
 }
+
+/* The sales lists grouped by year, month and day (issue #328): a tappable header per period with its figures. */
+.rt-group-list {
+  list-style: none;
+  margin: var(--space-2) 0;
+  padding: 0;
+}
+
+.rt-group {
+  margin: var(--space-2) 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.rt-group-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 var(--space-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-3);
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.rt-group-head[aria-expanded='true'] {
+  background: var(--color-surface-muted);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.rt-group-title {
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.rt-group-total {
+  font-weight: var(--weight-semibold);
+  text-align: right;
+}
+
+.rt-group-meta,
+.rt-group-methods {
+  grid-column: 1 / -1;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+}
+
+.rt-group-body {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.rt-group-body .rt-group-list,
+.rt-group-body ul:has(> li.rt-card) {
+  margin-top: var(--space-2);
+}
+
+.rt-group-trail ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  font-size: var(--text-sm);
+}
+
+.rt-group-trail li + li::before {
+  content: '>';
+  margin-right: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.rt-group-trail button {
+  min-height: var(--tap);
+  padding: 0 var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--color-link);
+  text-decoration: underline;
+}

@@ -12047,6 +12047,101 @@
           }
         }
       },
+      "RetailSalesSummary" : {
+        "properties" : {
+          "currency" : {
+            "description" : "The tenant's currency; a retail tenant keeps its books in one currency",
+            "type" : "string"
+          },
+          "group_by" : {
+            "type" : "string"
+          },
+          "has_more" : {
+            "description" : "True when older periods remain: ask again with to = next_to",
+            "type" : "boolean"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSalesSummaryGroup"
+            },
+            "type" : "array"
+          },
+          "next_to" : {
+            "description" : "The day before the oldest period shown",
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSalesSummaryGroup" : {
+        "properties" : {
+          "by_method" : {
+            "$ref" : "#/components/schemas/RetailSalesSummaryMethods"
+          },
+          "from" : {
+            "description" : "First calendar day of the period; not narrowed by the from filter of the request",
+            "format" : "date",
+            "type" : "string"
+          },
+          "period" : {
+            "description" : "2026, 2026-10 or 2026-10-19, by group_by",
+            "type" : "string"
+          },
+          "profit_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the figures cover",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_count" : {
+            "description" : "Completed sales; voided sales are not counted",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "to" : {
+            "description" : "Last calendar day of the period; not narrowed by the to filter of the request",
+            "format" : "date",
+            "type" : "string"
+          },
+          "total_minor" : {
+            "description" : "Total of the completed sales",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "voided_count" : {
+            "description" : "Voided sales in the period, kept out of every other figure",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailSalesSummaryMethod" : {
+        "properties" : {
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailSalesSummaryMethods" : {
+        "properties" : {
+          "bank" : {
+            "$ref" : "#/components/schemas/RetailSalesSummaryMethod"
+          },
+          "cash" : {
+            "$ref" : "#/components/schemas/RetailSalesSummaryMethod"
+          },
+          "credit" : {
+            "$ref" : "#/components/schemas/RetailSalesSummaryMethod"
+          },
+          "mobile_money" : {
+            "$ref" : "#/components/schemas/RetailSalesSummaryMethod"
+          }
+        }
+      },
       "RetailSavings" : {
         "properties" : {
           "amount_minor" : {
@@ -28544,6 +28639,97 @@
           }
         },
         "summary" : "Record a sale: snapshots, stock and journals in one transaction (FR-RET-04); M",
+        "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/sales/summary" : {
+      "get" : {
+        "operationId" : "summariseRetailSales",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "group_by",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "customer_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "payment_method",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "buyer",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "owing",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSalesSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sales grouped by year, month or day with a summary per group (issue #328)",
         "tags" : [ "retail-sales" ]
       }
     },

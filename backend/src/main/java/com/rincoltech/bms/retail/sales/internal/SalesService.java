@@ -601,10 +601,9 @@ class SalesService {
         return forCaller(repo.customer(id).orElseThrow());
     }
 
-    private static final java.util.Set<String> OWING_FILTERS = java.util.Set.of("owing", "overdue", "paid");
+    static final java.util.Set<String> OWING_FILTERS = java.util.Set.of("owing", "overdue", "paid");
 
-    private static final java.util.Set<String> PAYMENT_METHODS =
-            java.util.Set.of("cash", "mobile_money", "bank", "credit");
+    static final java.util.Set<String> PAYMENT_METHODS = java.util.Set.of("cash", "mobile_money", "bank", "credit");
 
     @Transactional(readOnly = true)
     SalePage list(

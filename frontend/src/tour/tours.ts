@@ -82,7 +82,8 @@ const branch: TourStep = {
 export const adminWelcome: Tour = {
   id: 'admin-welcome',
   // Version 5 adds the credit payment and void steps (issues #326, #327), so whoever finished version 4 sees them once.
-  version: 5,
+  // Version 6 words the payment step for the grouped lists (issue #328): the sales sit under a day, or in Still owing.
+  version: 6,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -185,7 +186,7 @@ export const adminWelcome: Tour = {
       needs: ['retail.sale.read', SELL],
       optional: true,
       title: 'When a buyer pays what they owe',
-      body: 'Open Credit sales, find the buyer, and tap Record payment. A part payment is fine. If they pay it all, tap Mark as fully paid.',
+      body: 'Open Credit sales and pick Still owing to see every debt, or open the day of the sale. Then tap Record payment. A part payment is fine. If they pay it all, tap Mark as fully paid.',
     },
     {
       id: 'void-sale',
@@ -233,7 +234,8 @@ export const adminWelcome: Tour = {
 export const retailSales: Tour = {
   id: 'retail-sales',
   // Version 3 adds the credit payment step (issue #326), so whoever finished version 2 sees it once.
-  version: 3,
+  // Version 4 words that step for the grouped lists (issue #328): the sales sit under a day, or in Still owing.
+  version: 4,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -287,7 +289,7 @@ export const retailSales: Tour = {
       needs: ['retail.sale.read'],
       optional: true,
       title: 'When a buyer pays what they owe',
-      body: 'Open Credit sales, find the buyer, and tap Record payment. A part payment is fine. If they pay it all, tap Mark as fully paid.',
+      body: 'Open Credit sales and pick Still owing to see every debt, or open the day of the sale. Then tap Record payment. A part payment is fine. If they pay it all, tap Mark as fully paid.',
     },
     {
       id: 'stock',
@@ -413,6 +415,42 @@ export const stockPage: Tour = {
   autoStart: false,
   page: '/staff/retail/stock',
   steps: retailSales.steps.filter((s) => s.id === 'stock-search' || s.id === 'restock-ask'),
+};
+
+// JUSTIFICATION-A3: two page tours of the same shape as stockPage, one per grouped list (issue #328); no existing tour covers these pages.
+// The All sales and Credit sales lists grouped by year, month and day (issue #328).
+const salesGroupsStep: TourStep = {
+  id: 'groups',
+  target: 'sales-groups',
+  module: 'retail',
+  title: 'Years, months and days',
+  body: 'Tap a line to open it. Each line shows what was sold, how many sales, and how they were paid. Profit shows if you may see it. Tap a day to see its sales one by one.',
+};
+
+export const salesPage: Tour = {
+  id: 'page-sales',
+  version: 1,
+  title: 'This page: all sales',
+  audience: (me) => held(me, 'retail.sale.read'),
+  autoStart: false,
+  page: '/staff/retail/sales',
+  steps: [
+    { id: 'range', target: 'sales-range', module: 'retail', title: 'Pick the days', body: 'Choose the first and the last day to look at. The sales under it are grouped by year, month and day.' },
+    salesGroupsStep,
+  ],
+};
+
+export const creditSalesPage: Tour = {
+  id: 'page-credit-sales',
+  version: 1,
+  title: 'This page: credit sales',
+  audience: (me) => held(me, 'retail.sale.read'),
+  autoStart: false,
+  page: '/staff/retail/credit-sales',
+  steps: [
+    { id: 'owing', target: 'credit-owing', module: 'retail', title: 'Who still owes', body: 'Choose Still owing, Overdue or Paid to narrow the list.' },
+    salesGroupsStep,
+  ],
 };
 
 export const setupPage: Tour = {
@@ -1168,7 +1206,7 @@ export const landedCostsPage: Tour = {
 };
 
 export const TOURS: readonly Tour[] = [
-  adminWelcome, retailSales, staffWelcome, salePage, stockPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
+  adminWelcome, retailSales, staffWelcome, salePage, stockPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
   purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, ...CUSTOMER_TOURS,

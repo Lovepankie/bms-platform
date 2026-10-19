@@ -306,7 +306,11 @@ Notes:
   branch-bound row the permission must cover that row's branch (`principal.may`, ADR-017), so a
   user with profit read at branch A only sees no cost on branch B's stock, movements, sales or
   valuation (review F5); tenant-wide products and price history need it in any branch. The sales
-  role holds no `core.*` permission; the PWA reads the user's branches from `/me`.
+  summary (`GET /retail/sales/summary`, issue #328) is a sum, so its `profit_minor` is offered only when the caller holds
+  `retail.profit.read` in every branch the figures cover (the requested branches within the `retail.sale.read` scope, or
+  every branch when none were asked for and the scope is all of them) and is absent otherwise: a profit summed over some
+  branches whose profit the caller may not read would otherwise read as the whole. It needs no new permission.
+  The sales role holds no `core.*` permission; the PWA reads the user's branches from `/me`.
 - Retail cash book (ADR-022, FR-RET-32, migration V34): the ten `retail.cashbook.*`,
   `retail.savings.*`, `retail.banking.record`, `retail.expense.*`, `retail.withdrawal.record` and
   `retail.advance.*` permissions are rows of the matrix above, seeded by the cash book migration.

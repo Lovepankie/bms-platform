@@ -131,6 +131,9 @@ export type SaleLine = S['RetailSaleLine'];
 /** How the price of a line was chosen (price_lists capability, ADR-033): absent on a line made without the capability. */
 export type LinePrice = S['RetailSaleLinePrice'];
 export type SalePage = S['RetailSalePage'];
+/** The sales grouped by year, month or day, summed on the server (issue #328); `profit_minor` is absent without retail.profit.read. */
+export type SalesSummary = S['RetailSalesSummary'];
+export type SalesSummaryGroup = S['RetailSalesSummaryGroup'];
 /** Price lists, their items and customer groups (ADR-033, issue #195). Prices are integer minor units per `unit`. */
 export type PriceList = S['RetailPriceList'];
 export type PriceListItem = S['RetailPriceListItem'];
@@ -241,6 +244,18 @@ export function salesParams({ branchId, from, to, buyer, paymentMethod, productI
   };
 }
 
+export interface SalesSummaryQuery extends Omit<SalesQuery, 'cursor' | 'status'> {
+  level: 'year' | 'month' | 'day';
+}
+
+/** The query string of a sales summary: the list's filters (no status, no paging) and the level. */
+export function salesSummaryParams({ level, branchId, from, to, buyer, paymentMethod, productId, owing }: SalesSummaryQuery) {
+  return {
+    group_by: level, branch_id: branchId ? [branchId] : undefined, from: from || undefined, to: to || undefined, buyer: buyer || undefined,
+    payment_method: paymentMethod, product_id: productId || undefined, owing,
+  };
+}
+
 /** A cash book list or report window: branches (empty means every branch in scope), dates, voided rows. */
 export interface CashQuery {
   branchIds?: string[];
@@ -284,6 +299,8 @@ export interface RetailApi {
   listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel; signal?: AbortSignal }): Promise<StockRow[]>;
   /** One page of sales, newest first, narrowed by the filters (#145). */
   listSales(q: SalesQuery): Promise<SalePage>;
+  /** Groups of sales by year, month or day with the totals of each, newest first; `next_to` continues into older periods (#328). */
+  salesSummary(q: SalesSummaryQuery): Promise<SalesSummary>;
   getSale(id: string): Promise<Sale>;
   /** A payment, partial allowed, against a credit sale (retail.sale.create at the branch); takes the Idempotency-Key of its form. */
   paySale(saleId: string, body: SalePaymentRequest, idempotencyKey: string): Promise<SalePaymentResult>;
@@ -642,6 +659,10 @@ const realRetail: RetailApi = {
 
   async listSales(q) {
     return unwrap(await api.GET('/api/v1/retail/sales', { params: { query: salesParams(q) }, signal: q.signal }));
+  },
+
+  async salesSummary(q) {
+    return unwrap(await api.GET('/api/v1/retail/sales/summary', { params: { query: salesSummaryParams(q) }, signal: q.signal }));
   },
 
   async getSale(id) {
