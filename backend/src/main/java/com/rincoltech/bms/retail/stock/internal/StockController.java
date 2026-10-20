@@ -59,16 +59,18 @@ class StockController {
     @GetMapping("/stock/all-branches")
     @RequiresPermission("retail.stock.read")
     @Operation(
-            summary = "Every product with its balance in each branch the caller may read (#144)",
+            summary =
+                    "Every product with its balance in each open branch the caller may read (#144); closed branches only with include_closed (#329)",
             operationId = "listRetailStockAllBranches")
     AllBranchesPage allBranches(
             @RequestParam(name = "query", required = false) String query,
             @RequestParam(name = "category_id", required = false) UUID categoryId,
             @RequestParam(name = "negative_only", required = false, defaultValue = "false") boolean negativeOnly,
             @RequestParam(name = "stock_level", required = false) String level,
+            @RequestParam(name = "include_closed", required = false, defaultValue = "false") boolean includeClosed,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.allBranches(query, categoryId, negativeOnly, level, limit, cursor);
+        return service.allBranches(query, categoryId, negativeOnly, level, includeClosed, limit, cursor);
     }
 
     @GetMapping("/stock/movements")

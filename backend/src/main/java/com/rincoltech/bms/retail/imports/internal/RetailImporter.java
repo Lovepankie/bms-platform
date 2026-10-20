@@ -404,6 +404,9 @@ public class RetailImporter {
         final Set<String> namedSuppliers = new HashSet<>();
         ZoneId zone;
         Map<String, UUID> branchByCode = Map.of();
+        /** Branches that keep no goods (issue #329): a balance for one is refused, never written. */
+        Set<UUID> noGoods = Set.of();
+
         Map<String, Product> productByCode = Map.of();
         long creditSales;
         long creditSalesMinor;
@@ -431,6 +434,10 @@ public class RetailImporter {
             zone = currentTenant.profile().timezone();
             branchByCode = new HashMap<>();
             branches.all().forEach(b -> branchByCode.put(b.code().toUpperCase(Locale.ROOT), b.id()));
+            noGoods = branches.all().stream()
+                    .filter(b -> !b.stocksGoods())
+                    .map(Branches.Branch::id)
+                    .collect(java.util.stream.Collectors.toSet());
             productByCode = catalogue.productsByCode();
             today = clock.today(zone);
             // The first live day is fixed by the first run: a later run reads it back from the opening
@@ -1360,7 +1367,21 @@ public class RetailImporter {
          */
         void balances(ExportFile file) {
             ImportReport.Counts c = report.file(file.name);
-            List<Balance> rows = parseBalances(file);
+            List<Balance> rows = new ArrayList<>();
+            for (Balance b : parseBalances(file)) {
+                if (noGoods.contains(b.branch())) {
+                    // The branch keeps no goods (ADR-041): refuse the row and say so, like any other row that cannot be
+                    // written.
+                    report.anomaly(
+                            file.name,
+                            b.row().line(),
+                            "branch " + b.branchCode() + " keeps no goods; the balance of "
+                                    + b.product().code() + " is not imported");
+                    c.skipped++;
+                } else {
+                    rows.add(b);
+                }
+            }
             Map<String, Position> positions = new HashMap<>();
             stock.positions().forEach(p -> positions.put(p.branchId() + "|" + p.productId(), p));
             Instant opening = openingInstant();
@@ -1535,23 +1556,39 @@ public class RetailImporter {
          */
         void checksum(ExportFile file) {
             List<Balance> rows = new ArrayList<>();
+            int[] excluded = {0};
             ImportReport quiet = new ImportReport("", "", true);
             Run reader = new Run(export, quiet, id, null);
             reader.begin();
             reader.each(file, row -> {
                 try {
-                    rows.add(new Balance(
+                    Balance b = new Balance(
                             row,
                             row.text("branch").strip().toUpperCase(Locale.ROOT),
                             reader.branch(row, "branch", row.text("branch")),
                             reader.product(row, row.text("product_code")),
-                            row.qty("qty")));
+                            row.qty("qty"));
+                    // A balance for a branch that keeps no goods is refused (reported by balances()), so it is not
+                    // compared.
+                    if (reader.noGoods.contains(b.branch())) {
+                        excluded[0]++;
+                    } else {
+                        rows.add(b);
+                    }
                 } catch (RuntimeException e) {
                     // skipped rows are already in the report
                 }
             });
             Map<String, BigDecimal> derived = new HashMap<>();
             stock.positions().forEach(p -> derived.put(p.branchId() + "|" + p.productId(), p.balance()));
+            // A branch that keeps no goods should hold none: say so when the books show a balance there (issue #329).
+            stock.positions().stream()
+                    .filter(p -> noGoods.contains(p.branchId()) && p.balance().signum() != 0)
+                    .forEach(p -> report.anomaly(
+                            file.name,
+                            0,
+                            "branch " + codeOf(p.branchId()) + " keeps no goods but holds "
+                                    + Quantities.format(p.balance()) + " of " + productCode(p.productId())));
             List<String> source = new ArrayList<>();
             List<String> after = new ArrayList<>();
             Set<String> keys = new HashSet<>();
@@ -1569,7 +1606,8 @@ public class RetailImporter {
             String s = sha256(source);
             String d = sha256(after);
             report.checksum("balances checksum: rows=" + source.size() + " total_qty=" + Quantities.format(total)
-                    + " source_sha256=" + s + " derived_sha256=" + d + " match=" + (s.equals(d) ? "yes" : "NO"));
+                    + " source_sha256=" + s + " derived_sha256=" + d + " match=" + (s.equals(d) ? "yes" : "NO")
+                    + " excluded_no_goods=" + excluded[0]);
         }
     }
 

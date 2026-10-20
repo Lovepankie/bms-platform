@@ -728,6 +728,24 @@ again under the sale's lock; the screens only save a round trip and say each ref
   `VITE_RETAIL_MOCK` and the tests. Tests: `sale-actions-state.test.ts` (the rules), `sale-actions.dom.test.tsx` (who sees what, validation, double submit,
   retry with the same key, error words, a moved-on balance, key reuse), `sales-wiring.dom.test.tsx` (the lists and the opened sale on the mock show the buttons and a payment refreshes the list), `screens.test.tsx` and `analytics.test.tsx` (Price and Cost order and words).
 
+## Branches: close, reopen and keeps-no-goods (#329, ADR-041)
+
+- **Screen.** `/staff/setup/branches` (crumbs Home, Business set-up, Branches; a link in Business set-up for whoever holds `core.branches.read`). One card per
+  branch with its name and code, the badges Head office, Closed and Keeps no goods, a line in plain words, and for an administrator (`core.branches.manage`)
+  the actions: Close this branch (head office excluded), Mark as keeping no goods or Keeps goods again, and on a closed branch Reopen this branch. Closed branches
+  are hidden behind a Show closed branches box that states how many there are, and a closed branch that still holds stock says so in its row (items and value). Mark as keeping no goods asks for a confirmation in plain words first (goods left there can still be moved out); Keeps goods again is one tap. Progressive disclosure: Close opens a confirmation panel; if the server finds stock
+  or a transfer on the road it answers `branch_close_needs_reason` and the panel shows the server's words (with the stock value), asks "Why are you closing it?"
+  and enables Close it anyway only with a reason. Nothing is posted or written off. After any change `/me`, the branch list and the retail queries are read again,
+  so the pickers and the stock list follow. A reader sees the list and the line "Only an administrator can close or reopen a branch."
+- **Everywhere else.** The staff bar picker lists the open branches from `/me` and tags a branch that keeps no goods "(no stock)"; the staff area does not start on
+  it unless it is all the user has or the user chose it last (cash book). The sale, move-stock, stock-take and usage screens use `useStockingBranch` and
+  `BranchRequired stocking`: on a branch that keeps no goods they say so and offer the branches that do. The restock, purchase order and goods receipt forms, the move-stock
+  destination and the restock branch of a return list only branches that keep goods. The Stock page in All branches leaves closed branches out, says "N closed shops
+  with stock hidden. Show them" when some are, and marks a closed column "(closed)"; the stock-by-location report keeps them with a Closed badge.
+- **Tours.** The welcome tour is version 8 (a "Your branches" step for whoever may read branches); `page-branches` is the page tour.
+- **Tests.** `branches/state.test.ts` (the rules), `branches/branches.dom.test.tsx` (hidden then shown closed branches, the badge and reason, confirm once, the warning
+  and reason, refusals in plain words, reopen, the stocking switch, a reader sees no action), `retail/not-stocking.test.tsx`, `auth/branch.test.ts`, `tour/*`.
+
 ## Left to do
 
 - Analytics: export to PDF and Excel and the daily WhatsApp summary (#149 items 8), and the cash view per shop per day (item 5), which need the cash book.

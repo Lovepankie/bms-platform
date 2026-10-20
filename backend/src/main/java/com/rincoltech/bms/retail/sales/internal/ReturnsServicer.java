@@ -29,6 +29,7 @@ import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
 import com.rincoltech.bms.retail.stock.RetailBooks.Posting;
+import com.rincoltech.bms.retail.stock.RetailBranchContext;
 import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.Movement;
@@ -71,6 +72,7 @@ class ReturnsServicer {
     private final StockLedger stock;
     private final RetailBooks books;
     private final Branches branches;
+    private final RetailBranchContext stockBranches;
     private final TenantSequences sequences;
     private final CurrentTenant tenant;
     private final BusinessClock clock;
@@ -84,6 +86,7 @@ class ReturnsServicer {
             StockLedger stock,
             RetailBooks books,
             Branches branches,
+            RetailBranchContext stockBranches,
             TenantSequences sequences,
             CurrentTenant tenant,
             BusinessClock clock,
@@ -95,6 +98,7 @@ class ReturnsServicer {
         this.stock = stock;
         this.books = books;
         this.branches = branches;
+        this.stockBranches = stockBranches;
         this.sequences = sequences;
         this.tenant = tenant;
         this.clock = clock;
@@ -185,6 +189,8 @@ class ReturnsServicer {
                             field + ".restock_branch_id", "unknown_branch", "No such active branch in your scope."));
                     continue;
                 }
+                // 422 branch_not_stocking for a branch that keeps no goods, like every other stock write (ADR-041).
+                stockBranches.requireStocks(restock, field + ".restock_branch_id");
             } else if (l.restockBranchId() != null) {
                 problems.add(new FieldProblem(
                         field + ".restock_branch_id",

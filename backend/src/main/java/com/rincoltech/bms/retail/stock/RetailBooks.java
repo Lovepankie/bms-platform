@@ -31,10 +31,24 @@ public interface RetailBooks {
             String sourceType,
             UUID sourceId,
             String idempotencyKey,
-            List<Leg> legs) {
+            List<Leg> legs,
+            boolean closedBranchOk) {
 
         public Posting {
             legs = List.copyOf(legs);
+        }
+
+        /** A posting to an open branch, which is every posting but a transfer receipt at a branch that has since closed. */
+        public Posting(
+                UUID branchId,
+                LocalDate date,
+                String reference,
+                String memo,
+                String sourceType,
+                UUID sourceId,
+                String idempotencyKey,
+                List<Leg> legs) {
+            this(branchId, date, reference, memo, sourceType, sourceId, idempotencyKey, legs, false);
         }
     }
 

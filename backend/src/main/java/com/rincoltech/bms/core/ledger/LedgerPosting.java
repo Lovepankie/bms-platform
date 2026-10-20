@@ -49,10 +49,35 @@ public interface LedgerPosting {
             String sourceType,
             UUID sourceId,
             String idempotencyKey,
-            List<Line> lines) {
+            List<Line> lines,
+            boolean allowClosedBranch) {
 
         public EntryRequest {
             lines = List.copyOf(lines);
+        }
+
+        /** An entry for an open branch, which is every entry but the receipt of goods already on the road to a closed one. */
+        public EntryRequest(
+                UUID branchId,
+                LocalDate entryDate,
+                String reference,
+                String memo,
+                String sourceModule,
+                String sourceType,
+                UUID sourceId,
+                String idempotencyKey,
+                List<Line> lines) {
+            this(
+                    branchId,
+                    entryDate,
+                    reference,
+                    memo,
+                    sourceModule,
+                    sourceType,
+                    sourceId,
+                    idempotencyKey,
+                    lines,
+                    false);
         }
     }
 

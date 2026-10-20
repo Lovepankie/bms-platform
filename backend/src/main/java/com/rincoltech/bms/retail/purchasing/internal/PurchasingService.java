@@ -248,7 +248,7 @@ class PurchasingService {
         }
         for (PurchaseLineRequest l : r.lines()) {
             for (BranchQty b : l.qtyByBranch()) {
-                branches.resolve(PERMISSION, b.branchId());
+                branches.resolveStocking(PERMISSION, b.branchId());
             }
         }
         products.forEach(catalogue::lock);

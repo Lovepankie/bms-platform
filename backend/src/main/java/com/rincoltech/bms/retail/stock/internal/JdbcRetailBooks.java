@@ -49,7 +49,8 @@ class JdbcRetailBooks implements RetailBooks {
                 p.sourceType(),
                 p.sourceId(),
                 p.idempotencyKey(),
-                lines)));
+                lines,
+                p.closedBranchOk())));
     }
 
     @Override

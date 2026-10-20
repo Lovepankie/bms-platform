@@ -12,6 +12,8 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -31,17 +33,43 @@ class JdbcTenancy implements Branches, CurrentTenant, TenantModules, TenantSeque
     @Transactional(readOnly = true)
     public Optional<Branch> findActive(UUID branchId) {
         return jdbc.sql(
-                        "SELECT id, code, name, is_head_office, status FROM branches WHERE id = ? AND status = 'active'")
+                        "SELECT id, code, name, is_head_office, status, stocks_goods FROM branches WHERE id = ? AND status = 'active'")
                 .param(branchId)
                 .query(JdbcTenancy::branch)
                 .optional();
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Branch> lockBranch(UUID branchId) {
+        try {
+            return jdbc.sql(
+                            "SELECT id, code, name, is_head_office, status, stocks_goods FROM branches WHERE id = ? FOR SHARE")
+                    .param(branchId)
+                    .query(JdbcTenancy::branch)
+                    .optional();
+        } catch (DataAccessException e) {
+            // The administrator's change held the row longer than the request's lock timeout (an Idempotency-Key sets 5
+            // s).
+            // Nothing was saved, so the same request is safe to send again.
+            for (Throwable t = e; t != null; t = t.getCause()) {
+                if (t instanceof SQLException sql && "55P03".equals(sql.getSQLState())) {
+                    throw new ApiException(
+                            HttpStatus.CONFLICT,
+                            "lock_timeout",
+                            "Try again in a moment",
+                            "This branch is being changed at this moment. Try again in a moment.");
+                }
+            }
+            throw e;
+        }
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<Branch> all() {
         return jdbc.sql(
-                        "SELECT id, code, name, is_head_office, status FROM branches ORDER BY is_head_office DESC, code")
+                        "SELECT id, code, name, is_head_office, status, stocks_goods FROM branches ORDER BY is_head_office DESC, code")
                 .query(JdbcTenancy::branch)
                 .list();
     }
@@ -52,7 +80,8 @@ class JdbcTenancy implements Branches, CurrentTenant, TenantModules, TenantSeque
                 rs.getString("code"),
                 rs.getString("name"),
                 rs.getBoolean("is_head_office"),
-                "active".equals(rs.getString("status")));
+                "active".equals(rs.getString("status")),
+                rs.getBoolean("stocks_goods"));
     }
 
     @Override

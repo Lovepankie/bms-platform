@@ -453,6 +453,21 @@ describe('a role on a branch that has closed', () => {
   });
 });
 
+// JUSTIFICATION-A3: a new test that the role editor's added row never offers a closed branch (issue #329).
+describe('adding a role in the role editor', () => {
+  it('does not offer a closed branch for the new role (issue #329)', async () => {
+    api.list.mockResolvedValue([SELF, WAITING]);
+    shell(<UsersScreen />);
+    const card = (await screen.findByText('Test Seller 02')).closest('li') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Change roles' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Add another role' }));
+    const second = within(card).getByLabelText('Role 2') as HTMLSelectElement;
+    fireEvent.change(second, { target: { value: 'cashier' } });
+    expect(within(card).queryByRole('option', { name: /Test Old Branch/ })).toBeNull();
+    expect(within(card).getAllByRole('option', { name: 'Test Branch Two (KLA)' }).length).toBeGreaterThan(0);
+  });
+});
+
 describe('taking the administrator role off yourself', () => {
   it('warns first, changes nothing until confirmed, then reads who you are again', async () => {
     api.setRoles.mockResolvedValue({ ...SELF, roles: [{ role_key: 'cashier' }] });

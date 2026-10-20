@@ -142,7 +142,7 @@ class ReceiptsService {
         if (on.isAfter(today)) {
             problems.add(new FieldProblem("received_on", "invalid", "A receipt cannot be dated in the future."));
         }
-        UUID branch = branches.resolve(PERMISSION, r.branchId());
+        UUID branch = branches.resolveStocking(PERMISSION, r.branchId());
         // Lock order, as for a void: the supplier, then the order, then the products and balances.
         UUID lockSupplier = r.orderId() == null
                 ? r.supplierId()

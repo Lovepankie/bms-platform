@@ -68,7 +68,16 @@ final class UserApi {
     record RoleCatalogue(List<RoleResponse> items) {}
 
     @Schema(name = "MeBranch")
-    record MeBranch(UUID id, String code, String name, boolean isHeadOffice) {}
+    record MeBranch(
+            UUID id,
+            String code,
+            String name,
+            boolean isHeadOffice,
+
+            @Schema(
+                    description =
+                            "false for a branch that keeps no goods: sale, restock and transfer forms skip it (#329)")
+            boolean stocksGoods) {}
 
     /** Where one permission applies: every branch, or the listed ones (ADR-017). */
     @Schema(name = "MePermissionScope")

@@ -52,7 +52,14 @@ final class StockApi {
             String nextCursor) {}
 
     @Schema(name = "RetailStockBranch")
-    record StockBranch(UUID id, String code, String name, boolean headOffice) {}
+    record StockBranch(
+            UUID id,
+            String code,
+            String name,
+            boolean headOffice,
+
+            @Schema(description = "A closed branch that still holds stock; shown only when include_closed is true")
+            boolean closed) {}
 
     @Schema(name = "RetailBranchBalance")
     record BranchBalance(
@@ -92,6 +99,11 @@ final class StockApi {
 
             @Schema(description = "A total at or below this is low stock; the same for every branch")
             String lowStockThreshold,
+
+            @Schema(
+                    description = "How many closed branches in the caller's scope still hold stock and are left out "
+                            + "unless include_closed is true")
+            int closedBranches,
 
             String nextCursor) {}
 

@@ -425,6 +425,8 @@ operator's verification as the real gate, so nothing is provisioned for a strang
 only, valid 7 days, replaced by every new email, carried in the URL fragment and sent in a request
 body, and compared digest to digest in constant time after the indexed lookup.
 
+`core.branches.manage` covers every branch change: create, rename, close, reopen and the stocking switch (FR-BR-01, FR-BR-07, FR-BR-08, issue #329, ADR-041). No permission was added for closing: only the tenant admin closes a branch, and the call is scoped to the caller's branches like the other branch routes (a branch outside the scope is 404). The retail refusal `branch_not_stocking` is not a permission: it applies to every caller, administrators included.
+
 ### 8.3.3 Enforcement
 
 - Every route declares exactly one permission (`@RequiresPermission`), or is explicitly marked

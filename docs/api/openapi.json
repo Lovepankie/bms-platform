@@ -670,6 +670,15 @@
       },
       "Branch" : {
         "properties" : {
+          "closed_at" : {
+            "description" : "when the branch was closed; null while it is open",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "closed_reason" : {
+            "description" : "why it was closed, when it had to be confirmed; null otherwise",
+            "type" : "string"
+          },
           "code" : {
             "type" : "string"
           },
@@ -691,7 +700,22 @@
             "type" : "string"
           },
           "status" : {
+            "description" : "active, or inactive for a closed branch (the owner's word is closed, ADR-041)",
             "type" : "string"
+          },
+          "stock_items" : {
+            "description" : "items still on the shelves of a closed branch; null for an open branch or when none",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "stock_value_minor" : {
+            "description" : "their value at current cost, in minor units; null for an open branch or when none",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "stocks_goods" : {
+            "description" : "false for a branch that keeps no goods, such as a head office (ADR-041)",
+            "type" : "boolean"
           },
           "updated_at" : {
             "format" : "date-time",
@@ -736,6 +760,16 @@
           },
           "theme_text" : {
             "description" : "#FFFFFF or #111111, the readable text colour on themePrimary; null with it",
+            "type" : "string"
+          }
+        }
+      },
+      "CloseBranchRequest" : {
+        "description" : "The reason is required only when the branch still holds stock or has transfers on their way (422 branch_close_needs_reason says which).",
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
             "type" : "string"
           }
         }
@@ -4663,6 +4697,10 @@
           },
           "name" : {
             "type" : "string"
+          },
+          "stocks_goods" : {
+            "description" : "false for a branch that keeps no goods: sale, restock and transfer forms skip it (#329)",
+            "type" : "boolean"
           }
         }
       },
@@ -6209,6 +6247,11 @@
               "$ref" : "#/components/schemas/RetailStockBranch"
             },
             "type" : "array"
+          },
+          "closed_branches" : {
+            "description" : "How many closed branches in the caller's scope still hold stock and are left out unless include_closed is true",
+            "format" : "int32",
+            "type" : "integer"
           },
           "items" : {
             "items" : {
@@ -9175,6 +9218,10 @@
       "RetailLocationBranch" : {
         "description" : "A column of the report; ordered stores, shops, then both",
         "properties" : {
+          "closed" : {
+            "description" : "A closed branch that still holds stock; its history stays in this report (#329)",
+            "type" : "boolean"
+          },
           "code" : {
             "type" : "string"
           },
@@ -12502,6 +12549,10 @@
       },
       "RetailStockBranch" : {
         "properties" : {
+          "closed" : {
+            "description" : "A closed branch that still holds stock; shown only when include_closed is true",
+            "type" : "boolean"
+          },
           "code" : {
             "type" : "string"
           },
@@ -16475,6 +16526,10 @@
             "maxLength" : 200,
             "minLength" : 1,
             "type" : "string"
+          },
+          "stocks_goods" : {
+            "description" : "false marks a branch that keeps no goods (a head office): no sales, restocks, transfers or stock adjustments there (422 branch_not_stocking). Refused with branch_still_has_stock while goods or a transfer on its way remain.",
+            "type" : "boolean"
           }
         }
       },
@@ -17610,19 +17665,70 @@
             "description" : "OK"
           }
         },
-        "summary" : "Rename a branch or change its location (FR-BR-01)",
+        "summary" : "Rename a branch, change its location or mark it as not stocking (FR-BR-01, ADR-041)",
         "tags" : [ "branches" ]
       }
     },
-    "/api/v1/branches/{branch_id}/deactivate" : {
+    "/api/v1/branches/{branch_id}/close" : {
       "post" : {
-        "operationId" : "deactivateBranch",
+        "operationId" : "closeBranch",
         "parameters" : [ {
           "in" : "path",
           "name" : "branch_id",
           "required" : true,
           "schema" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CloseBranchRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Close a branch and keep its history (FR-BR-01, ADR-041); 422 branch_close_needs_reason while stock or transfers on their way remain and no reason is sent",
+        "tags" : [ "branches" ]
+      }
+    },
+    "/api/v1/branches/{branch_id}/reopen" : {
+      "post" : {
+        "operationId" : "reopenBranch",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "branch_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
             "type" : "string"
           }
         } ],
@@ -17638,7 +17744,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Deactivate a branch (FR-BR-01)",
+        "summary" : "Reopen a closed branch (FR-BR-01, ADR-041)",
         "tags" : [ "branches" ]
       }
     },
@@ -29456,6 +29562,14 @@
           }
         }, {
           "in" : "query",
+          "name" : "include_closed",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
           "name" : "limit",
           "required" : false,
           "schema" : {
@@ -29482,7 +29596,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Every product with its balance in each branch the caller may read (#144)",
+        "summary" : "Every product with its balance in each open branch the caller may read (#144); closed branches only with include_closed (#329)",
         "tags" : [ "retail-stock" ]
       }
     },

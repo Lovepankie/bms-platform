@@ -29,7 +29,10 @@ final class LocationApi {
             @Schema(
                     allowableValues = {"store", "shop", "both"},
                     description = "both for every branch while the branch_roles capability is off")
-            String role) {}
+            String role,
+
+            @Schema(description = "A closed branch that still holds stock; its history stays in this report (#329)")
+            boolean closed) {}
 
     @Schema(name = "RetailLocationBalance")
     record LocationBalance(

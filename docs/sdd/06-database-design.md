@@ -417,7 +417,10 @@ after values. Older logos stay in `documents` (rows are never deleted).
 
 (std) `code varchar(10) NOT NULL` (`CHECK (code ~ '^[A-Z0-9]{2,10}$')`),
 `name text NOT NULL`, `location text`, `is_head_office boolean NOT NULL DEFAULT false`,
-`status text NOT NULL` [`active`, `inactive`].
+`status text NOT NULL` [`active`, `inactive`; `inactive` is what the owner calls closed, ADR-041],
+`stocks_goods boolean NOT NULL DEFAULT true` (false: the branch keeps no goods and retail refuses sales, restocks, transfers and
+stock adjustments there), `closed_at timestamptz`, `closed_reason text` (set by closing, cleared by reopening; migration V61,
+issue #329).
 `UNIQUE (tenant_id, code)`; partial unique index
 `ON branches (tenant_id) WHERE is_head_office` (exactly one head office). FR-BR-01.
 

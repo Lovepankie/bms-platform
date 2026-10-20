@@ -124,6 +124,17 @@ export function useSingleBranch(): { branchId: string | null; branchName: string
 }
 
 /**
+ * As {@link useSingleBranch} for a screen that sells, moves or counts goods: a branch that keeps no goods (a head office, #329) is
+ * not a branch to work in, so `branchId` is null there and {@link BranchRequired} says so and offers the branches that keep goods.
+ */
+export function useStockingBranch(): { branchId: string | null; branchName: string } {
+  const { me } = useStaff();
+  const one = useSingleBranch();
+  const found = (me.branches ?? []).find((b) => b.id === one.branchId);
+  return found?.stocks_goods === false ? { branchId: null, branchName: one.branchName } : one;
+}
+
+/**
  * The branch choice of a read screen: one concrete branch, or "All branches" (#144). The write screens
  * keep using {@link useSingleBranch}.
  */
@@ -193,11 +204,13 @@ export function CategoryLabel({ category }: { category?: string }) {
  * branches where the screen's `permissions` are all held as a button instead of pointing at the Branch
  * box (#144). With no such branch it says so.
  */
-export function BranchRequired({ permissions }: { permissions: string[] }) {
-  const { me, chooseBranch } = useStaff();
+export function BranchRequired({ permissions, stocking = false }: { permissions: string[]; stocking?: boolean }) {
+  const { me, chooseBranch, branch } = useStaff();
   const branches = (me.branches ?? []).filter(
-    (b) => b.id && permissions.every((p) => branchesWhere(me, p).some((x) => x.id === b.id)),
+    (b) => b.id && (!stocking || b.stocks_goods !== false) && permissions.every((p) => branchesWhere(me, p).some((x) => x.id === b.id)),
   );
+  // The chosen branch keeps no goods (#329): say so before the list.
+  const chosen = stocking ? (me.branches ?? []).find((b) => b.id === branch && b.stocks_goods === false) : undefined;
   if (branches.length === 0) {
     return (
       <div role="note" className="alert alert-info">
@@ -208,6 +221,7 @@ export function BranchRequired({ permissions }: { permissions: string[] }) {
   return (
     <div role="note" className="alert alert-info">
       <div className="stack">
+        {chosen && <p><strong>{branchLabel(chosen)}</strong> keeps no goods, so nothing is sold, restocked, moved or counted there.</p>}
         <p>Choose a branch to continue:</p>
         <p className="cluster">
           {branches.map((b) => (

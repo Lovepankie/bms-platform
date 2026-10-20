@@ -10,6 +10,8 @@ export interface BranchChoice {
   code?: string;
   name?: string;
   is_head_office?: boolean;
+  /** false for a branch that keeps no goods (a head office): the staff area does not start on it (#329). */
+  stocks_goods?: boolean;
 }
 
 export interface MeForBranches {
@@ -43,7 +45,10 @@ export function initialBranch(me: MeForBranches, stored: string | null, stocked:
   if (stored === ALL_BRANCHES && me.all_branches) return ALL_BRANCHES;
   if (stored && branches.some((b) => b.id === stored)) return stored;
   if (branches.length === 1) return branches[0]?.id ?? null;
-  const fallback = branches.find((b) => b.id === me.default_branch_id) ?? branches[0];
+  // A branch that keeps no goods is a last choice: sales, restocks and stock moves are refused there (#329).
+  const keeping = branches.filter((b) => b.stocks_goods !== false);
+  const preferred = branches.find((b) => b.id === me.default_branch_id) ?? branches[0];
+  const fallback = preferred && preferred.stocks_goods === false ? (keeping[0] ?? preferred) : preferred;
   if (stocked) {
     if (fallback?.id && stocked.has(fallback.id)) return fallback.id;
     const trading = branches.find((b) => b.id && stocked.has(b.id));

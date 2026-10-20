@@ -268,6 +268,15 @@ export function Setup() {
           </label>
         </fieldset>
 
+        {permissions.includes('core.branches.read') && (
+          <fieldset>
+            <legend>Branches</legend>
+            <p>
+              <Link to={'/staff/setup/branches' as never}>Branches</Link>: close a shop you no longer use and keep its history, reopen it, or say that your head office keeps no goods.
+            </p>
+          </fieldset>
+        )}
+
         {permissions.includes('core.users.read') && (
           <fieldset>
             <legend>Staff</legend>

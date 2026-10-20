@@ -60,7 +60,7 @@ export function LocationTable({ report }: { report: StockByLocation }) {
           </tr>
           <tr>
             {groups.flatMap((g) => [
-              ...g.branches.map((b) => <th key={b.id} className="num">{branchLabel(b)}</th>),
+              ...g.branches.map((b) => <th key={b.id} className="num">{branchLabel(b)}{b.closed && <span className="badge badge-warning"> Closed</span>}</th>),
               ...(g.branches.length > 1 ? [<th key={`${g.role}-subtotal`} className="num">Subtotal</th>] : []),
             ])}
           </tr>
@@ -121,7 +121,7 @@ export function LocationList({ report }: { report: StockByLocation }) {
               const b = (report.branches ?? []).find((x) => x.id === c.branch_id);
               return (
                 <div key={c.branch_id} className="rt-row">
-                  <span>{branchLabel(b)}</span>
+                  <span>{branchLabel(b)}{b?.closed && <span className="badge badge-warning"> Closed</span>}</span>
                   <span className="num"><Qty qty={c.qty ?? '0'} unit={r.unit} negative={c.negative} /></span>
                 </div>
               );

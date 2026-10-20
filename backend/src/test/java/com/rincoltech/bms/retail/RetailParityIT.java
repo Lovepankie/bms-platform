@@ -612,23 +612,31 @@ class RetailParityIT extends IntegrationTest {
     // ---- G. Inactive branches in All branches (review of #154) ------------------------------
 
     @Test
-    void allBranchesKeepsAnInactiveBranchThatStillHoldsStockAndDropsAnEmptyOne() {
+    void allBranchesLeavesAClosedBranchOutUnlessAskedAndDropsAnEmptyOne() {
         stockInTwoBranches();
         TestDatabase.owner()
                 .sql("UPDATE branches SET status = 'inactive' WHERE id = ?")
                 .param(t.secondBranch())
                 .update();
-        JsonNode page = ok(api.get("/stock/all-branches", ADMIN));
+        // Issue #329: the default list is the branches that trade; the closed one that holds stock is counted, not
+        // shown.
+        JsonNode plain = ok(api.get("/stock/all-branches", ADMIN));
+        assertThat(plain.get("branches")).hasSize(1);
+        assertThat(plain.get("closed_branches").asInt()).isEqualTo(1);
+        assertThat(plain.toString()).doesNotContain(t.secondBranch().toString());
+
+        JsonNode page = ok(api.get("/stock/all-branches?include_closed=true", ADMIN));
         assertThat(page.get("branches")).hasSize(2);
+        assertThat(page.get("closed_branches").asInt()).isZero();
         assertThat(row(page, "PAR-BULB").get("negative").asBoolean()).isTrue();
         assertThat(row(page, "PAR-CABLE").get("total_qty").asString()).isEqualTo("15.000");
 
-        // Once the closed branch is emptied it is no longer a column.
+        // Once the closed branch is emptied it is no longer a column, even when closed branches are asked for.
         TestDatabase.owner()
                 .sql("UPDATE retail_stock_balances SET qty = 0 WHERE branch_id = ?")
                 .param(t.secondBranch())
                 .update();
-        JsonNode after = ok(api.get("/stock/all-branches", ADMIN));
+        JsonNode after = ok(api.get("/stock/all-branches?include_closed=true", ADMIN));
         assertThat(after.get("branches")).hasSize(1);
         assertThat(after.toString()).doesNotContain(t.secondBranch().toString());
     }

@@ -107,7 +107,8 @@ class LocationService {
                         b.code(),
                         b.name(),
                         b.headOffice(),
-                        role.get(b.id()).wire()))
+                        role.get(b.id()).wire(),
+                        !b.active()))
                 .toList();
         if (ids.isEmpty()) {
             return new LocationReport(

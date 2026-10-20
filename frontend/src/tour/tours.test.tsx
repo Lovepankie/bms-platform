@@ -38,6 +38,7 @@ import { StocktakePage } from '../areas/staff/retail/stocktake';
 import { StaffBar } from '../areas/staff/route';
 import { AssistantSettingsPage } from '../areas/staff/assistant/page';
 import { Setup } from '../areas/staff/setup';
+import { BranchesScreen } from '../areas/staff/branches/page';
 import { UsersScreen } from '../areas/staff/users/page';
 import { FEATURES, type Tour, stepsFor } from './model';
 import { TOURS } from './tours';
@@ -78,6 +79,8 @@ function screen(path: string | undefined): ReactElement {
       return <Setup />;
     case '/staff/users':
       return <UsersScreen />;
+    case '/staff/setup/branches':
+      return <BranchesScreen />;
     case '/staff/retail':
       return (
         <>
@@ -249,6 +252,7 @@ const ASSISTANT: Me = { ...ADMIN, full_name: 'Test Assistant Admin 01', permissi
 const AUDIENCE: Record<string, Me[]> = {
   'page-assistant': [ASSISTANT],
   'page-users': [ADMIN],
+  'page-branches': [ADMIN],
   'page-members': [CLERK, OFFICER],
   'page-member-new': [CLERK],
   'page-member': [CLERK, CHECKER],

@@ -9,7 +9,7 @@ import { showQty } from './maths';
 import { buildTransfer, transferLineHint, transferProblem, type TransferDraft } from './transfer-state';
 import { milliOf } from './maths';
 import { TRANSFER_RECEIPT, capabilityOn, needsOf } from './permissions';
-import { BranchRequired, Gate, NoStockHere, ProductPicker, Problem, money, useProfitAccess, useSingleBranch } from './ui';
+import { BranchRequired, Gate, NoStockHere, ProductPicker, Problem, money, useProfitAccess, useStockingBranch } from './ui';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
 // stock leaves; it moves at cost, so nothing is gained or lost. One idempotency key per draft, kept
@@ -40,7 +40,7 @@ export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; 
   const update = (patch: Partial<TransferDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const add = (p: Product) =>
     setDraft((d) => (d.lines.some((l) => l.product.id === p.id) ? d : { ...d, lines: [...d.lines, { product: p, qty: '1' }] }));
-  const destinations = (me.branches ?? []).filter((b) => b.id !== fromBranchId);
+  const destinations = (me.branches ?? []).filter((b) => b.id !== fromBranchId && b.stocks_goods !== false);
   const problem = transferProblem(fromBranchId, draft);
   // With the two-step transfer on (ADR-033) the stock leaves now and is counted at the destination once received.
   const sends = capabilityOn(me, 'retail', TRANSFER_RECEIPT);
@@ -127,13 +127,13 @@ export function TransferSummary({ transfer, onNew }: { transfer: Transfer; onNew
 }
 
 function MoveStock() {
-  const { branchId } = useSingleBranch();
+  const { branchId } = useStockingBranch();
   const [done, setDone] = useState<Transfer | null>(null);
   const [round, setRound] = useState(0);
   return (
     <Gate screen="transfer" title="Move stock">
       {branchId === null ? (
-        <BranchRequired permissions={needsOf('transfer')} />
+        <BranchRequired permissions={needsOf('transfer')} stocking />
       ) : done ? (
         <TransferSummary transfer={done} onNew={() => { setDone(null); setRound((n) => n + 1); }} />
       ) : (

@@ -85,7 +85,7 @@ describe('step filtering', () => {
   it('keeps the admin tour free of steps for features that are not built yet', () => {
     const ids = stepsFor(adminWelcome, ADMIN).map((s) => s.id);
     for (const hidden of ['billing', 'trial', 'pay', 'agent']) expect(ids).not.toContain(hidden);
-    for (const shown of ['welcome', 'logo', 'colour', 'staff', 'modules', 'branch', 'retail', 'lending', 'approvals', 'help']) {
+    for (const shown of ['welcome', 'logo', 'colour', 'staff', 'branches', 'modules', 'branch', 'retail', 'lending', 'approvals', 'help']) {
       expect(ids).toContain(shown);
     }
   });

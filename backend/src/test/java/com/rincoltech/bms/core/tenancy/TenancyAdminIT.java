@@ -61,9 +61,9 @@ class TenancyAdminIT extends IntegrationTest {
                 .single();
     }
 
-    /** FR-BR-01: create, rename with If-Match, deactivate; the head office stays. */
+    /** FR-BR-01: create, rename with If-Match, close; the head office stays. */
     @Test
-    void branchesAreCreatedRenamedAndDeactivated() {
+    void branchesAreCreatedRenamedAndClosed() {
         ResponseEntity<JsonNode> created = api.post(
                 "/api/v1/branches",
                 Map.of("code", "EAST", "name", "Test Branch East", "location", "Test Town"),
@@ -99,15 +99,24 @@ class TenancyAdminIT extends IntegrationTest {
         assertThat(renamed.getBody().get("name").asString()).isEqualTo("Test Branch East Renamed");
         assertThat(renamed.getHeaders().getETag()).isEqualTo("\"2\"");
 
-        assertThat(api.post("/api/v1/branches/" + t.headOffice() + "/deactivate", null, admin.accessToken())
+        assertThat(api.call(
+                                HttpMethod.POST,
+                                "/api/v1/branches/" + t.headOffice() + "/close",
+                                null,
+                                admin.accessToken(),
+                                Map.of("If-Match", "\"1\""))
                         .getBody()
                         .get("code")
                         .asString())
                 .isEqualTo("head_office_required");
-        ResponseEntity<JsonNode> deactivated =
-                api.post("/api/v1/branches/" + east + "/deactivate", null, admin.accessToken());
-        assertThat(deactivated.getBody().get("status").asString()).isEqualTo("inactive");
-        assertThat(audits("core.branch.deactivated", east)).isEqualTo(1);
+        ResponseEntity<JsonNode> closed = api.call(
+                HttpMethod.POST,
+                "/api/v1/branches/" + east + "/close",
+                null,
+                admin.accessToken(),
+                Map.of("If-Match", "\"2\""));
+        assertThat(closed.getBody().get("status").asString()).isEqualTo("inactive");
+        assertThat(audits("core.branch.closed", east)).isEqualTo(1);
     }
 
     /** FR-BR-04, NFR-ISO-04: a scoped user lists only the branches of their scope. */

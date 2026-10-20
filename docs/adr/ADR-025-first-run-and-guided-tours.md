@@ -64,6 +64,10 @@ words); tours growing long (keep each under about a dozen steps and use page tou
 #93 removing `roles.mfa_required` for tenant admins, after which the first run offers the second
 factor to them too with no change here.
 
+## Amendment (2026-10-20, issue #329)
+
+The Branches page (`/staff/setup/branches`, under Business set-up in the breadcrumbs) is built. The welcome tour gains a "Your branches" step for whoever holds `core.branches.read` and is version 8 (after the Group by step of version 7); the page has its own page tour, `page-branches`, started from Help. No new ADR: nothing about how tours work changed.
+
 ## Amendment (2026-10-19, issue #319)
 
 The staff Users screen (`/staff/users`) is built, so the `staffAdmin` flag in `frontend/src/tour/model.ts`

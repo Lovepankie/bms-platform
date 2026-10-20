@@ -10,7 +10,7 @@ import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newL
 import { MIN_REASON, hasNoPrice, isOverride, pricedLines, receiptNote, reasonOk, sourceNote } from './price-state';
 import { activePacks, chosenPack, enteredPriceMinor, enteredQty } from './units-state';
 import { EmptyState } from '../../../components/states';
-import { BranchRequired, Gate, NoStockHere, Note, ProductPicker, Problem, money, useBranchRoles, useProfitAccess, useSingleBranch } from './ui';
+import { BranchRequired, Gate, NoStockHere, Note, ProductPicker, Problem, money, useBranchRoles, useProfitAccess, useStockingBranch } from './ui';
 import { branchLabel } from '../../../auth/branch';
 import type { BranchRole } from '../../../api/retail';
 import { BRANCH_ROLES, CREDIT_OVERRIDE, CUSTOMER_ACCOUNTS, PRICELIST_MANAGE, PRICELIST_USE, PRICE_LISTS, PRICE_OVERRIDE, UNITS, branchesWhere, capabilityOn, holds, holdsAt, needsOf, sellingBranches } from './permissions';
@@ -401,7 +401,7 @@ export function StoreBranch({ branchName, roles }: { branchName: string; roles: 
 export function RecordSale() {
   const { me } = useStaff();
   const roles = useBranchRoles(me);
-  const { branchId, branchName } = useSingleBranch();
+  const { branchId, branchName } = useStockingBranch();
   const store = branchId !== null && roles !== undefined && roles.some((r) => r.branch_id === branchId && !r.can_sell);
   // With branch roles on, the sale form waits for the roles, so it is never drawn at a store while they load.
   const waiting = capabilityOn(me, 'retail', BRANCH_ROLES) && (me.permissions ?? []).includes('retail.stock.read') && roles === undefined;
@@ -410,7 +410,7 @@ export function RecordSale() {
   return (
     <Gate screen="sale" title="Record a sale">
       {branchId === null ? (
-        <BranchRequired permissions={needsOf('sale')} />
+        <BranchRequired permissions={needsOf('sale')} stocking />
       ) : waiting ? (
         <p role="status">Loading</p>
       ) : store && roles ? (

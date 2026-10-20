@@ -113,7 +113,13 @@ class JdbcLedgerPosting implements LedgerPosting {
 
     private PostedEntry insert(EntryRequest request, UUID reversesEntryId) {
         EntryRules.check(request.lines());
-        if (branches.findActive(request.branchId()).isEmpty()) {
+        // Only the receipt of a transfer already on the road to a branch that has since closed may post to a closed
+        // branch
+        // (issue #329, ADR-041); every other entry needs an open one.
+        boolean usable = request.allowClosedBranch()
+                ? branches.lockBranch(request.branchId()).isPresent()
+                : branches.findActive(request.branchId()).isPresent();
+        if (!usable) {
             throw ApiException.rule("invalid_journal_line", "The entry's branch does not exist or is inactive.");
         }
         for (Line line : request.lines()) {

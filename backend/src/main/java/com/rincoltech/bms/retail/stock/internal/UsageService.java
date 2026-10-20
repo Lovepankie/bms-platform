@@ -81,6 +81,7 @@ class UsageService {
     }
 
     private UsageReport record(UsageRequest r) {
+        // Usage and damage only take stock out, so a branch that keeps no goods may still report them (ADR-041).
         UUID branch = branches.resolve("retail.usage.report", r.branchId());
         LocalDate today = clock.today(tenant.profile().timezone());
         LocalDate on = r.occurredOn() == null ? today : r.occurredOn();

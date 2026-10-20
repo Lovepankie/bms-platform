@@ -128,6 +128,7 @@ class TransferService {
 
     private Transfer record(TransferRequest r) {
         boolean dispatchOnly = capabilities.enabled(RetailCapabilities.TRANSFER_RECEIPT);
+        // A branch that keeps no goods may still be the source, so stock stranded there can leave (ADR-041).
         UUID from = branchContext.resolve(PERMISSION, r.fromBranchId(), "from_branch_id");
         LocalDate today = clock.today(tenant.profile().timezone());
         LocalDate on = r.transferDate() == null ? today : r.transferDate();
@@ -140,6 +141,8 @@ class TransferService {
             to = branches.findActive(r.toBranchId()).orElse(null);
             if (to == null) {
                 problems.add(new FieldProblem("to_branch_id", "unknown_branch", "No such active branch."));
+            } else {
+                branchContext.requireStocks(to.id(), "to_branch_id");
             }
         }
         if (on.isAfter(today)) {
@@ -327,6 +330,8 @@ class TransferService {
                 .orElseThrow(ApiException::notFound);
         Transfer t = h.transfer();
         requireInTransit(t, "received");
+        // A closed branch still receives what is on the road to it; a branch that keeps no goods does not (ADR-041).
+        branchContext.requireStocksReceiving(t.toBranchId(), "branch_id");
         List<StoredLine> lines = repo.storedLines(id);
         Map<UUID, BigDecimal> arrived = arrived(lines, r.lines());
         String note = r.note() == null || r.note().isBlank() ? null : r.note().trim();
@@ -373,7 +378,8 @@ class TransferService {
                         "retail.transfer_in:" + id,
                         List.of(
                                 Leg.debit("inventory", receivedValue),
-                                Leg.credit("interbranch_clearing", receivedValue))))
+                                Leg.credit("interbranch_clearing", receivedValue)),
+                        true))
                 .map(PostedEntry::entryId)
                 .orElse(null);
         UUID shortageEntry = books.post(new Posting(
@@ -384,7 +390,8 @@ class TransferService {
                         TRANSFER,
                         id,
                         "retail.transfer_shortage:" + id,
-                        List.of(Leg.debit("stock_shrinkage", shortage), Leg.credit("interbranch_clearing", shortage))))
+                        List.of(Leg.debit("stock_shrinkage", shortage), Leg.credit("interbranch_clearing", shortage)),
+                        true))
                 .map(PostedEntry::entryId)
                 .orElse(null);
         for (StoredLine l : lines) {

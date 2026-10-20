@@ -281,8 +281,8 @@ export function sellsAt(roles: BranchRole[] | undefined, branchId: string | null
 }
 
 /** The branches of `branches` a sale may be made at: stores are left out. */
-export function sellingBranches<B extends { id?: string }>(branches: B[], roles: BranchRole[] | undefined): B[] {
-  return branches.filter((b) => sellsAt(roles, b.id));
+export function sellingBranches<B extends { id?: string; stocks_goods?: boolean }>(branches: B[], roles: BranchRole[] | undefined): B[] {
+  return branches.filter((b) => b.stocks_goods !== false && sellsAt(roles, b.id));
 }
 
 export const SCREENS: { screen: RetailScreen; path: string; label: string; hint: string }[] = [

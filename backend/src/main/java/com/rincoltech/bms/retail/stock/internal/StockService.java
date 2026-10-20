@@ -103,17 +103,27 @@ class StockService {
      */
     @Transactional(readOnly = true)
     AllBranchesPage allBranches(
-            String query, UUID categoryId, boolean negativeOnly, String level, Integer limit, String cursor) {
+            String query,
+            UUID categoryId,
+            boolean negativeOnly,
+            String level,
+            boolean includeClosed,
+            Integer limit,
+            String cursor) {
         Long atMost = atMostOf(level);
         Principal principal = CurrentPrincipal.require();
-        List<Branch> visible = branches.visible(
-                "retail.stock.read", repo.branchesHoldingBalance(branches.inactiveInScope("retail.stock.read")));
+        // A closed branch that still holds stock is a column only when asked for (issue #329, ADR-041); the default
+        // list
+        // is the branches that trade. Its stock stays in the valuation and the stock-by-location report.
+        Set<UUID> closedHolding = repo.branchesHoldingBalance(branches.inactiveInScope("retail.stock.read"));
+        List<Branch> visible = branches.visible("retail.stock.read", includeClosed ? closedHolding : Set.of());
         List<UUID> ids = visible.stream().map(Branch::id).toList();
         List<StockBranch> columns = visible.stream()
-                .map(b -> new StockBranch(b.id(), b.code(), b.name(), b.headOffice()))
+                .map(b -> new StockBranch(b.id(), b.code(), b.name(), b.headOffice(), !b.active()))
                 .toList();
+        int closedLeftOut = includeClosed ? 0 : closedHolding.size();
         if (ids.isEmpty()) {
-            return new AllBranchesPage(columns, List.of(), Quantities.format(lowStock()), null);
+            return new AllBranchesPage(columns, List.of(), Quantities.format(lowStock()), closedLeftOut, null);
         }
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         Search.Query search = Search.parse(query);
@@ -162,7 +172,7 @@ class StockService {
                         Cursor.encode(
                                 page.getLast().code() + "|" + page.getLast().id()))
                 : null;
-        return new AllBranchesPage(columns, items, Quantities.format(lowStock()), next);
+        return new AllBranchesPage(columns, items, Quantities.format(lowStock()), closedLeftOut, next);
     }
 
     /** FR-RET-03: a branch's balances, negatives flagged. */
@@ -269,7 +279,7 @@ class StockService {
     /** FR-RET-08: records the counts and the balance each is compared with; nothing moves yet. */
     @Transactional
     Stocktake createStocktake(StocktakeRequest r) {
-        UUID branch = branches.resolve("retail.stocktake.commit", r.branchId());
+        UUID branch = branches.resolveStocking("retail.stocktake.commit", r.branchId());
         Set<UUID> seen = new HashSet<>();
         List<FieldProblem> problems = new ArrayList<>();
         for (int i = 0; i < r.lines().size(); i++) {
@@ -332,6 +342,9 @@ class StockService {
                     "Stock-take committed",
                     "This stock-take has been committed already.");
         }
+        // A draft made before the branch was closed or marked as not stocking must not write stock there (issue #329,
+        // ADR-041).
+        branches.requireStocks(s.branchId(), "branch_id");
         List<StocktakeLine> lines = new ArrayList<>(s.lines());
         lines.sort(Comparator.comparing(StocktakeLine::productId));
         List<Movement> movements = new ArrayList<>();

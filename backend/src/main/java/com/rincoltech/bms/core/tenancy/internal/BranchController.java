@@ -44,7 +44,19 @@ class BranchController {
     @Schema(name = "UpdateBranchRequest", description = "Omitted fields are unchanged. The code never changes.")
     record UpdateBranchRequest(
             @Size(min = 1, max = 200) String name,
-            @Size(max = 200) String location) {}
+            @Size(max = 200) String location,
+
+            @Schema(
+                    description = "false marks a branch that keeps no goods (a head office): no sales, restocks, "
+                            + "transfers or stock adjustments there (422 branch_not_stocking). Refused with "
+                            + "branch_still_has_stock while goods or a transfer on its way remain.")
+            Boolean stocksGoods) {}
+
+    @Schema(
+            name = "CloseBranchRequest",
+            description = "The reason is required only when the branch still holds stock "
+                    + "or has transfers on their way (422 branch_close_needs_reason says which).")
+    record CloseBranchRequest(@Size(max = 500) String reason) {}
 
     @Schema(name = "Branch")
     record BranchResponse(
@@ -53,7 +65,25 @@ class BranchController {
             String name,
             String location,
             boolean isHeadOffice,
+
+            @Schema(description = "active, or inactive for a closed branch (the owner's word is closed, ADR-041)")
             String status,
+
+            @Schema(description = "false for a branch that keeps no goods, such as a head office (ADR-041)")
+            boolean stocksGoods,
+
+            @Schema(description = "when the branch was closed; null while it is open")
+            Instant closedAt,
+
+            @Schema(description = "why it was closed, when it had to be confirmed; null otherwise")
+            String closedReason,
+
+            @Schema(description = "items still on the shelves of a closed branch; null for an open branch or when none")
+            Integer stockItems,
+
+            @Schema(description = "their value at current cost, in minor units; null for an open branch or when none")
+            Long stockValueMinor,
+
             Instant createdAt,
             Instant updatedAt,
             int version) {}
@@ -88,7 +118,9 @@ class BranchController {
 
     @PatchMapping("/{branch_id}")
     @RequiresPermission("core.branches.manage")
-    @Operation(summary = "Rename a branch or change its location (FR-BR-01)", operationId = "updateBranch")
+    @Operation(
+            summary = "Rename a branch, change its location or mark it as not stocking (FR-BR-01, ADR-041)",
+            operationId = "updateBranch")
     ResponseEntity<BranchResponse> update(
             @PathVariable("branch_id") UUID branchId,
             @RequestHeader(name = "If-Match", required = false) String ifMatch,
@@ -97,10 +129,27 @@ class BranchController {
         return ResponseEntity.ok().eTag(String.valueOf(branch.version())).body(branch);
     }
 
-    @PostMapping("/{branch_id}/deactivate")
+    @PostMapping("/{branch_id}/close")
     @RequiresPermission("core.branches.manage")
-    @Operation(summary = "Deactivate a branch (FR-BR-01)", operationId = "deactivateBranch")
-    BranchResponse deactivate(@PathVariable("branch_id") UUID branchId) {
-        return service.deactivate(branchId);
+    @Operation(
+            summary = "Close a branch and keep its history (FR-BR-01, ADR-041); 422 branch_close_needs_reason while "
+                    + "stock or transfers on their way remain and no reason is sent",
+            operationId = "closeBranch")
+    ResponseEntity<BranchResponse> close(
+            @PathVariable("branch_id") UUID branchId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody(required = false) CloseBranchRequest request) {
+        BranchResponse branch = service.close(branchId, ifMatch, request == null ? null : request.reason());
+        return ResponseEntity.ok().eTag(String.valueOf(branch.version())).body(branch);
+    }
+
+    @PostMapping("/{branch_id}/reopen")
+    @RequiresPermission("core.branches.manage")
+    @Operation(summary = "Reopen a closed branch (FR-BR-01, ADR-041)", operationId = "reopenBranch")
+    ResponseEntity<BranchResponse> reopen(
+            @PathVariable("branch_id") UUID branchId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch) {
+        BranchResponse branch = service.reopen(branchId, ifMatch);
+        return ResponseEntity.ok().eTag(String.valueOf(branch.version())).body(branch);
     }
 }

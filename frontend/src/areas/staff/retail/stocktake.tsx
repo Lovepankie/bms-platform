@@ -6,7 +6,7 @@ import { matchesSearch, useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type Stocktake, type StocktakeLine } from '../../../api/retail';
 import { milliOf, parseCount, showQty } from './maths';
 import { SkeletonList } from '../../../components/states';
-import { BranchRequired, CategoryLabel, Gate, Note, Problem, useSingleBranch } from './ui';
+import { BranchRequired, CategoryLabel, Gate, Note, Problem, useStockingBranch } from './ui';
 import { needsOf } from './permissions';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
@@ -122,11 +122,11 @@ function CountSheet({ branchId }: { branchId: string }) {
 }
 
 export function StocktakePage() {
-  const { branchId, branchName } = useSingleBranch();
+  const { branchId, branchName } = useStockingBranch();
   return (
     <Gate screen="stocktake" title="Stock-take">
       {branchId === null ? (
-        <BranchRequired permissions={needsOf('stocktake')} />
+        <BranchRequired permissions={needsOf('stocktake')} stocking />
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>

@@ -93,7 +93,7 @@ export function OrderFormView({ form, suppliers, branches, picker, busy, error, 
 /** The branches a purchase order may be for: where the session holds the restock permission. The form's default is the branch chosen at the top. */
 export function useOrderBranches(): { branches: { id?: string; name?: string; code?: string }[]; defaultBranch: string } {
   const { me, branch } = useStaff();
-  const branches = branchesWhere(me, PURCHASE_CREATE).filter((b) => b.id);
+  const branches = branchesWhere(me, PURCHASE_CREATE).filter((b) => b.id && b.stocks_goods !== false);
   const defaultBranch = branches.find((b) => b.id === branch)?.id ?? (branches.length === 1 ? (branches[0]?.id ?? '') : '');
   return { branches, defaultBranch };
 }

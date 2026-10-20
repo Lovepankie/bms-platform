@@ -447,6 +447,81 @@ class RetailImportIT extends IntegrationTest {
                 .isEqualTo(1);
     }
 
+    // JUSTIFICATION-A3: a new test for the importer's refusal of a balance at a branch that keeps no goods (issue
+    // #329).
+    /** Issue #329: a balance for a branch that keeps no goods is refused and reported; the other branch's balance is written. */
+    @Test
+    void refusesABalanceForABranchThatKeepsNoGoods(@TempDir Path dir) throws IOException {
+        owner.sql("UPDATE branches SET stocks_goods = false WHERE id = ?")
+                .param(t.headOffice())
+                .update();
+        Files.writeString(dir.resolve("categories.jsonl"), "{\"name\": \"Test Category\"}\n");
+        Files.writeString(dir.resolve("units.jsonl"), "{\"name\": \"piece\"}\n");
+        Files.writeString(dir.resolve("products.jsonl"), """
+                {"code": "TN-1", "description": "Test cup one", "category": "Test Category", "unit": "piece", "cost_minor": 100, "sell_minor": 150}
+                """);
+        Files.writeString(dir.resolve("balances.jsonl"), """
+                {"branch": "HQ", "product_code": "TN-1", "qty": "5"}
+                {"branch": "BR2", "product_code": "TN-1", "qty": "3"}
+                """);
+
+        ImportReport report = importer.run(t.slug(), dir, false);
+
+        assertThat(report.failed()).as(report.render()).isFalse();
+        assertThat(report.counts("balances.jsonl")).containsExactly(2, 1, 0, 1);
+        assertThat(report.anomalies()).anyMatch(a -> a.startsWith("balances.jsonl:1: branch HQ keeps no goods"));
+        assertThat(report.checksumLine()).contains("match=yes").contains("excluded_no_goods=1");
+        assertThat(owner.sql("SELECT count(*) FROM retail_stock_balances WHERE tenant_id = ? AND branch_id = ?")
+                        .params(t.tenantId(), t.headOffice())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(owner.sql("SELECT qty FROM retail_stock_balances WHERE tenant_id = ? AND branch_id = ?")
+                        .params(t.tenantId(), t.secondBranch())
+                        .query(BigDecimal.class)
+                        .single())
+                .isEqualByComparingTo("3");
+    }
+
+    // JUSTIFICATION-A3: a second importer test for a branch that keeps no goods yet holds a balance, and for historical
+    // sales (#329).
+    /** Issue #329: a branch that keeps no goods but shows a balance after the import is flagged; its historical sales still import. */
+    @Test
+    void flagsABalanceHeldAtABranchThatKeepsNoGoods(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve("categories.jsonl"), "{\"name\": \"Test Category\"}\n");
+        Files.writeString(dir.resolve("units.jsonl"), "{\"name\": \"piece\"}\n");
+        Files.writeString(dir.resolve("products.jsonl"), """
+                {"code": "TN-2", "description": "Test cup two", "category": "Test Category", "unit": "piece", "cost_minor": 100, "sell_minor": 150}
+                """);
+        Files.writeString(dir.resolve("balances.jsonl"), """
+                {"branch": "BR2", "product_code": "TN-2", "qty": "3"}
+                """);
+        assertThat(importer.run(t.slug(), dir, false).failed()).isFalse();
+        UUID product = owner.sql("SELECT id FROM retail_products WHERE tenant_id = ? AND code = 'TN-2'")
+                .param(t.tenantId())
+                .query(UUID.class)
+                .single();
+        api.importedBalance(t.headOffice(), product, "4");
+        owner.sql("UPDATE branches SET stocks_goods = false WHERE id = ?")
+                .param(t.headOffice())
+                .update();
+        // A sale made at a branch before it stopped keeping goods, or at one that has since closed, is history and
+        // imports as before.
+        owner.sql("UPDATE branches SET status = 'inactive' WHERE id = ?")
+                .param(t.secondBranch())
+                .update();
+        Files.writeString(dir.resolve("sales.jsonl"), """
+                {"source_ref": "H1", "branch": "HQ", "product_code": "TN-2", "qty": "1", "unit_price_minor": 150, "unit_cost_minor": 100, "payment_method": "cash", "sold_at": "2026-09-01T10:00:00"}
+                {"source_ref": "H2", "branch": "BR2", "product_code": "TN-2", "qty": "1", "unit_price_minor": 150, "unit_cost_minor": 100, "payment_method": "cash", "sold_at": "2026-09-01T11:00:00"}
+                """);
+
+        ImportReport again = importer.run(t.slug(), dir, false);
+
+        assertThat(again.failed()).as(again.render()).isFalse();
+        assertThat(again.counts("sales.jsonl")).containsExactly(2, 2, 0, 0);
+        assertThat(again.anomalies()).anyMatch(a -> a.contains("branch HQ keeps no goods but holds"));
+    }
+
     /** Issue #73: the 40 character limit applies to the normal form, and an over-long one skips the row. */
     @Test
     void checksTheCodeLengthAfterNormalisation(@TempDir Path dir) throws IOException {

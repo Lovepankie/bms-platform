@@ -17,7 +17,7 @@ export type Pack = S['RetailPack'];
 export type StockRow = S['RetailStockRow'];
 export type AllBranchesRow = S['RetailAllBranchesRow'];
 export type StockBranch = S['RetailStockBranch'];
-export type AllBranchesStock = { branches: StockBranch[]; items: AllBranchesRow[] };
+export type AllBranchesStock = { branches: StockBranch[]; items: AllBranchesRow[]; closed_branches?: number };
 export type BranchRole = S['RetailBranchRole'];
 export type RetailCapabilities = S['RetailCapabilities'];
 export type CapabilityChange = S['UpdateRetailCapabilitiesRequest'];
@@ -445,7 +445,7 @@ export interface RetailApi {
   createStocktake(body: StocktakeRequest): Promise<Stocktake>;
   commitStocktake(id: string): Promise<Stocktake>;
   /** Every product with its balance in each branch the caller may read (#144). */
-  listStockAllBranches(q: { query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel; signal?: AbortSignal }): Promise<AllBranchesStock>;
+  listStockAllBranches(q: { query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel; includeClosed?: boolean; signal?: AbortSignal }): Promise<AllBranchesStock>;
   /** One branch, or every branch in the caller's scope when `branchId` is absent (#144). */
   valuation(q: { branchId?: string; asOf?: string }): Promise<Valuation>;
   /** The branches in the caller's stock scope holding a quantity above zero of anything (#103). */
@@ -656,22 +656,24 @@ const realRetail: RetailApi = {
     return rows;
   },
 
-  async listStockAllBranches({ query, categoryId, negativeOnly, level, signal }) {
+  async listStockAllBranches({ query, categoryId, negativeOnly, level, includeClosed, signal }) {
     const items: AllBranchesRow[] = [];
     let branches: StockBranch[] = [];
+    let closedBranches = 0;
     let cursor: string | undefined;
     do {
       const page = unwrap(
         await api.GET('/api/v1/retail/stock/all-branches', {
-          params: { query: { query: query || undefined, category_id: categoryId || undefined, negative_only: negativeOnly || undefined, stock_level: level, limit: PAGE, cursor } },
+          params: { query: { query: query || undefined, category_id: categoryId || undefined, negative_only: negativeOnly || undefined, stock_level: level, include_closed: includeClosed || undefined, limit: PAGE, cursor } },
           signal,
         }),
       );
       branches = page.branches ?? branches;
+      closedBranches = page.closed_branches ?? closedBranches;
       items.push(...(page.items ?? []));
       cursor = page.next_cursor;
     } while (cursor);
-    return { branches, items };
+    return { branches, items, closed_branches: closedBranches };
   },
 
   async listSales(q) {

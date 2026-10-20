@@ -149,7 +149,7 @@ Forbidden, and enforced by the module boundary test (ADR-002):
 
 ### 5.4.3 Registries: how the core calls the verticals without depending on them
 
-The core needs to run vertical behaviour in five places. Each is a registry the vertical
+The core needs to run vertical behaviour in several places. Each is a registry the vertical
 registers into through its manifest at startup:
 
 | Registry (core) | What the vertical registers | Example |
@@ -158,6 +158,7 @@ registers into through its manifest at startup:
 | Module settings group | A tenant settings group the core stores as opaque jsonb, validates through the vertical and lists in `/me` (ADR-033; built: `retail.capabilities`, supplied by `retail.manifest`) | Retail capability flags |
 | Approval actions | One `ApprovalAction` bean per action type it owns (ADR-015) | `loan_disbursement` executes the disbursement |
 | Branch deactivation guards | Whether a branch still has open accounts of the module | Loans, savings, investments |
+| Branch closing checks | What the module still holds at a branch before it is closed or marked as not stocking (issue #329, ADR-041): read only, never moves or posts | Retail: stock on hand with its value, transfers on the road |
 | Import templates | Parser, classifier, normaliser, committer | `pilot_loan_register_v1` |
 | Payment purposes | Booking handler per purpose | `lending.loan_repayment` books a repayment (built in #216: `LoanRepaymentPurpose` in `lending.loans`, through `LoanServicing`); `lending.savings_deposit` books a deposit (built in #219: `SavingsDepositPurpose` in `lending.savings`, through `SavingsServicing`) |
 | Report definitions | Report key, parameters, permission, query | `lending.par` |

@@ -106,7 +106,7 @@ export function RestockForm({ onSaved }: { onSaved?: (p: Purchase, context: Rest
   const { me, branch } = useStaff();
   const canProfit = useProfitAccess();
   const queryClient = useQueryClient();
-  const branches = (me.branches ?? []).filter((b) => b.id);
+  const branches = (me.branches ?? []).filter((b) => b.id && b.stocks_goods !== false);
   const { key, draft, setDraft, finish, discard } = usePersistedDraft<RestockDraft>(`restock:${me.user_id ?? ''}`, {
     supplierId: '', newSupplier: '', purchasedOn: businessToday(), method: 'cash', lines: [],
   });

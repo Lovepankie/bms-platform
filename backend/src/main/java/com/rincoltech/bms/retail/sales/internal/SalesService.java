@@ -150,7 +150,7 @@ class SalesService {
 
     /** FR-RET-04, FR-RET-05, FR-RET-11. */
     Sale record(SaleRequest r) {
-        UUID branch = branches.resolve("retail.sale.create", r.branchId());
+        UUID branch = branches.resolveStocking("retail.sale.create", r.branchId());
         // ADR-033: a store never sells; with branch_roles off every branch acts as both.
         roles.requireMaySell(branch);
         LocalDate today = clock.today(tenant.profile().timezone());
@@ -495,7 +495,7 @@ class SalesService {
     @Transactional(readOnly = true)
     Resolution resolve(ResolveRequest r) {
         capabilities.require(RetailCapabilities.PRICE_LISTS);
-        UUID branch = branches.resolve("retail.sale.create", r.branchId());
+        UUID branch = branches.resolveStocking("retail.sale.create", r.branchId());
         // The same refusal as the sale: a store never sells, so it is not priced either (ADR-033).
         roles.requireMaySell(branch);
         LocalDate today = clock.today(tenant.profile().timezone());

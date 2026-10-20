@@ -1,8 +1,11 @@
 package com.rincoltech.bms.core.tenancy.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
+import com.rincoltech.bms.core.tenancy.BranchClosingCheck;
+import com.rincoltech.bms.core.tenancy.BranchClosingCheck.Finding;
 import com.rincoltech.bms.core.tenancy.BranchDeactivationGuard;
 import com.rincoltech.bms.core.tenancy.BranchProvisioning;
+import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.PlanLimits;
 import com.rincoltech.bms.core.tenancy.internal.BranchController.BranchResponse;
 import com.rincoltech.bms.core.tenancy.internal.BranchController.CreateBranchRequest;
@@ -17,6 +20,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,20 +37,30 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class BranchService implements BranchProvisioning {
 
-    private static final String COLUMNS =
-            "id, code, name, location, is_head_office, status, created_at, updated_at, version";
+    private static final String COLUMNS = "id, code, name, location, is_head_office, status, stocks_goods, closed_at,"
+            + " closed_reason, created_at, updated_at, version";
     private static final String READ = "core.branches.read";
 
     private final JdbcClient jdbc;
     private final PlanLimits planLimits;
     private final AuditLog audit;
     private final List<BranchDeactivationGuard> guards;
+    private final List<BranchClosingCheck> checks;
+    private final CurrentTenant tenant;
 
-    BranchService(JdbcClient jdbc, PlanLimits planLimits, AuditLog audit, List<BranchDeactivationGuard> guards) {
+    BranchService(
+            JdbcClient jdbc,
+            PlanLimits planLimits,
+            AuditLog audit,
+            List<BranchDeactivationGuard> guards,
+            List<BranchClosingCheck> checks,
+            CurrentTenant tenant) {
         this.jdbc = jdbc;
         this.planLimits = planLimits;
         this.audit = audit;
         this.guards = List.copyOf(guards);
+        this.checks = List.copyOf(checks);
+        this.tenant = tenant;
     }
 
     @Transactional(readOnly = true)
@@ -58,7 +72,34 @@ class BranchService implements BranchProvisioning {
                 .list()
                 .stream()
                 .filter(b -> principal.may(READ, b.id()))
+                .map(this::withHoldings)
                 .toList();
+    }
+
+    /** A closed branch shows what is still on its shelves (ADR-041); an open one, or an empty one, shows nothing. */
+    private BranchResponse withHoldings(BranchResponse b) {
+        if ("active".equals(b.status())) {
+            return b;
+        }
+        return findings(b.id()).stream()
+                .filter(f -> f.kind().equals("stock"))
+                .findFirst()
+                .map(f -> new BranchResponse(
+                        b.id(),
+                        b.code(),
+                        b.name(),
+                        b.location(),
+                        b.isHeadOffice(),
+                        b.status(),
+                        b.stocksGoods(),
+                        b.closedAt(),
+                        b.closedReason(),
+                        f.count(),
+                        f.valueMinor(),
+                        b.createdAt(),
+                        b.updatedAt(),
+                        b.version()))
+                .orElse(b);
     }
 
     @Transactional(readOnly = true)
@@ -110,53 +151,209 @@ class BranchService implements BranchProvisioning {
     @Transactional
     BranchResponse update(UUID branchId, String ifMatch, UpdateBranchRequest request) {
         int expected = Versions.fromIfMatch(ifMatch);
-        BranchResponse before = lockForUpdate(branchId);
+        Principal principal = CurrentPrincipal.require();
+        BranchResponse seen = find(branchId)
+                .filter(b -> principal.may("core.branches.manage", b.id()))
+                .orElseThrow(ApiException::notFound);
+        // Only a change of the stocking flag takes the explicit row lock that stock writes queue behind (ADR-041); a
+        // rename or a
+        // new location must not hold up a sale, so it relies on the version check of its own update.
+        boolean flagChange = request.stocksGoods() != null && request.stocksGoods() != seen.stocksGoods();
+        BranchResponse before = flagChange ? lockForUpdate(branchId) : seen;
         if (before.version() != expected) {
             throw Versions.conflict(before.version());
         }
         String name = request.name() == null ? before.name() : request.name().trim();
         String location = request.location() == null ? before.location() : request.location();
-        jdbc.sql("UPDATE branches SET name = ?, location = ?, updated_at = now(), version = version + 1 WHERE id = ?")
-                .params(name, location, branchId)
+        boolean stocks = request.stocksGoods() == null ? before.stocksGoods() : request.stocksGoods();
+        if (before.stocksGoods() && !stocks) {
+            refuseWhileGoodsRemain(before);
+        }
+        int changed = jdbc.sql("""
+                        UPDATE branches SET name = ?, location = ?, stocks_goods = ?, updated_at = now(),
+                               version = version + 1 WHERE id = ? AND version = ?
+                        """)
+                .params(name, location, stocks, branchId, before.version())
                 .update();
+        if (changed == 0) {
+            throw Versions.conflict(find(branchId).map(BranchResponse::version).orElse(before.version()));
+        }
         audit.record(new AuditLog.Entry(
                 "core.branch.updated",
                 "core.branch",
                 branchId,
                 branchId,
-                values(before.name(), before.location()),
-                values(name, location)));
+                values(before.name(), before.location(), before.stocksGoods()),
+                values(name, location, stocks)));
         return find(branchId).orElseThrow();
     }
 
+    // JUSTIFICATION-A3: close and reopen replace deactivate and add the findings check, the reason and the plan limit
+    // (ADR-041).
+    /**
+     * Closes a branch (ADR-041). Nothing is deleted or posted: the branch leaves pickers, defaults and forms, and its history,
+     * closing stock and sales stay for reports. Stock still held, or a transfer still on its way, is refused unless the
+     * administrator gives a reason; the audit row then carries the figures that were shown.
+     */
     @Transactional
-    BranchResponse deactivate(UUID branchId) {
+    BranchResponse close(UUID branchId, String ifMatch, String reason) {
+        int expected = Versions.fromIfMatch(ifMatch);
         BranchResponse before = lockForUpdate(branchId);
+        if (before.version() != expected) {
+            throw Versions.conflict(before.version());
+        }
         if (before.isHeadOffice()) {
-            throw ApiException.rule("head_office_required", "The head office cannot be deactivated.");
+            throw ApiException.rule(
+                    "head_office_required",
+                    "The head office cannot be closed. If it keeps no goods, mark it as not stocking instead.");
         }
         if (!"active".equals(before.status())) {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "invalid_status_transition",
                     "Invalid status transition",
-                    "The branch is already inactive.");
+                    "The branch is already closed.");
         }
         if (guards.stream().anyMatch(g -> g.hasOpenAccounts(branchId))) {
             throw ApiException.rule(
                     "branch_has_open_accounts", "The branch still has open loans, savings or investments.");
         }
-        jdbc.sql("UPDATE branches SET status = 'inactive', updated_at = now(), version = version + 1 WHERE id = ?")
-                .param(branchId)
-                .update();
+        String why = reason == null || reason.isBlank() ? null : reason.trim();
+        List<Finding> findings = findings(branchId);
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("status", "inactive");
+        if (!findings.isEmpty()) {
+            Map<String, Object> facts = facts(findings);
+            if (why == null) {
+                throw new ApiException(
+                        HttpStatus.UNPROCESSABLE_CONTENT,
+                        "branch_close_needs_reason",
+                        "Confirm closing this branch",
+                        describe(before, findings)
+                                + " Closing keeps all of it on record and posts nothing, but nobody can sell, restock"
+                                + " or transfer there afterwards. To close it anyway, say why.",
+                        List.of(),
+                        facts);
+            }
+            after.put("reason", why);
+            after.putAll(facts);
+        }
+        jdbc.sql("""
+                        UPDATE branches SET status = 'inactive', closed_at = now(), closed_reason = ?, updated_at = now(),
+                               version = version + 1 WHERE id = ?
+                        """).params(why, branchId).update();
         audit.record(new AuditLog.Entry(
-                "core.branch.deactivated",
+                "core.branch.closed", "core.branch", branchId, branchId, Map.of("status", "active"), after));
+        return find(branchId).orElseThrow();
+    }
+
+    @Transactional
+    BranchResponse reopen(UUID branchId, String ifMatch) {
+        int expected = Versions.fromIfMatch(ifMatch);
+        BranchResponse before = lockForUpdate(branchId);
+        if (before.version() != expected) {
+            throw Versions.conflict(before.version());
+        }
+        if ("active".equals(before.status())) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "invalid_status_transition",
+                    "Invalid status transition",
+                    "The branch is already open.");
+        }
+        long active = jdbc.sql("SELECT count(*) FROM branches WHERE status = 'active'")
+                .query(Long.class)
+                .single();
+        planLimits.checkRoomFor(PlanLimits.MAX_BRANCHES, active);
+        jdbc.sql("""
+                        UPDATE branches SET status = 'active', closed_at = NULL, closed_reason = NULL, updated_at = now(),
+                               version = version + 1 WHERE id = ?
+                        """).param(branchId).update();
+        audit.record(new AuditLog.Entry(
+                "core.branch.reopened",
                 "core.branch",
                 branchId,
                 branchId,
-                Map.of("status", "active"),
-                Map.of("status", "inactive")));
+                Map.of("status", "inactive"),
+                Map.of("status", "active")));
         return find(branchId).orElseThrow();
+    }
+
+    private List<Finding> findings(UUID branchId) {
+        return checks.stream().flatMap(c -> c.findings(branchId).stream()).toList();
+    }
+
+    /** Marking a branch as not stocking needs its shelves empty and nothing on the road: the stock would be stranded. */
+    private void refuseWhileGoodsRemain(BranchResponse branch) {
+        List<Finding> findings = findings(branch.id());
+        if (findings.isEmpty()) {
+            return;
+        }
+        throw new ApiException(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "branch_still_has_stock",
+                "This branch still has goods",
+                describe(branch, findings)
+                        + " Move the stock to a shop, receive or cancel the transfers and finish the stock-takes first,"
+                        + " then mark it as not stocking.",
+                List.of(),
+                facts(findings));
+    }
+
+    private String describe(BranchResponse branch, List<Finding> findings) {
+        String currency = tenant.profile().currency();
+        StringBuilder words = new StringBuilder(branch.name());
+        boolean first = true;
+        for (Finding f : findings) {
+            words.append(first ? " " : " and ");
+            first = false;
+            if (f.kind().equals("stock")) {
+                words.append("still holds stock worth ")
+                        .append(money(f.valueMinor(), currency))
+                        .append(" (")
+                        .append(f.count())
+                        .append(f.count() == 1 ? " item)" : " items)");
+            } else if (f.kind().equals("open_stocktakes")) {
+                words.append("has ")
+                        .append(f.count())
+                        .append(f.count() == 1 ? " stock-take" : " stock-takes")
+                        .append(" started and not finished");
+            } else {
+                words.append("has ")
+                        .append(f.count())
+                        .append(f.count() == 1 ? " transfer" : " transfers")
+                        .append(" still on the way");
+            }
+        }
+        return words.append('.').toString();
+    }
+
+    /** What the screen shows next to the warning, as figures, so it never has to read the words. */
+    private Map<String, Object> facts(List<Finding> findings) {
+        Map<String, Object> facts = new LinkedHashMap<>();
+        facts.put("currency", tenant.profile().currency());
+        for (Finding f : findings) {
+            if (f.kind().equals("stock")) {
+                facts.put("stock_items", f.count());
+                facts.put("stock_value_minor", f.valueMinor());
+            } else if (f.kind().equals("open_stocktakes")) {
+                facts.put("open_stocktakes", f.count());
+            } else {
+                facts.put("transfers_in_flight", f.count());
+                facts.put("transfers_in_flight_value_minor", f.valueMinor());
+            }
+        }
+        return facts;
+    }
+
+    /** Thousands separated with the currency code first; shillings have no minor unit. */
+    private static String money(long minor, String currency) {
+        if ("UGX".equals(currency)) {
+            return currency + " " + String.format(Locale.ENGLISH, "%,d", minor);
+        }
+        long abs = Math.abs(minor);
+        return currency + " " + (minor < 0 ? "-" : "")
+                + String.format(Locale.ENGLISH, "%,d.%02d", abs / 100, abs % 100);
     }
 
     private BranchResponse lockForUpdate(UUID branchId) {
@@ -176,10 +373,11 @@ class BranchService implements BranchProvisioning {
                 .optional();
     }
 
-    private static Map<String, Object> values(String name, String location) {
+    private static Map<String, Object> values(String name, String location, boolean stocksGoods) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("name", name);
         m.put("location", location);
+        m.put("stocks_goods", stocksGoods);
         return m;
     }
 
@@ -191,6 +389,11 @@ class BranchService implements BranchProvisioning {
                 rs.getString("location"),
                 rs.getBoolean("is_head_office"),
                 rs.getString("status"),
+                rs.getBoolean("stocks_goods"),
+                instant(rs.getTimestamp("closed_at")),
+                rs.getString("closed_reason"),
+                null,
+                null,
                 instant(rs.getTimestamp("created_at")),
                 instant(rs.getTimestamp("updated_at")),
                 rs.getInt("version"));

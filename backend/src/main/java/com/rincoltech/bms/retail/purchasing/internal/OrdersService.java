@@ -112,7 +112,7 @@ class OrdersService {
     }
 
     private Order record(OrderRequest r) {
-        UUID branch = branches.resolve(PERMISSION, r.branchId());
+        UUID branch = branches.resolveStocking(PERMISSION, r.branchId());
         Draft d = plan(r);
         UUID id = UUID.randomUUID();
         Numbered no = lines.next("PO", "retail_purchase_order_no", branch);

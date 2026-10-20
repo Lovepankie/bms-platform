@@ -75,7 +75,7 @@ function Qty({ qty, unit, negative }: { qty: string; unit?: string; negative?: b
 /** The subtotal of a group of all-branches rows: the total quantity and what it holds at the selling price. */
 const totalsSubtotal = (rows: AllBranchesStock['items']) => stockSubtotal(rows.map((r) => ({ qty: r.total_qty, unit: r.unit, sell_minor: r.sell_minor })));
 
-const branchName = (b: { code?: string; name?: string }) => branchLabel(b);
+const branchName = (b: { code?: string; name?: string; closed?: boolean }) => `${branchLabel(b)}${b.closed ? ' (closed)' : ''}`;
 
 /** All branches on a wide screen: a column per branch and a total, the negative flag on each cell. */
 export function AllBranchesTable({ data, showCost: mayCost, searching = false, filterKey = '', pending = false }: { data: AllBranchesStock; showCost: boolean } & Narrowing) {
@@ -187,6 +187,8 @@ export function StockPage() {
   const [negativeOnly, setNegativeOnly] = useState(false);
   const [categoryId, setCategoryId] = useState('');
   const [level, setLevel] = useState<StockLevel | ''>('');
+  // Closed branches that still hold stock are left out of the whole-business list unless asked for (#329).
+  const [showClosed, setShowClosed] = useState(false);
   const categories = useQuery({ queryKey: ['retail', 'categories'], queryFn: () => retail.listCategories() });
   const one = useQuery({
     queryKey: ['retail', 'stock', branchId, query, categoryId, negativeOnly, level],
@@ -195,8 +197,8 @@ export function StockPage() {
     placeholderData: keepPreviousData,
   });
   const many = useQuery({
-    queryKey: ['retail', 'stock', 'all-branches', query, categoryId, negativeOnly, level],
-    queryFn: ({ signal }) => retail.listStockAllBranches({ query, categoryId, negativeOnly, level: level || undefined, signal }),
+    queryKey: ['retail', 'stock', 'all-branches', query, categoryId, negativeOnly, level, showClosed],
+    queryFn: ({ signal }) => retail.listStockAllBranches({ query, categoryId, negativeOnly, level: level || undefined, includeClosed: showClosed, signal }),
     enabled: all,
     placeholderData: keepPreviousData,
   });
@@ -225,6 +227,12 @@ export function StockPage() {
         <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={negativeOnly} onChange={(e) => setNegativeOnly(e.target.checked)} />
         Show only negative stock
       </label>
+      {all && (showClosed || (many.data?.closed_branches ?? 0) > 0) && (
+        <label style={{ fontWeight: 400 }}>
+          <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
+          {showClosed ? 'Showing closed branches' : `${many.data?.closed_branches ?? 0} closed ${many.data?.closed_branches === 1 ? 'shop' : 'shops'} with stock hidden. Show them`}
+        </label>
+      )}
       {!all && branchId === null && <BranchRequired permissions={needsOf('stock')} />}
       {result.isPending && (all || branchId !== null) && <SkeletonList label="Loading stock" />}
       <Problem error={result.error} />

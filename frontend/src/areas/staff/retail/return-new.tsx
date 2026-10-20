@@ -37,7 +37,7 @@ export function ReturnRow({ line, row, back, branches, onChange }: {
   line: SaleLine;
   row: RowForm;
   back: Back;
-  branches: { id?: string; name?: string; code?: string }[];
+  branches: { id?: string; name?: string; code?: string; stocks_goods?: boolean }[];
   onChange: (row: RowForm) => void;
 }) {
   const id = line.id ?? '';
@@ -80,7 +80,7 @@ export function ReturnRow({ line, row, back, branches, onChange }: {
                   <label htmlFor={`branch-${id}`}>Put them back at</label>
                   <select id={`branch-${id}`} value={row.restockBranchId} onChange={(e) => onChange({ ...row, restockBranchId: e.target.value })}>
                     <option value="">Choose a branch or store</option>
-                    {branches.map((b) => <option key={b.id} value={b.id}>{branchLabel(b)}</option>)}
+                    {branches.filter((b) => b.stocks_goods !== false).map((b) => <option key={b.id} value={b.id}>{branchLabel(b)}</option>)}
                   </select>
                 </>
               )}
