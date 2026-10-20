@@ -21,6 +21,7 @@ Closes #<!-- task or chore number -->
 - [ ] CI is green (tests on real PostgreSQL, isolation and boundary tests, guards)
 - [ ] Docs updated in this pull request: SDD chapter, data model, endpoint catalogue, permission matrix, `docs/workspace.dsl`, ADR (whichever apply)
 - [ ] Migrations are expand and contract
+- [ ] A new or renamed route has its spotlight tour (`frontend/src/tour/`, version bumped for a tour I changed), breadcrumbs and cross links, or this body has a line `TOUR-EXEMPT: <reason>` (passes `tour-guard` only; `route-coverage.test.ts` still needs the route in its `NO_TOUR` list with the reason; ADR-049)
 - [ ] No em dashes or en dashes; no real client or borrower data; no secrets
 - [ ] Commit messages follow PROCESS.md section 5; branch follows section 4
 

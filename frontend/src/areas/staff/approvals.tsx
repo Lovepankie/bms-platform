@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
+import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { type Approval, api, listPendingApprovals, problemOf } from '../../api/client';
 import { branchFilter } from '../../auth/branch';
@@ -62,7 +62,15 @@ function Row({ item, id }: { item: Approval; id: string }) {
 
   return (
     <tr>
-      <td data-label="Action"><What item={item} /></td>
+      <td data-label="Action">
+        <What item={item} />
+        {item.action_type === 'collateral_release' && item.subject_id && (
+          <>
+            {' '}
+            <Link to="/staff/lending/collateral/$collateralId" params={{ collateralId: item.subject_id }}>Open the item</Link>
+          </>
+        )}
+      </td>
       <td data-label="Amount" className="num">{item.amount_minor != null && item.currency ? formatMinor(item.amount_minor, item.currency) : ''}</td>
       <td data-label="Requested by">{item.requested_by_name ?? item.requested_by}</td>
       <td data-label="Requested at">{item.requested_at ? new Date(item.requested_at).toLocaleString() : ''}</td>
@@ -92,7 +100,7 @@ function Row({ item, id }: { item: Approval; id: string }) {
   );
 }
 
-function Approvals() {
+export function Approvals() {
   const { branch } = useStaff();
   const pending = useQuery({
     queryKey: ['approvals', branch],
@@ -104,6 +112,7 @@ function Approvals() {
   return (
     <main>
       <h1>Approvals</h1>
+      <div data-tour="approvals-list">
       {pending.isPending && <SkeletonList label="Loading approvals" />}
       {pending.isError && <p role="alert" className="alert alert-danger">Could not load approvals.</p>}
       {pending.data && items.length === 0 && <EmptyState art="nothingWaiting" title="Nothing waiting.">Requests for your approval appear here.</EmptyState>}
@@ -114,9 +123,9 @@ function Approvals() {
               <tr>
                 <th>Action</th>
                 <th className="num">Amount</th>
-                <th>Requested by</th>
+                <th data-tour="approvals-who">Requested by</th>
                 <th>Requested at</th>
-                <th>Decision</th>
+                <th data-tour="approvals-decision">Decision</th>
               </tr>
             </thead>
             <tbody>
@@ -125,6 +134,7 @@ function Approvals() {
           </table>
         </div>
       )}
+      </div>
     </main>
   );
 }

@@ -38,7 +38,7 @@ export function SavingsGate({ title, children }: { title: string; children: Reac
       <h1>{title}</h1>
       {showSavings(me) ? (
         <>
-          <nav className="sv-nav" aria-label="Savings">
+          <nav className="sv-nav" aria-label="Savings" data-tour="savings-nav">
             <Link to="/staff/lending/savings" activeOptions={{ exact: true }}>Accounts</Link>
             {mayManageProducts(me) && <Link to="/staff/lending/savings/products">Products</Link>}
           </nav>
@@ -76,7 +76,7 @@ export function AccountRows({ items, term = '' }: { items: SavingsAccount[]; ter
   );
 }
 
-function Accounts() {
+export function Accounts() {
   const { branch } = useStaff();
   const search = useLiveSearch();
   const [status, setStatus] = useState('');
@@ -92,10 +92,10 @@ function Accounts() {
   const fetching = pages.isPlaceholderData || (pages.isFetching && !pages.isFetchingNextPage);
   return (
     <SavingsGate title="Savings">
-      <form role="search" className="ln-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
+      <form role="search" className="ln-search" data-tour="savings-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
         <SearchBox id="sv-q" label="Account number, member number, name or phone" search={search} fetching={fetching} count={pages.data ? items.length : undefined} more={pages.hasNextPage} />
         <label htmlFor="sv-status">Status</label>
-        <select id="sv-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select id="sv-status" data-tour="savings-status" value={status} onChange={(e) => setStatus(e.target.value)}>
           {SAVINGS_STATUSES.map((s) => (
             <option key={s} value={s}>
               {s === '' ? 'All' : words(s)}

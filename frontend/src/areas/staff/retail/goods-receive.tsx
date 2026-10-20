@@ -82,27 +82,31 @@ export function ReceiveFormView({ form, blind, order, suppliers, branches, picke
   const setLine = (i: number, line: ReceiveLineForm) => onChange({ ...form, lines: form.lines.map((l, n) => (n === i ? line : l)) });
   return (
     <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!problem && !busy) onSubmit(); }} data-tour="receive-form">
-      {blind ? (
-        <SupplierField id="receive-supplier" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId })} />
-      ) : (
-        <p><strong>Supplier:</strong> {order?.supplier_name}</p>
-      )}
-      <BranchField id="receive-branch" label="The goods go into" value={form.branchId} branches={branches} onChange={(branchId) => onChange({ ...form, branchId })} />
-      <label htmlFor="receive-date">Received on</label>
-      <input id="receive-date" type="date" value={form.receivedOn} onChange={(e) => onChange({ ...form, receivedOn: e.target.value })} />
-      <label htmlFor="receive-ref">Supplier&apos;s delivery note number (optional)</label>
-      <input id="receive-ref" value={form.deliveryRef} maxLength={60} onChange={(e) => onChange({ ...form, deliveryRef: e.target.value })} />
+      <div className="stack" data-tour="receive-who">
+        {blind ? (
+          <SupplierField id="receive-supplier" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId })} />
+        ) : (
+          <p><strong>Supplier:</strong> {order?.supplier_name}</p>
+        )}
+        <BranchField id="receive-branch" label="The goods go into" value={form.branchId} branches={branches} onChange={(branchId) => onChange({ ...form, branchId })} />
+        <label htmlFor="receive-date">Received on</label>
+        <input id="receive-date" type="date" value={form.receivedOn} onChange={(e) => onChange({ ...form, receivedOn: e.target.value })} />
+        <label htmlFor="receive-ref">Supplier&apos;s delivery note number (optional)</label>
+        <input id="receive-ref" value={form.deliveryRef} maxLength={60} onChange={(e) => onChange({ ...form, deliveryRef: e.target.value })} />
+      </div>
       <label htmlFor="receive-note">Note (optional)</label>
       <input id="receive-note" value={form.note} maxLength={300} onChange={(e) => onChange({ ...form, note: e.target.value })} />
-      <label>
-        <input type="checkbox" checked={form.hold === true} onChange={(e) => onChange({ ...form, hold: e.target.checked })} />
-        <span>Hold until the landed cost is in</span>
-      </label>
-      <p className="hint">Tick this when freight or duty is still to come. The delivery shows as held, not costed, until you add the landed cost or release the hold.</p>
-      {picker}
+      <div data-tour="receive-hold">
+        <label>
+          <input type="checkbox" checked={form.hold === true} onChange={(e) => onChange({ ...form, hold: e.target.checked })} />
+          <span>Hold until the landed cost is in</span>
+        </label>
+        <p className="hint">Tick this when freight or duty is still to come. The delivery shows as held, not costed, until you add the landed cost or release the hold.</p>
+      </div>
+      {picker && <div data-tour="receive-items">{picker}</div>}
       <h2>What arrived</h2>
       {form.lines.length === 0 && <p className="empty-state">{blind ? 'No items yet. Find an item above and add it.' : 'Everything on this order has arrived.'}</p>}
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+      <ul style={{ listStyle: 'none', padding: 0 }} data-tour="receive-lines">
         {form.lines.map((l, i) => (
           <LineCard key={l.key} line={l} index={i} order={order} onChange={(line) => setLine(i, line)} onRemove={blind ? () => onChange({ ...form, lines: form.lines.filter((_, n) => n !== i) }) : undefined} />
         ))}
@@ -110,7 +114,7 @@ export function ReceiveFormView({ form, blind, order, suppliers, branches, picke
       <p className="rt-total" aria-live="polite" data-testid="receive-total">Worth {money(receiveTotal(form.lines))}</p>
       {problem && form.lines.length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || busy}>{busy ? 'Saving' : 'Save goods received'}</button>
+      <button type="submit" className="rt-primary" disabled={problem !== null || busy} data-tour="receive-save">{busy ? 'Saving' : 'Save goods received'}</button>
     </form>
   );
 }

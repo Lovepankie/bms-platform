@@ -488,7 +488,7 @@ output changed.
   and a loan officer, all fabricated; the loan page as an approved and an active loan, so both the
   payout and the payment buttons are checked) and fails when a `data-tour` anchor is missing;
   `tour/spotlight.test.tsx` checks the dialog semantics, the live region and that no style
-  attribute is written. `FirstRunIT` proves that accepting signs the user in only under the
+  attribute is written; `tour/tours-*.test.tsx` do the same for the page tours of each slice through the shared `tour/test-kit.tsx`, `tour/route-coverage.test.ts` fails when a staff route has no page tour (ADR-049), and `.github/scripts/test_tour_guard.py` runs `tour_guard.py` in a scratch git repository (a new or renamed route needs a tour change or a `TOUR-EXEMPT` line; a removed route, a test file or a change outside the frontend does not). `FirstRunIT` proves that accepting signs the user in only under the
   sign-in rules and that tour progress is per user.
 - Bundle budget check for the member area (NFR-PERF-06).
 - Accessibility checks on key screens (NFR-ACC-01).

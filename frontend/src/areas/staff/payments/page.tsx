@@ -20,7 +20,7 @@ function When({ iso }: { iso: string | null }) {
 export function AccountStatus({ account }: { account: MerchantAccount }) {
   const badge = account.status === 'verified' ? 'badge badge-success' : account.status === 'failed' ? 'badge badge-danger' : 'badge';
   return (
-    <section className="rt-card stack" aria-labelledby="receive-status">
+    <section className="rt-card stack" aria-labelledby="receive-status" data-tour="payments-status">
       <h2 id="receive-status">Your payment account</h2>
       <p>
         <span className={badge}>{STATUS_WORDS[account.status]}</span>
@@ -73,7 +73,7 @@ export function CredentialsForm({ account, busy, error, onSave }: {
   const codeBad = code === '' ? null : codeProblem(code);
   const ready = key !== '' && secret !== '' && !credentialProblem(key) && !credentialProblem(secret) && !codeProblem(code);
   return (
-    <section className="rt-card stack" aria-labelledby="receive-form">
+    <section className="rt-card stack" aria-labelledby="receive-form" data-tour="payments-credentials">
       <h2 id="receive-form">{account.credentials_saved ? 'Change the key and secret' : 'Enter the key and secret'}</h2>
       <p className="hint">
         You find both in your own Pesapal account, under the API keys of your business. The secret cannot be shown again after you save it.
@@ -207,14 +207,14 @@ export function ReceivePaymentsPage() {
   return (
     <main className="rt ln stack">
       <h1>Receive payments</h1>
-      <p>
+      <p data-tour="payments-intro">
         Members pay by mobile money or card into <strong>your own</strong> Pesapal account. This system never holds your money.
       </p>
       {query.error && <p role="alert" className="alert alert-danger">{messageOf(query.error)}</p>}
       {!account && !query.error && <p className="loading">Loading</p>}
       {account && <AccountStatus account={account} />}
       {account && canChange && account.credentials_saved && account.status !== 'verified' && (
-        <section className="rt-card stack" aria-labelledby="receive-test">
+        <section className="rt-card stack" aria-labelledby="receive-test" data-tour="payments-test">
           <h2 id="receive-test">Test the connection</h2>
           <p className="hint">We ask Pesapal for access with your key and secret and tell it where to report payments. Nothing is charged.</p>
           {test.error && <p role="alert" className="alert alert-danger">{messageOf(test.error)}</p>}

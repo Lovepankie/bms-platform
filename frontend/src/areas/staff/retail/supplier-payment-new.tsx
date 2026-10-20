@@ -49,26 +49,30 @@ export function PaymentFormView({ form, suppliers, branches, items, owed, loadin
   const left = remainingMinor(form);
   return (
     <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!problem && !busy) onSubmit(); }} data-tour="payment-form">
-      <SupplierField id="pay-supplier" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId, amounts: {} })} />
-      {form.supplierId !== '' && loadingItems && <p className="loading">Loading</p>}
-      {form.supplierId !== '' && items && (
-        <section aria-label="What is owed">
-          {items.length === 0 ? <p className="empty-state">This supplier is owed nothing.</p> : <p data-testid="owed-total">This supplier is owed <strong>{money(owed ?? 0)}</strong>.</p>}
-          {form.allocation === 'oldest_first' && items.length > 0 && <OwedList items={items} />}
-        </section>
-      )}
-      <BranchField id="pay-branch" label="Paid from the till or bank of" value={form.branchId} branches={branches} onChange={(branchId) => onChange({ ...form, branchId })} />
-      <label htmlFor="pay-method">Paid by</label>
-      <select id="pay-method" value={form.method} onChange={(e) => onChange({ ...form, method: e.target.value as PaymentMethod })}>
-        {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-      </select>
-      <label htmlFor="pay-amount">Amount paid</label>
-      <input id="pay-amount" inputMode="numeric" value={form.amount} onChange={(e) => onChange({ ...form, amount: e.target.value })} />
+      <div className="stack" data-tour="payment-supplier">
+        <SupplierField id="pay-supplier" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId, amounts: {} })} />
+        {form.supplierId !== '' && loadingItems && <p className="loading">Loading</p>}
+        {form.supplierId !== '' && items && (
+          <section aria-label="What is owed">
+            {items.length === 0 ? <p className="empty-state">This supplier is owed nothing.</p> : <p data-testid="owed-total">This supplier is owed <strong>{money(owed ?? 0)}</strong>.</p>}
+            {form.allocation === 'oldest_first' && items.length > 0 && <OwedList items={items} />}
+          </section>
+        )}
+      </div>
+      <div className="stack" data-tour="payment-amount">
+        <BranchField id="pay-branch" label="Paid from the till or bank of" value={form.branchId} branches={branches} onChange={(branchId) => onChange({ ...form, branchId })} />
+        <label htmlFor="pay-method">Paid by</label>
+        <select id="pay-method" value={form.method} onChange={(e) => onChange({ ...form, method: e.target.value as PaymentMethod })}>
+          {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+        </select>
+        <label htmlFor="pay-amount">Amount paid</label>
+        <input id="pay-amount" inputMode="numeric" value={form.amount} onChange={(e) => onChange({ ...form, amount: e.target.value })} />
+      </div>
       <label htmlFor="pay-ref">Reference, such as a bank or mobile money number (optional)</label>
       <input id="pay-ref" value={form.reference} maxLength={60} onChange={(e) => onChange({ ...form, reference: e.target.value })} />
       <label htmlFor="pay-note">Note (optional)</label>
       <input id="pay-note" value={form.note} maxLength={300} onChange={(e) => onChange({ ...form, note: e.target.value })} />
-      <fieldset>
+      <fieldset data-tour="payment-allocation">
         <legend>What does this payment pay?</legend>
         <label>
           <input type="radio" name="pay-allocation" checked={form.allocation === 'oldest_first'} onChange={() => onChange({ ...form, allocation: 'oldest_first' })} />
@@ -102,7 +106,7 @@ export function PaymentFormView({ form, suppliers, branches, items, owed, loadin
       )}
       {problem && (form.amount.trim() !== '' || form.supplierId !== '') && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || busy}>{busy ? 'Saving' : 'Save payment'}</button>
+      <button type="submit" className="rt-primary" disabled={problem !== null || busy} data-tour="payment-save">{busy ? 'Saving' : 'Save payment'}</button>
     </form>
   );
 }

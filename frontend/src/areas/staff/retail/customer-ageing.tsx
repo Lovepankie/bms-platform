@@ -10,6 +10,7 @@ import { useStaff } from '../context';
 import { Bars, Choice, Empty, Section } from './analytics-ui';
 import { termsWords } from './account-state';
 import { canOpenAccount } from './permissions';
+import { ScreenLink } from './screen-link';
 import { Gate, Problem, money, useBranchView, useIsPhone } from './ui';
 
 // Customer ageing (customer_accounts capability, ADR-033, issue #196): what each credit buyer with a record owes, by days past
@@ -85,7 +86,7 @@ export function CustomerAgeingView({ data, rows, accounts = false }: { data: Cus
   );
 }
 
-function CustomerAgeingPage() {
+export function CustomerAgeingPage() {
   const { me } = useStaff();
   const { all, branchId, branchName } = useBranchView();
   const [top, setTop] = useState(20);
@@ -99,18 +100,23 @@ function CustomerAgeingPage() {
   return (
     <Gate screen="customerAgeing" title="Customer ageing" wide>
       <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
-      <p className="hint">What each credit buyer owes, as of today, by how late it is.</p>
-      <div className="rt-row">
+      <p className="hint" data-tour="ageing-help">What each credit buyer owes, as of today, by how late it is.</p>
+      <p><ScreenLink screen="creditSales" to="/staff/retail/credit-sales">Credit sales</ScreenLink></p>
+      <div className="rt-row" data-tour="ageing-top">
         <Choice id="ca-top" label="Rows to show" value={top} options={TOPS} onChange={setTop} />
       </div>
-      <SearchBox id="search-ageing" label="Find a buyer in this list" search={search} fetching={false} count={report.data ? rows.length : undefined} />
+      <div data-tour="ageing-search">
+        <SearchBox id="search-ageing" label="Find a buyer in this list" search={search} fetching={false} count={report.data ? rows.length : undefined} />
+      </div>
       {report.isPending && <SkeletonList label="Loading customer ageing" />}
       <Problem error={report.error} />
-      {report.data && search.term !== '' && rows.length === 0 ? (
-        <NoResults term={search.term} onClear={search.clear} noun="credit buyers" />
-      ) : (
-        report.data && <SearchResults fetching={false}><CustomerAgeingView data={report.data} rows={rows} accounts={canOpenAccount(me)} /></SearchResults>
-      )}
+      <div data-tour="ageing-report">
+        {report.data && search.term !== '' && rows.length === 0 ? (
+          <NoResults term={search.term} onClear={search.clear} noun="credit buyers" />
+        ) : (
+          report.data && <SearchResults fetching={false}><CustomerAgeingView data={report.data} rows={rows} accounts={canOpenAccount(me)} /></SearchResults>
+        )}
+      </div>
     </Gate>
   );
 }

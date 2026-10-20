@@ -9,6 +9,7 @@ import { BuyerAccount } from './buyer-account';
 import { BuyerPricing } from './buyer-pricing';
 import { AddPanel, BackToCatalogue } from './catalogue';
 import { canUse } from './permissions';
+import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
 
 // Suppliers and Credit buyers (#146): a name and a contact, added and edited by the shop. A supplier
@@ -129,6 +130,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
       <BackToCatalogue />
       {note && <p className="hint">{note}</p>}
       {canAdd && (
+        <div data-tour="person-add">
         <AddPanel label={`Add a ${noun}`} open={adding} onOpen={() => setAdding(true)} onClose={() => { setAdding(false); setName(''); setContact(''); }}>
         <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) add.mutate(); }}>
           <label htmlFor={`new-${queryKey}-name`}>Name</label>
@@ -139,15 +141,19 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
         </form>
         <Problem error={add.error} />
         </AddPanel>
+        </div>
       )}
       {message && <Success>{message}</Success>}
       <Problem error={failure && new Error(failure)} />
       {rows.isPending && <p className="loading">Loading</p>}
       <Problem error={rows.error} />
       {searchable && (
-        <SearchBox id={`search-${queryKey}`} label="Search by name or phone" search={search} fetching={finding} count={rows.data ? people.length : undefined} more={rows.hasNextPage} />
+        <div data-tour="person-search">
+          <SearchBox id={`search-${queryKey}`} label="Search by name or phone" search={search} fetching={finding} count={rows.data ? people.length : undefined} more={rows.hasNextPage} />
+        </div>
       )}
       {rows.data && people.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun={plural} /> : <p className="empty-state">{`No ${plural} yet.`}</p>)}
+      <div data-tour="person-list">
       <SearchResults fetching={finding}>
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {people.map((r) => (
@@ -155,7 +161,9 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
             key={r.id}
             row={r}
             busy={change.isPending}
-            extra={'balance_minor' in r ? <><BuyerPricing row={r} /><BuyerAccount row={r} /></> : undefined}
+            extra={'balance_minor' in r
+              ? <><BuyerPricing row={r} /><BuyerAccount row={r} /></>
+              : <p><ScreenLink screen="supplierPayments" to="/staff/retail/supplier-payments/new" search={{ supplier: r.id ?? '' }} label={`Open items of ${r.name}`}>Open items</ScreenLink></p>}
             onSave={(edit) => change.mutate({ id: r.id ?? '', version: r.version, body: edit, text: (x) => `Saved the changes to "${x.name}".` })}
             {...(canSwitch
               ? {
@@ -174,13 +182,14 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
         ))}
       </ul>
       </SearchResults>
+      </div>
       {rows.hasNextPage && <button type="button" onClick={() => void rows.fetchNextPage()} disabled={rows.isFetchingNextPage || rows.isPlaceholderData}>{rows.isFetchingNextPage ? 'Loading' : `Show more ${plural}`}</button>}
       {toast}
     </>
   );
 }
 
-function SuppliersPage() {
+export function SuppliersPage() {
   const { me } = useStaff();
   return (
     <Gate screen="suppliers" title="Suppliers">
@@ -194,7 +203,7 @@ function SuppliersPage() {
   );
 }
 
-function BuyersPage() {
+export function BuyersPage() {
   return (
     <Gate screen="buyers" title="Credit buyers">
       <PeopleList

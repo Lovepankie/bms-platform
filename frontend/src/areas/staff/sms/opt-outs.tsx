@@ -100,6 +100,7 @@ function AddNumber({ onAdded }: { onAdded: () => void }) {
   return (
     <form
       aria-label="Add a number"
+      data-tour="sms-optouts-add"
       className="rt-card form-stack"
       onSubmit={(e) => { e.preventDefault(); if (phone.trim() !== '' && !add.isPending) add.mutate(); }}
     >
@@ -145,6 +146,7 @@ function PasteList({ onAdded }: { onAdded: () => void }) {
   return (
     <form
       aria-label="Paste a list of numbers"
+      data-tour="sms-optouts-paste"
       className="rt-card form-stack"
       onSubmit={(e) => { e.preventDefault(); if (text.trim() !== '' && !run.isPending) run.mutate(true); }}
     >
@@ -216,7 +218,7 @@ export function OptOutsScreen() {
       <p>
         These people and numbers get no text message of the kind chosen. Staff can also stop messages to one member on the member's own page. Numbers are shown masked and are not kept.
       </p>
-      <form role="search" className="ln-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
+      <form role="search" className="ln-search" data-tour="sms-optouts-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
         <SearchBox id="sms-oo-q" label="Find a number by its last digits" search={search} fetching={fetching} count={pages.data ? items.length : undefined} more={pages.hasNextPage} hint="For example 0601" />
         <label htmlFor="sms-oo-kind">Who</label>
         <select id="sms-oo-kind" value={kind} onChange={(e) => setKind(e.target.value)}>

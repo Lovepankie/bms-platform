@@ -322,7 +322,7 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
           onSubmit={() => pay.mutate()}
         />
       )}
-      <section aria-label="Payments taken">
+      <section aria-label="Payments taken" data-tour="account-payments">
         <h2>Payments taken</h2>
         <ReceiptList
           items={payments.data?.items ?? []}

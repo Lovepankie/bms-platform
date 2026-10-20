@@ -175,7 +175,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
 - **First run and guided tours (issues #19 and #86, ADR-025):** accepting an invitation signs the
   user in; the PWA walks a new user through password, an optional second factor and recovery codes;
   role aware spotlight tours (`frontend/src/tour/`) start once and replay from Help, with per-user
-  progress in `users.preferences` (`V31`). A new screen adds `data-tour` anchors and its steps.
+  progress in `users.preferences` (`V31`). A new screen adds `data-tour` anchors and its steps. **Every staff route has a page tour, breadcrumbs and the cross links of issue #336** (a buyer name opens the buyer, an item its stock, a sale its documents and returns, a branch its stock, a total the rows behind it); a pull request that adds or renames a route changes `frontend/src/tour/` too (bump the version of a tour you change), or its body has a line `TOUR-EXEMPT: <reason>`, and `tour-guard` (`.github/scripts/tour_guard.py`, ADR-049) fails it otherwise.
 - **Built (staff Users screen, issue #319):** PWA only, no migration, no API change: `/staff/users` (list with search, roles with branch,
   status invited, active or deactivated) and `/staff/users/new` (phone-first invite, role pick-list with plain descriptions, branch
   pick-list unless the role is the administrator). The one-time invitation link is shown once with Copy and Send on WhatsApp; resend,

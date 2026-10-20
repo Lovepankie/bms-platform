@@ -168,6 +168,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
     <form onSubmit={(e) => { e.preventDefault(); if (!blocked && !save.isPending) save.mutate(); }}>
       <Note>Saving a restock changes the cost and sell price of every item below to the values you enter. The change is recorded in the price history.</Note>
 
+      <div data-tour="restock-supplier">
       <label htmlFor="supplier">Supplier</label>
       <select id="supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
         <option value="">No supplier</option>
@@ -175,6 +176,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
           <option key={s.id} value={s.id}>{s.active === false ? `${s.name} (switched off)` : s.name}</option>
         ))}
       </select>
+      </div>
       {supplierId === '' && (
         <>
           <label htmlFor="new-supplier">Or add a new supplier</label>
@@ -189,7 +191,9 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
         </p>
       )}
 
+      <div data-tour="restock-search">
       <SearchBox id="restock-search" label="Find an item by name, code or category" search={search} fetching={finding} count={products.data ? Math.min(products.data.length, 20) : undefined} more={(products.data?.length ?? 0) > 20} />
+      </div>
       {products.data && products.data.length === 0 && search.term && <NoResults term={search.term} onClear={search.clear} noun="items" />}
       <SearchResults fetching={finding}>
       <ul style={{ listStyle: 'none', padding: 0, maxHeight: 180, overflowY: 'auto' }}>
@@ -254,7 +258,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
         );
       })}
 
-      <fieldset>
+      <fieldset data-tour="restock-paid">
         <legend>How is it paid?</legend>
         {METHODS.map((m) => (
           <label key={m.value} style={{ fontWeight: 400 }}>
@@ -266,7 +270,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
 
       <p className="rt-total" aria-live="polite">Total cost {money(restockTotal(lines))}</p>
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={blocked || save.isPending}>{save.isPending ? 'Saving' : 'Save restock'}</button>
+      <button type="submit" className="rt-primary" data-tour="restock-save" disabled={blocked || save.isPending}>{save.isPending ? 'Saving' : 'Save restock'}</button>
       {lines.length > 0 && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this restock</button>
       )}

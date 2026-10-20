@@ -208,7 +208,7 @@ export function ProductCard({ p, onEdit }: { p: InvestmentProduct; onEdit?: () =
   );
 }
 
-function Products() {
+export function Products() {
   const { me } = useStaff();
   const queryClient = useQueryClient();
   const manage = may(me, PRODUCTS_MANAGE);
@@ -222,7 +222,7 @@ function Products() {
   return (
     <InvestmentsGate title="Investment products">
       {manage && editing === null && (
-        <button type="button" className="rt-primary btn-block" onClick={() => setEditing('new')}>New product</button>
+        <button type="button" className="rt-primary btn-block" data-tour="investment-product-new" onClick={() => setEditing('new')}>New product</button>
       )}
       {editing !== null && (
         <section className="rt-card" aria-label="Product form">
@@ -238,13 +238,15 @@ function Products() {
       {list.isPending && <p className="loading">Loading products</p>}
       <Problem error={list.error ?? archive.error} />
       {list.data && list.data.length === 0 && <p className="empty-state">No investment product yet.</p>}
-      {list.data && (
-        <ul className="ln-list">
-          {list.data.map((p) => (
-            <ProductCard key={p.id} p={p} onEdit={manage ? () => setEditing(p) : undefined} />
-          ))}
-        </ul>
-      )}
+      <div data-tour="investment-products-list">
+        {list.data && (
+          <ul className="ln-list">
+            {list.data.map((p) => (
+              <ProductCard key={p.id} p={p} onEdit={manage ? () => setEditing(p) : undefined} />
+            ))}
+          </ul>
+        )}
+      </div>
     </InvestmentsGate>
   );
 }

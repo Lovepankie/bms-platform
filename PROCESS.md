@@ -115,7 +115,8 @@ makes substantive changes, the escape hatch does not apply.
 6. **Architecture coupling.** A change to `docs/workspace.dsl` that reflects a decision
    needs the corresponding ADR in the same pull request, and an accepted ADR that changes
    structure needs the model updated in the same pull request.
-7. **Record type fast track.** Files under `docs/meetings/` and `docs/specs/` may be self
+7. **Every route has a tour.** A pull request that adds or renames a staff route ships its page tour in `frontend/src/tour/` (plain words, one step per main action, the version bumped when a tour changes), its breadcrumb label and the cross links of issue #336, or says `TOUR-EXEMPT: <reason>` on a line of its body; `tour-guard` fails it otherwise (ADR-049).
+8. **Record type fast track.** Files under `docs/meetings/` and `docs/specs/` may be self
    merged by the author, still through a short-lived branch and a pull request.
 
 ## 7. Delivery pipeline
@@ -165,6 +166,7 @@ commit it and delete it later, because a commit is permanent.
 | `.github/workflows/dash-guard.yml` | No em dashes or en dashes in any changed text file |
 | `.github/workflows/adr-citation-guard.yml` | Every cited ADR exists or is marked pending |
 | `.github/workflows/placeholder-migration-guard.yml` | No migration keeps the placeholder number `V99` (renumbered to the next free number at merge, no override; Flyway runs with `outOfOrder` off; the first job of `deploy.yml` refuses it too) |
+| `.github/workflows/tour-guard.yml` | A pull request that adds or renames a route under `frontend/src/areas` changes `frontend/src/tour/` too (a page tour, a bumped version), or its body has a line `TOUR-EXEMPT: <reason>` (ADR-049) |
 | `.github/workflows/architecture-model.yml` | `docs/workspace.dsl` validates against the pinned CLI and the static site builds |
 | `.github/workflows/linked-issue-guard.yml` | Every code or architecture pull request closes an issue |
 | `.github/workflows/estimate-guard.yml` | Leaf-only estimates, every item typed, no orphans (runs once the board is configured) |

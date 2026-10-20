@@ -7,6 +7,7 @@ import { amountOrNull, warningWords } from './cash-state';
 import { DateField, RecordsByShop, Saved, Warnings, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
 import { usePersistedDraft } from './idempotency';
 import { CASHBOOK_READ, holds, needsOf } from './permissions';
+import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, money, useSingleBranch } from './ui';
 import { showDate } from './transfers';
@@ -55,7 +56,7 @@ export function WithdrawalRecords({ onVoided }: { onVoided?: (message: string) =
     queryFn: () => retail.listWithdrawals({ branchIds: scope, ...window.query, includeVoided: true }),
   });
   return (
-    <section aria-label="Withdrawal records">
+    <section aria-label="Withdrawal records" data-tour="withdrawal-records">
       <h2>Cash withdrawals</h2>
       <WindowFields id="withdrawal-list" window={window} />
       {rows.isError && <Problem error={rows.error} />}
@@ -79,7 +80,7 @@ export function WithdrawalRecords({ onVoided }: { onVoided?: (message: string) =
   );
 }
 
-function WithdrawalsScreen() {
+export function WithdrawalsScreen() {
   const { me } = useStaff();
   const { branchId, branchName } = useSingleBranch();
   const [saved, setSaved] = useSavedFor<Withdrawal>(branchId);
@@ -87,6 +88,8 @@ function WithdrawalsScreen() {
   const { show, toast } = useToast();
   return (
     <Gate screen="withdrawals" title="Cash withdrawals">
+      <p><ScreenLink screen="cashSummary" to="/staff/retail/cash-summary">Cash summary</ScreenLink></p>
+      <div data-tour="withdrawal-form">
       {branchId === null ? (
         <BranchRequired permissions={needsOf('withdrawals')} />
       ) : saved ? (
@@ -99,6 +102,7 @@ function WithdrawalsScreen() {
           <WithdrawalForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(w) => { setSaved(w); show('Withdrawal recorded.'); }} />
         </>
       )}
+      </div>
       {toast}
       {holds(me, CASHBOOK_READ) && <WithdrawalRecords onVoided={show} />}
     </Gate>

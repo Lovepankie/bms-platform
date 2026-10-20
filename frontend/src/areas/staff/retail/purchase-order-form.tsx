@@ -68,16 +68,18 @@ export function OrderFormView({ form, suppliers, branches, picker, busy, error, 
   return (
     <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!problem && !busy) onSubmit(); }} data-tour="order-form">
       <p className="hint">Saving makes a draft. Nothing is ordered, and no stock moves, until you send the order.</p>
-      <SupplierField id="order-supplier" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId })} />
-      {branches.length > 0 && <BranchField id="order-branch" label="Goods are expected at" value={form.branchId} branches={branches} onChange={(branchId) => onChange({ ...form, branchId })} />}
+      <div className="stack" data-tour="order-supplier">
+        <SupplierField id="order-supplier" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId })} />
+        {branches.length > 0 && <BranchField id="order-branch" label="Goods are expected at" value={form.branchId} branches={branches} onChange={(branchId) => onChange({ ...form, branchId })} />}
+      </div>
       <label htmlFor="order-expected">Expected on (optional)</label>
       <input id="order-expected" type="date" value={form.expectedOn} onChange={(e) => onChange({ ...form, expectedOn: e.target.value })} />
       <label htmlFor="order-note">Note (optional)</label>
       <input id="order-note" value={form.note} maxLength={300} onChange={(e) => onChange({ ...form, note: e.target.value })} />
-      {picker}
+      <div data-tour="order-items">{picker}</div>
       <h2>Items</h2>
       {form.lines.length === 0 && <p className="empty-state">No items yet.</p>}
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+      <ul style={{ listStyle: 'none', padding: 0 }} data-tour="order-lines">
         {form.lines.map((l, i) => (
           <OrderLineCard key={`${l.productId}-${i}`} line={l} index={i} onChange={(line) => setLine(i, line)} onRemove={() => onChange({ ...form, lines: form.lines.filter((_, n) => n !== i) })} />
         ))}
@@ -85,7 +87,7 @@ export function OrderFormView({ form, suppliers, branches, picker, busy, error, 
       <p className="rt-total" aria-live="polite" data-testid="order-total">Order total {money(orderTotal(form.lines))}</p>
       {problem && form.lines.length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || busy}>{busy ? 'Saving' : submitLabel}</button>
+      <button type="submit" className="rt-primary" disabled={problem !== null || busy} data-tour="order-save">{busy ? 'Saving' : submitLabel}</button>
     </form>
   );
 }
@@ -147,7 +149,7 @@ export function PurchaseOrderEditPage() {
   const allowed = canUse(me, 'purchaseOrders');
   const order = useQuery({ queryKey: ['retail', 'purchase-order', orderId], queryFn: () => retail.getPurchaseOrder(orderId), enabled: allowed });
   useCrumbLabel(order.data?.order_no ? `Change ${order.data.order_no}` : undefined);
-  const [form, setForm] = useState<OrderForm | null>(null);
+  const [form, setForm] = useState<OrderForm | null>(() => (order.data ? formFromOrder(order.data) : null));
   // The form is filled from the order when it is first read and again when someone else changes it (a new version), not on every refetch.
   const version = order.data?.version;
   useEffect(() => {

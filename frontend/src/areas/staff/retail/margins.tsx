@@ -3,7 +3,7 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retailAnalytics, type MarginRow, type Margins, type PriceChangeImpact } from '../../../api/retail-analytics';
 import { SkeletonList } from '../../../components/states';
-import { Choice, DateRange, Empty, Section, defaultRange, percentOrNone, rangeProblem } from './analytics-ui';
+import { Choice, DateRange, Empty, Section, ToSales, ToStock, defaultRange, percentOrNone, rangeProblem } from './analytics-ui';
 import { showPercent, showQty } from './maths';
 import { Gate, Problem, money, useBranchView, useIsPhone } from './ui';
 
@@ -32,7 +32,7 @@ function MarginTable({ title, rows, flag }: { title: string; rows: MarginRow[]; 
         {rows.map((r) => (
           <tr key={r.id ?? r.label}>
             <td>
-              {r.label}
+              {title === 'Item' ? <ToStock>{r.label}</ToStock> : r.label}
               {r.code && <><br /><span className="hint">{r.code}</span></>}
               {phone && <><br /><span className="hint">Sales {money(r.sales_minor ?? 0)}, cost {money(r.cost_minor ?? 0)}, {showQty(r.qty ?? '0')}{r.unit ? ` ${r.unit}` : ''} sold</span></>}
             </td>
@@ -61,7 +61,7 @@ function PriceChanges({ items }: { items: PriceChangeImpact[] }) {
       <ul className="an-cards">
         {items.map((c) => (
           <li key={c.product_id} className="rt-card">
-            <strong>{c.description}</strong>
+            <strong><ToStock>{c.description}</ToStock></strong>
             <span className="hint">{c.code}</span>
             <p>Price {money(c.old_sell_minor ?? 0)} to {money(c.new_sell_minor ?? 0)} on {c.changed_on}</p>
             <p>Before: <Pace units={c.units_before} days={c.days_before} />, margin {percentOrNone(c.margin_before_bp) || 'n/a'}</p>
@@ -80,7 +80,7 @@ function PriceChanges({ items }: { items: PriceChangeImpact[] }) {
         {items.map((c) => (
           <tr key={c.product_id}>
             <td>
-              {c.description}<br />
+              <ToStock>{c.description}</ToStock><br />
               <span className="hint">{c.code}: {money(c.old_sell_minor ?? 0)} to {money(c.new_sell_minor ?? 0)} on {c.changed_on}</span>
             </td>
             <td className="num"><Pace units={c.units_before} days={c.days_before} /></td>
@@ -102,7 +102,7 @@ export function MarginsView({ data }: { data: Margins }) {
     <>
       <div className="table-wrap"><table>
         <tbody>
-          <tr><td>Sales</td><td className="num">{money(totals.sales_minor ?? 0)}</td></tr>
+          <tr><td>Sales</td><td className="num"><ToSales>{money(totals.sales_minor ?? 0)}</ToSales></td></tr>
           <tr><td>Cost of what was sold</td><td className="num">{money(totals.cost_minor ?? 0)}</td></tr>
           <tr><td>Profit</td><td className="num">{money(totals.profit_minor ?? 0)}</td></tr>
           <tr><td>Margin (profit over sales)</td><td className="num">{percentOrNone(totals.margin_bp)}</td></tr>
@@ -124,7 +124,7 @@ export function MarginsView({ data }: { data: Margins }) {
   );
 }
 
-function MarginsPage() {
+export function MarginsPage() {
   const { all, branchId, branchName } = useBranchView();
   const initial = defaultRange();
   const [from, setFrom] = useState(initial.from);
@@ -140,14 +140,16 @@ function MarginsPage() {
   return (
     <Gate screen="margins" title="Margins" wide>
       <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
-      <DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} />
-      <div className="rt-row">
+      <div data-tour="margins-range"><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} /></div>
+      <div className="rt-row" data-tour="margins-target">
         <Choice id="mg-target" label="Margin target" value={target} options={TARGETS} onChange={setTarget} />
         <Choice id="mg-top" label="Rows to show" value={top} options={TOPS} onChange={setTop} />
       </div>
+      <div data-tour="margins-results">
       {report.isPending && !problem && <SkeletonList label="Loading margins" />}
       <Problem error={report.error} />
       {report.data && <MarginsView data={report.data} />}
+      </div>
     </Gate>
   );
 }

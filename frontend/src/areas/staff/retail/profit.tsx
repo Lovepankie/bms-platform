@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { businessToday, daysBefore, retail, type DailyProfit, type DailyProfitRow, type Valuation } from '../../../api/retail';
 import { showPercent, showQty } from './maths';
 import { SkeletonList } from '../../../components/states';
+import { ToSales, ToStock } from './analytics-ui';
 import { BranchRequired, CategoryLabel, Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 import { needsOf } from './permissions';
 
@@ -42,7 +43,7 @@ function SummaryRows({ label, rows, withCost }: { label: string; rows: { key: st
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {rows.map(({ key, name, sums }) => (
           <li key={key} className="rt-card">
-            <strong>{name}</strong>
+            <strong>{label === 'Branch' ? <ToStock>{name}</ToStock> : name}</strong>
             <div className="rt-row"><span>At price</span><span className="num">{money(sums.sales ?? 0)}</span></div>
             {withCost && sums.cost !== undefined && <div className="rt-row"><span>At cost</span><span className="num">{money(sums.cost)}</span></div>}
             {withCost && sums.profit !== undefined && <div className="rt-row"><span>Expected profit</span><span className="num">{money(sums.profit)}</span></div>}
@@ -66,7 +67,7 @@ function SummaryRows({ label, rows, withCost }: { label: string; rows: { key: st
       <tbody>
         {rows.map(({ key, name, sums }) => (
           <tr key={key}>
-            <td>{name}</td>
+            <td>{label === 'Branch' ? <ToStock>{name}</ToStock> : name}</td>
             {withCost && <td className="num">{sums.cost !== undefined ? money(sums.cost) : ''}</td>}
             <td className="num">{money(sums.sales ?? 0)}</td>
             {withCost && <td className="num">{sums.profit !== undefined ? money(sums.profit) : ''}</td>}
@@ -113,7 +114,7 @@ export function ValuationTable({ valuation, nameOf }: { valuation: Valuation; na
           {(valuation.rows ?? []).map((r) => (
             <tr key={`${r.branch_id}-${r.product_id}`}>
               <td>
-                {r.description}<br /><CategoryLabel category={r.category} />
+                <ToStock>{r.description}</ToStock><br /><CategoryLabel category={r.category} />
                 {nameOf && <><br /><span className="hint">{nameOf(r.branch_id)}</span></>}
                 {phone && <><br /><span className="hint">{showQty(r.qty ?? '0')} in stock{withCost && r.value_at_cost_minor !== undefined ? `, cost ${money(r.value_at_cost_minor)}` : ''}</span></>}
               </td>
@@ -149,7 +150,7 @@ export function BranchTotals({ valuation, nameOf }: { valuation: Valuation; name
   );
 }
 
-function ValuationPage() {
+export function ValuationPage() {
   const { all, branchId, branchName } = useBranchView();
   const nameOf = useBranchName();
   const valuation = useQuery({
@@ -161,7 +162,8 @@ function ValuationPage() {
     <Gate screen="valuation" title="Stock value">
       {!all && branchId === null ? <BranchRequired permissions={needsOf('valuation')} /> : (
         <>
-          <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
+          <p className="branch-line" data-tour="valuation-branch">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
+          <div data-tour="valuation-figures">
           {valuation.isPending && <SkeletonList label="Loading stock value" />}
           <Problem error={valuation.error} />
           {valuation.data && (
@@ -170,6 +172,7 @@ function ValuationPage() {
               <ValuationTable valuation={valuation.data} nameOf={all ? nameOf : undefined} />
             </>
           )}
+          </div>
         </>
       )}
     </Gate>
@@ -244,6 +247,7 @@ export function ProfitTable({ report, nameOf }: { report: DailyProfit; nameOf?: 
   return (
     <>
       <p className="rt-total">{onPayment && atSale === 0 ? 'Profit from money received, for the period' : 'Profit for the period'} {money(report.profit_minor ?? 0)}</p>
+      <p className="hint"><ToSales>See the sales behind it</ToSales></p>
       {onPayment && (
         <ul className="an-stats" data-testid="credit-recognition-summary">
           <li className="an-stat"><span className="an-stat-label">Sold</span><strong className="an-stat-value num">{money(report.sold_minor ?? 0)}</strong><span className="hint">Everything sold, credit included</span></li>
@@ -273,7 +277,7 @@ export function ProfitTable({ report, nameOf }: { report: DailyProfit; nameOf?: 
   );
 }
 
-function ProfitPage() {
+export function ProfitPage() {
   const { all, branchId, branchName } = useBranchView();
   const nameOf = useBranchName();
   // The last seven days in the business's timezone, the server's own business date (#112 item 9).
@@ -289,14 +293,16 @@ function ProfitPage() {
       {!all && branchId === null ? <BranchRequired permissions={needsOf('profit')} /> : (
         <>
           <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
-          <div className="rt-row">
+          <div className="rt-row" data-tour="profit-range">
             <div><label htmlFor="from">From</label><input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
             <div><label htmlFor="to">To</label><input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
           </div>
           {from > to && <p role="alert" className="rt-flag">The start date must not be after the end date.</p>}
+          <div data-tour="profit-figures">
           {profit.isPending && from <= to && <SkeletonList label="Loading profit" />}
           <Problem error={profit.error} />
           {profit.data && <ProfitTable report={profit.data} nameOf={all ? nameOf : undefined} />}
+          </div>
         </>
       )}
     </Gate>

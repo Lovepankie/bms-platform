@@ -6,9 +6,11 @@ import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { investments, type Investment } from '../../../api/investments';
 import { branchFilter } from '../../../auth/branch';
 import { useStaff } from '../context';
+import { MemberLink } from './member-ui';
 import { Problem } from '../retail/ui';
 import { INVESTMENTS_OPEN, PRODUCTS_MANAGE, investmentBadge, may, percent, showInvestments } from './investment-state';
 import { money, words } from './loan-state';
+import { showSavings } from './savings-permissions';
 
 // Investments (FR-INV-02, FR-INV-12): find an investment by its account number, the member's
 // number, name or phone, filter by status, and open it; the member tab lists one member's investments.
@@ -29,7 +31,7 @@ export function InvestmentsGate({ title, children }: { title: string; children: 
   }
   return (
     <main className="rt ln">
-      <nav className="iv-nav" aria-label="Investments">
+      <nav className="iv-nav" aria-label="Investments" data-tour="investments-nav">
         <Link to="/staff/lending/investments" activeOptions={{ exact: true }}>All</Link>
         <Link to="/staff/lending/investments/maturities">Maturities</Link>
         {may(me, INVESTMENTS_OPEN) && <Link to="/staff/lending/investments/new">New investment</Link>}
@@ -95,16 +97,16 @@ function MoreButton({ pages }: { pages: ReturnType<typeof useInvestmentPages>['p
   );
 }
 
-function Investments() {
+export function Investments() {
   const search = useLiveSearch();
   const [status, setStatus] = useState('');
   const { pages, items, waiting, fetching } = useInvestmentPages(search.term, status);
   return (
     <InvestmentsGate title="Investments">
-      <form role="search" className="ln-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
+      <form role="search" className="ln-search" data-tour="investments-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
         <SearchBox id="inv-q" label="Account number, member number, name or phone" search={search} fetching={fetching} count={pages.data ? items.length : undefined} more={pages.hasNextPage} />
         <label htmlFor="inv-status">Status</label>
-        <select id="inv-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select id="inv-status" data-tour="investments-status" value={status} onChange={(e) => setStatus(e.target.value)}>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
               {s === '' ? 'All' : words(s)}
@@ -127,8 +129,7 @@ function Investments() {
 const memberRoute = getRouteApi('/staff/lending/investments/member/$memberId');
 
 /** The member investments tab: every investment of one member, and a new one for them. */
-function MemberInvestments() {
-  const { memberId } = memberRoute.useParams();
+export function MemberInvestmentsBody({ memberId }: { memberId: string }) {
   const { me } = useStaff();
   const { pages, items, waiting } = useInvestmentPages('', '', memberId);
   const first = items[0];
@@ -136,21 +137,40 @@ function MemberInvestments() {
     .filter((i) => ['active', 'matured'].includes(i.status ?? ''))
     .reduce((sum, i) => sum + (i.principal_held_minor ?? 0), 0);
   return (
-    <InvestmentsGate title={first ? `Investments of ${first.member_name ?? ''}` : 'Member investments'}>
+    <>
       {first && (
         <p className="ln-muted">
-          Member {first.member_no}. Held now: <strong>{money(held, first.currency)}</strong> in {items.filter((i) => ['active', 'matured'].includes(i.status ?? '')).length} open investments.
+          Member <MemberLink memberId={memberId}>{first.member_no}</MemberLink>. Held now: <strong>{money(held, first.currency)}</strong> in {items.filter((i) => ['active', 'matured'].includes(i.status ?? '')).length} open investments.
+          {showSavings(me) && (
+            <>
+              {' '}
+              <Link to="/staff/lending/members/$memberId/savings" params={{ memberId }}>Savings of this member</Link>
+            </>
+          )}
         </p>
       )}
       {may(me, INVESTMENTS_OPEN) && (
-        <Link className="btn rt-primary" to="/staff/lending/investments/member/$memberId/new" params={{ memberId }}>
+        <Link className="btn rt-primary" to="/staff/lending/investments/member/$memberId/new" params={{ memberId }} data-tour="member-investments-new">
           New investment for this member
         </Link>
       )}
-      {waiting && <p className="loading">Loading investments</p>}
-      <Problem error={pages.error} />
-      {pages.data && <InvestmentRows items={items} />}
+      <div data-tour="member-investments-list">
+        {waiting && <p className="loading">Loading investments</p>}
+        <Problem error={pages.error} />
+        {pages.data && <InvestmentRows items={items} />}
+      </div>
       <MoreButton pages={pages} />
+    </>
+  );
+}
+
+function MemberInvestments() {
+  const { memberId } = memberRoute.useParams();
+  const { items } = useInvestmentPages('', '', memberId);
+  const first = items[0];
+  return (
+    <InvestmentsGate title={first ? `Investments of ${first.member_name ?? ''}` : 'Member investments'}>
+      <MemberInvestmentsBody memberId={memberId} />
     </InvestmentsGate>
   );
 }

@@ -7,6 +7,7 @@ import { DateField, RecordsByShop, Saved, WindowFields, useReadScope, useSavedFo
 import { usePersistedDraft } from './idempotency';
 import { CASHBOOK_READ, SAVINGS_OVERWRITE, SAVINGS_RECORD, holds } from './permissions';
 import { afterSavingsConflict, planSavings, seesAmounts } from './savings-state';
+import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Note, Problem, money, useSingleBranch } from './ui';
 import { showDate } from './transfers';
@@ -99,7 +100,7 @@ export function SavingsRecords({ onVoided }: { onVoided?: (message: string) => v
     queryFn: () => retail.listSavings({ branchIds: scope, ...window.query, includeVoided: true }),
   });
   return (
-    <section aria-label="Savings records">
+    <section aria-label="Savings records" data-tour="savings-records">
       <h2>Savings records</h2>
       <WindowFields id="savings-list" window={window} />
       {rows.isError && <Problem error={rows.error} />}
@@ -126,7 +127,7 @@ export function SavingsRecords({ onVoided }: { onVoided?: (message: string) => v
   );
 }
 
-function SavingsScreen() {
+export function SavingsScreen() {
   const { me } = useStaff();
   const { branchId, branchName } = useSingleBranch();
   const [saved, setSaved] = useSavedFor<Savings>(branchId);
@@ -134,6 +135,8 @@ function SavingsScreen() {
   const { show, toast } = useToast();
   return (
     <Gate screen="savings" title="Savings">
+      <p><ScreenLink screen="cashSummary" to="/staff/retail/cash-summary">Cash summary</ScreenLink></p>
+      <div data-tour="savings-form">
       {branchId === null ? (
         <BranchRequired permissions={[SAVINGS_RECORD]} />
       ) : saved ? (
@@ -149,6 +152,7 @@ function SavingsScreen() {
           <SavingsForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(s) => { setSaved(s); show('Savings recorded.'); }} />
         </>
       )}
+      </div>
       {toast}
       {holds(me, CASHBOOK_READ) && <SavingsRecords onVoided={show} />}
     </Gate>

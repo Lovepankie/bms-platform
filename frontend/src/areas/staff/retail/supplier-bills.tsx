@@ -6,12 +6,12 @@ import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type SupplierBill } from '../../../api/retail';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { SkeletonList } from '../../../components/states';
-import { useStaff } from '../context';
+import { useOptionalStaff, useStaff } from '../context';
 import { canCredit } from './credits-state';
 import { showQty } from './maths';
 import { PAYABLE_MANAGE, canUse, holdsAt } from './permissions';
 import { varianceWords } from './payables-state';
-import { Facts, MoreButton, ReasonPanel, StatusBadge, useActionKeys, useCursorList } from './purchasing-ui';
+import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
 
@@ -49,36 +49,42 @@ export function SupplierBillsPage() {
         A supplier invoice says what a supplier wants to be paid for goods you received. Record it against the goods, and the page checks it against what you ordered and received.
       </p>
       <p className="cluster">
-        <Link className="btn rt-primary" to="/staff/retail/supplier-bills/new">New supplier invoice</Link>
+        <Link className="btn rt-primary" to="/staff/retail/supplier-bills/new" data-tour="bills-new">New supplier invoice</Link>
         <Link className="btn-sm" to="/staff/retail/supplier-payments">Supplier payments</Link>
       </p>
       {list.query.isPending && <p className="loading">Loading</p>}
       <Problem error={list.query.error} />
-      <SearchBox id="search-bills" label="Search by our number, the supplier's invoice number or the supplier" search={search} fetching={list.finding} count={list.query.data ? list.rows.length : undefined} more={list.query.hasNextPage} />
-      <label>
-        <input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} />
-        <span>Only invoices that are still owed</span>
-      </label>
+      <div data-tour="bills-search">
+        <SearchBox id="search-bills" label="Search by our number, the supplier's invoice number or the supplier" search={search} fetching={list.finding} count={list.query.data ? list.rows.length : undefined} more={list.query.hasNextPage} />
+        <label>
+          <input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} />
+          <span>Only invoices that are still owed</span>
+        </label>
+      </div>
       {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="invoices" /> : <p className="empty-state">{openOnly ? 'Nothing is owed on any invoice.' : 'No supplier invoices yet.'}</p>)}
-      <SearchResults fetching={list.finding}>
-        <ul style={{ listStyle: 'none', padding: 0 }}>
-          {list.rows.map((r) => <BillRow key={r.id} row={r} />)}
-        </ul>
-      </SearchResults>
+      <div data-tour="bills-list">
+        <SearchResults fetching={list.finding}>
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {list.rows.map((r) => <BillRow key={r.id} row={r} />)}
+          </ul>
+        </SearchResults>
+      </div>
       <MoreButton list={list} noun="invoices" />
     </Gate>
   );
 }
 
 /** One invoice: facts, the goods it bills against what they were received at, and what is paid and owed. */
-export function SupplierBillView({ bill, nameOf, landedCostId }: { bill: SupplierBill; nameOf: (branchId: string | undefined) => string; landedCostId?: string }) {
+export function SupplierBillView({ bill, nameOf, landedCostId, payable }: { bill: SupplierBill; nameOf: (branchId: string | undefined) => string; landedCostId?: string; payable?: boolean }) {
   const landedCost = bill.kind === 'landed_cost';
+  const session = useOptionalStaff();
+  const openReceipts = session !== null && canUse(session.me, 'goodsReceived');
   return (
-    <section aria-label="Supplier invoice" data-testid="supplier-bill">
+    <section aria-label="Supplier invoice" data-testid="supplier-bill" data-tour="bill-summary">
       <h2>{bill.bill_no} <StatusBadge words={BILL_STATUS[bill.status ?? ''] ?? (bill.status ?? '')} warn={bill.status === 'voided'} /></h2>
       <Facts
         rows={[
-          ['Supplier', bill.supplier_name ?? ''],
+          ['Supplier', <SupplierOwed key="s" id={bill.supplier_id} name={bill.supplier_name} payable={payable} />],
           ['Supplier\'s invoice number', bill.supplier_ref ?? ''],
           ...(landedCost
             ? [['What it is', landedCostId
@@ -103,7 +109,7 @@ export function SupplierBillView({ bill, nameOf, landedCostId }: { bill: Supplie
           ...(bill.status === 'voided' ? [['Voided because', bill.void_reason ?? ''] as [string, string]] : []),
         ]}
       />
-      <div className="table-wrap" tabIndex={0}>
+      <div className="table-wrap" tabIndex={0} data-tour="bill-lines">
         <table>
           <thead>
             <tr>
@@ -120,7 +126,7 @@ export function SupplierBillView({ bill, nameOf, landedCostId }: { bill: Supplie
             {(bill.lines ?? []).map((l) => (
               <tr key={l.id}>
                 <td>{l.description}</td>
-                <td>{l.receipt_no}</td>
+                <td>{l.receipt_id && openReceipts ? <Link to="/staff/retail/goods-received/$receiptId" params={{ receiptId: l.receipt_id }}>{l.receipt_no}</Link> : l.receipt_no}</td>
                 <td className="num">{showQty(l.unit_qty ?? l.qty ?? '0')} {l.unit}</td>
                 <td className="num">{money(l.unit_price_minor ?? 0)}</td>
                 <td className="num">{money(l.line_total_minor ?? 0)}</td>
@@ -181,11 +187,11 @@ export function SupplierBillPage() {
       {bill.isPending && <SkeletonList label="Loading the invoice" />}
       <Problem error={bill.error} />
       {message && <Success>{message}</Success>}
-      {b && <SupplierBillView bill={b} nameOf={nameOf} landedCostId={landed.data?.id} />}
+      {b && <SupplierBillView bill={b} nameOf={nameOf} landedCostId={landed.data?.id} payable={canUse(me, 'supplierPayments')} />}
       {b && b.status === 'posted' && holdsAt(me, PAYABLE_MANAGE, b.branch_id) && (
         <div className="stack">
           {(b.open_minor ?? 0) > 0 && (
-            <p><Link className="btn-sm" to="/staff/retail/supplier-payments/new" search={{ supplier: b.supplier_id } as never}>Pay this supplier</Link></p>
+            <p><Link className="btn-sm" to="/staff/retail/supplier-payments/new" search={{ supplier: b.supplier_id } as never} data-tour="bill-pay">Pay this supplier</Link></p>
           )}
           {canCredit(b) && (
             <p><Link className="btn-sm" to="/staff/retail/supplier-credits/new" search={{ bill: b.id } as never} data-tour="bill-credit">Credit note</Link></p>

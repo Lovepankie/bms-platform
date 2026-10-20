@@ -1,6 +1,10 @@
 import type { Me } from '../api/client';
 import type { Tour, TourStep } from './model';
 import { CUSTOMER_TOURS } from './tours-customers';
+import { LENDING_MORE_TOURS } from './tours-lending-more';
+import { RETAIL_CASH_TOURS } from './tours-retail-cash';
+import { RETAIL_PURCHASING_TOURS } from './tours-retail-purchasing';
+import { RETAIL_REPORT_TOURS } from './tours-retail-reports';
 
 // The tours themselves (issue #19). Copy rules: plain English, short sentences, no jargon, say
 // what to tap. Every target is a data-tour attribute on a screen; tours.test.tsx renders each
@@ -1462,9 +1466,22 @@ export const controlsPage: Tour = {
   ],
 };
 
-export const TOURS: readonly Tour[] = [
+/** The tours whose screens tours.test.tsx maps one by one; the slices below carry their own test files (test-kit.tsx). */
+export const CORE_TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
   purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, ...CUSTOMER_TOURS,
 ];
+
+const dynamicSegments = (tour: Tour) => (tour.page ?? '').split('/').filter((part) => part.startsWith('$')).length;
+
+/**
+ * Every tour. pageTourFor returns the first tour whose page matches, and a `$name` segment matches any segment, so a page with a fixed
+ * segment (`goods-received/new`) must come before its `$` sibling (`goods-received/$receiptId`): the tours with fewer `$` segments go
+ * first (the sort is stable, so the order inside each group is the order written). route-coverage.test.ts proves it for every route.
+ */
+export const TOURS: readonly Tour[] = [...CORE_TOURS, ...RETAIL_REPORT_TOURS, ...RETAIL_CASH_TOURS, ...RETAIL_PURCHASING_TOURS, ...LENDING_MORE_TOURS]
+  .map((tour, order) => ({ tour, order }))
+  .sort((a, b) => dynamicSegments(a.tour) - dynamicSegments(b.tour) || a.order - b.order)
+  .map(({ tour }) => tour);

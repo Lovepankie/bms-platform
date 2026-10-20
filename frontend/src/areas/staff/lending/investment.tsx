@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { investments, type Investment, type InvestmentSchedule, type InvestmentStatementLine } from '../../../api/investments';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
+import { MemberLink } from './member-ui';
 import { Problem } from '../retail/ui';
 import { EarlyWithdrawalForm, FundForm, InstructionForm, PayForm, ReverseForm, RolloverForm } from './investment-actions';
 import {
@@ -34,15 +35,17 @@ const ACTION_LABELS: Record<InvestmentAction, string> = {
 
 export function InvestmentHeader({ inv }: { inv: Investment }) {
   return (
-    <section aria-label="Investment" className="rt-card ln-head">
+    <section aria-label="Investment" className="rt-card ln-head" data-tour="investment-header">
       <p className="ln-item-head">
         <strong>{inv.account_no}</strong>
         <span className={investmentBadge(inv.status)}>{words(inv.status)}</span>
       </p>
       <p>
-        <Link to="/staff/lending/investments/member/$memberId" params={{ memberId: inv.member_id ?? '' }}>
+        <MemberLink memberId={inv.member_id ?? ''}>
           {inv.member_name} ({inv.member_no})
-        </Link>
+        </MemberLink>
+        {' '}
+        <Link to="/staff/lending/investments/member/$memberId" params={{ memberId: inv.member_id ?? '' }}>All their investments</Link>
       </p>
       <p className="ln-muted">
         {inv.product_name}: {percent(inv.return_rate_bp)} a year, {inv.return_method === 'compound' ? 'compounding monthly' : 'flat'}, paid{' '}
@@ -58,7 +61,7 @@ const date = (d: string | undefined) => d ?? 'None';
 export function InvestmentBalances({ inv }: { inv: Investment }) {
   const c = inv.currency;
   return (
-    <section aria-labelledby="iv-balances" className="rt-card">
+    <section aria-labelledby="iv-balances" className="rt-card" data-tour="investment-balances">
       <h2 id="iv-balances">Balances</h2>
       <dl className="ln-facts">
         <dt>Amount invested</dt>
@@ -88,7 +91,9 @@ export function InvestmentBalances({ inv }: { inv: Investment }) {
         {inv.certificate_no && (
           <>
             <dt>Certificate</dt>
-            <dd>{inv.certificate_no}</dd>
+            <dd>
+              <Link to="/staff/lending/investments/$investmentId/certificate" params={{ investmentId: inv.id ?? '' }}>{inv.certificate_no}</Link>
+            </dd>
           </>
         )}
         {inv.closed_on && (
@@ -199,7 +204,7 @@ export function InvestmentView({ inv }: { inv: Investment }) {
     <>
       <InvestmentHeader inv={inv} />
       {actions.length > 0 && (
-        <div className="ln-actions" role="group" aria-label="Actions">
+        <div className="ln-actions" role="group" aria-label="Actions" data-tour="investment-actions">
           {actions.map((a) => (
             <button key={a} type="button" aria-pressed={open === a} onClick={() => setOpen(open === a ? null : a)}>
               {ACTION_LABELS[a]}
@@ -221,7 +226,7 @@ export function InvestmentView({ inv }: { inv: Investment }) {
       )}
       <InvestmentBalances inv={inv} />
       {inv.certificate_no && (
-        <Link className="btn btn-block" to="/staff/lending/investments/$investmentId/certificate" params={{ investmentId: id }}>
+        <Link className="btn btn-block" to="/staff/lending/investments/$investmentId/certificate" params={{ investmentId: id }} data-tour="investment-certificate-link">
           Certificate and statement to print
         </Link>
       )}
@@ -230,7 +235,7 @@ export function InvestmentView({ inv }: { inv: Investment }) {
           Go to the investment it rolled into
         </Link>
       )}
-      <h2 id="iv-schedule">Schedule</h2>
+      <h2 id="iv-schedule" data-tour="investment-schedule">Schedule</h2>
       {!funded ? (
         <p className="empty-state">The schedule is set when the investment is funded.</p>
       ) : (
@@ -240,7 +245,7 @@ export function InvestmentView({ inv }: { inv: Investment }) {
           {schedule.data && <InvestmentScheduleTable schedule={schedule.data} />}
         </>
       )}
-      <h2>Statement</h2>
+      <h2 data-tour="investment-statement">Statement</h2>
       {statement.isPending && <p className="loading">Loading the statement</p>}
       <Problem error={statement.error} />
       {statement.data && <StatementList inv={inv} lines={statement.data.lines ?? []} />}

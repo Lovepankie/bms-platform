@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, getRouteApi } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { retail, type SaleReturn } from '../../../api/retail';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { SkeletonList } from '../../../components/states';
@@ -8,7 +8,7 @@ import { useStaff } from '../context';
 import { MIN_REASON, reasonOf, reversalKeys } from './account-state';
 import { CreditNotePdf } from './documents-ui';
 import { newIdempotencyKey } from './idempotency';
-import { SALE_RETURN, canUse, holdsAt } from './permissions';
+import { SALE_RETURN, canOpenAccount, canUse, holdsAt } from './permissions';
 import { DISPOSITION_WORDS, reasonWords, returnedWords, settledWords, type Disposition } from './returns-state';
 import { showDate } from './transfers';
 import { Problem, Success, money, useBranchName, useToast } from './ui';
@@ -18,18 +18,20 @@ import { Problem, Success, money, useBranchName, useToast } from './ui';
 // return is voided as a whole, with a reason, by whoever holds retail.sale.return at its branch; the server decides again.
 
 /** The credit note: facts, lines and totals. Cost shows only when the server sent it (retail.profit.read). */
-export function CreditNoteView({ note, nameOf }: { note: SaleReturn; nameOf: (branchId: string | undefined) => string }) {
-  const facts: [string, string][] = [
+export function CreditNoteView({ note, nameOf, buyerOpens }: { note: SaleReturn; nameOf: (branchId: string | undefined) => string; buyerOpens?: boolean }) {
+  const facts: [string, ReactNode][] = [
     ['Date', showDate(note.returned_on)],
     ['Branch', nameOf(note.branch_id)],
     ['Sale', note.sale_no ?? ''],
-    ...(note.customer_name ? [['Buyer', note.customer_name] as [string, string]] : []),
+    ...(note.customer_name
+      ? [['Buyer', buyerOpens && note.customer_id ? <Link key="buyer" to="/staff/retail/accounts/$customerId" params={{ customerId: note.customer_id }}>{note.customer_name}</Link> : note.customer_name] as [string, ReactNode]]
+      : []),
     ['Settled', settledWords(note)],
-    ...(note.note ? [['Note', note.note] as [string, string]] : []),
-    ...(note.status === 'voided' ? [['Voided because', note.void_reason ?? ''] as [string, string]] : []),
+    ...(note.note ? [['Note', note.note] as [string, ReactNode]] : []),
+    ...(note.status === 'voided' ? [['Voided because', note.void_reason ?? ''] as [string, ReactNode]] : []),
   ];
   return (
-    <section aria-label="Credit note" data-testid="credit-note">
+    <section aria-label="Credit note" data-testid="credit-note" data-tour="credit-note">
       <h2>
         {note.credit_note_no} {note.status === 'voided' && <span className="badge badge-warning">Voided</span>}
       </h2>
@@ -38,7 +40,7 @@ export function CreditNoteView({ note, nameOf }: { note: SaleReturn; nameOf: (br
           {facts.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}
         </tbody>
       </table></div>
-      <div className="table-wrap" tabIndex={0}><table>
+      <div className="table-wrap" tabIndex={0} data-tour="credit-note-lines"><table>
         <thead>
           <tr><th>Goods</th><th>Why, and where they went</th><th className="num">Credit</th></tr>
         </thead>
@@ -56,7 +58,7 @@ export function CreditNoteView({ note, nameOf }: { note: SaleReturn; nameOf: (br
           ))}
         </tbody>
       </table></div>
-      <div className="table-wrap"><table>
+      <div className="table-wrap" data-tour="credit-note-totals"><table>
         <tbody>
           <tr><td><strong>Credit note total</strong></td><td className="num"><strong>{money(note.total_minor ?? 0)}</strong></td></tr>
           {(note.account_credit_minor ?? 0) > 0 && <tr><td>Taken off what the buyer owes</td><td className="num">{money(note.account_credit_minor ?? 0)}</td></tr>}
@@ -72,7 +74,7 @@ export function CreditNoteView({ note, nameOf }: { note: SaleReturn; nameOf: (br
 export function VoidPanel({ busy, error, onVoid }: { busy?: boolean; error?: unknown; onVoid: (reason: string) => void }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
-  if (!open) return <p><button type="button" className="btn-sm" onClick={() => setOpen(true)}>Void this credit note</button></p>;
+  if (!open) return <p data-tour="credit-note-void"><button type="button" className="btn-sm" onClick={() => setOpen(true)}>Void this credit note</button></p>;
   return (
     <form
       className="stack"
@@ -133,7 +135,7 @@ export function CreditNotePage() {
       {note.isPending && <SkeletonList label="Loading the credit note" />}
       <Problem error={note.error} />
       {message && <Success>{message}</Success>}
-      {note.data && <CreditNoteView note={note.data} nameOf={nameOf} />}
+      {note.data && <CreditNoteView note={note.data} nameOf={nameOf} buyerOpens={canOpenAccount(me)} />}
       {note.data && <CreditNotePdf returnId={returnId} branchId={note.data.branch_id} />}
       {note.data && note.data.status === 'completed' && holdsAt(me, SALE_RETURN, note.data.branch_id) && (
         <VoidPanel busy={voided.isPending} error={voided.error} onVoid={(reason) => voided.mutate(reason)} />

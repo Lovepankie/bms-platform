@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { retailAnalytics, type Ageing, type CreditControl } from '../../../api/retail-analytics';
 import { SkeletonList } from '../../../components/states';
 import { useStaff } from '../context';
-import { Bars, Choice, DateRange, Empty, Section, defaultRange, rangeProblem } from './analytics-ui';
+import { Bars, Choice, DateRange, Empty, Section, ToSales, defaultRange, rangeProblem } from './analytics-ui';
 import { canOpenAccount } from './permissions';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 
@@ -39,7 +39,7 @@ export function CreditControlView({ data, nameOf, sort, accounts = false }: { da
   const payments = data.payments ?? [];
   return (
     <>
-      <p className="rt-total">Owed by credit buyers {money(totals.owed_minor ?? 0)}</p>
+      <p className="rt-total">Owed by credit buyers {money(totals.owed_minor ?? 0)} <ToSales credit>See the credit sales</ToSales></p>
       <p className="hint">{data.buyer_count ?? 0} {data.buyer_count === 1 ? 'buyer owes' : 'buyers owe'} this, as of {data.as_of}. Days are counted from the due date; a sale with no due date counts as not yet due.</p>
       <Section title="Ageing">
         <Bars label="Owed by age" rows={BUCKETS.map((b) => ({ key: b.key, name: b.label, value: totals[b.key] ?? 0, text: money(totals[b.key] ?? 0) }))} />
@@ -87,7 +87,7 @@ export function CreditControlView({ data, nameOf, sort, accounts = false }: { da
               <tbody>
                 {overdue.map((o) => (
                   <tr key={o.sale_id}>
-                    <td>{o.buyer_name}<br /><span className="hint">{o.sale_no}, {nameOf(o.branch_id)}{phone ? `, due ${o.due_date}` : ''}</span></td>
+                    <td>{accounts && o.customer_id ? <Link to="/staff/retail/accounts/$customerId" params={{ customerId: o.customer_id }} aria-label={`Open the account of ${o.buyer_name}`}>{o.buyer_name}</Link> : o.buyer_name}<br /><span className="hint">{o.sale_no}, {nameOf(o.branch_id)}{phone ? `, due ${o.due_date}` : ''}</span></td>
                     {!phone && <td>{o.due_date}</td>}
                     <td className="num">{o.days_overdue} days</td>
                     <td className="num">{money(o.outstanding_minor ?? 0)}</td>
@@ -128,7 +128,7 @@ export function CreditControlView({ data, nameOf, sort, accounts = false }: { da
   );
 }
 
-function CreditControlPage() {
+export function CreditControlPage() {
   const { me } = useStaff();
   const { all, branchId, branchName } = useBranchView();
   const nameOf = useBranchName();
@@ -147,14 +147,16 @@ function CreditControlPage() {
     <Gate screen="creditControl" title="Credit control" wide>
       <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
       <p className="hint">The dates choose which payments are listed. What is owed is always as of today.</p>
-      <DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} />
-      <div className="rt-row">
+      <div data-tour="credit-range"><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} /></div>
+      <div className="rt-row" data-tour="credit-sort">
         <Choice id="cc-sort" label="Overdue list" value={sort} options={[...SORTS]} onChange={setSort} />
         <Choice id="cc-top" label="Rows to show" value={top} options={TOPS} onChange={setTop} />
       </div>
+      <div data-tour="credit-results">
       {report.isPending && !problem && <SkeletonList label="Loading credit control" />}
       <Problem error={report.error} />
       {report.data && <CreditControlView data={report.data} nameOf={nameOf} sort={sort} accounts={canOpenAccount(me)} />}
+      </div>
     </Gate>
   );
 }

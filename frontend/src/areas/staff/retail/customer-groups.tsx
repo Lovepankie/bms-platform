@@ -1,16 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { retail, type CustomerGroup, type PriceList } from '../../../api/retail';
 import { AddPanel } from './catalogue';
+import { ScreenLink } from './screen-link';
 import { Gate, Problem, changeFailureText, requireVersion } from './ui';
 
 // Customer groups (ADR-033, issue #195): customers that share a price list. A buyer's own list wins over the list of
 // the group; a buyer is put in a group on the Credit buyers page. A group is switched off, never deleted. Each group
 // names the list its buyers are priced from, or none.
 
-export function GroupCard({ group, lists, busy, onSave }: {
+export function GroupCard({ group, lists, busy, onSave, extra }: {
   group: CustomerGroup;
+  /** More under the group's line, such as links to its buyers and its price list. */
+  extra?: ReactNode;
   lists: PriceList[];
   busy?: boolean;
   onSave: (body: { name: string; price_list_id?: string; active: boolean }) => void;
@@ -29,6 +32,7 @@ export function GroupCard({ group, lists, busy, onSave }: {
       <p className="hint">
         {group.price_list ? <>Priced from the list {group.price_list}.</> : 'No price list: its customers pay the retail price.'} {group.customer_count ?? 0} customers.
       </p>
+      {extra}
       {editing ? (
         <div className="stack">
           <label htmlFor={`group-name-${group.id}`}>Name</label>
@@ -73,8 +77,8 @@ export function CustomerGroups() {
   });
   return (
     <Gate screen="customerGroups" title="Customer groups">
-      <p>Put customers that share prices in a group, then give the group a price list. A customer's own price list wins over the group's.</p>
-      <AddPanel label="Add a customer group" open={adding} onOpen={() => setAdding(true)} onClose={() => { setAdding(false); setName(''); setListId(''); create.reset(); }}>
+      <p data-tour="customer-groups-help">Put customers that share prices in a group, then give the group a price list. A customer's own price list wins over the group's.</p>
+      <div data-tour="customer-groups-add"><AddPanel label="Add a customer group" open={adding} onOpen={() => setAdding(true)} onClose={() => { setAdding(false); setName(''); setListId(''); create.reset(); }}>
         <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) create.mutate(); }} data-tour="customer-group-new">
           <label htmlFor="new-group-name">Name</label>
           <input id="new-group-name" value={name} maxLength={100} onChange={(e) => setName(e.target.value)} autoComplete="off" />
@@ -86,14 +90,26 @@ export function CustomerGroups() {
           <button type="submit" className="rt-primary" disabled={create.isPending || name.trim() === ''}>{create.isPending ? 'Adding' : 'Add group'}</button>
           <Problem error={create.error} />
         </form>
-      </AddPanel>
+      </AddPanel></div>
       <Problem error={failure && new Error(failure)} />
       {groups.isPending && <p className="loading">Loading</p>}
       <Problem error={groups.error} />
       {groups.data && groups.data.length === 0 && <p className="empty-state">No customer groups yet.</p>}
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+      <ul style={{ listStyle: 'none', padding: 0 }} data-tour="customer-groups-list">
         {(groups.data ?? []).map((g) => (
-          <GroupCard key={g.id} group={g} lists={lists.data ?? []} busy={change.isPending} onSave={(body) => change.mutate({ group: g, body })} />
+          <GroupCard
+            key={g.id}
+            group={g}
+            lists={lists.data ?? []}
+            busy={change.isPending}
+            onSave={(body) => change.mutate({ group: g, body })}
+            extra={(
+              <p className="cluster">
+                <ScreenLink screen="buyers" to="/staff/retail/catalogue/buyers" label={`See the credit buyers of ${g.name}`}>Credit buyers</ScreenLink>
+                {g.price_list && <ScreenLink screen="priceLists" to="/staff/retail/price-lists" label={`See the price list ${g.price_list}`}>Price lists</ScreenLink>}
+              </p>
+            )}
+          />
         ))}
       </ul>
     </Gate>

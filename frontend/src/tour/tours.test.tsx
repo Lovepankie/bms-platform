@@ -45,7 +45,7 @@ import { BranchesScreen } from '../areas/staff/branches/page';
 import { TwoStepPolicyScreen } from '../areas/staff/two-step/page';
 import { UsersScreen } from '../areas/staff/users/page';
 import { FEATURES, type Tour, stepsFor } from './model';
-import { TOURS } from './tours';
+import { CORE_TOURS, TOURS } from './tours';
 
 // One test per tour: render the screen each step points at (under the staff bar, as the staff
 // layout draws it), as the user the tour is for, and prove its data-tour target is there. Renaming a screen or dropping an anchor fails here, not on
@@ -308,10 +308,10 @@ const AUDIENCE: Record<string, Me[]> = {
 
 describe('every tour target exists on its screen', () => {
   it('has an audience for every registered tour', () => {
-    expect(Object.keys(AUDIENCE).sort()).toEqual(TOURS.map((t) => t.id).sort());
+    expect(Object.keys(AUDIENCE).sort()).toEqual(CORE_TOURS.map((t) => t.id).sort());
   });
 
-  for (const tour of TOURS as Tour[]) {
+  for (const tour of CORE_TOURS as Tour[]) {
     it(`${tour.id}`, () => {
       for (const user of AUDIENCE[tour.id] ?? []) {
         expect(tour.audience(user), `${tour.id} is for ${user.full_name}`).toBe(true);

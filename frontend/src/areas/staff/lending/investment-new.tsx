@@ -9,6 +9,7 @@ import { INVESTMENTS_OPEN, instructionWords, may, payoutWords, percent } from '.
 import { InvestmentsGate } from './investments';
 import { money, parseAmount } from './loan-state';
 import { useStaff } from '../context';
+import { MemberLink } from './member-ui';
 
 // The subscribe form (FR-INV-02): choose the member, the product, the amount and the term, see the
 // return schedule the server works out for them (R-INV-1 to R-INV-4), record the member's maturity
@@ -24,7 +25,7 @@ function MemberPicker({ onPick }: { onPick: (m: MemberListItem) => void }) {
   });
   const fetching = found.isPlaceholderData || found.isFetching;
   return (
-    <section aria-label="Member">
+    <section aria-label="Member" data-tour="investment-member">
       <form role="search" className="ln-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
         <SearchBox
           id="iv-member-q"
@@ -87,9 +88,9 @@ export function SubscribeForm({ member, products }: { member: { id: string; labe
   const p = preview.data;
   return (
     <form aria-label="New investment" onSubmit={(e) => { e.preventDefault(); if (amountMinor !== null && termOk && !save.isPending) save.mutate(); }}>
-      <p>For <strong>{member.label}</strong></p>
+      <p>For <MemberLink memberId={member.id}><strong>{member.label}</strong></MemberLink></p>
       <label htmlFor="iv-product">Product</label>
-      <select id="iv-product" value={productId} onChange={(e) => {
+      <select id="iv-product" data-tour="investment-product" value={productId} onChange={(e) => {
         setProductId(e.target.value);
         setTerm(active.find((x) => x.id === e.target.value)?.allowed_terms_months?.[0] ?? 0);
       }}>
@@ -100,13 +101,13 @@ export function SubscribeForm({ member, products }: { member: { id: string; labe
         ))}
       </select>
       <label htmlFor="iv-amount">Amount ({product?.currency ?? 'UGX'})</label>
-      <input id="iv-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)}
+      <input id="iv-amount" data-tour="investment-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)}
         aria-invalid={amount !== '' && amountMinor === null} aria-describedby="iv-amount-hint" />
       <p id="iv-amount-hint" className="field-hint">
         From {money(product?.min_amount_minor, product?.currency)}
         {product?.max_amount_minor ? ` to ${money(product.max_amount_minor, product.currency)}` : ''}.
       </p>
-      <fieldset>
+      <fieldset data-tour="investment-term">
         <legend>Term</legend>
         {terms.map((t) => (
           <label key={t}>
@@ -135,7 +136,7 @@ export function SubscribeForm({ member, products }: { member: { id: string; labe
         </dl>
       )}
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary btn-block" disabled={amountMinor === null || !termOk || save.isPending}>
+      <button type="submit" className="rt-primary btn-block" data-tour="investment-open" disabled={amountMinor === null || !termOk || save.isPending}>
         {save.isPending ? 'Opening' : 'Open the investment'}
       </button>
       <p className="field-hint">It opens pending funding; record the money received on the next screen.</p>
@@ -143,13 +144,13 @@ export function SubscribeForm({ member, products }: { member: { id: string; labe
   );
 }
 
-function NewInvestment({ memberId }: { memberId?: string }) {
+export function NewInvestment({ memberId }: { memberId?: string }) {
   const { me } = useStaff();
   const [picked, setPicked] = useState<{ id: string; label: string } | null>(memberId ? { id: memberId, label: 'the member' } : null);
   const products = useQuery({ queryKey: ['lending', 'investment-products'], queryFn: () => investments.products() });
   if (!may(me, INVESTMENTS_OPEN)) return <p className="empty-state">You may not open investments.</p>;
   return (
-    <>
+    <div data-tour="investment-new">
       {!picked && <MemberPicker onPick={(m) => setPicked({ id: m.id ?? '', label: `${m.full_name ?? ''} (${m.member_no ?? ''})` })} />}
       {picked && (
         <>
@@ -161,7 +162,7 @@ function NewInvestment({ memberId }: { memberId?: string }) {
           {products.data && <SubscribeForm member={picked} products={products.data} />}
         </>
       )}
-    </>
+    </div>
   );
 }
 

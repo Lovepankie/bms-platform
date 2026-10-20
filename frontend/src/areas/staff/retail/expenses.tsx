@@ -8,6 +8,7 @@ import { MIN_EXPLANATION, activeCategories, itemsOf, needsExplanation, planExpen
 import { usePersistedDraft } from './idempotency';
 import { PartyPicker, useCashParties } from './party-picker';
 import { CASHBOOK_READ, holds, needsOf } from './permissions';
+import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
@@ -93,7 +94,7 @@ export function ExpenseRecords({ onVoided }: { onVoided?: (message: string) => v
     queryFn: () => retail.listExpenses({ branchIds: scope, ...window.query, includeVoided: true }),
   });
   return (
-    <section aria-label="Expense records">
+    <section aria-label="Expense records" data-tour="expense-records">
       <h2>Expense records</h2>
       <WindowFields id="expense-list" window={window} />
       {rows.isError && <Problem error={rows.error} />}
@@ -120,7 +121,7 @@ export function ExpenseRecords({ onVoided }: { onVoided?: (message: string) => v
   );
 }
 
-function ExpensesScreen() {
+export function ExpensesScreen() {
   const { me } = useStaff();
   const { branchId, branchName } = useSingleBranch();
   const [saved, setSaved] = useSavedFor<Expense>(branchId);
@@ -128,6 +129,11 @@ function ExpensesScreen() {
   const { show, toast } = useToast();
   return (
     <Gate screen="expenses" title="Expenses">
+      <p className="cluster">
+        <ScreenLink screen="expensesReport" to="/staff/retail/expenses-report" tour="expenses-report-link">Expenses report</ScreenLink>
+        <ScreenLink screen="expenseSetup" to="/staff/retail/expense-lists" tour="expenses-lists-link">Expense lists</ScreenLink>
+      </p>
+      <div data-tour="expense-form">
       {branchId === null ? (
         <BranchRequired permissions={needsOf('expenses')} />
       ) : saved ? (
@@ -143,6 +149,7 @@ function ExpensesScreen() {
           <ExpenseForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(x) => { setSaved(x); show('Expense recorded.'); }} />
         </>
       )}
+      </div>
       {toast}
       {holds(me, CASHBOOK_READ) && <ExpenseRecords onVoided={show} />}
     </Gate>
@@ -182,7 +189,7 @@ export function ExpenseGroups({ groups, total, count, by }: { groups: ExpenseGro
   );
 }
 
-function ExpensesReportScreen() {
+export function ExpensesReportScreen() {
   const scope = useReadScope();
   const window = useWindow();
   const [by, setBy] = useState<ReportGroup>('category');
@@ -192,8 +199,9 @@ function ExpensesReportScreen() {
   });
   return (
     <Gate screen="expensesReport" title="Expenses report">
-      <WindowFields id="expenses-report" window={window} />
-      <div className="cluster filters" role="group" aria-label="Group the expenses">
+      <p><ScreenLink screen="expenses" to="/staff/retail/expenses" tour="expenses-back-link">Record an expense</ScreenLink></p>
+      <div data-tour="expenses-report-window"><WindowFields id="expenses-report" window={window} /></div>
+      <div className="cluster filters" role="group" aria-label="Group the expenses" data-tour="expenses-report-group">
         {GROUPS.map((g) => (
           <button key={g.value} type="button" className="btn-sm" aria-pressed={by === g.value} onClick={() => setBy(g.value)}>
             {g.label}
@@ -202,7 +210,9 @@ function ExpensesReportScreen() {
       </div>
       {report.isError && <Problem error={report.error} />}
       {report.isPending && <p className="loading">Loading</p>}
-      {report.data && <ExpenseGroups groups={report.data.items ?? []} total={report.data.total_minor ?? 0} count={report.data.count ?? 0} by={by} />}
+      <div data-tour="expenses-report-rows">
+        {report.data && <ExpenseGroups groups={report.data.items ?? []} total={report.data.total_minor ?? 0} count={report.data.count ?? 0} by={by} />}
+      </div>
     </Gate>
   );
 }

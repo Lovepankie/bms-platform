@@ -107,25 +107,29 @@ export function BillFormView({ form, suppliers, loadingLines, match, checking, m
   const setLine = (i: number, line: BillLineForm) => onChange({ ...form, lines: form.lines.map((l, n) => (n === i ? line : l)) });
   return (
     <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!problem && !busy && !checking) onSubmit(); }} data-tour="bill-form">
-      <SupplierField id="bill-supplier" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId, lines: [], varianceReason: '' })} />
-      {form.supplierId !== '' && (
-        <>
-          <h2>Goods received and not yet invoiced</h2>
-          {loadingLines && <p className="loading">Loading</p>}
-          {!loadingLines && form.lines.length === 0 && <p className="empty-state">Nothing received from this supplier is waiting for an invoice.</p>}
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {form.lines.map((l, i) => <BillLineCard key={l.receiptLineId} line={l} index={i} onChange={(line) => setLine(i, line)} />)}
-          </ul>
-        </>
-      )}
-      <label htmlFor="bill-ref">Supplier&apos;s invoice number</label>
-      <input id="bill-ref" value={form.supplierRef} maxLength={60} onChange={(e) => onChange({ ...form, supplierRef: e.target.value })} />
-      <label htmlFor="bill-date">Invoice date</label>
-      <input id="bill-date" type="date" value={form.billDate} onChange={(e) => onChange({ ...form, billDate: e.target.value })} />
-      <label htmlFor="bill-due">Due on</label>
-      <input id="bill-due" type="date" value={form.dueDate} onChange={(e) => onChange({ ...form, dueDate: e.target.value })} />
-      <label htmlFor="bill-total">Invoice total, as printed</label>
-      <input id="bill-total" inputMode="numeric" value={form.total} onChange={(e) => onChange({ ...form, total: e.target.value })} />
+      <div className="stack" data-tour="bill-goods">
+        <SupplierField id="bill-supplier" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId, lines: [], varianceReason: '' })} />
+        {form.supplierId !== '' && (
+          <>
+            <h2>Goods received and not yet invoiced</h2>
+            {loadingLines && <p className="loading">Loading</p>}
+            {!loadingLines && form.lines.length === 0 && <p className="empty-state">Nothing received from this supplier is waiting for an invoice.</p>}
+            <ul style={{ listStyle: 'none', padding: 0 }}>
+              {form.lines.map((l, i) => <BillLineCard key={l.receiptLineId} line={l} index={i} onChange={(line) => setLine(i, line)} />)}
+            </ul>
+          </>
+        )}
+      </div>
+      <div className="stack" data-tour="bill-details">
+        <label htmlFor="bill-ref">Supplier&apos;s invoice number</label>
+        <input id="bill-ref" value={form.supplierRef} maxLength={60} onChange={(e) => onChange({ ...form, supplierRef: e.target.value })} />
+        <label htmlFor="bill-date">Invoice date</label>
+        <input id="bill-date" type="date" value={form.billDate} onChange={(e) => onChange({ ...form, billDate: e.target.value })} />
+        <label htmlFor="bill-due">Due on</label>
+        <input id="bill-due" type="date" value={form.dueDate} onChange={(e) => onChange({ ...form, dueDate: e.target.value })} />
+        <label htmlFor="bill-total">Invoice total, as printed</label>
+        <input id="bill-total" inputMode="numeric" value={form.total} onChange={(e) => onChange({ ...form, total: e.target.value })} />
+      </div>
       {ticked(form).length > 0 && <p className="hint" data-testid="bill-lines-total">The lines you ticked come to {money(billLinesTotal(form))}.</p>}
       {checking && <p className="hint" role="status">Checking against the goods received</p>}
       <Problem error={matchError} />
@@ -140,7 +144,7 @@ export function BillFormView({ form, suppliers, loadingLines, match, checking, m
       <input id="bill-note" value={form.note} maxLength={300} onChange={(e) => onChange({ ...form, note: e.target.value })} />
       {problem && ticked(form).length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || busy || checking}>{busy ? 'Saving' : 'Save supplier invoice'}</button>
+      <button type="submit" className="rt-primary" disabled={problem !== null || busy || checking} data-tour="bill-save">{busy ? 'Saving' : 'Save supplier invoice'}</button>
     </form>
   );
 }

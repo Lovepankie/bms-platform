@@ -8,6 +8,7 @@ import { amountOrNull, clockTime, flagWords, groupByShopMonth, warningWords, typ
 import { DateField, ImportedBadge, RecordsByShop, Saved, Warnings, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
 import { usePersistedDraft } from './idempotency';
 import { CASHBOOK_READ, holds, needsOf } from './permissions';
+import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
@@ -93,7 +94,7 @@ export function BankingRecords({ onVoided }: { onVoided?: (message: string) => v
     queryFn: () => retail.listBankings({ branchIds: scope, ...window.query, includeVoided: true }),
   });
   return (
-    <section aria-label="Banking records">
+    <section aria-label="Banking records" data-tour="banking-records">
       <h2>Banked cash records</h2>
       <WindowFields id="banking-list" window={window} />
       {rows.isError && <Problem error={rows.error} />}
@@ -120,7 +121,7 @@ export function BankingRecords({ onVoided }: { onVoided?: (message: string) => v
   );
 }
 
-function BankingScreen() {
+export function BankingScreen() {
   const { me } = useStaff();
   const { branchId, branchName } = useSingleBranch();
   const [saved, setSaved] = useSavedFor<Banking>(branchId);
@@ -128,6 +129,8 @@ function BankingScreen() {
   const { show, toast } = useToast();
   return (
     <Gate screen="banking" title="Banking">
+      <p><ScreenLink screen="bankingReport" to="/staff/retail/banking-report" tour="banking-report-link">Banking report</ScreenLink></p>
+      <div data-tour="banking-form">
       {branchId === null ? (
         <BranchRequired permissions={needsOf('banking')} />
       ) : saved ? (
@@ -141,6 +144,7 @@ function BankingScreen() {
           <BankingForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(b) => { setSaved(b); show('Banking recorded.'); }} />
         </>
       )}
+      </div>
       {toast}
       {holds(me, CASHBOOK_READ) && <BankingRecords onVoided={show} />}
     </Gate>
@@ -212,7 +216,7 @@ export function BankingReportView({ days }: { days: BankingDay[] }) {
   );
 }
 
-function BankingReportScreen() {
+export function BankingReportScreen() {
   const scope = useReadScope();
   const window = useWindow();
   const report = useQuery({
@@ -221,10 +225,13 @@ function BankingReportScreen() {
   });
   return (
     <Gate screen="bankingReport" title="Banking report">
-      <WindowFields id="banking-report" window={window} />
+      <p><ScreenLink screen="banking" to="/staff/retail/banking" tour="banking-back-link">Record banking</ScreenLink></p>
+      <div data-tour="banking-report-window"><WindowFields id="banking-report" window={window} /></div>
       {report.isError && <Problem error={report.error} />}
       {report.isPending && <p className="loading">Loading</p>}
-      {report.data && <BankingReportView days={report.data.items ?? []} />}
+      <div data-tour="banking-report-days">
+        {report.data && <BankingReportView days={report.data.items ?? []} />}
+      </div>
     </Gate>
   );
 }

@@ -8,7 +8,7 @@ import { useStaff } from '../context';
 import { showQty } from './maths';
 import { PURCHASE_CREATE, canUse, holdsAt } from './permissions';
 import { canCancelOrder, canEditOrder, canReceiveOrder, canSendOrder, inLineUnit, orderStatusWords, sendOutcomeWords } from './purchasing-state';
-import { Facts, ReasonPanel, StatusBadge, useActionKeys } from './purchasing-ui';
+import { Facts, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Problem, Success, money, useBranchName, useToast } from './ui';
 
@@ -17,15 +17,15 @@ import { Problem, Success, money, useBranchName, useToast } from './ui';
 // receive goods against it. Large orders wait for a second person: the order stays a draft until they approve it in Approvals.
 
 /** The order: facts, lines and the receipts made against it. Billed columns show only when the server sent them. */
-export function PurchaseOrderView({ order, nameOf }: { order: PurchaseOrder; nameOf: (branchId: string | undefined) => string }) {
+export function PurchaseOrderView({ order, nameOf, payable }: { order: PurchaseOrder; nameOf: (branchId: string | undefined) => string; payable?: boolean }) {
   const lines = order.lines ?? [];
   const showBilled = lines.some((l) => l.billed_qty !== undefined);
   return (
-    <section aria-label="Purchase order" data-testid="purchase-order">
+    <section aria-label="Purchase order" data-testid="purchase-order" data-tour="order-summary">
       <h2>{order.order_no} <StatusBadge words={orderStatusWords(order.status)} warn={order.status === 'cancelled'} /></h2>
       <Facts
         rows={[
-          ['Supplier', order.supplier_name ?? ''],
+          ['Supplier', <SupplierOwed key="s" id={order.supplier_id} name={order.supplier_name} payable={payable} />],
           ['Goods go to', nameOf(order.branch_id)],
           ['Ordered on', showDate(order.ordered_on)],
           ...(order.expected_on ? [['Expected on', showDate(order.expected_on)] as [string, string]] : []),
@@ -33,7 +33,7 @@ export function PurchaseOrderView({ order, nameOf }: { order: PurchaseOrder; nam
           ...(order.status === 'cancelled' ? [['Cancelled because', order.cancel_reason ?? ''] as [string, string]] : []),
         ]}
       />
-      <div className="table-wrap" tabIndex={0}>
+      <div className="table-wrap" tabIndex={0} data-tour="order-lines">
         <table>
           <thead>
             <tr>
@@ -62,7 +62,7 @@ export function PurchaseOrderView({ order, nameOf }: { order: PurchaseOrder; nam
           </tfoot>
         </table>
       </div>
-      <h3>Goods received against this order</h3>
+      <h3 data-tour="order-receipts">Goods received against this order</h3>
       {(order.receipts ?? []).length === 0 ? (
         <p className="empty-state">Nothing has been received yet.</p>
       ) : (
@@ -128,7 +128,7 @@ export function PurchaseOrderPage() {
       {order.isPending && <SkeletonList label="Loading the order" />}
       <Problem error={order.error} />
       {message && <Success>{message}</Success>}
-      {o && <PurchaseOrderView order={o} nameOf={nameOf} />}
+      {o && <PurchaseOrderView order={o} nameOf={nameOf} payable={canUse(me, 'supplierPayments')} />}
       {o && mayAct && (
         <div className="stack" data-tour="order-actions">
           <p className="cluster">

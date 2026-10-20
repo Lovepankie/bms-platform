@@ -54,7 +54,7 @@ export function ImportReport({ result }: { result: ImportResult }) {
   );
 }
 
-function ImportPage() {
+export function ImportPage() {
   const queryClient = useQueryClient();
   const profit = useProfitAccess();
   const { show, toast } = useToast();
@@ -92,17 +92,19 @@ function ImportPage() {
   return (
     <Gate screen="importer" title="Import items">
       <BackToCatalogue />
-      <Note>
-        The first row names the columns: code, description, category, unit, sell price{profit ? ' and, if you wish, cost price' : ''}. Then one item on each row.
-        {profit ? '' : ' Leave the cost price out.'} Check the file first: nothing is saved until you add the items.
-      </Note>
+      <div data-tour="import-note">
+        <Note>
+          The first row names the columns: code, description, category, unit, sell price{profit ? ' and, if you wish, cost price' : ''}. Then one item on each row.
+          {profit ? '' : ' Leave the cost price out.'} Check the file first: nothing is saved until you add the items.
+        </Note>
+      </div>
       <label htmlFor="import-file">Choose a CSV file</label>
-      <input id="import-file" type="file" accept=".csv,.txt,text/csv,text/plain" onChange={(e) => choose(e.target.files?.[0])} />
+      <input id="import-file" type="file" data-tour="import-file" accept=".csv,.txt,text/csv,text/plain" onChange={(e) => choose(e.target.files?.[0])} />
       <label htmlFor="import-text">Or paste the rows here</label>
-      <textarea id="import-text" rows={8} value={text} onChange={(e) => { setText(e.target.value); setDone(null); setWarning(null); }} spellCheck={false} />
+      <textarea id="import-text" data-tour="import-text" rows={8} value={text} onChange={(e) => { setText(e.target.value); setDone(null); setWarning(null); }} spellCheck={false} />
       {warning && <p role="alert" className="alert alert-warning">{warning}</p>}
       <Problem error={check.error} />
-      <button type="button" className="rt-primary" disabled={text.trim() === '' || check.isPending} onClick={() => check.mutate()}>
+      <button type="button" className="rt-primary" data-tour="import-check" disabled={text.trim() === '' || check.isPending} onClick={() => check.mutate()}>
         {check.isPending ? 'Checking' : 'Check the file'}
       </button>
       {current && <ImportReport result={current} />}

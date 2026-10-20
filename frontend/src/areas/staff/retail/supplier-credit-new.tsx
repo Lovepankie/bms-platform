@@ -107,7 +107,7 @@ export function CreditFormView({ form, bill, loadingLines, busy, error, onChange
           <button type="button" className="btn-ghost" onClick={onOtherInvoice}>Choose another invoice</button>
         </section>
       )}
-      <fieldset>
+      <fieldset data-tour="credit-kind">
         <legend>What the credit note is for</legend>
         {CREDIT_KINDS.map((k) => (
           <p key={k.value}>
@@ -121,7 +121,7 @@ export function CreditFormView({ form, bill, loadingLines, busy, error, onChange
       <h2>The lines</h2>
       {loadingLines && <p className="loading">Loading</p>}
       {!loadingLines && form.lines.length === 0 && <p className="empty-state">This invoice has no lines to credit.</p>}
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+      <ul style={{ listStyle: 'none', padding: 0 }} data-tour="credit-lines">
         {form.lines.map((l, i) => <CreditLineCard key={l.billLineId} line={l} kind={form.kind} index={i} onChange={(x) => setLine(i, x)} />)}
       </ul>
       {used.length > 0 && <p className="hint" data-testid="credit-lines-total">The lines come to {money(creditTotal(form))}.</p>}
@@ -137,7 +137,7 @@ export function CreditFormView({ form, bill, loadingLines, busy, error, onChange
       <input id="credit-note" value={form.note} maxLength={300} onChange={(e) => onChange({ ...form, note: e.target.value })} />
       {problem && form.billId !== '' && used.length > 0 && <p role="alert" className="rt-flag" data-testid="credit-problem">{problem}</p>}
       <Problem error={error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || busy}>{busy ? 'Saving' : 'Save credit note'}</button>
+      <button type="submit" className="rt-primary" disabled={problem !== null || busy} data-tour="credit-save">{busy ? 'Saving' : 'Save credit note'}</button>
     </form>
   );
 }

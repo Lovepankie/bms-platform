@@ -1,0 +1,31 @@
+name: Tour guard
+
+# Every route has a page tour, breadcrumbs and cross links (ADR-049, issue #337). Breadcrumbs and the route table are checked by a
+# unit test; this guard fails a pull request that adds or renames a route under frontend/src/areas (or declares one in the router)
+# without a change under frontend/src/tour/, unless the pull request body has a line `TOUR-EXEMPT: <reason>`. It reads only the
+# diff and the body, holds no secret and runs on the same CI_RUNS_ON runners as the other small guards. The body arrives through
+# the environment, never interpolated into the script. `edited` re-runs it when the body gains the exemption line.
+# See .github/scripts/tour_guard.py.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  tour-guard:
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: The guard itself behaves as documented
+        run: python3 .github/scripts/test_tour_guard.py
+      - name: A new or renamed route needs a tour change or a TOUR-EXEMPT line
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python3 .github/scripts/tour_guard.py

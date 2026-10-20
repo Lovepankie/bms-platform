@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { retail, type Category, type Unit } from '../../../api/retail';
 import { AddPanel, BackToCatalogue } from './catalogue';
+import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, changeFailureText, requireVersion, useToast } from './ui';
 
 // Categories and Units (#146): the same screen twice. A row can be renamed or switched off, never
@@ -16,8 +17,10 @@ export function usedText(count: number | undefined, noun: string): string {
   return n === 0 ? `No items use this ${noun} yet.` : `Used by ${n} ${n === 1 ? 'item' : 'items'}.`;
 }
 
-export function NamedRow({ row, noun, busy, onRename, onToggle }: {
+export function NamedRow({ row, noun, busy, onRename, onToggle, extra }: {
   row: Named;
+  /** More beside the buttons, such as a link to the items that use this row. */
+  extra?: ReactNode;
   noun: string;
   busy?: boolean;
   onRename: (name: string) => void;
@@ -52,6 +55,7 @@ export function NamedRow({ row, noun, busy, onRename, onToggle }: {
           <button type="button" className="btn-sm" disabled={busy} onClick={onToggle} aria-label={`${off ? 'Switch on' : 'Switch off'} ${row.name}`}>
             {off ? 'Switch on' : 'Switch off'}
           </button>
+          {extra}
         </p>
       )}
     </li>
@@ -91,25 +95,28 @@ function NamedList({ noun, plural, list, create, update }: {
   return (
     <>
       <BackToCatalogue />
-      <AddPanel label={`Add a ${noun}`} open={adding} onOpen={() => setAdding(true)} onClose={() => { setAdding(false); setName(''); }}>
-        <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) add.mutate(); }}>
-          <label htmlFor={`new-${plural}`}>Name of the new {noun}</label>
-          <input id={`new-${plural}`} value={name} maxLength={noun === 'unit' ? 30 : 100} onChange={(e) => setName(e.target.value)} autoComplete="off" />
-          <button type="submit" className="rt-primary" disabled={add.isPending || name.trim() === ''}>{add.isPending ? 'Adding' : `Add ${noun}`}</button>
-        </form>
-        <Problem error={add.error} />
-      </AddPanel>
+      <div data-tour="named-add">
+        <AddPanel label={`Add a ${noun}`} open={adding} onOpen={() => setAdding(true)} onClose={() => { setAdding(false); setName(''); }}>
+          <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) add.mutate(); }}>
+            <label htmlFor={`new-${plural}`}>Name of the new {noun}</label>
+            <input id={`new-${plural}`} value={name} maxLength={noun === 'unit' ? 30 : 100} onChange={(e) => setName(e.target.value)} autoComplete="off" />
+            <button type="submit" className="rt-primary" disabled={add.isPending || name.trim() === ''}>{add.isPending ? 'Adding' : `Add ${noun}`}</button>
+          </form>
+          <Problem error={add.error} />
+        </AddPanel>
+      </div>
       {message && <Success>{message}</Success>}
       <Problem error={failure && new Error(failure)} />
       {rows.isPending && <p className="loading">Loading</p>}
       <Problem error={rows.error} />
       {rows.data && rows.data.length === 0 && <p className="empty-state">No {plural} yet. Add the first one above.</p>}
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+      <ul style={{ listStyle: 'none', padding: 0 }} data-tour="named-list">
         {(rows.data ?? []).map((r) => (
           <NamedRow
             key={r.id}
             row={r}
             noun={noun}
+            extra={<ScreenLink screen="products" to="/staff/retail/catalogue/products" label={`See the items of ${r.name}`}>Items</ScreenLink>}
             busy={change.isPending}
             onRename={(n) => change.mutate({ id: r.id ?? '', version: r.version, body: { name: n }, text: (x) => `Renamed to "${x.name}".` })}
             onToggle={() =>
@@ -129,7 +136,7 @@ function NamedList({ noun, plural, list, create, update }: {
   );
 }
 
-function CategoriesPage() {
+export function CategoriesPage() {
   return (
     <Gate screen="categories" title="Categories">
       <NamedList noun="category" plural="categories" list={() => retail.listCategories()} create={(n) => retail.createCategory(n)} update={(id, v, b) => retail.updateCategory(id, v, b)} />
@@ -137,7 +144,7 @@ function CategoriesPage() {
   );
 }
 
-function UnitsPage() {
+export function UnitsPage() {
   return (
     <Gate screen="units" title="Units">
       <NamedList noun="unit" plural="units" list={() => retail.listUnits()} create={(n) => retail.createUnit(n)} update={(id, v, b) => retail.updateUnit(id, v, b)} />

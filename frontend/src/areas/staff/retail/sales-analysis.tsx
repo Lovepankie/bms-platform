@@ -3,7 +3,7 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retailAnalytics, type AnalysisRow, type SalesAnalysis, type StockedItem } from '../../../api/retail-analytics';
 import { SkeletonList } from '../../../components/states';
-import { Bars, Choice, DateRange, Empty, Section, Sparkline, defaultRange, moneyOrNone, percentOrNone, rangeProblem } from './analytics-ui';
+import { Bars, Choice, DateRange, Empty, Section, Sparkline, ToSales, ToStock, defaultRange, moneyOrNone, percentOrNone, rangeProblem } from './analytics-ui';
 import { showQty } from './maths';
 import { Gate, Problem, money, useBranchView, useIsPhone } from './ui';
 
@@ -34,7 +34,7 @@ function RowsTable({ title, rows, profit }: { title: string; rows: AnalysisRow[]
         {rows.map((r) => (
           <tr key={r.id ?? r.label}>
             <td>
-              {r.label ?? 'Unknown'}
+              {title === 'Item' || title === 'Branch' ? <ToStock>{r.label ?? 'Unknown'}</ToStock> : (r.label ?? 'Unknown')}
               {r.code && <><br /><span className="hint">{r.code}</span></>}
               {phone && <><br /><span className="hint">{showQty(r.qty ?? '0')}{r.unit ? ` ${r.unit}` : ''} sold{profit && r.margin_bp !== undefined && r.margin_bp !== null ? `, margin ${percentOrNone(r.margin_bp)}` : ''}</span></>}
             </td>
@@ -61,7 +61,7 @@ function Stocked({ items, total, empty }: { items: StockedItem[]; total: number;
         <tbody>
           {items.map((i) => (
             <tr key={i.product_id}>
-              <td>{i.description}<br /><span className="hint">{i.code}</span></td>
+              <td><ToStock>{i.description}</ToStock><br /><span className="hint">{i.code}</span></td>
               <td className="num">{showQty(i.qty_on_hand ?? '0')} {i.unit}</td>
               <td className="num">{money(i.stock_at_price_minor ?? 0)}</td>
             </tr>
@@ -83,8 +83,8 @@ export function SalesAnalysisView({ data }: { data: SalesAnalysis }) {
     <>
       <div className="table-wrap"><table>
         <tbody>
-          <tr><td>Sales</td><td className="num">{money(totals.sales_minor ?? 0)}</td></tr>
-          <tr><td>Number of sales</td><td className="num">{totals.sale_count ?? 0}</td></tr>
+          <tr><td>Sales</td><td className="num"><ToSales>{money(totals.sales_minor ?? 0)}</ToSales></td></tr>
+          <tr><td>Number of sales</td><td className="num"><ToSales>{totals.sale_count ?? 0}</ToSales></td></tr>
           {profit && <tr><td>Profit</td><td className="num">{moneyOrNone(totals.gross_profit_minor)}</td></tr>}
           {profit && <tr><td>Margin (profit over sales)</td><td className="num">{percentOrNone(totals.margin_bp)}</td></tr>}
         </tbody>
@@ -137,7 +137,7 @@ export function SalesAnalysisView({ data }: { data: SalesAnalysis }) {
   );
 }
 
-function SalesAnalysisPage() {
+export function SalesAnalysisPage() {
   const { all, branchId, branchName } = useBranchView();
   const initial = defaultRange();
   const [from, setFrom] = useState(initial.from);
@@ -154,15 +154,17 @@ function SalesAnalysisPage() {
   return (
     <Gate screen="salesAnalysis" title="Sales analysis" wide>
       <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
-      <DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} />
-      <div className="rt-row">
+      <div data-tour="analysis-range"><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} /></div>
+      <div className="rt-row" data-tour="analysis-options">
         <Choice id="an-group" label="Group the days" value={group} options={[...GROUPS]} onChange={setGroup} />
         <Choice id="an-top" label="Rows to show" value={top} options={TOPS} onChange={setTop} />
         <Choice id="an-slow" label="Slow means no sale in" value={slowDays} options={SLOW} onChange={setSlowDays} />
       </div>
+      <div data-tour="analysis-results">
       {analysis.isPending && !problem && <SkeletonList label="Loading sales analysis" />}
       <Problem error={analysis.error} />
       {analysis.data && <SalesAnalysisView data={analysis.data} />}
+      </div>
     </Gate>
   );
 }

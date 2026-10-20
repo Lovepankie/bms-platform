@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
+import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { savings, type SavingsProduct, type SavingsProductTerms } from '../../../api/savings';
 import { useStaff } from '../context';
@@ -213,13 +213,13 @@ export function ProductRow({ p }: { p: SavingsProduct }) {
         {(p.min_balance_minor ?? 0) > 0 && <span>Keeps {money(p.min_balance_minor, c)}</span>}
         {(p.withdrawal_fee_minor ?? 0) > 0 && <span>Fee {money(p.withdrawal_fee_minor, c)}</span>}
         {p.dormancy_days && <span>Dormant after {p.dormancy_days} days</span>}
-        <span>{p.accounts ?? 0} accounts</span>
+        <Link to="/staff/lending/savings">{p.accounts ?? 0} accounts</Link>
       </p>
     </>
   );
 }
 
-function Products() {
+export function Products() {
   const { me } = useStaff();
   const [editing, setEditing] = useState<string | null>(null);
   const products = useQuery({ queryKey: ['savings', 'products'], queryFn: () => savings.listProducts() });
@@ -228,7 +228,7 @@ function Products() {
   return (
     <SavingsGate title="Savings products">
       {manage && editing === null && (
-        <button type="button" className="rt-primary btn-block" onClick={() => setEditing('new')}>New product</button>
+        <button type="button" className="rt-primary btn-block" data-tour="savings-product-new" onClick={() => setEditing('new')}>New product</button>
       )}
       {editing === 'new' && (
         <section className="rt-card" aria-label="New savings product">
@@ -238,7 +238,7 @@ function Products() {
       {products.isPending && <p className="loading">Loading products</p>}
       <Problem error={products.error} />
       {products.data && products.data.length === 0 && <p className="empty-state">No savings products yet.</p>}
-      <ul className="ln-list">
+      <ul className="ln-list" data-tour="savings-products-list">
         {(products.data ?? []).map((p) => (
           <li key={p.id} className="rt-card">
             {editing === p.id ? (

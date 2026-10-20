@@ -8,7 +8,7 @@ import { SkeletonList } from '../../../components/states';
 import { useStaff } from '../context';
 import { qtyString, showQty } from './maths';
 import { usePersistedDraft } from './idempotency';
-import { SALE_RETURN, branchesWhere, canUse, holdsAt, sellingBranches } from './permissions';
+import { SALE_RETURN, branchesWhere, canOpenAccount, canUse, holdsAt, sellingBranches } from './permissions';
 import {
   DISPOSITION_WORDS, MONEY_METHODS, accountRefundAllowed, REASONS, REFUND_WORDS, backOf, blankReturn, blankRow, buildReturnRequest, lineUnit, plannedLines, refundPlan, remainingMilli,
   resolved, returnProblem, rowProblem, soldMilli, type Back, type Disposition, type MoneyMethod, type RefundChoice, type ReturnForm, type RowForm,
@@ -162,7 +162,7 @@ export function ReturnFormView({ sale, back, form: chosen, branches, usualIsStor
       </section>
       {problem && planned.length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || busy}>{busy ? 'Saving' : 'Record the return'}</button>
+      <button type="submit" className="rt-primary" disabled={problem !== null || busy} data-tour="return-save">{busy ? 'Saving' : 'Record the return'}</button>
     </form>
   );
 }
@@ -221,7 +221,7 @@ export function ReturnNewPage() {
       {s && s.status !== 'voided' && !holdsAt(me, SALE_RETURN, s.branch_id) && <p className="empty-state">You cannot take goods back for the branch of this sale.</p>}
       {s && s.status !== 'voided' && holdsAt(me, SALE_RETURN, s.branch_id) && (
         <>
-          <p className="hint">Sale {s.sale_no}, {showDate(s.sale_date)}{s.buyer_name ? `, ${s.buyer_name}` : ''}, {money(s.total_minor ?? 0)}. Branch {branchLabel((me.branches ?? []).find((b) => b.id === s.branch_id)) || (branch ?? '')}.</p>
+          <p className="hint">Sale {s.sale_no}, {showDate(s.sale_date)}{s.buyer_name ? <>, {canOpenAccount(me) && s.customer_id ? <Link to="/staff/retail/accounts/$customerId" params={{ customerId: s.customer_id }} aria-label={`Open the account of ${s.buyer_name}`}>{s.buyer_name}</Link> : s.buyer_name}</> : ''}, {money(s.total_minor ?? 0)}. Branch {branchLabel((me.branches ?? []).find((b) => b.id === s.branch_id)) || (branch ?? '')}.</p>
           <ReturnFormView
             sale={s}
             back={back}

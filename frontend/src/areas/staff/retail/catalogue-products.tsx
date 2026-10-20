@@ -1,6 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { RETAIL_CURRENCY, RETAIL_ZONE, retail, type PriceChange, type Product, type SimilarProduct } from '../../../api/retail';
@@ -10,6 +10,7 @@ import { useStaff } from '../context';
 import { BackToCatalogue } from './catalogue';
 import { ExistsPanel, SimilarPanel, existingOf, type ExistingItem } from './catalogue-names';
 import { PackEditor } from './catalogue-packs';
+import { ScreenLink } from './screen-link';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
 
@@ -58,8 +59,10 @@ export function PriceHistory({ changes }: { changes: PriceChange[] }) {
   return <ul style={{ listStyle: 'none', padding: 0 }}>{[...changes].reverse().map((c) => <ChangeLine key={c.id} change={c} />)}</ul>;
 }
 
-export function ProductCard({ product, showCost, canPrice, onEdit, onPrice }: {
+export function ProductCard({ product, showCost, canPrice, onEdit, onPrice, extra }: {
   product: Product;
+  /** More beside the buttons, such as a link to the item's stock. */
+  extra?: ReactNode;
   showCost: boolean;
   canPrice: boolean;
   onEdit: () => void;
@@ -78,6 +81,7 @@ export function ProductCard({ product, showCost, canPrice, onEdit, onPrice }: {
       <p className="cluster">
         <button type="button" className="btn-sm" onClick={onEdit} aria-label={`Edit ${product.description}`}>Edit</button>
         {canPrice && <button type="button" className="btn-sm" onClick={onPrice} aria-label={`Change the price of ${product.description}`}>Change price</button>}
+        {extra}
       </p>
     </li>
   );
@@ -322,13 +326,13 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
   const items = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
   const canPrice = (me.permissions ?? []).includes(PRICE);
   const g = useCategoryGroups({ screen: 'items', items, categoryOf: (p) => p.category, resetKey: [query, categoryId, activeFilter].join('|'), searching: query !== '', pending: page.isPlaceholderData });
-  const card = (p: Product) => <ProductCard key={p.id} product={p} showCost={profit} canPrice={canPrice} onEdit={() => onEdit(p.id ?? '')} onPrice={() => onPrice(p.id ?? '')} />;
+  const card = (p: Product) => <ProductCard key={p.id} product={p} showCost={profit} canPrice={canPrice} onEdit={() => onEdit(p.id ?? '')} onPrice={() => onPrice(p.id ?? '')} extra={<ScreenLink screen="stock" to="/staff/retail/stock" label={`See the stock of ${p.description}`}>Stock</ScreenLink>} />;
   return (
     <>
       <BackToCatalogue />
-      <p><button type="button" onClick={onAdd}>Add an item</button></p>
-      <SearchBox id="items-search" label="Search by name, code or category" search={search} fetching={finding} count={page.data ? items.length : undefined} more={page.hasNextPage} />
-      <div className="rt-row">
+      <p><button type="button" onClick={onAdd} data-tour="product-add">Add an item</button></p>
+      <div data-tour="product-search"><SearchBox id="items-search" label="Search by name, code or category" search={search} fetching={finding} count={page.data ? items.length : undefined} more={page.hasNextPage} /></div>
+      <div className="rt-row" data-tour="product-filters">
         <div>
           <label htmlFor="items-category">Category</label>
           <select id="items-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
@@ -348,16 +352,18 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
       {page.isPending && <p className="loading">Loading</p>}
       <Problem error={page.error} />
       {page.data && items.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="items" /> : <p className="empty-state">No items found.</p>)}
-      <SearchResults fetching={finding}>
-        {items.length > 0 && <GroupControls state={g} paged={page.hasNextPage} />}
-        {g.active ? <GroupedCards state={g} renderItem={card} /> : <ul style={{ listStyle: 'none', padding: 0 }}>{items.map(card)}</ul>}
-      </SearchResults>
+      <div data-tour="product-list">
+        <SearchResults fetching={finding}>
+          {items.length > 0 && <GroupControls state={g} paged={page.hasNextPage} />}
+          {g.active ? <GroupedCards state={g} renderItem={card} /> : <ul style={{ listStyle: 'none', padding: 0 }}>{items.map(card)}</ul>}
+        </SearchResults>
+      </div>
       {page.hasNextPage && <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage || page.isPlaceholderData}>{page.isFetchingNextPage ? 'Loading' : 'Show more items'}</button>}
     </>
   );
 }
 
-function ProductsPage() {
+export function ProductsPage() {
   const [view, setView] = useState<View>({ mode: 'list' });
   const [message, setMessage] = useState<string | null>(null);
   const { show, toast } = useToast();

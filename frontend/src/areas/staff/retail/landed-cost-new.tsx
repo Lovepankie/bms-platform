@@ -119,18 +119,20 @@ export function LandedFormView({ form, suppliers, picker, onChange, onReview }: 
   const setLine = (id: string, l: GoodsLineForm) => onChange({ ...form, lines: form.lines.map((x) => (x.receiptLineId === id ? l : x)) });
   return (
     <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!problem) onReview(); }} data-tour="landed-form">
-      <h2>Who is owed</h2>
-      <SupplierField id="landed-supplier" label="Who is owed (the forwarder, carrier or agent)" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId })} />
-      <p className="hint">They must be in your list of suppliers. Add them in the Catalogue first if they are not.</p>
-      <label htmlFor="landed-ref">Their invoice number</label>
-      <input id="landed-ref" value={form.supplierRef} maxLength={60} onChange={(e) => onChange({ ...form, supplierRef: e.target.value })} />
-      <label htmlFor="landed-date">Date of the charges</label>
-      <input id="landed-date" type="date" value={form.costDate} onChange={(e) => onChange({ ...form, costDate: e.target.value })} />
-      <label htmlFor="landed-due">Due on</label>
-      <input id="landed-due" type="date" value={form.dueDate} onChange={(e) => onChange({ ...form, dueDate: e.target.value })} />
+      <div className="stack" data-tour="landed-who">
+        <h2>Who is owed</h2>
+        <SupplierField id="landed-supplier" label="Who is owed (the forwarder, carrier or agent)" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId })} />
+        <p className="hint">They must be in your list of suppliers. Add them in the Catalogue first if they are not.</p>
+        <label htmlFor="landed-ref">Their invoice number</label>
+        <input id="landed-ref" value={form.supplierRef} maxLength={60} onChange={(e) => onChange({ ...form, supplierRef: e.target.value })} />
+        <label htmlFor="landed-date">Date of the charges</label>
+        <input id="landed-date" type="date" value={form.costDate} onChange={(e) => onChange({ ...form, costDate: e.target.value })} />
+        <label htmlFor="landed-due">Due on</label>
+        <input id="landed-due" type="date" value={form.dueDate} onChange={(e) => onChange({ ...form, dueDate: e.target.value })} />
+      </div>
 
       <h2>The charges</h2>
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+      <ul style={{ listStyle: 'none', padding: 0 }} data-tour="landed-charges">
         {form.charges.map((c, i) => (
           <ChargeRow key={c.key} charge={c} index={i} onChange={(x) => setCharge(i, x)} onRemove={form.charges.length > 1 ? () => onChange({ ...form, charges: form.charges.filter((_, n) => n !== i) }) : undefined} />
         ))}
@@ -143,7 +145,7 @@ export function LandedFormView({ form, suppliers, picker, onChange, onReview }: 
         <p role="alert" className="rt-flag" data-testid="landed-total-mismatch">The total you typed is not the sum of the charges. Check both against the invoice.</p>
       )}
 
-      <fieldset>
+      <fieldset data-tour="landed-method">
         <legend>How to spread the charges over the goods</legend>
         {SPREAD_METHODS.map((m) => (
           <p key={m.value}>
@@ -176,7 +178,7 @@ export function LandedFormView({ form, suppliers, picker, onChange, onReview }: 
       <label htmlFor="landed-note">Note (optional)</label>
       <input id="landed-note" value={form.note} maxLength={300} onChange={(e) => onChange({ ...form, note: e.target.value })} />
       {problem && <p role="alert" className="rt-flag" data-testid="landed-problem">{problem}</p>}
-      <button type="submit" className="rt-primary" disabled={problem !== null}>Review</button>
+      <button type="submit" className="rt-primary" disabled={problem !== null} data-tour="landed-review">Review</button>
     </form>
   );
 }

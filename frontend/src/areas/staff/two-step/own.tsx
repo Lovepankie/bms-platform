@@ -79,11 +79,11 @@ export function OwnTwoStep({ blocking = false }: { blocking?: boolean }) {
             password. It takes about two minutes.
           </p>
           <ErrorLine message={message} />
-          <label>
+          <label data-tour="twostep-password">
             Your password, to confirm it is you
             <input type="password" autoComplete="current-password" value={password} disabled={busy} onChange={(e) => setPassword(e.target.value)} />
           </label>
-          <p className="cluster">
+          <p className="cluster" data-tour="twostep-turn-on">
             <button type="button" className="btn-primary btn-lg" disabled={busy || password === ''} onClick={() => void start()}>
               {busy ? 'Starting' : 'Turn on two-step sign-in'}
             </button>

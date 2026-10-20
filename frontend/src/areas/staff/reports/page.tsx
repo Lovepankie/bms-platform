@@ -63,7 +63,7 @@ export function defaultFormat(formats: string[]): string {
   return ['pdf', 'xlsx', 'csv', 'json'].find((f) => formats.includes(f)) ?? formats[0] ?? 'json';
 }
 
-function Reports() {
+export function Reports() {
   const { me } = useStaff();
   if (!showReports(me)) {
     return (
@@ -153,10 +153,10 @@ export function CatalogueList({
   onQueued: () => void;
 }) {
   if (entries.length === 0) {
-    return <p className="empty-state">No report is available to you yet.</p>;
+    return <p className="empty-state" data-tour="reports-catalogue">No report is available to you yet.</p>;
   }
   return (
-    <section aria-label="Reports you can run">
+    <section aria-label="Reports you can run" data-tour="reports-catalogue">
       {entries.map((e) => (
         <RunForm key={e.key} entry={e} branchIds={branchIds} onQueued={onQueued} />
       ))}
@@ -265,7 +265,7 @@ export function RunsTable({
     }
   }
   return (
-    <section aria-label="Your reports">
+    <section aria-label="Your reports" data-tour="reports-runs">
       <h2>Your reports</h2>
       {loading && <p className="loading">Loading your reports</p>}
       <Problem error={error ?? problem} />

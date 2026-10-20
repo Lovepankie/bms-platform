@@ -3,7 +3,7 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retailAnalytics, type CoverRow, type StockHealth } from '../../../api/retail-analytics';
 import { SkeletonList } from '../../../components/states';
-import { Choice, DateRange, Empty, Section, defaultRange, moneyOrNone, plural, rangeProblem } from './analytics-ui';
+import { Choice, DateRange, Empty, Section, ToStock, defaultRange, moneyOrNone, plural, rangeProblem } from './analytics-ui';
 import { showQty } from './maths';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 
@@ -34,7 +34,7 @@ function CoverTable({ rows, nameOf, reorder }: { rows: CoverRow[]; nameOf: NameO
         {rows.map((r) => (
           <tr key={`${r.branch_id}-${r.product_id}`}>
             <td>
-              {r.description}<br />
+              <ToStock>{r.description}</ToStock><br />
               <span className="hint">{r.code}, {nameOf(r.branch_id)}</span>
               {phone && <><br /><span className="hint">{showQty(r.qty_on_hand ?? '0')} {r.unit} in stock, {showQty(r.sold_last30 ?? '0')} sold in 30 days</span></>}
             </td>
@@ -73,7 +73,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
               <tbody>
                 {(dead?.branches ?? []).map((b) => (
                   <tr key={b.branch_id}>
-                    <td>{nameOf(b.branch_id)}</td>
+                    <td><ToStock>{nameOf(b.branch_id)}</ToStock></td>
                     <td className="num">{b.item_count}</td>
                     <td className="num">
                       {money(b.value_at_price_minor ?? 0)}
@@ -100,7 +100,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
                 {(dead?.items ?? []).map((i) => (
                   <tr key={`${i.branch_id}-${i.product_id}`}>
                     <td>
-                      {i.description}<br /><span className="hint">{i.code}, {nameOf(i.branch_id)}</span>
+                      <ToStock>{i.description}</ToStock><br /><span className="hint">{i.code}, {nameOf(i.branch_id)}</span>
                       {phone && <><br /><span className="hint">{showQty(i.qty_on_hand ?? '0')} {i.unit} in stock</span></>}
                     </td>
                     {!phone && <td className="num">{showQty(i.qty_on_hand ?? '0')} {i.unit}</td>}
@@ -159,7 +159,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
   );
 }
 
-function StockHealthPage() {
+export function StockHealthPage() {
   const { all, branchId, branchName } = useBranchView();
   const nameOf = useBranchName();
   const initial = defaultRange();
@@ -177,15 +177,17 @@ function StockHealthPage() {
   return (
     <Gate screen="stockHealth" title="Stock health" wide>
       <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
-      <DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} />
-      <div className="rt-row">
+      <div data-tour="health-range"><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} /></div>
+      <div className="rt-row" data-tour="health-buy">
         <Choice id="sh-lead" label="Buy when cover is under" value={lead} options={LEADS} onChange={setLead} />
         <Choice id="sh-cover" label="Buy enough for" value={cover} options={COVERS} onChange={setCover} />
         <Choice id="sh-top" label="Rows to show" value={top} options={TOPS} onChange={setTop} />
       </div>
+      <div data-tour="health-results">
       {report.isPending && !problem && <SkeletonList label="Loading stock health" />}
       <Problem error={report.error} />
       {report.data && <StockHealthView data={report.data} nameOf={nameOf} />}
+      </div>
     </Gate>
   );
 }

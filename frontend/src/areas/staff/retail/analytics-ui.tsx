@@ -1,6 +1,9 @@
-import type { ReactNode } from 'react';
+import { Link, useRouter } from '@tanstack/react-router';
+import { useContext, type ReactNode } from 'react';
 import { businessToday, daysBefore } from '../../../api/retail';
+import { StaffContext } from '../context';
 import { showPercent } from './maths';
+import { canUse } from './permissions';
 import { money } from './ui';
 
 // Shared pieces of the analytics screens (issue #149): a date range with the server's 366 day limit,
@@ -8,6 +11,20 @@ import { money } from './ui';
 // beside them), and small helpers for money and percent cells.
 
 export const MAX_RANGE_DAYS = 366;
+
+/** A name that opens the Stock page, for a session that may read stock; plain text for one that may not (issue #336). */
+export function ToStock({ children }: { children: ReactNode }) {
+  const staff = useContext(StaffContext);
+  const router = useRouter({ warn: false });
+  return router && staff && canUse(staff.me, 'stock') ? <Link to="/staff/retail/stock">{children}</Link> : <>{children}</>;
+}
+
+/** A total that opens the All sales page (or Credit sales with `credit`), for a session that may read sales; plain text otherwise (issue #336). */
+export function ToSales({ children, credit = false }: { children: ReactNode; credit?: boolean }) {
+  const staff = useContext(StaffContext);
+  const router = useRouter({ warn: false });
+  return router && staff && canUse(staff.me, 'salesHistory') ? <Link to={credit ? '/staff/retail/credit-sales' : '/staff/retail/sales'}>{children}</Link> : <>{children}</>;
+}
 
 /** The default range: the last 30 days, ending today in the business's timezone. */
 export function defaultRange(): { from: string; to: string } {

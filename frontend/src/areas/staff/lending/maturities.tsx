@@ -76,7 +76,7 @@ export function MetricsCard({ data }: { data: InvestmentMetrics }) {
         <ol className="iv-shares">
           {(data.top_investors ?? []).map((s) => (
             <li key={s.id}>
-              <span>{s.label}</span>
+              <Link to="/staff/lending/investments/member/$memberId" params={{ memberId: s.id ?? '' }}>{s.label}</Link>
               <span className="num">{percent(s.share_bp)}</span>
             </li>
           ))}
@@ -95,23 +95,27 @@ export function MetricsCard({ data }: { data: InvestmentMetrics }) {
   );
 }
 
-function Maturities() {
+export function Maturities() {
   const { branch } = useStaff();
   const branches = branchFilter(branch);
   const ladder = useQuery({ queryKey: ['lending', 'investments', 'maturities', branch], queryFn: () => investments.maturities(branches), enabled: branch !== null });
   const metrics = useQuery({ queryKey: ['lending', 'investments', 'metrics', branch], queryFn: () => investments.metrics(branches), enabled: branch !== null });
   return (
     <InvestmentsGate title="Maturities">
-      {ladder.isPending && branch !== null && <p className="loading">Loading maturities</p>}
-      <Problem error={ladder.error} />
-      {ladder.data && (
-        <>
-          <Ladder data={ladder.data} />
-          <MaturityRows data={ladder.data} />
-        </>
-      )}
-      <Problem error={metrics.error} />
-      {metrics.data && <MetricsCard data={metrics.data} />}
+      <div data-tour="maturities-ladder">
+        {ladder.isPending && branch !== null && <p className="loading">Loading maturities</p>}
+        <Problem error={ladder.error} />
+        {ladder.data && (
+          <>
+            <Ladder data={ladder.data} />
+            <MaturityRows data={ladder.data} />
+          </>
+        )}
+      </div>
+      <div data-tour="maturities-metrics">
+        <Problem error={metrics.error} />
+        {metrics.data && <MetricsCard data={metrics.data} />}
+      </div>
     </InvestmentsGate>
   );
 }

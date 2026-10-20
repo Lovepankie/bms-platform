@@ -11,7 +11,7 @@ import { CREDIT_STATUS, creditKindWords } from './credits-state';
 import { costEffectWords } from './landed-state';
 import { showQty } from './maths';
 import { PAYABLE_MANAGE, canUse, holdsAt } from './permissions';
-import { Facts, MoreButton, ReasonPanel, StatusBadge, useActionKeys, useCursorList } from './purchasing-ui';
+import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
 
@@ -52,13 +52,15 @@ export function SupplierCreditsPage() {
       </p>
       {list.query.isPending && <p className="loading">Loading</p>}
       <Problem error={list.query.error} />
-      <SearchBox id="search-credits" label="Search by our number, the credit note number or the supplier" search={search} fetching={list.finding} count={list.query.data ? list.rows.length : undefined} more={list.query.hasNextPage} />
-      <label htmlFor="credits-status">Show</label>
-      <select id="credits-status" value={status} onChange={(e) => setStatus(e.target.value)}>
-        <option value="">All credit notes</option>
-        <option value="posted">Standing</option>
-        <option value="voided">Voided</option>
-      </select>
+      <div data-tour="credits-search">
+        <SearchBox id="search-credits" label="Search by our number, the credit note number or the supplier" search={search} fetching={list.finding} count={list.query.data ? list.rows.length : undefined} more={list.query.hasNextPage} />
+        <label htmlFor="credits-status">Show</label>
+        <select id="credits-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">All credit notes</option>
+          <option value="posted">Standing</option>
+          <option value="voided">Voided</option>
+        </select>
+      </div>
       {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="credit notes" /> : <p className="empty-state">No supplier credit notes yet.</p>)}
       <div data-tour="credits-list">
         <SearchResults fetching={list.finding}>
@@ -73,16 +75,16 @@ export function SupplierCreditsPage() {
 }
 
 /** One credit note: facts and its lines. A goods credit shows what was sent back; a price credit shows the money taken off. */
-export function SupplierCreditView({ credit, nameOf }: { credit: SupplierCredit; nameOf: (branchId: string | undefined) => string }) {
+export function SupplierCreditView({ credit, nameOf, payable }: { credit: SupplierCredit; nameOf: (branchId: string | undefined) => string; payable?: boolean }) {
   const lines = credit.lines ?? [];
   const goods = credit.kind === 'goods';
   const showCost = lines.some((l) => l.cost_before_minor !== undefined);
   return (
-    <section aria-label="Supplier credit note" data-testid="supplier-credit">
+    <section aria-label="Supplier credit note" data-testid="supplier-credit" data-tour="credit-summary">
       <h2>{credit.credit_no} <StatusBadge words={CREDIT_STATUS[credit.status ?? ''] ?? (credit.status ?? '')} warn={credit.status === 'voided'} /></h2>
       <Facts
         rows={[
-          ['Supplier', credit.supplier_name ?? ''],
+          ['Supplier', <SupplierOwed key="s" id={credit.supplier_id} name={credit.supplier_name} payable={payable} />],
           ['Their credit note number', credit.supplier_ref ?? ''],
           ['Against invoice', credit.bill_id ? <Link key="b" to="/staff/retail/supplier-bills/$billId" params={{ billId: credit.bill_id }}>{credit.bill_no}</Link> : ''],
           ['What it is', creditKindWords(credit.kind)],
@@ -94,7 +96,7 @@ export function SupplierCreditView({ credit, nameOf }: { credit: SupplierCredit;
           ...(credit.status === 'voided' ? [['Voided because', credit.void_reason ?? ''] as [string, string]] : []),
         ]}
       />
-      <div className="table-wrap" tabIndex={0}>
+      <div className="table-wrap" tabIndex={0} data-tour="credit-detail-lines">
         <table>
           <thead>
             <tr>
@@ -166,8 +168,9 @@ export function SupplierCreditPage() {
       {credit.isPending && <SkeletonList label="Loading the credit note" />}
       <Problem error={credit.error} />
       {message && <Success>{message}</Success>}
-      {c && <SupplierCreditView credit={c} nameOf={nameOf} />}
+      {c && <SupplierCreditView credit={c} nameOf={nameOf} payable={canUse(me, 'supplierPayments')} />}
       {c && c.status === 'posted' && holdsAt(me, PAYABLE_MANAGE, c.branch_id) && (
+        <div data-tour="credit-void">
         <ReasonPanel
           openLabel="Void this credit note"
           question="Why is it voided?"
@@ -177,6 +180,7 @@ export function SupplierCreditPage() {
           error={voided.error}
           onSubmit={(reason) => voided.mutate(reason)}
         />
+        </div>
       )}
       {toast}
     </main>

@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
+import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
@@ -8,7 +8,7 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { parseQty, qtyString, showQty } from './maths';
 import { BranchRequired, CategoryLabel, Gate, Problem, useStockingBranch } from './ui';
-import { needsOf } from './permissions';
+import { canUse, needsOf } from './permissions';
 
 // Usage and damage (FR-RET-07): items taken out of stock for use in the shop or because they are
 // damaged, with a reason. Valued at cost by the server; no cost is shown here.
@@ -54,7 +54,7 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (valid && !save.isPending) save.mutate(); }}>
-      <fieldset>
+      <fieldset data-tour="usage-kind">
         <legend>What happened?</legend>
         {(['used', 'damaged'] as const).map((k) => (
           <label key={k} style={{ fontWeight: 400 }}>
@@ -63,10 +63,14 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
           </label>
         ))}
       </fieldset>
+      <div data-tour="usage-reason">
       <label htmlFor="usage-reason">Reason</label>
       <input id="usage-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+      </div>
 
+      <div data-tour="usage-search">
       <SearchBox id="usage-search" label="Find an item by name, code or category" search={search} fetching={finding} count={products.data ? Math.min(products.data.length, 20) : undefined} more={(products.data?.length ?? 0) > 20} />
+      </div>
       {products.data && products.data.length === 0 && search.term && <NoResults term={search.term} onClear={search.clear} noun="items" />}
       <SearchResults fetching={finding}>
       <ul style={{ listStyle: 'none', padding: 0, maxHeight: 180, overflowY: 'auto' }}>
@@ -92,7 +96,7 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
         </div>
       ))}
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={!valid || save.isPending}>{save.isPending ? 'Saving' : 'Save'}</button>
+      <button type="submit" className="rt-primary" data-tour="usage-save" disabled={!valid || save.isPending}>{save.isPending ? 'Saving' : 'Save'}</button>
       {(lines.length > 0 || reason !== '') && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this form</button>
       )}
@@ -100,7 +104,8 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
   );
 }
 
-function UsagePage() {
+export function UsagePage() {
+  const { me } = useStaff();
   const { branchId, branchName } = useStockingBranch();
   const [done, setDone] = useState<Usage | null>(null);
   const [round, setRound] = useState(0);
@@ -111,7 +116,7 @@ function UsagePage() {
       ) : done ? (
         <section aria-label="Saved">
           <h2>Saved</h2>
-          <p>{done.kind === 'used' ? 'Usage' : 'Damage'} recorded for {(done.lines ?? []).length} items. Stock is reduced.</p>
+          <p>{done.kind === 'used' ? 'Usage' : 'Damage'} recorded for {(done.lines ?? []).length} items. Stock is reduced. {canUse(me, 'stock') && <Link to="/staff/retail/stock">See the stock</Link>}</p>
           <button type="button" className="rt-primary" onClick={() => { setDone(null); setRound((n) => n + 1); }}>Record another</button>
         </section>
       ) : (

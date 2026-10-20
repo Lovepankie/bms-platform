@@ -257,7 +257,7 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
         </Group>
       )}
       {editing && (
-        <Group title="Status">
+        <Group title="Status" tourId="member-edit-status">
           <SelectField name="status" label="Member status" form={form} value={status} onChange={setStatus} options={STATUSES} />
         </Group>
       )}

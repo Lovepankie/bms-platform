@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
+import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type Transfer } from '../../../api/retail';
 import { useCrumbTail } from '../../../components/breadcrumbs';
@@ -104,7 +104,8 @@ function TransferDetail({ id, onClose }: { id: string; onClose: () => void }) {
   );
 }
 
-function StockMoves() {
+export function StockMoves() {
+  const { me } = useStaff();
   const { branchId } = useSingleBranch();
   const [open, setOpen] = useState<string | null>(null);
   const page = useQuery({
@@ -113,6 +114,8 @@ function StockMoves() {
   });
   return (
     <Gate screen="transfers" title="Stock moves">
+      {!open && canUse(me, 'transfer') && <p data-tour="transfers-new"><Link to="/staff/retail/transfer">Move stock to another branch</Link></p>}
+      <div data-tour="transfers-list">
       {open ? (
         <TransferDetail id={open} onClose={() => setOpen(null)} />
       ) : (
@@ -121,6 +124,7 @@ function StockMoves() {
           {page.data && <TransferList items={page.data.items ?? []} onOpen={setOpen} />}
         </>
       )}
+      </div>
     </Gate>
   );
 }

@@ -3,10 +3,12 @@ import { Link, createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react
 import { useState } from 'react';
 import { savings } from '../../../api/savings';
 import { useStaff } from '../context';
+import { MemberLink } from './member-ui';
 import { Problem } from '../retail/ui';
 import { money } from './loan-state';
 import { AccountRows, SavingsGate } from './savings';
 import { MemberSmsControl } from './member-sms';
+import { showInvestments } from './investment-state';
 import { mayOpenAccounts } from './savings-permissions';
 
 // A member's savings tab (FR-SAV-02): every account the member holds (a member may hold several),
@@ -54,8 +56,8 @@ function OpenAccount({ memberId }: { memberId: string }) {
 
 const route = getRouteApi('/staff/lending/members/$memberId/savings');
 
-function MemberSavings() {
-  const { memberId } = route.useParams();
+/** One member's savings: the way back, their accounts with the total, and opening another one. */
+export function MemberSavingsBody({ memberId }: { memberId: string }) {
   const { me } = useStaff();
   const [opening, setOpening] = useState(false);
   const accounts = useQuery({
@@ -66,21 +68,29 @@ function MemberSavings() {
   const first = items[0];
   const total = items.reduce((sum, a) => sum + (a.balance_minor ?? 0), 0);
   return (
-    <SavingsGate title="Member savings">
-      <Link to="/staff/lending/savings" className="btn btn-ghost">Back to savings</Link>
+    <>
+      <Link to="/staff/lending/savings" className="btn btn-ghost" data-tour="member-savings-back">Back to savings</Link>
       {first && (
         <section className="rt-card ln-head" aria-label="Member">
           <p>
-            <strong>{first.member_name}</strong> ({first.member_no})
+            <MemberLink memberId={memberId}><strong>{first.member_name}</strong></MemberLink> ({first.member_no})
+            {showInvestments(me) && (
+              <>
+                {' '}
+                <Link to="/staff/lending/investments/member/$memberId" params={{ memberId }}>Investments</Link>
+              </>
+            )}
           </p>
           <p>
             {items.length} {items.length === 1 ? 'account' : 'accounts'}, total {money(total, first.currency)}
           </p>
         </section>
       )}
-      {accounts.isPending && <p className="loading">Loading the member's accounts</p>}
-      <Problem error={accounts.error} />
-      {accounts.data && <AccountRows items={items} />}
+      <div data-tour="member-savings-accounts">
+        {accounts.isPending && <p className="loading">Loading the member's accounts</p>}
+        <Problem error={accounts.error} />
+        {accounts.data && <AccountRows items={items} />}
+      </div>
       {mayOpenAccounts(me) &&
         (opening ? (
           <section className="rt-card" aria-label="Open a savings account">
@@ -88,9 +98,18 @@ function MemberSavings() {
             <OpenAccount memberId={memberId} />
           </section>
         ) : (
-          <button type="button" className="rt-primary btn-block" onClick={() => setOpening(true)}>Open a savings account</button>
+          <button type="button" className="rt-primary btn-block" data-tour="member-savings-open" onClick={() => setOpening(true)}>Open a savings account</button>
         ))}
       <MemberSmsControl memberId={memberId} />
+    </>
+  );
+}
+
+function MemberSavings() {
+  const { memberId } = route.useParams();
+  return (
+    <SavingsGate title="Member savings">
+      <MemberSavingsBody memberId={memberId} />
     </SavingsGate>
   );
 }

@@ -40,7 +40,7 @@ export function AccountCard({ account }: { account: SavingsAccount }) {
   const a = account;
   const c = a.currency;
   return (
-    <section aria-label="Savings account" className="rt-card ln-head">
+    <section aria-label="Savings account" className="rt-card ln-head" data-tour="savings-account-card">
       <p className="ln-item-head">
         <strong>{a.account_no}</strong>
         <span className={savingsBadge(a.status)}>{words(a.status)}</span>
@@ -143,7 +143,7 @@ export function AccountView({ account }: { account: SavingsAccount }) {
     <>
       <AccountCard account={account} />
       {actions.length > 0 && (
-        <div className="ln-actions" role="group" aria-label="Actions">
+        <div className="ln-actions" role="group" aria-label="Actions" data-tour="savings-account-actions">
           {actions.map((a) => (
             <button key={a} type="button" aria-pressed={open === a} onClick={() => setOpen(open === a ? null : a)}>
               {SAVINGS_ACTION_LABELS[a]}
@@ -162,11 +162,11 @@ export function AccountView({ account }: { account: SavingsAccount }) {
         </section>
       )}
       <p>
-        <Link to="/staff/lending/savings/accounts/$accountId/statement" params={{ accountId }} className="btn btn-ghost">
+        <Link to="/staff/lending/savings/accounts/$accountId/statement" params={{ accountId }} className="btn btn-ghost" data-tour="savings-statement-link">
           Statement
         </Link>
       </p>
-      <h2>Transactions</h2>
+      <h2 data-tour="savings-transactions">Transactions</h2>
       {txns.isPending && <p className="loading">Loading transactions</p>}
       <Problem error={txns.error} />
       {txns.data && <SavingsTransactions account={account} items={items} />}

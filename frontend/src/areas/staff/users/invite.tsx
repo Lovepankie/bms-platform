@@ -103,11 +103,11 @@ export function InviteScreen() {
         }}
       >
         <label htmlFor="invite-name">Full name</label>
-        <input id="invite-name" value={draft.fullName} maxLength={120} autoComplete="off" aria-invalid={Boolean(shown('fullName'))} onChange={(e) => set({ fullName: e.target.value })} />
+        <input id="invite-name" data-tour="invite-name" value={draft.fullName} maxLength={120} autoComplete="off" aria-invalid={Boolean(shown('fullName'))} onChange={(e) => set({ fullName: e.target.value })} />
         {shown('fullName') && <p role="alert" className="field-error">{shown('fullName')}</p>}
 
         <label htmlFor="invite-phone">Phone number</label>
-        <input id="invite-phone" type="tel" inputMode="tel" autoComplete="off" placeholder="0712 345 678" value={draft.phone} aria-invalid={Boolean(problems.phone)} onChange={(e) => set({ phone: e.target.value })} />
+        <input id="invite-phone" data-tour="invite-phone" type="tel" inputMode="tel" autoComplete="off" placeholder="0712 345 678" value={draft.phone} aria-invalid={Boolean(problems.phone)} onChange={(e) => set({ phone: e.target.value })} />
         {draft.phone.trim() !== '' && problems.phone && <p role="alert" className="field-error">{problems.phone}</p>}
         <p className="field-hint">A Uganda mobile number. Either a phone or an email is enough.</p>
 
@@ -116,6 +116,7 @@ export function InviteScreen() {
         {draft.email.trim() !== '' && problems.email && <p role="alert" className="field-error">{problems.email}</p>}
         {shown('contact') && <p role="alert" className="field-error">{shown('contact')}</p>}
 
+        <div data-tour="invite-role">
         <RolePick
           roles={roleChoices(roles.data ?? [])}
           branches={branches.data ?? []}
@@ -124,6 +125,7 @@ export function InviteScreen() {
           onChange={(next) => set(next)}
           problem={shown('roleKey')}
         />
+        </div>
 
         {error && <p role="alert" className="alert alert-danger">{error}</p>}
         {error && lookInList && (
@@ -132,7 +134,7 @@ export function InviteScreen() {
           </p>
         )}
         <p className="cluster">
-          <button type="submit" className="rt-primary" disabled={busy || roles.isPending}>{busy ? 'Inviting' : 'Invite'}</button>
+          <button type="submit" className="rt-primary" data-tour="invite-send" disabled={busy || roles.isPending}>{busy ? 'Inviting' : 'Invite'}</button>
           <Link to="/staff/users" className="btn-ghost btn">Cancel</Link>
         </p>
       </form>

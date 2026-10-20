@@ -8,6 +8,7 @@ import { DateField, ImportedBadge, RecordsByShop, Saved, VoidAction, useMayVoid,
 import { usePersistedDraft } from './idempotency';
 import { PartyPicker, useCashParties } from './party-picker';
 import { CASHBOOK_READ, holds } from './permissions';
+import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
@@ -268,7 +269,7 @@ function Outstanding() {
 
 type Mode = 'list' | 'new' | 'repay' | 'outstanding';
 
-function AdvancesScreen() {
+export function AdvancesScreen() {
   const { me } = useStaff();
   const { branchId, branchName } = useSingleBranch();
   const canRead = holds(me, CASHBOOK_READ);
@@ -287,11 +288,13 @@ function AdvancesScreen() {
   const choose = (next: Mode) => { setMode(next); setOpen(null); setSavedAdvance(null); setSavedRepayment(null); };
   return (
     <Gate screen="advances" title="Advances">
-      <div className="cluster filters" role="group" aria-label="Advances">
+      <p><ScreenLink screen="cashSummary" to="/staff/retail/cash-summary">Cash summary</ScreenLink></p>
+      <div className="cluster filters" role="group" aria-label="Advances" data-tour="advance-modes">
         {modes.map((m) => (
           <button key={m.mode} type="button" className="btn-sm" aria-pressed={mode === m.mode} onClick={() => choose(m.mode)}>{m.label}</button>
         ))}
       </div>
+      <div data-tour="advance-body">
 
       {mode === 'list' && canRead && (open ? <AdvanceDetail id={open} onClose={() => setOpen(null)} onVoided={show} /> : <AdvanceList onOpen={setOpen} />)}
       {mode === 'outstanding' && canRead && <Outstanding />}
@@ -320,6 +323,7 @@ function AdvancesScreen() {
           <RepaymentForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(repayment, advance) => { setSavedRepayment({ repayment, advance }); show('Repayment recorded.'); }} />
         </>
       ))}
+      </div>
       {toast}
     </Gate>
   );

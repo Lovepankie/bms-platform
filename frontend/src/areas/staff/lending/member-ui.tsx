@@ -1,10 +1,17 @@
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { useStaff } from '../context';
+import { useOptionalStaff, useStaff } from '../context';
 import { showCollateral, showMembers } from './member-permissions';
 
 // The frame of the member and collateral screens (issue #280): the page heading, the access check and the small menu
 // between Members and Collateral. Same page classes as the loan screens.
+
+/** The member's name as a link to the member, only for a session that may read members (otherwise the name as plain text). */
+export function MemberLink({ memberId, children }: { memberId: string; children: ReactNode }) {
+  const session = useOptionalStaff();
+  if (!session || !showMembers(session.me)) return <>{children}</>;
+  return <Link to="/staff/lending/members/$memberId" params={{ memberId }}>{children}</Link>;
+}
 
 export function MembersGate({ title, children, tourId }: { title: string; children: ReactNode; tourId?: string }) {
   const { me } = useStaff();

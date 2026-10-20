@@ -6,10 +6,10 @@ import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type LandedCost, type LandedCostLine } from '../../../api/retail';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { SkeletonList } from '../../../components/states';
-import { useStaff } from '../context';
+import { useOptionalStaff, useStaff } from '../context';
 import { LANDED_STATUS, costEffectWords, hasProfitFigures, kindWords, lineQtyWords, methodWords } from './landed-state';
 import { PAYABLE_MANAGE, canUse, holdsAt } from './permissions';
-import { Facts, MoreButton, ReasonPanel, StatusBadge, useActionKeys, useCursorList } from './purchasing-ui';
+import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
 
@@ -85,6 +85,8 @@ export function LandedCostsPage() {
  * did to the cost of one. Used for a recorded landed cost and for the review before saving.
  */
 export function AllocationTable({ lines, total }: { lines: LandedCostLine[]; total?: number }) {
+  const session = useOptionalStaff();
+  const openReceipts = session !== null && canUse(session.me, 'goodsReceived');
   const profit = hasProfitFigures(lines);
   // The share of each line is sent only with retail.profit.read in the line's branch; the total of the charges always is.
   const shares = lines.some((l) => l.allocated_minor !== undefined);
@@ -108,7 +110,7 @@ export function AllocationTable({ lines, total }: { lines: LandedCostLine[]; tot
           {lines.map((l, i) => (
             <tr key={l.receipt_line_id ?? i}>
               <td>{l.description}</td>
-              <td>{l.receipt_no}</td>
+              <td>{l.receipt_id && openReceipts ? <Link to="/staff/retail/goods-received/$receiptId" params={{ receiptId: l.receipt_id }}>{l.receipt_no}</Link> : l.receipt_no}</td>
               <td className="num">{lineQtyWords(l.qty, '')}</td>
               {shares && <td className="num">{l.allocated_minor === undefined ? '' : money(l.allocated_minor)}</td>}
               {profit && <td className="num">{money(l.to_inventory_minor ?? 0)}</td>}
@@ -130,14 +132,14 @@ export function AllocationTable({ lines, total }: { lines: LandedCostLine[]; tot
 }
 
 /** One landed cost: facts, the charges, and how they were shared over the goods. */
-export function LandedCostView({ cost, nameOf }: { cost: LandedCost; nameOf: (branchId: string | undefined) => string }) {
+export function LandedCostView({ cost, nameOf, payable }: { cost: LandedCost; nameOf: (branchId: string | undefined) => string; payable?: boolean }) {
   const owed = cost.status === 'voided' ? 0 : (cost.total_minor ?? 0) - (cost.paid_minor ?? 0);
   return (
-    <section aria-label="Landed cost" data-testid="landed-cost">
+    <section aria-label="Landed cost" data-testid="landed-cost" data-tour="landed-summary">
       <h2>{cost.landed_no} <StatusBadge words={LANDED_STATUS[cost.status ?? ''] ?? (cost.status ?? '')} warn={cost.status === 'voided'} /></h2>
       <Facts
         rows={[
-          ['Owed to', cost.supplier_name ?? ''],
+          ['Owed to', <SupplierOwed key="s" id={cost.supplier_id} name={cost.supplier_name} payable={payable} />],
           ['Their invoice number', cost.supplier_ref ?? ''],
           ['Their invoice on our books', cost.bill_id ? <Link key="b" to="/staff/retail/supplier-bills/$billId" params={{ billId: cost.bill_id }}>{cost.bill_no}</Link> : ''],
           ['Branch', nameOf(cost.branch_id)],
@@ -152,7 +154,7 @@ export function LandedCostView({ cost, nameOf }: { cost: LandedCost; nameOf: (br
         ]}
       />
       <h3>The charges</h3>
-      <div className="table-wrap" tabIndex={0}>
+      <div className="table-wrap" tabIndex={0} data-tour="landed-charges-table">
         <table>
           <thead>
             <tr><th>Kind</th><th>What for</th><th className="num">Amount</th></tr>
@@ -169,7 +171,9 @@ export function LandedCostView({ cost, nameOf }: { cost: LandedCost; nameOf: (br
         </table>
       </div>
       <h3>How it was shared over the goods</h3>
-      <AllocationTable lines={cost.lines ?? []} total={cost.total_minor} />
+      <div data-tour="landed-shared">
+        <AllocationTable lines={cost.lines ?? []} total={cost.total_minor} />
+      </div>
     </section>
   );
 }
@@ -213,8 +217,9 @@ export function LandedCostPage() {
       {cost.isPending && <SkeletonList label="Loading the landed cost" />}
       <Problem error={cost.error} />
       {message && <Success>{message}</Success>}
-      {c && <LandedCostView cost={c} nameOf={nameOf} />}
+      {c && <LandedCostView cost={c} nameOf={nameOf} payable={canUse(me, 'supplierPayments')} />}
       {c && c.status === 'posted' && holdsAt(me, PAYABLE_MANAGE, c.branch_id) && (
+        <div data-tour="landed-void">
         <ReasonPanel
           openLabel="Void this landed cost"
           question="Why is it voided?"
@@ -224,6 +229,7 @@ export function LandedCostPage() {
           error={voided.error}
           onSubmit={(reason) => voided.mutate(reason)}
         />
+        </div>
       )}
       {toast}
     </main>

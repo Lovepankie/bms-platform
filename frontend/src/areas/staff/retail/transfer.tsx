@@ -5,6 +5,7 @@ import { businessToday, retail, type Product, type Transfer } from '../../../api
 import { branchLabel } from '../../../auth/branch';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
+import { ToStock } from './analytics-ui';
 import { showQty } from './maths';
 import { buildTransfer, transferLineHint, transferProblem, type TransferDraft } from './transfer-state';
 import { milliOf } from './maths';
@@ -49,6 +50,7 @@ export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; 
     <form onSubmit={(e) => { e.preventDefault(); if (!problem && !save.isPending) save.mutate(); }}>
       <p>From: {label(fromBranchId)}</p>
       <NoStockHere branchId={fromBranchId} />
+      <div data-tour="transfer-to">
       <label htmlFor="transfer-to">To branch</label>
       <select id="transfer-to" value={draft.toBranchId} onChange={(e) => update({ toBranchId: e.target.value })}>
         <option value="">Choose a branch</option>
@@ -56,12 +58,15 @@ export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; 
           <option key={b.id} value={b.id}>{label(b.id)}</option>
         ))}
       </select>
+      </div>
       {destinations.length === 0 && <p>You have no other branch to move stock to.</p>}
       {sends && <p className="hint">The stock leaves this branch now. The other branch counts it once they receive it.</p>}
 
+      <div data-tour="transfer-search">
       <ProductPicker id="transfer-search" branchId={fromBranchId} onAdd={add} />
+      </div>
 
-      <h2>Items to move</h2>
+      <h2 data-tour="transfer-items">Items to move</h2>
       {draft.lines.length === 0 && <p>No items yet. Search above and tap Add.</p>}
       {draft.lines.map((l, i) => {
         const hint = transferLineHint(l);
@@ -85,9 +90,11 @@ export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; 
 
       {problem && draft.lines.length > 0 && <p>{problem}</p>}
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending}>
-        {save.isPending ? 'Saving' : sends ? 'Send stock' : 'Move stock'}
-      </button>
+      <span data-tour="transfer-save">
+        <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending}>
+          {save.isPending ? 'Saving' : sends ? 'Send stock' : 'Move stock'}
+        </button>
+      </span>
       {(draft.lines.length > 0 || draft.toBranchId !== '') && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this form</button>
       )}
@@ -103,7 +110,7 @@ export function TransferSummary({ transfer, onNew }: { transfer: Transfer; onNew
   return (
     <section aria-label="Saved">
       <h2>{HEADING[transfer.status ?? 'completed'] ?? 'Stock moved'}</h2>
-      <p>From {label(transfer.from_branch_id)} to {label(transfer.to_branch_id)} on {transfer.transfer_date}.</p>
+      <p>From <ToStock>{label(transfer.from_branch_id)}</ToStock> to <ToStock>{label(transfer.to_branch_id)}</ToStock> on {transfer.transfer_date}.</p>
       {transfer.status === 'in_transit' && <p>It is on its way. It is in neither branch's stock until the other branch receives it (see On the way).</p>}
       <ul>
         {(transfer.lines ?? []).map((l) => {
@@ -126,7 +133,7 @@ export function TransferSummary({ transfer, onNew }: { transfer: Transfer; onNew
   );
 }
 
-function MoveStock() {
+export function MoveStock() {
   const { branchId } = useStockingBranch();
   const [done, setDone] = useState<Transfer | null>(null);
   const [round, setRound] = useState(0);

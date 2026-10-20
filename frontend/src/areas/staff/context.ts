@@ -11,6 +11,11 @@ export interface StaffContextValue {
 
 export const StaffContext = createContext<StaffContextValue | null>(null);
 
+/** The session when there is one: a leaf view drawn outside the staff layout (a test, a print view) shows no permission-gated link. */
+export function useOptionalStaff(): StaffContextValue | null {
+  return useContext(StaffContext);
+}
+
 export function useStaff(): StaffContextValue {
   const value = useContext(StaffContext);
   if (!value) throw new Error('useStaff outside the staff layout');

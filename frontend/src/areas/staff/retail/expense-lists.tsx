@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useId, useState } from 'react';
 import { retail, type ExpenseCategory, type ExpenseItem } from '../../../api/retail';
+import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { Gate, Problem } from './ui';
 
@@ -116,7 +117,7 @@ export function ExpenseLists({ categories, busy, error, change }: { categories: 
   );
 }
 
-function ExpenseListsScreen() {
+export function ExpenseListsScreen() {
   const queryClient = useQueryClient();
   const { show, toast } = useToast();
   const categories = useQuery({ queryKey: ['retail', 'expense-categories', false], queryFn: () => retail.listExpenseCategories() });
@@ -128,10 +129,13 @@ function ExpenseListsScreen() {
   });
   return (
     <Gate screen="expenseSetup" title="Expense lists">
-      <p className="hint">Categories and items are what the expense form offers. Switching one off keeps it on old records.</p>
-      {categories.isError && <Problem error={categories.error} />}
-      {categories.isPending && <p className="loading">Loading</p>}
-      {categories.data && <ExpenseLists categories={categories.data} busy={change.isPending} error={change.error} change={(run) => change.mutate(run)} />}
+      <p className="hint" data-tour="expense-lists-help">Categories and items are what the expense form offers. Switching one off keeps it on old records.</p>
+      <p><ScreenLink screen="expenses" to="/staff/retail/expenses">Record an expense</ScreenLink></p>
+      <div data-tour="expense-lists-body">
+        {categories.isError && <Problem error={categories.error} />}
+        {categories.isPending && <p className="loading">Loading</p>}
+        {categories.data && <ExpenseLists categories={categories.data} busy={change.isPending} error={change.error} change={(run) => change.mutate(run)} />}
+      </div>
       {toast}
     </Gate>
   );

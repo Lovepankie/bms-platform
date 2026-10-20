@@ -10,7 +10,7 @@ import { useStaff } from '../context';
 import { showQty } from './maths';
 import { PAYABLE_MANAGE, PURCHASE_CREATE, canUse, holdsAt } from './permissions';
 import { RECEIPT_STATUS_WORDS, canVoidReceipt, inLineUnit } from './purchasing-state';
-import { Facts, MoreButton, ReasonPanel, StatusBadge, useActionKeys, useCursorList } from './purchasing-ui';
+import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
 
@@ -51,38 +51,42 @@ export function GoodsReceivedPage() {
         A delivery marked held is waiting for its freight and duty to be added as a landed cost.
       </p>
       <p className="cluster">
-        <Link className="btn rt-primary" to="/staff/retail/goods-received/new">Receive goods without an order</Link>
+        <Link className="btn rt-primary" to="/staff/retail/goods-received/new" data-tour="receipts-new">Receive goods without an order</Link>
         <Link className="btn-sm" to="/staff/retail/purchase-orders">Purchase orders</Link>
       </p>
       {list.query.isPending && <p className="loading">Loading</p>}
       <Problem error={list.query.error} />
-      <SearchBox id="search-receipts" label="Search by receipt, order, delivery note or supplier" search={search} fetching={list.finding} count={list.query.data ? list.rows.length : undefined} more={list.query.hasNextPage} />
-      <label htmlFor="receipts-status">Show</label>
-      <select id="receipts-status" value={status} onChange={(e) => setStatus(e.target.value)}>
-        <option value="">All deliveries</option>
-        <option value="posted">Standing</option>
-        <option value="voided">Voided</option>
-      </select>
+      <div data-tour="receipts-search">
+        <SearchBox id="search-receipts" label="Search by receipt, order, delivery note or supplier" search={search} fetching={list.finding} count={list.query.data ? list.rows.length : undefined} more={list.query.hasNextPage} />
+        <label htmlFor="receipts-status">Show</label>
+        <select id="receipts-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">All deliveries</option>
+          <option value="posted">Standing</option>
+          <option value="voided">Voided</option>
+        </select>
+      </div>
       {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="deliveries" /> : <p className="empty-state">No goods have been received yet.</p>)}
+      <div data-tour="receipts-list">
       <SearchResults fetching={list.finding}>
         <ul style={{ listStyle: 'none', padding: 0 }}>
           {list.rows.map((r) => <ReceiptRow key={r.id} row={r} branchName={nameOf(r.branch_id)} />)}
         </ul>
       </SearchResults>
+      </div>
       <MoreButton list={list} noun="deliveries" />
     </Gate>
   );
 }
 
 /** One delivery: facts, the lines with what was received and at what cost, and (when the server sent it) how much is already billed. */
-export function GoodsReceiptView({ receipt, nameOf }: { receipt: GoodsReceipt; nameOf: (branchId: string | undefined) => string }) {
+export function GoodsReceiptView({ receipt, nameOf, payable }: { receipt: GoodsReceipt; nameOf: (branchId: string | undefined) => string; payable?: boolean }) {
   const lines = receipt.lines ?? [];
   const showBilled = lines.some((l) => l.billed_qty !== undefined);
   // The landed amount is sent only with profit access, and only for lines a landed cost has touched.
   const showLanded = lines.some((l) => l.landed_minor !== undefined);
   const held = receipt.held_for_costing === true && receipt.status === 'posted';
   return (
-    <section aria-label="Goods received" data-testid="goods-receipt">
+    <section aria-label="Goods received" data-testid="goods-receipt" data-tour="receipt-summary">
       <h2>
         {receipt.receipt_no} <StatusBadge words={RECEIPT_STATUS_WORDS[receipt.status ?? ''] ?? (receipt.status ?? '')} warn={receipt.status === 'voided'} />
         {held && <> <StatusBadge words="Held, not costed" warn /></>}
@@ -90,7 +94,7 @@ export function GoodsReceiptView({ receipt, nameOf }: { receipt: GoodsReceipt; n
       {held && <p className="hint" data-testid="receipt-held">Held until the landed cost is in. While the business requires costing before sale, this quantity cannot be moved out of the branch. Other stock of the same item can still go.</p>}
       <Facts
         rows={[
-          ['Supplier', receipt.supplier_name ?? ''],
+          ['Supplier', <SupplierOwed key="s" id={receipt.supplier_id} name={receipt.supplier_name} payable={payable} />],
           ['Into', nameOf(receipt.branch_id)],
           ['Received on', showDate(receipt.received_on)],
           ...(receipt.order_no && receipt.order_id
@@ -101,7 +105,7 @@ export function GoodsReceiptView({ receipt, nameOf }: { receipt: GoodsReceipt; n
           ...(receipt.status === 'voided' ? [['Voided because', receipt.void_reason ?? ''] as [string, string]] : []),
         ]}
       />
-      <div className="table-wrap" tabIndex={0}>
+      <div className="table-wrap" tabIndex={0} data-tour="receipt-lines">
         <table>
           <thead>
             <tr>
@@ -185,7 +189,7 @@ export function GoodsReceiptPage() {
       {receipt.isPending && <SkeletonList label="Loading the delivery" />}
       <Problem error={receipt.error} />
       {message && <Success>{message}</Success>}
-      {r && <GoodsReceiptView receipt={r} nameOf={nameOf} />}
+      {r && <GoodsReceiptView receipt={r} nameOf={nameOf} payable={canUse(me, 'supplierPayments')} />}
       {r && r.status === 'posted' && canUse(me, 'landedCosts') && holdsAt(me, PAYABLE_MANAGE, r.branch_id) && (
         <p><Link className="btn-sm" to="/staff/retail/landed-costs/new" search={{ receipt: r.id } as never} data-tour="receipt-landed">Add landed cost</Link></p>
       )}
@@ -202,6 +206,7 @@ export function GoodsReceiptPage() {
         />
       )}
       {r && canVoidReceipt(r) && holdsAt(me, PURCHASE_CREATE, r.branch_id) && (
+        <div data-tour="receipt-void">
         <ReasonPanel
           openLabel="Void this delivery"
           question="Why is it voided?"
@@ -211,6 +216,7 @@ export function GoodsReceiptPage() {
           error={voided.error}
           onSubmit={(reason) => voided.mutate(reason)}
         />
+        </div>
       )}
       {toast}
     </main>

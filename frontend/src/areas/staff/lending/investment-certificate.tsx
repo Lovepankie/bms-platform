@@ -14,7 +14,7 @@ import { money } from './loan-state';
 export function CertificateCard({ c }: { c: InvestmentCertificate }) {
   const cur = c.currency;
   return (
-    <section aria-labelledby="iv-cert" className="rt-card iv-print">
+    <section aria-labelledby="iv-cert" className="rt-card iv-print" data-tour="certificate-card">
       <p className="ln-muted">{c.tenant_name}, {c.branch_name}</p>
       <h2 id="iv-cert">Investment certificate {c.certificate_no}</h2>
       <p>
@@ -91,20 +91,29 @@ export function StatementTable({ statement }: { statement: InvestmentStatement }
 
 const route = getRouteApi('/staff/lending/investments/$investmentId/certificate');
 
-function CertificatePage() {
-  const { investmentId } = route.useParams();
+/** The certificate and statement of one investment, with Print and the way back. */
+export function CertificateBody({ investmentId }: { investmentId: string }) {
   const cert = useQuery({ queryKey: ['lending', 'investment', investmentId, 'certificate'], queryFn: () => investments.certificate(investmentId) });
   const statement = useQuery({ queryKey: ['lending', 'investment', investmentId, 'statement'], queryFn: () => investments.statement(investmentId) });
   return (
-    <InvestmentsGate title="Certificate">
+    <>
       <div className="ln-actions iv-no-print">
-        <Link className="btn btn-ghost" to="/staff/lending/investments/$investmentId" params={{ investmentId }}>Back to the investment</Link>
-        <button type="button" className="rt-primary" onClick={() => window.print()}>Print</button>
+        <Link className="btn btn-ghost" to="/staff/lending/investments/$investmentId" params={{ investmentId }} data-tour="certificate-back">Back to the investment</Link>
+        <button type="button" className="rt-primary" data-tour="certificate-print" onClick={() => window.print()}>Print</button>
       </div>
       {cert.isPending && <p className="loading">Loading the certificate</p>}
       <Problem error={cert.error ?? statement.error} />
       {cert.data && <CertificateCard c={cert.data} />}
       {statement.data && <StatementTable statement={statement.data} />}
+    </>
+  );
+}
+
+function CertificatePage() {
+  const { investmentId } = route.useParams();
+  return (
+    <InvestmentsGate title="Certificate">
+      <CertificateBody investmentId={investmentId} />
     </InvestmentsGate>
   );
 }

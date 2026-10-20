@@ -45,8 +45,8 @@ branch --PR--> ci.yml (self-hosted hillary-pi): backend mvn verify | frontend co
 **Where jobs run (ADR-018, finding H1 and its amendment 2026-10-18).** The three small text guards (`dash-guard`,
 `adr-citation-guard`, `linked-issue-guard`) only read the checked-out diff, hold no secret and cost seconds. They ran on the GitHub-hosted
 `ubuntu-latest` runner until the organisation's Actions budget ran out (the job then does not start at all and every pull request fails the
-three checks); they now target the same `CI_RUNS_ON` runners as the other read-only checks. The deploy workflow runs on its own runner
-(ADR-040, below). The read-only checks (`ci.yml`, `architecture-model`, `estimate-guard` and the three guards) target `runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}`: the three
+three checks); they now target the same `CI_RUNS_ON` runners as the other read-only checks (`tour-guard`, ADR-049, was written for them). The deploy workflow runs on its own runner
+(ADR-040, below). The read-only checks (`ci.yml`, `architecture-model`, `estimate-guard` and the small guards) target `runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}`: the three
 organisation runners on Jerome's laptop first (runner group `jerome-laptop`, X64, 6 cores, WSL2 with Docker), and the organisation runner on the ARM64
 staging host (runner group `hillary-pi`) only when all three laptop runners are busy or offline. `scripts/ci/pick-runner.sh` sets the repository
 variable `CI_RUNS_ON` every minute (a launchd job on the maintainer's Mac) from the runners' busy flags; both groups admit private repositories only, public repositories refused (ADR-018 amendment 2026-10-16). It costs no Actions minutes,
@@ -83,6 +83,7 @@ The documentation guards (`dash-guard`, `adr-citation-guard`, `architecture-mode
 `linked-issue-guard`) run as their own workflows (ADR-005), and so does `placeholder-migration-guard`, which fails a pull request that
 still holds a migration numbered `V99` (the placeholder a branch uses when it cannot know the next free number; a `V99` on main would
 block every later migration, because Flyway runs with `outOfOrder` off), until the number is taken: there is no override. The first job of `deploy.yml` refuses the same file, so no image is built and the staging pointer never moves to a commit that holds one.
+`tour-guard` (ADR-049, issue #337) is a further small guard on the same runners: it fails a pull request that adds or renames a route (a `createLazyRoute`, `createFileRoute`, `createRoute`, `retailScreen` or `lendingScreen` line added under `frontend/src/areas` or in `frontend/src/app/router.tsx`, tests excluded) without a change under `frontend/src/tour/`, unless the pull request body has a line `TOUR-EXEMPT: <reason>`; it reads only the diff and the body (passed as an environment variable, never interpolated), runs its own unit test first, and re-runs when the body is edited.
 
 `pull_request` is used, never `pull_request_target`: a run for a fork's pull request gets a
 read-only token and no secrets. Nothing in CI pushes images or deploys.

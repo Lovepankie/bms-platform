@@ -171,7 +171,7 @@ function Editor({ saved, canManage, notice, setNotice }: { saved: SmsSettings; c
           hint="The name members see. It must be one the platform approved for your business. Without one, messages come from the provider's shared sender. To get a name approved, ask the platform."
           error={fieldError('sender_id')}
         >
-          <select id="sms-sender" value={draft.senderId} disabled={!canManage} onChange={(e) => set('senderId', e.target.value)}>
+          <select id="sms-sender" data-tour="sms-sender" value={draft.senderId} disabled={!canManage} onChange={(e) => set('senderId', e.target.value)}>
             <option value="">The shared sender (default)</option>
             {saved.approved_sender_ids.map((id) => (
               <option key={id} value={id}>{id}</option>
@@ -187,7 +187,7 @@ function Editor({ saved, canManage, notice, setNotice }: { saved: SmsSettings; c
           </p>
         )}
 
-        <fieldset className="stack" aria-describedby="sms-window-hint">
+        <fieldset className="stack" aria-describedby="sms-window-hint" data-tour="sms-window">
           <legend>Sending window</legend>
           <p id="sms-window-hint" className="field-hint">
             Reminders and arrears notices are sent only inside this window, on {saved.window_zone} time, between {saved.window_earliest} and{' '}
@@ -204,7 +204,7 @@ function Editor({ saved, canManage, notice, setNotice }: { saved: SmsSettings; c
           )}
         </fieldset>
 
-        <fieldset className="stack">
+        <fieldset className="stack" data-tour="sms-limits">
           <legend>Limits</legend>
           <p className="field-hint">
             The platform sets the most your business can send: {saved.daily_ceiling} a day and {saved.monthly_ceiling} a month. You can lower these, not raise them. Leave a box

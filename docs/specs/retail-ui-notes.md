@@ -945,6 +945,141 @@ till. Barcode scanning is a separate ticket (#345) and is not part of this. PWA 
 - **Tours.** `retail-sales` (version 6) and `admin-welcome` (version 9) get a Cash and change step on the sale screen (skipped when the
   customer pays another way); the Help page `page-sale` shows it too.
 
+## Navigation and tour coverage (issues #336 and #337, ADR-049)
+
+Audit of 2026-10-20 over every staff route in `frontend/src/app/router.tsx` (the retail and lending routes and the staff routes beside them; the sign-in,
+sign-up, platform console, member area and style routes are not staff screens and are outside this rule). One row per route: the breadcrumb label it
+declares, its page tour in `frontend/src/tour/`, and the cross links this change added. Frontend only: no API, schema or permission change, no new screen.
+
+**Result.** 105 staff routes. Breadcrumbs: 105 of 105 (they are structural: each route declares a `crumb`, a test fails without one, and the detail pages
+name their last crumb after the entity they load). Page tours: 29 before this change, 105 after (76 added, each version 1; no existing tour's copy
+changed, so no existing version was bumped). `tour/route-coverage.test.ts` now fails when a staff route has no page tour, and the `tour-guard` CI guard fails a
+pull request that adds or renames a route without a change under `frontend/src/tour/` or a `TOUR-EXEMPT: <reason>` line in its body (ADR-049).
+
+**Added after the first audit (merge of main, 2026-10-20).** The routes that arrived with the Controls page (`/staff/retail/controls`, tour `page-controls`), the two-step policy page (`/staff/setup/two-step`, `page-two-step`) and the user's own two-step page (`/staff/two-step`, `page-own-two-step`, added here) each have a page tour, so the count stays complete; `route-coverage.test.ts` is what keeps it so, and the table below is the state at the first audit.
+
+**Conventions the tours follow.** A tour is data in one of the slice files (`tours.ts`, `tours-customers.ts`, `tours-retail-reports.ts`, `tours-retail-cash.ts`,
+`tours-retail-purchasing.ts`, `tours-lending-more.ts`), `page` is the route path (`$name` matches any one segment), plain words, one step per main action,
+`optional: true` for a step a permission or setting can hide. Its anchors are `data-tour` attributes on markup the screen draws before any data
+arrives, because `tour/test-kit.tsx` renders each step's screen statically and fails when the anchor is missing; a detail page exports the body it draws for
+a given id so the test can render it. Cross links show only when the user may open the destination (`retail/screen-link.tsx`, `ToStock` and `ToSales` in
+`analytics-ui.tsx`).
+
+**Cross links that could not be added without a new screen or a search parameter** (left as they were, listed so a later slice can take them):
+a sale number opens nothing by itself, because a sale opens in place inside All sales and Credit sales, which take no sale parameter, so a sale number on a
+credit note, a return, an account statement or a credit control row stays plain; a product name opens the Stock list, not that item, because Stock takes no
+item parameter; a branch name opens Stock for the session's branch, not the named one, so branch names in the cash records stay plain (the branch roles page opens
+Stores and shops, which lists every branch); category and unit rows open the unfiltered items list, because the items page keeps its category in local
+state; Insights drill-down rows carry no ids; the used, damaged and found-missing counts on Stock health have no list screen. A product opening "its stock and history" is
+therefore as far as the existing routes go: Stock, and Past restocks and Stock moves for the history.
+
+| Route | Breadcrumb | Page tour | Cross links added (#336) |
+|---|---|---|---|
+| `/staff` | Home | `page-staff-home` v1 (added) | member name opens the member |
+| `/staff/approvals` | Approvals | `page-approvals` v1 (added) | "Open the item" on collateral releases |
+| `/staff/assistant` | AI assistant | `page-assistant` v1 (existing) | none added |
+| `/staff/insights` | Insights | `page-insights` v1 (added) | links to the loan list and to maturities |
+| `/staff/lending` | Lending | `page-loans` v1 (existing) | none added |
+| `/staff/lending/collateral` | Collateral | `page-collateral` v1 (existing) | none added |
+| `/staff/lending/collateral/$collateralId` | Item | `page-collateral-item` v1 (existing) | none added |
+| `/staff/lending/collateral/$collateralId/edit` | Change details | `page-collateral-edit` v1 (added) | Cancel returns to the item |
+| `/staff/lending/collateral/new` | Register collateral | `page-collateral-new` v1 (existing) | none added |
+| `/staff/lending/investments` | Investments | `page-investments` v1 (added) | none added |
+| `/staff/lending/investments/$investmentId` | Investment | `page-investment` v1 (added) | member name opens the member; certificate number opens the certificate |
+| `/staff/lending/investments/$investmentId/certificate` | Certificate | `page-investment-certificate` v1 (added) | none added |
+| `/staff/lending/investments/maturities` | Maturities | `page-investment-maturities` v1 (added) | largest investors open their investments |
+| `/staff/lending/investments/member/$memberId` | Member investments | `page-member-investments` v1 (added) | member number opens the member; link to their savings |
+| `/staff/lending/investments/member/$memberId/new` | New investment | `page-investment-new-member` v1 (added) | member name opens the member |
+| `/staff/lending/investments/new` | New investment | `page-investment-new` v1 (added) | member name opens the member |
+| `/staff/lending/investments/products` | Investment products | `page-investment-products` v1 (added) | none added |
+| `/staff/lending/loans/$loanId` | Loan | `page-loan` v1 (existing) | none added |
+| `/staff/lending/members` | Members | `page-members` v1 (existing) | none added |
+| `/staff/lending/members/$memberId` | Member | `page-member` v1 (existing) | none added |
+| `/staff/lending/members/$memberId/edit` | Change details | `page-member-edit` v1 (added) | none added |
+| `/staff/lending/members/$memberId/savings` | Member savings | `page-member-savings` v1 (added) | member name opens the member; link to the member's investments |
+| `/staff/lending/members/new` | New member | `page-member-new` v1 (existing) | none added |
+| `/staff/lending/savings` | Savings | `page-lending-savings` v1 (added) | none added |
+| `/staff/lending/savings/accounts/$accountId` | Account | `page-savings-account` v1 (added) | none added |
+| `/staff/lending/savings/accounts/$accountId/statement` | Statement | `page-savings-statement` v1 (added) | account number opens the account |
+| `/staff/lending/savings/products` | Savings products | `page-savings-products` v1 (added) | the account count opens the savings list |
+| `/staff/payments` | Receive payments | `page-payments` v1 (added) | none added |
+| `/staff/reports` | Reports | `page-reports` v1 (added) | none added |
+| `/staff/retail` | Retail | `page-retail-home` v1 (added) | none added |
+| `/staff/retail/accounts` | Customer accounts | `page-accounts` v1 (existing) | none added |
+| `/staff/retail/accounts/$customerId` | Account | `page-account` v1 (added) | none added |
+| `/staff/retail/advances` | Advances | `page-advances` v1 (added) | link to Cash summary |
+| `/staff/retail/banking` | Banking | `page-banking` v1 (added) | link to the banking report |
+| `/staff/retail/banking-report` | Banking report | `page-banking-report` v1 (added) | link back to Banking |
+| `/staff/retail/branch-roles` | Branch roles | `page-branch-roles` v1 (added) | branch row opens Stores and shops |
+| `/staff/retail/cash-summary` | Cash summary | `page-cash-summary` v1 (added) | each figure opens the rows behind it (sales, expenses report, banking report, withdrawals, advances, savings) |
+| `/staff/retail/catalogue` | Catalogue | `page-catalogue` v1 (existing) | none added |
+| `/staff/retail/catalogue/buyers` | Credit buyers | `page-buyers` v1 (added) | Open account (already there) |
+| `/staff/retail/catalogue/categories` | Categories | `page-categories` v1 (added) | Items link on each row |
+| `/staff/retail/catalogue/import` | Import items | `page-import` v1 (added) | none added |
+| `/staff/retail/catalogue/products` | Items | `page-products` v1 (added) | each item has a Stock link |
+| `/staff/retail/catalogue/suppliers` | Suppliers | `page-suppliers` v1 (added) | Open items link (supplier payment form) |
+| `/staff/retail/catalogue/units` | Units | `page-units` v1 (added) | Items link on each row |
+| `/staff/retail/credit-control` | Credit control | `page-credit-control` v1 (added) | overdue buyer opens the account; "See the credit sales" |
+| `/staff/retail/credit-sales` | Credit sales | `page-credit-sales` v2 (existing) | none added |
+| `/staff/retail/customer-ageing` | Customer ageing | `page-customer-ageing` v1 (added) | buyer opens the account (already there); Credit sales link |
+| `/staff/retail/customer-groups` | Customer groups | `page-customer-groups` v1 (added) | Credit buyers and Price lists links |
+| `/staff/retail/documents` | Documents | `page-documents` v1 (existing) | none added |
+| `/staff/retail/evaluation` | Business evaluation | `page-evaluation` v1 (added) | item names open Stock |
+| `/staff/retail/expense-lists` | Expense lists | `page-expense-lists` v1 (added) | link to Expenses |
+| `/staff/retail/expenses` | Expenses | `page-expenses` v1 (added) | links to the expenses report and the expense lists |
+| `/staff/retail/expenses-report` | Expenses report | `page-expenses-report` v1 (added) | link back to Expenses |
+| `/staff/retail/goods-received` | Goods received | `page-goods-received` v1 (added) | none added |
+| `/staff/retail/goods-received/$receiptId` | Delivery | `page-goods-receipt` v1 (added) | supplier opens its open items |
+| `/staff/retail/goods-received/new` | Receive without an order | `page-goods-receipt` v1 (added) | none added |
+| `/staff/retail/in-transit` | On the way | `page-in-transit` v1 (existing) | none added |
+| `/staff/retail/landed-costs` | Landed costs | `page-landed-costs` v1 (existing) | none added |
+| `/staff/retail/landed-costs/$landedCostId` | Landed cost | `page-landed-cost` v1 (added) | supplier opens its open items; delivery number opens the delivery |
+| `/staff/retail/landed-costs/new` | New landed cost | `page-landed-cost-new` v1 (added) | none added |
+| `/staff/retail/margins` | Margins | `page-margins` v1 (added) | sales total opens All sales; item names open Stock |
+| `/staff/retail/price-lists` | Price lists | `page-price-lists` v1 (existing) | none added |
+| `/staff/retail/profit` | Daily profit | `page-profit` v1 (added) | branch names open Stock; "See the sales behind it" opens All sales |
+| `/staff/retail/purchase-orders` | Purchase orders | `page-purchase-orders` v1 (existing) | none added |
+| `/staff/retail/purchase-orders/$orderId` | Purchase order | `page-purchase-order` v1 (added) | supplier opens its open items |
+| `/staff/retail/purchase-orders/$orderId/edit` | Change order | `page-purchase-order-edit` v1 (added) | none added |
+| `/staff/retail/purchase-orders/$orderId/receive` | Receive goods | `page-order-receive` v1 (added) | none added |
+| `/staff/retail/purchase-orders/new` | New purchase order | `page-purchase-order-new` v1 (added) | none added |
+| `/staff/retail/quotations` | Quotations | `page-quotations` v1 (existing) | none added |
+| `/staff/retail/restock` | Restock | `page-restock` v1 (added) | none added |
+| `/staff/retail/restocks` | Past restocks | `page-restocks` v2 (existing) | none added |
+| `/staff/retail/returns` | Customer returns | `page-returns` v1 (existing) | none added |
+| `/staff/retail/returns/$returnId` | Credit note | `page-credit-note` v1 (added) | buyer opens the account |
+| `/staff/retail/returns/new/$saleId` | Take goods back | `page-return-new` v1 (added) | buyer opens the account |
+| `/staff/retail/sale` | Record a sale | `page-sale` v1 (existing) | none added |
+| `/staff/retail/sales` | All sales | `page-sales` v2 (existing) | none added |
+| `/staff/retail/sales-analysis` | Sales analysis | `page-sales-analysis` v1 (added) | sales total and count open All sales; item and branch names open Stock |
+| `/staff/retail/savings` | Savings | `page-savings` v1 (added) | link to Cash summary |
+| `/staff/retail/settings` | Retail settings | `page-retail-settings` v1 (existing) | none added |
+| `/staff/retail/stock` | Stock | `page-stock` v3 (existing) | none added |
+| `/staff/retail/stock-by-location` | Stores and shops | `page-stock-by-location` v1 (existing) | none added |
+| `/staff/retail/stock-health` | Stock health | `page-stock-health` v1 (added) | item and branch names open Stock |
+| `/staff/retail/stocktake` | Stock-take | `page-stocktake` v1 (existing) | none added |
+| `/staff/retail/supplier-bills` | Supplier invoices | `page-supplier-bills` v1 (added) | none added |
+| `/staff/retail/supplier-bills/$billId` | Supplier invoice | `page-supplier-bill` v1 (added) | supplier opens its open items; delivery number opens the delivery |
+| `/staff/retail/supplier-bills/new` | New supplier invoice | `page-supplier-bill-new` v1 (added) | none added |
+| `/staff/retail/supplier-credits` | Supplier credit notes | `page-supplier-credits` v1 (added) | none added |
+| `/staff/retail/supplier-credits/$creditId` | Supplier credit note | `page-supplier-credit` v1 (added) | supplier opens its open items |
+| `/staff/retail/supplier-credits/new` | New credit note | `page-supplier-credit-new` v1 (added) | none added |
+| `/staff/retail/supplier-payables` | What you owe suppliers | `page-supplier-payables` v1 (added) | none added |
+| `/staff/retail/supplier-payments` | Supplier payments | `page-supplier-payments` v1 (added) | none added |
+| `/staff/retail/supplier-payments/$paymentId` | Supplier payment | `page-supplier-payment` v1 (added) | supplier opens its open items |
+| `/staff/retail/supplier-payments/new` | Pay a supplier | `page-supplier-payment-new` v1 (added) | none added |
+| `/staff/retail/transfer` | Move stock | `page-transfer` v1 (added) | branch names on the saved summary open Stock |
+| `/staff/retail/transfers` | Stock moves | `page-transfers` v1 (added) | branch names in a move open Stock; link to Move stock |
+| `/staff/retail/usage` | Usage and damage | `page-usage` v1 (added) | "See the stock" link on the saved summary |
+| `/staff/retail/valuation` | Stock value | `page-valuation` v1 (added) | item and branch names open Stock |
+| `/staff/retail/withdrawals` | Cash withdrawals | `page-withdrawals` v1 (added) | link to Cash summary |
+| `/staff/setup` | Business set-up | `page-setup` v1 (existing) | none added |
+| `/staff/setup/branches` | Branches | `page-branches` v1 (existing) | none added |
+| `/staff/sms` | SMS | `page-sms-settings` v1 (added) | none added |
+| `/staff/sms/opt-outs` | Opt-outs | `page-sms-opt-outs` v1 (added) | none added |
+| `/staff/sms/wording` | Wording | `page-sms-wording` v1 (added) | none added |
+| `/staff/users` | Staff users | `page-users` v2 (existing) | none added |
+| `/staff/users/new` | Invite someone | `page-invite-user` v1 (added) | none added |
 ## Controls (issue #358, part of #357, ADR-047)
 
 A read-only page for the tenant administrator and anyone given `retail.controls.read`: what deserves a second look, metrics first,

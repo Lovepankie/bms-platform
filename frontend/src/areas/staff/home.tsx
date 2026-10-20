@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
+import { Link, createLazyRoute } from '@tanstack/react-router';
 import { Highlight, NoResults, SearchBox, SearchResults } from '../../app/ui/SearchBox';
 import { useLiveSearch } from '../../app/ui/useLiveSearch';
 import { fetchHealth, listMembers } from '../../api/client';
@@ -26,7 +26,7 @@ export function StaffHome() {
 
   return (
     <main>
-      <div className="page-header">
+      <div className="page-header" data-tour="staff-home-header">
         <h1>Staff area</h1>
         <span className={health.data === 'UP' ? 'badge badge-success' : 'badge'}>
           API: {health.data ?? 'checking'}
@@ -35,7 +35,9 @@ export function StaffHome() {
       {canReadMembers && (
         <section aria-labelledby="members-title" data-tour="lending-members">
           <h2 id="members-title">Members</h2>
+          <div data-tour="staff-home-search">
           <SearchBox id="member-search" label="Member number, name, phone or national ID" search={search} fetching={fetching} count={members.data ? found.length : undefined} more={!!members.data?.next_cursor} />
+          </div>
           {members.isPending && <SkeletonList label="Loading members" />}
           {members.isError && <p role="alert" className="alert alert-danger">Could not load members.</p>}
           {members.data && found.length === 0 && search.term && <NoResults term={search.term} onClear={search.clear} noun="members" />}
@@ -58,7 +60,13 @@ export function StaffHome() {
                   {found.map((m) => (
                     <tr key={m.id}>
                       <td data-label="Member no"><Highlight text={m.member_no ?? ''} term={search.term} /></td>
-                      <td data-label="Name"><Highlight text={m.full_name ?? ''} term={search.term} /></td>
+                      <td data-label="Name">
+                        {m.id ? (
+                          <Link to="/staff/lending/members/$memberId" params={{ memberId: m.id }}><Highlight text={m.full_name ?? ''} term={search.term} /></Link>
+                        ) : (
+                          <Highlight text={m.full_name ?? ''} term={search.term} />
+                        )}
+                      </td>
                       <td data-label="Phone">{m.phone_e164_masked}</td>
                       <td data-label="KYC">{m.kyc_status}</td>
                     </tr>

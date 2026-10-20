@@ -16,6 +16,8 @@ import { Problem } from '../retail/ui';
 import { BarList, ColumnChart, LineChart, type BarRow } from './charts';
 import { formatValue, presetRange, words } from './format';
 import { AdvisorCard } from './advisor';
+import { showLending } from '../lending/permissions';
+import { showInvestments } from '../lending/investment-state';
 import { canExport, canManageDigest, canUseAdvisor, ownPortfolioOnly, showInsights } from './permissions';
 import { MetricCard, MetricGrid, drillOf, type DrillTarget } from './ui';
 
@@ -46,7 +48,7 @@ const PRESETS = [
   { value: 'custom', label: 'Custom dates' },
 ];
 
-function Insights() {
+export function Insights() {
   const { me } = useStaff();
   if (!showInsights(me)) {
     return (
@@ -156,7 +158,7 @@ function InsightsPage() {
         </button>
       </div>
       {own && <p className="alert alert-info">These figures cover only the loans you are the responsible officer for.</p>}
-      <form className="iv-filters iv-noprint" onSubmit={(e: FormEvent) => e.preventDefault()} aria-label="Filters">
+      <form className="iv-filters iv-noprint" onSubmit={(e: FormEvent) => e.preventDefault()} aria-label="Filters" data-tour="insights-filters">
         <label>
           Range
           <select value={preset} onChange={(e) => choosePreset(e.target.value)}>
@@ -206,7 +208,12 @@ function InsightsPage() {
         <p className="ln-muted iv-filters-note">Branch: the one chosen at the top of the page.</p>
       </form>
 
-      <div className="iv-tabs iv-noprint" role="tablist" aria-label="Insights sections">
+      <p className="iv-noprint iv-links" data-tour="insights-links">
+        {showLending(me) && <Link to="/staff/lending">Open the loan list</Link>}
+        {showLending(me) && showInvestments(me) && ' '}
+        {showInvestments(me) && <Link to="/staff/lending/investments/maturities">See what matures soon</Link>}
+      </p>
+      <div className="iv-tabs iv-noprint" role="tablist" aria-label="Insights sections" data-tour="insights-tabs">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -222,7 +229,7 @@ function InsightsPage() {
       </div>
 
       {tab === 'brief' && (
-        <section aria-label="Morning brief">
+        <section aria-label="Morning brief" data-tour="insights-brief">
           {canUseAdvisor(me) && <AdvisorCard onChip={openMetric} />}
           <Problem error={brief.error} />
           {brief.data && (

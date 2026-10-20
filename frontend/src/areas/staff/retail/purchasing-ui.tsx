@@ -1,4 +1,5 @@
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { useRef, useState, type ReactNode } from 'react';
 import { retail } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
@@ -109,6 +110,15 @@ export function SupplierField({ id, label = 'Supplier', value, suppliers, disabl
       </select>
     </>
   );
+}
+
+/**
+ * A supplier's name on a detail page. Where the person may pay suppliers it opens the payment form for that supplier, which lists
+ * what the supplier is owed (the open items); otherwise it is plain text.
+ */
+export function SupplierOwed({ id, name, payable }: { id?: string; name?: string; payable?: boolean }) {
+  if (!payable || !id) return <>{name ?? ''}</>;
+  return <Link to="/staff/retail/supplier-payments/new" search={{ supplier: id } as never} aria-label={`See what is owed to ${name ?? 'the supplier'}`}>{name}</Link>;
 }
 
 /** Which branch or store a form is for. With only one to choose from it is shown, not asked. */

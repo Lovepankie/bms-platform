@@ -9,7 +9,7 @@ import { SkeletonList } from '../../../components/states';
 import { useStaff } from '../context';
 import { PAYABLE_MANAGE, canUse, holdsAt } from './permissions';
 import { methodWords } from './payables-state';
-import { Facts, MoreButton, ReasonPanel, StatusBadge, useActionKeys, useCursorList } from './purchasing-ui';
+import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
 
@@ -49,37 +49,41 @@ export function SupplierPaymentsPage() {
         Money paid to suppliers. A payment clears the oldest supplier invoices and credit restocks first, unless you choose what it pays.
       </p>
       <p className="cluster">
-        <Link className="btn rt-primary" to="/staff/retail/supplier-payments/new">Pay a supplier</Link>
+        <Link className="btn rt-primary" to="/staff/retail/supplier-payments/new" data-tour="payments-new">Pay a supplier</Link>
         <Link className="btn-sm" to="/staff/retail/supplier-payables">What you owe suppliers</Link>
       </p>
       {list.query.isPending && <p className="loading">Loading</p>}
       <Problem error={list.query.error} />
-      <SearchBox id="search-payments" label="Search by payment number, reference or supplier" search={search} fetching={list.finding} count={list.query.data ? list.rows.length : undefined} more={list.query.hasNextPage} />
-      <label htmlFor="payments-status">Show</label>
-      <select id="payments-status" value={status} onChange={(e) => setStatus(e.target.value)}>
-        <option value="">All payments</option>
-        <option value="posted">Paid</option>
-        <option value="reversed">Reversed</option>
-      </select>
+      <div data-tour="payments-search">
+        <SearchBox id="search-payments" label="Search by payment number, reference or supplier" search={search} fetching={list.finding} count={list.query.data ? list.rows.length : undefined} more={list.query.hasNextPage} />
+        <label htmlFor="payments-status">Show</label>
+        <select id="payments-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">All payments</option>
+          <option value="posted">Paid</option>
+          <option value="reversed">Reversed</option>
+        </select>
+      </div>
       {list.query.data && list.rows.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="payments" /> : <p className="empty-state">No payments to suppliers yet.</p>)}
-      <SearchResults fetching={list.finding}>
-        <ul style={{ listStyle: 'none', padding: 0 }}>
-          {list.rows.map((r) => <PaymentRow key={r.id} row={r} branchName={nameOf(r.branch_id)} />)}
-        </ul>
-      </SearchResults>
+      <div data-tour="payments-list">
+        <SearchResults fetching={list.finding}>
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {list.rows.map((r) => <PaymentRow key={r.id} row={r} branchName={nameOf(r.branch_id)} />)}
+          </ul>
+        </SearchResults>
+      </div>
       <MoreButton list={list} noun="payments" />
     </Gate>
   );
 }
 
 /** One payment: facts and what it cleared, invoice by invoice. */
-export function SupplierPaymentView({ payment, nameOf }: { payment: SupplierPayment; nameOf: (branchId: string | undefined) => string }) {
+export function SupplierPaymentView({ payment, nameOf, payable }: { payment: SupplierPayment; nameOf: (branchId: string | undefined) => string; payable?: boolean }) {
   return (
-    <section aria-label="Supplier payment" data-testid="supplier-payment">
+    <section aria-label="Supplier payment" data-testid="supplier-payment" data-tour="payment-summary">
       <h2>{payment.payment_no} <StatusBadge words={PAYMENT_STATUS[payment.status ?? ''] ?? (payment.status ?? '')} warn={payment.status === 'reversed'} /></h2>
       <Facts
         rows={[
-          ['Supplier', payment.supplier_name ?? ''],
+          ['Supplier', <SupplierOwed key="s" id={payment.supplier_id} name={payment.supplier_name} payable={payable} />],
           ['Paid on', showDate(payment.paid_on)],
           ['Amount', money(payment.amount_minor ?? 0)],
           ['Paid by', methodWords(payment.method)],
@@ -90,7 +94,7 @@ export function SupplierPaymentView({ payment, nameOf }: { payment: SupplierPaym
           ...(payment.status === 'reversed' ? [['Reversed because', payment.reverse_reason ?? ''] as [string, string]] : []),
         ]}
       />
-      <div className="table-wrap" tabIndex={0}>
+      <div className="table-wrap" tabIndex={0} data-tour="payment-allocations">
         <table>
           <thead>
             <tr><th>Paid</th><th>Supplier&apos;s invoice</th><th className="num">Amount</th></tr>
@@ -155,8 +159,9 @@ export function SupplierPaymentPage() {
       {payment.isPending && <SkeletonList label="Loading the payment" />}
       <Problem error={payment.error} />
       {message && <Success>{message}</Success>}
-      {p && <SupplierPaymentView payment={p} nameOf={nameOf} />}
+      {p && <SupplierPaymentView payment={p} nameOf={nameOf} payable />}
       {p && p.status === 'posted' && holdsAt(me, PAYABLE_MANAGE, p.branch_id) && (
+        <div data-tour="payment-reverse">
         <ReasonPanel
           openLabel="Reverse this payment"
           question="Why is it reversed?"
@@ -166,6 +171,7 @@ export function SupplierPaymentPage() {
           error={reversed.error}
           onSubmit={(reason) => reversed.mutate(reason)}
         />
+        </div>
       )}
       {toast}
     </main>

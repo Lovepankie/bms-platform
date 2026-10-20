@@ -29,7 +29,7 @@ export function PayablesReport({ report, phone = false }: { report: SupplierPaya
   const suppliers = report.suppliers ?? [];
   const totals = report.totals ?? {};
   return (
-    <section aria-label="What you owe suppliers" data-testid="payables-report">
+    <section aria-label="What you owe suppliers" data-testid="payables-report" data-tour="payables-report">
       <p className="hint">As of {showDate(report.as_of)}. Tap a supplier&apos;s name to pay them.</p>
       {suppliers.length === 0 && <p className="empty-state">You owe no supplier anything, and no goods are waiting for an invoice.</p>}
       {suppliers.length > 0 && phone && (
@@ -92,7 +92,7 @@ export function SupplierPayablesPage() {
       <p className="hint" data-tour="payables-help">
         Everything you owe suppliers, by how late it is. It counts supplier invoices and stock bought on credit in Restock.
       </p>
-      <p className="cluster">
+      <p className="cluster" data-tour="payables-links">
         <Link className="btn-sm" to="/staff/retail/supplier-payments">Supplier payments</Link>
         <Link className="btn-sm" to="/staff/retail/supplier-bills">Supplier invoices</Link>
       </p>

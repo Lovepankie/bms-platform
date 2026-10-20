@@ -138,7 +138,7 @@ function TestMessage({ eventKey, text, canSend }: { eventKey: string; text: stri
   );
 }
 
-export function TemplateEditor({ template, canManage, onNotice }: { template: SmsTemplate; canManage: boolean; onNotice: (message: string | null) => void }) {
+export function TemplateEditor({ template, canManage, onNotice, tour = false }: { template: SmsTemplate; canManage: boolean; onNotice: (message: string | null) => void; tour?: boolean }) {
   const queryClient = useQueryClient();
   const saved = template.override?.text ?? template.default_text;
   const [text, setText] = useState(saved);
@@ -193,6 +193,7 @@ export function TemplateEditor({ template, canManage, onNotice }: { template: Sm
       <textarea
         id={`sms-text-${template.event_key}`}
         ref={area}
+        data-tour={tour ? 'sms-wording-message' : undefined}
         rows={4}
         value={text}
         maxLength={template.max_chars}
@@ -221,7 +222,7 @@ export function TemplateEditor({ template, canManage, onNotice }: { template: Sm
       {revert.error instanceof Error && <p role="alert" className="field-error">{revert.error.message}</p>}
       {canManage && (
         <p className="cluster">
-          <button type="button" className="rt-primary" disabled={!dirty || previewError !== null || save.isPending} onClick={() => save.mutate()}>
+          <button type="button" className="rt-primary" data-tour={tour ? 'sms-wording-save' : undefined} disabled={!dirty || previewError !== null || save.isPending} onClick={() => save.mutate()}>
             {save.isPending ? 'Saving' : 'Save my words'}
           </button>
           {dirty && (
@@ -263,15 +264,15 @@ export function WordingScreen() {
   }
   const canManage = mayManageWording(me);
   return (
-    <div className="stack">
+    <div className="stack" data-tour="sms-wording">
       <p>
         Choose the words each text message uses. Without your own words, the default is sent. Placeholders such as <code>{'{amount}'}</code> are filled in for each message.
       </p>
       {notice && <p role="alert" className="alert alert-warning">{notice}</p>}
       {!canManage && <p className="hint">You can look at the wording. Only a business administrator can change it.</p>}
-      {list.data.map((t) => (
+      {list.data.map((t, i) => (
         // Keyed by the saved version, so a fresh read after a save or someone else's change starts from what is saved.
-        <TemplateEditor key={`${t.event_key}:${t.override?.version ?? 0}`} template={t} canManage={canManage} onNotice={setNotice} />
+        <TemplateEditor key={`${t.event_key}:${t.override?.version ?? 0}`} template={t} canManage={canManage} onNotice={setNotice} tour={i === 0} />
       ))}
     </div>
   );

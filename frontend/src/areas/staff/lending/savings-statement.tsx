@@ -22,7 +22,9 @@ export function StatementTable({ s }: { s: SavingsStatement }) {
     <>
       <dl className="ln-facts">
         <dt>Account</dt>
-        <dd>{s.account_no}</dd>
+        <dd>
+          {s.account_id ? <Link to="/staff/lending/savings/accounts/$accountId" params={{ accountId: s.account_id }}>{s.account_no}</Link> : s.account_no}
+        </dd>
         <dt>Member</dt>
         <dd>
           {s.member_name} ({s.member_no})
@@ -83,8 +85,8 @@ export function StatementTable({ s }: { s: SavingsStatement }) {
 
 const route = getRouteApi('/staff/lending/savings/accounts/$accountId/statement');
 
-function StatementPage() {
-  const { accountId } = route.useParams();
+/** The statement for one account: the way back, the date range and, once read, the statement. */
+export function StatementBody({ accountId }: { accountId: string }) {
   const today = localDate();
   const [from, setFrom] = useState(threeMonthsBefore(today));
   const [to, setTo] = useState(today);
@@ -95,11 +97,11 @@ function StatementPage() {
     enabled: valid,
   });
   return (
-    <SavingsGate title="Statement">
-      <Link to="/staff/lending/savings/accounts/$accountId" params={{ accountId }} className="btn btn-ghost">
+    <>
+      <Link to="/staff/lending/savings/accounts/$accountId" params={{ accountId }} className="btn btn-ghost" data-tour="statement-back">
         Back to the account
       </Link>
-      <form className="sv-range" onSubmit={(e) => e.preventDefault()}>
+      <form className="sv-range" data-tour="statement-range" onSubmit={(e) => e.preventDefault()}>
         <div>
           <label htmlFor="sv-from">From</label>
           <input id="sv-from" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
@@ -113,6 +115,15 @@ function StatementPage() {
       {statement.isFetching && <p className="loading">Loading the statement</p>}
       <Problem error={statement.error} />
       {statement.data && <StatementTable s={statement.data} />}
+    </>
+  );
+}
+
+function StatementPage() {
+  const { accountId } = route.useParams();
+  return (
+    <SavingsGate title="Statement">
+      <StatementBody accountId={accountId} />
     </SavingsGate>
   );
 }
