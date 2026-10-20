@@ -93,6 +93,10 @@ const retailEvaluationRoute = retailScreen('/evaluation', 'Business evaluation')
 const retailControlsRoute = retailScreen('/controls', 'Controls').lazy(() => import('../areas/staff/retail/controls').then((m) => m.Route));
 const retailCatalogueRoute = retailScreen('/catalogue', 'Catalogue').lazy(() => import('../areas/staff/retail/catalogue').then((m) => m.Route));
 const retailProductsRoute = retailScreen('/catalogue/products', 'Items').lazy(() => import('../areas/staff/retail/catalogue-products').then((m) => m.ProductsRoute));
+// Items with sizes and colours (issue #384): under Items, so the trail reads Catalogue, Items, then the item.
+const retailSizesNewRoute = retailScreen('/catalogue/products/sizes/new', 'Add an item with sizes and colours').lazy(() => import('../areas/staff/retail/catalogue-variants').then((m) => m.NewFamilyRoute));
+const retailSizesJoinRoute = retailScreen('/catalogue/products/sizes/join', 'Join items as sizes').lazy(() => import('../areas/staff/retail/catalogue-variants').then((m) => m.JoinRoute));
+const retailSizesRoute = retailScreen('/catalogue/products/sizes/$familyId', 'Sizes and colours').lazy(() => import('../areas/staff/retail/catalogue-family').then((m) => m.FamilyRoute));
 const retailCategoriesRoute = retailScreen('/catalogue/categories', 'Categories').lazy(() => import('../areas/staff/retail/catalogue-lists').then((m) => m.CategoriesRoute));
 const retailUnitsRoute = retailScreen('/catalogue/units', 'Units').lazy(() => import('../areas/staff/retail/catalogue-lists').then((m) => m.UnitsRoute));
 const retailSuppliersRoute = retailScreen('/catalogue/suppliers', 'Suppliers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.SuppliersRoute));
@@ -294,6 +298,9 @@ export const router = createRouter({
         retailControlsRoute,
         retailCatalogueRoute,
         retailProductsRoute,
+        retailSizesNewRoute,
+        retailSizesJoinRoute,
+        retailSizesRoute,
         retailCategoriesRoute,
         retailUnitsRoute,
         retailSuppliersRoute,

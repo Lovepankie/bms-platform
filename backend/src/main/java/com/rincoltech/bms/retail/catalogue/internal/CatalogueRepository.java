@@ -26,10 +26,12 @@ class CatalogueRepository {
 
     private static final String SELECT_PRODUCT = """
             SELECT p.id, p.code, p.description, p.category_id, c.name AS category, p.unit_id, u.name AS unit,
-                   p.sell_minor, p.cost_minor, p.currency, p.active, p.created_at, p.updated_at, p.version
+                   p.sell_minor, p.cost_minor, p.currency, p.active, p.created_at, p.updated_at, p.version,
+                   p.family_id, f.name AS family_name, p.variant_size, p.variant_colour, p.variant_sort
               FROM retail_products p
               JOIN retail_categories c ON c.id = p.category_id
               JOIN retail_units u ON u.id = p.unit_id
+              LEFT JOIN retail_product_families f ON f.id = p.family_id
             """;
 
     private final JdbcClient jdbc;
@@ -175,10 +177,17 @@ class CatalogueRepository {
 
     /** A product found by its name key, for the duplicate refusal and the near-duplicate warning. */
     record NameMatch(
-            UUID id, String code, String description, UUID unitId, String unit, boolean active, String nameKey) {}
+            UUID id,
+            String code,
+            String description,
+            UUID unitId,
+            String unit,
+            boolean active,
+            String nameKey,
+            UUID familyId) {}
 
     private static final String SELECT_NAME = """
-            SELECT p.id, p.code, p.description, p.unit_id, u.name AS unit, p.active, p.name_key
+            SELECT p.id, p.code, p.description, p.unit_id, u.name AS unit, p.active, p.name_key, p.family_id
               FROM retail_products p JOIN retail_units u ON u.id = p.unit_id
             """;
 
@@ -190,7 +199,28 @@ class CatalogueRepository {
                 rs.getObject("unit_id", UUID.class),
                 rs.getString("unit"),
                 rs.getBoolean("active"),
-                rs.getString("name_key"));
+                rs.getString("name_key"),
+                rs.getObject("family_id", UUID.class));
+    }
+
+    /** Issue #384, ADR-044 one level up: an item with sizes and colours whose name has the same key as {@code name}. */
+    record FamilyMatch(UUID id, String baseCode, String name, UUID unitId) {}
+
+    List<FamilyMatch> sameFamilyName(String name, UUID excludeId) {
+        return jdbc.sql("""
+                        SELECT f.id, f.base_code, f.name, f.unit_id FROM retail_product_families f
+                         WHERE bms_name_key(f.name) = bms_name_key(:d)
+                           AND (CAST(:exclude AS uuid) IS NULL OR f.id <> CAST(:exclude AS uuid))
+                         ORDER BY f.name, f.id
+                        """)
+                .param("d", name)
+                .param("exclude", excludeId)
+                .query((rs, n) -> new FamilyMatch(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("base_code"),
+                        rs.getString("name"),
+                        rs.getObject("unit_id", UUID.class)))
+                .list();
     }
 
     /**
@@ -350,13 +380,35 @@ class CatalogueRepository {
     }
 
     void insert(Product p, UUID createdBy, String duplicateReason) {
+        insert(p, createdBy, duplicateReason, null, null, null, null);
+    }
+
+    /**
+     * A product, or with {@code familyId} a variant of an item with sizes and colours (issue #384): its size, colour (one
+     * may be null) and place in the item's list.
+     */
+    void insert(
+            Product p,
+            UUID createdBy,
+            String duplicateReason,
+            UUID familyId,
+            String size,
+            String colour,
+            Integer position) {
         jdbc.sql("""
                         INSERT INTO retail_products (id, tenant_id, code, description, category_id, unit_id, cost_minor,
-                                                     sell_minor, currency, active, created_by, duplicate_reason)
+                                                     sell_minor, currency, active, created_by, duplicate_reason,
+                                                     family_id, variant_size, variant_colour, variant_sort)
                         VALUES (:id, current_setting('app.tenant_id')::uuid, :code, :description, :categoryId, :unitId,
-                                :costMinor, :sellMinor, :currency, true, :createdBy, :duplicateReason)
+                                :costMinor, :sellMinor, :currency, :active, :createdBy, :duplicateReason,
+                                :familyId, :size, :colour, :position)
                         """)
+                .param("familyId", familyId, java.sql.Types.OTHER)
+                .param("size", size, java.sql.Types.VARCHAR)
+                .param("colour", colour, java.sql.Types.VARCHAR)
+                .param("position", position, java.sql.Types.INTEGER)
                 .param("duplicateReason", duplicateReason)
+                .param("active", p.active())
                 .param("id", p.id())
                 .param("code", p.code())
                 .param("description", p.description())
@@ -548,6 +600,24 @@ class CatalogueRepository {
     }
 
     static Product product(ResultSet rs, int n) throws SQLException {
+        return plainProduct(rs).withVariant(variantOf(rs));
+    }
+
+    /** The item a product is a variant of (issue #384), or null for an item without variants. */
+    static CatalogueApi.VariantOf variantOf(ResultSet rs) throws SQLException {
+        UUID familyId = rs.getObject("family_id", UUID.class);
+        if (familyId == null) {
+            return null;
+        }
+        return new CatalogueApi.VariantOf(
+                familyId,
+                rs.getString("family_name"),
+                rs.getString("variant_size"),
+                rs.getString("variant_colour"),
+                rs.getInt("variant_sort"));
+    }
+
+    private static Product plainProduct(ResultSet rs) throws SQLException {
         return new Product(
                 rs.getObject("id", UUID.class),
                 rs.getString("code"),
@@ -572,23 +642,216 @@ class CatalogueRepository {
         BigDecimal qty = rs.getBigDecimal("qty");
         BigDecimal q = (qty == null ? BigDecimal.ZERO : qty).setScale(3);
         return new Product(
-                p.id(),
-                p.code(),
-                p.description(),
-                p.categoryId(),
-                p.category(),
-                p.unitId(),
-                p.unit(),
-                p.sellMinor(),
-                p.costMinor(),
-                p.currency(),
-                p.active(),
-                p.createdAt(),
-                p.updatedAt(),
-                p.version(),
-                q.toPlainString(),
-                q.signum() < 0,
-                null);
+                        p.id(),
+                        p.code(),
+                        p.description(),
+                        p.categoryId(),
+                        p.category(),
+                        p.unitId(),
+                        p.unit(),
+                        p.sellMinor(),
+                        p.costMinor(),
+                        p.currency(),
+                        p.active(),
+                        p.createdAt(),
+                        p.updatedAt(),
+                        p.version(),
+                        q.toPlainString(),
+                        q.signum() < 0,
+                        null)
+                .withVariant(p.variant());
+    }
+
+    // ---- Items with sizes and colours (issue #384, ADR-051) --------------------------------------------
+
+    /** An item with sizes and colours, as stored. */
+    record FamilyRow(
+            UUID id,
+            String name,
+            String baseCode,
+            UUID categoryId,
+            String category,
+            UUID unitId,
+            String unit,
+            Instant createdAt,
+            int version) {}
+
+    private static final String SELECT_FAMILY = """
+            SELECT f.id, f.name, f.base_code, f.category_id, c.name AS category, f.unit_id, u.name AS unit, f.created_at,
+                   f.version
+              FROM retail_product_families f
+              JOIN retail_categories c ON c.id = f.category_id
+              JOIN retail_units u ON u.id = f.unit_id
+            """;
+
+    private static FamilyRow familyRow(ResultSet rs, int n) throws SQLException {
+        return new FamilyRow(
+                rs.getObject("id", UUID.class),
+                rs.getString("name"),
+                rs.getString("base_code"),
+                rs.getObject("category_id", UUID.class),
+                rs.getString("category"),
+                rs.getObject("unit_id", UUID.class),
+                rs.getString("unit"),
+                instant(rs, "created_at"),
+                rs.getInt("version"));
+    }
+
+    Optional<FamilyRow> family(UUID id) {
+        return jdbc.sql(SELECT_FAMILY + " WHERE f.id = ?")
+                .param(id)
+                .query(CatalogueRepository::familyRow)
+                .optional();
+    }
+
+    /** The item's row lock: serialises adding variants, renaming and moving the item. */
+    Optional<FamilyRow> lockFamily(UUID id) {
+        return jdbc.sql(SELECT_FAMILY + " WHERE f.id = ? FOR NO KEY UPDATE OF f")
+                .param(id)
+                .query(CatalogueRepository::familyRow)
+                .optional();
+    }
+
+    void insertFamily(
+            UUID id,
+            String name,
+            String baseCode,
+            UUID categoryId,
+            UUID unitId,
+            UUID createdBy,
+            String duplicateReason) {
+        jdbc.sql("""
+                        INSERT INTO retail_product_families (id, tenant_id, name, base_code, category_id, unit_id, created_by,
+                                                             duplicate_reason)
+                        VALUES (:id, current_setting('app.tenant_id')::uuid, :name, :base, :category, :unit, :by, :reason)
+                        """)
+                .param("id", id)
+                .param("name", name)
+                .param("base", baseCode)
+                .param("category", categoryId)
+                .param("unit", unitId)
+                .param("by", createdBy)
+                .param("reason", duplicateReason, java.sql.Types.VARCHAR)
+                .update();
+    }
+
+    /** Rows changed: 0 when the version moved since it was read. */
+    int updateFamily(
+            UUID id, String name, UUID categoryId, int expectedVersion, boolean renamed, String duplicateReason) {
+        return jdbc.sql("""
+                        UPDATE retail_product_families SET name = :name, category_id = :category, updated_at = now(),
+                               version = version + 1,
+                               duplicate_reason = CASE WHEN :renamed THEN :reason ELSE duplicate_reason END
+                         WHERE id = :id AND version = :version
+                        """)
+                .param("name", name)
+                .param("category", categoryId)
+                .param("renamed", renamed)
+                .param("reason", duplicateReason, java.sql.Types.VARCHAR)
+                .param("id", id)
+                .param("version", expectedVersion)
+                .update();
+    }
+
+    /** A product joining an item with sizes takes the item's category (issue #384). */
+    void setCategory(UUID productId, UUID categoryId) {
+        jdbc.sql("""
+                        UPDATE retail_products SET category_id = ?, updated_at = now(), version = version + 1
+                         WHERE id = ? AND category_id <> ?
+                        """).params(categoryId, productId, categoryId).update();
+    }
+
+    /** Every variant of an item, active or not, in the item's order. */
+    List<Product> variants(UUID familyId) {
+        return jdbc.sql(SELECT_PRODUCT + " WHERE p.family_id = ? ORDER BY p.variant_sort, p.code, p.id")
+                .param(familyId)
+                .query(CatalogueRepository::product)
+                .list();
+    }
+
+    /** The balances of an item's variants that are not zero, for the item's stock (the stock module's table). */
+    record VariantBalance(UUID productId, UUID branchId, BigDecimal qty) {}
+
+    List<VariantBalance> familyBalances(UUID familyId) {
+        return jdbc.sql("""
+                        SELECT b.product_id, b.branch_id, b.qty
+                          FROM retail_stock_balances b JOIN retail_products p ON p.id = b.product_id
+                         WHERE p.family_id = ? AND b.qty <> 0
+                        """)
+                .param(familyId)
+                .query((rs, n) -> new VariantBalance(
+                        rs.getObject("product_id", UUID.class),
+                        rs.getObject("branch_id", UUID.class),
+                        rs.getBigDecimal("qty")))
+                .list();
+    }
+
+    /** An item without variants joins an item as one of its variants, with its new description (issue #384). */
+    void joinFamily(UUID productId, UUID familyId, String size, String colour, int position, String description) {
+        jdbc.sql("""
+                        UPDATE retail_products SET family_id = :familyId, variant_size = :size, variant_colour = :colour,
+                               variant_sort = :position, description = :description, duplicate_reason = NULL,
+                               updated_at = now(), version = version + 1
+                         WHERE id = :id
+                        """)
+                .param("familyId", familyId)
+                .param("size", size, java.sql.Types.VARCHAR)
+                .param("colour", colour, java.sql.Types.VARCHAR)
+                .param("position", position)
+                .param("description", description)
+                .param("id", productId)
+                .update();
+    }
+
+    /** Adding variants changes the item: its version moves, so an item read before is known to be stale. */
+    void touchFamily(UUID id) {
+        jdbc.sql("UPDATE retail_product_families SET updated_at = now(), version = version + 1 WHERE id = ?")
+                .param(id)
+                .update();
+    }
+
+    /** A variant's size, colour and description, after a rename of its item. */
+    void setVariantName(UUID productId, String size, String colour, String description) {
+        setVariantName(productId, size, colour, description, true);
+    }
+
+    /** As above; {@code bump} false when the caller's own update of the row has moved its version already. */
+    void setVariantName(UUID productId, String size, String colour, String description, boolean bump) {
+        jdbc.sql("""
+                        UPDATE retail_products SET variant_size = :size, variant_colour = :colour, description = :description,
+                               updated_at = now(), version = version + CASE WHEN :bump THEN 1 ELSE 0 END
+                         WHERE id = :id
+                        """)
+                .param("bump", bump)
+                .param("size", size, java.sql.Types.VARCHAR)
+                .param("colour", colour, java.sql.Types.VARCHAR)
+                .param("description", description)
+                .param("id", productId)
+                .update();
+    }
+
+    /** Another variant of the item with this size and colour (case ignored), other than {@code excludeId}. */
+    boolean variantTaken(UUID familyId, String size, String colour, UUID excludeId) {
+        return jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM retail_products
+                                        WHERE family_id = :familyId AND id <> :excludeId
+                                          AND lower(coalesce(variant_size, '')) = lower(coalesce(CAST(:size AS text), ''))
+                                          AND lower(coalesce(variant_colour, '')) = lower(coalesce(CAST(:colour AS text), '')))
+                        """)
+                .param("familyId", familyId)
+                .param("excludeId", excludeId)
+                .param("size", size, java.sql.Types.VARCHAR)
+                .param("colour", colour, java.sql.Types.VARCHAR)
+                .query(Boolean.class)
+                .single();
+    }
+
+    /** Every variant of an item follows its new category. */
+    void setFamilyCategory(UUID familyId, UUID categoryId) {
+        jdbc.sql("""
+                        UPDATE retail_products SET category_id = ?, updated_at = now(), version = version + 1
+                         WHERE family_id = ? AND category_id <> ?
+                        """).params(categoryId, familyId, categoryId).update();
     }
 
     static Instant instant(ResultSet rs, String column) throws SQLException {

@@ -78,7 +78,11 @@ class PurchasesSummaryService {
         String currency = tenant.profile().currency();
         int at = chain.indexOf(level);
         String next = at + 1 < chain.size() ? chain.get(at + 1) : null;
-        List<String> available = PurchasesSummaryRepository.LEVELS;
+        // Issue #384: the variant level is offered only to a tenant that has an item with sizes and colours.
+        boolean variants = repo.anyItemWithVariants();
+        List<String> available = PurchasesSummaryRepository.LEVELS.stream()
+                .filter(l -> variants || !l.equals("variant"))
+                .toList();
         if (filter != null && filter.isEmpty()) {
             return new Summary(level, chain, next, available, currency, List.of(), false, null, null);
         }
@@ -121,10 +125,12 @@ class PurchasesSummaryService {
             ok &= PurchasesSummaryRepository.LEVELS.contains(level) && seen.add(level);
         }
         if (!ok) {
-            throw ApiException.validation(List.of(new FieldProblem(
-                    "group_by",
-                    "invalid",
-                    "group_by is a list of branch, year, month, supplier, day, category or item, each once.")));
+            throw ApiException.validation(
+                    List.of(
+                            new FieldProblem(
+                                    "group_by",
+                                    "invalid",
+                                    "group_by is a list of branch, year, month, supplier, day, category, item or variant, each once.")));
         }
         return chain;
     }

@@ -4,7 +4,7 @@ import { NO_SUPPLIER, type Purchase, type PurchaseLevel, type PurchasesSummary, 
 // the same rules as the server. A voided restock is only counted apart, what was bought at cost exists only for a session holding
 // retail.profit.read, groups are bounded and the rest is reached by next_to (year, month, day) or next_offset.
 
-const BOUND: Record<PurchaseLevel, number> = { year: 20, month: 12, day: 31, branch: 100, supplier: 50, category: 50, item: 50 };
+const BOUND: Record<PurchaseLevel, number> = { year: 20, month: 12, day: 31, branch: 100, supplier: 50, category: 50, item: 50, variant: 50 };
 const milli = (qty: string | undefined) => Math.round(Number(qty ?? '0') * 1000);
 
 /** What the mock knows of the world around a restock. */
@@ -12,7 +12,10 @@ export interface PurchasesContext {
   cost: boolean;
   branchName: (id: string | undefined) => string;
   supplierName: (id: string | undefined) => string;
-  product: (id: string | undefined) => { name: string; categoryId: string; categoryName: string; unit: string } | undefined;
+  /** The product, and the item with sizes and colours it is a variant of (issue #384). */
+  product: (id: string | undefined) => { name: string; categoryId: string; categoryName: string; unit: string; familyId?: string; familyName?: string } | undefined;
+  /** Whether the tenant has an item with sizes and colours: only then is the variant level offered. */
+  variants?: boolean;
 }
 
 interface Entry {
@@ -35,7 +38,7 @@ export function summarisePurchases(purchases: Purchase[], q: PurchasesSummaryQue
     const supplier = e.purchase.supplier_id ?? NO_SUPPLIER;
     return (!q.status || (q.status === 'voided') === (e.purchase.status === 'voided'))
       && (!q.branchId || e.branchId === q.branchId) && (!q.from || day >= q.from) && (!q.to || day <= q.to)
-      && (!q.supplierId || supplier === q.supplierId) && (!q.itemId || e.productId === q.itemId)
+      && (!q.supplierId || supplier === q.supplierId) && (!q.itemId || e.productId === q.itemId || ctx.product(e.productId)?.familyId === q.itemId)
       && (!q.categoryId || ctx.product(e.productId)?.categoryId === q.categoryId);
   });
   const keyOf = (e: Entry): { key: string; label: string; from?: string; to?: string } => {
@@ -44,13 +47,18 @@ export function summarisePurchases(purchases: Purchase[], q: PurchasesSummaryQue
       case 'branch': return { key: e.branchId, label: ctx.branchName(e.branchId) };
       case 'supplier': return { key: e.purchase.supplier_id ?? NO_SUPPLIER, label: e.purchase.supplier_id ? ctx.supplierName(e.purchase.supplier_id) : 'No supplier' };
       case 'category': { const p = ctx.product(e.productId); return { key: p?.categoryId ?? 'unknown', label: p?.categoryName ?? 'Unknown' }; }
-      case 'item': return { key: e.productId, label: ctx.product(e.productId)?.name ?? 'Unknown' };
+      case 'item': { const p = ctx.product(e.productId); return p?.familyId ? { key: p.familyId, label: p.familyName ?? p.name } : { key: e.productId, label: p?.name ?? 'Unknown' }; }
+      case 'variant': return { key: e.productId, label: ctx.product(e.productId)?.name ?? 'Unknown' };
       case 'year': return { key: date.slice(0, 4), label: date.slice(0, 4), from: `${date.slice(0, 4)}-01-01`, to: `${date.slice(0, 4)}-12-31` };
       case 'month': return { key: date.slice(0, 7), label: date.slice(0, 7), from: `${date.slice(0, 7)}-01`, to: `${date.slice(0, 7)}-${new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0)).getUTCDate()}` };
       default: return { key: date, label: date, from: date, to: date };
     }
   };
   const groups = new Map<string, PurchasesSummaryGroup & { sold: number; live: Set<string>; voided: Set<string> }>();
+  // An item with sizes is keyed by its own id, which is not a product: its unit is the unit of any of its variants.
+  const units = new Map<string, string>();
+  for (const e of entries) units.set(keyOf(e).key, ctx.product(e.productId)?.unit ?? '');
+  const unitOf = (key: string | undefined) => units.get(key ?? '') ?? '';
   for (const e of entries) {
     const k = keyOf(e);
     const g = groups.get(k.key) ?? {
@@ -73,13 +81,13 @@ export function summarisePurchases(purchases: Purchase[], q: PurchasesSummaryQue
   const size = BOUND[q.level];
   const page = all.slice(offset, offset + size).map(({ sold, live, voided, ...g }) => ({
     ...g, purchases_count: live.size, voided_count: voided.size,
-    ...(q.level === 'item' ? { quantity: String(sold / 1000), unit: ctx.product(g.key)?.unit ?? '' } : {}),
+    ...(q.level === 'item' || q.level === 'variant' ? { quantity: String(sold / 1000), unit: unitOf(g.key) } : {}),
   }));
   const more = all.length > offset + size;
   const oldest = page.at(-1)?.from;
   const nextTo = more && time && oldest ? new Date(Date.parse(`${oldest}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10) : undefined;
   return {
-    group_by: q.level, levels: q.chain, ...(next ? { next_level: next } : {}), available_levels: ['branch', 'year', 'month', 'supplier', 'day', 'category', 'item'],
+    group_by: q.level, levels: q.chain, ...(next ? { next_level: next } : {}), available_levels: ['branch', 'year', 'month', 'supplier', 'day', 'category', 'item', ...(ctx.variants ? ['variant'] : [])],
     currency: 'UGX', items: page, has_more: more, ...(nextTo ? { next_to: nextTo } : {}), ...(more && !time ? { next_offset: offset + size } : {}),
   };
 }

@@ -34,6 +34,17 @@ export type ProductPage = S['RetailProductPage'];
 export type PriceChange = S['RetailPriceChange'];
 export type NewProduct = S['CreateRetailProductRequest'];
 export type ProductChange = S['UpdateRetailProductRequest'];
+/** An item with sizes and colours (issue #384, ADR-051): its variants are products, each with its own code, prices and stock. */
+export type Family = S['RetailFamily'];
+export type NewFamily = S['CreateRetailFamilyRequest'];
+export type FamilyChange = S['UpdateRetailFamilyRequest'];
+export type AddVariants = S['AddRetailVariantsRequest'];
+export type MakeFamily = S['RetailMakeFamilyRequest'];
+export type VariantLine = S['RetailVariantLine'];
+/** Items kept apart until now (one per size) becoming the sizes and colours of one item (issue #384). */
+export type JoinRequest = S['RetailJoinRequest'];
+/** The item a product is a variant of, and its size and colour; absent for an item without variants. */
+export type VariantOf = S['RetailProductVariantOf'];
 export type PriceEdit = S['RetailPriceEditRequest'];
 /** A product with this name or a close one (issue #352): `exact` is the same name in the same unit, which a save refuses. */
 export type SimilarProducts = S['RetailSimilarProducts'];
@@ -266,7 +277,7 @@ export function salesParams({ branchId, from, to, buyer, paymentMethod, productI
 }
 
 /** The levels a sales summary can group by (issue #341). */
-export type SummaryLevel = 'branch' | 'year' | 'month' | 'seller' | 'day' | 'category' | 'item';
+export type SummaryLevel = 'branch' | 'year' | 'month' | 'seller' | 'day' | 'category' | 'item' | 'variant';
 
 export interface SalesSummaryQuery extends Omit<SalesQuery, 'cursor' | 'status'> {
   /** The level whose groups are asked for. */
@@ -290,7 +301,7 @@ export function salesSummaryParams({ level, chain, branchId, from, to, buyer, pa
 }
 
 /** The levels a restocks summary can group by (issue #350). */
-export type PurchaseLevel = 'branch' | 'year' | 'month' | 'supplier' | 'day' | 'category' | 'item';
+export type PurchaseLevel = 'branch' | 'year' | 'month' | 'supplier' | 'day' | 'category' | 'item' | 'variant';
 
 /** The levels a stock summary can group by: the items themselves are the stock list (issue #350). */
 export type StockChainLevel = 'branch' | 'category';
@@ -359,6 +370,18 @@ export interface RetailApi {
   /** A price change under If-Match; the server writes the history row. */
   editPrices(id: string, version: number, body: PriceEdit): Promise<Product>;
   priceHistory(id: string): Promise<PriceChange[]>;
+  /** An item with sizes and colours, its variants and its stock over the caller's branches (issue #384). */
+  getFamily(id: string): Promise<Family>;
+  /** Makes the item and every combination of the sizes and colours chosen once (or the variants named). */
+  createFamily(body: NewFamily): Promise<Family>;
+  /** A new name renames every variant, a new category moves every variant; under If-Match. */
+  updateFamily(id: string, version: number, body: FamilyChange): Promise<Family>;
+  /** More sizes or colours; a combination the item has is skipped. */
+  addVariants(id: string, body: AddVariants): Promise<Family>;
+  /** Gives an item without variants sizes and colours; it keeps its stock and history as one of them. */
+  makeFamily(productId: string, body: MakeFamily): Promise<Family>;
+  /** Items kept apart become the sizes and colours of a new item (familyId null) or of one that exists; each keeps its stock and history. */
+  joinFamily(familyId: string | null, body: JoinRequest): Promise<Family>;
   /** The pack sizes of an item (the units capability, issue #194); 404 capability_not_enabled while it is off. */
   listPacks(productId: string): Promise<Pack[]>;
   addPack(productId: string, body: { unit_id: string; factor: string }): Promise<Pack>;
@@ -676,6 +699,34 @@ const realRetail: RetailApi = {
 
   async priceHistory(id) {
     return unwrap(await api.GET('/api/v1/retail/products/{product_id}/price-history', { params: { path: { product_id: id } } })).items ?? [];
+  },
+
+  async getFamily(id) {
+    return unwrap(await api.GET('/api/v1/retail/product-families/{family_id}', { params: { path: { family_id: id } } }));
+  },
+
+  async createFamily(body) {
+    return unwrap(await api.POST('/api/v1/retail/product-families', { body }));
+  },
+
+  async updateFamily(id, version, body) {
+    return unwrap(
+      await api.PATCH('/api/v1/retail/product-families/{family_id}', { params: { path: { family_id: id }, header: { 'If-Match': `"${version}"` } }, body }),
+    );
+  },
+
+  async addVariants(id, body) {
+    return unwrap(await api.POST('/api/v1/retail/product-families/{family_id}/variants', { params: { path: { family_id: id } }, body }));
+  },
+
+  async makeFamily(productId, body) {
+    return unwrap(await api.POST('/api/v1/retail/products/{product_id}/family', { params: { path: { product_id: productId } }, body }));
+  },
+
+  async joinFamily(familyId, body) {
+    return familyId
+      ? unwrap(await api.POST('/api/v1/retail/product-families/{family_id}/join', { params: { path: { family_id: familyId } }, body }))
+      : unwrap(await api.POST('/api/v1/retail/product-families/join', { body }));
   },
 
   async listPacks(productId) {

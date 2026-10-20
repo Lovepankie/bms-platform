@@ -639,6 +639,20 @@ class RlsIsolationIT {
                         SELECT gen_random_uuid(), ?, (SELECT id FROM retail_products WHERE tenant_id = ? LIMIT 1), u.id, 12
                           FROM u
                         """).params(t.tenantId(), t.tenantId(), t.tenantId()).update();
+        // An item with sizes and colours (issue #384, ADR-051), with one variant: a second product of the tenant's.
+        // JUSTIFICATION-A3: a fixture row for the new table; the isolation test needs one row per tenant table.
+        UUID family = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_product_families (id, tenant_id, name, base_code, category_id, unit_id)
+                        VALUES (?, ?, 'rls-romper', 'RLS-ROMP', ?, ?)
+                        """).params(family, t.tenantId(), retailCategory, retailUnit).update();
+        owner.sql("""
+                        INSERT INTO retail_products (id, tenant_id, code, description, category_id, unit_id, cost_minor,
+                                                     sell_minor, currency, family_id, variant_size, variant_sort)
+                        VALUES (?, ?, 'RLS-ROMP-S', 'rls-romper (S)', ?, ?, 1, 2, 'UGX', ?, 'S', 0)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), retailCategory, retailUnit, family)
+                .update();
         // Retail price lists, their items and customer groups (ADR-033, #195).
         // JUSTIFICATION-A3: a fixture row for each new table; the isolation test needs one row per tenant table.
         owner.sql("""

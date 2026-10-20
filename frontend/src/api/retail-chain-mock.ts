@@ -7,16 +7,19 @@ import { summariseSales } from './retail-summary-mock';
 // apart, profit exists only for a session holding retail.profit.read, groups are bounded and the rest is reached by
 // next_to (year, month, day) or next_offset.
 
-const LEVELS: SummaryLevel[] = ['branch', 'year', 'month', 'seller', 'day', 'category', 'item'];
+const LEVELS: SummaryLevel[] = ['branch', 'year', 'month', 'seller', 'day', 'category', 'item', 'variant'];
 const METHODS = ['cash', 'mobile_money', 'bank', 'credit'] as const;
-const BOUND: Record<SummaryLevel, number> = { year: 20, month: 12, day: 31, branch: 100, seller: 50, category: 50, item: 50 };
+const BOUND: Record<SummaryLevel, number> = { year: 20, month: 12, day: 31, branch: 100, seller: 50, category: 50, item: 50, variant: 50 };
 
 /** What the mock knows of the world around a sale. */
 export interface ChainContext {
   profit: boolean;
   branchName: (id: string | undefined) => string;
   sellerName: (id: string | undefined) => string;
-  product: (id: string | undefined) => { name: string; categoryId: string; categoryName: string } | undefined;
+  /** The product, and the item with sizes and colours it is a variant of (issue #384). */
+  product: (id: string | undefined) => { name: string; categoryId: string; categoryName: string; familyId?: string; familyName?: string } | undefined;
+  /** Whether the tenant has an item with sizes and colours: only then is the variant level offered. */
+  variants?: boolean;
 }
 
 type Line = NonNullable<Sale['lines']>[number];
@@ -32,8 +35,8 @@ export function summariseChain(sales: Sale[], q: SalesSummaryQuery, ctx: ChainCo
   const chain = q.chain ?? [q.level];
   const at = chain.indexOf(q.level);
   const next = at >= 0 ? chain[at + 1] : undefined;
-  const wrap = (s: SalesSummary): SalesSummary => ({ ...s, group_by: q.level, levels: chain, available_levels: LEVELS, ...(next ? { next_level: next } : {}) });
-  const overLines = q.level === 'category' || q.level === 'item' || !!q.categoryId || !!q.itemId;
+  const wrap = (s: SalesSummary): SalesSummary => ({ ...s, group_by: q.level, levels: chain, available_levels: LEVELS.filter((l) => ctx.variants || l !== 'variant'), ...(next ? { next_level: next } : {}) });
+  const overLines = q.level === 'category' || q.level === 'item' || q.level === 'variant' || !!q.categoryId || !!q.itemId;
   if (!overLines && (q.level === 'year' || q.level === 'month' || q.level === 'day')) {
     const r = summariseSales(sales, q.level, ctx.profit);
     return wrap({ ...r, items: (r.items ?? []).map((g) => ({ ...g, key: g.period, label: g.period })) });
@@ -41,7 +44,7 @@ export function summariseChain(sales: Sale[], q: SalesSummaryQuery, ctx: ChainCo
   const entries: Entry[] = sales.flatMap((sale) => {
     if (!overLines) return [{ sale }];
     return (sale.lines ?? [])
-      .filter((l) => (!q.itemId || l.product_id === q.itemId) && (!q.categoryId || ctx.product(l.product_id)?.categoryId === q.categoryId))
+      .filter((l) => (!q.itemId || l.product_id === q.itemId || ctx.product(l.product_id)?.familyId === q.itemId) && (!q.categoryId || ctx.product(l.product_id)?.categoryId === q.categoryId))
       .map((line) => ({ sale, line }));
   });
   const keyOf = (e: Entry): { key: string; label: string; from?: string; to?: string } => {
@@ -50,7 +53,8 @@ export function summariseChain(sales: Sale[], q: SalesSummaryQuery, ctx: ChainCo
       case 'branch': return { key: e.sale.branch_id ?? '', label: ctx.branchName(e.sale.branch_id) };
       case 'seller': return { key: e.sale.created_by ?? 'unknown', label: ctx.sellerName(e.sale.created_by) };
       case 'category': { const p = ctx.product(e.line?.product_id); return { key: p?.categoryId ?? 'unknown', label: p?.categoryName ?? 'Unknown' }; }
-      case 'item': return { key: e.line?.product_id ?? '', label: e.line?.description ?? ctx.product(e.line?.product_id)?.name ?? 'Unknown' };
+      case 'item': { const p = ctx.product(e.line?.product_id); return p?.familyId ? { key: p.familyId, label: p.familyName ?? p.name } : { key: e.line?.product_id ?? '', label: e.line?.description ?? p?.name ?? 'Unknown' }; }
+      case 'variant': return { key: e.line?.product_id ?? '', label: ctx.product(e.line?.product_id)?.name ?? e.line?.description ?? 'Unknown' };
       case 'year': return { key: date.slice(0, 4), label: date.slice(0, 4), from: `${date.slice(0, 4)}-01-01`, to: `${date.slice(0, 4)}-12-31` };
       case 'month': return { key: date.slice(0, 7), label: date.slice(0, 7), from: `${date.slice(0, 7)}-01`, to: `${date.slice(0, 7)}-${new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0)).getUTCDate()}` };
       default: return { key: date, label: date, from: date, to: date };

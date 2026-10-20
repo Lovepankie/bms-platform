@@ -17,6 +17,7 @@ import { useRootFigures } from './sales-grouped';
 import { SalesChain, useChainView } from './sales-chain';
 import { chainUser, effectiveChain, usableChain, usableLevels, type Selection } from './sales-chain-state';
 import { GroupBy } from './sales-group-by';
+import { useSalesVariantLevel } from './catalogue-variants';
 import { PaySaleAction, VoidSaleAction, WriteOffSaleAction } from './sale-actions';
 
 // Credit sales and All sales (#145): the lists the pilot's app has, 'Credit sales' and the sales
@@ -272,8 +273,10 @@ export function CreditSales() {
   const today = businessToday();
   const { me } = useStaff();
   const view = useChainView(chainUser(me), 'credit');
-  const levels = usableLevels(canRankSellers(me, all ? null : branchId));
-  const shown = usableChain(view.chain, canRankSellers(me, all ? null : branchId));
+  // Issue #384: the Size and colour level is offered once the business has an item with sizes and colours.
+  const variants = useSalesVariantLevel();
+  const levels = usableLevels(canRankSellers(me, all ? null : branchId), variants);
+  const shown = usableChain(view.chain, canRankSellers(me, all ? null : branchId), variants);
   const chain = effectiveChain(shown, !all);
   const filter = { branchId: all ? undefined : (branchId ?? undefined), buyer: search.term, paymentMethod: 'credit' as const, owing: owing === 'all' ? undefined : owing };
   // Debts still owing or overdue are listed together, oldest groups included: nothing is open to start with, so a debt in an old month would otherwise be hidden.
@@ -326,8 +329,10 @@ export function AllSales() {
   const products = useQuery({ queryKey: ['retail', 'products', 'all', itemSearch], queryFn: ({ signal }) => retail.listProducts({ query: itemSearch, signal }), enabled: itemSearch !== '', placeholderData: keepPreviousData });
   const { me } = useStaff();
   const view = useChainView(chainUser(me), 'all');
-  const levels = usableLevels(canRankSellers(me, all ? null : branchId));
-  const shown = usableChain(view.chain, canRankSellers(me, all ? null : branchId));
+  // Issue #384: the Size and colour level is offered once the business has an item with sizes and colours.
+  const variants = useSalesVariantLevel();
+  const levels = usableLevels(canRankSellers(me, all ? null : branchId), variants);
+  const shown = usableChain(view.chain, canRankSellers(me, all ? null : branchId), variants);
   const chain = effectiveChain(shown, !all);
   const filter = { branchId: all ? undefined : (branchId ?? undefined), buyer: search.term, paymentMethod: method || undefined, productId };
   const figures = useRootFigures(filter, { from, to }, (all || branchId !== null) && from <= to);

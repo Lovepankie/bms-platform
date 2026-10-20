@@ -1549,6 +1549,108 @@ class MigrationOrderIT {
                 .isEqualTo(1);
     }
 
+    /**
+     * Issue #384, ADR-051: staging already holds items, stock and sales when sizes and colours arrive. Every existing item is
+     * its own single default variant: same id, same balance, same sale lines, the four new columns null, so nothing is
+     * copied and nothing reads differently; the new check and foreign key end validated, the item table starts empty, and
+     * half a variant is refused.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates products across the variants migration.
+     */
+    @Test
+    void variantsMigrationKeepsEveryItemOfADatabaseAtV67AsItsOwnSingleVariant() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            assertThat(flyway(postgres, "67").migrate().targetSchemaVersion).isEqualTo("67");
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            UUID branch = UUID.randomUUID();
+            UUID product = UUID.randomUUID();
+            UUID sale = UUID.randomUUID();
+            owner.sql(
+                            "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v67v', 'Test Tenant V67V', '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            owner.sql(
+                            "INSERT INTO branches (id, tenant_id, code, name, is_head_office) VALUES (?, ?, 'HQ', 'Head Office', true)")
+                    .params(branch, tenant)
+                    .update();
+            owner.sql("SELECT platform_set_tenant_modules(?, ?::text[], NULL)")
+                    .params(tenant, "{retail}")
+                    .query((rs, n) -> 1)
+                    .single();
+            owner.sql("""
+                            WITH c AS (INSERT INTO retail_categories (id, tenant_id, name) VALUES (gen_random_uuid(), ?, 'Test')
+                                       RETURNING id),
+                                 u AS (INSERT INTO retail_units (id, tenant_id, name) VALUES (gen_random_uuid(), ?, 'pcs')
+                                       RETURNING id)
+                            INSERT INTO retail_products (id, tenant_id, code, description, category_id, unit_id, cost_minor,
+                                                         sell_minor, currency)
+                            SELECT ?, ?, 'T1', 'Test romper', c.id, u.id, 4000, 9000, 'UGX' FROM c, u
+                            """).params(tenant, tenant, product, tenant).update();
+            owner.sql("INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, qty) VALUES (?, ?, ?, 7)")
+                    .params(tenant, branch, product)
+                    .update();
+            owner.sql("""
+                            INSERT INTO retail_sales (id, tenant_id, branch_id, sale_no, sale_date, payment_method, currency,
+                                total_minor, cost_total_minor, paid_minor, status, created_by)
+                            VALUES (?, ?, ?, 'RS00000001', DATE '2026-10-15', 'cash', 'UGX', 18000, 8000, 18000, 'completed',
+                                gen_random_uuid())
+                            """).params(sale, tenant, branch).update();
+            owner.sql("""
+                            INSERT INTO retail_sale_lines (id, tenant_id, sale_id, line_no, product_id, qty, unit_price_minor,
+                                unit_cost_minor, line_total_minor, line_cost_minor)
+                            VALUES (gen_random_uuid(), ?, ?, 1, ?, 2, 9000, 4000, 18000, 8000)
+                            """).params(tenant, sale, product).update();
+
+            MigrateResult result =
+                    DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+            assertThat(result.success).isTrue();
+            assertThat(result.migrations.stream().map(m -> m.version).toList())
+                    .containsExactlyElementsOf(VERSIONS.subList(VERSIONS.indexOf("67") + 1, VERSIONS.size()));
+            assertThat(owner.sql("""
+                                    SELECT count(*) FROM retail_products
+                                     WHERE id = ? AND family_id IS NULL AND variant_size IS NULL AND variant_colour IS NULL
+                                       AND variant_sort IS NULL AND description = 'Test romper' AND code = 'T1' AND version = 1
+                                    """).param(product).query(Long.class).single())
+                    .as("the item is its own single variant, untouched")
+                    .isEqualTo(1);
+            assertThat(owner.sql("SELECT qty::text FROM retail_stock_balances WHERE product_id = ?")
+                            .param(product)
+                            .query(String.class)
+                            .single())
+                    .isEqualTo("7.000");
+            assertThat(owner.sql("SELECT count(*) FROM retail_sale_lines WHERE product_id = ? AND qty = 2")
+                            .param(product)
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(1);
+            assertThat(owner.sql("SELECT count(*) FROM retail_product_families")
+                            .query(Long.class)
+                            .single())
+                    .isZero();
+            assertThat(owner.sql("""
+                                    SELECT count(*) FROM pg_constraint
+                                     WHERE conrelid IN ('retail_products'::regclass, 'retail_product_families'::regclass)
+                                       AND NOT convalidated
+                                    """).query(Long.class).single())
+                    .as("every constraint ends validated")
+                    .isZero();
+            assertThat(owner.sql(
+                                    "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid = 'retail_product_families'::regclass")
+                            .query(Boolean.class)
+                            .single())
+                    .as("the new table has forced row-level security")
+                    .isTrue();
+            // The all-or-none check: a size without an item is refused.
+            assertThatThrownBy(() -> owner.sql("UPDATE retail_products SET variant_size = 'S' WHERE id = ?")
+                            .param(product)
+                            .update())
+                    .hasStackTraceContaining("retail_products_variant_chk");
+        }
+    }
+
     @Test
     void noTwoMigrationsShareAVersion() {
         try (PostgreSQLContainer postgres = database()) {

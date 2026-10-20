@@ -30,7 +30,17 @@ class SalesSummaryRepository {
     static final List<String> TIME_LEVELS = List.of("year", "month", "day");
 
     /** Every level, in the default order of the grouping chain. */
-    static final List<String> LEVELS = List.of("branch", "year", "month", "seller", "day", "category", "item");
+    static final List<String> LEVELS =
+            List.of("branch", "year", "month", "seller", "day", "category", "item", "variant");
+
+    /**
+     * Issue #384: a product id or the id of an item with sizes and colours, which stands for all its variants. Ids are
+     * unique across both tables, so one parameter serves both.
+     */
+    static String productOrItem(String column, String param) {
+        return column + " IN (SELECT fp.id FROM retail_products fp WHERE fp.id = :" + param + " OR fp.family_id = :"
+                + param + ")";
+    }
 
     private static final List<String> METHODS = List.of("cash", "mobile_money", "bank", "credit");
 
@@ -59,10 +69,24 @@ class SalesSummaryRepository {
             int offset,
             int limit) {
 
-        /** True when the figures are summed over sale lines: a category or an item is the level or was chosen above. */
+        /**
+         * True when the figures are summed over sale lines: a category, an item or a variant is the level or was chosen
+         * above.
+         */
         boolean overLines() {
-            return level.equals("category") || level.equals("item") || categoryId != null || itemId != null;
+            return level.equals("category")
+                    || level.equals("item")
+                    || level.equals("variant")
+                    || categoryId != null
+                    || itemId != null;
         }
+    }
+
+    /** Whether the tenant has an item with sizes and colours (issue #384): only then is the variant level offered. */
+    boolean anyItemWithVariants() {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM retail_product_families)")
+                .query(Boolean.class)
+                .single();
     }
 
     List<Group> groups(Spec spec) {
@@ -74,7 +98,9 @@ class SalesSummaryRepository {
             case "branch" -> "retail_sales.branch_id";
             case "seller" -> "retail_sales.created_by";
             case "category" -> "pr.category_id";
-            case "item" -> "sl.product_id";
+            // Issue #384: an item with sizes and colours is one group of all its variants; an item without is its own.
+            case "item" -> "coalesce(pr.family_id, sl.product_id)";
+            case "variant" -> "sl.product_id";
             case "day" -> "retail_sales.sale_date";
             default -> "date_trunc('" + level + "', retail_sales.sale_date::timestamp)::date";
         };
@@ -99,7 +125,7 @@ class SalesSummaryRepository {
                         ? " coalesce(sum(" + profit + ") FILTER (WHERE " + done + "), 0) AS profit_minor,"
                         : " 0 AS profit_minor,");
         sql.append(
-                level.equals("item")
+                level.equals("item") || level.equals("variant")
                         ? " coalesce(sum(sl.qty) FILTER (WHERE " + done + "), 0) AS quantity"
                         : " NULL::numeric AS quantity");
         sql.append(
@@ -107,7 +133,7 @@ class SalesSummaryRepository {
                         ? " FROM retail_sale_lines sl JOIN retail_sales ON retail_sales.tenant_id = sl.tenant_id"
                                 + " AND retail_sales.id = sl.sale_id"
                         : " FROM retail_sales");
-        if (lines && (level.equals("category") || spec.categoryId() != null)) {
+        if (lines) {
             sql.append(" JOIN retail_products pr ON pr.tenant_id = sl.tenant_id AND pr.id = sl.product_id");
         }
         sql.append(" WHERE true");
@@ -129,7 +155,7 @@ class SalesSummaryRepository {
                 spec.sellerId(),
                 null);
         if (lines && spec.productId() != null) {
-            sql.append(" AND sl.product_id = :productId");
+            sql.append(" AND ").append(productOrItem("sl.product_id", "productId"));
             params.put("productId", spec.productId());
         }
         if (spec.categoryId() != null) {
@@ -137,7 +163,7 @@ class SalesSummaryRepository {
             params.put("categoryId", spec.categoryId());
         }
         if (spec.itemId() != null) {
-            sql.append(" AND sl.product_id = :itemId");
+            sql.append(" AND ").append(productOrItem("sl.product_id", "itemId"));
             params.put("itemId", spec.itemId());
         }
         sql.append(" GROUP BY 1");
@@ -145,12 +171,15 @@ class SalesSummaryRepository {
             case "branch" -> " LEFT JOIN branches x ON x.id = g.grp";
             case "seller" -> " LEFT JOIN users x ON x.id = g.grp";
             case "category" -> " LEFT JOIN retail_categories x ON x.id = g.grp";
-            case "item" -> " LEFT JOIN retail_products x ON x.id = g.grp";
+            case "item" ->
+                " LEFT JOIN retail_products x ON x.id = g.grp LEFT JOIN retail_product_families f ON f.id = g.grp";
+            case "variant" -> " LEFT JOIN retail_products x ON x.id = g.grp";
             default -> "";
         };
         String label = switch (level) {
             case "seller" -> "x.full_name";
-            case "item" -> "x.description";
+            case "item" -> "coalesce(f.name, x.description)";
+            case "variant" -> "x.description";
             case "branch", "category" -> "x.name";
             default -> "NULL";
         };

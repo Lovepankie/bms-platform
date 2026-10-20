@@ -1125,3 +1125,37 @@ No migration beyond the permission; no write anywhere on the page.
   on their records, and no Approver level for a correction.
 - **Not yet.** Credit write-offs (#349) have no card until that table is on `main`; groups
   2 to 6 of #357 are separate pages.
+
+## Sizes and colours (issue #384, ADR-051, FR-RET-51, FR-RET-52)
+
+For a shop that sells one design in several sizes, colours or prints (a romper in 0-3m, 3-6m and 6-12m, in Blue and Pink; a cable in
+1.5mm and 2.5mm). Each size and colour is an item of its own everywhere stock is touched, named with its size and colour: "Baby romper
+(0-3m, Blue)". So a sale, a restock, Move stock, a stock-take, Usage and damage and Take goods back pick it like any item, and the
+stock list shows it on its own row.
+
+- **Items** has a second button, **Add an item with sizes and colours** (`/staff/retail/catalogue/products/sizes/new`). The owner types
+  the name, a short code, the category, the unit and the prices once, then the sizes and the colours or prints, each list separated by
+  commas. The list of what will be made shows at once, each with its code (`ROMP-03M-BLUE`) and price, which the owner may change (a
+  bigger size that costs more); two that would share a code are flagged in plain words. **Make these 6** saves exactly that list.
+- **The item's page** (`/staff/retail/catalogue/products/sizes/$familyId`, crumbs Catalogue, Items, then the item's name): the stock of
+  every size and colour together, per shop or store the person may see and in all; each size and colour with its code, price, cost
+  (with cost read) and stock, with **Change price** and **Change** (its size, colour, code, on sale); **Add more sizes or colours** (a
+  new print is made in every size the item has, at the price of its first size); **Change the name or category** (every size and
+  colour follows). Links to Items, Record a sale, Restock, Move stock, Stock and Sales.
+- **An existing item** gets **Give this item sizes and colours** on its edit form: the owner says which size or colour its stock is
+  now; it keeps its code, prices, stock and history, and the others are made at its prices.
+- **Join items as sizes of one item** (`/staff/retail/catalogue/products/sizes/join`, a third button on Items): for a shop that
+  typed one item per size. Name the item, pick the items with Add as a size, type each one's size or colour, Join them as one item.
+  Each keeps its code, price, stock and history. Tour `page-sizes-join`; `page-products` is version 3 with a Join step.
+- **A name another item has** (on Add an item with sizes and colours and on Join) is refused in plain words naming the one that
+  exists; an administrator may use it anyway with a reason.
+- **A size's own edit form** shows its name, category and unit as the item's, with a link to change them on the item's page, and lets
+  the size, colour, code and on sale change. A card in the Items list shows the size and colour and **All sizes and colours**.
+- **All sales, Credit sales and Past restocks (grouped)**: the Item level shows an item with sizes once, every size and colour
+  together; the new level **Size and colour** splits it. The level is offered in Group by only once the business has an item with
+  sizes, so a shop without them sees the lists as before.
+- **Files.** `catalogue-variants.tsx` (the new item screen, the panel for an existing item, the preview, the level hooks),
+  `catalogue-family.tsx` (the item's page), `api/retail-variants.ts` (the same combination and code rules as the server; tests in
+  `retail-variants.test.ts`), `catalogue-variants.dom.test.tsx`, `api/retail-variants-mock.test.ts`.
+- **Tours.** `page-products` version 2 (a Sizes and colours step), `page-sizes-new` and `page-sizes`.
+- **Not yet.** Item photos are the second slice of the issue.

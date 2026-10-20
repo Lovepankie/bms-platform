@@ -13,9 +13,9 @@ import { Problem } from './ui';
 // a restock opened for correction finds the same groups open.
 
 /** The view the person chose and the chain, remembered per user and list; changing either closes everything. */
-export function useListView<L extends string>(user: string, list: ListName, order: readonly L[]) {
+export function useListView<L extends string>(user: string, list: ListName, order: readonly L[], known: readonly L[] = order) {
   const [view, setViewState] = useState<ListView>(() => readView(user, list));
-  const [chain, setChainState] = useState<L[]>(() => readChainOf(user, list, order));
+  const [chain, setChainState] = useState<L[]>(() => readChainOf(user, list, order, known));
   const [open, setOpen] = useState<OpenGroups>(new Map());
   return {
     view,

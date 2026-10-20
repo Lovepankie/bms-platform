@@ -3,6 +3,7 @@ package com.rincoltech.bms.retail.catalogue.internal;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
@@ -97,7 +98,18 @@ final class CatalogueApi {
             Boolean active,
 
             @Size(max = 300) @Schema(description = DUPLICATE_REASON)
-            String duplicateReason) {}
+            String duplicateReason,
+
+            @Size(max = 30)
+            @Schema(
+                    description =
+                            "Issue #384, a variant only: its new size; an empty string removes it (a colour must remain)."
+                                    + " The description follows: the item's name, then the size and colour")
+            String variantSize,
+
+            @Size(max = 30)
+            @Schema(description = "Issue #384, a variant only: its new colour or print; an empty string removes it")
+            String variantColour) {}
 
     static final String DUPLICATE_REASON =
             "Issue #352: only an administrator (core.settings.manage) may add or rename a product to a"
@@ -181,7 +193,58 @@ final class CatalogueApi {
                     description =
                             "Issue #342: in how many of the branches the caller may read the balance is not zero (a positive and a"
                                     + " negative balance do not cancel); sent only by GET /retail/products/{id}")
-            Integer stockBranches) {
+            Integer stockBranches,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #384: the item with sizes and colours this product is one variant of; absent for an item"
+                                    + " without variants")
+            VariantOf variant) {
+
+        /** Every field but the variant, the shape every read had before sizes and colours (issue #384). */
+        Product(
+                UUID id,
+                String code,
+                String description,
+                UUID categoryId,
+                String category,
+                UUID unitId,
+                String unit,
+                long sellMinor,
+                Long costMinor,
+                String currency,
+                boolean active,
+                Instant createdAt,
+                Instant updatedAt,
+                int version,
+                String qty,
+                Boolean negative,
+                List<Pack> packs,
+                String stockOnHand,
+                Integer stockBranches) {
+            this(
+                    id,
+                    code,
+                    description,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sellMinor,
+                    costMinor,
+                    currency,
+                    active,
+                    createdAt,
+                    updatedAt,
+                    version,
+                    qty,
+                    negative,
+                    packs,
+                    stockOnHand,
+                    stockBranches,
+                    null);
+        }
 
         /** A product with packs but no stock total, the shape every list row has. */
         Product(
@@ -282,7 +345,8 @@ final class CatalogueApi {
                     negative,
                     packs,
                     stockOnHand,
-                    stockBranches);
+                    stockBranches,
+                    variant);
         }
 
         Product withStock(String total, int branches) {
@@ -305,7 +369,8 @@ final class CatalogueApi {
                     negative,
                     packs,
                     total,
-                    branches);
+                    branches,
+                    variant);
         }
 
         Product withoutCost() {
@@ -328,9 +393,234 @@ final class CatalogueApi {
                     negative,
                     packs,
                     stockOnHand,
-                    stockBranches);
+                    stockBranches,
+                    variant);
+        }
+
+        Product withVariant(VariantOf v) {
+            return new Product(
+                    id,
+                    code,
+                    description,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sellMinor,
+                    costMinor,
+                    currency,
+                    active,
+                    createdAt,
+                    updatedAt,
+                    version,
+                    qty,
+                    negative,
+                    packs,
+                    stockOnHand,
+                    stockBranches,
+                    v);
         }
     }
+
+    @Schema(
+            name = "RetailProductVariantOf",
+            description = "Issue #384: the item a variant belongs to, and the variant's size and colour (at least one)")
+    record VariantOf(
+            UUID familyId,
+            String familyName,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String size,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String colour,
+
+            @Schema(
+                    description =
+                            "The variant's place in the item's list, in the order the sizes and colours were given")
+            int position) {}
+
+    // ---- Items with sizes and colours (issue #384, ADR-051) --------------------------------------------
+
+    @Schema(
+            name = "RetailVariantLine",
+            description =
+                    "One size and colour to make: a size, a colour or both; the code and prices default from the item")
+    record VariantLine(
+            @Size(max = 30) String size,
+
+            @Size(max = 30) @Schema(description = "A colour or a print")
+            String colour,
+
+            @Size(max = 40)
+            @Schema(
+                    description =
+                            "The variant's own code; by default the base code, the size and the colour in capitals, as ROMP-03M-BLUE")
+            String code,
+
+            @PositiveOrZero
+            @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            @Schema(description = "This variant's own cost; by default the item's")
+            Long costMinor,
+
+            @PositiveOrZero
+            @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            @Schema(description = "This variant's own selling price; by default the item's")
+            Long sellMinor) {}
+
+    static final String GRID =
+            "Without variants every combination of sizes and colours is made, sizes in the order given; with variants exactly"
+                    + " those are made";
+
+    @Schema(name = "CreateRetailFamilyRequest", description = "Issue #384: an item with sizes and colours. " + GRID)
+    record CreateFamilyRequest(
+            @NotBlank @Size(max = 200) @Schema(description = "The item's name, as Baby romper")
+            String name,
+
+            @NotBlank
+            @Size(max = 24)
+            @Schema(description = "What every variant's code starts with, as ROMP; unique codes ignore case")
+            String baseCode,
+
+            @NotNull UUID categoryId,
+            @NotNull UUID unitId,
+
+            @NotNull
+            @PositiveOrZero
+            @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            @Schema(description = "Each variant's cost unless it has its own; 0 without retail.profit.read")
+            Long costMinor,
+
+            @NotNull
+            @PositiveOrZero
+            @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            @Schema(description = "Each variant's selling price unless it has its own")
+            Long sellMinor,
+
+            @Size(max = 30) List<@Size(max = 30) String> sizes,
+            @Size(max = 30) List<@Size(max = 30) String> colours,
+            @Size(max = VariantGrid.MAX_VARIANTS) List<@Valid VariantLine> variants,
+
+            @Size(max = 300) @Schema(description = ITEM_DUPLICATE_REASON)
+            String duplicateReason) {}
+
+    @Schema(
+            name = "AddRetailVariantsRequest",
+            description =
+                    "Issue #384: more sizes or colours for an item; a combination it has already is skipped. " + GRID)
+    record AddVariantsRequest(
+            @Size(max = 30) List<@Size(max = 30) String> sizes,
+            @Size(max = 30) List<@Size(max = 30) String> colours,
+            @Size(max = VariantGrid.MAX_VARIANTS) List<@Valid VariantLine> variants,
+
+            @PositiveOrZero
+            @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            @Schema(description = "The new variants' cost; by default the cost of the item's first variant")
+            Long costMinor,
+
+            @PositiveOrZero
+            @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            @Schema(description = "The new variants' selling price; by default the price of the item's first variant")
+            Long sellMinor) {}
+
+    @Schema(
+            name = "RetailMakeFamilyRequest",
+            description =
+                    "Issue #384: give an item without variants sizes and colours. The item becomes the variant named by"
+                            + " size and colour, keeping its code, prices, stock and history; the other combinations are made at its"
+                            + " prices. " + GRID)
+    record MakeFamilyRequest(
+            @Size(max = 30) @Schema(description = "The size of the stock the item holds now")
+            String size,
+
+            @Size(max = 30) @Schema(description = "The colour or print of the stock the item holds now")
+            String colour,
+
+            @Size(max = 30) List<@Size(max = 30) String> sizes,
+            @Size(max = 30) List<@Size(max = 30) String> colours,
+            @Size(max = VariantGrid.MAX_VARIANTS) List<@Valid VariantLine> variants,
+
+            @Size(max = 300) @Schema(description = ITEM_DUPLICATE_REASON)
+            String duplicateReason) {}
+
+    @Schema(
+            name = "UpdateRetailFamilyRequest",
+            description =
+                    "Omitted fields are unchanged. A new name renames every variant; a new category moves every variant")
+    record UpdateFamilyRequest(
+            @Size(min = 1, max = 200) String name,
+            UUID categoryId,
+
+            @Size(max = 300) @Schema(description = ITEM_DUPLICATE_REASON)
+            String duplicateReason) {}
+
+    static final String ITEM_DUPLICATE_REASON =
+            "Issue #384, ADR-044 one level up: an item's name is kept once per unit against other items with sizes and items"
+                    + " without; only an administrator (core.settings.manage) may use a name that exists, with a reason of at"
+                    + " least 5 characters. Without it that is refused with 422 duplicate_product_name";
+
+    @Schema(name = "RetailJoinItem", description = "An item without sizes that becomes one size or colour of the item")
+    record JoinItem(
+            @NotNull UUID productId,
+            @Size(max = 30) String size,
+
+            @Size(max = 30) @Schema(description = "A colour or a print")
+            String colour) {}
+
+    @Schema(
+            name = "RetailJoinRequest",
+            description =
+                    "Issue #384: items kept apart until now (one per size) become the sizes and colours of one item. Each keeps"
+                            + " its id, code, prices, stock and history; its name becomes the item's name with its size and colour,"
+                            + " its category the item's. They must share one unit and have no sizes yet")
+    record JoinRequest(
+            @Size(min = 1, max = 200) @Schema(description = "The item's name; required for a new item")
+            String name,
+
+            @Size(min = 1, max = 24)
+            @Schema(description = "What later variant codes start with; by default the first item's code")
+            String baseCode,
+
+            @Schema(description = "The item's category; by default the first item's")
+            UUID categoryId,
+
+            @NotNull @Size(min = 1, max = VariantGrid.MAX_VARIANTS)
+            List<@Valid @NotNull JoinItem> items,
+
+            @Size(max = 300) @Schema(description = ITEM_DUPLICATE_REASON)
+            String duplicateReason) {}
+
+    @Schema(name = "RetailBranchStock", description = "What the item holds in one branch, all its variants together")
+    record BranchStock(UUID branchId, String qty) {}
+
+    @Schema(name = "RetailFamily", description = "Issue #384: an item with sizes and colours and its variants")
+    record Family(
+            UUID id,
+            String name,
+            String baseCode,
+            UUID categoryId,
+            String category,
+            UUID unitId,
+            String unit,
+
+            @Schema(description = "The sizes in the item's order")
+            List<String> sizes,
+
+            @Schema(description = "The colours or prints in the item's order")
+            List<String> colours,
+
+            @Schema(
+                    description =
+                            "Every variant, active or not, in the item's order, each with stock_on_hand and stock_branches over the"
+                                    + " branches the caller may read")
+            List<Product> variants,
+
+            @Schema(description = "The item's stock over the branches the caller may read, every variant together")
+            String stockOnHand,
+
+            @Schema(description = "The item's stock per branch the caller may read, where it is not zero")
+            List<BranchStock> stockByBranch,
+
+            Instant createdAt,
+
+            @Schema(description = "Send as If-Match when updating")
+            int version) {}
 
     @Schema(name = "RetailProductPage")
     record ProductPage(List<Product> items, String nextCursor) {}

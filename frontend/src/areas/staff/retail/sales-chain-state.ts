@@ -2,19 +2,25 @@
 // list of levels the user chooses (shop, year, month, salesperson, day, product category, item); what is open is a set
 // of path keys like "branch:b1/year:2026/month:2026-10", so the same day under two salespeople is two groups.
 
-export type ChainLevel = 'branch' | 'year' | 'month' | 'seller' | 'day' | 'category' | 'item';
+export type ChainLevel = 'branch' | 'year' | 'month' | 'seller' | 'day' | 'category' | 'item' | 'variant';
 
 /** The order the old spreadsheet app used, and the order a new user starts with. */
 export const DEFAULT_CHAIN: readonly ChainLevel[] = ['branch', 'year', 'month', 'seller', 'day', 'category', 'item'];
 
+/**
+ * Every level, the size and colour of an item last (issue #384): offered only to a business that has an item with sizes and
+ * colours, so the Group by of a shop without them is what it always was.
+ */
+export const ALL_LEVELS: readonly ChainLevel[] = [...DEFAULT_CHAIN, 'variant'];
+
 /** The words a person reads for each level. */
 export const LEVEL_NAMES: Record<ChainLevel, string> = {
-  branch: 'Shop', year: 'Year', month: 'Month', seller: 'Salesperson', day: 'Day', category: 'Product category', item: 'Item',
+  branch: 'Shop', year: 'Year', month: 'Month', seller: 'Salesperson', day: 'Day', category: 'Product category', item: 'Item', variant: 'Size and colour',
 };
 
 /** What a "show more" button calls the groups of a level. */
 export const LEVEL_PLURALS: Record<ChainLevel, string> = {
-  branch: 'shops', year: 'years', month: 'months', seller: 'salespeople', day: 'days', category: 'categories', item: 'items',
+  branch: 'shops', year: 'years', month: 'months', seller: 'salespeople', day: 'days', category: 'categories', item: 'items', variant: 'sizes and colours',
 };
 
 export const isTimeLevel = (level: ChainLevel) => level === 'year' || level === 'month' || level === 'day';
@@ -44,12 +50,13 @@ export function addLevel<L extends string = ChainLevel>(chain: readonly L[], lev
 }
 
 /** The levels a person may use: the salesperson level is for those who may read profit (a cashier sees no ranking of colleagues). */
-export const usableLevels = (sellerAllowed: boolean): ChainLevel[] => DEFAULT_CHAIN.filter((l) => sellerAllowed || l !== 'seller');
+export const usableLevels = (sellerAllowed: boolean, variants = false): ChainLevel[] =>
+  ALL_LEVELS.filter((l) => (sellerAllowed || l !== 'seller') && (variants || l !== 'variant'));
 
 /** The chain with the levels the person may not use taken out; the usual order if nothing is left. */
-export function usableChain(chain: readonly ChainLevel[], sellerAllowed: boolean): ChainLevel[] {
-  const kept = chain.filter((l) => sellerAllowed || l !== 'seller');
-  return kept.length > 0 ? kept : usableLevels(sellerAllowed);
+export function usableChain(chain: readonly ChainLevel[], sellerAllowed: boolean, variants = false): ChainLevel[] {
+  const kept = chain.filter((l) => (sellerAllowed || l !== 'seller') && (variants || l !== 'variant'));
+  return kept.length > 0 ? kept : usableLevels(sellerAllowed, variants).filter((l) => l !== 'variant');
 }
 
 /** The levels not in the chain, in the usual order. */
@@ -78,7 +85,7 @@ const storeKey = (user: string, list: ChainList) => `bms.salesChain.${list}.${us
 /** The chain this user chose for the list; storage that is blocked, missing or garbled gives the usual order. */
 export function readChain(user: string, list: ChainList): ChainLevel[] {
   try {
-    return parseChain(localStorage.getItem(storeKey(user, list))) ?? [...DEFAULT_CHAIN];
+    return parseChain(localStorage.getItem(storeKey(user, list)), ALL_LEVELS) ?? [...DEFAULT_CHAIN];
   } catch {
     return [...DEFAULT_CHAIN];
   }
@@ -98,11 +105,11 @@ export function effectiveChain<L extends string = ChainLevel>(chain: readonly L[
   return shopChosen && without.length > 0 ? without : [...chain];
 }
 
-/** Whether a group at `index` offers "Show the sales": on a day, on any level when the chain has no day, and on the level above a last item level. */
+/** Whether a group at `index` offers "Show the sales": on a day, on any level when the chain has no day, and on the level above a last item or size level. */
 export function offersSales(chain: readonly ChainLevel[], index: number): boolean {
   const level = chain[index];
   const last = chain.length - 1;
-  return level === 'day' || !chain.includes('day') || (index + 1 === last && chain[last] === 'item');
+  return level === 'day' || !chain.includes('day') || (index + 1 === last && (chain[last] === 'item' || chain[last] === 'variant'));
 }
 
 /** What the user opened above a level: it travels to the server as filters. */
@@ -135,13 +142,14 @@ export function selectGroup(sel: Selection, level: ChainLevel, group: Picked): S
     case 'branch': return { ...sel, branchId: group.key };
     case 'seller': return { ...sel, sellerId: group.key };
     case 'category': return { ...sel, categoryId: group.key };
-    case 'item': return { ...sel, itemId: group.key };
+    // A size and colour narrows the item chosen above to that one variant: an item id or a product id, the server takes both.
+    case 'item': case 'variant': return { ...sel, itemId: group.key };
     default: return { ...sel, ...narrowed(group, sel) };
   }
 }
 
-/** True when the figures at `level` under `sel` are summed over sale lines, not whole sales (a category or an item is the level or was chosen above). */
-export const overLines = (level: ChainLevel, sel: Selection): boolean => level === 'category' || level === 'item' || !!sel.categoryId || !!sel.itemId;
+/** True when the figures at `level` under `sel` are summed over sale lines, not whole sales (a category, an item or a size is the level or was chosen above). */
+export const overLines = (level: ChainLevel, sel: Selection): boolean => level === 'category' || level === 'item' || level === 'variant' || !!sel.categoryId || !!sel.itemId;
 
 /** The words above the sales listed under a chosen category or item: they are whole sales, so their totals can be more than the line above. */
 export function wholeSalesNote(sel: Selection): string | null {

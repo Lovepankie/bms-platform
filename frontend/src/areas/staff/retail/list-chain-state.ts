@@ -4,18 +4,20 @@ import { toggleGroup, type OpenGroups } from './sales-chain-state';
 // idea as the sales lists (sales-chain-state.ts, issue #341): an ordered list of levels the user chooses, groups opened one under
 // another as path keys, and what was opened above a level travelling to the server as filters.
 
-export type PurchaseChainLevel = 'branch' | 'year' | 'month' | 'supplier' | 'day' | 'category' | 'item';
+export type PurchaseChainLevel = 'branch' | 'year' | 'month' | 'supplier' | 'day' | 'category' | 'item' | 'variant';
 export type StockLevelName = 'branch' | 'category';
 
 /** The order a new user starts with, which is also the order a dropped level goes back into. */
 export const PURCHASE_ORDER: readonly PurchaseChainLevel[] = ['branch', 'year', 'month', 'supplier', 'day', 'category', 'item'];
+/** With the size and colour of an item last (issue #384), offered only to a business that has an item with sizes and colours. */
+export const PURCHASE_ALL: readonly PurchaseChainLevel[] = [...PURCHASE_ORDER, 'variant'];
 export const STOCK_ORDER: readonly StockLevelName[] = ['branch', 'category'];
 
 export const PURCHASE_NAMES: Record<PurchaseChainLevel, string> = {
-  branch: 'Shop', year: 'Year', month: 'Month', supplier: 'Supplier', day: 'Day', category: 'Product category', item: 'Item',
+  branch: 'Shop', year: 'Year', month: 'Month', supplier: 'Supplier', day: 'Day', category: 'Product category', item: 'Item', variant: 'Size and colour',
 };
 export const PURCHASE_PLURALS: Record<PurchaseChainLevel, string> = {
-  branch: 'shops', year: 'years', month: 'months', supplier: 'suppliers', day: 'days', category: 'categories', item: 'items',
+  branch: 'shops', year: 'years', month: 'months', supplier: 'suppliers', day: 'days', category: 'categories', item: 'items', variant: 'sizes and colours',
 };
 export const STOCK_NAMES: Record<StockLevelName, string> = { branch: 'Shop', category: 'Product category' };
 export const STOCK_PLURALS: Record<StockLevelName, string> = { branch: 'shops', category: 'categories' };
@@ -65,9 +67,9 @@ export const listUser = (me: { user_id?: string }) => me.user_id ?? 'staff';
 const chainKey = (user: string, list: ListName) => `bms.listChain.${list}.${user}`;
 const viewKey = (user: string, list: ListName) => `bms.listView.${list}.${user}`;
 
-export function readChainOf<L extends string>(user: string, list: ListName, order: readonly L[]): L[] {
+export function readChainOf<L extends string>(user: string, list: ListName, order: readonly L[], known: readonly L[] = order): L[] {
   try {
-    return parseOf(localStorage.getItem(chainKey(user, list)), order) ?? [...order];
+    return parseOf(localStorage.getItem(chainKey(user, list)), known) ?? [...order];
   } catch {
     return [...order];
   }
@@ -136,7 +138,7 @@ export function selectIn(sel: ListSelection, level: string, group: PickedGroup):
     case 'branch': return { ...sel, branchId: group.key };
     case 'supplier': return { ...sel, supplierId: group.key };
     case 'category': return { ...sel, categoryId: group.key };
-    case 'item': return { ...sel, itemId: group.key };
+    case 'item': case 'variant': return { ...sel, itemId: group.key };
     default: return { ...sel, ...narrowed(group, sel) };
   }
 }
@@ -145,7 +147,7 @@ export function selectIn(sel: ListSelection, level: string, group: PickedGroup):
 export function offersRestocks(chain: readonly string[], index: number): boolean {
   const level = chain[index];
   const last = chain.length - 1;
-  return level === 'day' || !chain.includes('day') || (index + 1 === last && chain[last] === 'item');
+  return level === 'day' || !chain.includes('day') || (index + 1 === last && (chain[last] === 'item' || chain[last] === 'variant'));
 }
 
 export const pathOf = (parent: string, level: string, key: string) => `${parent}/${level}:${key}`;

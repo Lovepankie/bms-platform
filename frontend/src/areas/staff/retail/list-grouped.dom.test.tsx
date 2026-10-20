@@ -181,7 +181,7 @@ describe('the past restocks, grouped', () => {
     expect(y.textContent).toContain('2 restocks');
     expect(y.textContent).toContain('1 voided (not counted)');
     expect(y.textContent).toContain('20,000');
-    expect(purchasesSummary.mock.calls[0]?.[0]).toMatchObject({ level: 'year', chain: ['year', 'supplier'] });
+    expect(purchasesSummary.mock.calls.map((c) => c[0]).find((q) => q.level === 'year')).toMatchObject({ level: 'year', chain: ['year', 'supplier'] });
     expect(listPurchases).not.toHaveBeenCalled();
   });
 

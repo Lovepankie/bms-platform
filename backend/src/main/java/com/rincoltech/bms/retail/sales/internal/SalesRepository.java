@@ -185,8 +185,9 @@ class SalesRepository {
             params.put("paymentMethod", paymentMethod);
         }
         if (productId != null) {
-            sql.append(" AND EXISTS (SELECT 1 FROM retail_sale_lines l WHERE l.sale_id = retail_sales.id"
-                    + " AND l.product_id = :productId)");
+            // Issue #384: the id of an item with sizes and colours finds the sales of any of its variants.
+            sql.append(" AND EXISTS (SELECT 1 FROM retail_sale_lines l WHERE l.sale_id = retail_sales.id AND "
+                    + SalesSummaryRepository.productOrItem("l.product_id", "productId") + ")");
             params.put("productId", productId);
         }
         if (sellerId != null) {

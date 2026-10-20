@@ -1906,6 +1906,23 @@ rows they read.
 (null when the cost is zero and nothing posts) and `created_by`. The movement list reads it through `movement_id` to show a
 correction with its reason and the old and new quantity.
 
+### 6.11.2b Items with sizes and colours (FR-RET-51, FR-RET-52; ADR-051; issue #384; V69)
+
+A variant is a row of `retail_products`; every movement, balance and line keeps pointing at it, so no stock or ledger table changes.
+
+`retail_product_families`: the item with sizes and colours. `name` (varchar(200), trimmed, not blank: what every variant's description
+starts with), `base_code` (varchar(24): what generated variant codes start with), `category_id` and `unit_id` (composite FKs; every
+variant has the same category and unit, kept equal by the service), `created_by`, `version` for If-Match. Forced row-level security;
+the application role may select, insert and update.
+
+`retail_products` gains four nullable columns: `family_id` (composite FK to `retail_product_families`), `variant_size` and
+`variant_colour` (varchar(30), trimmed, not blank when present) and `variant_sort` (the variant's place in its item, from 0, in the
+order the sizes and colours were given). `retail_products_variant_chk` keeps the four all null (an item without variants, which is its
+own single variant: every product that existed before V69) or a complete variant (a family, a sort and at least one of size and
+colour). The partial unique index `retail_products_variant` on `(tenant_id, family_id, lower(coalesce(variant_size, '')),
+lower(coalesce(variant_colour, '')))` where `family_id` is not null keeps one variant per size and colour in an item and serves the
+lookup of an item's variants. A query that reads "per item" groups by `coalesce(family_id, product_id)`.
+
 ### 6.11.3 Valuation and profit (FR-RET-09, FR-RET-10; #54)
 
 No table: `retail.reports` reads the tables above. Valuation per branch and product is the

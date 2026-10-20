@@ -283,7 +283,8 @@ class PurchasingRepository {
                 params.put("categoryId", categoryId);
             }
             if (productId != null) {
-                sql.append(" AND m.product_id = :productId");
+                // Issue #384: the id of an item with sizes and colours finds the restocks of any of its variants.
+                sql.append(" AND ").append(PurchasesSummaryRepository.productOrItem("m.product_id", "productId"));
                 params.put("productId", productId);
             }
             sql.append(")");

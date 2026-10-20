@@ -9,6 +9,8 @@ import { ImportPage } from '../areas/staff/retail/catalogue-import';
 import { CategoriesPage, UnitsPage } from '../areas/staff/retail/catalogue-lists';
 import { BuyersPage, SuppliersPage } from '../areas/staff/retail/catalogue-people';
 import { ProductsPage } from '../areas/staff/retail/catalogue-products';
+import { FamilyScreen } from '../areas/staff/retail/catalogue-family';
+import { JoinPage, NewFamilyPage } from '../areas/staff/retail/catalogue-variants';
 import { CustomerAgeingPage } from '../areas/staff/retail/customer-ageing';
 import { CustomerGroups } from '../areas/staff/retail/customer-groups';
 import { ExpenseListsScreen } from '../areas/staff/retail/expense-lists';
@@ -28,6 +30,9 @@ const SELLER: Me = { ...mockMe('sales'), full_name: 'Test Seller 02' };
 function screen(path: string): ReactElement {
   switch (path) {
     case '/staff/retail/catalogue/products': return <ProductsPage />;
+    case '/staff/retail/catalogue/products/sizes/new': return <NewFamilyPage />;
+    case '/staff/retail/catalogue/products/sizes/join': return <JoinPage />;
+    case '/staff/retail/catalogue/products/sizes/$familyId': return <FamilyScreen familyId="f0000000-0000-4000-8000-000000000001" />;
     case '/staff/retail/catalogue/categories': return <CategoriesPage />;
     case '/staff/retail/catalogue/units': return <UnitsPage />;
     case '/staff/retail/catalogue/suppliers': return <SuppliersPage />;
@@ -54,6 +59,9 @@ describeTours(
   RETAIL_CASH_TOURS,
   {
     'page-products': [ADMIN],
+    'page-sizes-new': [ADMIN],
+    'page-sizes-join': [ADMIN],
+    'page-sizes': [ADMIN],
     'page-categories': [ADMIN],
     'page-units': [ADMIN],
     'page-suppliers': [ADMIN],

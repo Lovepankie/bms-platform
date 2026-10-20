@@ -1,5 +1,5 @@
 import type {
-  AllBranchesRow, Category, CapabilitiesRead, Pack, Customer, InFlightReport, LocationRow, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, SimilarProduct, StockMovement, Stocktake, StockByLocation, StockRow,
+  AllBranchesRow, Category, CapabilitiesRead, Family, Pack, Customer, InFlightReport, LocationRow, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, SimilarProduct, StockMovement, Stocktake, StockByLocation, StockRow,
   Supplier, Transfer, Unit, Usage, Valuation, ValuationRow,
 } from './retail';
 import type { SalesQuery } from './retail';
@@ -14,6 +14,7 @@ import { createAccountsMock } from './retail-accounts-mock';
 import { createDocumentsMock } from './retail-documents-mock';
 import { createReturnsMock } from './retail-returns-mock';
 import { createPurchasingMock } from './retail-purchasing-mock';
+import { cleanOption, planVariants, variantDescription, variantKey, variantLabel } from './retail-variants';
 
 // Fabricated retail data for VITE_RETAIL_MOCK and for tests: invented products, branches and
 // balances, held in memory, with the REAL snake_case shapes of docs/sdd/07-api-design.md section
@@ -78,7 +79,11 @@ export function setMockProfitAccess(allowed: boolean): void {
   profitAccess = allowed;
 }
 
-interface MockProduct { id: string; code: string; description: string; category: string; unit: string; costMinor: number; sellMinor: number; active?: boolean; version?: number }
+interface MockProduct {
+  id: string; code: string; description: string; category: string; unit: string; costMinor: number; sellMinor: number; active?: boolean; version?: number;
+  /** Issue #384: the item with sizes and colours this product is a variant of, its size, colour and place. */
+  familyId?: string; size?: string; colour?: string; position?: number;
+}
 
 /** The mock's page size for credit buyers, as the API's default limit is 50. */
 const CUSTOMER_PAGE = 50;
@@ -172,8 +177,14 @@ export function createMockRetail(): RetailApi {
   const packs = new Map<string, Pack[]>();
   const used = <K extends 'category' | 'unit'>(key: K, name: string) => [...products.values()].filter((p) => p[key] === name).length;
   const refreshed = <T extends { name?: string }>(row: T, key: 'category' | 'unit') => ({ ...row, product_count: used(key, row.name ?? '') });
+  // Items with sizes and colours of this mock instance (issue #384): the item's own row; its variants are products.
+  const families = new Map<string, { id: string; name: string; baseCode: string; category: string; unit: string; version: number; createdAt: string }>();
+  const variantOf = (p: MockProduct) => {
+    const f = p.familyId ? families.get(p.familyId) : undefined;
+    return f ? { variant: { family_id: f.id, family_name: f.name, ...(p.size ? { size: p.size } : {}), ...(p.colour ? { colour: p.colour } : {}), position: p.position ?? 0 } } : {};
+  };
   const asProduct = (p: MockProduct): Product =>
-    cost({ id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, unit_id: unitRows.find((u) => u.name === p.unit)?.id, sell_minor: p.sellMinor, currency: 'UGX', active: p.active !== false, version: p.version ?? 1 }, { cost_minor: p.costMinor });
+    cost({ id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, unit_id: unitRows.find((u) => u.name === p.unit)?.id, sell_minor: p.sellMinor, currency: 'UGX', active: p.active !== false, version: p.version ?? 1, ...variantOf(p) }, { cost_minor: p.costMinor });
   const clash = (list: { id: string; name: string }[], id: string, name: string, code: string, what: string) => {
     if (list.some((x) => x.id !== id && x.name.toLowerCase() === name.trim().toLowerCase())) refuse(409, code, `A ${what} with this name exists.`);
   };
@@ -323,6 +334,43 @@ export function createMockRetail(): RetailApi {
     cost: (id) => products.get(id)?.costMinor ?? 0,
   });
 
+  /** Makes the planned variants of an item; returns how many were made. */
+  const addPlanned = (familyId: string, sizes: string[], colours: string[], lines: { size?: string; colour?: string; code?: string; cost_minor?: number; sell_minor?: number }[] | undefined, costMinor: number, sellMinor: number, nextPosition: number): number => {
+    const f = families.get(familyId) ?? refuse(404, 'not_found', 'That could not be found.');
+    const existing = new Set([...products.values()].filter((p) => p.familyId === familyId).map((p) => variantKey(p.size, p.colour)));
+    const plan = lines && lines.length > 0
+      ? lines.map((l, i) => ({ size: cleanOption(l.size), colour: cleanOption(l.colour), code: (l.code ?? '').trim() || planVariants({ baseCode: f.baseCode, sizes: [l.size ?? ''], colours: [l.colour ?? ''], costMinor, sellMinor })[0]?.code || f.baseCode, costMinor: l.cost_minor ?? costMinor, sellMinor: l.sell_minor ?? sellMinor, position: nextPosition + i }))
+      : planVariants({ baseCode: f.baseCode, sizes, colours, costMinor, sellMinor, existing, nextPosition });
+    if (plan.length > 100) refuse(422, 'too_many_variants', `That makes ${plan.length} sizes and colours. Make at most 100 at a time; add the rest afterwards.`);
+    for (const v of plan) {
+      if (existing.has(variantKey(v.size, v.colour)) && lines && lines.length > 0) refuse(409, 'duplicate_variant', `The item has ${variantLabel(v.size, v.colour)} already. Each one is listed once.`);
+      if ([...products.values()].some((x) => x.code.toLowerCase() === v.code.toLowerCase())) refuse(409, 'duplicate_product_code', `A product with the code ${v.code} exists. Give ${variantLabel(v.size, v.colour)} another code.`);
+      const p: MockProduct = { id: nextId('b'), code: v.code, description: variantDescription(f.name, v.size, v.colour), category: f.category, unit: f.unit, costMinor: v.costMinor, sellMinor: v.sellMinor, active: true, version: 1, familyId, size: v.size, colour: v.colour, position: v.position };
+      products.set(p.id, p);
+      existing.add(variantKey(v.size, v.colour));
+      history.set(p.id, [{ id: nextId('h'), at: new Date().toISOString(), source: 'initial', new_sell_minor: p.sellMinor, currency: 'UGX', ...(profitAccess ? { new_cost_minor: p.costMinor } : {}) }]);
+    }
+    return plan.length;
+  };
+  /** The item as the server answers it: its variants in order, each with its stock, and the item's stock per branch. */
+  const familyOf = (id: string): Family => {
+    const f = families.get(id) ?? refuse(404, 'not_found', 'That could not be found.');
+    const mine = [...products.values()].filter((p) => p.familyId === id).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+    const byBranch = MOCK_BRANCHES.map((b) => ({ branch_id: b.id, milli: mine.reduce((s, p) => s + bal(b.id, p.id), 0) })).filter((b) => b.milli !== 0);
+    const sizes = [...new Map(mine.filter((p) => p.size).map((p) => [(p.size ?? '').toLowerCase(), p.size ?? ''])).values()];
+    const colours = [...new Map(mine.filter((p) => p.colour).map((p) => [(p.colour ?? '').toLowerCase(), p.colour ?? ''])).values()];
+    return {
+      id: f.id, name: f.name, base_code: f.baseCode, category_id: categoryId(f.category), category: f.category, unit_id: unitRows.find((u) => u.name === f.unit)?.id, unit: f.unit,
+      sizes, colours, created_at: f.createdAt, version: f.version,
+      variants: mine.map((p) => {
+        const held = MOCK_BRANCHES.map((b) => bal(b.id, p.id)).filter((m) => m !== 0);
+        return { ...asProduct(p), stock_on_hand: fromMilli(held.reduce((x, y) => x + y, 0)), stock_branches: held.length };
+      }),
+      stock_on_hand: fromMilli(byBranch.reduce((s, b) => s + b.milli, 0)),
+      stock_by_branch: byBranch.map((b) => ({ branch_id: b.branch_id, qty: fromMilli(b.milli) })),
+    };
+  };
+
   const mock: RetailApi = {
     ...pricingApi,
     ...accountsApi,
@@ -397,6 +445,17 @@ export function createMockRetail(): RetailApi {
       run(() => {
         const p = find(id);
         stale(p, version);
+        const fam = p.familyId ? families.get(p.familyId) : undefined;
+        if (!fam && (body.variant_size !== undefined || body.variant_colour !== undefined)) refuse(422, 'not_a_variant', 'This item has no sizes or colours. Give it sizes and colours first, then change one of them.');
+        if (fam) {
+          if (body.description !== undefined && body.description.trim() !== p.description) refuse(422, 'variant_name_follows_item', "The name of a size or colour comes from its item. Change the item's name on its sizes and colours page.");
+          const size = body.variant_size === undefined ? p.size : cleanOption(body.variant_size);
+          const colour = body.variant_colour === undefined ? p.colour : cleanOption(body.variant_colour);
+          if (!size && !colour) refuse(422, 'validation_failed', 'Keep a size, a colour or both.');
+          if ([...products.values()].some((x) => x.id !== id && x.familyId === fam.id && variantKey(x.size, x.colour) === variantKey(size, colour))) refuse(409, 'duplicate_variant', `The item has ${variantLabel(size, colour)} already. Each one is listed once.`);
+          Object.assign(p, { size, colour, description: variantDescription(fam.name, size, colour), code: body.code === undefined ? p.code : body.code.trim(), active: body.active ?? p.active, version: (p.version ?? 1) + 1 });
+          return asProduct(p);
+        }
         const code = body.code === undefined ? p.code : body.code.trim();
         if ([...products.values()].some((x) => x.id !== id && x.code.toLowerCase() === code.toLowerCase())) refuse(409, 'duplicate_product_code', 'A product with this code exists (codes ignore case).');
         const category = body.category_id ? cats.find((c) => c.id === body.category_id) : undefined;
@@ -423,6 +482,86 @@ export function createMockRetail(): RetailApi {
         }]);
         Object.assign(p, { costMinor: nextCost, sellMinor: nextSell, version: (p.version ?? 1) + 1 });
         return asProduct(p);
+      }),
+
+    // Items with sizes and colours (issue #384): the same rules as the server, in memory.
+    getFamily: (id) => run(() => familyOf(id)),
+
+    createFamily: (body) =>
+      run(() => {
+        const category = cats.find((c) => c.id === body.category_id);
+        const unit = unitRows.find((u) => u.id === body.unit_id);
+        if (!category || !unit) return refuse(422, 'validation_failed', 'Choose a category and a unit.');
+        const id = nextId('f');
+        families.set(id, { id, name: (body.name ?? '').trim(), baseCode: (body.base_code ?? '').trim(), category: category.name, unit: unit.name, version: 1, createdAt: new Date().toISOString() });
+        addPlanned(id, body.sizes ?? [], body.colours ?? [], body.variants, body.cost_minor ?? 0, body.sell_minor ?? 0, 0);
+        return familyOf(id);
+      }),
+
+    updateFamily: (id, version, body) =>
+      run(() => {
+        const f = families.get(id) ?? refuse(404, 'not_found', 'That could not be found.');
+        if (f.version !== version) refuse(409, 'version_conflict', 'This was changed by someone else. Reload and try again.');
+        const category = body.category_id ? cats.find((c) => c.id === body.category_id) : undefined;
+        f.name = body.name?.trim() || f.name;
+        f.category = category?.name ?? f.category;
+        f.version += 1;
+        for (const p of products.values()) {
+          if (p.familyId !== id) continue;
+          Object.assign(p, { description: variantDescription(f.name, p.size, p.colour), category: f.category, version: (p.version ?? 1) + 1 });
+        }
+        return familyOf(id);
+      }),
+
+    addVariants: (id, body) =>
+      run(() => {
+        const f = families.get(id) ?? refuse(404, 'not_found', 'That could not be found.');
+        const mine = [...products.values()].filter((p) => p.familyId === f.id).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+        const added = addPlanned(f.id, body.sizes ?? [], body.colours ?? [], body.variants, body.cost_minor ?? mine[0]?.costMinor ?? 0, body.sell_minor ?? mine[0]?.sellMinor ?? 0, Math.max(-1, ...mine.map((p) => p.position ?? 0)) + 1);
+        if (added === 0) refuse(422, 'nothing_to_add', 'The item has every one of these sizes and colours already. Choose one it does not have.');
+        return familyOf(f.id);
+      }),
+
+    joinFamily: (familyId, body) =>
+      run(() => {
+        const items = body.items ?? [];
+        const picked = items.map((i) => find(i.product_id ?? ''));
+        if (picked.some((p) => p.familyId)) refuse(422, 'already_has_variants', 'One of these is a size or colour of an item already.');
+        const first = picked[0] ?? refuse(422, 'validation_failed', 'Pick at least one item.');
+        if (picked.some((p) => p.unit !== first.unit)) refuse(422, 'unit_differs', 'The sizes of one item are counted in one unit.');
+        let id = familyId;
+        if (!id) {
+          id = nextId('f');
+          const category = body.category_id ? cats.find((c) => c.id === body.category_id)?.name : undefined;
+          families.set(id, { id, name: (body.name ?? '').trim(), baseCode: (body.base_code ?? first.code).slice(0, 24), category: category ?? first.category, unit: first.unit, version: 1, createdAt: new Date().toISOString() });
+        }
+        const f = families.get(id) ?? refuse(404, 'not_found', 'That could not be found.');
+        const taken = new Set([...products.values()].filter((p) => p.familyId === f.id).map((p) => variantKey(p.size, p.colour)));
+        let position = [...products.values()].filter((p) => p.familyId === f.id).length;
+        items.forEach((item, i) => {
+          const p = picked[i] as MockProduct;
+          const size = cleanOption(item.size);
+          const colour = cleanOption(item.colour);
+          if (!size && !colour) refuse(422, 'validation_failed', `Give ${p.description} a size, a colour or both.`);
+          if (taken.has(variantKey(size, colour))) refuse(409, 'duplicate_variant', `The item has ${variantLabel(size, colour)} already. Each one is listed once.`);
+          taken.add(variantKey(size, colour));
+          Object.assign(p, { familyId: f.id, size, colour, position: position++, category: f.category, description: variantDescription(f.name, size, colour), version: (p.version ?? 1) + 1 });
+        });
+        return familyOf(f.id);
+      }),
+
+    makeFamily: (productId, body) =>
+      run(() => {
+        const p = find(productId);
+        if (p.familyId) refuse(422, 'already_has_variants', 'This item has sizes and colours already. Add more on its sizes and colours page.');
+        const size = cleanOption(body.size);
+        const colour = cleanOption(body.colour);
+        if (!size && !colour) refuse(422, 'validation_failed', 'Say which size or colour the stock of this item is now.');
+        const id = nextId('f');
+        families.set(id, { id, name: p.description, baseCode: p.code.slice(0, 24), category: p.category, unit: p.unit, version: 1, createdAt: new Date().toISOString() });
+        Object.assign(p, { familyId: id, size, colour, position: 0, description: variantDescription(p.description, size, colour), version: (p.version ?? 1) + 1 });
+        addPlanned(id, body.sizes ?? [], body.colours ?? [], body.variants, p.costMinor, p.sellMinor, 1);
+        return familyOf(id);
       }),
 
     priceHistory: (id) => run(() => ((find(id) && history.get(id)) || undefined)?.map((h) => (profitAccess ? h : { ...h, old_cost_minor: undefined, new_cost_minor: undefined })) || [{ id: nextId('h'), at: '2026-09-01T08:00:00Z', source: 'initial', new_sell_minor: find(id).sellMinor, currency: 'UGX', ...(profitAccess ? { new_cost_minor: find(id).costMinor } : {}) }]),
@@ -571,8 +710,10 @@ export function createMockRetail(): RetailApi {
       sellerName: () => MOCK_SELLER.name,
       product: (id) => {
         const p = id ? products.get(id) : undefined;
-        return p ? { name: p.description, categoryId: categoryId(p.category), categoryName: p.category } : undefined;
+        const f = p?.familyId ? families.get(p.familyId) : undefined;
+        return p ? { name: p.description, categoryId: categoryId(p.category), categoryName: p.category, ...(f ? { familyId: f.id, familyName: f.name } : {}) } : undefined;
       },
+      variants: families.size > 0,
     })),
 
     getSale: (id) => {
@@ -785,8 +926,10 @@ export function createMockRetail(): RetailApi {
         supplierName: (id) => suppliers.find((s) => s.id === id)?.name ?? 'Unknown',
         product: (id) => {
           const p = id ? products.get(id) : undefined;
-          return p ? { name: p.description, categoryId: categoryId(p.category), categoryName: p.category, unit: p.unit } : undefined;
+          const f = p?.familyId ? families.get(p.familyId) : undefined;
+          return p ? { name: p.description, categoryId: categoryId(p.category), categoryName: p.category, unit: p.unit, ...(f ? { familyId: f.id, familyName: f.name } : {}) } : undefined;
         },
+        variants: families.size > 0,
       })),
 
     stockSummary: (q) =>

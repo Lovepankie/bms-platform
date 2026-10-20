@@ -25,7 +25,7 @@ const kindFor = (status: 'all' | 'posted' | 'voided'): TreeKind<PurchaseLevel, P
       {g.total_minor !== undefined && <><span className="rt-group-total">{money(g.total_minor)}</span>{' '}</>}
       <span className="rt-group-meta">
         {g.quantity !== undefined && <>{showQty(g.quantity)} {g.unit} bought, </>}
-        {level === 'category' || level === 'item' || sel.categoryId || sel.itemId ? 'in ' : ''}{restocksWord(g.purchases_count ?? 0)}
+        {level === 'category' || level === 'item' || level === 'variant' || sel.categoryId || sel.itemId ? 'in ' : ''}{restocksWord(g.purchases_count ?? 0)}
         {(g.voided_count ?? 0) > 0 && <>, {g.voided_count} voided (not counted)</>}
       </span>
     </>

@@ -1,5 +1,5 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
+import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useRef, useState, type ReactNode } from 'react';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
@@ -10,6 +10,7 @@ import { useStaff } from '../context';
 import { BackToCatalogue } from './catalogue';
 import { ExistsPanel, SimilarPanel, existingOf, type ExistingItem } from './catalogue-names';
 import { PackEditor } from './catalogue-packs';
+import { MakeFamilyPanel, SIZES_JOIN, SIZES_NEW, VariantNote } from './catalogue-variants';
 import { ScreenLink } from './screen-link';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
@@ -74,6 +75,7 @@ export function ProductCard({ product, showCost, canPrice, onEdit, onPrice, extr
         <strong>{product.description}</strong> {product.active === false && <span className="badge badge-warning">Inactive</span>}
       </p>
       <p className="hint">{product.code}, {product.category}, per {product.unit}</p>
+      <VariantNote product={product} />
       <p>
         Sells at <strong>{money(product.sell_minor ?? 0)}</strong>
         {showCost && product.cost_minor !== undefined && <>, cost {money(product.cost_minor)}</>}
@@ -105,6 +107,10 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
   const [unitId, setUnitId] = useState(product?.unit_id ?? '');
   const [active, setActive] = useState(product?.active !== false);
   const canManage = (me.permissions ?? []).includes('retail.catalogue.manage');
+  // Issue #384: a size or colour of an item takes its name, category and unit from the item; it changes its own size and colour.
+  const variant = product?.variant;
+  const [size, setSize] = useState(variant?.size ?? '');
+  const [colour, setColour] = useState(variant?.colour ?? '');
   const [sell, setSell] = useState('');
   const [cost, setCost] = useState('0');
   const sellMinor = parseMinor(sell, RETAIL_CURRENCY);
@@ -112,19 +118,21 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
   // A switched-off category or unit is offered only when it is the item's own.
   const categoryChoices = (categories.data ?? []).filter((c) => c.active !== false || c.id === product?.category_id);
   const unitChoices = (units.data ?? []).filter((u) => u.active !== false || u.id === product?.unit_id);
-  const complete = code.trim() !== '' && description.trim() !== '' && categoryId !== '' && unitId !== '' && (product ? true : sellMinor !== null && costMinor !== null);
+  const complete = code.trim() !== '' && description.trim() !== '' && categoryId !== '' && unitId !== '' && (product ? true : sellMinor !== null && costMinor !== null)
+    && (!variant || size.trim() !== '' || colour.trim() !== '');
   // The name is kept once per unit (issue #352): a close name is a warning, the same name is refused, an administrator may add it anyway.
   const [similar, setSimilar] = useState<SimilarProduct[] | null>(null);
   const [exists, setExists] = useState<ExistingItem | null>(null);
   const [acceptedKey, setAcceptedKey] = useState('');
   const nameKey = `${description.trim()}|${unitId}`;
-  const nameChanged = !product || description.trim() !== product.description || unitId !== product.unit_id;
+  const nameChanged = !variant && (!product || description.trim() !== product.description || unitId !== product.unit_id);
   const canAddAnyway = (me.permissions ?? []).includes('core.settings.manage');
   // A second press before the first request has started must not send another: the ref answers at once, the mutation state a render later.
   const sending = useRef(false);
   const save = useMutation({
     mutationFn: (duplicateReason?: string) => {
       const reason = duplicateReason ? { duplicate_reason: duplicateReason } : {};
+      if (product && variant) return retail.updateProduct(product.id ?? '', product.version ?? 1, { code: code.trim(), active, variant_size: size.trim(), variant_colour: colour.trim() });
       return product
         ? retail.updateProduct(product.id ?? '', product.version ?? 1, { code: code.trim(), description: description.trim(), category_id: categoryId, unit_id: unitId, active, ...reason })
         : retail.createProduct({ code: code.trim(), description: description.trim(), category_id: categoryId, unit_id: unitId, sell_minor: sellMinor ?? 0, cost_minor: profit ? (costMinor ?? 0) : 0, ...reason });
@@ -166,18 +174,34 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
       <h2>{product ? 'Change this item' : 'Add an item'}</h2>
       <label htmlFor="item-code">Code</label>
       <input id="item-code" value={code} maxLength={40} onChange={(e) => setCode(e.target.value)} autoComplete="off" />
-      <label htmlFor="item-description">Description</label>
-      <input id="item-description" value={description} maxLength={300} onChange={(e) => { setDescription(e.target.value); forget(); }} autoComplete="off" />
-      <label htmlFor="item-category">Category</label>
-      <select id="item-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-        <option value="">Choose a category</option>
-        {categoryChoices.map((c) => <option key={c.id} value={c.id}>{c.name}{c.active === false ? ' (switched off)' : ''}</option>)}
-      </select>
-      <label htmlFor="item-unit">Unit</label>
-      <select id="item-unit" value={unitId} onChange={(e) => { setUnitId(e.target.value); forget(); }}>
-        <option value="">Choose a unit</option>
-        {unitChoices.map((u) => <option key={u.id} value={u.id}>{u.name}{u.active === false ? ' (switched off)' : ''}</option>)}
-      </select>
+      {variant ? (
+        <>
+          <p>
+            <strong>{product?.description}</strong>. {product?.category}, per {product?.unit}.{' '}
+            <Link to={`/staff/retail/catalogue/products/sizes/${variant.family_id ?? ''}` as never}>Change the name or category of {variant.family_name}</Link>
+          </p>
+          <p className="hint">This is one size or colour of {variant.family_name}. Its name, category and unit come from the item, so all of its sizes and colours stay together.</p>
+          <label htmlFor="item-size">Size</label>
+          <input id="item-size" value={size} maxLength={30} onChange={(e) => setSize(e.target.value)} autoComplete="off" />
+          <label htmlFor="item-colour">Colour or print</label>
+          <input id="item-colour" value={colour} maxLength={30} onChange={(e) => setColour(e.target.value)} autoComplete="off" />
+        </>
+      ) : (
+        <>
+          <label htmlFor="item-description">Description</label>
+          <input id="item-description" value={description} maxLength={300} onChange={(e) => { setDescription(e.target.value); forget(); }} autoComplete="off" />
+          <label htmlFor="item-category">Category</label>
+          <select id="item-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">Choose a category</option>
+            {categoryChoices.map((c) => <option key={c.id} value={c.id}>{c.name}{c.active === false ? ' (switched off)' : ''}</option>)}
+          </select>
+          <label htmlFor="item-unit">Unit</label>
+          <select id="item-unit" value={unitId} onChange={(e) => { setUnitId(e.target.value); forget(); }}>
+            <option value="">Choose a unit</option>
+            {unitChoices.map((u) => <option key={u.id} value={u.id}>{u.name}{u.active === false ? ' (switched off)' : ''}</option>)}
+          </select>
+        </>
+      )}
       {product ? (
         <>
           {canManage && (
@@ -193,6 +217,7 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
           )}
           <p className="hint">To change the price, use Change price on the list.</p>
           <PackEditor product={product} />
+          <MakeFamilyPanel product={product} />
         </>
       ) : (
         <>
@@ -330,7 +355,11 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
   return (
     <>
       <BackToCatalogue />
-      <p><button type="button" onClick={onAdd} data-tour="product-add">Add an item</button></p>
+      <p className="cluster">
+        <button type="button" onClick={onAdd} data-tour="product-add">Add an item</button>
+        <Link className="btn-sm" to={SIZES_NEW as never} data-tour="product-add-sizes">Add an item with sizes and colours</Link>
+        <Link className="btn-sm" to={SIZES_JOIN as never} data-tour="product-join-sizes">Join items as sizes of one item</Link>
+      </p>
       <div data-tour="product-search"><SearchBox id="items-search" label="Search by name, code or category" search={search} fetching={finding} count={page.data ? items.length : undefined} more={page.hasNextPage} /></div>
       <div className="rt-row" data-tour="product-filters">
         <div>

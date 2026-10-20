@@ -76,11 +76,12 @@ class SalesSummaryService {
         // the
         // figures cover, the rule of profit_minor.
         boolean sellers = profitVisible(principal, filter);
-        List<String> available = sellers
-                ? SalesSummaryRepository.LEVELS
-                : SalesSummaryRepository.LEVELS.stream()
-                        .filter(l -> !l.equals("seller"))
-                        .toList();
+        // Issue #384: the variant level is offered only to a tenant that has an item with sizes and colours.
+        boolean variants = repo.anyItemWithVariants();
+        List<String> available = SalesSummaryRepository.LEVELS.stream()
+                .filter(l -> sellers || !l.equals("seller"))
+                .filter(l -> variants || !l.equals("variant"))
+                .toList();
         List<String> chain = chain(q.groupBy());
         if (!sellers && (chain.contains("seller") || q.sellerId() != null)) {
             throw new ApiException(
@@ -162,7 +163,7 @@ class SalesSummaryService {
             throw ApiException.validation(List.of(new FieldProblem(
                     "group_by",
                     "invalid",
-                    "group_by is a list of branch, year, month, seller, day, category or item, each once.")));
+                    "group_by is a list of branch, year, month, seller, day, category, item or variant, each once.")));
         }
         return chain;
     }

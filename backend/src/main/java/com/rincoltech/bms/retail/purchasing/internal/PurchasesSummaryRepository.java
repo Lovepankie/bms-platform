@@ -25,7 +25,21 @@ class PurchasesSummaryRepository {
     static final List<String> TIME_LEVELS = List.of("year", "month", "day");
 
     /** Every level, in the default order of the grouping chain. */
-    static final List<String> LEVELS = List.of("branch", "year", "month", "supplier", "day", "category", "item");
+    static final List<String> LEVELS =
+            List.of("branch", "year", "month", "supplier", "day", "category", "item", "variant");
+
+    /** Issue #384: a product id, or the id of an item with sizes and colours standing for all its variants. */
+    static String productOrItem(String column, String param) {
+        return column + " IN (SELECT fp.id FROM retail_products fp WHERE fp.id = :" + param + " OR fp.family_id = :"
+                + param + ")";
+    }
+
+    /** Whether the tenant has an item with sizes and colours: only then is the variant level offered. */
+    boolean anyItemWithVariants() {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM retail_product_families)")
+                .query(Boolean.class)
+                .single();
+    }
 
     /** The key of the restocks that name no supplier. */
     static final UUID NO_SUPPLIER = new UUID(0L, 0L);
@@ -58,7 +72,9 @@ class PurchasesSummaryRepository {
             case "branch" -> "m.branch_id";
             case "supplier" -> "coalesce(p.supplier_id, '" + NO_SUPPLIER + "'::uuid)";
             case "category" -> "pr.category_id";
-            case "item" -> "m.product_id";
+            // Issue #384: an item with sizes and colours is one group of all its variants; an item without is its own.
+            case "item" -> "coalesce(pr.family_id, m.product_id)";
+            case "variant" -> "m.product_id";
             case "day" -> "p.purchased_on";
             default -> "date_trunc('" + level + "', p.purchased_on::timestamp)::date";
         };
@@ -76,7 +92,7 @@ class PurchasesSummaryRepository {
                         ? " coalesce(sum(" + value + ") FILTER (WHERE " + live + "), 0) AS total_minor,"
                         : " 0 AS total_minor,");
         sql.append(
-                level.equals("item")
+                level.equals("item") || level.equals("variant")
                         ? " coalesce(sum(m.qty) FILTER (WHERE " + live + "), 0) AS quantity"
                         : " NULL::numeric AS quantity");
         sql.append(" FROM retail_purchases p");
@@ -84,7 +100,7 @@ class PurchasesSummaryRepository {
                 + " AND m.source_type = 'retail.purchase' AND m.kind = 'purchase'");
         sql.append(" JOIN retail_purchase_lines l ON l.tenant_id = m.tenant_id AND l.id = m.source_line_id");
         sql.append(" LEFT JOIN retail_purchase_voids v ON v.tenant_id = p.tenant_id AND v.purchase_id = p.id");
-        if (level.equals("category") || spec.categoryId() != null) {
+        if (level.equals("category") || level.equals("item") || spec.categoryId() != null) {
             sql.append(" JOIN retail_products pr ON pr.tenant_id = m.tenant_id AND pr.id = m.product_id");
         }
         sql.append(" WHERE true");
@@ -112,7 +128,7 @@ class PurchasesSummaryRepository {
             params.put("categoryId", spec.categoryId());
         }
         if (spec.itemId() != null) {
-            sql.append(" AND m.product_id = :itemId");
+            sql.append(" AND ").append(productOrItem("m.product_id", "itemId"));
             params.put("itemId", spec.itemId());
         }
         sql.append(" GROUP BY 1");
@@ -120,17 +136,23 @@ class PurchasesSummaryRepository {
             case "branch" -> " LEFT JOIN branches x ON x.id = g.grp";
             case "supplier" -> " LEFT JOIN retail_suppliers x ON x.id = g.grp";
             case "category" -> " LEFT JOIN retail_categories x ON x.id = g.grp";
-            case "item" -> " LEFT JOIN retail_products x ON x.id = g.grp LEFT JOIN retail_units u ON u.id = x.unit_id";
+            case "item" ->
+                " LEFT JOIN retail_products x ON x.id = g.grp LEFT JOIN retail_product_families f ON f.id = g.grp"
+                        + " LEFT JOIN retail_units u ON u.id = coalesce(f.unit_id, x.unit_id)";
+            case "variant" ->
+                " LEFT JOIN retail_products x ON x.id = g.grp LEFT JOIN retail_units u ON u.id = x.unit_id";
             default -> "";
         };
         String label = switch (level) {
-            case "item" -> "x.description";
+            case "item" -> "coalesce(f.name, x.description)";
+            case "variant" -> "x.description";
             case "branch", "supplier", "category" -> "x.name";
             default -> "NULL";
         };
         String order = time ? "g.grp DESC" : "g.purchases_count DESC, g.grp";
         String outer = "WITH g AS (" + sql + ") SELECT g.*, " + label + " AS label, "
-                + (level.equals("item") ? "u.name" : "NULL") + " AS unit FROM g" + names + " ORDER BY " + order
+                + (level.equals("item") || level.equals("variant") ? "u.name" : "NULL") + " AS unit FROM g" + names
+                + " ORDER BY " + order
                 + " OFFSET :offset LIMIT :limit";
         params.put("offset", spec.offset());
         params.put("limit", spec.limit());
