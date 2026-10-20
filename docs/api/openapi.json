@@ -5633,6 +5633,83 @@
           }
         }
       },
+      "PushConfig" : {
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "public_key" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PushDevice" : {
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "last_used_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
+      "PushDeviceList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PushDevice"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "PushKeys" : {
+        "properties" : {
+          "auth" : {
+            "maxLength" : 30,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "p256dh" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "auth", "p256dh" ]
+      },
+      "PushSubscribeRequest" : {
+        "properties" : {
+          "endpoint" : {
+            "maxLength" : 2048,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "keys" : {
+            "$ref" : "#/components/schemas/PushKeys"
+          }
+        },
+        "required" : [ "endpoint", "keys" ]
+      },
+      "PushUnsubscribeRequest" : {
+        "properties" : {
+          "endpoint" : {
+            "maxLength" : 2048,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "endpoint" ]
+      },
       "RecoveryCodes" : {
         "properties" : {
           "recovery_codes" : {
@@ -23675,6 +23752,122 @@
           }
         },
         "summary" : "Render wording with fabricated sample data: text, encoding, segments, cost estimate",
+        "tags" : [ "notifications" ]
+      }
+    },
+    "/api/v1/notifications/push/config" : {
+      "get" : {
+        "operationId" : "getPushConfig",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PushConfig"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether this server sends notifications, and the public key a browser subscribes against (ADR-050)",
+        "tags" : [ "notifications" ]
+      }
+    },
+    "/api/v1/notifications/push/subscriptions" : {
+      "get" : {
+        "operationId" : "listPushDevices",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PushDeviceList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own devices that receive notifications: label, when added, when last used (ADR-050)",
+        "tags" : [ "notifications" ]
+      },
+      "post" : {
+        "operationId" : "subscribePushDevice",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "User-Agent",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PushSubscribeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PushDevice"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register this device for notifications, or refresh it: one row per endpoint, moved to the caller when another person used the device before (ADR-050)",
+        "tags" : [ "notifications" ]
+      }
+    },
+    "/api/v1/notifications/push/subscriptions/unsubscribe" : {
+      "post" : {
+        "operationId" : "unsubscribePushDevice",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PushUnsubscribeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Stop notifications on this device by its endpoint; nothing to remove is still 204 (ADR-050)",
+        "tags" : [ "notifications" ]
+      }
+    },
+    "/api/v1/notifications/push/subscriptions/{device_id}" : {
+      "delete" : {
+        "operationId" : "removePushDevice",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "device_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove one of the caller's own devices (ADR-050)",
         "tags" : [ "notifications" ]
       }
     },

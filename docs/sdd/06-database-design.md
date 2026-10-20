@@ -266,8 +266,9 @@ expired rows are deleted 90 days after `closed_at` (FR-ONB-09).
 ### `notification_outbox` (platform; no privilege for `bms_app`, definer functions only, ADR-024)
 
 One row per message to send (spec section 11, FR-NTF-09): `id uuid PK`, `channel` [`email`,
-`telegram`, `sms`] (`sms` from `V30` for the savings receipts, sent by the SMS channel from `V50`, ADR-036), `recipient varchar(320)` (an address, `operator` for the
-Telegram operator chat, whose id stays in the environment, or an E.164 phone for SMS), `template_key varchar(100)`, `params jsonb` (template values;
+`telegram`, `sms`, `push`] (`sms` from `V30` for the savings receipts, sent by the SMS channel from `V50`, ADR-036; `push` from `V90`, ADR-050), `recipient varchar(320)` (an address, `operator` for the
+Telegram operator chat, whose id stays in the environment, an E.164 phone for SMS, or `user:<user id>` for a push notification, which the channel
+sends to every device of that person in `push_subscriptions`), `template_key varchar(100)`, `params jsonb` (template values;
 cleared to `{}` once sent, because they can hold a one-time link), `status` [`pending`, `sent`,
 `failed`], `attempts integer`, `idempotency_key varchar(200) UNIQUE`, `throttle_key varchar(400)`
 (groups rows for a volume bound, for example `onboarding.verify:<mailbox>`), `expires_at` (when the
@@ -475,6 +476,21 @@ who issued an `admin` link or the platform operator who issued an `operator` lin
 `(tenant_id, user_id, created_at DESC)`. Grants `SELECT, INSERT, UPDATE`; `created_at` is written by the application's clock. Rows are deleted 30
 days after they were made by `user_password_resets_purge(timestamptz)` (a definer function the nightly job `core.identity.password-reset-purge` calls; there is no
 DELETE grant, and the function itself never deletes a row younger than 30 days, whatever cutoff it is given). `origin` `operator` rows are the platform operator's. The token itself is never stored.
+
+### `push_subscriptions` (RLS)
+
+(std without `updated_at` and `version`; ADR-050; migration `V90`, a placeholder number the coordinator renumbers at merge) One row per
+user per device that receives Web Push. `user_id uuid NOT NULL` (FK `(tenant_id, user_id)`), `endpoint text NOT NULL` (the push service's
+address for that browser; `https://` only, at most 2048 characters), `endpoint_hash char(64) NOT NULL` (SHA-256 of the endpoint in hex),
+`p256dh varchar(100) NOT NULL` (the subscription's public key, 65 bytes as unpadded base64url, 86 to 88 characters), `auth varchar(30) NOT NULL`
+(its secret, 16 bytes, 20 to 24 characters), `user_agent varchar(300)` (the browser's own description, shown to the person only as a label such
+as "Chrome on Android"), `created_at timestamptz`, `last_used_at timestamptz` (set when a push was accepted). `UNIQUE (tenant_id, endpoint_hash)`:
+the endpoint is the device, so it is one row in the tenant, and a second person who subscribes from the same device takes the row over
+(`INSERT ... ON CONFLICT (tenant_id, endpoint_hash) DO UPDATE SET user_id, p256dh, auth`). `UNIQUE (tenant_id, id)`. Index
+`(tenant_id, user_id)`. Grants `SELECT, INSERT, UPDATE, DELETE`: a device is removed when the person removes it, when the push service answers
+404 or 410, or when it is beyond the ten a person may keep. The endpoint and the keys are secrets of the device: the API never returns them,
+they are never logged or audited, and they are not copied into the outbox. The same migration widens the CHECK on `notification_outbox.channel` to
+`email`, `telegram`, `sms` and `push`.
 
 ### `auth_sessions` (RLS)
 
@@ -1415,6 +1431,7 @@ erDiagram
     USERS ||--o{ USER_ROLE_ASSIGNMENTS : holds
     BRANCHES ||--o{ USER_ROLE_ASSIGNMENTS : scopes
     USERS ||--o{ AUTH_SESSIONS : opens
+    USERS ||--o{ PUSH_SUBSCRIPTIONS : "receives notifications on"
     USERS ||--o{ APPROVAL_REQUESTS : "requests or decides"
     GL_ACCOUNTS ||--o{ JOURNAL_LINES : "posted to"
     JOURNAL_ENTRIES ||--|{ JOURNAL_LINES : contains

@@ -169,6 +169,15 @@ bms:
     telegram:
       bot-token: ${BMS_TELEGRAM_BOT_TOKEN:}
       operator-chat-id: ${BMS_TELEGRAM_OPERATOR_CHAT_ID:}
+  # Web Push (ADR-050, docs/runbooks/push-notifications.md). Off unless both VAPID keys are set; the subject is a mailto: address or an
+  # https: URL the push services can reach. Never logged. Generate the pair with: npx web-push generate-vapid-keys (docs/runbooks/push-notifications.md).
+  push:
+    vapid-public-key: ${BMS_PUSH_VAPID_PUBLIC_KEY:}
+    vapid-private-key: ${BMS_PUSH_VAPID_PRIVATE_KEY:}
+    subject: ${BMS_PUSH_SUBJECT:}
+    extra-endpoint-hosts: ${BMS_PUSH_EXTRA_ENDPOINT_HOSTS:}
+    # Development and tests only (the dev profile sets it): a key pair made at start. Startup refuses it on staging and production.
+    ephemeral-keys: false
   # SMS (ADR-036, spec section 4.4). Nothing here sends by default: the mode is off (sink on staging), and
   # startup refuses any combination that could text a real phone from outside production. The API
   # key is never logged. BMS_ENVIRONMENT is staging or production; unset is treated as not production.

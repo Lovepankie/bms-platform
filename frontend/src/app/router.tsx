@@ -156,6 +156,11 @@ const staffAssistantRoute = createRoute({ getParentRoute: () => staffRoute, path
 const staffPaymentsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/payments', staticData: { crumb: 'Receive payments' } }).lazy(() =>
   import('../areas/staff/payments/page').then((m) => m.Route),
 );
+// Notifications and app: install BMS and turn notifications on for this device (ADR-050).
+const staffNotificationsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/notifications', staticData: { crumb: 'Notifications and app' } }).lazy(() =>
+  import('../areas/staff/notifications/page').then((m) => m.Route),
+);
+
 // Staff users: who works in the business, invite and roles (issue #319).
 const staffUsersRoute = createRoute({ getParentRoute: () => staffRoute, path: '/users', staticData: { crumb: 'Staff users' } }).lazy(() =>
   import('../areas/staff/users/page').then((m) => m.Route),
@@ -352,7 +357,7 @@ export const router = createRouter({
         memberInvestmentNewRoute,
         investmentRoute,
         investmentCertificateRoute,
-      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffUsersRoute, staffUserInviteRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
+      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffUsersRoute, staffUserInviteRoute, staffNotificationsRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
     memberRoute,
     styleRoute,
     signUpRoute,

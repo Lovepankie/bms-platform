@@ -11,6 +11,9 @@ import com.rincoltech.bms.core.tenancy.internal.SettingsController.SettingsRespo
 import com.rincoltech.bms.core.tenancy.internal.SettingsController.UpdateSettingsRequest;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
+import com.rincoltech.bms.kernel.CurrentPrincipal;
+import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.PushNotice;
 import com.rincoltech.bms.kernel.Versions;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -23,6 +26,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +54,7 @@ class SettingsService implements TenantSettings, ModuleSettings {
     private final Documents documents;
     private final Map<String, ModuleSettingsGroup> groups = new TreeMap<>();
     private final TenantModules modules;
+    private final ApplicationEventPublisher events;
 
     SettingsService(
             JdbcClient jdbc,
@@ -58,7 +63,9 @@ class SettingsService implements TenantSettings, ModuleSettings {
             AuditLog audit,
             Documents documents,
             List<ModuleSettingsGroup> groupBeans,
-            TenantModules modules) {
+            TenantModules modules,
+            ApplicationEventPublisher events) {
+        this.events = events;
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.tenant = tenant;
@@ -158,7 +165,40 @@ class SettingsService implements TenantSettings, ModuleSettings {
                 null,
                 auditBefore,
                 auditAfter));
+        announceWeakening(before, after);
         return after;
+    }
+
+    /**
+     * The administrators with a device are told when a safeguard is loosened (ADR-050): the amount that needs a second person
+     * raised for an action, or two-step sign-in no longer required of every user. The person who changed it is not told. The
+     * names of the actions are the ones the approvals inbox shows.
+     */
+    private void announceWeakening(SettingsResponse before, SettingsResponse after) {
+        UUID by = CurrentPrincipal.get().map(Principal::userId).orElse(null);
+        List<String> raised = after.approvalThresholdsMinor().entrySet().stream()
+                .filter(e -> e.getValue() > before.approvalThresholdsMinor().getOrDefault(e.getKey(), 0L))
+                .map(e -> e.getKey().replace('_', ' '))
+                .sorted()
+                .toList();
+        if (!raised.isEmpty()) {
+            events.publishEvent(new PushNotice(
+                    "core.approval_policy_weakened",
+                    "settings-v" + after.version(),
+                    new PushNotice.Holders("core.settings.manage", null, by),
+                    Map.of(
+                            "action_label",
+                            String.join(", ", raised.subList(0, Math.min(3, raised.size()))),
+                            "path",
+                            "/staff/setup")));
+        }
+        if (before.requireMfaAllStaff() && !after.requireMfaAllStaff()) {
+            events.publishEvent(new PushNotice(
+                    "core.signin_policy_weakened",
+                    "settings-v" + after.version(),
+                    new PushNotice.Holders("core.settings.manage", null, by),
+                    Map.of("path", "/staff/setup")));
+        }
     }
 
     @Override

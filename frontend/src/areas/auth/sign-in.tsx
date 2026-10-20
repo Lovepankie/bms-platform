@@ -4,6 +4,7 @@ import { api, type MfaEnrolment, problemOf, type SignInResponse } from '../../ap
 import { normaliseSecondFactor, plainProblem } from '../../auth/codes';
 import { setAccessToken } from '../../auth/session';
 import { illustrations } from '../../components/illustrations';
+import { InstallPrompt } from '../../install/InstallPrompt';
 import { ErrorLine, RecoveryCodes, StepHeader, TwoStepSetup } from './steps';
 
 // Staff sign-in (FR-IAM-04 to FR-IAM-06, FR-IAM-11): password, then the second factor when the
@@ -132,6 +133,7 @@ export function SignIn() {
           <p>
             <Link to="/forgot-password">Forgot password?</Link>
           </p>
+          <InstallPrompt />
         </>
       )}
 

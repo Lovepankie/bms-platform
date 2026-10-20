@@ -132,6 +132,20 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
 | A stolen platform operator token resetting an admin's second factor and then issuing a link for the same admin, on any tenant | Both platform reset routes need the operator's own fresh, single-use authenticator code and fail closed without one; five wrong codes lock the step-up and end the operator's sessions; both audit logs record the act; the admin is emailed when a link is issued, before it is used, which is the detective control (ADR-042 decision 9(b2)) |
 | A link in the admin's hand used by the admin | Possible by design for an ordinary user (an admin who can reset a sign-in could also deactivate and invite): the issue and the reveal are audited with the admin's identity, the user is emailed when it is issued and again when the password changes |
 
+### 8.2b Threat model of push notifications (ADR-050)
+
+A push subscription is per user per device (`push_subscriptions`, forced row-level security, composite foreign key to the user).
+
+| Threat | Control |
+|---|---|
+| The server posts to an address a caller chose (server-side request forgery) | The endpoint must be `https` on 443, no credentials, a name and not an address, at a known push service host (or one in `BMS_PUSH_EXTRA_ENDPOINT_HOSTS`); checked at subscribe and before every send; redirects are never followed |
+| Someone else's device or notifications | The routes are the caller's own: the user is the principal, never a parameter; a device of another person or tenant is 404; the API never returns an endpoint or a key |
+| A shared phone keeps telling the last person's news | The endpoint is unique in the tenant, so subscribing moves the device to the new person; sign-out removes the device's row; a deactivated user is never a recipient |
+| A notification read on a lock screen | Templates carry no name, phone, identity number or amount (a test fails one that does); text is cut to 80 and 200 characters; a tap opens an app route only |
+| An invalid-curve or oversized key from a client | The subscription point is checked to be on P-256 and the secret to be 16 bytes at subscribe; a payload over one record is refused |
+| Theft of the VAPID private key | It lives only in the host environment (`BMS_PUSH_VAPID_PRIVATE_KEY`), never in git, logs or the API; rotation is in `docs/runbooks/push-notifications.md` |
+| A push failure harming a business event | The notice is an event handled in a savepoint; the sender runs outside any transaction; failures follow the outbox retry and expiry |
+
 ## 8.3 Role-based access control
 
 ### 8.3.1 Roles
@@ -632,6 +646,7 @@ the lending module is switched on (runbook `docs/runbooks/`, onboarding a tenant
 | Application data key (`BMS_DATA_KEY`, 32 bytes base64, and `BMS_DATA_KEY_ID`; encrypts TOTP secrets and any other field-level encrypted value) | Host env file | Key id stored with each ciphertext; re-encryption job on rotation |
 | Object storage credentials | Host env file; bucket-scoped token | Yearly |
 | SMS aggregator and payment gateway credentials | Host env file | Per provider policy |
+| Web Push (ADR-050): `BMS_PUSH_VAPID_PRIVATE_KEY` (with `BMS_PUSH_VAPID_PUBLIC_KEY`, `BMS_PUSH_SUBJECT`, `BMS_PUSH_EXTRA_ENDPOINT_HOSTS`) | Host env file; optional, push is off when unset | Made once per environment with `npx web-push generate-vapid-keys`; rotating strands every device until its next staff page load |
 | Outbox senders: `BMS_SMTP_PASSWORD` (with `BMS_SMTP_HOST`, `BMS_SMTP_PORT`, `BMS_SMTP_USER`, `BMS_MAIL_FROM`) and `BMS_TELEGRAM_BOT_TOKEN` (with `BMS_TELEGRAM_OPERATOR_CHAT_ID`) | Host env file; optional, a sender is off when unset | Per provider policy; the bot token through BotFather |
 | The platform's own Pesapal pair (`BMS_PESAPAL_PLATFORM_*`) and its notification path token | Host env file (ADR-035) | Yearly, on staff change, on suspected exposure; the token whenever the IPN URL is re-registered |
 | A lender's own Pesapal consumer key and secret | Table `payment_gateway_accounts`, AES-256-GCM sealed with `BMS_DATA_KEY` (the id of the key is inside the box); entered by the lender's administrator, write-only: no endpoint returns it, no log line, audit row or error carries it; the notification token is stored only as its SHA-256 (ADR-035 amendment of 2026-10-18) | When the lender rotates it at Pesapal (a new secret for the same key is allowed with payments in flight); data key rotation re-seals the rows and the second-factor seeds (`BMS_DATA_KEY_PREVIOUS`, runbook `payments.md` section 4a) |

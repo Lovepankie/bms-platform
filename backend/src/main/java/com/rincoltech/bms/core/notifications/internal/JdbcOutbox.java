@@ -21,7 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 class JdbcOutbox implements Outbox {
 
-    private static final Set<String> CHANNELS = Set.of(EMAIL, TELEGRAM, SMS);
+    private static final Set<String> CHANNELS = Set.of(EMAIL, TELEGRAM, SMS, PUSH);
     private static final Set<String> CATEGORIES = Set.of(TRANSACTIONAL, REMINDER, ARREARS);
 
     private final JdbcClient jdbc;

@@ -13,3 +13,6 @@ bms:
     mode: dev
   storage:
     provider: fake
+  push:
+    # A key pair made at every start, so notifications can be tried locally without setting up keys (ADR-050).
+    ephemeral-keys: true

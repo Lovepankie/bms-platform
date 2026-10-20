@@ -13,17 +13,31 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // The app is installable (ADR-050): a name, an id that never changes, a start page, standalone display, icons of 192 and
+      // 512 pixels and a maskable one, so the phone's home screen, the app list and the task switcher show it as an app.
+      includeAssets: ['icon.svg', 'icons/apple-touch-icon.png', 'push-sw.js'],
       manifest: {
-        name: 'BMS Platform',
+        id: '/staff',
+        name: 'BMS',
         short_name: 'BMS',
-        description: 'Business management for lenders and their members',
-        start_url: '/',
+        description: 'Business management for lenders, retailers and their members',
+        lang: 'en',
+        start_url: '/staff',
+        scope: '/',
         display: 'standalone',
         background_color: '#ffffff',
         theme_color: '#0077b6',
-        icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
+        icons: [
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+        ],
       },
       workbox: {
+        // The push and notification-click handlers (ADR-050) live in public/push-sw.js and run inside the generated worker.
+        importScripts: ['push-sw.js'],
         // Staff data is never cached for offline use; API calls always go to the network
         // (ADR-009). Member read caches arrive with the member area.
         navigateFallbackDenylist: [/^\/api\//, /^\/healthz/, /^\/readyz/, /^\/version/],

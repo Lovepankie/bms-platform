@@ -106,6 +106,11 @@ services:
       BMS_SMS_AT_BASE_URL: ${BMS_SMS_AT_BASE_URL:-}
       BMS_SMS_AT_USERNAME: ${BMS_SMS_AT_USERNAME:-}
       BMS_SMS_AT_API_KEY: ${BMS_SMS_AT_API_KEY:-}
+      # Web Push (ADR-050). Off unless both VAPID keys are set (docs/runbooks/push-notifications.md).
+      BMS_PUSH_VAPID_PUBLIC_KEY: ${BMS_PUSH_VAPID_PUBLIC_KEY:-}
+      BMS_PUSH_VAPID_PRIVATE_KEY: ${BMS_PUSH_VAPID_PRIVATE_KEY:-}
+      BMS_PUSH_SUBJECT: ${BMS_PUSH_SUBJECT:-}
+      BMS_PUSH_EXTRA_ENDPOINT_HOSTS: ${BMS_PUSH_EXTRA_ENDPOINT_HOSTS:-}
       # Language model gateway (ADR-037). Off unless BMS_AI_PROVIDER is openai_compatible and the base URL,
       # key and model are set; the allow-list names the tenants that may switch the assistant on.
       BMS_AI_PROVIDER: ${BMS_AI_PROVIDER:-off}

@@ -30,6 +30,14 @@ const help: TourStep = {
   body: 'Lost? Tap Help to take this tour again, or to see a short tour of the page you are on.',
 };
 
+// The Notifications and app page (ADR-050): install BMS as an app and turn on notifications on this device. Everyone signed in has it.
+const notifications: TourStep = {
+  id: 'notifications',
+  target: 'nav-notifications',
+  title: 'Install the app and get notifications',
+  body: 'Tap Notifications to install BMS on your phone. There you can also turn on a notice for when something needs you, such as an approval.',
+};
+
 const insights: TourStep = {
   id: 'insights',
   target: 'nav-insights',
@@ -90,7 +98,8 @@ export const adminWelcome: Tour = {
   // Version 11 adds the step on when a credit sale counts as profit (issue #340, ADR-043).
   // Version 12 adds the step on writing off a debt that will never be paid (issue #340).
   // Version 13 adds the Controls step (issue #357): sales cancelled, goods taken back, prices changed, restocks cancelled and quantities corrected, by shop and person.
-  version: 13,
+  // Version 14 adds the Notifications step: install the app and turn on notifications (ADR-050).
+  version: 14,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -313,6 +322,7 @@ export const adminWelcome: Tour = {
       body: 'Some actions need a second person to agree. They wait for you here.',
     },
     insights,
+    notifications,
     help,
   ],
 };
@@ -324,7 +334,8 @@ export const retailSales: Tour = {
   // Version 5 adds the Group by step (issue #341): the sales lists open from the shop down to the items.
   // Version 6 adds the Cash and change step (issue #346): the amount received and the change to give on a cash sale.
   // Version 7 adds the Correct step on the stock list (issue #351): fix a wrong quantity or category where you see it.
-  version: 7,
+  // Version 8 adds the Notifications step: install the app and turn on notifications (ADR-050).
+  version: 8,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -466,13 +477,15 @@ export const retailSales: Tour = {
       title: 'Shortcuts',
       body: 'On a phone, your most used pages are always at the bottom of the screen.',
     },
+    notifications,
     help,
   ],
 };
 
 export const staffWelcome: Tour = {
   id: 'staff-welcome',
-  version: 2,
+  // Version 3 adds the Notifications step: install the app and turn on notifications (ADR-050).
+  version: 3,
   title: 'Welcome tour',
   audience: (me) => !isTenantAdmin(me) && !isSeller(me),
   autoStart: true,
@@ -511,6 +524,7 @@ export const staffWelcome: Tour = {
       title: 'Retail',
       body: 'Sales and stock live here.',
     },
+    notifications,
     help,
   ],
 };
@@ -851,6 +865,39 @@ export const usersPage: Tour = {
       optional: true,
       title: 'Who has joined',
       body: 'Invited means the person has not opened their link yet. On their card you can send a new link, change their roles, or deactivate them when they leave. Reset sign-in makes a link for someone who forgot their password.',
+    },
+  ],
+};
+
+// The Notifications and app page (ADR-050): for everyone signed in. The install control is always on the page, so its step never
+// waits on whether this device can install right now. JUSTIFICATION-A3: a page tour is a data object, one per screen, as every
+// tour in this file is; the new screen needs exactly this one.
+export const notificationsPage: Tour = {
+  id: 'page-notifications',
+  version: 1,
+  title: 'This page: notifications and the app',
+  audience: () => true,
+  autoStart: false,
+  page: '/staff/notifications',
+  steps: [
+    {
+      id: 'install',
+      target: 'install-app',
+      title: 'Install the app',
+      body: 'Add BMS to your home screen or app list. On an iPhone or iPad, tap Share, then Add to Home Screen.',
+    },
+    {
+      id: 'toggle',
+      target: 'notifications-toggle',
+      title: 'Notifications on this device',
+      body: 'Turn this on to hear when something needs you. Your phone asks once, and only after you tap. A notice never shows a name, a phone number or an amount.',
+    },
+    {
+      id: 'devices',
+      target: 'notifications-devices',
+      optional: true,
+      title: 'Your devices',
+      body: 'Each device that tells you things is listed here. Remove one you no longer use.',
     },
   ],
 };
@@ -1434,5 +1481,5 @@ export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, ...CUSTOMER_TOURS,
+  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, notificationsPage, ...CUSTOMER_TOURS,
 ];
