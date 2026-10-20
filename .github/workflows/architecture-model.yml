@@ -55,7 +55,9 @@ jobs:
         # ADR-018 finding L9: see ci.yml's delivery job for why this must be checked before any
         # --user 0:0 step on this self-hosted runner.
         run: |
-          if ! docker info --format '{{.SecurityOptions}}' | grep -q 'name=rootless'; then
+          # GitHub-hosted runners are throwaway VMs with no other tenant, so the rootless check
+          # (ADR-018) only applies to our self-hosted runners.
+          if [ "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ] && ! docker info --format '{{.SecurityOptions}}' | grep -q 'name=rootless'; then
             echo "::error::the Docker daemon on this runner is not rootless; refusing to run --user 0:0 steps"
             exit 1
           fi

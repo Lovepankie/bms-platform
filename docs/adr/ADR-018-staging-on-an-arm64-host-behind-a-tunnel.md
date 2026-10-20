@@ -327,3 +327,11 @@ workflow stays on `ubuntu-latest` (finding H1): it holds the signing key and reg
 
 **Consequences.** Better: the guards no longer spend or depend on hosted minutes. Worse: they now wait for a laptop or Pi runner, and the repository
 still needs a hosted budget for deploys. The rule from the 2026-10-16 amendment stands: these runners never hold a secret or a deploy credential.
+
+**Amendment 2026-10-20 (owner's decision): public repository, hosted runners for the time being.** To stop CI queueing behind
+one laptop, the owner made the repository public, which gives it GitHub-hosted runners at no cost. While it is public:
+`CI_RUNS_ON` is `["ubuntu-latest"]`; the repository is removed from the `jerome-laptop` and `hillary-pi` runner groups, so no
+self-hosted runner can run a pull request's code; outside contributors' pull requests need approval before any workflow
+runs; the deploy runner group admits the public repository but still only `deploy.yml` on `main`; and the rootless Docker
+check is skipped on GitHub-hosted runners, which are throwaway single-tenant VMs. When the repository goes private again,
+all of these are reversed and the self-hosted rule above applies unchanged.

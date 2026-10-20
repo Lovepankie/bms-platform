@@ -114,7 +114,9 @@ jobs:
         # system one, the same flag would bind-mount the workspace as real root, so fail before any
         # such step runs rather than trust that the host is still configured the way ADR-018 says.
         run: |
-          if ! docker info --format '{{.SecurityOptions}}' | grep -q 'name=rootless'; then
+          # GitHub-hosted runners are throwaway VMs with no other tenant, so the rootless check
+          # (ADR-018) only applies to our self-hosted runners.
+          if [ "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ] && ! docker info --format '{{.SecurityOptions}}' | grep -q 'name=rootless'; then
             echo "::error::the Docker daemon on this runner is not rootless; refusing to run --user 0:0 steps"
             exit 1
           fi
