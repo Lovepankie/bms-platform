@@ -453,7 +453,7 @@ class StockService {
     }
 
     /** The quantity a level filter keeps at or below, in thousandths; null for no level (#145). */
-    private static Long atMostOf(String level) {
+    static Long atMostOf(String level) {
         if (level == null || level.isBlank()) {
             return null;
         }

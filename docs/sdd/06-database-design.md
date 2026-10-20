@@ -1869,6 +1869,14 @@ changed: a restock is voided when a row names it, and the reads join the table. 
 of the source type `retail.purchase_void` with `reverses_movement_id` set; the journal reversals are the ledger's own
 (`reverses_entry_id`), written on the void's date.
 
+The grouped restocks and stock lists (issue #350, no migration) read these tables with one grouped query per level. The restocks
+summary groups the purchase movements of `retail_purchases` (`retail_stock_movements` with `source_type = 'retail.purchase'`, through
+the index on the source) joined to `retail_purchase_lines` and `retail_purchase_voids`, so a restock is counted by what it added to
+the branches in scope, a voided one is counted apart, and the value is the movement quantity at the line's cost. The stock summary
+reads each branch against each listed product with its `retail_stock_balances` row, so an item with no balance row counts as nothing
+in stock, as in the list. Neither query is covered by an index of its own; both are bounded in the groups they return, not in the
+rows they read.
+
 `retail_stock_corrections`: one row per quantity corrected on the stock list. `branch_id`, `product_id`, `movement_id` (the
 `adjustment` movement it wrote, unique), `old_qty` and `new_qty` (numeric(14,3); `new_qty >= 0` and different from `old_qty`),
 `reason_code` (`entry_mistake` or `miscount`), `note`, `unit_cost_minor` (the cost the movement was valued at), `journal_entry_id`

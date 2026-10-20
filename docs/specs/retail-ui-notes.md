@@ -842,6 +842,31 @@ salesperson, day, product category, item, with a summary on every line. The user
 - **Tours.** `retail-sales` (version 5) and `admin-welcome` (version 7) get a Group by step on the retail home; the Help pages
   `page-sales` and `page-credit-sales` (version 2) get a Group by step and a line about the breadcrumb.
 
+## Stock and past restocks grouped by a chain (issue #350)
+
+The Group by chain of the sales lists (issue #341) is offered on the Stock page and on Past restocks. Both stay as they were until
+the person chooses **Grouped** (a switch of two buttons, Flat list and Grouped, remembered per person and list in `localStorage`
+under `bms.listView.<list>.<user id>`). Then the Group by control and the groups appear; what is open is kept in the screen, so a
+restock opened for correction and closed finds the same groups open. Nothing is open to start with.
+
+- **Stock:** levels shop and product category (`bms.listChain.stock.<user id>`, default shop then category). Every line is the
+  server's summary of its group (`GET /retail/stock/summary`): the value at the selling price, how many items, the value at cost
+  when the server sent it, and how many are negative. The items of the last opened group are the screen's own stock table (flat, no
+  category sections) for that shop and category, so **Correct** on a stock row works inside the groups; with no shop in the
+  chain the all-branches table or cards for the category. With one shop chosen at the top of the page the shop level is left out.
+  The search, category, negative and stock-level filters apply to the groups and to the items. A "Include closed shops that still
+  hold stock" box replaces the closed-shops hint while grouped.
+- **Past restocks:** levels shop, year, month, supplier, day, product category and item (`bms.listChain.restocks.<user id>`, default
+  in that order). Every line shows how many restocks, how many were voided and are not counted, what was bought at cost only when the
+  server sent it, and at the item level the quantity bought with its unit. The restocks of the last opened group, and "Show the
+  restocks here" on a day, on any level of a chain with no day and above a last item level, are the screen's own cards, so **Correct
+  this restock** and its void work inside the groups. Under a category or an item the cards are whole restocks that include it
+  (their totals can be more than the line above). The From, To and Show filters of the page apply to the groups and the cards.
+  Restocks with no supplier are one group, "No supplier".
+- Components: `list-chain.tsx` (the view switch, Group by, the tree), `list-chain-state.ts` (levels, remembered choice, selection),
+  `stock-grouped.tsx`, `restocks-grouped.tsx`. The tours `page-stock` (version 3) and `page-restocks` (version 2) have a Grouped step
+  that explains Group by.
+
 ## Amount received and change to give (issue #346)
 
 For a cash sale the seller types what the customer handed over and the form shows the change to give back, as at a supermarket

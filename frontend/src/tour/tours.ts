@@ -492,28 +492,42 @@ export const salePage: Tour = {
   steps: retailSales.steps.filter((s) => s.route === '/staff/retail/sale'),
 };
 
+// The stock list and the restocks list grouped by a chain (issue #350): the switch to Grouped, which explains the Group by control.
+const groupedViewStep = (what: string, levels: string): TourStep => ({
+  id: 'grouped-view',
+  target: 'list-view',
+  module: 'retail',
+  title: 'See it in groups',
+  body: `Choose Grouped to see ${what}. Tap a line to open it. Under Group by, choose the order: ${levels}. Move a line up or down, or take it out. We remember your choice. Choose Flat list to go back.`,
+});
+
 export const stockPage: Tour = {
   id: 'page-stock',
-  // Version 2 adds the Correct step (issue #351).
-  version: 2,
+  // Version 2 adds the Correct step (issue #351); version 3 the grouped view (issue #350).
+  version: 3,
   title: 'This page: stock',
   audience: (me) => held(me, 'retail.stock.read'),
   autoStart: false,
   page: '/staff/retail/stock',
-  steps: retailSales.steps.filter((s) => s.id === 'stock-search' || s.id === 'restock-ask' || s.id === 'correct-stock'),
+  steps: [
+    ...retailSales.steps.filter((s) => s.id === 'stock-search' || s.id === 'restock-ask' || s.id === 'correct-stock'),
+    groupedViewStep('your stock by shop and category, with its value', 'shop and product category'),
+  ],
 };
 
 // JUSTIFICATION-A3: a page tour for the new Past restocks page (issue #351), of the same shape as the page tours around it.
 export const restocksPage: Tour = {
   id: 'page-restocks',
-  version: 1,
+  // Version 2 adds the grouped view (issue #350).
+  version: 2,
   title: 'This page: past restocks',
   audience: (me) => held(me, RESTOCK),
   autoStart: false,
   page: '/staff/retail/restocks',
   steps: [
     { id: 'restocks-filters', target: 'restocks-filters', module: 'retail', title: 'Find the restock', body: 'Choose the first and last day, or show only the voided ones. Every restock is kept, even a voided one.' },
-    { id: 'restocks-list', target: 'restocks-list', module: 'retail', title: 'Correct this restock', body: 'Tap Correct this restock, give the reason, then enter it again with the right quantity or unit. If less than its quantity is left, use Correct on the Stock page instead.' },
+    { id: 'restocks-list', target: 'restocks-list', module: 'retail', optional: true, title: 'Correct this restock', body: 'Tap Correct this restock, give the reason, then enter it again with the right quantity or unit. If less than its quantity is left, use Correct on the Stock page instead.' },
+    groupedViewStep('your restocks in groups, with how many in each', 'shop, year, month, supplier, day, category and item'),
   ],
 };
 

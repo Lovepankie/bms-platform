@@ -9,6 +9,7 @@ import com.rincoltech.bms.retail.stock.internal.StockApi.MovementPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Stocktake;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeRequest;
+import com.rincoltech.bms.retail.stock.internal.StockSummaryApi.Summary;
 import com.rincoltech.bms.retail.stock.internal.UsageApi.UsageReport;
 import com.rincoltech.bms.retail.stock.internal.UsageApi.UsageRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,11 +40,17 @@ class StockController {
     private final StockService service;
     private final UsageService usage;
     private final StockCorrectionService corrections;
+    private final StockSummaryService summaries;
 
-    StockController(StockService service, UsageService usage, StockCorrectionService corrections) {
+    StockController(
+            StockService service,
+            UsageService usage,
+            StockCorrectionService corrections,
+            StockSummaryService summaries) {
         this.service = service;
         this.usage = usage;
         this.corrections = corrections;
+        this.summaries = summaries;
     }
 
     @GetMapping("/stock")
@@ -75,6 +82,26 @@ class StockController {
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
         return service.allBranches(query, categoryId, negativeOnly, level, includeClosed, limit, cursor);
+    }
+
+    // JUSTIFICATION-A3: a new read route is one handler; the grouped query lives in its own service (issue #350).
+    @GetMapping("/stock/summary")
+    @RequiresPermission("retail.stock.read")
+    @Operation(
+            summary = "Stock grouped by shop and category with the number of items and their value (issue #350)",
+            operationId = "summariseRetailStock")
+    Summary summary(
+            @RequestParam(name = "group_by") String groupBy,
+            @RequestParam(name = "level", required = false) String level,
+            @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
+            @RequestParam(name = "query", required = false) String query,
+            @RequestParam(name = "category_id", required = false) UUID categoryId,
+            @RequestParam(name = "negative_only", required = false, defaultValue = "false") boolean negativeOnly,
+            @RequestParam(name = "stock_level", required = false) String stockLevel,
+            @RequestParam(name = "include_closed", required = false, defaultValue = "false") boolean includeClosed,
+            @RequestParam(name = "offset", required = false) Integer offset) {
+        return summaries.summary(new StockSummaryService.Query(
+                groupBy, level, branchIds, query, categoryId, negativeOnly, stockLevel, includeClosed, offset));
     }
 
     @GetMapping("/stock/movements")

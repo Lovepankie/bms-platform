@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.purchasing.internal;
 
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.RequiresPermission;
+import com.rincoltech.bms.retail.purchasing.internal.PurchasesSummaryApi.Summary;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.Purchase;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.PurchasePage;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.PurchaseRequest;
@@ -15,6 +16,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -37,8 +39,11 @@ class PurchasingController {
 
     private final PurchasingService service;
 
-    PurchasingController(PurchasingService service) {
+    private final PurchasesSummaryService summaryService;
+
+    PurchasingController(PurchasingService service, PurchasesSummaryService summaryService) {
         this.service = service;
+        this.summaryService = summaryService;
     }
 
     @GetMapping("/suppliers")
@@ -90,14 +95,38 @@ class PurchasingController {
     @RequiresPermission("retail.purchase.create")
     @Operation(summary = "Purchases", operationId = "listRetailPurchases")
     PurchasePage list(
+            @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
             @RequestParam(name = "from", required = false) LocalDate from,
             @RequestParam(name = "to", required = false) LocalDate to,
             @RequestParam(name = "supplier_id", required = false) UUID supplierId,
+            @RequestParam(name = "category_id", required = false) UUID categoryId,
+            @RequestParam(name = "product_id", required = false) UUID productId,
             @RequestParam(name = "status", required = false) String status,
             @RequestParam(name = "newest_first", required = false, defaultValue = "false") boolean newestFirst,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.list(from, to, supplierId, status, newestFirst, limit, cursor);
+        return service.list(branchIds, from, to, supplierId, categoryId, productId, status, newestFirst, limit, cursor);
+    }
+
+    // JUSTIFICATION-A3: a new read route is one handler; the grouped query lives in its own service (issue #350).
+    @GetMapping("/purchases/summary")
+    @RequiresPermission("retail.purchase.create")
+    @Operation(
+            summary = "Restocks grouped by a chain of levels with a summary per group (issue #350)",
+            operationId = "summariseRetailPurchases")
+    Summary summary(
+            @RequestParam(name = "group_by") String groupBy,
+            @RequestParam(name = "level", required = false) String level,
+            @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
+            @RequestParam(name = "from", required = false) LocalDate from,
+            @RequestParam(name = "to", required = false) LocalDate to,
+            @RequestParam(name = "supplier_id", required = false) UUID supplierId,
+            @RequestParam(name = "category_id", required = false) UUID categoryId,
+            @RequestParam(name = "item_id", required = false) UUID itemId,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "offset", required = false) Integer offset) {
+        return summaryService.summary(new PurchasesSummaryService.Query(
+                groupBy, level, branchIds, from, to, supplierId, categoryId, itemId, status, offset));
     }
 
     @GetMapping("/purchases/{purchase_id}")

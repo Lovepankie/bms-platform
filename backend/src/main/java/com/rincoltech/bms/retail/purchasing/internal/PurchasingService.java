@@ -380,9 +380,12 @@ class PurchasingService {
 
     @Transactional(readOnly = true)
     PurchasePage list(
+            List<UUID> branchIds,
             LocalDate from,
             LocalDate to,
             UUID supplierId,
+            UUID categoryId,
+            UUID productId,
             String status,
             boolean newestFirst,
             Integer limit,
@@ -392,6 +395,9 @@ class PurchasingService {
                     List.of(new FieldProblem("status", "invalid", "status is posted or voided.")));
         }
         List<UUID> filter = CurrentPrincipal.require().branchFilter(PERMISSION, null);
+        // Which restocks are listed follows the branch asked for; what each card shows (and may be corrected from)
+        // follows the caller's own scope.
+        List<UUID> listed = CurrentPrincipal.require().branchFilter(PERMISSION, branchIds);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         Instant afterCreated = null;
         UUID afterId = null;
@@ -400,8 +406,19 @@ class PurchasingService {
             afterCreated = after.at();
             afterId = after.id();
         }
-        List<Purchase> rows =
-                repo.page(filter, from, to, supplierId, status, newestFirst, afterCreated, afterId, size + 1);
+        List<Purchase> rows = repo.page(
+                filter,
+                listed,
+                from,
+                to,
+                supplierId,
+                categoryId,
+                productId,
+                status,
+                newestFirst,
+                afterCreated,
+                afterId,
+                size + 1);
         boolean more = rows.size() > size;
         List<Purchase> items = more ? rows.subList(0, size) : rows;
         String next = more

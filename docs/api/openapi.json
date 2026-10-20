@@ -11009,6 +11009,107 @@
         },
         "required" : [ "reason" ]
       },
+      "RetailPurchasesSummary" : {
+        "properties" : {
+          "available_levels" : {
+            "description" : "Every level group_by accepts",
+            "items" : {
+              "description" : "Every level group_by accepts",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "description" : "The tenant's currency; a retail tenant keeps its books in one currency",
+            "type" : "string"
+          },
+          "group_by" : {
+            "description" : "The level these groups are: one of available_levels",
+            "type" : "string"
+          },
+          "has_more" : {
+            "description" : "True when more groups remain: next_to (year, month, day) or next_offset (the rest)",
+            "type" : "boolean"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPurchasesSummaryGroup"
+            },
+            "type" : "array"
+          },
+          "levels" : {
+            "description" : "The chain the request asked for, in order",
+            "items" : {
+              "description" : "The chain the request asked for, in order",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "next_level" : {
+            "description" : "The level under this one in the chain; absent at the end of the chain",
+            "type" : "string"
+          },
+          "next_offset" : {
+            "description" : "Branch, supplier, category and item: ask again with offset = next_offset",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "next_to" : {
+            "description" : "Year, month and day: the day before the oldest period shown; ask again with to = next_to",
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailPurchasesSummaryGroup" : {
+        "properties" : {
+          "from" : {
+            "description" : "First calendar day of the period; year, month and day only",
+            "format" : "date",
+            "type" : "string"
+          },
+          "key" : {
+            "description" : "What the group is: a branch id, a supplier id (the nil UUID for restocks with no supplier), a category id, a product id, or the period (2026, 2026-10 or 2026-10-19); pass it back as the matching filter of the next level",
+            "type" : "string"
+          },
+          "label" : {
+            "description" : "What to show: the branch, supplier, category or item name, or the period key",
+            "type" : "string"
+          },
+          "period" : {
+            "description" : "2026, 2026-10 or 2026-10-19; year, month and day only",
+            "type" : "string"
+          },
+          "purchases_count" : {
+            "description" : "Restocks that were not voided. Under a category or an item: the restocks that have a line in it",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "quantity" : {
+            "description" : "Units bought, in base units; item level only",
+            "type" : "string"
+          },
+          "to" : {
+            "description" : "Last calendar day of the period; year, month and day only",
+            "format" : "date",
+            "type" : "string"
+          },
+          "total_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the figures cover: what was bought, at cost",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit" : {
+            "description" : "The item's base unit; item level only",
+            "type" : "string"
+          },
+          "voided_count" : {
+            "description" : "Voided restocks in the group, kept out of every other figure",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "RetailPurchasingSettings" : {
         "properties" : {
           "bill_tolerance_bp" : {
@@ -13026,6 +13127,84 @@
           },
           "unit" : {
             "type" : "string"
+          }
+        }
+      },
+      "RetailStockSummary" : {
+        "properties" : {
+          "available_levels" : {
+            "description" : "Every level group_by accepts: branch and category",
+            "items" : {
+              "description" : "Every level group_by accepts: branch and category",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "description" : "The tenant's currency; a retail tenant keeps its books in one currency",
+            "type" : "string"
+          },
+          "group_by" : {
+            "description" : "The level these groups are: one of available_levels",
+            "type" : "string"
+          },
+          "has_more" : {
+            "description" : "True when more groups remain: ask again with offset = next_offset",
+            "type" : "boolean"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailStockSummaryGroup"
+            },
+            "type" : "array"
+          },
+          "levels" : {
+            "description" : "The chain the request asked for, in order",
+            "items" : {
+              "description" : "The chain the request asked for, in order",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "next_level" : {
+            "description" : "The level under this one in the chain; absent at the end of the chain",
+            "type" : "string"
+          },
+          "next_offset" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailStockSummaryGroup" : {
+        "properties" : {
+          "cost_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the figures cover: what the stock holds at cost",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "items_count" : {
+            "description" : "Items listed: active ones and inactive ones that still hold stock",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "key" : {
+            "description" : "A branch id or a category id; pass it back as branch_id or category_id",
+            "type" : "string"
+          },
+          "label" : {
+            "description" : "The branch or category name",
+            "type" : "string"
+          },
+          "negative_count" : {
+            "description" : "Items with a balance below zero",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value_minor" : {
+            "description" : "What the stock holds at the selling price",
+            "format" : "int64",
+            "type" : "integer"
           }
         }
       },
@@ -27695,6 +27874,17 @@
         "operationId" : "listRetailPurchases",
         "parameters" : [ {
           "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
           "name" : "from",
           "required" : false,
           "schema" : {
@@ -27712,6 +27902,22 @@
         }, {
           "in" : "query",
           "name" : "supplier_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "category_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "product_id",
           "required" : false,
           "schema" : {
             "format" : "uuid",
@@ -27796,6 +28002,106 @@
           }
         },
         "summary" : "Record a restock: prices, history, movements and journals in one transaction (FR-RET-06); M",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/purchases/summary" : {
+      "get" : {
+        "operationId" : "summariseRetailPurchases",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "group_by",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "level",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "supplier_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "category_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "item_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "offset",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchasesSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Restocks grouped by a chain of levels with a summary per group (issue #350)",
         "tags" : [ "retail-purchasing" ]
       }
     },
@@ -30234,6 +30540,97 @@
           }
         },
         "summary" : "Stock movements in the caller's branch scope",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/stock/summary" : {
+      "get" : {
+        "operationId" : "summariseRetailStock",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "group_by",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "level",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "category_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "negative_only",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "stock_level",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "include_closed",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "offset",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailStockSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Stock grouped by shop and category with the number of items and their value (issue #350)",
         "tags" : [ "retail-stock" ]
       }
     },

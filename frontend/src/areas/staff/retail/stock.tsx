@@ -13,13 +13,16 @@ import { BranchRequired, CategoryLabel, Gate, NoStockHere, Problem, money, useBr
 import { CorrectItem, mayCorrect } from './stock-correct';
 import { useStaff } from '../context';
 import { needsOf } from './permissions';
+import { ListGroupBy, ViewSwitch, useListView } from './list-chain';
+import { STOCK_NAMES, STOCK_ORDER, listUser, withoutShop, type ListSelection } from './list-chain-state';
+import { GroupedStock, type StockFilter } from './stock-grouped';
 
 // Stock per branch (FR-RET-03): balances with a negative flag and a search box. The cost column
 // exists only for a session holding retail.profit.read: showCost is the screen's choice and the server
 // sends no cost field to anyone else.
 
 /** Search and filters of a stock list, so its groups start again when they change (category-groups.tsx). */
-type Narrowing = { searching?: boolean; filterKey?: string; pending?: boolean };
+type Narrowing = { searching?: boolean; filterKey?: string; pending?: boolean; /** Under a group of the grouped view the items are one plain list (issue #350). */ flat?: boolean };
 
 /** Set by the stock page for one branch when the session may correct something there: each row then offers Correct (issue #351). */
 type Correctable = { branchId: string };
@@ -30,14 +33,15 @@ function stockSubtotal(rows: { qty?: string; unit?: string; sell_minor?: number 
   return [sameUnitQty(rows), `${money(value)} at price`].filter(Boolean).join(', ');
 }
 
-export function StockTable({ rows, showCost, searching = false, filterKey = '', pending = false, correctable }: { rows: StockRow[]; showCost: boolean; correctable?: Correctable } & Narrowing) {
+export function StockTable({ rows, showCost, searching = false, filterKey = '', pending = false, flat = false, correctable }: { rows: StockRow[]; showCost: boolean; correctable?: Correctable } & Narrowing) {
   // On a phone the category sits under the item's name, so the table keeps room for the quantity and price.
   const phone = useIsPhone();
   const [corrected, setCorrected] = useState<string | null>(null);
   const g = useCategoryGroups({ screen: 'stock', items: rows, categoryOf: (r) => r.category, subtotalOf: stockSubtotal, resetKey: filterKey, searching, pending });
+  const grouping = g.active && !flat;
   if (rows.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
-  const showCategory = !g.active && phone;
-  const columns = 3 + (!phone && !g.active ? 1 : 0) + (showCost ? 1 : 0);
+  const showCategory = !grouping && phone;
+  const columns = 3 + (!phone && !grouping ? 1 : 0) + (showCost ? 1 : 0);
   const row = (r: StockRow) => (
     <Fragment key={r.product_id}>
       <tr>
@@ -49,7 +53,7 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
             </div>
           )}
         </td>
-        {!phone && !g.active && <td>{r.category}</td>}
+        {!phone && !grouping && <td>{r.category}</td>}
         <td className="num">
           {showQty(r.qty ?? '0')} {r.unit}
           {r.negative && <div className="rt-flag">Negative</div>}
@@ -64,18 +68,18 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
   );
   return (
     <>
-    <GroupControls state={g} />
+    {!flat && <GroupControls state={g} />}
     <div className="table-wrap" tabIndex={0}><table>
       <thead>
         <tr>
           <th>Item</th>
-          {!phone && !g.active && <th>Category</th>}
+          {!phone && !grouping && <th>Category</th>}
           <th className="num">In stock</th>
           {showCost && <th className="num">Cost</th>}
           <th className="num">Price</th>
         </tr>
       </thead>
-      {g.active ? <GroupedBodies state={g} colSpan={3 + (showCost ? 1 : 0)} renderRow={row} /> : <tbody>{rows.map(row)}</tbody>}
+      {grouping ? <GroupedBodies state={g} colSpan={3 + (showCost ? 1 : 0)} renderRow={row} /> : <tbody>{rows.map(row)}</tbody>}
     </table></div>
     </>
   );
@@ -97,13 +101,14 @@ const totalsSubtotal = (rows: AllBranchesStock['items']) => stockSubtotal(rows.m
 const branchName = (b: { code?: string; name?: string; closed?: boolean }) => `${branchLabel(b)}${b.closed ? ' (closed)' : ''}`;
 
 /** All branches on a wide screen: a column per branch and a total, the negative flag on each cell. */
-export function AllBranchesTable({ data, showCost: mayCost, searching = false, filterKey = '', pending = false }: { data: AllBranchesStock; showCost: boolean } & Narrowing) {
+export function AllBranchesTable({ data, showCost: mayCost, searching = false, filterKey = '', pending = false, flat = false }: { data: AllBranchesStock; showCost: boolean } & Narrowing) {
   const showCost = mayCost && data.items.some((r) => r.cost_minor !== undefined);
   const g = useCategoryGroups({ screen: 'stock', items: data.items, categoryOf: (r) => r.category, subtotalOf: totalsSubtotal, resetKey: filterKey, searching, pending });
+  const grouping = g.active && !flat;
   if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
   const row = (r: AllBranchesStock['items'][number]) => (
     <tr key={r.product_id}>
-      <td>{r.description}{!g.active && <><br /><CategoryLabel category={r.category} /></>}</td>
+      <td>{r.description}{!grouping && <><br /><CategoryLabel category={r.category} /></>}</td>
       <td className="num"><strong><Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} /></strong></td>
       {(r.balances ?? []).map((c) => (
         <td key={c.branch_id} className="num"><Qty qty={c.qty ?? '0'} negative={c.negative} /></td>
@@ -114,7 +119,7 @@ export function AllBranchesTable({ data, showCost: mayCost, searching = false, f
   );
   return (
     <>
-    <GroupControls state={g} />
+    {!flat && <GroupControls state={g} />}
     <div className="table-wrap" tabIndex={0}><table className="stock-matrix">
       <thead>
         <tr>
@@ -125,16 +130,17 @@ export function AllBranchesTable({ data, showCost: mayCost, searching = false, f
           <th className="num">Price</th>
         </tr>
       </thead>
-      {g.active ? <GroupedBodies state={g} colSpan={3 + data.branches.length + (showCost ? 1 : 0)} renderRow={row} /> : <tbody>{data.items.map(row)}</tbody>}
+      {grouping ? <GroupedBodies state={g} colSpan={3 + data.branches.length + (showCost ? 1 : 0)} renderRow={row} /> : <tbody>{data.items.map(row)}</tbody>}
     </table></div>
     </>
   );
 }
 
 /** All branches on a phone: one card per product with the total, and a button that opens its branches. */
-export function AllBranchesList({ data, showCost, searching = false, filterKey = '', pending = false }: { data: AllBranchesStock; showCost: boolean } & Narrowing) {
+export function AllBranchesList({ data, showCost, searching = false, filterKey = '', pending = false, flat = false }: { data: AllBranchesStock; showCost: boolean } & Narrowing) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const g = useCategoryGroups({ screen: 'stock', items: data.items, categoryOf: (r) => r.category, subtotalOf: totalsSubtotal, resetKey: filterKey, searching, pending });
+  const grouping = g.active && !flat;
   if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
   const names = Object.fromEntries(data.branches.map((b) => [b.id ?? '', branchName(b)]));
   const card = (r: AllBranchesStock['items'][number]) => {
@@ -145,7 +151,7 @@ export function AllBranchesList({ data, showCost, searching = false, filterKey =
             <div className="rt-row">
               <span>
                 <strong>{r.description}</strong>
-                {!g.active && <><br /><CategoryLabel category={r.category} /></>}
+                {!grouping && <><br /><CategoryLabel category={r.category} /></>}
               </span>
               <span className="num"><strong>Total <Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} /></strong></span>
             </div>
@@ -168,8 +174,8 @@ export function AllBranchesList({ data, showCost, searching = false, filterKey =
   };
   return (
     <>
-      <GroupControls state={g} />
-      {g.active ? <GroupedCards state={g} renderItem={card} /> : <ul style={{ listStyle: 'none', padding: 0 }}>{data.items.map(card)}</ul>}
+      {!flat && <GroupControls state={g} />}
+      {grouping ? <GroupedCards state={g} renderItem={card} /> : <ul style={{ listStyle: 'none', padding: 0 }}>{data.items.map(card)}</ul>}
     </>
   );
 }
@@ -197,11 +203,43 @@ export function StockLevelFilter({ level, onChange }: { level: StockLevel | ''; 
   );
 }
 
+/** The items of an opened group of the grouped view (issue #350): the same tables as the flat list, filtered by what was opened, so Correct works here. */
+function StockRows({ sel, filter, all, branchId }: { sel: ListSelection; filter: StockFilter; all: boolean; branchId: string | null }) {
+  const { me } = useStaff();
+  const canProfit = useProfitAccess();
+  const phone = useIsPhone();
+  const branch = sel.branchId ?? (all ? null : branchId);
+  const categoryId = sel.categoryId ?? filter.categoryId;
+  const level = filter.level || undefined;
+  const one = useQuery({
+    queryKey: ['retail', 'stock', branch, filter.query, categoryId, filter.negativeOnly, level ?? ''],
+    queryFn: ({ signal }) => retail.listStock({ branchId: branch ?? '', query: filter.query, categoryId, negativeOnly: filter.negativeOnly, level, signal }),
+    enabled: branch !== null,
+  });
+  const many = useQuery({
+    queryKey: ['retail', 'stock', 'all-branches', filter.query, categoryId, filter.negativeOnly, level ?? '', filter.includeClosed],
+    queryFn: ({ signal }) => retail.listStockAllBranches({ query: filter.query, categoryId, negativeOnly: filter.negativeOnly, level, includeClosed: filter.includeClosed, signal }),
+    enabled: branch === null,
+  });
+  const result = branch === null ? many : one;
+  const key = [branch ?? 'all', filter.query, categoryId, filter.negativeOnly, level ?? ''].join('|');
+  return (
+    <>
+      {result.isPending && <SkeletonList label="Loading stock" />}
+      <Problem error={result.error} />
+      {branch !== null && one.data && <StockTable rows={one.data} showCost={canProfit} flat filterKey={key} correctable={mayCorrect(me, branch) ? { branchId: branch } : undefined} />}
+      {branch === null && many.data && (phone ? <AllBranchesList data={many.data} showCost={canProfit} flat filterKey={key} /> : <AllBranchesTable data={many.data} showCost={canProfit} flat filterKey={key} />)}
+    </>
+  );
+}
+
 export function StockPage() {
   const { me } = useStaff();
   const { all, branchId, branchName: name } = useBranchView();
   const canProfit = useProfitAccess();
   const phone = useIsPhone();
+  const list = useListView(listUser(me), 'stock', STOCK_ORDER);
+  const grouped = list.view === 'grouped';
   const search = useLiveSearch();
   const query = search.term;
   const [negativeOnly, setNegativeOnly] = useState(false);
@@ -213,13 +251,13 @@ export function StockPage() {
   const one = useQuery({
     queryKey: ['retail', 'stock', branchId, query, categoryId, negativeOnly, level],
     queryFn: ({ signal }) => retail.listStock({ branchId: branchId ?? '', query, categoryId, negativeOnly, level: level || undefined, signal }),
-    enabled: !all && branchId !== null,
+    enabled: !all && branchId !== null && !grouped,
     placeholderData: keepPreviousData,
   });
   const many = useQuery({
     queryKey: ['retail', 'stock', 'all-branches', query, categoryId, negativeOnly, level, showClosed],
     queryFn: ({ signal }) => retail.listStockAllBranches({ query, categoryId, negativeOnly, level: level || undefined, includeClosed: showClosed, signal }),
-    enabled: all,
+    enabled: all && !grouped,
     placeholderData: keepPreviousData,
   });
   const result = all ? many : one;
@@ -227,11 +265,14 @@ export function StockPage() {
   const shown = all ? many.data?.items.length : one.data?.length;
   // The whole-business view is the stock "by location": a last crumb says so (components/breadcrumbs.tsx).
   useCrumbTail(all ? 'By location' : undefined);
+  const stockFilter: StockFilter = { query, categoryId, negativeOnly, level, includeClosed: showClosed };
+  const shopChosen = !all && branchId !== null;
   const narrowing = { pending: result.isPlaceholderData, searching: query !== '', filterKey: [all ? 'all' : branchId, query, categoryId, negativeOnly, level].join('|') };
   return (
     <Gate screen="stock" title="Stock">
       <p className="branch-line">Branch: <strong>{all ? 'All branches' : name}</strong></p>
       {!all && branchId !== null && <NoStockHere branchId={branchId} />}
+      <ViewSwitch view={list.view} onChange={list.setView} />
       <StockLevelFilter level={level} onChange={setLevel} />
       <div data-tour="stock-search">
         <SearchBox id="stock-search" label="Search by name, code or category" search={search} fetching={finding} count={shown} />
@@ -247,22 +288,41 @@ export function StockPage() {
         <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={negativeOnly} onChange={(e) => setNegativeOnly(e.target.checked)} />
         Show only negative stock
       </label>
-      {all && (showClosed || (many.data?.closed_branches ?? 0) > 0) && (
+      {all && grouped && (
+        <label style={{ fontWeight: 400 }}>
+          <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
+          Include closed shops that still hold stock
+        </label>
+      )}
+      {all && !grouped && (showClosed || (many.data?.closed_branches ?? 0) > 0) && (
         <label style={{ fontWeight: 400 }}>
           <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
           {showClosed ? 'Showing closed branches' : `${many.data?.closed_branches ?? 0} closed ${many.data?.closed_branches === 1 ? 'shop' : 'shops'} with stock hidden. Show them`}
         </label>
       )}
       {!all && branchId === null && <BranchRequired permissions={needsOf('stock')} />}
-      {result.isPending && (all || branchId !== null) && <SkeletonList label="Loading stock" />}
-      <Problem error={result.error} />
-      {shown === 0 && query && <NoResults term={query} onClear={search.clear} noun="items" />}
+      {grouped && (all || branchId !== null) && (
+        <>
+          <ListGroupBy chain={list.chain} order={STOCK_ORDER} names={STOCK_NAMES} onChange={list.setChain} />
+          <div data-tour="stock-list">
+            <GroupedStock
+              view={list} filter={stockFilter} chain={withoutShop(list.chain, shopChosen)} enabled range={shopChosen ? { branchId } : {}}
+              renderRows={(sel) => <StockRows sel={sel} filter={stockFilter} all={all} branchId={branchId} />}
+            />
+          </div>
+        </>
+      )}
+      {!grouped && result.isPending && (all || branchId !== null) && <SkeletonList label="Loading stock" />}
+      {!grouped && <Problem error={result.error} />}
+      {!grouped && shown === 0 && query && <NoResults term={query} onClear={search.clear} noun="items" />}
+      {!grouped && (
       <div data-tour="stock-list">
       <SearchResults fetching={finding}>
         {!all && one.data && <StockTable rows={one.data} showCost={canProfit} correctable={mayCorrect(me, branchId) && branchId !== null ? { branchId } : undefined} {...narrowing} />}
         {all && many.data && (phone ? <AllBranchesList data={many.data} showCost={canProfit} {...narrowing} /> : <AllBranchesTable data={many.data} showCost={canProfit} {...narrowing} />)}
       </SearchResults>
       </div>
+      )}
     </Gate>
   );
 }

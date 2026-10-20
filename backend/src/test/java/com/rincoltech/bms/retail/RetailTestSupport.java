@@ -165,4 +165,9 @@ public final class RetailTestSupport {
         }
         return UUID.fromString(response.getBody().get("id").asString());
     }
+
+    /** One string field of a response body. */
+    public static String idOf(ResponseEntity<JsonNode> response, String field) {
+        return response.getBody().get(field).asString();
+    }
 }

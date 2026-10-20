@@ -3866,6 +3866,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/purchases/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Restocks grouped by a chain of levels with a summary per group (issue #350) */
+        get: operations["summariseRetailPurchases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/purchases/{purchase_id}": {
         parameters: {
             query?: never;
@@ -4597,6 +4614,23 @@ export interface paths {
         };
         /** Stock movements in the caller's branch scope */
         get: operations["listRetailStockMovements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/stock/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stock grouped by shop and category with the number of items and their value (issue #350) */
+        get: operations["summariseRetailStock"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10420,6 +10454,68 @@ export interface components {
         RetailPurchaseVoidRequest: {
             reason: string;
         };
+        RetailPurchasesSummary: {
+            /** @description Every level group_by accepts */
+            available_levels?: string[];
+            /** @description The tenant's currency; a retail tenant keeps its books in one currency */
+            currency?: string;
+            /** @description The level these groups are: one of available_levels */
+            group_by?: string;
+            /** @description True when more groups remain: next_to (year, month, day) or next_offset (the rest) */
+            has_more?: boolean;
+            items?: components["schemas"]["RetailPurchasesSummaryGroup"][];
+            /** @description The chain the request asked for, in order */
+            levels?: string[];
+            /** @description The level under this one in the chain; absent at the end of the chain */
+            next_level?: string;
+            /**
+             * Format: int32
+             * @description Branch, supplier, category and item: ask again with offset = next_offset
+             */
+            next_offset?: number;
+            /**
+             * Format: date
+             * @description Year, month and day: the day before the oldest period shown; ask again with to = next_to
+             */
+            next_to?: string;
+        };
+        RetailPurchasesSummaryGroup: {
+            /**
+             * Format: date
+             * @description First calendar day of the period; year, month and day only
+             */
+            from?: string;
+            /** @description What the group is: a branch id, a supplier id (the nil UUID for restocks with no supplier), a category id, a product id, or the period (2026, 2026-10 or 2026-10-19); pass it back as the matching filter of the next level */
+            key?: string;
+            /** @description What to show: the branch, supplier, category or item name, or the period key */
+            label?: string;
+            /** @description 2026, 2026-10 or 2026-10-19; year, month and day only */
+            period?: string;
+            /**
+             * Format: int64
+             * @description Restocks that were not voided. Under a category or an item: the restocks that have a line in it
+             */
+            purchases_count?: number;
+            /** @description Units bought, in base units; item level only */
+            quantity?: string;
+            /**
+             * Format: date
+             * @description Last calendar day of the period; year, month and day only
+             */
+            to?: string;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the figures cover: what was bought, at cost
+             */
+            total_minor?: number;
+            /** @description The item's base unit; item level only */
+            unit?: string;
+            /**
+             * Format: int64
+             * @description Voided restocks in the group, kept out of every other figure
+             */
+            voided_count?: number;
+        };
         RetailPurchasingSettings: {
             /**
              * Format: int32
@@ -11465,6 +11561,49 @@ export interface components {
             /** Format: int64 */
             sell_minor?: number;
             unit?: string;
+        };
+        RetailStockSummary: {
+            /** @description Every level group_by accepts: branch and category */
+            available_levels?: string[];
+            /** @description The tenant's currency; a retail tenant keeps its books in one currency */
+            currency?: string;
+            /** @description The level these groups are: one of available_levels */
+            group_by?: string;
+            /** @description True when more groups remain: ask again with offset = next_offset */
+            has_more?: boolean;
+            items?: components["schemas"]["RetailStockSummaryGroup"][];
+            /** @description The chain the request asked for, in order */
+            levels?: string[];
+            /** @description The level under this one in the chain; absent at the end of the chain */
+            next_level?: string;
+            /** Format: int32 */
+            next_offset?: number;
+        };
+        RetailStockSummaryGroup: {
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the figures cover: what the stock holds at cost
+             */
+            cost_minor?: number;
+            /**
+             * Format: int64
+             * @description Items listed: active ones and inactive ones that still hold stock
+             */
+            items_count?: number;
+            /** @description A branch id or a category id; pass it back as branch_id or category_id */
+            key?: string;
+            /** @description The branch or category name */
+            label?: string;
+            /**
+             * Format: int64
+             * @description Items with a balance below zero
+             */
+            negative_count?: number;
+            /**
+             * Format: int64
+             * @description What the stock holds at the selling price
+             */
+            value_minor?: number;
         };
         /** @description A product with stock on hand, summed over the reported branches */
         RetailStockedItem: {
@@ -20390,9 +20529,12 @@ export interface operations {
     listRetailPurchases: {
         parameters: {
             query?: {
+                branch_id?: string[];
                 from?: string;
                 to?: string;
                 supplier_id?: string;
+                category_id?: string;
+                product_id?: string;
                 status?: string;
                 newest_first?: boolean;
                 limit?: number;
@@ -20437,6 +20579,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailPurchase"];
+                };
+            };
+        };
+    };
+    summariseRetailPurchases: {
+        parameters: {
+            query: {
+                group_by: string;
+                level?: string;
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                supplier_id?: string;
+                category_id?: string;
+                item_id?: string;
+                status?: string;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchasesSummary"];
                 };
             };
         };
@@ -21730,6 +21903,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailStockMovementPage"];
+                };
+            };
+        };
+    };
+    summariseRetailStock: {
+        parameters: {
+            query: {
+                group_by: string;
+                level?: string;
+                branch_id?: string[];
+                query?: string;
+                category_id?: string;
+                negative_only?: boolean;
+                stock_level?: string;
+                include_closed?: boolean;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStockSummary"];
                 };
             };
         };

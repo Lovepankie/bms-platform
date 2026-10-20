@@ -142,6 +142,11 @@ export type SalePage = S['RetailSalePage'];
 /** The sales grouped by year, month or day, summed on the server (issue #328); `profit_minor` is absent without retail.profit.read. */
 export type SalesSummary = S['RetailSalesSummary'];
 export type SalesSummaryGroup = S['RetailSalesSummaryGroup'];
+/** The restocks and the stock grouped by a chain of levels, summed on the server (issue #350); `total_minor` and `cost_minor` are absent without retail.profit.read. */
+export type PurchasesSummary = S['RetailPurchasesSummary'];
+export type PurchasesSummaryGroup = S['RetailPurchasesSummaryGroup'];
+export type StockSummary = S['RetailStockSummary'];
+export type StockSummaryGroup = S['RetailStockSummaryGroup'];
 /** Price lists, their items and customer groups (ADR-033, issue #195). Prices are integer minor units per `unit`. */
 export type PriceList = S['RetailPriceList'];
 export type PriceListItem = S['RetailPriceListItem'];
@@ -281,6 +286,45 @@ export function salesSummaryParams({ level, chain, branchId, from, to, buyer, pa
     seller_id: sellerId || undefined, category_id: categoryId || undefined, item_id: itemId || undefined, offset: offset || undefined,
   };
 }
+
+/** The levels a restocks summary can group by (issue #350). */
+export type PurchaseLevel = 'branch' | 'year' | 'month' | 'supplier' | 'day' | 'category' | 'item';
+
+/** The levels a stock summary can group by: the items themselves are the stock list (issue #350). */
+export type StockChainLevel = 'branch' | 'category';
+
+/** The restocks summary: the level asked for, the whole chain, and what was opened above (the filters). */
+export interface PurchasesSummaryQuery {
+  level: PurchaseLevel;
+  chain: PurchaseLevel[];
+  branchId?: string;
+  from?: string;
+  to?: string;
+  supplierId?: string;
+  categoryId?: string;
+  itemId?: string;
+  /** The posted or voided restocks only; absent for both. */
+  status?: 'posted' | 'voided';
+  offset?: number;
+  signal?: AbortSignal;
+}
+
+/** The stock summary: the level asked for, the whole chain, the stock list's own filters and what was opened above. */
+export interface StockSummaryQuery {
+  level: StockChainLevel;
+  chain: StockChainLevel[];
+  branchId?: string;
+  categoryId?: string;
+  query?: string;
+  negativeOnly?: boolean;
+  stockLevel?: StockLevel;
+  includeClosed?: boolean;
+  offset?: number;
+  signal?: AbortSignal;
+}
+
+/** The nil UUID the server uses as the key of the restocks that name no supplier. */
+export const NO_SUPPLIER = '00000000-0000-0000-0000-000000000000';
 
 /** A cash book list or report window: branches (empty means every branch in scope), dates, voided rows. */
 export interface CashQuery {
@@ -457,7 +501,11 @@ export interface RetailApi {
   createSale(body: SaleRequest, idempotencyKey: string): Promise<Sale>;
   createPurchase(body: PurchaseRequest, idempotencyKey: string): Promise<Purchase>;
   /** The restocks (retail.purchase.create), a voided one included and marked; newest first with the filters of the past restocks screen (issue #351). */
-  listPurchases(q: { from?: string; to?: string; status?: 'posted' | 'voided'; cursor?: string; limit?: number; signal?: AbortSignal }): Promise<PurchasePage>;
+  listPurchases(q: { branchId?: string; from?: string; to?: string; supplierId?: string; categoryId?: string; productId?: string; status?: 'posted' | 'voided'; cursor?: string; limit?: number; signal?: AbortSignal }): Promise<PurchasePage>;
+  /** Groups of restocks at one level of a chain (shop, year, month, supplier, day, category, item); `next_to` (time levels) or `next_offset` continues (#350). */
+  purchasesSummary(q: PurchasesSummaryQuery): Promise<PurchasesSummary>;
+  /** Groups of the stock list by shop or category with the number of items and their value (#350). */
+  stockSummary(q: StockSummaryQuery): Promise<StockSummary>;
   getPurchase(id: string): Promise<Purchase>;
   /** Voids a restock by reversal, once (retail.purchase.create at every branch it touched); takes the Idempotency-Key of its form. */
   voidPurchase(id: string, reason: string, idempotencyKey: string): Promise<Purchase>;
@@ -1085,10 +1133,44 @@ const realRetail: RetailApi = {
     return unwrap(await api.POST('/api/v1/retail/purchases', { body, params: { header: { 'Idempotency-Key': key } } }));
   },
 
-  async listPurchases({ from, to, status, cursor, limit, signal }) {
+  async listPurchases({ branchId, from, to, supplierId, categoryId, productId, status, cursor, limit, signal }) {
     return unwrap(
       await api.GET('/api/v1/retail/purchases', {
-        params: { query: { newest_first: true, ...(from ? { from } : {}), ...(to ? { to } : {}), ...(status ? { status } : {}), ...(cursor ? { cursor } : {}), ...(limit ? { limit } : {}) } },
+        params: {
+          query: {
+            newest_first: true, ...(branchId ? { branch_id: [branchId] } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}),
+            ...(supplierId ? { supplier_id: supplierId } : {}), ...(categoryId ? { category_id: categoryId } : {}), ...(productId ? { product_id: productId } : {}),
+            ...(status ? { status } : {}), ...(cursor ? { cursor } : {}), ...(limit ? { limit } : {}),
+          },
+        },
+        signal,
+      }),
+    );
+  },
+
+  async purchasesSummary({ level, chain, branchId, from, to, supplierId, categoryId, itemId, status, offset, signal }) {
+    return unwrap(
+      await api.GET('/api/v1/retail/purchases/summary', {
+        params: {
+          query: {
+            group_by: chain.join(','), level, branch_id: branchId ? [branchId] : undefined, from: from || undefined, to: to || undefined,
+            supplier_id: supplierId || undefined, category_id: categoryId || undefined, item_id: itemId || undefined, status, offset: offset || undefined,
+          },
+        },
+        signal,
+      }),
+    );
+  },
+
+  async stockSummary({ level, chain, branchId, categoryId, query, negativeOnly, stockLevel, includeClosed, offset, signal }) {
+    return unwrap(
+      await api.GET('/api/v1/retail/stock/summary', {
+        params: {
+          query: {
+            group_by: chain.join(','), level, branch_id: branchId ? [branchId] : undefined, category_id: categoryId || undefined, query: query || undefined,
+            negative_only: negativeOnly || undefined, stock_level: stockLevel, include_closed: includeClosed || undefined, offset: offset || undefined,
+          },
+        },
         signal,
       }),
     );

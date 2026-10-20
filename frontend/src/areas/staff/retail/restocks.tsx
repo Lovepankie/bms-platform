@@ -8,6 +8,9 @@ import { showDate } from './maths';
 import { holdsAt, PURCHASE_CREATE } from './permissions';
 import { alreadyVoided, listIsStale, quantityWords, stateOf, unitHint, voidReasonOf, MIN_VOID_REASON } from './restock-correct-state';
 import { Gate, Problem, Success, money } from './ui';
+import { ListGroupBy, ViewSwitch, useListView } from './list-chain';
+import { PURCHASE_NAMES, PURCHASE_ORDER, listUser } from './list-chain-state';
+import { GroupedRestocks } from './restocks-grouped';
 
 // Past restocks (issue #351, ADR-044): every restock, newest first, a voided one marked and never deleted. A restock entered with a
 // wrong quantity, price, unit or supplier is corrected here: "Correct this restock" voids it (the stock, the books and the prices go
@@ -108,12 +111,16 @@ export function RestocksPage() {
   const [to, setTo] = useState(today);
   const [status, setStatus] = useState<'all' | 'posted' | 'voided'>('all');
   const [message, setMessage] = useState<string | null>(null);
+  const { me } = useStaff();
+  const list = useListView(listUser(me), 'restocks', PURCHASE_ORDER);
+  const grouped = list.view === 'grouped';
   const suppliers = useQuery({ queryKey: ['retail', 'suppliers'], queryFn: () => retail.listSuppliers() });
   const page = useInfiniteQuery({
     queryKey: ['retail', 'restocks', from, to, status],
     queryFn: ({ pageParam, signal }) => retail.listPurchases({ from, to, ...(status === 'all' ? {} : { status }), ...(pageParam ? { cursor: pageParam } : {}), signal }),
     initialPageParam: '',
     getNextPageParam: (last) => last.next_cursor || undefined,
+    enabled: !grouped,
   });
   const names = new Map((suppliers.data ?? []).map((s) => [s.id, s.name]));
   const items = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
@@ -140,13 +147,23 @@ export function RestocksPage() {
           </select>
         </div>
       </div>
-      {page.isPending && <p className="loading">Loading</p>}
-      <Problem error={page.error} />
-      {page.data && items.length === 0 && <p className="empty-state">No restocks in these dates.</p>}
-      <ul style={{ listStyle: 'none', padding: 0 }} data-tour="restocks-list">
-        {items.map((p) => <RestockCard key={p.id} purchase={p} supplier={names.get(p.supplier_id)} onDone={setMessage} />)}
-      </ul>
-      {page.hasNextPage && <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>{page.isFetchingNextPage ? 'Loading' : 'Show older restocks'}</button>}
+      <ViewSwitch view={list.view} onChange={list.setView} />
+      {grouped && <ListGroupBy chain={list.chain} order={PURCHASE_ORDER} names={PURCHASE_NAMES} onChange={list.setChain} />}
+      {grouped && (
+        <GroupedRestocks
+          view={list} range={{ from, to }} status={status}
+          render={(p) => <RestockCard key={p.id} purchase={p} supplier={names.get(p.supplier_id)} onDone={setMessage} />}
+        />
+      )}
+      {!grouped && page.isPending && <p className="loading">Loading</p>}
+      {!grouped && <Problem error={page.error} />}
+      {!grouped && page.data && items.length === 0 && <p className="empty-state">No restocks in these dates.</p>}
+      {!grouped && (
+        <ul style={{ listStyle: 'none', padding: 0 }} data-tour="restocks-list">
+          {items.map((p) => <RestockCard key={p.id} purchase={p} supplier={names.get(p.supplier_id)} onDone={setMessage} />)}
+        </ul>
+      )}
+      {!grouped && page.hasNextPage && <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>{page.isFetchingNextPage ? 'Loading' : 'Show older restocks'}</button>}
     </Gate>
   );
 }
