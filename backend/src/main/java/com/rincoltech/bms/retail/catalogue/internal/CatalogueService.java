@@ -32,6 +32,7 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateCategoryR
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdatePackRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateProductRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateUnitRequest;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -307,7 +308,17 @@ class CatalogueService {
 
     @Transactional(readOnly = true)
     Product get(UUID id) {
-        return withPacks(visible(repo.find(id).orElseThrow(ApiException::notFound)));
+        Product p = withPacks(visible(repo.find(id).orElseThrow(ApiException::notFound)));
+        // Issue #342: the stock the caller may read, so the edit screen can warn before an item with stock is switched
+        // off.
+        // The warning follows any non-zero branch, so a positive and a negative balance never cancel to nothing.
+        Principal principal = CurrentPrincipal.require();
+        List<CatalogueRepository.BranchBalance> held = repo.stockBalances(id).stream()
+                .filter(b -> principal.may("retail.stock.read", b.branchId()))
+                .toList();
+        BigDecimal total =
+                held.stream().map(CatalogueRepository.BranchBalance::qty).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return p.withStock(total.setScale(3, java.math.RoundingMode.UNNECESSARY).toPlainString(), held.size());
     }
 
     /** Non-price fields; omitted fields are unchanged. Prices change only through {@link #editPrices}. */

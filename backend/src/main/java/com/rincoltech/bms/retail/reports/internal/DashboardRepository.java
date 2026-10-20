@@ -59,8 +59,8 @@ class DashboardRepository {
 
     /**
      * Stock value above zero per branch (active items) and, per branch, the items out of stock or low by
-     * the stock list's rule: every active item (and any inactive one still holding a quantity) judged on
-     * its balance in that branch, an item with no balance row counting as zero.
+     * the stock list's rule: every active item judged on its balance in that branch (an inactive item, issue
+     * #342, is left out like the list leaves it out), an item with no balance row counting as zero.
      */
     List<Position> positions(List<UUID> branchIds, BigDecimal lowThreshold) {
         if (branchIds != null && branchIds.isEmpty()) {
@@ -82,7 +82,7 @@ class DashboardRepository {
                         + "  CROSS JOIN retail_products p"
                         + "  LEFT JOIN retail_stock_balances b ON b.tenant_id = p.tenant_id AND b.product_id = p.id"
                         + "   AND b.branch_id = br.id"
-                        + " WHERE (p.active OR coalesce(b.qty, 0) <> 0)"
+                        + " WHERE p.active"
                         + "   AND (br.status = 'active' OR EXISTS (SELECT 1 FROM retail_stock_balances h"
                         + "        WHERE h.tenant_id = br.tenant_id AND h.branch_id = br.id AND h.qty <> 0))" + branch
                         + " GROUP BY br.id")
@@ -118,8 +118,8 @@ class DashboardRepository {
                         + "          FROM retail_products p"
                         + "          LEFT JOIN retail_stock_balances b ON b.tenant_id = p.tenant_id AND b.product_id = p.id"
                         + branch
-                        + "         GROUP BY p.id, p.active"
-                        + "        HAVING p.active OR count(*) FILTER (WHERE b.qty <> 0) > 0) t")
+                        + "         WHERE p.active"
+                        + "         GROUP BY p.id) t")
                 .params(params)
                 .query((rs, n) -> new int[] {rs.getInt("out_of_stock"), rs.getInt("low_stock")})
                 .single();

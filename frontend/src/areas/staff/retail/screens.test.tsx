@@ -458,7 +458,7 @@ describe('All branches (#144)', () => {
 
   it('the Stock page with All branches shows the table, not a request to choose a branch', () => {
     const client = new QueryClient();
-    client.setQueryData(['retail', 'stock', 'all-branches', '', '', false, '', false], data);
+    client.setQueryData(['retail', 'stock', 'all-branches', '', '', false, '', false, false], data);
     const html = inAll(<StockPage />, 'admin', client);
     expect(html).toContain('All branches');
     expect(html).toContain('LED bulb 9W screw');

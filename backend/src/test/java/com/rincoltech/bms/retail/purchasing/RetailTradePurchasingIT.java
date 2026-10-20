@@ -1956,4 +1956,32 @@ class RetailTradePurchasingIT extends IntegrationTest {
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);
     }
+
+    /** Marks a product inactive, as the Items screen does (issue #342). */
+    void switchOff(UUID id) {
+        String etag = api.get("/products/" + id, ADMIN).getHeaders().getETag();
+        assertThat(api.call(
+                                HttpMethod.PATCH,
+                                "/products/" + id,
+                                Map.of("active", false),
+                                ADMIN,
+                                "*",
+                                Map.of("If-Match", etag))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    /** ADR-045: goods already on the way are received even if the item was switched off after the order was sent. */
+    @Test
+    void goodsAgainstASentOrderAreReceivedForAnItemSwitchedOffSinceButABlindReceiptIsRefused() {
+        JsonNode order = sent(hq, orderLine(product, "10", 100));
+        UUID id = uuid(order, "id");
+        switchOff(product);
+        JsonNode receipt = received(id, hq, List.of(rline(order(id).get("lines").get(0), "10")));
+        assertThat(receipt.get("id").asString()).isNotEmpty();
+        ResponseEntity<JsonNode> blind = receiveRaw(
+                null, hq, List.of(Map.<String, Object>of("product_id", product, "qty", "1", "cost_minor", 100)));
+        assertThat(blind.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(blind.getBody().toString()).contains("product_inactive");
+    }
 }

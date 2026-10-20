@@ -162,6 +162,14 @@ class TransferService {
                 problems.add(new FieldProblem("lines[" + i + "].product_id", "unknown_product", "No such product."));
                 continue;
             }
+            if (!p.active()) {
+                problems.add(
+                        new FieldProblem(
+                                "lines[" + i + "].product_id",
+                                "product_inactive",
+                                "This item is inactive, so it cannot be moved to another branch. Switch it on again on the Items screen first."));
+                continue;
+            }
             if (!Quantities.exact(l.qty())) {
                 problems.add(new FieldProblem("lines[" + i + "].qty", "invalid", "At most three decimal places."));
                 continue;

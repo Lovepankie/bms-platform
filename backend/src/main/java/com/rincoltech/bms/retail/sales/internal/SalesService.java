@@ -344,7 +344,10 @@ class SalesService {
                 continue;
             }
             if (!p.active()) {
-                problems.add(new FieldProblem(field + ".product_id", "product_inactive", "The product is inactive."));
+                problems.add(new FieldProblem(
+                        field + ".product_id",
+                        "product_inactive",
+                        "This item is inactive, so it cannot be sold. Switch it on again on the Items screen first."));
                 continue;
             }
             if (!p.currency().equals(currency)) {
@@ -517,6 +520,13 @@ class SalesService {
             ProductSnapshot p = catalogue.find(l.productId()).orElse(null);
             if (p == null) {
                 problems.add(new FieldProblem(field + ".product_id", "unknown_product", "No such product."));
+                continue;
+            }
+            if (!p.active()) {
+                problems.add(new FieldProblem(
+                        field + ".product_id",
+                        "product_inactive",
+                        "This item is inactive, so it cannot be sold. Switch it on again on the Items screen first."));
                 continue;
             }
             if (!Quantities.exact(l.qty())) {

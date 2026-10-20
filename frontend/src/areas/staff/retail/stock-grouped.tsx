@@ -15,6 +15,7 @@ export interface StockFilter {
   negativeOnly: boolean;
   level: StockLevel | '';
   includeClosed: boolean;
+  includeInactive: boolean;
 }
 
 const kindFor = (f: StockFilter): TreeKind<StockChainLevel, StockSummaryGroup> => ({
@@ -23,7 +24,7 @@ const kindFor = (f: StockFilter): TreeKind<StockChainLevel, StockSummaryGroup> =
   fetch: (level, chain, sel, page, signal) =>
     retail.stockSummary({
       level, chain, signal, branchId: sel.branchId, categoryId: sel.categoryId ?? (f.categoryId || undefined), query: f.query, negativeOnly: f.negativeOnly,
-      stockLevel: f.level || undefined, includeClosed: f.includeClosed, offset: page.offset,
+      stockLevel: f.level || undefined, includeClosed: f.includeClosed, includeInactive: f.includeInactive, offset: page.offset,
     }),
   title: (_level, g) => g.label ?? g.key ?? '',
   figures: (_level, g) => (

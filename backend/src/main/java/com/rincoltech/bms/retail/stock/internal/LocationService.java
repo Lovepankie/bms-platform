@@ -128,6 +128,8 @@ class LocationService {
                 search,
                 categoryId,
                 negativeOnly,
+                false,
+                true,
                 null,
                 position.rank(),
                 after == null ? null : after.sortKey(),

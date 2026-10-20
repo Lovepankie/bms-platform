@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
@@ -356,5 +357,28 @@ class RetailStockCorrectionIT extends IntegrationTest {
         assertThat(stockAt(hq)).isEqualByComparingTo("9");
         assertThat(correct(hq, "6", "entry_mistake", null).getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(stockAt(hq)).isEqualByComparingTo("6");
+    }
+
+    /** Marks a product inactive, as the Items screen does (issue #342). */
+    void switchOff(UUID id) {
+        String etag = api.get("/products/" + id, ADMIN).getHeaders().getETag();
+        assertThat(api.call(
+                                HttpMethod.PATCH,
+                                "/products/" + id,
+                                Map.of("active", false),
+                                ADMIN,
+                                "*",
+                                Map.of("If-Match", etag))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    /** ADR-045: a quantity correction works for an item switched off, so a forgotten balance can be put right. */
+    @Test
+    void aQuantityOfAnInactiveItemCanStillBeCorrected() {
+        api.stockUp(t.headOffice(), product, "10");
+        switchOff(product);
+        ResponseEntity<JsonNode> r = correct(t.headOffice(), "8", "miscount", null);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.CREATED);
     }
 }

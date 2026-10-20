@@ -209,4 +209,72 @@ class RetailDashboardIT extends IntegrationTest {
                     .isEqualTo(listed);
         }
     }
+
+    /**
+     * Issue #342, ADR-045: an item switched off leaves the dashboard's stock value and its out of stock and low stock counts, as
+     * it leaves the stock list. The item holds 3 at head office and is 2 below zero at branch two, so while it is active it is low
+     * at head office, out and low at branch two, and low over all branches.
+     */
+    @Test
+    void anInactiveItemLeavesTheStockValueAndTheCountsAsItLeavesTheStockList() {
+        UUID off = api.product("ANA-OFF", 100, 150);
+        api.stockUp(t.headOffice(), off, "3");
+        api.importedBalance(t.secondBranch(), off, "-2");
+        JsonNode before = dashboard(ADMIN);
+
+        String etag = api.get("/products/" + off, ADMIN).getHeaders().getETag();
+        assertThat(api.call(
+                                HttpMethod.PATCH,
+                                "/products/" + off,
+                                Map.of("active", false),
+                                ADMIN,
+                                "*",
+                                Map.of("If-Match", etag))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        JsonNode after = dashboard(ADMIN);
+
+        // The value: 3 at head office at 150 each, nothing from the negative balance.
+        assertThat(after.get("stock").get("value_at_price_minor").asLong())
+                .isEqualTo(before.get("stock").get("value_at_price_minor").asLong() - 450);
+        assertThat(after.get("stock").get("value_at_cost_minor").asLong())
+                .isEqualTo(before.get("stock").get("value_at_cost_minor").asLong() - 300);
+        // All branches: total 1, low but not out.
+        assertThat(after.get("stock").get("out_of_stock").asInt())
+                .isEqualTo(before.get("stock").get("out_of_stock").asInt());
+        assertThat(after.get("stock").get("low_stock").asInt())
+                .isEqualTo(before.get("stock").get("low_stock").asInt() - 1);
+        // One branch each (the positions).
+        JsonNode hqBefore = shop(before, t.headOffice());
+        JsonNode hqAfter = shop(after, t.headOffice());
+        assertThat(hqAfter.get("out_of_stock").asInt())
+                .isEqualTo(hqBefore.get("out_of_stock").asInt());
+        assertThat(hqAfter.get("low_stock").asInt())
+                .isEqualTo(hqBefore.get("low_stock").asInt() - 1);
+        assertThat(hqAfter.get("stock_at_price_minor").asLong())
+                .isEqualTo(hqBefore.get("stock_at_price_minor").asLong() - 450);
+        JsonNode b2Before = shop(before, t.secondBranch());
+        JsonNode b2After = shop(after, t.secondBranch());
+        assertThat(b2After.get("out_of_stock").asInt())
+                .isEqualTo(b2Before.get("out_of_stock").asInt() - 1);
+        assertThat(b2After.get("low_stock").asInt())
+                .isEqualTo(b2Before.get("low_stock").asInt() - 1);
+
+        // The same figures as the stock list the counts follow.
+        assertThat(api.get("/stock?branch_id=" + t.headOffice() + "&stock_level=low", ADMIN)
+                        .getBody()
+                        .get("items")
+                        .size())
+                .isEqualTo(hqAfter.get("low_stock").asInt());
+        assertThat(api.get("/stock?branch_id=" + t.secondBranch() + "&stock_level=out", ADMIN)
+                        .getBody()
+                        .get("items")
+                        .size())
+                .isEqualTo(b2After.get("out_of_stock").asInt());
+        assertThat(api.get("/stock/all-branches?stock_level=low", ADMIN)
+                        .getBody()
+                        .get("items")
+                        .size())
+                .isEqualTo(after.get("stock").get("low_stock").asInt());
+    }
 }

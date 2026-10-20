@@ -108,6 +108,7 @@ class StockService {
             boolean negativeOnly,
             String level,
             boolean includeClosed,
+            boolean includeInactive,
             Integer limit,
             String cursor) {
         Long atMost = atMostOf(level);
@@ -134,6 +135,8 @@ class StockService {
                 search,
                 categoryId,
                 negativeOnly,
+                includeInactive,
+                false,
                 atMost,
                 position.rank(),
                 after == null ? null : after.sortKey(),
@@ -183,6 +186,7 @@ class StockService {
             UUID categoryId,
             boolean negativeOnly,
             String level,
+            boolean includeInactive,
             Integer limit,
             String cursor) {
         Long atMost = atMostOf(level);
@@ -196,6 +200,7 @@ class StockService {
                 search,
                 categoryId,
                 negativeOnly,
+                includeInactive,
                 atMost,
                 position.rank(),
                 after == null ? null : after.sortKey(),

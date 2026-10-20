@@ -353,7 +353,12 @@ export function createMockRetail(): RetailApi {
       return delay({ items: wanted.slice(start, start + 50).map(asProduct), ...(start + 50 < wanted.length ? { next_cursor: String(start + 50) } : {}) });
     },
 
-    getProduct: (id) => run(() => asProduct(find(id))),
+    // Issue #342: the one-product read also reports the stock on hand and in how many branches it is not zero.
+    getProduct: (id) =>
+      run(() => {
+        const held = MOCK_BRANCHES.map((b) => bal(b.id, id)).filter((m) => m !== 0);
+        return { ...asProduct(find(id)), stock_on_hand: fromMilli(held.reduce((x, y) => x + y, 0)), stock_branches: held.length };
+      }),
 
     similarProducts: ({ description, unitId, excludeId }) =>
       run(() => {
@@ -533,10 +538,10 @@ export function createMockRetail(): RetailApi {
         return refreshed(u, 'unit') as Unit;
       }),
 
-    listStockAllBranches: ({ query, categoryId: category, negativeOnly, level }) =>
+    listStockAllBranches: ({ query, categoryId: category, negativeOnly, level, includeInactive }) =>
       delay({
         branches: MOCK_BRANCHES.map((b) => ({ id: b.id, code: b.code, name: b.name, head_office: b.is_head_office })),
-        items: [...products.values()].filter((p) => matches(p, query) && (!category || categoryId(p.category) === category)).map((p): AllBranchesRow => {
+        items: [...products.values()].filter((p) => (includeInactive || p.active !== false) && matches(p, query) && (!category || categoryId(p.category) === category)).map((p): AllBranchesRow => {
           const balancesMilli = MOCK_BRANCHES.map((b) => bal(b.id, p.id));
           return cost({
             product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit,
@@ -546,8 +551,8 @@ export function createMockRetail(): RetailApi {
         }).filter((r) => (!negativeOnly || r.negative) && atLevel(Number(r.total_qty), level)),
       }),
 
-    listStock: ({ branchId, query, categoryId: category, negativeOnly, level }) =>
-      delay([...products.values()].filter((p) => matches(p, query) && (!category || categoryId(p.category) === category)).map((p): StockRow => {
+    listStock: ({ branchId, query, categoryId: category, negativeOnly, level, includeInactive }) =>
+      delay([...products.values()].filter((p) => (includeInactive || p.active !== false) && matches(p, query) && (!category || categoryId(p.category) === category)).map((p): StockRow => {
         const milli = bal(branchId, p.id);
         return cost({ product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor }, { cost_minor: p.costMinor });
       }).filter((r) => (!negativeOnly || r.negative) && atLevel(Number(r.qty), level))),

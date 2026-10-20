@@ -62,9 +62,10 @@ class StockController {
             @RequestParam(name = "category_id", required = false) UUID categoryId,
             @RequestParam(name = "negative_only", required = false, defaultValue = "false") boolean negativeOnly,
             @RequestParam(name = "stock_level", required = false) String level,
+            @RequestParam(name = "include_inactive", required = false, defaultValue = "false") boolean includeInactive,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.stock(branchId, query, categoryId, negativeOnly, level, limit, cursor);
+        return service.stock(branchId, query, categoryId, negativeOnly, level, includeInactive, limit, cursor);
     }
 
     @GetMapping("/stock/all-branches")
@@ -79,9 +80,11 @@ class StockController {
             @RequestParam(name = "negative_only", required = false, defaultValue = "false") boolean negativeOnly,
             @RequestParam(name = "stock_level", required = false) String level,
             @RequestParam(name = "include_closed", required = false, defaultValue = "false") boolean includeClosed,
+            @RequestParam(name = "include_inactive", required = false, defaultValue = "false") boolean includeInactive,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.allBranches(query, categoryId, negativeOnly, level, includeClosed, limit, cursor);
+        return service.allBranches(
+                query, categoryId, negativeOnly, level, includeClosed, includeInactive, limit, cursor);
     }
 
     // JUSTIFICATION-A3: a new read route is one handler; the grouped query lives in its own service (issue #350).
@@ -99,9 +102,19 @@ class StockController {
             @RequestParam(name = "negative_only", required = false, defaultValue = "false") boolean negativeOnly,
             @RequestParam(name = "stock_level", required = false) String stockLevel,
             @RequestParam(name = "include_closed", required = false, defaultValue = "false") boolean includeClosed,
+            @RequestParam(name = "include_inactive", required = false, defaultValue = "false") boolean includeInactive,
             @RequestParam(name = "offset", required = false) Integer offset) {
         return summaries.summary(new StockSummaryService.Query(
-                groupBy, level, branchIds, query, categoryId, negativeOnly, stockLevel, includeClosed, offset));
+                groupBy,
+                level,
+                branchIds,
+                query,
+                categoryId,
+                negativeOnly,
+                stockLevel,
+                includeClosed,
+                includeInactive,
+                offset));
     }
 
     @GetMapping("/stock/movements")

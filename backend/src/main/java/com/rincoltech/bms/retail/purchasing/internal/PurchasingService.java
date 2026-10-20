@@ -213,6 +213,14 @@ class PurchasingService {
                 problems.add(new FieldProblem(field + ".product_id", "unknown_product", "No such product."));
                 continue;
             }
+            if (!p.active()) {
+                problems.add(
+                        new FieldProblem(
+                                field + ".product_id",
+                                "product_inactive",
+                                "This item is inactive, so it cannot be restocked. Switch it on again on the Items screen first."));
+                continue;
+            }
             if (l.unitId() != null && !l.unitId().equals(p.unitId())) {
                 if (!capabilities.enabled(RetailCapabilities.UNITS)) {
                     problems.add(new FieldProblem(

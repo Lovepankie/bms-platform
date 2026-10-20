@@ -58,12 +58,22 @@ export function StocktakeReview({ stocktake, onCommit, committing }: { stocktake
   );
 }
 
+/**
+ * The count sheet lists the active items and every inactive item that still holds stock (issue #342): a shelf is counted
+ * whatever the catalogue says, so a held quantity never drops off the sheet and hides a shortage.
+ */
+export async function countableStock(branchId: string, api: Pick<typeof retail, 'listStock'> = retail) {
+  const [active, withInactive] = await Promise.all([api.listStock({ branchId }), api.listStock({ branchId, includeInactive: true })]);
+  const shown = new Set(active.map((r) => r.product_id));
+  return [...active, ...withInactive.filter((r) => !shown.has(r.product_id) && Number(r.qty) !== 0)].sort((x, y) => (x.code ?? '').localeCompare(y.code ?? ''));
+}
+
 function CountSheet({ branchId }: { branchId: string }) {
   const queryClient = useQueryClient();
   const search = useLiveSearch();
   const [counts, setCounts] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Stocktake | null>(null);
-  const stock = useQuery({ queryKey: ['retail', 'stock', branchId, '', false], queryFn: () => retail.listStock({ branchId }) });
+  const stock = useQuery({ queryKey: ['retail', 'stock', branchId, '', false], queryFn: () => countableStock(branchId) });
 
   const entered = Object.entries(counts).filter(([, v]) => v.trim() !== '');
   const bad = entered.some(([, v]) => parseCount(v) === null);

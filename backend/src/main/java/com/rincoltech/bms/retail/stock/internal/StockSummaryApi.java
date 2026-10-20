@@ -22,7 +22,7 @@ final class StockSummaryApi {
             @Schema(description = "The branch or category name")
             String label,
 
-            @Schema(description = "Items listed: active ones and inactive ones that still hold stock")
+            @Schema(description = "Items listed: active ones, and inactive ones only with include_inactive")
             long itemsCount,
 
             @Schema(description = "Items with a balance below zero")

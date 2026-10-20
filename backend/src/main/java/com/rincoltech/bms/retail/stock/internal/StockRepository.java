@@ -40,7 +40,7 @@ class StockRepository {
             Search.Fields.of().names("p.description", "c.name").codes("p.code");
 
     /**
-     * Active products, and inactive ones still holding stock, with the branch balance; ordered by code,
+     * Active products (inactive ones too when {@code includeInactive}, issue #342), with the branch balance; ordered by code,
      * or by match rank and then code when {@code query} is given.
      */
     List<Search.Ranked<StockRow>> stock(
@@ -48,6 +48,7 @@ class StockRepository {
             Search.Query query,
             UUID categoryId,
             boolean negativeOnly,
+            boolean includeInactive,
             Long atMostMilli,
             int afterRank,
             String afterCode,
@@ -61,10 +62,11 @@ class StockRepository {
                   JOIN retail_units u ON u.id = p.unit_id
                   JOIN retail_categories c ON c.id = p.category_id
                   LEFT JOIN retail_stock_balances b ON b.product_id = p.id AND b.branch_id = :branch
-                 WHERE (p.active OR coalesce(b.qty, 0) <> 0)
+                 WHERE (p.active OR :includeInactive)
                 """);
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("branch", branchId);
+        params.put("includeInactive", includeInactive);
         if (match != null) {
             sql.insert("SELECT ".length(), match.rank() + " AS search_rank, ");
             sql.append(" AND ").append(match.where());
@@ -135,13 +137,16 @@ class StockRepository {
 
     /**
      * Products with their quantity summed over {@code branchIds} (the caller's scope; never empty),
-     * ordered by code. An inactive product shows only while it holds a quantity in those branches.
+     * ordered by code. An inactive product is left out unless {@code includeInactive} (issue #342); the stock-by-location
+     * report passes {@code keepHeldInactive} so it still shows an inactive product while it holds a quantity there.
      */
     List<Search.Ranked<ProductTotal>> allBranches(
             List<UUID> branchIds,
             Search.Query query,
             UUID categoryId,
             boolean negativeOnly,
+            boolean includeInactive,
+            boolean keepHeldInactive,
             Long atMostMilli,
             int afterRank,
             String afterCode,
@@ -158,10 +163,12 @@ class StockRepository {
                                     count(*) FILTER (WHERE qty <> 0) AS held
                                FROM retail_stock_balances WHERE branch_id IN (:branchIds)
                               GROUP BY product_id) t ON t.product_id = p.id
-                 WHERE (p.active OR coalesce(t.held, 0) > 0)
+                 WHERE (p.active OR :includeInactive OR (:keepHeld AND coalesce(t.held, 0) > 0))
                 """);
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("branchIds", branchIds);
+        params.put("includeInactive", includeInactive);
+        params.put("keepHeld", keepHeldInactive);
         if (match != null) {
             sql.insert("SELECT ".length(), match.rank() + " AS search_rank, ");
             sql.append(" AND ").append(match.where());

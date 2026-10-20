@@ -825,4 +825,30 @@ class RetailTwoStepTransfersIT extends IntegrationTest {
         assertThat(api.get("/reports/transfers-in-flight", "retail.sale.read").getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
     }
+
+    /** Marks a product inactive, as the Items screen does (issue #342). */
+    void switchOff(UUID id) {
+        String etag = api.get("/products/" + id, ADMIN).getHeaders().getETag();
+        assertThat(api.call(
+                                HttpMethod.PATCH,
+                                "/products/" + id,
+                                Map.of("active", false),
+                                ADMIN,
+                                "*",
+                                Map.of("If-Match", etag))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    /** ADR-045: a transfer already on the road is received even if the item was switched off after it was sent. */
+    @Test
+    void anInTransitTransferOfAnItemSwitchedOffIsStillReceived() {
+        switchOn();
+        api.stockUp(t.headOffice(), product, "10");
+        UUID id = dispatched("4");
+        switchOff(product);
+        ResponseEntity<JsonNode> r = receiveAll(id);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(qty(t.secondBranch(), product)).isEqualTo("4.000");
+    }
 }

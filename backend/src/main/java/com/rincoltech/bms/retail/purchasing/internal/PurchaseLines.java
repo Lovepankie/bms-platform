@@ -65,12 +65,35 @@ class PurchaseLines {
     /** A document number and the sequence it came from. */
     record Numbered(String no, long seq) {}
 
-    /** Null when a problem was added. */
+    /** Null when a problem was added. An inactive product is refused (issue #342). */
     Planned plan(
             String field, UUID productId, UUID unitId, BigDecimal qty, long enteredCost, List<FieldProblem> problems) {
+        return plan(field, productId, unitId, qty, enteredCost, problems, false);
+    }
+
+    /**
+     * Null when a problem was added. {@code allowInactive} is true for goods received against a sent order line: the
+     * goods are already on the way, so an item switched off since the order was sent is still received (ADR-045).
+     */
+    Planned plan(
+            String field,
+            UUID productId,
+            UUID unitId,
+            BigDecimal qty,
+            long enteredCost,
+            List<FieldProblem> problems,
+            boolean allowInactive) {
         ProductSnapshot p = catalogue.find(productId).orElse(null);
         if (p == null) {
             problems.add(new FieldProblem(field + ".product_id", "unknown_product", "No such product."));
+            return null;
+        }
+        if (!p.active() && !allowInactive) {
+            problems.add(
+                    new FieldProblem(
+                            field + ".product_id",
+                            "product_inactive",
+                            "This item is inactive, so it cannot be ordered or restocked. Switch it on again on the Items screen first."));
             return null;
         }
         if (!p.currency().equals(tenant.profile().currency())) {

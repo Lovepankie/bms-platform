@@ -495,6 +495,30 @@ class RetailPurchaseVoidIT extends IntegrationTest {
         assertThat(stockAt(hq)).isEqualByComparingTo("3");
     }
 
+    /** Marks a product inactive, as the Items screen does (issue #342). */
+    void switchOff(UUID id) {
+        String etag = api.get("/products/" + id, ADMIN).getHeaders().getETag();
+        assertThat(api.call(
+                                HttpMethod.PATCH,
+                                "/products/" + id,
+                                Map.of("active", false),
+                                ADMIN,
+                                "*",
+                                Map.of("If-Match", etag))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    /** ADR-045: voiding a restock corrects what was entered, so it works for an item switched off since. */
+    @Test
+    void aRestockOfAnItemMadeInactiveCanStillBeVoided() {
+        JsonNode purchase = buy("cash", TODAY, 1_000, 1_500, null, Map.of(hq, "3"));
+        switchOff(product);
+        ResponseEntity<JsonNode> voided =
+                voidIt(UUID.fromString(purchase.get("id").asString()), "Typed the wrong number");
+        assertThat(voided.getStatusCode()).as("%s", voided.getBody()).isEqualTo(HttpStatus.OK);
+    }
+
     @Test
     void voidingTheNewestOfTwoRestocksStillRollsThePricesBackToTheEarlierOne() {
         buy("cash", EARLIER, 1_200, 1_800, null, Map.of(hq, "10"));

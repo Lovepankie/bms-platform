@@ -10134,6 +10134,13 @@ export interface components {
             qty?: string;
             /** Format: int64 */
             sell_minor?: number;
+            /**
+             * Format: int32
+             * @description Issue #342: in how many of the branches the caller may read the balance is not zero (a positive and a negative balance do not cancel); sent only by GET /retail/products/{id}
+             */
+            stock_branches?: number;
+            /** @description Issue #342: the stock of this product summed over the branches the caller may read; sent only by GET /retail/products/{id}, so the edit screen can warn before an item with stock is switched off */
+            stock_on_hand?: string;
             unit?: string;
             /** Format: uuid */
             unit_id?: string;
@@ -11587,7 +11594,7 @@ export interface components {
             cost_minor?: number;
             /**
              * Format: int64
-             * @description Items listed: active ones and inactive ones that still hold stock
+             * @description Items listed: active ones, and inactive ones only with include_inactive
              */
             items_count?: number;
             /** @description A branch id or a category id; pass it back as branch_id or category_id */
@@ -21805,6 +21812,7 @@ export interface operations {
                 category_id?: string;
                 negative_only?: boolean;
                 stock_level?: string;
+                include_inactive?: boolean;
                 limit?: number;
                 cursor?: string;
             };
@@ -21833,6 +21841,7 @@ export interface operations {
                 negative_only?: boolean;
                 stock_level?: string;
                 include_closed?: boolean;
+                include_inactive?: boolean;
                 limit?: number;
                 cursor?: string;
             };
@@ -21918,6 +21927,7 @@ export interface operations {
                 negative_only?: boolean;
                 stock_level?: string;
                 include_closed?: boolean;
+                include_inactive?: boolean;
                 offset?: number;
             };
             header?: never;

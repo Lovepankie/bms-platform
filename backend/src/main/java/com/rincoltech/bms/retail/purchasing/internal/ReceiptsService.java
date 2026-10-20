@@ -241,7 +241,7 @@ class ReceiptsService {
                     continue;
                 }
             }
-            Planned p = lines.plan(field, productId, unitId, l.qty(), cost, problems);
+            Planned p = lines.plan(field, productId, unitId, l.qty(), cost, problems, ol != null);
             if (p != null) {
                 items.add(new Item(i, ol, l, p));
             }

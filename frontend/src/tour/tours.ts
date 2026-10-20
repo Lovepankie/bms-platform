@@ -663,9 +663,10 @@ export const loanPage: Tour = {
   ],
 };
 
+// Version 2 adds the inactive items step (issue #342), so whoever finished version 1 sees it once.
 export const cataloguePage: Tour = {
   id: 'page-catalogue',
-  version: 1,
+  version: 2,
   title: 'This page: catalogue',
   audience: (me) => CATALOGUE.some((p) => held(me, p)),
   autoStart: false,
@@ -683,6 +684,14 @@ export const cataloguePage: Tour = {
       optional: true,
       title: 'Items and prices',
       body: 'Add a new item or change a price here. Old prices are kept.',
+    },
+    {
+      id: 'inactive',
+      target: 'catalogue-products',
+      needs: ['retail.catalogue.manage'],
+      optional: true,
+      title: 'Items you stopped selling',
+      body: 'Open an item and tick Inactive. It is never deleted: it leaves the sale, restock and move lists, and its history and reports stay. Show inactive items on the Stock page brings it back into view.',
     },
     {
       id: 'importer',

@@ -1552,4 +1552,28 @@ class RetailReturnsIT extends IntegrationTest {
         }
         assertThat(api.get("/returns", RETURNER).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
+
+    /** Marks a product inactive, as the Items screen does (issue #342). */
+    void switchOff(UUID id) {
+        String etag = api.get("/products/" + id, ADMIN).getHeaders().getETag();
+        assertThat(api.call(
+                                HttpMethod.PATCH,
+                                "/products/" + id,
+                                Map.of("active", false),
+                                ADMIN,
+                                "*",
+                                Map.of("If-Match", etag))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    /** ADR-045: a return corrects a sale already made, so it works for an item switched off since. */
+    @Test
+    void aReturnOfAnItemMadeInactiveAfterTheSaleWorks() {
+        UUID s = cashSale(hq, "5", null);
+        UUID l = lineOf(s, 0);
+        switchOff(product);
+        ResponseEntity<JsonNode> r = ret(s, List.of(line(l, "1", "restock")), "cash");
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.CREATED);
+    }
 }

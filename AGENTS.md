@@ -614,6 +614,8 @@ Accepted (this list is the ADR index):
   not raised; proposed, #296; `deploy/runner/`, `deploy/signer/`)
 - ADR-044 Entry mistakes are corrected inside the app: one product name per unit, a restock voided by reversal and entered
   again, a quantity corrected as an adjustment that no report counts as shrinkage (proposed, #351 and #352)
+- ADR-045 A discontinued product is marked inactive, never deleted: refused on sales, restocks and transfers with 422
+  `product_inactive`, left out of the default stock lists (`include_inactive`), its stock shown as a warning (proposed, #342)
 
 - ADR-042 A staff user who forgot the password gets back in with a one-time link, by email or from a tenant admin; the reset
   never touches the second factor or the lock, and the form tells nobody whether an account exists (proposed, #320; FR-IAM-15)

@@ -53,6 +53,7 @@ class StockSummaryService {
             boolean negativeOnly,
             String stockLevel,
             boolean includeClosed,
+            boolean includeInactive,
             Integer offset) {}
 
     @Transactional(readOnly = true)
@@ -89,6 +90,7 @@ class StockSummaryService {
                 Search.parse(q.query()),
                 q.categoryId(),
                 q.negativeOnly(),
+                q.includeInactive(),
                 atMost,
                 offset,
                 BOUND + 1));

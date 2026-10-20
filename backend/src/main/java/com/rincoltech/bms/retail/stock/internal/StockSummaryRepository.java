@@ -34,6 +34,7 @@ class StockSummaryRepository {
             Search.Query query,
             UUID categoryId,
             boolean negativeOnly,
+            boolean includeInactive,
             Long atMostMilli,
             int offset,
             int limit) {}
@@ -54,9 +55,10 @@ class StockSummaryRepository {
                         : " 0 AS cost_minor");
         sql.append(" FROM branches br CROSS JOIN retail_products p JOIN retail_categories c ON c.id = p.category_id");
         sql.append(" LEFT JOIN retail_stock_balances b ON b.branch_id = br.id AND b.product_id = p.id");
-        sql.append(" WHERE br.id IN (:branchIds) AND (p.active OR coalesce(b.qty, 0) <> 0)");
+        sql.append(" WHERE br.id IN (:branchIds) AND (p.active OR :includeInactive)");
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("branchIds", spec.branchIds());
+        params.put("includeInactive", spec.includeInactive());
         Search.Match match = spec.query() == null ? null : spec.query().match(StockRepository.SEARCH);
         if (match != null) {
             sql.append(" AND ").append(match.where());

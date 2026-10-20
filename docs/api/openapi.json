@@ -10356,6 +10356,15 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "stock_branches" : {
+            "description" : "Issue #342: in how many of the branches the caller may read the balance is not zero (a positive and a negative balance do not cancel); sent only by GET /retail/products/{id}",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "stock_on_hand" : {
+            "description" : "Issue #342: the stock of this product summed over the branches the caller may read; sent only by GET /retail/products/{id}, so the edit screen can warn before an item with stock is switched off",
+            "type" : "string"
+          },
           "unit" : {
             "type" : "string"
           },
@@ -13184,7 +13193,7 @@
             "type" : "integer"
           },
           "items_count" : {
-            "description" : "Items listed: active ones and inactive ones that still hold stock",
+            "description" : "Items listed: active ones, and inactive ones only with include_inactive",
             "format" : "int64",
             "type" : "integer"
           },
@@ -30325,6 +30334,14 @@
           }
         }, {
           "in" : "query",
+          "name" : "include_inactive",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
           "name" : "limit",
           "required" : false,
           "schema" : {
@@ -30391,6 +30408,14 @@
         }, {
           "in" : "query",
           "name" : "include_closed",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "include_inactive",
           "required" : false,
           "schema" : {
             "default" : false,
@@ -30604,6 +30629,14 @@
         }, {
           "in" : "query",
           "name" : "include_closed",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "include_inactive",
           "required" : false,
           "schema" : {
             "default" : false,
