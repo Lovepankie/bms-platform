@@ -172,16 +172,69 @@ describe('a quantity that moved meanwhile', () => {
     expect(reason().value).toBe('miscount');
   });
 
-  it('says so in plain words when the shelf moved, and the next try uses the new quantity and a new key', async () => {
+  it('says so in plain words when the shelf moved, and the retry is typed against the new quantity with a new key', async () => {
     correctStock.mockRejectedValueOnce(refusal('stock_moved', 'The quantity changed while you were typing: it is 8 roll now, not 10. Look at the list again and type the right quantity.'));
-    screenOf(admin, <CorrectItem row={row} branchId={branch} onClose={() => undefined} />);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const tree = (rowQty: string) => (
+      <QueryClientProvider client={client}>
+        <StaffContext.Provider value={{ me: admin, branch }}>
+          <CorrectItem row={{ ...row, qty: rowQty }} branchId={branch} onClose={() => undefined} />
+        </StaffContext.Provider>
+      </QueryClientProvider>
+    );
+    const view = render(tree('10.000'));
     open('The quantity is wrong');
     fireEvent.change(qty(), { target: { value: '6' } });
     fireEvent.change(reason(), { target: { value: 'entry_mistake' } });
     fireEvent.click(save());
     expect((await screen.findByRole('alert')).textContent).toContain('The quantity changed while you were typing');
-    await waitFor(() => expect(qty().value).toBe('10'));
+    expect(correctStock.mock.calls[0]?.[0]).toMatchObject({ expected_qty: '10.000' });
+    // The list is read again and now says 8: the form starts again from it.
+    view.rerender(tree('8.000'));
+    await waitFor(() => expect(qty().value).toBe('8'));
     expect(reason().value).toBe('');
+    expect(screen.getByText(/In stock now/).textContent).toContain('8 roll');
+    correctStock.mockResolvedValueOnce({ id: 'c3', old_qty: '8.000', new_qty: '6.000' });
+    fireEvent.change(qty(), { target: { value: '6' } });
+    fireEvent.change(reason(), { target: { value: 'entry_mistake' } });
+    fireEvent.click(save());
+    await waitFor(() => expect(correctStock).toHaveBeenCalledTimes(2));
+    expect(correctStock.mock.calls[1]?.[0]).toMatchObject({ expected_qty: '8.000', new_qty: '6.000' });
+    expect(correctStock.mock.calls[1]?.[1]).not.toBe(correctStock.mock.calls[0]?.[1]);
+  });
+});
+
+describe('a 409 after the list already moved', () => {
+  it('restarts from the list quantity and the retry sends it with a new key', async () => {
+    correctStock.mockRejectedValueOnce(refusal('stock_moved', 'The quantity changed while you were typing: it is 8 roll now.'));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const tree = (q: string) => (
+      <QueryClientProvider client={client}>
+        <StaffContext.Provider value={{ me: admin, branch }}>
+          <CorrectItem row={{ ...row, qty: q }} branchId={branch} onClose={() => undefined} />
+        </StaffContext.Provider>
+      </QueryClientProvider>
+    );
+    const view = render(tree('10.000'));
+    open('The quantity is wrong');
+    fireEvent.change(qty(), { target: { value: '6' } });
+    fireEvent.change(reason(), { target: { value: 'miscount' } });
+    view.rerender(tree('8.000'));
+    await waitFor(() => expect(qty().value).toBe('8'));
+    expect(screen.getByRole('status').textContent).toContain('changed to 8');
+    fireEvent.change(reason(), { target: { value: 'miscount' } });
+    fireEvent.change(qty(), { target: { value: '5' } });
+    fireEvent.click(save());
+    await screen.findByRole('alert');
+    expect(correctStock.mock.calls[0]?.[0]).toMatchObject({ expected_qty: '8.000' });
+    expect(qty().value).toBe('8');
+    correctStock.mockResolvedValueOnce({ id: 'c4', old_qty: '8.000', new_qty: '5.000' });
+    fireEvent.change(qty(), { target: { value: '5' } });
+    fireEvent.change(reason(), { target: { value: 'miscount' } });
+    fireEvent.click(save());
+    await waitFor(() => expect(correctStock).toHaveBeenCalledTimes(2));
+    expect(correctStock.mock.calls[1]?.[0]).toMatchObject({ expected_qty: '8.000' });
+    expect(correctStock.mock.calls[1]?.[1]).not.toBe(correctStock.mock.calls[0]?.[1]);
   });
 });
 

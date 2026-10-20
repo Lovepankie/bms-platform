@@ -494,4 +494,19 @@ class RetailPurchaseVoidIT extends IntegrationTest {
         assertThat(code(refused)).isEqualTo("branch_not_stocking");
         assertThat(stockAt(hq)).isEqualByComparingTo("3");
     }
+
+    @Test
+    void voidingTheNewestOfTwoRestocksStillRollsThePricesBackToTheEarlierOne() {
+        buy("cash", EARLIER, 1_200, 1_800, null, Map.of(hq, "10"));
+        UUID newest = UUID.fromString(buy("cash", TODAY, 1_300, 1_900, null, Map.of(hq, "5"))
+                .get("id")
+                .asString());
+        assertThat(product().get("cost_minor").asLong()).isEqualTo(1_300);
+        assertThat(product().get("sell_minor").asLong()).isEqualTo(1_900);
+        assertThat(voidIt(newest, "Entered the wrong price").getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode p = product();
+        assertThat(p.get("cost_minor").asLong()).isEqualTo(1_200);
+        assertThat(p.get("sell_minor").asLong()).isEqualTo(1_800);
+        assertThat(stockAt(hq)).isEqualByComparingTo("10");
+    }
 }

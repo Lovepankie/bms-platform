@@ -30,11 +30,20 @@ function QuantityForm({ row, branchId, onDone }: { row: StockRow; branchId: stri
     `stock-correct:${me.user_id ?? ''}:${branchId}:${row.product_id ?? ''}`,
     { qty: showQty(current), reason: '', note: '', expected: current },
   );
-  // A draft kept from an earlier opening was typed against another quantity: start again from the one on the list now.
+  // A draft typed against another quantity (kept from an earlier opening, or the shelf moved and the list was read again) starts
+  // again from the quantity on the list now, with a new key: the quantity sent as expected is always the one on the list.
+  const [restarted, setRestarted] = useState<string | null>(null);
+  // Starts the form again from the quantity on the list: a new key, nothing typed, expected is the list's quantity.
+  const restart = (touched: boolean) => {
+    discard();
+    setDraft({ qty: showQty(current), reason: '', note: '', expected: current });
+    setRestarted(touched ? current : null);
+  };
   useEffect(() => {
-    if (draft.expected !== current) discard();
+    if (draft.expected === current) return;
+    restart(draft.reason !== '' || draft.note !== '' || draft.qty !== showQty(draft.expected));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [current]);
   const problem = quantityProblem(draft.qty, current);
   const ready = problem === null && draft.reason !== '';
   // A second press before the first request has started must not send another one: the ref answers at once.
@@ -50,7 +59,7 @@ function QuantityForm({ row, branchId, onDone }: { row: StockRow; branchId: stri
       // The shelf moved while the form was open: read the list again, and type against the new quantity with a new key.
       if (error instanceof RetailError && ['stock_moved', 'stocktake_in_progress'].includes(error.code ?? '')) {
         void queryClient.invalidateQueries({ queryKey: ['retail'] });
-        if (error.code === 'stock_moved') discard();
+        if (error.code === 'stock_moved') restart(true);
       }
     },
     onSettled: () => { sending.current = false; },
@@ -64,6 +73,7 @@ function QuantityForm({ row, branchId, onDone }: { row: StockRow; branchId: stri
   return (
     <form className="stack" aria-label="Correct the quantity" onSubmit={(e) => { e.preventDefault(); press(); }}>
       <p>In stock now: <strong>{showQty(current)} {row.unit}</strong>.</p>
+      {restarted !== null && <p role="status" className="hint">The quantity on the list changed to {showQty(restarted)}; type it again.</p>}
       <label htmlFor="correct-qty">Right quantity ({row.unit})</label>
       <input id="correct-qty" inputMode="decimal" value={draft.qty} onChange={(e) => setDraft((d) => ({ ...d, qty: e.target.value }))} aria-invalid={problem !== null && draft.qty !== showQty(current)} autoComplete="off" />
       {difference && <p className="hint" aria-live="polite">{difference}</p>}
