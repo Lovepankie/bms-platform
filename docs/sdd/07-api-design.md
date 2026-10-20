@@ -917,6 +917,19 @@ Built (#53, purchasing, usage and payments):
 | POST | `/retail/sales/{sale_id}/payments` | `retail.sale.create` | **M**. `{amount_minor, method: cash, mobile_money or bank, paid_on?}`; `{payment, sale_paid_minor, sale_balance_minor}`; 422 `payment_exceeds_balance`, `sale_not_payable`. FR-RET-05. UI (issue #326): **Record payment** and **Mark as fully paid** on a live credit sale that still owes, from the Credit sales list, the All sales list and the opened sale, one `Idempotency-Key` per form. An imported sale offers neither, but only the UI enforces that for now: this route does not check `historical` (unlike the account payment route, `sale_historical`), so a backend rule is still to be written (`docs/specs/retail-ui-notes.md`, Sale actions) |
 | GET | `/retail/sales/{sale_id}/payments` | `retail.sale.read` | |
 
+**UI notes: amount received and change to give (issue #346, FR-RET-04).** The sale form's cash tender is PWA only: no
+migration, no API change, no new permission (whoever may record a sale, `retail.sale.create`, sees it). For a sale paid in cash the
+form shows Amount received (whole shillings, numeric keyboard, commas and spaces allowed), the quick buttons 1,000, 2,000, 5,000, 10,000,
+20,000 and 50,000 and Exact, and Change to give in large figures once the amount covers the total. Nothing is shown for mobile money,
+bank or credit, and the form has no reference field for mobile money or bank today, so none was added. An empty field is allowed (no
+change was asked for); an amount below the total is refused in plain words ("Enter at least the total, UGX 15,500.") because the
+backend has no part payment on a cash sale (a part payment is a credit sale or `POST /retail/sales/{sale_id}/payments`); a negative, a
+decimal, a non-number and an amount above UGX 100 billion are refused with their own words. The change is display only: the amount
+received is not in the `POST /retail/sales` body, not in the saved draft and not stored anywhere; the sale is recorded at its total, the
+daily cash summary counts that total, and the receipt shows "Received" and "Change given" from the form's own state, which is gone after
+the next sale or a reload. Double-submit protection is unchanged (one `Idempotency-Key` per draft). The tours `retail-sales` (version 6)
+and `admin-welcome` (version 9) have a Cash and change step. Notes: `docs/specs/retail-ui-notes.md` (Amount received and change).
+
 Built (#54, reports):
 
 | Method | Path | Permission | Notes |

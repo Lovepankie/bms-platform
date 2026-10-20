@@ -16,6 +16,8 @@ import type { BranchRole } from '../../../api/retail';
 import { BRANCH_ROLES, CREDIT_OVERRIDE, CUSTOMER_ACCOUNTS, PRICELIST_MANAGE, PRICELIST_USE, PRICE_LISTS, PRICE_OVERRIDE, UNITS, branchesWhere, capabilityOn, holds, holdsAt, needsOf, sellingBranches } from './permissions';
 import { exceededBy, isLimitRefusal, limitWords, termsWords } from './account-state';
 import { SaleDocuments } from './documents-ui';
+import { ChangePanel, ReceiptChange } from './sale-change';
+import { receivedFor, receivedProblem } from './sale-change-state';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -39,7 +41,7 @@ function useSettled<T>(value: T): T {
   return settled;
 }
 
-export function Receipt({ sale, onNew }: { sale: Sale; onNew?: () => void }) {
+export function Receipt({ sale, onNew, received }: { sale: Sale; onNew?: () => void; /** Cash the customer gave, for the change line; display only. */ received?: number }) {
   const canProfit = useProfitAccess();
   return (
     <section aria-label="Sale receipt">
@@ -72,6 +74,7 @@ export function Receipt({ sale, onNew }: { sale: Sale; onNew?: () => void }) {
         </tbody>
       </table></div>
       <p className="rt-total">Total {money(sale.total_minor ?? 0)}</p>
+      <ReceiptChange sale={sale} received={received} />
       {(sale.balance_minor ?? 0) > 0 && (
         <p>
           Still to pay: <strong>{money(sale.balance_minor ?? 0)}</strong>
@@ -160,13 +163,15 @@ export function SaleLineCard({ line, index, unitsOn, price, onQty, onPrice, onUn
   );
 }
 
-export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (sale: Sale) => void }) {
+export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (sale: Sale, received?: number) => void }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
   const { key, draft, setDraft, finish, discard } = usePersistedDraft<Draft>(`sale:${me.user_id ?? ''}:${branchId}`, {
     branchId, method: 'cash', customerId: '', newBuyerName: '', newBuyerContact: '', dueDate: '', lines: [],
   });
   const [addingBuyer, setAddingBuyer] = useState(draft.newBuyerName !== '');
+  // What the customer handed over (cash only): kept in this form's state, never in the draft, so it goes with the form (#346).
+  const [received, setReceived] = useState('');
 
   const pricesOn = capabilityOn(me, 'retail', PRICE_LISTS);
   const customers = useQuery({ queryKey: ['retail', 'customers'], queryFn: () => retail.listCustomers(), enabled: draft.method === 'credit' || pricesOn });
@@ -197,7 +202,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail', 'products'] });
       void queryClient.invalidateQueries({ queryKey: ['retail', 'stock'] });
-      onSaved?.(sale);
+      onSaved?.(sale, receivedFor(draft.method, sale.total_minor ?? 0, received));
     },
   });
 
@@ -219,8 +224,8 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
   const add = (p: Product) =>
     setDraft((d) => (d.lines.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0) ? d : { ...d, lines: [...d.lines, newLine(p)] }));
 
-  const problem = draftProblem(shown, pricing, accounts);
   const total = draftTotal(shown.lines);
+  const problem = draftProblem(shown, pricing, accounts) ?? receivedProblem(draft.method, total, received);
   // A credit sale refused for the buyer's limit: say by how much, and offer the override to whoever holds it.
   const overBy = accountsOn && draft.method === 'credit' ? exceededBy(save.error) : null;
   const canOverride = holdsAt(me, CREDIT_OVERRIDE, branchId);
@@ -343,6 +348,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
       <p className="rt-total" aria-live="polite">
         Total {money(total)}
       </p>
+      <ChangePanel method={draft.method} total={total} text={received} onText={setReceived} />
       {problem && draft.lines.length > 0 && <Note>{problem}</Note>}
       {overBy !== null && (
         <div role="alert" className="alert alert-danger" data-testid="limit-refusal">
@@ -365,7 +371,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
         {save.isPending ? 'Saving' : 'Save sale'}
       </button>
       {draft.lines.length > 0 && !save.isPending && (
-        <button type="button" onClick={() => { discard(); setAddingBuyer(false); save.reset(); }}>
+        <button type="button" onClick={() => { discard(); setAddingBuyer(false); setReceived(''); save.reset(); }}>
           Clear this sale
         </button>
       )}
@@ -406,6 +412,7 @@ export function RecordSale() {
   // With branch roles on, the sale form waits for the roles, so it is never drawn at a store while they load.
   const waiting = capabilityOn(me, 'retail', BRANCH_ROLES) && (me.permissions ?? []).includes('retail.stock.read') && roles === undefined;
   const [sale, setSale] = useState<Sale | null>(null);
+  const [received, setReceived] = useState<number>();
   const [round, setRound] = useState(0);
   return (
     <Gate screen="sale" title="Record a sale">
@@ -417,14 +424,14 @@ export function RecordSale() {
         <StoreBranch branchName={branchName} roles={roles} />
       ) : sale ? (
         <>
-          <Receipt sale={sale} onNew={() => { setSale(null); setRound((n) => n + 1); }} />
+          <Receipt sale={sale} received={received} onNew={() => { setSale(null); setReceived(undefined); setRound((n) => n + 1); }} />
           {sale.id && <SaleDocuments saleId={sale.id} status={sale.status} branchId={sale.branch_id} />}
         </>
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <NoStockHere branchId={branchId} />
-          <SaleForm key={`${branchId}-${round}`} branchId={branchId} onSaved={setSale} />
+          <SaleForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(s, r) => { setSale(s); setReceived(r); }} />
         </>
       )}
     </Gate>

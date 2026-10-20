@@ -799,3 +799,36 @@ salesperson, day, product category, item, with a summary on every line. The user
   tests were removed.
 - **Tours.** `retail-sales` (version 5) and `admin-welcome` (version 7) get a Group by step on the retail home; the Help pages
   `page-sales` and `page-credit-sales` (version 2) get a Group by step and a line about the breadcrumb.
+
+## Amount received and change to give (issue #346)
+
+For a cash sale the seller types what the customer handed over and the form shows the change to give back, as at a supermarket
+till. Barcode scanning is a separate ticket (#345) and is not part of this. PWA only: no migration, no API change.
+
+- **Where it shows.** Under the Total, in a box called Cash from the customer, only while How is it paid is Cash. Mobile money, bank and
+  credit hide it. The form has no reference field for mobile money or bank today, so none was added; credit is unchanged.
+- **The field.** Amount received (UGX), numeric keyboard, whole shillings. Commas and spaces are allowed ("20,000"). The quick buttons
+  are 1,000, 2,000, 5,000, 10,000, 20,000 and 50,000 (each sets the amount to that note) and Exact (sets it to the total, disabled while
+  the total is 0). Change to give appears in large plain figures (the same style as the Total) once the amount covers the total; Exact
+  shows UGX 0.
+- **What is refused (Save stays off, the reason is in words).** An amount below the total: "Enter at least the total, UGX 15,500." (the
+  backend has no part payment on a cash sale, so there is no "part paid" choice; a part payment is a credit sale or a payment recorded
+  later). A negative: "The amount cannot be negative." A decimal: "Type whole shillings only, for example 20000." Letters or signs:
+  "Type numbers only, for example 20000." More than UGX 100 billion: "That amount is too large. Check the figure." An empty field is allowed:
+  the customer paid the exact amount and no change was asked for, so the quick sale is as fast as before.
+- **Display only.** The sale is saved at its total. The amount received is not sent to the server, not stored in the saved draft
+  (`usePersistedDraft`), and not in any storage; it lives in the form's own state, so a new sale starts empty, Clear this sale empties it and
+  a reload loses it. The daily cash summary keeps counting the sale total, not the cash handed over.
+- **Receipt.** After saving a cash sale where an amount was typed, the receipt adds "Received UGX 20,000. Change given: UGX 4,500". No
+  amount typed, no line. Mobile money, bank and credit receipts are unchanged.
+- **Several items.** The total is the sum of all lines, so the change follows every item added or removed.
+- **Permission and double tap.** Whoever may record a sale (`retail.sale.create`) sees it; nothing new. One request however often
+  Save is pressed, as before.
+- **Mobile first.** One column at 360px; the note buttons wrap and are at least a tap high; the change is the largest figure on the form.
+  Not yet checked on a device.
+- **Files.** `sale-change-state.ts` (reading what was typed, the change, the refusals, the notes), `sale-change.tsx` (`ChangePanel`,
+  `ReceiptChange`), tests `sale-change-state.test.ts` and `sale-change.dom.test.tsx`. `sale.tsx` only keeps the typed text in one
+  `useState`, draws the panel under the Total, adds its refusal to the form's problem and passes the amount to the receipt, so a barcode
+  scanner added to the same form does not collide with it.
+- **Tours.** `retail-sales` (version 6) and `admin-welcome` (version 9) get a Cash and change step on the sale screen (skipped when the
+  customer pays another way); the Help page `page-sale` shows it too.
