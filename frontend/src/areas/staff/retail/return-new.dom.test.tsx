@@ -28,6 +28,32 @@ function Form({ s, onSubmit, back = backOf([]) }: { s: Sale; onSubmit: (form: Re
 const type = (label: RegExp | string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 const save = () => screen.getByRole('button', { name: 'Record the return' }) as HTMLButtonElement;
 
+describe('a sale made at a store (ADR-048)', () => {
+  const shops = [{ id: 'b1', name: 'Test Branch A', code: 'BR1' }, { id: 'b2', name: 'Test Store B', code: 'ST2', sells_goods: false }];
+
+  it('offers only shops to pay the refund from, and no usual branch', () => {
+    const atStore = sale({ branch_id: 'b2' });
+    function StoreForm() {
+      const [form, setForm] = useState<ReturnForm>(blankReturn());
+      return <ReturnFormView sale={atStore} back={backOf([])} form={form} branches={shops} usualIsStore onChange={setForm} onSubmit={() => undefined} />;
+    }
+    render(<StoreForm />);
+    type(/Quantity to return/, '2');
+    const select = screen.getByLabelText(/Pay the money out of the till of/) as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['Choose a branch', 'Test Branch A (BR1)']);
+  });
+
+  it('keeps the usual branch for a sale made at a shop', () => {
+    function ShopForm() {
+      const [form, setForm] = useState<ReturnForm>(blankReturn());
+      return <ReturnFormView sale={sale()} back={backOf([])} form={form} branches={shops} onChange={setForm} onSubmit={() => undefined} />;
+    }
+    render(<ShopForm />);
+    type(/Quantity to return/, '2');
+    expect(screen.queryByLabelText(/Pay the money out of the till of/)).toBeNull();
+  });
+});
+
 describe('taking goods back', () => {
   it('waits for a quantity, shows the credit, and refuses more than was sold', () => {
     render(<Form s={sale()} onSubmit={() => undefined} />);

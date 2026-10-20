@@ -5,6 +5,7 @@ import com.rincoltech.bms.core.tenancy.BranchClosingCheck;
 import com.rincoltech.bms.core.tenancy.BranchClosingCheck.Finding;
 import com.rincoltech.bms.core.tenancy.BranchDeactivationGuard;
 import com.rincoltech.bms.core.tenancy.BranchProvisioning;
+import com.rincoltech.bms.core.tenancy.BranchSellingCheck;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.PlanLimits;
 import com.rincoltech.bms.core.tenancy.internal.BranchController.BranchResponse;
@@ -37,8 +38,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class BranchService implements BranchProvisioning {
 
-    private static final String COLUMNS = "id, code, name, location, is_head_office, status, stocks_goods, closed_at,"
-            + " closed_reason, created_at, updated_at, version";
+    private static final String COLUMNS =
+            "id, code, name, location, is_head_office, status, stocks_goods, sells_goods, closed_at,"
+                    + " closed_reason, created_at, updated_at, version";
     private static final String READ = "core.branches.read";
 
     private final JdbcClient jdbc;
@@ -46,6 +48,7 @@ class BranchService implements BranchProvisioning {
     private final AuditLog audit;
     private final List<BranchDeactivationGuard> guards;
     private final List<BranchClosingCheck> checks;
+    private final List<BranchSellingCheck> sellingChecks;
     private final CurrentTenant tenant;
 
     BranchService(
@@ -54,12 +57,14 @@ class BranchService implements BranchProvisioning {
             AuditLog audit,
             List<BranchDeactivationGuard> guards,
             List<BranchClosingCheck> checks,
+            List<BranchSellingCheck> sellingChecks,
             CurrentTenant tenant) {
         this.jdbc = jdbc;
         this.planLimits = planLimits;
         this.audit = audit;
         this.guards = List.copyOf(guards);
         this.checks = List.copyOf(checks);
+        this.sellingChecks = List.copyOf(sellingChecks);
         this.tenant = tenant;
     }
 
@@ -92,6 +97,7 @@ class BranchService implements BranchProvisioning {
                         b.isHeadOffice(),
                         b.status(),
                         b.stocksGoods(),
+                        b.sellsGoods(),
                         b.closedAt(),
                         b.closedReason(),
                         f.count(),
@@ -124,14 +130,16 @@ class BranchService implements BranchProvisioning {
                     HttpStatus.CONFLICT, "duplicate_branch_code", "Duplicate branch code", "The code is in use.");
         }
         UUID id = UUID.randomUUID();
+        boolean sells = request.sellsGoods() == null || request.sellsGoods();
         jdbc.sql("""
-                        INSERT INTO branches (id, tenant_id, code, name, location)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?)
+                        INSERT INTO branches (id, tenant_id, code, name, location, sells_goods)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?)
                         """)
-                .params(id, request.code(), request.name().trim(), request.location())
+                .params(id, request.code(), request.name().trim(), request.location(), sells)
                 .update();
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("code", request.code());
+        after.put("sells_goods", sells);
         after.put("name", request.name().trim());
         after.put("location", request.location());
         audit.record(AuditLog.Entry.created("core.branch.created", "core.branch", id, id, after));
@@ -145,7 +153,7 @@ class BranchService implements BranchProvisioning {
             throw ApiException.rule(
                     "invalid_branch", "A branch needs a code of 2 to 10 capital letters or digits and a name.");
         }
-        return create(new CreateBranchRequest(code, name, null)).id();
+        return create(new CreateBranchRequest(code, name, null, null)).id();
     }
 
     @Transactional
@@ -158,7 +166,8 @@ class BranchService implements BranchProvisioning {
         // Only a change of the stocking flag takes the explicit row lock that stock writes queue behind (ADR-041); a
         // rename or a
         // new location must not hold up a sale, so it relies on the version check of its own update.
-        boolean flagChange = request.stocksGoods() != null && request.stocksGoods() != seen.stocksGoods();
+        boolean flagChange = (request.stocksGoods() != null && request.stocksGoods() != seen.stocksGoods())
+                || (request.sellsGoods() != null && request.sellsGoods() != seen.sellsGoods());
         BranchResponse before = flagChange ? lockForUpdate(branchId) : seen;
         if (before.version() != expected) {
             throw Versions.conflict(before.version());
@@ -166,14 +175,24 @@ class BranchService implements BranchProvisioning {
         String name = request.name() == null ? before.name() : request.name().trim();
         String location = request.location() == null ? before.location() : request.location();
         boolean stocks = request.stocksGoods() == null ? before.stocksGoods() : request.stocksGoods();
+        boolean sells = request.sellsGoods() == null ? before.sellsGoods() : request.sellsGoods();
+        if (!sells && !stocks) {
+            throw ApiException.rule(
+                    "store_must_stock",
+                    "A Store holds stock, so it cannot also be a branch that keeps no goods. Make it a shop that sells,"
+                            + " or let it keep goods.");
+        }
         if (before.stocksGoods() && !stocks) {
             refuseWhileGoodsRemain(before);
         }
+        if (before.sellsGoods() && !sells) {
+            refuseWhileSalesOpen(before);
+        }
         int changed = jdbc.sql("""
-                        UPDATE branches SET name = ?, location = ?, stocks_goods = ?, updated_at = now(),
+                        UPDATE branches SET name = ?, location = ?, stocks_goods = ?, sells_goods = ?, updated_at = now(),
                                version = version + 1 WHERE id = ? AND version = ?
                         """)
-                .params(name, location, stocks, branchId, before.version())
+                .params(name, location, stocks, sells, branchId, before.version())
                 .update();
         if (changed == 0) {
             throw Versions.conflict(find(branchId).map(BranchResponse::version).orElse(before.version()));
@@ -183,8 +202,8 @@ class BranchService implements BranchProvisioning {
                 "core.branch",
                 branchId,
                 branchId,
-                values(before.name(), before.location(), before.stocksGoods()),
-                values(name, location, stocks)));
+                values(before.name(), before.location(), before.stocksGoods(), before.sellsGoods()),
+                values(name, location, stocks, sells)));
         return find(branchId).orElseThrow();
     }
 
@@ -300,6 +319,25 @@ class BranchService implements BranchProvisioning {
                 facts(findings));
     }
 
+    /** Marking a branch as a Store needs no credit sale of it still owing: its payments are taken at the till that stops selling. */
+    private void refuseWhileSalesOpen(BranchResponse branch) {
+        int open = sellingChecks.stream()
+                .mapToInt(c -> c.openCreditSales(branch.id()))
+                .sum();
+        if (open == 0) {
+            return;
+        }
+        throw new ApiException(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "branch_has_open_credit_sales",
+                "This branch still has credit sales owing",
+                branch.name() + " has " + open + (open == 1 ? " credit sale" : " credit sales")
+                        + " that still owe money, and the payments are taken at this branch. Let the buyers pay, or settle"
+                        + " them, before marking it as a store that does not sell.",
+                List.of(),
+                Map.of("open_credit_sales", open));
+    }
+
     private String describe(BranchResponse branch, List<Finding> findings) {
         String currency = tenant.profile().currency();
         StringBuilder words = new StringBuilder(branch.name());
@@ -373,11 +411,12 @@ class BranchService implements BranchProvisioning {
                 .optional();
     }
 
-    private static Map<String, Object> values(String name, String location, boolean stocksGoods) {
+    private static Map<String, Object> values(String name, String location, boolean stocksGoods, boolean sellsGoods) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("name", name);
         m.put("location", location);
         m.put("stocks_goods", stocksGoods);
+        m.put("sells_goods", sellsGoods);
         return m;
     }
 
@@ -390,6 +429,7 @@ class BranchService implements BranchProvisioning {
                 rs.getBoolean("is_head_office"),
                 rs.getString("status"),
                 rs.getBoolean("stocks_goods"),
+                rs.getBoolean("sells_goods"),
                 instant(rs.getTimestamp("closed_at")),
                 rs.getString("closed_reason"),
                 null,

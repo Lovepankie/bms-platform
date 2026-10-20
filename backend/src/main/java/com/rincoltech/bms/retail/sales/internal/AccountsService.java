@@ -371,6 +371,7 @@ class AccountsService {
         capabilities.require(RetailCapabilities.CUSTOMER_ACCOUNTS);
         Principal principal = CurrentPrincipal.require();
         UUID branch = branches.resolve("retail.sale.create", r.branchId());
+        branches.requireSells(branch, "branch_id");
         // The buyer's row is locked first: payments, and credit sales that check the limit, queue behind each other.
         repo.terms(customerId, true).orElseThrow(ApiException::notFound);
         // One read of the business clock: the day and the moment the payment is entered come from the same instant

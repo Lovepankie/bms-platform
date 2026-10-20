@@ -383,7 +383,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
  * Says plainly that the chosen branch is a store, which never sells (ADR-033), with a button for each
  * branch the user can sell at; or that there is none, and where to go instead.
  */
-export function StoreBranch({ branchName, roles }: { branchName: string; roles: BranchRole[] }) {
+export function StoreBranch({ branchName, roles }: { branchName: string; roles?: BranchRole[] }) {
   const { me, chooseBranch } = useStaff();
   const shops = sellingBranches(branchesWhere(me, 'retail.sale.create'), roles);
   return (
@@ -408,7 +408,10 @@ export function RecordSale() {
   const { me } = useStaff();
   const roles = useBranchRoles(me);
   const { branchId, branchName } = useStockingBranch();
-  const store = branchId !== null && roles !== undefined && roles.some((r) => r.branch_id === branchId && !r.can_sell);
+  // A store by role (ADR-033) or by the branch's own flag (ADR-048): either never sells.
+  const store =
+    branchId !== null &&
+    ((roles !== undefined && roles.some((r) => r.branch_id === branchId && !r.can_sell)) || (me.branches ?? []).some((b) => b.id === branchId && b.sells_goods === false));
   // With branch roles on, the sale form waits for the roles, so it is never drawn at a store while they load.
   const waiting = capabilityOn(me, 'retail', BRANCH_ROLES) && (me.permissions ?? []).includes('retail.stock.read') && roles === undefined;
   const [sale, setSale] = useState<Sale | null>(null);
@@ -420,7 +423,7 @@ export function RecordSale() {
         <BranchRequired permissions={needsOf('sale')} stocking />
       ) : waiting ? (
         <p role="status">Loading</p>
-      ) : store && roles ? (
+      ) : store ? (
         <StoreBranch branchName={branchName} roles={roles} />
       ) : sale ? (
         <>

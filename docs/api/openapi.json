@@ -699,6 +699,10 @@
           "name" : {
             "type" : "string"
           },
+          "sells_goods" : {
+            "description" : "false for a Store: it holds stock and takes transfers but does not sell (ADR-048)",
+            "type" : "boolean"
+          },
           "status" : {
             "description" : "active, or inactive for a closed branch (the owner's word is closed, ADR-041)",
             "type" : "string"
@@ -1076,6 +1080,10 @@
             "maxLength" : 200,
             "minLength" : 0,
             "type" : "string"
+          },
+          "sells_goods" : {
+            "description" : "false creates a Store: it holds stock but does not sell (ADR-048). Omitted means a shop.",
+            "type" : "boolean"
           }
         },
         "required" : [ "code", "name" ]
@@ -4703,6 +4711,10 @@
           },
           "name" : {
             "type" : "string"
+          },
+          "sells_goods" : {
+            "description" : "false for a Store, a branch that holds stock but does not sell: the sale form, the default selling branch and the till skip it; restock, goods receipt, transfer and stock-take forms include it (#366)",
+            "type" : "boolean"
           },
           "stocks_goods" : {
             "description" : "false for a branch that keeps no goods: sale, restock and transfer forms skip it (#329)",
@@ -11794,7 +11806,7 @@
             "type" : "string"
           },
           "refund_branch_id" : {
-            "description" : "The branch whose till pays the money out, inside the caller's retail.sale.return scope; absent means the caller's own branch when their scope is one branch, else the sale's branch. Not used when nothing is paid out in money",
+            "description" : "The branch whose till pays the money out, inside the caller's retail.sale.return scope; absent means the caller's own branch when their scope is one branch, else the sale's branch. When that branch is a store (it has no till) the one shop the caller may sell at pays, else 422 refund_branch_required (several shops to choose from, or none). Not used when nothing is paid out in money",
             "format" : "uuid",
             "type" : "string"
           },
@@ -17203,6 +17215,10 @@
             "maxLength" : 200,
             "minLength" : 1,
             "type" : "string"
+          },
+          "sells_goods" : {
+            "description" : "false marks a Store: it holds stock, receives purchases and takes transfers in and out, but a sale, a payment taken or a refund paid there is refused (422 branch_does_not_sell). A Store must keep goods (422 store_must_stock). Refused with branch_has_open_credit_sales while a credit sale made there still has a balance owing.",
+            "type" : "boolean"
           },
           "stocks_goods" : {
             "description" : "false marks a branch that keeps no goods (a head office): no sales, restocks, transfers or stock adjustments there (422 branch_not_stocking). Refused with branch_still_has_stock while goods or a transfer on its way remain.",

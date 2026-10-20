@@ -95,6 +95,31 @@ public class RetailBranchContext {
         }
     }
 
+    // JUSTIFICATION-A3: the one place every selling path asks "may this branch sell"; it sits beside requireStocks,
+    // whose lock it shares.
+    /**
+     * Refuses a Store, a branch that holds stock but does not sell (issue #366, ADR-048), with 422 {@code branch_does_not_sell}.
+     * Called by every path that makes a sale, takes a payment at a till or pays a refund out of one; never by a restock, a goods
+     * receipt, a transfer or a stock-take, which a Store takes like any branch. The branch row is read under the share lock the
+     * administrator's change waits for, as {@link #requireStocks} does.
+     */
+    public void requireSells(UUID branch, String field) {
+        Branches.Branch found = writing()
+                ? branches.lockBranch(branch).orElse(null)
+                : branches.findActive(branch).orElse(null);
+        if (found != null && !found.sellsGoods()) {
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "branch_does_not_sell",
+                    "This branch does not sell",
+                    found.name()
+                            + " is a store: it holds stock and takes transfers and purchases, but nothing is sold, paid or"
+                            + " refunded there. Choose a shop.",
+                    List.of(new FieldProblem(
+                            field, "branch_does_not_sell", "This branch is a store and does not sell.")));
+        }
+    }
+
     private static void refuseIfNotStocking(Branches.Branch found, String field) {
         if (!found.stocksGoods()) {
             throw new ApiException(

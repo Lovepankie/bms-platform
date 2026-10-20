@@ -154,6 +154,7 @@ class SalesService {
         UUID branch = branches.resolveStocking("retail.sale.create", r.branchId());
         // ADR-033: a store never sells; with branch_roles off every branch acts as both.
         roles.requireMaySell(branch);
+        branches.requireSells(branch, "branch_id");
         LocalDate today = clock.today(tenant.profile().timezone());
         LocalDate saleDate = r.saleDate() == null ? today : r.saleDate();
         List<FieldProblem> problems = new ArrayList<>();
@@ -504,6 +505,7 @@ class SalesService {
         UUID branch = branches.resolveStocking("retail.sale.create", r.branchId());
         // The same refusal as the sale: a store never sells, so it is not priced either (ADR-033).
         roles.requireMaySell(branch);
+        branches.requireSells(branch, "branch_id");
         LocalDate today = clock.today(tenant.profile().timezone());
         LocalDate saleDate = r.saleDate() == null ? today : r.saleDate();
         List<FieldProblem> problems = new ArrayList<>();
@@ -806,6 +808,7 @@ class SalesService {
                 .map(Header::sale)
                 .filter(x -> principal.may("retail.sale.create", x.branchId()))
                 .orElseThrow(ApiException::notFound);
+        branches.requireSells(s.branchId(), "branch_id");
         if (s.writeOff() != null) {
             throw writtenOff("The unpaid part of this sale was written off, so it takes no payment.");
         }

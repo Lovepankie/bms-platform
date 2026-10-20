@@ -129,6 +129,7 @@ class QuotationsService {
         UUID branch = branches.resolve(DocumentsService.ISSUE, r.branchId());
         // A store never sells (ADR-033), so it does not quote either.
         roles.requireMaySell(branch);
+        branches.requireSells(branch, "branch_id");
         LocalDate today = docs.today();
         List<FieldProblem> problems = new ArrayList<>();
         if (r.validUntil().isBefore(today)) {

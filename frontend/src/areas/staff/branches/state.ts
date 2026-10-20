@@ -19,6 +19,9 @@ export const isClosed = (b: Pick<AdminBranch, 'status'>): boolean => b.status ==
 /** A branch that keeps no goods: false only when the server says so, so an older answer reads as keeping goods. */
 export const keepsGoods = (b: { stocks_goods?: boolean }): boolean => b.stocks_goods !== false;
 
+/** A Store (ADR-048): holds stock and takes purchases and transfers, but does not sell. False only when the server says so. */
+export const sellsGoods = (b: { sells_goods?: boolean }): boolean => b.sells_goods !== false;
+
 export const closedCount = (all: AdminBranch[]): number => all.filter(isClosed).length;
 
 /** The branches to list: open ones always, closed ones only when asked for. */
@@ -47,6 +50,7 @@ export function stockValueWords(facts: CloseFacts | undefined): string | null {
 /** The one line under a branch's name: what it is, in the words of the people who run it. */
 export function branchLine(b: AdminBranch): string {
   if (isClosed(b)) return 'Closed. Its sales and stock records are kept for your reports.';
+  if (!sellsGoods(b)) return 'Store: holds stock and takes restocks and transfers in and out. Nothing is sold here. No takings, savings, banking or repayments here; expenses can still be paid.';
   if (!keepsGoods(b)) return 'Keeps no goods: no sales, restocks or stock-takes here, and no goods can be moved in. Cash records still work, and goods left here can be moved out.';
   return b.is_head_office ? 'Head office.' : 'Open.';
 }

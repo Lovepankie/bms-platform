@@ -27,6 +27,8 @@ export class BranchesError extends Error {
 }
 
 const MESSAGES: Record<string, string | undefined> = {
+  branch_has_open_credit_sales: 'Credit sales made at this branch are still owing. Let the buyers pay, or settle them, before marking it as a store.',
+  store_must_stock: 'A store holds stock, so it must keep goods. Switch it back to a shop first.',
   head_office_required: 'The head office cannot be closed. If it keeps no goods, switch off "Keeps goods" instead.',
   branch_has_open_accounts: 'This branch still has open loans, savings or investments. Close or move those first.',
   invalid_status_transition: 'This branch changed while you were looking. Reload the page to see how it is now.',
@@ -97,6 +99,19 @@ export const branches = {
         }),
       ),
       'Could not reopen this branch.',
+    );
+  },
+
+  /** Makes the branch a store (false: holds stock, takes purchases and transfers, does not sell) or a shop again (true). */
+  async setSelling(branch: AdminBranch, sellsGoods: boolean): Promise<AdminBranch> {
+    return unwrap(
+      await sent(
+        api.PATCH('/api/v1/branches/{branch_id}', {
+          params: { path: { branch_id: branch.id ?? '' }, header: { 'If-Match': etag(branch.version) } },
+          body: { sells_goods: sellsGoods },
+        }),
+      ),
+      'Could not change this branch.',
     );
   },
 

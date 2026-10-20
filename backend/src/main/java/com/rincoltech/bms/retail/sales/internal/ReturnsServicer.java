@@ -337,7 +337,10 @@ class ReturnsServicer {
                                 + money + " cannot be paid out. Credit the rest to the account.");
             }
         }
-        UUID payBranch = refundBranch(principal, s, money > 0 ? r.refundBranchId() : null);
+        UUID payBranch = refundBranch(principal, s, money > 0 ? r.refundBranchId() : null, money > 0);
+        if (money > 0) {
+            stockBranches.requireSells(payBranch, "refund_branch_id");
+        }
         return new Plan(
                 s, on, lines, total, cost, account, money, method, choice, payBranch, repo.returnedTotal(saleId));
     }
@@ -347,7 +350,7 @@ class ReturnsServicer {
      * {@code retail.sale.return} scope and active; else their own branch when the scope is exactly one branch; else the sale's
      * branch.
      */
-    private UUID refundBranch(Principal principal, Sale s, UUID requested) {
+    private UUID refundBranch(Principal principal, Sale s, UUID requested, boolean paying) {
         if (requested != null) {
             if (!principal.may(PERMISSION, requested)
                     || branches.findActive(requested).isEmpty()) {
@@ -356,12 +359,39 @@ class ReturnsServicer {
             }
             return requested;
         }
-        return principal
+        UUID usual = principal
                 .scopeOf(PERMISSION)
                 .filter(sc -> !sc.all() && sc.branchIds().size() == 1)
                 .map(sc -> sc.branchIds().iterator().next())
                 .filter(b -> branches.findActive(b).isPresent())
                 .orElse(s.branchId());
+        if (!paying || branches.findActive(usual).filter(b -> !b.sellsGoods()).isEmpty()) {
+            return usual;
+        }
+        // The usual till is a store (ADR-048): the one branch the caller may sell at takes the refund; with none or
+        // several they choose.
+        List<UUID> shops = branches.all().stream()
+                .filter(b -> b.active() && b.sellsGoods() && principal.may(PERMISSION, b.id()))
+                .map(Branches.Branch::id)
+                .toList();
+        if (shops.size() == 1) {
+            return shops.get(0);
+        }
+        if (shops.isEmpty()) {
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "refund_branch_required",
+                    "No shop can pay this out",
+                    "No shop you work at can pay this out; credit the account or ask a shop.",
+                    List.of());
+        }
+        throw new ApiException(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "refund_branch_required",
+                "Choose where the money comes from",
+                "The sale was made at a store, and a store has no till. Choose the shop whose till pays the refund.",
+                List.of(new FieldProblem(
+                        "refund_branch_id", "refund_branch_required", "Choose the shop that pays the refund.")));
     }
 
     /** {@code amount x part / whole}, rounded half up once. */

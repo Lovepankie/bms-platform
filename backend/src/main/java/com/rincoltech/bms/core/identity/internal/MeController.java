@@ -80,12 +80,16 @@ class MeController {
         UserResponse user = users.find(principal.userId()).orElseThrow(AuthFlow::unauthenticated);
         List<MeBranch> workable = branches.all().stream()
                 .filter(b -> b.active() && principal.canSeeBranch(b.id()))
-                .map(b -> new MeBranch(b.id(), b.code(), b.name(), b.headOffice(), b.stocksGoods()))
+                .map(b -> new MeBranch(b.id(), b.code(), b.name(), b.headOffice(), b.stocksGoods(), b.sellsGoods()))
                 .toList();
-        // A branch that keeps goods is the default; a head office that keeps none is the last choice (issue #329).
+        // A branch that keeps goods and sells is the default; a Store (#366) and a head office that keeps none come
+        // later.
         UUID defaultBranch = workable.stream()
-                .filter(b -> b.isHeadOffice() && b.stocksGoods())
+                .filter(b -> b.isHeadOffice() && b.stocksGoods() && b.sellsGoods())
                 .findFirst()
+                .or(() -> workable.stream()
+                        .filter(b -> b.stocksGoods() && b.sellsGoods())
+                        .findFirst())
                 .or(() -> workable.stream().filter(MeBranch::stocksGoods).findFirst())
                 .or(() -> workable.stream().findFirst())
                 .map(MeBranch::id)

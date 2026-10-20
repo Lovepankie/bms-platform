@@ -112,6 +112,7 @@ class SavingsService {
 
     private Savings record(SavingsRequest r) {
         UUID branch = branchContext.resolve(CashbookSupport.SAVINGS_RECORD, r.branchId());
+        branchContext.requireSells(branch, "branch_id");
         LocalDate date = support.businessDate(r.businessDate(), "business_date");
         boolean profit = mayProfit(branch);
         if (r.suggestionToken() == null || r.suggestionToken().isBlank()) {

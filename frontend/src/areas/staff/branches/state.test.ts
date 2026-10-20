@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AdminBranch } from '../../../api/branches';
-import { branchLine, canManageBranches, closedCount, closedOn, isClosed, keepsGoods, showBranches, stockValueWords, visibleBranches } from './state';
+import { branchLine, canManageBranches, closedCount, closedOn, isClosed, keepsGoods, sellsGoods, showBranches, stockValueWords, visibleBranches } from './state';
 
 const open: AdminBranch = { id: 'a', code: 'KLA', name: 'Test Shop', status: 'active' };
 const closed: AdminBranch = { id: 'b', code: 'OLD', name: 'Test Old', status: 'inactive', closed_at: '2026-08-14T10:00:00Z' };
@@ -34,6 +34,13 @@ describe('the Branches rules (#329)', () => {
     expect(closedOn(closed)).toBe('Closed on 14 Aug 2026');
     expect(closedOn(open)).toBeNull();
     expect(closedOn({ ...closed, closed_at: undefined })).toBeNull();
+  });
+
+  it('reads a missing selling flag as a shop and words a store plainly (#366)', () => {
+    const store: AdminBranch = { ...open, sells_goods: false };
+    expect(sellsGoods(open)).toBe(true);
+    expect(sellsGoods(store)).toBe(false);
+    expect(branchLine(store)).toMatch(/^Store: holds stock/);
   });
 
   it('shows the stock value in the business currency, or nothing when unknown', () => {

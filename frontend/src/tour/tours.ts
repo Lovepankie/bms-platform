@@ -847,7 +847,8 @@ export const usersPage: Tour = {
 // The Branches page (issue #329): a page tour for whoever may read branches; closing and reopening need the manage permission.
 export const branchesPage: Tour = {
   id: 'page-branches',
-  version: 1,
+  // Version 2 adds the Store step (issue #366): a branch that holds stock but does not sell.
+  version: 2,
   title: 'This page: branches',
   audience: (me) => held(me, 'core.branches.read'),
   autoStart: false,
@@ -864,6 +865,12 @@ export const branchesPage: Tour = {
       target: 'branches-list',
       title: 'Your branches',
       body: 'Each card is a branch. Tap Close this branch for a shop you no longer use. Tap Mark as keeping no goods for a head office with no stock. Goods left there can still be moved out. Closed branches are hidden. Tick Show closed branches to see them, then tap Reopen to bring one back.',
+    },
+    {
+      id: 'store',
+      target: 'branches-list',
+      title: 'A store holds stock but does not sell',
+      body: 'Tap Mark as a store (does not sell) for a branch that only keeps stock. It still takes restocks and stock moves, but it leaves the sale screen and the till. Tap Sells again to make it a shop.',
     },
   ],
 };

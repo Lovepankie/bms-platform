@@ -82,7 +82,9 @@ final class ReturnsApi {
             @Schema(
                     description =
                             "The branch whose till pays the money out, inside the caller's retail.sale.return scope; absent means the"
-                                    + " caller's own branch when their scope is one branch, else the sale's branch. Not used when nothing is paid out in money")
+                                    + " caller's own branch when their scope is one branch, else the sale's branch. "
+                                    + "When that branch is a store (it has no till) the one shop the caller may sell at pays, else 422 "
+                                    + "refund_branch_required (several shops to choose from, or none). Not used when nothing is paid out in money")
             UUID refundBranchId,
 
             @Size(max = 300) String note) {}

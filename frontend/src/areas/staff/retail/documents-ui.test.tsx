@@ -59,6 +59,14 @@ describe('the pages are closed unless the feature is on', () => {
     expect(quotes).toContain('New quotation');
   });
 
+  it('offers no New quotation at a store, and says why (ADR-048)', () => {
+    const store = on(mockMe('admin'));
+    store.branches = (store.branches ?? []).map((b) => (b.id === branch ? { ...b, sells_goods: false } : b));
+    const quotes = page(store, <QuotationsPage />);
+    expect(quotes).toContain('is a store, and a store does not sell or quote');
+    expect(quotes).not.toContain('New quotation');
+  });
+
   it('offers the tiles only while the feature is on and the permission is held', () => {
     const tiles = (me: ReturnType<typeof mockMe>) => screensFor(me).map((s) => s.screen);
     expect(tiles(mockMe('admin'))).not.toContain('documents');

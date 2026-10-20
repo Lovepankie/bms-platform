@@ -420,7 +420,10 @@ after values. Older logos stay in `documents` (rows are never deleted).
 `status text NOT NULL` [`active`, `inactive`; `inactive` is what the owner calls closed, ADR-041],
 `stocks_goods boolean NOT NULL DEFAULT true` (false: the branch keeps no goods and retail refuses sales, restocks, transfers and
 stock adjustments there), `closed_at timestamptz`, `closed_reason text` (set by closing, cleared by reopening; migration V61,
-issue #329).
+issue #329),
+`sells_goods boolean NOT NULL DEFAULT true` (false: a Store, a branch that holds stock but does not sell; retail refuses a sale, a payment taken and a
+refund paid there with `branch_does_not_sell`), `CHECK (sells_goods OR stocks_goods)` named `branches_store_stocks` (a Store must keep goods; migration
+V65, issue #366, ADR-048).
 `UNIQUE (tenant_id, code)`; partial unique index
 `ON branches (tenant_id) WHERE is_head_office` (exactly one head office). FR-BR-01.
 

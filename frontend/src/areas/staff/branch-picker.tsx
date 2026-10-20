@@ -51,7 +51,7 @@ export function BranchPicker({ me, branch, onChoose }: { me: Me; branch: string 
         {(me.branches ?? []).map((b) => (
           <option key={b.id} value={b.id}>
             {branchLabel(b)}
-            {b.stocks_goods === false ? ' (no stock)' : ''}
+            {b.stocks_goods === false ? ' (no stock)' : b.sells_goods === false ? ' (store)' : ''}
           </option>
         ))}
       </select>

@@ -70,3 +70,21 @@ describe('a branch that keeps no goods (#329)', () => {
     expect(initialBranch({ default_branch_id: 'hq', branches: [noStockHq] }, null, null)).toBe('hq');
   });
 });
+
+describe('a store, a branch that holds stock but does not sell (#366)', () => {
+  const store = { ...HQ, sells_goods: false };
+  const me: MeForBranches = { all_branches: true, default_branch_id: 'hq', branches: [store, ...shops] };
+
+  it('is not where the staff area starts, even when it holds the stock', () => {
+    expect(initialBranch(me, null, null)).toBe('s1');
+    expect(initialBranch(me, null, new Set(['hq', 's2']))).toBe('s2');
+  });
+
+  it('is still kept when this user chose it last, for stock work', () => {
+    expect(initialBranch(me, 'hq', new Set(['s2']))).toBe('hq');
+  });
+
+  it('is the start when it is the only branch', () => {
+    expect(initialBranch({ branches: [store] }, null, null)).toBe('hq');
+  });
+});

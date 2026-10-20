@@ -12,6 +12,8 @@ export interface BranchChoice {
   is_head_office?: boolean;
   /** false for a branch that keeps no goods (a head office): the staff area does not start on it (#329). */
   stocks_goods?: boolean;
+  /** false for a Store, a branch that holds stock but does not sell: the sale form, the till and the default branch skip it (#366). */
+  sells_goods?: boolean;
 }
 
 export interface MeForBranches {
@@ -45,13 +47,15 @@ export function initialBranch(me: MeForBranches, stored: string | null, stocked:
   if (stored === ALL_BRANCHES && me.all_branches) return ALL_BRANCHES;
   if (stored && branches.some((b) => b.id === stored)) return stored;
   if (branches.length === 1) return branches[0]?.id ?? null;
-  // A branch that keeps no goods is a last choice: sales, restocks and stock moves are refused there (#329).
-  const keeping = branches.filter((b) => b.stocks_goods !== false);
+  // A branch that keeps no goods is a last choice: sales, restocks and stock moves are refused there (#329). A Store (#366) holds
+  // stock but does not sell, so the staff area never starts on it while a shop exists.
+  const keeping = branches.filter((b) => b.stocks_goods !== false && b.sells_goods !== false);
   const preferred = branches.find((b) => b.id === me.default_branch_id) ?? branches[0];
-  const fallback = preferred && preferred.stocks_goods === false ? (keeping[0] ?? preferred) : preferred;
+  const unfit = preferred && (preferred.stocks_goods === false || preferred.sells_goods === false);
+  const fallback = unfit ? (keeping[0] ?? preferred) : preferred;
   if (stocked) {
     if (fallback?.id && stocked.has(fallback.id)) return fallback.id;
-    const trading = branches.find((b) => b.id && stocked.has(b.id));
+    const trading = branches.find((b) => b.id && b.sells_goods !== false && stocked.has(b.id)) ?? branches.find((b) => b.id && stocked.has(b.id));
     if (trading) return trading.id ?? null;
     // No branch holds stock yet: still never open on the empty head office when a shop exists.
     if (fallback?.is_head_office) return branches.find((b) => !b.is_head_office)?.id ?? fallback.id ?? null;

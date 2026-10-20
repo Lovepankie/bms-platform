@@ -23,6 +23,16 @@ public interface Branches {
      * @param active false for a closed branch (status {@code inactive}, ADR-041)
      * @param stocksGoods false for a branch that keeps no goods, such as a head office that only keeps accounts: the
      *     retail module refuses sales, restocks, transfers and stock adjustments there
+     * @param sellsGoods false for a Store, a branch that holds stock and takes transfers and purchases but does not sell: the
+     *     retail module refuses a sale, a payment taken and a refund paid there with 422 {@code branch_does_not_sell} (issue
+     *     #366, ADR-048)
      */
-    record Branch(UUID id, String code, String name, boolean headOffice, boolean active, boolean stocksGoods) {}
+    record Branch(
+            UUID id,
+            String code,
+            String name,
+            boolean headOffice,
+            boolean active,
+            boolean stocksGoods,
+            boolean sellsGoods) {}
 }

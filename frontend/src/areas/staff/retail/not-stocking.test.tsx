@@ -28,6 +28,30 @@ function on(me: ReturnType<typeof mockMe>, branch: string, node: ReactElement) {
   );
 }
 
+describe('a store, a branch that holds stock but does not sell (#366)', () => {
+  function meWithStore() {
+    const me = mockMe('admin');
+    me.branches = (me.branches ?? []).map((b, i) => (i === 0 ? { ...b, sells_goods: false } : b));
+    return me;
+  }
+
+  it('is not a branch a sale can be made at, yet stock screens still offer it', () => {
+    const me = meWithStore();
+    const first = me.branches?.[0]?.id ?? '';
+    expect(sellingBranches(me.branches ?? [], undefined).map((b) => b.id)).not.toContain(first);
+    const asked = on(me, 'all', <BranchRequired permissions={needsOf('stocktake')} stocking />);
+    expect(asked).toContain('Test Branch A (BR1)');
+  });
+
+  it('shows the sale screen as a plain note with a button for each shop', () => {
+    const me = meWithStore();
+    const first = me.branches?.[0]?.id ?? '';
+    const html = on(me, first, <RecordSale />);
+    expect(html).toContain('is a store, and a store does not sell');
+    expect(html).toContain('Sell at Test Branch B (BR2)');
+  });
+});
+
 describe('a branch that keeps no goods', () => {
   it('is left out of the choices of a stock screen, and the screen says why when it is the one chosen', () => {
     const me = meWithHeadNotStocking();

@@ -11,7 +11,7 @@ import {
   payableSales, paymentProblem, reasonOf, reversalKeys, termsWords, type AccountForm, type ManualRow, type PaymentForm,
 } from './account-state';
 import { usePersistedDraft, newIdempotencyKey } from './idempotency';
-import { CREDIT_MANAGE, DOCUMENT_ISSUE, SALE_VOID, branchesWhere, canIssueDocuments, canOpenAccount, holds, holdsAt } from './permissions';
+import { CREDIT_MANAGE, DOCUMENT_ISSUE, SALE_VOID, branchesWhere, canIssueDocuments, canOpenAccount, holds, holdsAt, sellingBranches } from './permissions';
 import { openMadePdf } from './documents-ui';
 import { Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
 
@@ -260,7 +260,7 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
   const [message, setMessage] = useState<string | null>(null);
   // One key per receipt: a failed reversal of one receipt must not give the next receipt the same key on another path.
   const reverseKeys = useRef(reversalKeys(newIdempotencyKey));
-  const payBranches = branchesWhere(me, 'retail.sale.create');
+  const payBranches = sellingBranches(branchesWhere(me, 'retail.sale.create'), undefined);
   const firstBranch = payBranches.find((b) => b.id === branch)?.id ?? (payBranches.length === 1 ? payBranches[0]?.id : undefined) ?? '';
   const { key, draft, setDraft, discard } = usePersistedDraft<PaymentForm>(`account-payment:${me.user_id ?? ''}:${customerId}`, blankPayment(firstBranch, today));
   const account = useQuery({ queryKey: ['retail', 'account', customerId], queryFn: () => retail.customerAccount(customerId), enabled: allowed });

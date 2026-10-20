@@ -98,7 +98,8 @@ function QuotationCard({ q, branchName }: { q: Quotation; branchName?: string })
     },
   });
   const open = q.status === 'open' && !q.expired;
-  const canSell = holdsAt(me, 'retail.sale.create', q.branch_id);
+  // A store never sells (ADR-048), so a quotation made there cannot be turned into a sale.
+  const canSell = holdsAt(me, 'retail.sale.create', q.branch_id) && !(me.branches ?? []).some((b) => b.id === q.branch_id && b.sells_goods === false);
   return (
     <li className="rt-card" data-testid={`quotation-${q.id}`}>
       <p>
@@ -227,6 +228,8 @@ export function QuotationsPage() {
   const { all, branchId, branchName } = useBranchView();
   const nameOf = useBranchName();
   const single = useSingleBranch();
+  const { me } = useStaff();
+  const atStore = (me.branches ?? []).some((b) => b.id === single.branchId && b.sells_goods === false);
   const queryClient = useQueryClient();
   const search = useLiveSearch();
   const [status, setStatus] = useState<Status>('open');
@@ -246,13 +249,14 @@ export function QuotationsPage() {
     <Gate screen="quotations" title="Quotations" wide>
       <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
       <p className="hint" data-tour="quotations-help">A quotation offers prices until a date. It reserves no stock and posts nothing. When the buyer says yes, make it a sale here.</p>
-      {!making && (
+      {atStore && <p className="hint">{single.branchName} is a store, and a store does not sell or quote. Choose a shop to make a quotation.</p>}
+      {!making && !atStore && (
         <button type="button" className="rt-primary" disabled={single.branchId === null} data-tour="quotation-new" onClick={() => setMaking(true)}>
           New quotation
         </button>
       )}
-      {!making && single.branchId === null && <p className="hint">Choose one branch at the top of the page to make a quotation.</p>}
-      {making && single.branchId !== null && (
+      {!making && !atStore && single.branchId === null && <p className="hint">Choose one branch at the top of the page to make a quotation.</p>}
+      {making && !atStore && single.branchId !== null && (
         <section aria-label="New quotation">
           <h2>New quotation for {single.branchName}</h2>
           <QuotationForm

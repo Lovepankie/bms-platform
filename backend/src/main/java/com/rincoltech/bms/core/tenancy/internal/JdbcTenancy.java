@@ -33,7 +33,7 @@ class JdbcTenancy implements Branches, CurrentTenant, TenantModules, TenantSeque
     @Transactional(readOnly = true)
     public Optional<Branch> findActive(UUID branchId) {
         return jdbc.sql(
-                        "SELECT id, code, name, is_head_office, status, stocks_goods FROM branches WHERE id = ? AND status = 'active'")
+                        "SELECT id, code, name, is_head_office, status, stocks_goods, sells_goods FROM branches WHERE id = ? AND status = 'active'")
                 .param(branchId)
                 .query(JdbcTenancy::branch)
                 .optional();
@@ -44,7 +44,7 @@ class JdbcTenancy implements Branches, CurrentTenant, TenantModules, TenantSeque
     public Optional<Branch> lockBranch(UUID branchId) {
         try {
             return jdbc.sql(
-                            "SELECT id, code, name, is_head_office, status, stocks_goods FROM branches WHERE id = ? FOR SHARE")
+                            "SELECT id, code, name, is_head_office, status, stocks_goods, sells_goods FROM branches WHERE id = ? FOR SHARE")
                     .param(branchId)
                     .query(JdbcTenancy::branch)
                     .optional();
@@ -69,7 +69,7 @@ class JdbcTenancy implements Branches, CurrentTenant, TenantModules, TenantSeque
     @Transactional(readOnly = true)
     public List<Branch> all() {
         return jdbc.sql(
-                        "SELECT id, code, name, is_head_office, status, stocks_goods FROM branches ORDER BY is_head_office DESC, code")
+                        "SELECT id, code, name, is_head_office, status, stocks_goods, sells_goods FROM branches ORDER BY is_head_office DESC, code")
                 .query(JdbcTenancy::branch)
                 .list();
     }
@@ -81,7 +81,8 @@ class JdbcTenancy implements Branches, CurrentTenant, TenantModules, TenantSeque
                 rs.getString("name"),
                 rs.getBoolean("is_head_office"),
                 "active".equals(rs.getString("status")),
-                rs.getBoolean("stocks_goods"));
+                rs.getBoolean("stocks_goods"),
+                rs.getBoolean("sells_goods"));
     }
 
     @Override

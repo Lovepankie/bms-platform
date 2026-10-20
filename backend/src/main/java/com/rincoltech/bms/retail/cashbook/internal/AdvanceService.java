@@ -235,6 +235,8 @@ class AdvanceService {
                 .orElseThrow(ApiException::notFound);
         UUID branch = branchContext.resolve(
                 CashbookSupport.ADVANCE_REPAY, r.branchId() == null ? advance.branchId() : r.branchId());
+        // A store keeps no cash takings (ADR-048): a repayment is money in, so it is taken at a shop.
+        branchContext.requireSells(branch, "branch_id");
         if (advance.voided().voided()) {
             throw CashbookSupport.alreadyVoided();
         }

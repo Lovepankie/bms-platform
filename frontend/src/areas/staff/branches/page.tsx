@@ -4,23 +4,30 @@ import { useRef, useState } from 'react';
 import { type AdminBranch, BranchesError, branches } from '../../../api/branches';
 import { branchLabel } from '../../../auth/branch';
 import { useStaff } from '../context';
-import { money } from '../retail/ui';
-import { branchLine, canManageBranches, closedCount, closedOn, isClosed, keepsGoods, showBranches, visibleBranches } from './state';
+import { money, useBranchRoles } from '../retail/ui';
+import { branchLine, canManageBranches, closedCount, closedOn, isClosed, keepsGoods, sellsGoods, showBranches, visibleBranches } from './state';
 
 // Branches (issue #329; ADR-041): which branches are open, close one without losing its history, reopen it, and say that a branch
 // keeps no goods (a head office). Everyone who may read branches sees the list; an administrator also closes, reopens and switches.
 // Closed branches are hidden until asked for. Closing over stock or transfers on the road shows the server's warning with the stock
 // value and asks for a reason; nothing is moved or written off.
 
+// The ADR-033 branch role, when roles are on, shown beside the Store flag so the two are never read as one (ADR-048).
+const roleWords = (roles: { branch_id?: string; role?: string }[] | undefined, id: string | undefined): string | null => {
+  const role = roles?.find((r) => r.branch_id === id)?.role;
+  return role && role !== 'both' ? `Branch role: ${role}` : null;
+};
+
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.');
 
-type Panel = { id: string; kind: 'close' | 'nostock'; warning: BranchesError | null; reason: string } | null;
+type Panel = { id: string; kind: 'close' | 'nostock' | 'store'; warning: BranchesError | null; reason: string } | null;
 
 export function BranchesScreen() {
   const { me } = useStaff();
   const queryClient = useQueryClient();
   const allowed = showBranches(me);
   const canManage = canManageBranches(me);
+  const roles = useBranchRoles(me);
   const list = useQuery({ queryKey: ['staff-branches'], queryFn: branches.list, enabled: allowed });
   const [showClosed, setShowClosed] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
@@ -88,6 +95,12 @@ export function BranchesScreen() {
       return on ? `${branchLabel(branch)} keeps goods again.` : `${branchLabel(branch)} now keeps no goods.`;
     });
 
+  const selling = (branch: AdminBranch, on: boolean) =>
+    act(branch, async () => {
+      await branches.setSelling(branch, on);
+      return on ? `${branchLabel(branch)} is a shop again and sells.` : `${branchLabel(branch)} is now a store. It holds stock but does not sell.`;
+    });
+
   const all = list.data ?? [];
   const shown = visibleBranches(all, showClosed);
   const hidden = closedCount(all);
@@ -123,7 +136,9 @@ export function BranchesScreen() {
                       <strong>{branchLabel(b)}</strong>{' '}
                       {b.is_head_office && <span className="badge">Head office</span>}{' '}
                       {closed && <span className="badge badge-warning">Closed</span>}{' '}
-                      {!closed && !keepsGoods(b) && <span className="badge">Keeps no goods</span>}
+                      {!closed && !keepsGoods(b) && <span className="badge">Keeps no goods</span>}{' '}
+                      {!closed && !sellsGoods(b) && <span className="badge">Store (does not sell)</span>}{' '}
+                      {!closed && roleWords(roles, b.id) && <span className="badge">{roleWords(roles, b.id)}</span>}
                     </p>
                     <p className="hint">{branchLine(b)}</p>
                     {closed && closedOn(b) && <p className="hint">{closedOn(b)}</p>}
@@ -143,6 +158,7 @@ export function BranchesScreen() {
                           </button>
                         ) : (
                           <>
+                            {sellsGoods(b) && (
                             <button
                               type="button"
                               className="btn-sm"
@@ -158,6 +174,24 @@ export function BranchesScreen() {
                             >
                               {keepsGoods(b) ? 'Mark as keeping no goods' : 'Keeps goods again'}
                             </button>
+                            )}
+                            {keepsGoods(b) && (
+                              <button
+                                type="button"
+                                className="btn-sm"
+                                disabled={busyId !== null}
+                                onClick={() => {
+                                  if (sellsGoods(b)) {
+                                    setPanel({ id: b.id ?? '', kind: 'store', warning: null, reason: '' });
+                                    setError(null);
+                                  } else {
+                                    void selling(b, true);
+                                  }
+                                }}
+                              >
+                                {sellsGoods(b) ? 'Mark as a store (does not sell)' : 'Sells again (make it a shop)'}
+                              </button>
+                            )}
                             {!b.is_head_office && (
                               <button type="button" className="btn-ghost btn-sm" disabled={busyId !== null} onClick={() => { setPanel({ id: b.id ?? '', kind: 'close', warning: null, reason: '' }); setError(null); }}>
                                 Close this branch
@@ -176,6 +210,21 @@ export function BranchesScreen() {
                         <p className="cluster">
                           <button type="button" className="rt-primary" disabled={busyId !== null} onClick={() => void stocking(b, false)}>
                             {busyId === b.id ? 'Saving' : 'Yes, mark it'}
+                          </button>
+                          <button type="button" className="btn-ghost" disabled={busyId !== null} onClick={() => setPanel(null)}>Keep it as it is</button>
+                        </p>
+                      </div>
+                    )}
+                    {open && panel && panel.kind === 'store' && (
+                      <div className="alert alert-warning stack" role="group" aria-label={`Mark ${branchLabel(b)} as a store`}>
+                        <p>
+                          Mark <strong>{branchLabel(b)}</strong> as a store? It keeps its stock and still takes purchases, restocks and transfers in and out, but
+                          nothing can be sold there afterwards. No takings, savings, banking or repayments here; expenses can still be paid from it. It
+                          leaves the sale screen and the till. You can make it a shop again at any time.
+                        </p>
+                        <p className="cluster">
+                          <button type="button" className="rt-primary" disabled={busyId !== null} onClick={() => void selling(b, false)}>
+                            {busyId === b.id ? 'Saving' : 'Yes, make it a store'}
                           </button>
                           <button type="button" className="btn-ghost" disabled={busyId !== null} onClick={() => setPanel(null)}>Keep it as it is</button>
                         </p>

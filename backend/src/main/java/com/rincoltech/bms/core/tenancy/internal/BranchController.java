@@ -39,7 +39,12 @@ class BranchController {
     record CreateBranchRequest(
             @NotBlank @Pattern(regexp = "^[A-Z0-9]{2,10}$") String code,
             @NotBlank @Size(max = 200) String name,
-            @Size(max = 200) String location) {}
+            @Size(max = 200) String location,
+
+            @Schema(
+                    description =
+                            "false creates a Store: it holds stock but does not sell (ADR-048). Omitted means a shop.")
+            Boolean sellsGoods) {}
 
     @Schema(name = "UpdateBranchRequest", description = "Omitted fields are unchanged. The code never changes.")
     record UpdateBranchRequest(
@@ -50,7 +55,15 @@ class BranchController {
                     description = "false marks a branch that keeps no goods (a head office): no sales, restocks, "
                             + "transfers or stock adjustments there (422 branch_not_stocking). Refused with "
                             + "branch_still_has_stock while goods or a transfer on its way remain.")
-            Boolean stocksGoods) {}
+            Boolean stocksGoods,
+
+            @Schema(
+                    description =
+                            "false marks a Store: it holds stock, receives purchases and takes transfers in and out, but a "
+                                    + "sale, a payment taken or a refund paid there is refused (422 branch_does_not_sell). A Store must keep "
+                                    + "goods (422 store_must_stock). Refused with branch_has_open_credit_sales while a credit sale made there "
+                                    + "still has a balance owing.")
+            Boolean sellsGoods) {}
 
     @Schema(
             name = "CloseBranchRequest",
@@ -71,6 +84,9 @@ class BranchController {
 
             @Schema(description = "false for a branch that keeps no goods, such as a head office (ADR-041)")
             boolean stocksGoods,
+
+            @Schema(description = "false for a Store: it holds stock and takes transfers but does not sell (ADR-048)")
+            boolean sellsGoods,
 
             @Schema(description = "when the branch was closed; null while it is open")
             Instant closedAt,

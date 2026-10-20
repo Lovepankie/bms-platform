@@ -282,9 +282,9 @@ export function sellsAt(roles: BranchRole[] | undefined, branchId: string | null
   return roles.find((r) => r.branch_id === branchId)?.can_sell ?? true;
 }
 
-/** The branches of `branches` a sale may be made at: stores are left out. */
-export function sellingBranches<B extends { id?: string; stocks_goods?: boolean }>(branches: B[], roles: BranchRole[] | undefined): B[] {
-  return branches.filter((b) => b.stocks_goods !== false && sellsAt(roles, b.id));
+/** The branches of `branches` a sale may be made at: stores are left out, by a role (ADR-033) or by the branch's own flag (ADR-048). */
+export function sellingBranches<B extends { id?: string; stocks_goods?: boolean; sells_goods?: boolean }>(branches: B[], roles: BranchRole[] | undefined): B[] {
+  return branches.filter((b) => b.stocks_goods !== false && b.sells_goods !== false && sellsAt(roles, b.id));
 }
 
 export const SCREENS: { screen: RetailScreen; path: string; label: string; hint: string }[] = [

@@ -122,6 +122,7 @@ class BankingService {
 
     private Banking recordBanking(BankingRequest r) {
         UUID branch = branchContext.resolve(CashbookSupport.BANKING_RECORD, r.branchId());
+        branchContext.requireSells(branch, "branch_id");
         LocalDate date = support.businessDate(r.businessDate(), "business_date");
         Instant bankedAt = r.bankedAt() == null ? support.now() : r.bankedAt();
         if (bankedAt.atZone(tenant.profile().timezone()).toLocalDate().isAfter(support.today())) {
@@ -277,6 +278,7 @@ class BankingService {
 
     private Withdrawal recordWithdrawal(WithdrawalRequest r) {
         UUID branch = withdrawalBranch(r.branchId());
+        branchContext.requireSells(branch, "branch_id");
         LocalDate date = support.businessDate(r.businessDate(), "business_date");
         Instant at = r.withdrawnAt() == null ? support.now() : r.withdrawnAt();
         if (at.atZone(tenant.profile().timezone()).toLocalDate().isAfter(support.today())) {

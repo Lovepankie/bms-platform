@@ -13,7 +13,7 @@ import { StaffContext } from '../context';
 // reason before it is sent again, nothing is sent twice by a double tap, a reopen and the stocking switch work, and someone who may only
 // read sees the list and no action. Every name below is invented.
 
-const api = { list: vi.fn(), close: vi.fn(), reopen: vi.fn(), setStocking: vi.fn() };
+const api = { list: vi.fn(), close: vi.fn(), reopen: vi.fn(), setStocking: vi.fn(), setSelling: vi.fn() };
 
 vi.mock('../../../api/branches', async (original) => {
   const real = await original<typeof import('../../../api/branches')>();
@@ -161,5 +161,39 @@ describe('reopening and the stocking switch', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Yes, mark it' }));
     await waitFor(() => expect(api.setStocking).toHaveBeenCalledTimes(2));
     expect(api.setStocking.mock.calls[1]?.[1]).toBe(false);
+  });
+});
+
+describe('the store switch (#366)', () => {
+  it('asks in plain words, then makes a shop a store, and shows the refusal over a credit sale still owing', async () => {
+    api.setSelling
+      .mockRejectedValueOnce(new BranchesError('Test Shop Two (KLA) has 2 credit sales that still owe money. Let the buyers pay first.', 422, 'branch_has_open_credit_sales'))
+      .mockResolvedValueOnce({ ...SHOP, sells_goods: false });
+    shell();
+    await screen.findByText('Test Shop Two (KLA)');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Mark as a store (does not sell)' })[1] as HTMLElement);
+    // One tap only asks: nothing is sent until the person confirms.
+    expect(screen.getByText(/No takings, savings, banking or repayments here/)).toBeTruthy();
+    expect(api.setSelling).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, make it a store' }));
+    expect(await screen.findByText(/2 credit sales that still owe money/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, make it a store' }));
+    await waitFor(() => expect(api.setSelling).toHaveBeenCalledTimes(2));
+    expect(api.setSelling.mock.calls[1]?.[0]).toMatchObject({ id: 'b-two' });
+    expect(api.setSelling.mock.calls[1]?.[1]).toBe(false);
+    expect(await screen.findByText(/is now a store. It holds stock but does not sell/)).toBeTruthy();
+  });
+
+  it('marks a store with a badge and offers the way back', async () => {
+    api.list.mockResolvedValue([HEAD, { ...SHOP, sells_goods: false }]);
+    api.setSelling.mockResolvedValue({ ...SHOP, sells_goods: true });
+    shell();
+    await screen.findByText('Test Shop Two (KLA)');
+    expect(screen.getByText('Store (does not sell)', { selector: '.badge' })).toBeTruthy();
+    // A store keeps goods by definition, so the keeps-no-goods switch is not offered on it (head office still has it).
+    expect(screen.getAllByRole('button', { name: 'Mark as keeping no goods' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Sells again (make it a shop)' }));
+    await waitFor(() => expect(api.setSelling).toHaveBeenCalledTimes(1));
+    expect(api.setSelling.mock.calls[0]?.[1]).toBe(true);
   });
 });
