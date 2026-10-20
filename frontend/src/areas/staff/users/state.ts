@@ -157,6 +157,26 @@ export function branchUnavailable(branchId: string, branches: StaffBranch[]): bo
 
 // --- The one-time link -----------------------------------------------------------------------------
 
+// --- Reset someone's sign-in (issue #339; FR-IAM-15, ADR-042) --------------------------------------
+
+/**
+ * The Reset sign-in action: an administrator, for an active person who is not an administrator and not themselves. The server
+ * refuses the others (409 `admin_reset_by_operator`, `cannot_reset_own_sign_in`, `invalid_status_transition`); this only hides
+ * the button, so nobody is offered a step that cannot work.
+ */
+export function canResetSignIn(me: Pick<Me, 'permissions' | 'user_id'>, user: Pick<StaffUser, 'id' | 'status' | 'roles'>): boolean {
+  return canManageUsers(me) && user.status === 'active' && user.id !== me.user_id && !(user.roles ?? []).some((r) => r.role_key === TENANT_ADMIN);
+}
+
+/**
+ * What the administrator must type to prove it is still them: the 6 digits of their own authenticator app when they have two-step
+ * sign-in (`me.mfa_enabled`), otherwise their own current password. null when it can be sent.
+ */
+export function resetProofProblem(mfaEnabled: boolean, typed: string): string | null {
+  if (mfaEnabled) return /^\d{6}$/.test(typed.trim()) ? null : 'Type the 6 digits from your authenticator app.';
+  return typed === '' ? 'Type your own password.' : null;
+}
+
 /** The expiry in the reader's own words, for example "Fri 23 Oct 2026, 14:30". */
 export function expiryWords(iso: string | undefined): string {
   const d = iso ? new Date(iso) : null;
@@ -164,9 +184,10 @@ export function expiryWords(iso: string | undefined): string {
 }
 
 /** The WhatsApp link with the message already typed. With a phone the chat opens on that person; without one, WhatsApp asks who. */
-export function whatsappLink(opts: { phone?: string | null; name: string; business: string; url: string; expiresAt?: string }): string {
+export function whatsappLink(opts: { phone?: string | null; name: string; business: string; url: string; expiresAt?: string; reset?: boolean }): string {
   const first = opts.name.trim().split(/\s+/)[0] || 'there';
-  const text = `Hello ${first}, you have been invited to join ${opts.business}. Open this link to set up your sign-in: ${opts.url} . It works once and stops working on ${expiryWords(opts.expiresAt)}.`;
+  const intro = opts.reset ? `Hello ${first}, here is your link to choose a new password for ${opts.business}.` : `Hello ${first}, you have been invited to join ${opts.business}.`;
+  const text = `${intro} Open this link to ${opts.reset ? 'choose it' : 'set up your sign-in'}: ${opts.url} . It works once and stops working on ${expiryWords(opts.expiresAt)}.`;
   const digits = (opts.phone ?? '').replace(/\D/g, '');
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
 }

@@ -12,8 +12,8 @@ export interface ShownLink {
   phone: string | null;
   url: string;
   expiresAt?: string;
-  /** "invited" for a new person, "again" for a link made after a first one stopped working. */
-  kind: 'invited' | 'again';
+  /** "invited" for a new person, "again" for a link made after a first one stopped working, "reset" for a new password (issue #339). */
+  kind: 'invited' | 'again' | 'reset';
 }
 
 export function LinkBox({ link, business, onDone, doneLabel = 'I have sent it' }: { link: ShownLink; business: string; onDone: () => void; doneLabel?: string }) {
@@ -48,16 +48,16 @@ export function LinkBox({ link, business, onDone, doneLabel = 'I have sent it' }
 
   return (
     <section className="rt-card stack" aria-labelledby="link-title" data-tour="staff-link">
-      <h2 id="link-title">{link.kind === 'invited' ? `${link.name} is invited` : `New link for ${link.name}`}</h2>
+      <h2 id="link-title">{link.kind === 'invited' ? `${link.name} is invited` : link.kind === 'reset' ? `Sign-in link for ${link.name}` : `New link for ${link.name}`}</h2>
       <p className="alert alert-warning" role="note">
-        This link is shown only now. Send it to {link.name} yourself: they open it to choose their password. It works once and stops
+        This link is shown only now. Send it to {link.name} yourself: they open it to choose {link.kind === 'reset' ? 'a new' : 'their'} password. It works once and stops
         working on <strong>{expiryWords(link.expiresAt)}</strong>. If it is lost, make a new one from the staff list.
       </p>
-      <label htmlFor="invite-link">Invitation link</label>
+      <label htmlFor="invite-link">{link.kind === 'reset' ? 'Sign-in link' : 'Invitation link'}</label>
       <input id="invite-link" ref={field} readOnly value={link.url} onFocus={(e) => e.currentTarget.select()} spellCheck={false} />
       <p className="cluster">
         <button type="button" className="rt-primary" onClick={() => void copy()}>Copy the link</button>
-        <a className="btn" href={whatsappLink({ phone: link.phone, name: link.name, business, url: link.url, expiresAt: link.expiresAt })} target="_blank" rel="noopener noreferrer">
+        <a className="btn" href={whatsappLink({ phone: link.phone, name: link.name, business, url: link.url, expiresAt: link.expiresAt, reset: link.kind === 'reset' })} target="_blank" rel="noopener noreferrer">
           Send on WhatsApp
         </a>
       </p>

@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
+import { type AdminCredential, resetUserSignIn } from '../../../api/sign-in-reset';
 import { type RoleAssignmentRequest, type StaffUser, users } from '../../../api/users';
 import { useShellBrand } from '../../../app/branding';
 import { Highlight, NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
@@ -8,17 +9,19 @@ import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { useStaff } from '../context';
 import { LinkBox, type ShownLink } from './link-box';
 import { RoleEditor } from './role-editor';
-import { canManageUsers, contactLine, matchesSearch, roleChoices, roleLines, showUsers, statusWords } from './state';
+import { ResetPanel } from './reset-panel';
+import { canManageUsers, canResetSignIn, contactLine, matchesSearch, roleChoices, roleLines, showUsers, statusWords } from './state';
 
 // Staff users (issue #319; FR-IAM-01, FR-IAM-02, FR-IAM-08): who works in the business, what each person may do, and who has not
 // joined yet. Anyone who may read the list sees it; an administrator also invites, sends a new link, changes roles and deactivates.
-// The one-time link of a resend is shown once, in a box, and is never kept.
+// The one-time link of a resend is shown once, in a box, and is never kept. Reset sign-in (issue #339) makes such a link for an active
+// person who forgot their password, after the administrator types a code from their own authenticator app (or their own password).
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.');
 
 const BADGE: Record<string, string> = { invited: 'badge badge-warning', active: 'badge badge-success', deactivated: 'badge' };
 
-type Mode = { kind: 'roles' | 'deactivate'; id: string } | null;
+type Mode = { kind: 'roles' | 'deactivate' | 'reset'; id: string } | null;
 
 export function UsersScreen() {
   const { me } = useStaff();
@@ -71,6 +74,23 @@ export function UsersScreen() {
       setLink({ userId: user.id, name: user.full_name ?? 'this person', phone: user.phone_e164 ?? null, url: made.url ?? '', expiresAt: made.expires_at, kind: 'again' });
       return null;
     });
+
+  // The link of a reset is held in this screen's state only, like the invitation link, and the proof the administrator typed is not kept.
+  async function resetSignIn(user: StaffUser, credential: AdminCredential): Promise<string | null> {
+    if (working.current) return null;
+    working.current = true;
+    setNotice(null);
+    try {
+      const made = await resetUserSignIn(user.id ?? '', credential);
+      setLink({ userId: user.id, name: user.full_name ?? 'this person', phone: user.phone_e164 ?? null, url: made.url, expiresAt: made.expiresAt, kind: 'reset' });
+      setMode(null);
+      return null;
+    } catch (e) {
+      return messageOf(e);
+    } finally {
+      working.current = false;
+    }
+  }
 
   const deactivate = (user: StaffUser) =>
     act(user, async () => {
@@ -154,6 +174,11 @@ export function UsersScreen() {
                         <button type="button" className="btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'roles', id: u.id ?? '' }); setError(null); }}>
                           Change roles
                         </button>
+                        {canResetSignIn(me, u) && (
+                          <button type="button" className="btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'reset', id: u.id ?? '' }); setError(null); }}>
+                            Reset sign-in
+                          </button>
+                        )}
                         {u.id !== me.user_id && (
                           <button type="button" className="btn-ghost btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'deactivate', id: u.id ?? '' }); setError(null); }}>
                             Deactivate
@@ -163,6 +188,9 @@ export function UsersScreen() {
                     )}
                     {mode?.id === u.id && mode?.kind === 'roles' && (
                       <RoleEditor user={u} self={u.id === me.user_id} roles={choices} branches={branchList} onSave={(next) => saveRoles(u, next)} onCancel={() => setMode(null)} />
+                    )}
+                    {mode?.id === u.id && mode?.kind === 'reset' && (
+                      <ResetPanel user={u} mfaEnabled={me.mfa_enabled === true} onSend={(credential) => resetSignIn(u, credential)} onCancel={() => setMode(null)} />
                     )}
                     {mode?.id === u.id && mode?.kind === 'deactivate' && (
                       <div className="alert alert-warning stack" role="group" aria-label={`Deactivate ${u.full_name}`}>

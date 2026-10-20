@@ -578,6 +578,7 @@ export function createMockRetail(): RetailApi {
       run(() => once(`pay|${key}`, { saleId, body }, () => {
         const sale = sales.find((x) => x.id === saleId) ?? refuse(404, 'not_found', 'That could not be found.');
         if (sale.payment_method !== 'credit' || sale.status !== 'completed') refuse(422, 'sale_not_payable', 'Only a completed credit sale takes payments.');
+        if (sale.historical === true) refuse(422, 'sale_historical', 'An imported sale cannot be paid from here. Record this payment with your accountant.');
         if (body.amount_minor > (sale.balance_minor ?? 0)) refuse(422, 'payment_exceeds_balance', 'The payment is larger than the balance.');
         const paidOn = body.paid_on ?? today();
         if (paidOn > today() || paidOn < (sale.sale_date ?? '')) refuse(422, 'validation_failed', 'A payment is dated between the sale and today.');

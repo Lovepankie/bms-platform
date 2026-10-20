@@ -792,6 +792,13 @@ class SalesService {
         if (!s.paymentMethod().equals("credit") || !s.status().equals("completed")) {
             throw ApiException.rule("sale_not_payable", "Only a completed credit sale takes payments.");
         }
+        if (s.historical()) {
+            // Issue #338: an imported credit sale has no debtor in the books (import runbook), so cash against it
+            // would credit trade debtors for an amount that was never recorded. Same code as the account path.
+            throw ApiException.rule(
+                    "sale_historical",
+                    "An imported sale cannot be paid from here. Record this payment with your accountant.");
+        }
         long balance = s.totalMinor() - s.paidMinor();
         if (r.amountMinor() > balance) {
             throw ApiException.rule(

@@ -535,7 +535,7 @@ class AccountsService {
                 problems.add(new FieldProblem(
                         field + ".sale_id",
                         "sale_historical",
-                        "An imported sale cannot be paid from an account payment; pay it on its own."));
+                        "An imported sale cannot be paid from here. Record this payment with your accountant."));
             } else if (s.saleDate().isAfter(paidOn)) {
                 problems.add(new FieldProblem(field + ".sale_id", "invalid", "The sale is dated after the payment."));
             } else if (a.amountMinor() > s.balanceMinor()) {

@@ -2,7 +2,7 @@ import { api, problemOf } from './client';
 
 // The forgotten staff password (FR-IAM-15, ADR-042; chapter 7 section 7.11.2 and 7.11.4). Two calls:
 //  - requestPasswordReset: the sign-in page's "Forgot password?" form. It answers the same for every login, so the page can too.
-//  - resetUserSignIn: the admin action (the future Users screen button, issue #339; nothing calls it yet). It returns the one-time link,
+//  - resetUserSignIn: the admin action (the Users screen's Reset sign-in button, issue #339). It returns the one-time link,
 //    shown once to the admin to hand to the user.
 
 export interface SignInResetLink {

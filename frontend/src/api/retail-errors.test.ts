@@ -13,6 +13,7 @@ describe('retail problem details in plain words', () => {
     ['branch_required', 422, /choose one branch/i],
     ['sale_voided', 409, /already been voided/i],
     ['sale_not_payable', 422, /not voided takes payments/i],
+    ['sale_historical', 422, /with your accountant/i],
     ['sale_has_payments', 422, /payments cannot be voided/i],
     ['sale_has_returns', 422, /void the returns first/i],
     ['payment_exceeds_balance', 422, /more than the buyer still owes/i],

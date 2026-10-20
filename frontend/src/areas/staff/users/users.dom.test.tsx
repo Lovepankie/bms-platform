@@ -23,7 +23,11 @@ vi.mock('../../../api/users', async (original) => {
 });
 vi.mock('../../../app/branding', () => ({ useShellBrand: () => ({ name: 'Test Trading Co' }) }));
 
+const resetUserSignIn = vi.fn();
+vi.mock('../../../api/sign-in-reset', async (original) => ({ ...(await original<typeof import('../../../api/sign-in-reset')>()), resetUserSignIn: (...args: unknown[]) => resetUserSignIn(...args) }));
+
 const { UsersError, NETWORK_WORDS } = await import('../../../api/users');
+const { SignInResetError } = await import('../../../api/sign-in-reset');
 const { UsersScreen } = await import('./page');
 const { InviteScreen } = await import('./invite');
 
@@ -50,8 +54,8 @@ const READER = ['core.users.read'];
 
 let lastClient: QueryClient;
 
-function shell(node: ReactElement, permissions: string[] = ADMIN) {
-  const me = { ...mockMe('admin'), permissions, user_id: 'u-self' };
+function shell(node: ReactElement, permissions: string[] = ADMIN, mfaEnabled = false) {
+  const me = { ...mockMe('admin'), permissions, user_id: 'u-self', mfa_enabled: mfaEnabled };
   const router = createRouter({ routeTree: appRouter.routeTree, history: createMemoryHistory({ initialEntries: ['/staff/users'] }) });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   lastClient = client;
@@ -80,6 +84,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   Object.values(api).forEach((m) => m.mockReset());
+  resetUserSignIn.mockReset();
   writeText.mockReset();
 });
 
@@ -518,5 +523,99 @@ describe('finding a person by phone', () => {
     }
     // The digits that matched are marked, which splits the text; the whole line still reads as the phone.
     expect((screen.getByText('Test Seller 02').closest('li') as HTMLElement).textContent).toContain('+256 700 000 002');
+  });
+});
+
+// JUSTIFICATION-A3: new tests for the new Reset sign-in action, appended after the last describe; the anchor is only the insertion point.
+describe('Reset sign-in (issue #339)', () => {
+  const SELLER: StaffUser = { id: 'u-seller', full_name: 'Test Seller 07', phone_e164: '+256700000007', status: 'active', roles: [{ role_key: 'retail_sales', branch_id: 'b-two' }] };
+  const RESET_LINK = 'https://test.example/reset-password#token=invented-token-0001';
+
+  beforeEach(() => api.list.mockResolvedValue([SELF, SELLER, SECOND_ADMIN, WAITING, LEFT]));
+
+  it('is offered only for an active person who is not an administrator and not you', async () => {
+    shell(<UsersScreen />);
+    await screen.findByText('Test Seller 07');
+    expect(screen.getAllByRole('button', { name: 'Reset sign-in' })).toHaveLength(1);
+    expect(within(screen.getByText('Test Seller 07').closest('li') as HTMLElement).getByRole('button', { name: 'Reset sign-in' })).toBeTruthy();
+    for (const name of ['Test Owner 01', 'Test Admin 03', 'Test Seller 02']) {
+      expect(within(screen.getByText(name).closest('li') as HTMLElement).queryByRole('button', { name: 'Reset sign-in' })).toBeNull();
+    }
+  });
+
+  it('is not offered to someone who may only read the list', async () => {
+    shell(<UsersScreen />, READER);
+    await screen.findByText('Test Seller 07');
+    expect(screen.queryByRole('button', { name: 'Reset sign-in' })).toBeNull();
+  });
+
+  it('asks for the code from the authenticator app when you have two-step sign-in, sends it, and shows the link once', async () => {
+    resetUserSignIn.mockResolvedValue({ url: RESET_LINK, expiresAt: '2026-10-22T10:00:00Z' });
+    shell(<UsersScreen />, ADMIN, true);
+    const card = (await screen.findByText('Test Seller 07')).closest('li') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Reset sign-in' }));
+    fireEvent.change(within(card).getByLabelText('Code from your authenticator app'), { target: { value: '12' } });
+    expect(within(card).getByText('Type the 6 digits from your authenticator app.')).toBeTruthy();
+    expect((within(card).getByRole('button', { name: 'Make the link' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(card).getByLabelText('Code from your authenticator app'), { target: { value: '123456' } });
+    fireEvent.click(within(card).getByRole('button', { name: 'Make the link' }));
+
+    await screen.findByRole('heading', { name: 'Sign-in link for Test Seller 07' });
+    expect(resetUserSignIn).toHaveBeenCalledTimes(1);
+    expect(resetUserSignIn).toHaveBeenCalledWith('u-seller', { totpCode: '123456' });
+    expect((screen.getByLabelText('Sign-in link') as HTMLInputElement).value).toBe(RESET_LINK);
+    const whatsapp = screen.getByRole('link', { name: 'Send on WhatsApp' }) as HTMLAnchorElement;
+    expect(whatsapp.href.startsWith('https://wa.me/256700000007?text=')).toBe(true);
+    expect(decodeURIComponent(whatsapp.href)).toContain('choose a new password');
+    expect(decodeURIComponent(whatsapp.href)).toContain(RESET_LINK);
+    // The panel closed and the code is gone; the link is in the box and not in any cache.
+    expect(screen.queryByLabelText('Code from your authenticator app')).toBeNull();
+    expect(JSON.stringify(lastClient.getQueryCache().getAll().map((q) => q.state.data))).not.toContain('invented-token-0001');
+    fireEvent.click(screen.getByRole('button', { name: 'I have sent it' }));
+    expect(screen.queryByLabelText('Sign-in link')).toBeNull();
+    expect(document.body.textContent).not.toContain('invented-token-0001');
+  });
+
+  it('asks for your own password when you have no authenticator app', async () => {
+    resetUserSignIn.mockResolvedValue({ url: RESET_LINK, expiresAt: '2026-10-22T10:00:00Z' });
+    shell(<UsersScreen />);
+    const card = (await screen.findByText('Test Seller 07')).closest('li') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Reset sign-in' }));
+    expect(within(card).queryByLabelText('Code from your authenticator app')).toBeNull();
+    fireEvent.change(within(card).getByLabelText('Your own password'), { target: { value: 'invented-password-1' } });
+    fireEvent.click(within(card).getByRole('button', { name: 'Make the link' }));
+    await screen.findByRole('heading', { name: 'Sign-in link for Test Seller 07' });
+    expect(resetUserSignIn).toHaveBeenCalledWith('u-seller', { password: 'invented-password-1' });
+  });
+
+  it('shows a wrong code in plain words, keeps the panel open with the box empty, and shows no link', async () => {
+    resetUserSignIn.mockRejectedValue(new SignInResetError('That code is not right. Codes change every 30 seconds; type the next one.', 422, 'invalid_mfa_code'));
+    shell(<UsersScreen />, ADMIN, true);
+    const card = (await screen.findByText('Test Seller 07')).closest('li') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Reset sign-in' }));
+    fireEvent.change(within(card).getByLabelText('Code from your authenticator app'), { target: { value: '000000' } });
+    fireEvent.click(within(card).getByRole('button', { name: 'Make the link' }));
+    expect(await within(card).findByText(/That code is not right/)).toBeTruthy();
+    expect((within(card).getByLabelText('Code from your authenticator app') as HTMLInputElement).value).toBe('');
+    expect(screen.queryByLabelText('Sign-in link')).toBeNull();
+  });
+
+  it('sends nothing when cancelled, and one request for two taps before the first answer', async () => {
+    let finish: (v: { url: string; expiresAt: string }) => void = () => {};
+    resetUserSignIn.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    shell(<UsersScreen />);
+    const card = (await screen.findByText('Test Seller 07')).closest('li') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Reset sign-in' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Cancel' }));
+    expect(within(card).queryByLabelText('Your own password')).toBeNull();
+    expect(resetUserSignIn).not.toHaveBeenCalled();
+    fireEvent.click(within(card).getByRole('button', { name: 'Reset sign-in' }));
+    fireEvent.change(within(card).getByLabelText('Your own password'), { target: { value: 'invented-password-1' } });
+    const form = within(card).getByRole('form');
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(resetUserSignIn).toHaveBeenCalledTimes(1);
+    await act(async () => finish({ url: RESET_LINK, expiresAt: '2026-10-22T10:00:00Z' }));
+    await screen.findByRole('heading', { name: 'Sign-in link for Test Seller 07' });
   });
 });

@@ -703,8 +703,10 @@ again under the sale's lock; the screens only save a round trip and say each ref
   `sale_not_payable` as "only a credit sale that is not voided takes payments".
 - **Imported sales.** An imported (historical) credit sale that still owes shows a note instead of the buttons: one short line in a list row ("Imported from the old
   records; record this payment with your accountant.") and a fuller one on the opened sale. A payment on it would post cash against a debtor that was never recorded
-  here (`docs/runbooks/import-retail.md`), so it is left to the accountant, as the issue asks. **Only the screen enforces this for now:** `recordPayment` in
-  `SalesService` does not check `historical` (the account payment route refuses it as `sale_historical`), so a direct API call still works. A backend rule is a separate issue.
+  here (`docs/runbooks/import-retail.md`), so it is left to the accountant, as the issue asks. **The server enforces it too (issue #338):** `recordPayment` in
+  `SalesService` refuses a historical sale with 422 `sale_historical`, as the account payment route does, so an old cached build or a hand-made request cannot post cash
+  against it either. The message is the same plain line ("An imported sale cannot be paid from here. Record this payment with your accountant."); the screen maps the code
+  to that wording in `retail-errors.ts`. How imported credit is finally settled stays with the accountant and the operator.
 - **When the sale moves on.** If the balance changed since the screen read it (someone else took a payment), `payment_exceeds_balance`, `sale_not_payable` and
   `sale_voided` make the lists and the sale load again. In Mark as fully paid the message is "The balance has changed; check the new amount."; a typed amount above
   the new balance goes back to the balance. Record payment and Mark as fully paid keep separate drafts and keys, so a lost answer on one never blocks the other; Cancel

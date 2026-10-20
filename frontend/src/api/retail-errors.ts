@@ -35,7 +35,7 @@ const BY_CODE: Record<string, string> = {
   credit_limit_exceeded: 'This sale takes the buyer above their credit limit.',
   payment_exceeds_allocatable: 'That is more than this buyer owes on the credit sales you can take payment for.',
   allocations_must_equal_amount: 'The amounts given to the sales must add up to the payment.',
-  sale_historical: 'An imported sale cannot be paid from here. Open the sale and pay it on its own.',
+  sale_historical: 'An imported sale cannot be paid from here. Record this payment with your accountant.',
   receipt_reversed: 'This payment has already been reversed.',
   payment_not_reversible: 'A sale no longer holds this payment, so it cannot be reversed.',
   too_many_sales: 'This payment would settle too many sales at once. Record it in parts.',

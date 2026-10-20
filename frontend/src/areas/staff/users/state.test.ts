@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { planLimitWords } from '../../../api/users';
 import {
-  assignmentFor, branchUnavailable, canManageUsers, contactLine, emptyInvite, hasProblems, inviteBody, inviteProblems, matchesSearch, roleChoice, roleChoices, roleLines, showUsers, whatsappLink,
+  assignmentFor, branchUnavailable, canManageUsers, canResetSignIn, contactLine, resetProofProblem, emptyInvite, hasProblems, inviteBody, inviteProblems, matchesSearch, roleChoice, roleChoices, roleLines, showUsers, whatsappLink,
 } from './state';
 
 // The rules of the Users screen (issue #319), with fabricated people and numbers only.
@@ -121,6 +121,36 @@ describe('finding a person', () => {
 
   it('shows a phone written to read', () => {
     expect(contactLine(user)).toBe('+256 700 000 002 \u00b7 seller02@example.com');
+  });
+});
+
+// JUSTIFICATION-A3: tests for the three new pure helpers of Reset sign-in; the anchor is only the insertion point.
+describe('Reset sign-in (issue #339)', () => {
+  const admin = { permissions: ['core.users.read', 'core.users.manage'], user_id: 'me' };
+  const seller = { id: 's', status: 'active', roles: [{ role_key: 'retail_sales' }] };
+  it('is for an administrator, an active person, who is not an administrator and not themselves', () => {
+    expect(canResetSignIn(admin, seller)).toBe(true);
+    expect(canResetSignIn({ ...admin, permissions: ['core.users.read'] }, seller)).toBe(false);
+    expect(canResetSignIn(admin, { ...seller, id: 'me' })).toBe(false);
+    expect(canResetSignIn(admin, { ...seller, roles: [{ role_key: 'tenant_admin' }] })).toBe(false);
+    expect(canResetSignIn(admin, { ...seller, roles: [{ role_key: 'cashier' }, { role_key: 'tenant_admin' }] })).toBe(false);
+    expect(canResetSignIn(admin, { ...seller, status: 'invited' })).toBe(false);
+    expect(canResetSignIn(admin, { ...seller, status: 'deactivated' })).toBe(false);
+  });
+
+  it('asks for six digits with an authenticator app and for the password without one', () => {
+    expect(resetProofProblem(true, '123456')).toBeNull();
+    expect(resetProofProblem(true, ' 123456 ')).toBeNull();
+    expect(resetProofProblem(true, '12345')).toMatch(/6 digits/);
+    expect(resetProofProblem(true, 'abcdef')).toMatch(/6 digits/);
+    expect(resetProofProblem(false, 'invented-password-1')).toBeNull();
+    expect(resetProofProblem(false, '')).toMatch(/password/);
+  });
+
+  it('words the WhatsApp message for a new password, not an invitation', () => {
+    const text = decodeURIComponent(whatsappLink({ phone: '+256700000007', name: 'Test Seller 07', business: 'Test Trading Co', url: 'https://test.example/x#token=t', reset: true }));
+    expect(text).toContain('Hello Test, here is your link to choose a new password for Test Trading Co.');
+    expect(text).not.toContain('invited');
   });
 });
 

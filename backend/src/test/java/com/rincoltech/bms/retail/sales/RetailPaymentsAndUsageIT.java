@@ -90,6 +90,52 @@ class RetailPaymentsAndUsageIT extends IntegrationTest {
         assertThat(pay(cash, 100, ADMIN).getBody().get("code").asString()).isEqualTo("sale_not_payable");
     }
 
+    // JUSTIFICATION-A3: one new test for the new refusal; the anchor is only where the test is inserted.
+    /**
+     * Issue #338, FR-RET-05, FR-RET-37: an imported (historical) credit sale has no debtor in the books, so a payment
+     * on it is refused with 422 sale_historical in plain words, for any caller, and nothing is written.
+     */
+    @Test
+    void anImportedCreditSaleRefusesAPayment() {
+        UUID imported = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO retail_sales (id, tenant_id, branch_id, sale_no, sale_date, payment_method, buyer_name,
+                            currency, total_minor, cost_total_minor, paid_minor, status, historical, created_by)
+                        VALUES (?, ?, ?, ?, CAST('2025-10-01' AS date), 'credit', 'Test Buyer 01',
+                            'UGX', 4000, 0, 0, 'completed', true, gen_random_uuid())
+                        """)
+                .params(
+                        imported,
+                        t.tenantId(),
+                        t.headOffice(),
+                        "RS9" + imported.toString().substring(0, 7))
+                .update();
+        Long before = TestDatabase.owner()
+                .sql("SELECT count(*) FROM journal_entries WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .query(Long.class)
+                .single();
+        for (String perms : List.of(SALES, ADMIN)) {
+            ResponseEntity<JsonNode> r = pay(imported, 1_000, perms);
+            assertThat(r.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(r.getBody().get("code").asString()).isEqualTo("sale_historical");
+            assertThat(r.getBody().get("detail").asString())
+                    .isEqualTo("An imported sale cannot be paid from here. Record this payment with your accountant.");
+        }
+        JsonNode s = api.get("/sales/" + imported, ADMIN).getBody();
+        assertThat(s.get("paid_minor").asLong()).isZero();
+        assertThat(s.get("balance_minor").asLong()).isEqualTo(4_000);
+        assertThat(api.get("/sales/" + imported + "/payments", ADMIN).getBody().get("items"))
+                .isEmpty();
+        Long after = TestDatabase.owner()
+                .sql("SELECT count(*) FROM journal_entries WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .query(Long.class)
+                .single();
+        assertThat(after).isEqualTo(before);
+    }
+
     /**
      * FR-RET-07, FR-RET-11: usage and damage reduce stock, are valued at the cost at the time and
      * post to stock shrinkage; the sales role may report but sees no cost.

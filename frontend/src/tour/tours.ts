@@ -762,7 +762,7 @@ export const assistantPage: Tour = {
 // The Users page (issue #319): a page tour for whoever may read the staff list; the steps about changing people need the manage permission.
 export const usersPage: Tour = {
   id: 'page-users',
-  version: 1,
+  version: 2,
   title: 'This page: staff users',
   audience: (me) => held(me, 'core.users.read'),
   autoStart: false,
@@ -786,7 +786,7 @@ export const usersPage: Tour = {
       target: 'staff-list',
       optional: true,
       title: 'Who has joined',
-      body: 'Invited means the person has not opened their link yet. On their card you can send a new link, change their roles, or deactivate them when they leave.',
+      body: 'Invited means the person has not opened their link yet. On their card you can send a new link, change their roles, or deactivate them when they leave. Reset sign-in makes a link for someone who forgot their password.',
     },
   ],
 };

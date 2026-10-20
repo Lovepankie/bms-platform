@@ -435,7 +435,8 @@ Notes:
   pull request that changes this chapter and a new migration together.
 - The staff Users screen (issue #319, section 7.11.4) follows the two rows above without changing a
   cell: `core.users.read` shows the screen, the staff menu entry and the list (tenant admin, branch
-  manager, auditor); `core.users.manage` alone shows Invite someone, Send a new link, Change roles and
+  manager, auditor); `core.users.manage` alone shows Invite someone, Send a new link, Change roles, Reset sign-in
+  (issue #339; for an active person who is not an administrator and not oneself) and
   Deactivate (tenant admin). The API still decides every call; the screen only hides what a user
   cannot do, from the permissions in `/me`.
 
