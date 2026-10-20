@@ -542,3 +542,66 @@ th[scope='rowgroup'] .cat-head {
   color: var(--color-link);
   text-decoration: underline;
 }
+
+/* Group by (issue #341): the levels the sales lists are grouped by, one line each, buttons not dragging. */
+.rt-groupby {
+  margin: var(--space-2) 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.rt-groupby > summary {
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+}
+
+.rt-groupby-now {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.rt-groupby-list {
+  margin: 0;
+  padding: 0 var(--space-3);
+  list-style: none;
+}
+
+.rt-groupby-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.rt-groupby-name {
+  flex: 1 1 8rem;
+  font-weight: var(--weight-semibold);
+}
+
+.rt-groupby button {
+  min-height: var(--tap);
+}
+
+.rt-groupby-add,
+.rt-groupby > button {
+  margin: var(--space-2) var(--space-3);
+}
+
+.rt-item-row {
+  cursor: default;
+}
+
+.rt-day-sales {
+  margin-top: var(--space-2);
+}
+
+.rt-group-note {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}

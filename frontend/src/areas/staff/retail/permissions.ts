@@ -221,6 +221,15 @@ export function holdsAt(me: Pick<Me, 'permissions' | 'permission_scopes' | 'bran
   return branchesWhere(me, permission).some((b) => b.id === branchId);
 }
 
+/**
+ * True when the salesperson level may be offered: profit read covers every branch whose sales are in view (the one chosen,
+ * or all the session may read), the rule the server applies to the level and to the seller filter (ADR-017).
+ */
+export function canRankSellers(me: Pick<Me, 'permissions' | 'permission_scopes' | 'branches'>, branchId: string | null | undefined): boolean {
+  const viewed = branchesWhere(me, 'retail.sale.read').filter((b) => !branchId || b.id === branchId);
+  return viewed.length > 0 && viewed.every((b) => holdsAt(me, PROFIT, b.id));
+}
+
 export function hasAnyRetailPermission(me: Pick<Me, 'permissions'>): boolean {
   return permissionsOf(me).some((p) => p.startsWith('retail.'));
 }

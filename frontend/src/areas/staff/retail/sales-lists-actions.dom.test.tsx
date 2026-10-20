@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Sale, SalesSummary, SalesSummaryQuery } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
+import { chainUser, writeChain } from './sales-chain-state';
 
 // The grouped All sales and Credit sales lists must still take a payment (issues #326 and #328): the real PaySaleAction is
 // under each sale of an opened day, and under each sale of the Still owing list. An owing live credit sale has Record payment;
@@ -31,7 +32,7 @@ const branch = me.branches?.[0]?.id ?? '';
 const today = businessToday();
 const none = { count: 0, total_minor: 0 };
 const group = (period: string, from: string, to: string) => ({
-  period, from, to, sales_count: 3, total_minor: 9000, voided_count: 0,
+  key: period, label: period, period, from, to, sales_count: 3, total_minor: 9000, voided_count: 0,
   by_method: { cash: none, mobile_money: none, bank: none, credit: { count: 3, total_minor: 9000 } },
 });
 const answer = (q: SalesSummaryQuery): SalesSummary => {
@@ -72,7 +73,19 @@ function expectActionsOnEachKindOfSale() {
   expect(screen.getAllByRole('button', { name: 'Record payment' })).toHaveLength(1);
 }
 
+// These lists are grouped by the chain the person chose; this file uses year, month, day so a day's sales are the bottom (issue #341).
+const YEAR_MONTH_DAY = ['year', 'month', 'day'] as const;
+
+/** Taps down the list as a person would: the year, the month, then today. */
+async function openToday() {
+  fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^${today.slice(0, 4)} `) }));
+  fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^[A-Z][a-z]+ ${today.slice(0, 4)} `) }));
+  fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^[A-Z][a-z]+ ${Number(today.slice(8))} `) }));
+}
+
 beforeEach(() => {
+  writeChain(chainUser(me), 'all', [...YEAR_MONTH_DAY]);
+  writeChain(chainUser(me), 'credit', [...YEAR_MONTH_DAY]);
   summary.mockImplementation(async (q) => answer(q));
   listSales.mockImplementation(async () => ({ items: sales }));
 });
@@ -86,7 +99,7 @@ describe('the grouped lists keep the payment buttons', () => {
   it('All sales: an opened day shows Record payment on an owing live credit sale only', async () => {
     show(<AllSales />);
     expect(screen.queryByRole('button', { name: 'Record payment' })).toBeNull();
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^[A-Z][a-z]+ ${Number(today.slice(8))} `) }));
+    await openToday();
     await screen.findByText('Test Buyer Owing');
     expectActionsOnEachKindOfSale();
     expect(listSales).toHaveBeenCalledWith(expect.objectContaining({ from: today, to: today }));
@@ -94,7 +107,7 @@ describe('the grouped lists keep the payment buttons', () => {
 
   it('Credit sales: an opened day shows the same, and Still owing lists the debts together with the button', async () => {
     show(<CreditSales />);
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^[A-Z][a-z]+ ${Number(today.slice(8))} `) }));
+    await openToday();
     await screen.findByText('Test Buyer Owing');
     expectActionsOnEachKindOfSale();
     cleanup();
@@ -110,7 +123,7 @@ describe('the grouped lists keep the payment buttons', () => {
   it('a day that fails to load says so and can be tried again', async () => {
     listSales.mockRejectedValueOnce(new Error('The server is busy.'));
     show(<AllSales />);
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^[A-Z][a-z]+ ${Number(today.slice(8))} `) }));
+    await openToday();
     expect((await screen.findByRole('alert')).textContent).toContain('The server is busy.');
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await screen.findByText('Test Buyer Owing');

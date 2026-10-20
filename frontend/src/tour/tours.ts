@@ -83,7 +83,8 @@ export const adminWelcome: Tour = {
   id: 'admin-welcome',
   // Version 5 adds the credit payment and void steps (issues #326, #327), so whoever finished version 4 sees them once.
   // Version 6 words the payment step for the grouped lists (issue #328): the sales sit under a day, or in Still owing.
-  version: 6,
+  // Version 7 adds the Group by step (issue #341): the sales lists open from the shop down to the items.
+  version: 7,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -189,6 +190,16 @@ export const adminWelcome: Tour = {
       body: 'Open Credit sales and pick Still owing to see every debt, or open the day of the sale. Then tap Record payment. A part payment is fine. If they pay it all, tap Mark as fully paid.',
     },
     {
+      id: 'sales-grouping',
+      route: '/staff/retail',
+      target: 'retail-salesHistory',
+      module: 'retail',
+      needs: ['retail.sale.read'],
+      optional: true,
+      title: 'Your sales, your way',
+      body: 'Open All sales. Tap Group by to choose the order: shop, year, month, salesperson, day, category and item. Tap a line to open it. Every line shows its total.',
+    },
+    {
       id: 'void-sale',
       route: '/staff/retail',
       target: 'retail-salesHistory',
@@ -235,7 +246,8 @@ export const retailSales: Tour = {
   id: 'retail-sales',
   // Version 3 adds the credit payment step (issue #326), so whoever finished version 2 sees it once.
   // Version 4 words that step for the grouped lists (issue #328): the sales sit under a day, or in Still owing.
-  version: 4,
+  // Version 5 adds the Group by step (issue #341): the sales lists open from the shop down to the items.
+  version: 5,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -290,6 +302,16 @@ export const retailSales: Tour = {
       optional: true,
       title: 'When a buyer pays what they owe',
       body: 'Open Credit sales and pick Still owing to see every debt, or open the day of the sale. Then tap Record payment. A part payment is fine. If they pay it all, tap Mark as fully paid.',
+    },
+    {
+      id: 'sales-grouping',
+      route: '/staff/retail',
+      target: 'retail-salesHistory',
+      module: 'retail',
+      needs: ['retail.sale.read'],
+      optional: true,
+      title: 'Your sales, your way',
+      body: 'Open All sales. Tap Group by to choose the order: shop, year, month, salesperson, day, category and item. Tap a line to open it. Every line shows its total.',
     },
     {
       id: 'stock',
@@ -418,37 +440,49 @@ export const stockPage: Tour = {
 };
 
 // JUSTIFICATION-A3: two page tours of the same shape as stockPage, one per grouped list (issue #328); no existing tour covers these pages.
-// The All sales and Credit sales lists grouped by year, month and day (issue #328).
+// The All sales and Credit sales lists grouped by a chain of levels (issues #328, #341).
 const salesGroupsStep: TourStep = {
   id: 'groups',
   target: 'sales-groups',
   module: 'retail',
-  title: 'Years, months and days',
-  body: 'Tap a line to open it. Each line shows what was sold, how many sales, and how they were paid. Profit shows if you may see it. Tap a day to see its sales one by one.',
+  title: 'Open a line',
+  body: 'Tap a line to open it. Each line shows what was sold, how many sales, and how they were paid. Profit shows if you may see it. The way you came shows above the list; tap a place in it to go back. Tap a day to see its sales one by one.',
+};
+
+const groupByStep: TourStep = {
+  id: 'group-by',
+  target: 'sales-group-by',
+  module: 'retail',
+  title: 'Group by',
+  body: 'Choose how the sales are grouped: shop, year, month, salesperson, day, category and item. Move a line up or down, or take it out. We remember your choice.',
 };
 
 export const salesPage: Tour = {
   id: 'page-sales',
-  version: 1,
+  // Version 2 adds the Group by step (issue #341).
+  version: 2,
   title: 'This page: all sales',
   audience: (me) => held(me, 'retail.sale.read'),
   autoStart: false,
   page: '/staff/retail/sales',
   steps: [
-    { id: 'range', target: 'sales-range', module: 'retail', title: 'Pick the days', body: 'Choose the first and the last day to look at. The sales under it are grouped by year, month and day.' },
+    { id: 'range', target: 'sales-range', module: 'retail', title: 'Pick the days', body: 'Choose the first and the last day to look at. The sales under it are grouped the way you choose below.' },
+    groupByStep,
     salesGroupsStep,
   ],
 };
 
 export const creditSalesPage: Tour = {
   id: 'page-credit-sales',
-  version: 1,
+  // Version 2 adds the Group by step (issue #341).
+  version: 2,
   title: 'This page: credit sales',
   audience: (me) => held(me, 'retail.sale.read'),
   autoStart: false,
   page: '/staff/retail/credit-sales',
   steps: [
     { id: 'owing', target: 'credit-owing', module: 'retail', title: 'Who still owes', body: 'Choose Still owing, Overdue or Paid to narrow the list.' },
+    groupByStep,
     salesGroupsStep,
   ],
 };

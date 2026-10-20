@@ -12049,15 +12049,24 @@
       },
       "RetailSalesSummary" : {
         "properties" : {
+          "available_levels" : {
+            "description" : "Every level group_by accepts from this caller; seller needs retail.profit.read in some branch in scope",
+            "items" : {
+              "description" : "Every level group_by accepts from this caller; seller needs retail.profit.read in some branch in scope",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "currency" : {
             "description" : "The tenant's currency; a retail tenant keeps its books in one currency",
             "type" : "string"
           },
           "group_by" : {
+            "description" : "The level these groups are: one of available_levels",
             "type" : "string"
           },
           "has_more" : {
-            "description" : "True when older periods remain: ask again with to = next_to",
+            "description" : "True when more groups remain: next_to (year, month, day) or next_offset (the rest)",
             "type" : "boolean"
           },
           "items" : {
@@ -12066,8 +12075,25 @@
             },
             "type" : "array"
           },
+          "levels" : {
+            "description" : "The chain the request asked for, in order",
+            "items" : {
+              "description" : "The chain the request asked for, in order",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "next_level" : {
+            "description" : "The level under this one in the chain; absent at the end of the chain",
+            "type" : "string"
+          },
+          "next_offset" : {
+            "description" : "Branch, seller, category and item: ask again with offset = next_offset",
+            "format" : "int32",
+            "type" : "integer"
+          },
           "next_to" : {
-            "description" : "The day before the oldest period shown",
+            "description" : "Year, month and day: the day before the oldest period shown; ask again with to = next_to",
             "format" : "date",
             "type" : "string"
           }
@@ -12079,12 +12105,20 @@
             "$ref" : "#/components/schemas/RetailSalesSummaryMethods"
           },
           "from" : {
-            "description" : "First calendar day of the period; not narrowed by the from filter of the request",
+            "description" : "First calendar day of the period; year, month and day only; not narrowed by the from filter",
             "format" : "date",
             "type" : "string"
           },
+          "key" : {
+            "description" : "What the group is: a branch id, a user id, a category id, a product id, or the period (2026, 2026-10 or 2026-10-19); pass it back as the matching filter of the next level",
+            "type" : "string"
+          },
+          "label" : {
+            "description" : "What to show: the branch, person, category or item name, or the period key",
+            "type" : "string"
+          },
           "period" : {
-            "description" : "2026, 2026-10 or 2026-10-19, by group_by",
+            "description" : "2026, 2026-10 or 2026-10-19; year, month and day only",
             "type" : "string"
           },
           "profit_minor" : {
@@ -12092,23 +12126,27 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "quantity" : {
+            "description" : "Units sold, in base units; item level only",
+            "type" : "string"
+          },
           "sales_count" : {
-            "description" : "Completed sales; voided sales are not counted",
+            "description" : "Completed sales; voided sales are not counted. Under a category or an item: the completed sales that have a line in it",
             "format" : "int64",
             "type" : "integer"
           },
           "to" : {
-            "description" : "Last calendar day of the period; not narrowed by the to filter of the request",
+            "description" : "Last calendar day of the period; year, month and day only; not narrowed by the to filter",
             "format" : "date",
             "type" : "string"
           },
           "total_minor" : {
-            "description" : "Total of the completed sales",
+            "description" : "Total of the completed sales. Under a category or an item: the total of its lines",
             "format" : "int64",
             "type" : "integer"
           },
           "voided_count" : {
-            "description" : "Voided sales in the period, kept out of every other figure",
+            "description" : "Voided sales in the group, kept out of every other figure",
             "format" : "int64",
             "type" : "integer"
           }
@@ -28569,6 +28607,22 @@
           }
         }, {
           "in" : "query",
+          "name" : "seller_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "category_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
           "name" : "newest_first",
           "required" : false,
           "schema" : {
@@ -28654,6 +28708,13 @@
           }
         }, {
           "in" : "query",
+          "name" : "level",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
           "name" : "branch_id",
           "required" : false,
           "schema" : {
@@ -28716,6 +28777,38 @@
           "schema" : {
             "type" : "string"
           }
+        }, {
+          "in" : "query",
+          "name" : "seller_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "category_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "item_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "offset",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
         } ],
         "responses" : {
           "200" : {
@@ -28729,7 +28822,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Sales grouped by year, month or day with a summary per group (issue #328)",
+        "summary" : "Sales grouped by a chain of levels with a summary per group (issues #328, #341)",
         "tags" : [ "retail-sales" ]
       }
     },

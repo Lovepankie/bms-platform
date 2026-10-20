@@ -4,7 +4,7 @@ import type {
 } from './retail';
 import type { SalesQuery } from './retail';
 import { RetailError, businessToday, daysBefore } from './retail';
-import { summariseSales } from './retail-summary-mock';
+import { summariseChain } from './retail-chain-mock';
 import { retailMessage } from './retail-errors';
 import type { Me } from './client';
 import { createCashbookMock } from './retail-cashbook-mock';
@@ -23,6 +23,8 @@ import { createPurchasingMock } from './retail-purchasing-mock';
 
 const BRANCH_A = '00000000-0000-4000-8000-0000000000a1';
 const BRANCH_B = '00000000-0000-4000-8000-0000000000a2';
+/** The one fabricated salesperson of every mock sale (issue #341). */
+const MOCK_SELLER = { id: '00000000-0000-4000-8000-0000000005e1', name: 'Test Seller' };
 const MOCK_BRANCHES = [
   { id: BRANCH_A, code: 'BR1', name: 'Test Branch A', is_head_office: true },
   { id: BRANCH_B, code: 'BR2', name: 'Test Branch B', is_head_office: false },
@@ -191,6 +193,10 @@ export function createMockRetail(): RetailApi {
   };
   const bal = (branch: string, product: string) => balances.get(`${branch}|${product}`) ?? 0;
   const move = (branch: string, product: string, milli: number) => balances.set(`${branch}|${product}`, bal(branch, product) + milli);
+  const categoryOf = (id?: string): string | undefined => {
+    const p = id ? products.get(id) : undefined;
+    return p ? categoryId(p.category) : undefined;
+  };
   const find = (id: string) => {
     const p = products.get(id);
     if (!p) return refuse(422, 'validation_failed', 'No such product.');
@@ -493,13 +499,22 @@ export function createMockRetail(): RetailApi {
       }).filter((r) => (!negativeOnly || r.negative) && atLevel(Number(r.qty), level))),
 
     listSales: ({ cursor, ...q }) => {
-      const wanted = [...sales].reverse().filter((x) => saleMatches(x, q));
+      const wanted = [...sales].reverse().filter((x) => saleMatches(x, q, categoryOf));
       const start = cursor ? Number(cursor) : 0;
       const items = wanted.slice(start, start + 50).map(visibleSale);
       return delay({ items, ...(start + 50 < wanted.length ? { next_cursor: String(start + 50) } : {}) });
     },
 
-    salesSummary: (q) => delay(summariseSales(sales.filter((x) => saleMatches(x, q)), q.level, profitAccess)),
+    // The category and the item of a chain choose lines, not sales: summariseChain applies them, so the sales are matched without.
+    salesSummary: (q) => delay(summariseChain(sales.filter((x) => saleMatches(x, { ...q, categoryId: undefined }, categoryOf)), q, {
+      profit: profitAccess,
+      branchName: (id) => MOCK_BRANCHES.find((b) => b.id === id)?.name ?? 'Branch',
+      sellerName: () => MOCK_SELLER.name,
+      product: (id) => {
+        const p = id ? products.get(id) : undefined;
+        return p ? { name: p.description, categoryId: categoryId(p.category), categoryName: p.category } : undefined;
+      },
+    })),
 
     getSale: (id) => {
       const found = sales.find((x) => x.id === id);
@@ -627,7 +642,7 @@ export function createMockRetail(): RetailApi {
       const credit = body.payment_method === 'credit';
       const buyer = body.buyer_name ?? customers.find((c) => c.id === body.customer_id)?.name;
       const sale = cost({
-        id: nextId('5'), sale_no: `S-${String(seq).padStart(6, '0')}`, branch_id: branchId, sale_date: body.sale_date ?? today(),
+        id: nextId('5'), sale_no: `S-${String(seq).padStart(6, '0')}`, branch_id: branchId, sale_date: body.sale_date ?? today(), created_by: MOCK_SELLER.id,
         payment_method: body.payment_method, status: 'completed', currency: 'UGX',
         ...(buyer ? { buyer_name: buyer } : {}), ...(body.customer_id ? { customer_id: body.customer_id } : {}), ...((dueDate ?? body.due_date) ? { due_date: dueDate ?? body.due_date } : {}),
         lines, total_minor: total, paid_minor: credit ? 0 : total, balance_minor: credit ? total : 0,
@@ -903,8 +918,9 @@ export function createMockRetail(): RetailApi {
 }
 
 /** The list's filters (branch, dates, buyer, method, item, status, owing) applied to one stored sale. */
-function saleMatches(x: Sale, { branchId, from, to, buyer, paymentMethod, productId, status, owing }: Omit<SalesQuery, 'cursor' | 'signal'>): boolean {
-  return (!branchId || x.branch_id === branchId) && (!from || (x.sale_date ?? '') >= from) && (!to || (x.sale_date ?? '') <= to)
+function saleMatches(x: Sale, { branchId, from, to, buyer, paymentMethod, productId, sellerId, categoryId, status, owing }: Omit<SalesQuery, 'cursor' | 'signal'>, categoryOf: (productId?: string) => string | undefined): boolean {
+  return (!branchId || x.branch_id === branchId) && (!sellerId || x.created_by === sellerId)
+    && (!categoryId || (x.lines ?? []).some((l) => categoryOf(l.product_id) === categoryId)) && (!from || (x.sale_date ?? '') >= from) && (!to || (x.sale_date ?? '') <= to)
     && (!buyer || (x.buyer_name ?? '').toLowerCase().includes(buyer.trim().toLowerCase()))
     && (!paymentMethod || x.payment_method === paymentMethod) && (!productId || (x.lines ?? []).some((l) => l.product_id === productId))
     && (!status || x.status === status)

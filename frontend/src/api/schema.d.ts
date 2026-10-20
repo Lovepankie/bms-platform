@@ -4250,7 +4250,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Sales grouped by year, month or day with a summary per group (issue #328) */
+        /** Sales grouped by a chain of levels with a summary per group (issues #328, #341) */
         get: operations["summariseRetailSales"];
         put?: never;
         post?: never;
@@ -10809,15 +10809,27 @@ export interface components {
             sales_minor?: number;
         };
         RetailSalesSummary: {
+            /** @description Every level group_by accepts from this caller; seller needs retail.profit.read in some branch in scope */
+            available_levels?: string[];
             /** @description The tenant's currency; a retail tenant keeps its books in one currency */
             currency?: string;
+            /** @description The level these groups are: one of available_levels */
             group_by?: string;
-            /** @description True when older periods remain: ask again with to = next_to */
+            /** @description True when more groups remain: next_to (year, month, day) or next_offset (the rest) */
             has_more?: boolean;
             items?: components["schemas"]["RetailSalesSummaryGroup"][];
+            /** @description The chain the request asked for, in order */
+            levels?: string[];
+            /** @description The level under this one in the chain; absent at the end of the chain */
+            next_level?: string;
+            /**
+             * Format: int32
+             * @description Branch, seller, category and item: ask again with offset = next_offset
+             */
+            next_offset?: number;
             /**
              * Format: date
-             * @description The day before the oldest period shown
+             * @description Year, month and day: the day before the oldest period shown; ask again with to = next_to
              */
             next_to?: string;
         };
@@ -10825,34 +10837,40 @@ export interface components {
             by_method?: components["schemas"]["RetailSalesSummaryMethods"];
             /**
              * Format: date
-             * @description First calendar day of the period; not narrowed by the from filter of the request
+             * @description First calendar day of the period; year, month and day only; not narrowed by the from filter
              */
             from?: string;
-            /** @description 2026, 2026-10 or 2026-10-19, by group_by */
+            /** @description What the group is: a branch id, a user id, a category id, a product id, or the period (2026, 2026-10 or 2026-10-19); pass it back as the matching filter of the next level */
+            key?: string;
+            /** @description What to show: the branch, person, category or item name, or the period key */
+            label?: string;
+            /** @description 2026, 2026-10 or 2026-10-19; year, month and day only */
             period?: string;
             /**
              * Format: int64
              * @description Present only with retail.profit.read in every branch the figures cover
              */
             profit_minor?: number;
+            /** @description Units sold, in base units; item level only */
+            quantity?: string;
             /**
              * Format: int64
-             * @description Completed sales; voided sales are not counted
+             * @description Completed sales; voided sales are not counted. Under a category or an item: the completed sales that have a line in it
              */
             sales_count?: number;
             /**
              * Format: date
-             * @description Last calendar day of the period; not narrowed by the to filter of the request
+             * @description Last calendar day of the period; year, month and day only; not narrowed by the to filter
              */
             to?: string;
             /**
              * Format: int64
-             * @description Total of the completed sales
+             * @description Total of the completed sales. Under a category or an item: the total of its lines
              */
             total_minor?: number;
             /**
              * Format: int64
-             * @description Voided sales in the period, kept out of every other figure
+             * @description Voided sales in the group, kept out of every other figure
              */
             voided_count?: number;
         };
@@ -20676,6 +20694,8 @@ export interface operations {
                 buyer?: string;
                 status?: string;
                 owing?: string;
+                seller_id?: string;
+                category_id?: string;
                 newest_first?: boolean;
                 limit?: number;
                 cursor?: string;
@@ -20727,6 +20747,7 @@ export interface operations {
         parameters: {
             query: {
                 group_by: string;
+                level?: string;
                 branch_id?: string[];
                 from?: string;
                 to?: string;
@@ -20735,6 +20756,10 @@ export interface operations {
                 product_id?: string;
                 buyer?: string;
                 owing?: string;
+                seller_id?: string;
+                category_id?: string;
+                item_id?: string;
+                offset?: number;
             };
             header?: never;
             path?: never;

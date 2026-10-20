@@ -7,6 +7,7 @@ import { retail, type Sale } from '../../../api/retail';
 import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { ALL_BRANCHES } from '../../../auth/branch';
 import { StaffContext } from '../context';
+import { chainUser, writeChain } from './sales-chain-state';
 import { AllSales, CreditSales, SaleList } from './sales';
 
 // The record-payment and void actions are wired into the screens (issues #326 and #327): the lists show them on their rows, an opened sale
@@ -19,6 +20,9 @@ let api: ReturnType<typeof createMockRetail>;
 beforeEach(() => {
   api = createMockRetail();
   Object.assign(retail, api);
+  // These lists are grouped by the chain the person chose; this file uses year, month, day so a day's sales are the bottom (issue #341).
+  writeChain(chainUser(mockMe('admin')), 'all', ['year', 'month', 'day']);
+  writeChain(chainUser(mockMe('admin')), 'credit', ['year', 'month', 'day']);
 });
 afterEach(() => {
   cleanup();

@@ -84,6 +84,8 @@ class SalesController {
             @RequestParam(name = "buyer", required = false) String buyer,
             @RequestParam(name = "status", required = false) String status,
             @RequestParam(name = "owing", required = false) String owing,
+            @RequestParam(name = "seller_id", required = false) UUID sellerId,
+            @RequestParam(name = "category_id", required = false) UUID categoryId,
             @RequestParam(name = "newest_first", required = false, defaultValue = "false") boolean newestFirst,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
@@ -97,19 +99,23 @@ class SalesController {
                 buyer,
                 status,
                 owing,
+                sellerId,
+                categoryId,
                 newestFirst,
                 limit,
                 cursor);
     }
 
-    // JUSTIFICATION-A3: a new read route is one handler; the grouped query lives in its own service (issue #328).
+    // JUSTIFICATION-A3: a new read route is one handler; the grouped query lives in its own service (issues #328,
+    // #341).
     @GetMapping("/sales/summary")
     @RequiresPermission("retail.sale.read")
     @Operation(
-            summary = "Sales grouped by year, month or day with a summary per group (issue #328)",
+            summary = "Sales grouped by a chain of levels with a summary per group (issues #328, #341)",
             operationId = "summariseRetailSales")
     Summary summary(
             @RequestParam(name = "group_by") String groupBy,
+            @RequestParam(name = "level", required = false) String level,
             @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
             @RequestParam(name = "from", required = false) LocalDate from,
             @RequestParam(name = "to", required = false) LocalDate to,
@@ -117,8 +123,26 @@ class SalesController {
             @RequestParam(name = "payment_method", required = false) String paymentMethod,
             @RequestParam(name = "product_id", required = false) UUID productId,
             @RequestParam(name = "buyer", required = false) String buyer,
-            @RequestParam(name = "owing", required = false) String owing) {
-        return summaryService.summary(groupBy, branchIds, from, to, customerId, paymentMethod, productId, buyer, owing);
+            @RequestParam(name = "owing", required = false) String owing,
+            @RequestParam(name = "seller_id", required = false) UUID sellerId,
+            @RequestParam(name = "category_id", required = false) UUID categoryId,
+            @RequestParam(name = "item_id", required = false) UUID itemId,
+            @RequestParam(name = "offset", required = false) Integer offset) {
+        return summaryService.summary(new SalesSummaryService.Query(
+                groupBy,
+                level,
+                branchIds,
+                from,
+                to,
+                customerId,
+                paymentMethod,
+                productId,
+                buyer,
+                owing,
+                sellerId,
+                categoryId,
+                itemId,
+                offset));
     }
 
     @GetMapping("/sales/{sale_id}")

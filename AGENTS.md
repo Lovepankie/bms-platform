@@ -300,8 +300,20 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   ones counted apart, per payment method counts and amounts, `profit_minor` only with `retail.profit.read` in every branch the
   figures cover), bounded to 20 years, 12 months or 31 days with `has_more` and `next_to`; the list and the summary share
   `SalesRepository.appendFilters`. All sales and Credit sales are collapsible year, month and day groups with a summary on every
-  header, the current month open by day, a day's sales loaded only when it opens (`sales-grouped.tsx`, `sales-grouped-state.ts`,
+  header, a day's sales loaded only when it opens (issue #341 replaced the fixed levels with a chain and nothing open to start with; `sales-grouped-state.ts`,
   `docs/specs/retail-ui-notes.md`), with the Help tours `page-sales` and `page-credit-sales`.
+- **Built (retail grouping chain, issue #341):** no migration. `GET /retail/sales/summary` takes `group_by` as an ordered list from
+  branch, year, month, seller, day, category and item (a single value still works) and `level` for the level answered; the parent
+  selection travels as filters (`branch_id`, `from`/`to`, `seller_id`, `category_id`, `item_id`), one grouped query per level, bounded per
+  level (20 years, 12 months, 31 days, 100 shops, 50 of the others) with `has_more` and `next_to` or `next_offset`; a category or an item is summed
+  over the sale lines, `profit_minor` only with `retail.profit.read` in every branch covered, voided sales counted apart; the sales list also
+  takes `seller_id` and `category_id`. All sales and Credit sales have a Group by control (move, remove, add, kept per user and list in
+  localStorage, keyed by the user id) and open from the shop down to the items with a summary on every line and a breadcrumb (`sales-chain.tsx`,
+  `sales-chain-state.ts`, `sales-group-by.tsx`, `docs/specs/retail-ui-notes.md`); the salesperson level (and `seller_id`) needs `retail.profit.read`
+  in every branch the figures cover (403 otherwise, left out of `available_levels` and of the PWA's Group by; the sales list's `seller_id`
+  has the same rule, and `created_by`/`voided_by` on its rows are null for a caller without profit read, unless it is their own id); a group that opens onto groups also offers
+  "Show the sales"; the tours `retail-sales` (version 5), `admin-welcome`
+  (version 7), `page-sales` and `page-credit-sales` (version 2) have a Group by step.
 - **Built (retail sale actions, issues #326, #327 and #330, frontend only):** no migration, permission or route. An opened sale and the Credit sales and All sales lists take **Record payment** and **Mark as fully paid** on a live credit sale that still owes (`POST /retail/sales/{id}/payments` with an `Idempotency-Key` kept by `usePersistedDraft`; amount defaults to the balance, cash, mobile money or bank, a date from the sale to today; shown to a holder of `retail.sale.create` at the sale's branch; an imported sale shows a note instead, which only the screen enforces for now; the payments route does not check `historical`), and an opened completed sale takes **Void this sale** (`POST /retail/sales/{id}/void`, a reason of five characters, a plain warning that stock goes back and reports drop it; shown to a holder of `retail.sale.void` at the branch; the sale then reads Voided with its reason). The forms are in `sale-actions.tsx` and their rules in `sale-actions-state.ts`; the home cards, stock list and stock value say Price and Cost, cost first. Notes: `docs/specs/retail-ui-notes.md` (Sale actions).
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
