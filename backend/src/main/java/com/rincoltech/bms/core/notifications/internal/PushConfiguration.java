@@ -36,7 +36,7 @@ class PushConfiguration {
     }
 
     @Bean
-    PushSender pushSender(VapidKeys keys, PushEndpoints endpoints, BusinessClock clock) {
+    PushSender webPushSender(VapidKeys keys, PushEndpoints endpoints, BusinessClock clock) {
         return new WebPushSender(keys, endpoints, clock);
     }
 
