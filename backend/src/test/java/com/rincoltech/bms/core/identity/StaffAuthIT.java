@@ -42,6 +42,7 @@ class StaffAuthIT extends IntegrationTest {
     @BeforeEach
     void setUp() {
         t = TestDatabase.tenant("auth", true);
+        Api.requireTwoStepForAdmins(t);
         api = Api.tenant(http, t.slug());
         adminEmail = Api.email("admin");
         admin = Api.staff(t, adminEmail, new Role("tenant_admin", null));

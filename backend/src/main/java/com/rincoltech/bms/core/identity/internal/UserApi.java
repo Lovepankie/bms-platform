@@ -146,7 +146,20 @@ final class UserApi {
             @Schema(
                     description =
                             "True when the tenant has switched report runs on (setting reports_enabled, ADR-038); the PWA shows the Reports tab only then")
-            boolean reportsEnabled) {}
+            boolean reportsEnabled,
+
+            @Schema(
+                    description =
+                            "When the tenant's two-step policy will require this user to set up a second factor: only for a user it covers who has none yet and whose grace period is still running, otherwise null (ADR-046)")
+            Instant mfaDueBy,
+
+            @Schema(
+                    description =
+                            "The tenant's two-step sign-in policy: off, roles or everyone; the PWA recommends turning it on to administrators while it is off (ADR-046)")
+            String twoStepPolicy,
+
+            @Schema(description = "The business's time zone, in which mfa_due_by is a day's end (ADR-046)")
+            String tenantTimezone) {}
 
     @Schema(name = "PlatformMe")
     record PlatformMeResponse(UUID userId, String kind, String fullName, String email, List<String> permissions) {}

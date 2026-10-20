@@ -36,9 +36,12 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
   SHA-256 hashes only.
 - TOTP secrets are encrypted at rest with the application data key (8.7). TOTP is RFC 6238
   (HMAC-SHA1, 6 digits, 30 seconds); one step of drift is accepted and each code works once.
-  Enrolment is forced at first sign-in for roles that require it (`roles.mfa_required`: the
-  tenant admin) and for platform operators, and for all staff when the tenant setting
-  `require_mfa_all_staff` is on (FR-IAM-06).
+  Enrolment is forced at first sign-in for platform operators and for a role flagged in
+  `roles.mfa_required` (no seeded role is since `V67`). For tenant staff, tenant admins included, it is optional by default
+  and a tenant administrator can require it for everyone (`require_mfa_all_staff`) or for chosen roles (`require_mfa_roles`)
+  with a grace period (`mfa_grace_days`, `mfa_enforce_from`): until the date a covered user without a factor signs in and is
+  reminded, after it they are sent to enrolment (FR-IAM-06, FR-IAM-16, ADR-046). Changing the policy needs `core.settings.manage`
+  and is audited with before and after.
 - **First run** (FR-IAM-13, ADR-025): accepting an invitation sets the password and signs the user
   in through the same rules as a sign-in, so a role that requires the second factor is sent to
   enrolment, never past it; a refused link signs nobody in. The PWA screens are: 1. Choose a
@@ -49,7 +52,7 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
   grid with Copy all, Download as text and a required "I have saved these codes". Then the staff
   home, where a new tenant admin lands on the set-up checklist and the first-run tour starts
   (FR-IAM-14). The invitation token is removed from the address bar once used; no key or code is
-  logged. Whether tenant admins must enrol stays with issue #93.
+  logged. Whether tenants must require it is the tenant's own policy (issue #348, ADR-046): optional by default.
 - **Recovery codes** (FR-IAM-11): enrolment issues ten single-use codes, shown once. A code is
   accepted in place of a TOTP code; the user can replace all of them with a current TOTP code.
   Failed codes count toward the lockout.
@@ -84,7 +87,7 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
   the same rules as a sign-in (a link issued by an administrator or the operator also emails the user at once, without
   the link): a user with TOTP is asked for the code (`mfa_required`), a role that requires a second factor
   is sent to enrolment, and the failed-attempt lock is not cleared (the user is told to sign in later, `sign_in_required`), so
-  a reset can never switch the second factor off, skip it or reset its guess counter. A user whose role or tenant setting actually requires a second factor (`roles.mfa_required`, `require_mfa_all_staff`) that is not set up gets no link by email; otherwise a user with none resets by mailbox, and a deactivated user
+  a reset can never switch the second factor off, skip it or reset its guess counter. A user whom a role flag or the tenant's two-step policy requires, now, to have a second factor (`roles.mfa_required`, or `require_mfa_all_staff` / `require_mfa_roles` once the grace period has ended, ADR-046) that is not set up gets no link by email; otherwise a user with none resets by mailbox, and a deactivated user
   (the open links are revoked and the link is refused anyway) and a user still invited get no reset. Audited as `core.password_reset.requested`,
   `.refused` (with a reason, for a known account that was not acted on), `.link_revealed` (admin path) and `.used`; the token
   is in no audit row, log line or error. The reset page takes the token out of the address bar and the browser history the moment it reads it and keeps it in memory only (never in storage) until the server accepts the password. Section 8.2a gives the threat model.
@@ -123,7 +126,7 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
 | Guessing a link | 256 random bits; looked up by SHA-256, so no secret comparison and no partial match; 30 attempts per 10 minutes per address; single use; one hour |
 | Reading a link from the database, a backup or a log | The token is stored as a hash. The outbox row of an emailed link holds it in plain text until the email is sent or the link expires; a job every 5 minutes then clears the parameters, so the window is the hour plus 5 minutes at most, or until sent (ADR-042 decision 11); a backup taken in that window holds it, one hour old and single use. No log line, audit row or error holds a token |
 | A link sent to the wrong place or a phishing host | Sent only to the email on file (never to the address typed on the form); the host is the tenant's own, from configuration, never a request header; the token travels in the fragment, so it reaches no server log or Referer |
-| Account takeover by whoever reads the mailbox | An account with TOTP still needs the code, and the reset neither disables it nor clears the failed-attempt lock. Two-step sign-in is optional: where no role or tenant setting requires a factor, a user with none resets by mailbox as before (the staging database has the requirement off for `tenant_admin` by a hand edit, the V2 seed has it on, so elsewhere a no-factor admin never gets a session). **Whoever reads a no-factor tenant admin's mailbox can take the account over on staging until #348 lands (a consequence of the optional setting, for Hillary's explicit acceptance).** Where `roles.mfa_required` or `require_mfa_all_staff` requires a factor the user has not set up, no link is sent by email (the request is answered like any other and refused inside, decided by that data and not by a role name), because the reader of the mailbox could otherwise choose the password and enrol their own authenticator; that user is helped by an administrator or the operator. What is left is an account with no second factor and no requirement, which is as safe as its mailbox; the owner of the mailbox is emailed when a password is changed and every device is signed out |
+| Account takeover by whoever reads the mailbox | An account with TOTP still needs the code, and the reset neither disables it nor clears the failed-attempt lock. Two-step sign-in is optional by default on every database (migration `V67`, ADR-046): where no role flag or tenant policy requires a factor, a user with none resets by mailbox as before. **V67 changes no existing tenant's policy.** **Whoever reads a no-factor tenant admin's mailbox can take the account over, for as long as the tenant has not required two-step sign-in (the owner's decision of 20 October 2026, now true of every tenant, not only staging); the mitigations are the recommendation to turn the policy on, the first run's offer, the notice email when a password changes and every device signed out. A tenant that requires it closes the gap once the grace period has ended, and not before: inside the grace period a covered user with no factor is as exposed as an optional one.** Where `roles.mfa_required` or the tenant's policy (`require_mfa_all_staff`, `require_mfa_roles`) requires, now, a factor the user has not set up, no link is sent by email (the request is answered like any other and refused inside, decided by that data and not by a role name), because the reader of the mailbox could otherwise choose the password and enrol their own authenticator; that user is helped by an administrator or the operator. What is left is an account with no second factor and no requirement, which is as safe as its mailbox; the owner of the mailbox is emailed when a password is changed and every device is signed out |
 | A stale or stolen session surviving a reset | Every session and refresh token of the user ends in the transaction that sets the password |
 | A reset for an account that should not get back in | Only active users; a deactivated user's open links are revoked and refused; an invited user keeps the invitation path |
 | One tenant's link or admin reaching another's user | The table has forced row-level security with the tenant policy; the lookup runs inside the tenant of the host, so a link of tenant A used on tenant B's host is not found, and an admin of B cannot issue a link for A's user (`PasswordResetIT`, `RlsIsolationIT`) |
@@ -487,6 +490,8 @@ only, valid 7 days, replaced by every new email, carried in the URL fragment and
 body, and compared digest to digest in constant time after the indexed lookup.
 
 `core.branches.manage` covers every branch change: create, rename, close, reopen and the stocking switch (FR-BR-01, FR-BR-07, FR-BR-08, issue #329, ADR-041). No permission was added for closing: only the tenant admin closes a branch, and the call is scoped to the caller's branches like the other branch routes (a branch outside the scope is 404). The retail refusals `branch_not_stocking` and `branch_does_not_sell` (a Store, FR-RET-50, ADR-048, issue #366) are not permissions: they apply to every caller, administrators included. Making a branch a Store is the same `core.branches.manage` call; no permission was added.
+
+`core.settings.manage` also covers the tenant's two-step sign-in policy (`require_mfa_all_staff`, `require_mfa_roles`, `mfa_grace_days` in `PATCH /settings`, FR-IAM-16, issue #348, ADR-046). No permission was added: the people who may change the settings may change who must use a second factor, and `core.settings.read` (the tenant admin, branch manager, accountant and auditor) may read it. A user's own set-up of two-step sign-in (`/auth/staff/mfa/enrol` and `/mfa/confirm`) is open to every signed-in staff user.
 
 ### 8.3.3 Enforcement
 

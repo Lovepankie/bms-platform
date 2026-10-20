@@ -7387,6 +7387,11 @@ export interface components {
             email?: string;
             full_name?: string;
             kind?: string;
+            /**
+             * Format: date-time
+             * @description When the tenant's two-step policy will require this user to set up a second factor: only for a user it covers who has none yet and whose grace period is still running, otherwise null (ADR-046)
+             */
+            mfa_due_by?: string;
             mfa_enabled?: boolean;
             mfa_required?: boolean;
             /** @description Per enabled module that has a settings group, the capabilities switched on (ADR-033); the PWA offers a capability's screens only when listed */
@@ -7404,10 +7409,14 @@ export interface components {
             /** @description True when the tenant has switched report runs on (setting reports_enabled, ADR-038); the PWA shows the Reports tab only then */
             reports_enabled?: boolean;
             roles?: components["schemas"]["RoleAssignment"][];
+            /** @description The business's time zone, in which mfa_due_by is a day's end (ADR-046) */
+            tenant_timezone?: string;
             /** @description Guided tours the user finished or dismissed, by tour id (issue #19) */
             tours?: {
                 [key: string]: components["schemas"]["TourState"];
             };
+            /** @description The tenant's two-step sign-in policy: off, roles or everyone; the PWA recommends turning it on to administrators while it is off (ADR-046) */
+            two_step_policy?: string;
             /** Format: int32 */
             unused_recovery_codes?: number;
             /** Format: uuid */
@@ -7545,6 +7554,8 @@ export interface components {
         /** @description mfa_token when enrolment is forced at sign-in; empty when signed in */
         MfaEnrolRequest: {
             mfa_token?: string;
+            /** @description A signed-in user starting their own set-up gives their current password; not needed with an mfa_token */
+            password?: string;
         };
         MfaEnrolment: {
             /** @description otpauth URI for a QR code; shown once */
@@ -13781,14 +13792,29 @@ export interface components {
             logo_document_id?: string;
             /** Format: int32 */
             max_active_loans_per_member?: number;
+            /**
+             * Format: date-time
+             * @description When a covered user without a second factor must set one up; null means at once or no requirement (ADR-046)
+             */
+            mfa_enforce_from?: string;
+            /**
+             * Format: int32
+             * @description The grace period in days last chosen for the two-step requirement, or null
+             */
+            mfa_grace_days?: number;
             receipt_footer?: string;
             /** @description True when the report runs are switched on for this tenant (default false; extras slice D1, ADR-038) */
             reports_enabled?: boolean;
+            /** @description Two-step sign-in is required of every staff user (FR-IAM-06, ADR-046) */
             require_mfa_all_staff?: boolean;
+            /** @description Staff role keys whose holders must use two-step sign-in (ADR-046); empty when none is chosen */
+            require_mfa_roles?: string[];
             /** @description True once the business set-up checklist has been dismissed */
             setup_dismissed?: boolean;
             /** @description Brand colour #RRGGBB, or null for the platform look (FR-TEN-08) */
             theme_primary?: string;
+            /** @description The business's time zone, in which a two-step deadline is a day's end (ADR-046) */
+            timezone?: string;
             /** Format: int32 */
             version?: number;
         };
@@ -14011,12 +14037,24 @@ export interface components {
             display_name?: string;
             /** Format: int32 */
             max_active_loans_per_member?: number;
+            /**
+             * Format: int32
+             * @description Days a covered user without a second factor may keep signing in before it is required; 0 means at once. Sending it moves the deadline to now plus these days (ADR-046)
+             */
+            mfa_grace_days?: number;
+            /** @description Needed to turn two-step sign-in off or narrow it, from an administrator with no authenticator: their own current password (ADR-046). Never stored or logged */
+            password?: string;
             receipt_footer?: string;
             reports_enabled?: boolean;
+            /** @description Require two-step sign-in of every staff user; the grace period applies (ADR-046) */
             require_mfa_all_staff?: boolean;
+            /** @description Staff role keys whose holders must use two-step sign-in; an empty list clears the choice (ADR-046) */
+            require_mfa_roles?: string[];
             setup_dismissed?: boolean;
             /** @description #RRGGBB, or an empty string to clear it; white or near-black text on it must reach contrast 4.5 (FR-TEN-08) */
             theme_primary?: string;
+            /** @description Needed to turn two-step sign-in off or narrow it, from an administrator who has an authenticator: its current code (ADR-046). Never stored or logged */
+            totp_code?: string;
         };
         UpdateTenantSmsControlsRequest: {
             /** Format: int32 */

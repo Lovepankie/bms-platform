@@ -42,6 +42,7 @@ class AuthConcurrencyIT extends IntegrationTest {
     @BeforeEach
     void setUp() {
         t = TestDatabase.tenant("race", true);
+        Api.requireTwoStepForAdmins(t);
         api = Api.tenant(http, t.slug());
         adminEmail = Api.email("admin");
         admin = Api.staff(t, adminEmail, new Role("tenant_admin", null));

@@ -81,9 +81,9 @@ describe('step 2: two-step sign-in, recommended not required', () => {
     expect(sixDigits('12a 34-56789')).toBe('123456');
   });
 
-  it('has no Skip when the role requires it, and says why', () => {
+  it('has no Skip when the business requires it, and says why', () => {
     const html = at({ kind: 'enrol', enrolment, mfaToken: 'fabricated-mfa-token' });
-    expect(html).toContain('Your role needs two-step sign-in, so this step cannot be skipped.');
+    expect(html).toContain('Your business asks for two-step sign-in, so this step cannot be skipped.');
     expect(html).not.toContain('Skip for now');
     expect(html).not.toContain('fabricated-mfa-token');
   });

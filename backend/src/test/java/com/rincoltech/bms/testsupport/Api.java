@@ -251,6 +251,23 @@ public final class Api {
         return id;
     }
 
+    /**
+     * Makes the tenant require two-step sign-in of its tenant admins, at once, the way a business would through its settings
+     * (ADR-046). Two-step sign-in is optional by default since V67, so a test of the second factor calls this first.
+     */
+    public static void requireTwoStepForAdmins(TestDatabase.Fixture t) {
+        requireTwoStepForAdmins(t.tenantId());
+    }
+
+    public static void requireTwoStepForAdmins(UUID tenantId) {
+        TestDatabase.owner().sql("""
+                        INSERT INTO tenant_settings (id, tenant_id, settings)
+                        VALUES (?, ?, '{"require_mfa_roles": ["tenant_admin"]}')
+                        ON CONFLICT (tenant_id) DO UPDATE
+                           SET settings = tenant_settings.settings || '{"require_mfa_roles": ["tenant_admin"]}'
+                        """).params(UUID.randomUUID(), tenantId).update();
+    }
+
     /** A platform operator with the test password, not yet enrolled in MFA. */
     public static UUID platformUser(String email) {
         UUID id = UUID.randomUUID();

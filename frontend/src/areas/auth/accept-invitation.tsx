@@ -1,5 +1,5 @@
 import { Link, createLazyRoute, useNavigate } from '@tanstack/react-router';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useRef, useState } from 'react';
 import { api, type MfaEnrolment, problemOf, type SignInResponse } from '../../api/client';
 import { invitationToken, plainProblem } from '../../auth/codes';
 import { setAccessToken } from '../../auth/session';
@@ -10,8 +10,8 @@ import { ErrorLine, PasswordFields, RecoveryCodes, StepHeader, TwoStepSetup, pas
 // The first run of an invited user (FR-IAM-01, issues #86 and #93). The one-time token arrives in
 // the link's fragment, so it never reaches a server log. Three steps, one action each:
 //   1. Choose a password. Accepting signs the user in (ADR-025).
-//   2. Two-step sign-in: recommended, not required, with a clear Skip for now. When the user's role
-//      still requires it (FR-IAM-06 until #93 lands), there is no Skip and the screen says why.
+//   2. Two-step sign-in: recommended, not required, with a clear Skip for now. When the business requires it
+//      of this user (the tenant's policy, FR-IAM-06, ADR-046), there is no Skip and the screen says why.
 //   3. Recovery codes, only after turning two-step sign-in on.
 // Then the staff area, where a new tenant admin lands on the set-up checklist and the first-run
 // tour starts (issue #19).
@@ -34,6 +34,8 @@ export function AcceptInvitation({ token, initial = { kind: 'password' } }: { to
   const [code, setCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The password just chosen, kept in memory only until the person turns two-step on or leaves: starting the set-up asks for it.
+  const chosen = useRef('');
 
   async function run(action: () => Promise<void>, fallback: string) {
     if (busy) return;
@@ -48,7 +50,10 @@ export function AcceptInvitation({ token, initial = { kind: 'password' } }: { to
     }
   }
 
-  const home = () => void navigate({ to: '/staff' });
+  const home = () => {
+    chosen.current = '';
+    void navigate({ to: '/staff' });
+  };
 
   async function afterPassword(body: SignInResponse) {
     // The token has done its job; drop it from the address bar and the history.
@@ -75,6 +80,7 @@ export function AcceptInvitation({ token, initial = { kind: 'password' } }: { to
     void run(async () => {
       const { data, error } = await api.POST('/api/v1/auth/staff/invitations/accept', { body: { token, password } });
       if (error || !data) throw error;
+      chosen.current = password;
       setPassword('');
       setConfirm('');
       await afterPassword(data);
@@ -83,8 +89,9 @@ export function AcceptInvitation({ token, initial = { kind: 'password' } }: { to
 
   function turnOn() {
     void run(async () => {
-      const { data, error } = await api.POST('/api/v1/auth/staff/mfa/enrol', {});
+      const { data, error } = await api.POST('/api/v1/auth/staff/mfa/enrol', { body: { password: chosen.current } });
       if (error || !data) throw error;
+      chosen.current = '';
       setStep({ kind: 'enrol', enrolment: data, mfaToken: null });
     }, 'Two-step sign-in could not start. Try again.');
   }
@@ -157,7 +164,7 @@ export function AcceptInvitation({ token, initial = { kind: 'password' } }: { to
             step={2}
             of={STEPS}
             title="Set up two-step sign-in"
-            lead={step.mfaToken ? 'Your role needs two-step sign-in, so this step cannot be skipped.' : undefined}
+            lead={step.mfaToken ? 'Your business asks for two-step sign-in, so this step cannot be skipped.' : undefined}
           />
           <ErrorLine message={message} />
           <TwoStepSetup enrolment={step.enrolment} code={code} onCode={setCode} busy={busy} onSubmit={(e) => confirmCode(e, step.mfaToken)}>

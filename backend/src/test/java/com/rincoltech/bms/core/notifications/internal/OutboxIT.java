@@ -541,6 +541,15 @@ class OutboxIT extends IntegrationTest {
                 }
             }
         }
+        // ADR-046: the warning to the administrators when two-step sign-in is relaxed names the business, who and when.
+        OutboxTemplates.Rendered relaxed = templates.render("email", "identity.two_step_policy_weakened", params);
+        assertThat(relaxed.subject()).contains("Test Shop");
+        assertThat(relaxed.text())
+                .contains("Test Administrator")
+                .contains("18 Oct 2026 10:00 UTC")
+                .contains("saved");
+        assertThat(OutboxTemplates.placeholders("email", "identity.two_step_policy_weakened"))
+                .containsExactlyInAnyOrder("business_name", "who", "when", "change");
         // Review B1: the email to an unconfirmed address carries only the server's values.
         assertThat(OutboxTemplates.placeholders("email", "onboarding.verify_email"))
                 .containsExactlyInAnyOrder("link", "reference");

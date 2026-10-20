@@ -13,6 +13,7 @@ import com.rincoltech.bms.core.identity.internal.AuthApi.RecoveryCodesResponse;
 import com.rincoltech.bms.core.identity.internal.AuthApi.SignInRequest;
 import com.rincoltech.bms.core.identity.internal.AuthApi.SignInResponse;
 import com.rincoltech.bms.core.identity.internal.AuthFlow.Enrolment;
+import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.AuthenticatedEndpoint;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
@@ -83,7 +84,19 @@ class StaffAuthController {
     @PublicEndpoint
     @Operation(summary = "Start TOTP enrolment; returns the secret once (FR-IAM-06)", operationId = "staffMfaEnrol")
     MfaEnrolmentResponse enrol(@RequestBody(required = false) MfaEnrolRequest request) {
-        Enrolment e = flow.startEnrolment(accounts, enrollee(request == null ? null : request.mfaToken()));
+        String mfaToken = request == null ? null : request.mfaToken();
+        UUID userId = enrollee(mfaToken);
+        if (mfaToken == null || mfaToken.isBlank()) {
+            // A person already signed in who starts their own set-up proves it is them: a stolen session cannot
+            // enrol its own authenticator (ADR-046 decision 7).
+            if (request == null
+                    || request.password() == null
+                    || request.password().isEmpty()) {
+                throw ApiException.rule("password_required", "Enter your own password to confirm.");
+            }
+            flow.confirmPassword(accounts, userId, CurrentPrincipal.require().sessionId(), request.password());
+        }
+        Enrolment e = flow.startEnrolment(accounts, userId);
         return new MfaEnrolmentResponse(e.secret(), e.otpauthUri());
     }
 

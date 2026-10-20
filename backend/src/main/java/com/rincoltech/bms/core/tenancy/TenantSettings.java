@@ -13,8 +13,11 @@ public interface TenantSettings {
      */
     long approvalThresholdMinor(String actionType);
 
-    /** FR-IAM-06: every staff user must use TOTP, not only the roles that require it. */
-    boolean requireMfaAllStaff();
+    /**
+     * FR-IAM-06, issue #348, ADR-046: the tenant's two-step sign-in policy. Off by default: two-step sign-in is optional until a
+     * tenant administrator requires it for everyone or for chosen roles.
+     */
+    TwoStepPolicy twoStepPolicy();
 
     /** FR-COL-05: collateral types this tenant does not accept; empty when unset. */
     Set<String> disabledCollateralTypes();

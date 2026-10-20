@@ -226,25 +226,25 @@ administration instead.
 
 The user types the email or phone on the sign-in page's "Forgot password?" and a link (valid one hour, once) goes to the email on
 file; nothing tells the page whether an account matched (FR-IAM-15, ADR-042). It needs the SMTP variables above on the host: until
-they are set the link is queued and not sent. A user whose role requires two-step sign-in that is not set up yet (a new tenant admin)
+they are set the link is queued and not sent. A user whom the tenant's policy requires, now, to use two-step sign-in and who has not set it up yet
 gets no link by email.
 
 For a user with no email on file, an unreachable inbox, or a host without SMTP, a tenant admin calls
 `POST /api/v1/users/{user_id}/reset-sign-in` and hands the returned link to the user once; it is not emailed, and the user is emailed
 that a reset was issued. The body proves the admin is still themselves: `{"totp_code": "<the current code from their own
 authenticator>"}` when they have two-step sign-in, otherwise `{"password": "<their own current password>"}` (two-step sign-in is
-optional on staging; a wrong password counts toward the same 15 minute lock as at sign-in, and the fifth wrong password ends the session that sent it). **On the Users screen** (`/staff/users`) this is the **Reset sign-in** button on the person's card: the administrator types the
+optional by default; a wrong password counts toward the same 15 minute lock as at sign-in, and the fifth wrong password ends the session that sent it). **On the Users screen** (`/staff/users`) this is the **Reset sign-in** button on the person's card: the administrator types the
 6 digit code from their own authenticator app (or their own password when they have none), and the link is shown once with Copy and
 Send on WhatsApp (issue #339). A tenant admin cannot be reset this way, nor can an admin reset themselves; the platform operator's
 route for a tenant admin has no screen and is called by API.
 
-**Staging note.** The V2 seed makes two-step sign-in required for the `tenant_admin` role (`roles.mfa_required = true`), and only the staging
-database has it `false`, by the owner's hand edit (not a migration). On a fresh database (production, CI) a tenant admin with no authenticator
-is sent to enrolment and gets no session, so the password step-up below is reachable only where the seed was edited. On staging a no-factor
-admin is allowed, and whoever reads that admin's mailbox can take the account over (a consequence of the optional setting, listed for Hillary's explicit acceptance until #348 lands). Such an admin such an admin resets other
-users with their own password, and, where SMTP is set up, can use Forgot password themselves. A user for whom a factor IS required
-(the role setting, or the tenant's `require_mfa_all_staff`) and has none gets no link by email and is helped by an administrator or the
-operator. A per-tenant policy for this is #348.
+**Two-step sign-in is optional by default** (migration `V67`, issue #348, ADR-046): no role is flagged, so a new tenant admin is signed in after
+the first run and is offered the second factor, and every database behaves the same (staging's hand edit of `roles.mfa_required` is no longer needed). A
+tenant administrator chooses who must use it under Business set-up > Two-step sign-in (everyone, or chosen roles, with a grace period); the platform
+operator can read it in the tenant's settings. A no-factor admin resets other users with their own password, and, where SMTP is set up, can use Forgot
+password themselves, and whoever reads that admin's mailbox can take the account over until the tenant requires two-step sign-in, so recommend it when
+you hand a tenant over. A user for whom a factor IS required now (a role flag, or the tenant's policy once its grace period has ended) and has none gets
+no link by email and is helped by an administrator or the operator.
 
 A tenant admin who forgot the password and cannot use the sign-in page (no email, or SMTP not set up) is helped by the platform
 operator after verifying the request with the tenant out of band: `POST /api/v1/platform/tenants/{id}/users/{user_id}/reset-sign-in` with

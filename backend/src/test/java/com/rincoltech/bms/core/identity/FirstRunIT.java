@@ -64,9 +64,26 @@ class FirstRunIT extends IntegrationTest {
         return api.call(HttpMethod.PUT, "/api/v1/me/tours/" + tourId, body, token);
     }
 
-    /** FR-IAM-06, issue #86: a role that requires a second factor goes to enrolment, not past it. */
+    /** FR-IAM-06, issues #86 and #348: with two-step sign-in optional (the default), a new administrator is signed in and offered it. */
+    @Test
+    void acceptingAsAnAdminOfATenantWithNoPolicyIsSignedInAndTwoStepStaysOptional() {
+        ResponseEntity<JsonNode> accepted = accept(invite(Api.email("owner1"), "tenant_admin"));
+
+        assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(accepted.getBody().get("status").asString()).isEqualTo("signed_in");
+        JsonNode me = api.get(
+                        "/api/v1/me", accepted.getBody().get("access_token").asString())
+                .getBody();
+        assertThat(me.get("mfa_enabled").asBoolean()).isFalse();
+        assertThat(me.get("mfa_required").asBoolean()).isFalse();
+        assertThat(me.get("mfa_due_by").isNull()).isTrue();
+        assertThat(me.get("two_step_policy").asString()).isEqualTo("off");
+    }
+
+    /** FR-IAM-06, issue #86: a role that the tenant requires a second factor of goes to enrolment, not past it. */
     @Test
     void acceptingAsARoleThatRequiresTheFactorLeadsToEnrolmentNotToASession() {
+        Api.requireTwoStepForAdmins(t);
         ResponseEntity<JsonNode> accepted = accept(invite(Api.email("owner2"), "tenant_admin"));
 
         assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.OK);
