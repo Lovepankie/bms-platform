@@ -54,6 +54,8 @@ export type AccountPayment = S['RetailAccountPayment'];
 export type AccountPaymentRequest = S['RetailAccountPaymentRequest'];
 /** One payment against one credit sale (FR-RET-05) and the sale's figures after it. */
 export type SalePaymentRequest = S['RetailPaymentRequest'];
+/** The write-off of a credit sale's unpaid part (ADR-043): done at once, or waiting for a second administrator. */
+export type WriteOffOutcome = S['RetailWriteOffOutcome'];
 export type SalePaymentResult = S['RetailPaymentResult'];
 export type AccountPaymentPage = S['RetailAccountPaymentList'];
 /** Optional documents (documents capability, ADR-033, issue #197): quotations, invoices and delivery notes, numbered per branch. */
@@ -383,6 +385,8 @@ export interface RetailApi {
   paySale(saleId: string, body: SalePaymentRequest, idempotencyKey: string): Promise<SalePaymentResult>;
   /** Voids a sale by reversal (retail.sale.void at the branch). The schema has no Idempotency-Key for it: a second void is refused as sale_voided. */
   voidSale(saleId: string, reason: string): Promise<Sale>;
+  /** Writes off what a credit sale still owes as a loss (retail.credit.manage); takes the Idempotency-Key of its form. */
+  writeOffSale(saleId: string, reason: string, idempotencyKey: string): Promise<WriteOffOutcome>;
   listCustomers(): Promise<Customer[]>;
   /** The credit buyers screen: server-side search and cursor paging. */
   listCustomerPage(q: { query?: string; cursor?: string; signal?: AbortSignal }): Promise<CustomerPage>;
@@ -783,6 +787,10 @@ const realRetail: RetailApi = {
 
   async voidSale(saleId, reason) {
     return unwrap(await api.POST('/api/v1/retail/sales/{sale_id}/void', { params: { path: { sale_id: saleId } }, body: { reason } }));
+  },
+
+  async writeOffSale(saleId, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/sales/{sale_id}/write-off', { params: { path: { sale_id: saleId }, header: { 'Idempotency-Key': key } }, body: { reason } }));
   },
 
   async listCustomers() {

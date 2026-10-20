@@ -17,7 +17,7 @@ import { useRootFigures } from './sales-grouped';
 import { SalesChain, useChainView } from './sales-chain';
 import { chainUser, effectiveChain, usableChain, usableLevels, type Selection } from './sales-chain-state';
 import { GroupBy } from './sales-group-by';
-import { PaySaleAction, VoidSaleAction } from './sale-actions';
+import { PaySaleAction, VoidSaleAction, WriteOffSaleAction } from './sale-actions';
 
 // Credit sales and All sales (#145): the lists the pilot's app has, 'Credit sales' and the sales
 // history, read from the sales list API in the branch chosen at the top of the page (every branch the
@@ -32,11 +32,12 @@ const METHODS: { value: SalePayment; label: string }[] = [
 ];
 const methodLabel = (m: string | undefined) => METHODS.find((x) => x.value === m)?.label ?? m ?? '';
 
-export type SaleState = { label: 'Paid' | 'Part paid' | 'Unpaid' | 'Overdue' | 'Voided'; tone: 'success' | 'warning' | 'danger' | 'info' };
+export type SaleState = { label: 'Paid' | 'Part paid' | 'Unpaid' | 'Overdue' | 'Voided' | 'Written off'; tone: 'success' | 'warning' | 'danger' | 'info' };
 
 /** What a sale is, in words: voided, paid, or (credit) unpaid, part paid or overdue on the business date `today`. */
 export function saleState(sale: Sale, today: string): SaleState {
   if (sale.status === 'voided') return { label: 'Voided', tone: 'warning' };
+  if (sale.write_off) return { label: 'Written off', tone: 'warning' };
   const owed = sale.balance_minor ?? 0;
   if (sale.payment_method !== 'credit' || owed <= 0) return { label: 'Paid', tone: 'success' };
   if (sale.due_date && sale.due_date < today) return { label: 'Overdue', tone: 'danger' };
@@ -103,6 +104,7 @@ export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: str
     ...(sale.buyer_contact ? [['Contact', sale.buyer_contact] as [string, string]] : []),
     ...(sale.due_date ? [['Due', showDate(sale.due_date)] as [string, string]] : []),
     ...(sale.status === 'voided' && sale.void_reason ? [['Voided because', sale.void_reason] as [string, string]] : []),
+    ...(sale.write_off ? [['Written off', `${showDate(sale.write_off.written_off_on)}, ${money(sale.write_off.unpaid_minor ?? 0)} owed was cleared: ${sale.write_off.reason ?? ''}`] as [string, string]] : []),
   ];
   return (
     <section aria-label="Sale">
@@ -170,6 +172,7 @@ function OpenSale({ id, onClose }: { id: string; onClose: () => void }) {
         <p><Link className="btn-sm" to="/staff/retail/returns/new/$saleId" params={{ saleId: id }}>Return goods</Link></p>
       )}
       {sale.data && <VoidSaleAction sale={sale.data} branchName={nameOf(sale.data.branch_id)} />}
+      {sale.data && <WriteOffSaleAction sale={sale.data} />}
       {mayReturn && (returns.data ?? []).length > 0 && (
         <section aria-label="Returns of this sale" data-testid="sale-returns">
           <h3>Returns of this sale</h3>

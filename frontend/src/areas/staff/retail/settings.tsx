@@ -7,6 +7,7 @@ import {
   CAPABILITIES, changeOf, chooseProfile, draftOf, isChange, requestOf, sentencesOf, toggle,
   type CapabilityKey, type Change, type Draft, type Profile,
 } from './capabilities-state';
+import { CreditRecognitionSetting } from './credit-recognition';
 import { PurchasingSettings } from './purchasing-settings';
 import { Gate, Problem, Success, changeFailureText, useToast } from './ui';
 
@@ -149,6 +150,7 @@ export function RetailSettings() {
       {read.data && <ReturnsThresholdWarning capabilities={read.data.capabilities} />}
       {/* Keyed by the version, so a fresh read after someone else's change starts from what is saved. */}
       {read.data && <Editor key={read.data.version} read={read.data} onSaved={() => { setSaved(true); show('Saved'); }} onEdit={() => setSaved(false)} />}
+      {read.data && <CreditRecognitionSetting key={`credit-${read.data.version}`} read={read.data} onSaved={() => show('Saved')} />}
       <PurchasingSettings />
     </Gate>
   );

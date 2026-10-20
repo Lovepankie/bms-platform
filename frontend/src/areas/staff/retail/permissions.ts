@@ -58,6 +58,8 @@ export const PRICELIST_USE = 'retail.pricelist.use';
 export const PRICE_OVERRIDE = 'retail.price.override';
 /** Set a credit buyer's limit and payment terms (administrators; the sales role edits name and contact only). */
 export const CREDIT_MANAGE = 'retail.credit.manage';
+/** Write off a debt that will never be paid (administrators; a write-off cannot be taken back in this release). */
+export const CREDIT_WRITE_OFF = 'retail.credit.write_off';
 /** Sell on credit above a buyer's limit, with a reason. */
 export const CREDIT_OVERRIDE = 'retail.credit.override';
 /** Issue and reprint quotations, invoices and delivery notes, and make the customer statement PDF (administrators; documents capability). */

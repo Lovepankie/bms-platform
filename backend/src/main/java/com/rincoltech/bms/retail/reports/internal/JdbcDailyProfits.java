@@ -14,10 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class JdbcDailyProfits implements DailyProfits {
 
-    private final ReportsRepository repo;
+    private final ProfitFigures figures;
 
-    JdbcDailyProfits(ReportsRepository repo) {
-        this.repo = repo;
+    JdbcDailyProfits(ProfitFigures figures) {
+        this.figures = figures;
     }
 
     @Override
@@ -30,8 +30,8 @@ class JdbcDailyProfits implements DailyProfits {
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public Map<LocalDate, Long> profitByDay(UUID branchId, LocalDate from, LocalDate to) {
         Map<LocalDate, Long> out = new TreeMap<>();
-        for (DayFigures f : repo.daily(List.of(branchId), from, to)) {
-            out.merge(f.date(), f.sales() - f.costOfSales() - f.usageCost(), Long::sum);
+        for (DayFigures f : figures.daily(List.of(branchId), from, to)) {
+            out.merge(f.date(), f.sales() - f.costOfSales() - f.usageCost() - f.badDebt(), Long::sum);
         }
         return out;
     }

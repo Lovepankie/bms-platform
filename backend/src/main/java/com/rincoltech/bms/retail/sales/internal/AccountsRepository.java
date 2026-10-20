@@ -37,7 +37,9 @@ class AccountsRepository {
             LocalDate saleDate,
             String currency,
             long totalMinor,
-            long paidMinor) {
+            long paidMinor,
+            java.time.Instant createdAt,
+            boolean historical) {
         long balanceMinor() {
             return totalMinor - paidMinor;
         }
@@ -120,7 +122,9 @@ class AccountsRepository {
                 rs.getDate("sale_date").toLocalDate(),
                 rs.getString("currency"),
                 rs.getLong("total_minor"),
-                rs.getLong("paid_minor"));
+                rs.getLong("paid_minor"),
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getBoolean("historical"));
     }
 
     /**
@@ -141,7 +145,7 @@ class AccountsRepository {
             params.put("branchIds", branchIds);
         }
         return jdbc.sql("""
-                        SELECT id, sale_no, branch_id, sale_date, currency, total_minor, paid_minor FROM retail_sales
+                        SELECT id, sale_no, branch_id, sale_date, currency, total_minor, paid_minor, created_at, historical FROM retail_sales
                          WHERE customer_id = :customer AND payment_method = 'credit' AND status = 'completed'
                            AND NOT historical AND paid_minor < total_minor AND sale_date <= :paidOn""" + branch + " ORDER BY sale_date, created_at, id FOR UPDATE")
                 .params(params)
@@ -152,13 +156,21 @@ class AccountsRepository {
     /** The named sales of a buyer, locked in a fixed order so two payments cannot deadlock. */
     List<OpenSale> lockSales(UUID customerId, List<UUID> ids) {
         return jdbc.sql("""
-                        SELECT id, sale_no, branch_id, sale_date, currency, total_minor, paid_minor FROM retail_sales
+                        SELECT id, sale_no, branch_id, sale_date, currency, total_minor, paid_minor, created_at, historical FROM retail_sales
                          WHERE customer_id = :customer AND payment_method = 'credit' AND status = 'completed'
                            AND id IN (:ids) ORDER BY sale_date, created_at, id FOR UPDATE
                         """)
                 .param("customer", customerId)
                 .param("ids", ids)
                 .query((rs, n) -> openSale(rs))
+                .list();
+    }
+
+    /** The sales among these whose unpaid part was written off (ADR-043): a payment that paid one cannot be reversed. */
+    List<UUID> writtenOffAmong(List<UUID> ids) {
+        return jdbc.sql("SELECT sale_id FROM retail_sale_writeoffs WHERE sale_id IN (:ids)")
+                .param("ids", ids)
+                .query(UUID.class)
                 .list();
     }
 
@@ -375,7 +387,13 @@ class AccountsRepository {
                        CAST(NULL AS text), r.account_credit_minor, CAST(0 AS bigint)
                   FROM retail_sale_returns r JOIN retail_sales s ON s.id = r.sale_id
                  WHERE s.customer_id = :customer AND s.payment_method = 'credit' AND NOT s.historical
-                   AND r.status = 'voided' AND r.account_credit_minor > 0""" + sb + "\n";
+                   AND r.status = 'voided' AND r.account_credit_minor > 0""" + sb + """
+
+                UNION ALL
+                SELECT w.written_off_on, 7, w.created_at, w.id, 'write_off', s.sale_no, s.id, CAST(NULL AS uuid),
+                       CAST(NULL AS text), CAST(0 AS bigint), w.unpaid_minor
+                  FROM retail_sale_writeoffs w JOIN retail_sales s ON s.id = w.sale_id
+                 WHERE s.customer_id = :customer AND s.payment_method = 'credit' AND NOT s.historical""" + sb + "\n";
     }
 
     private static Map<String, Object> statementParams(UUID customerId, List<UUID> branchIds, String zone) {

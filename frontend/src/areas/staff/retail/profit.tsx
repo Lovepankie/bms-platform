@@ -176,13 +176,17 @@ function ValuationPage() {
   );
 }
 
-type Figures = { sales: number; cost: number; usage: number; difference: number; profit: number };
+type Figures = { sold: number; received: number; sales: number; cost: number; usage: number; bad: number; difference: number; profit: number };
 const add = (to: Figures, r: DailyProfitRow): Figures => ({
-  sales: to.sales + (r.sales_minor ?? 0), cost: to.cost + (r.cost_of_sales_minor ?? 0), usage: to.usage + (r.usage_cost_minor ?? 0), difference: to.difference + (r.stocktake_difference_minor ?? 0), profit: to.profit + (r.profit_minor ?? 0),
+  sold: to.sold + (r.sold_minor ?? 0),
+  received: to.received + (r.received_minor ?? 0),
+  sales: to.sales + (r.sales_minor ?? 0), cost: to.cost + (r.cost_of_sales_minor ?? 0), usage: to.usage + (r.usage_cost_minor ?? 0), bad: to.bad + (r.bad_debt_minor ?? 0), difference: to.difference + (r.stocktake_difference_minor ?? 0), profit: to.profit + (r.profit_minor ?? 0),
 });
-const none = (): Figures => ({ sales: 0, cost: 0, usage: 0, difference: 0, profit: 0 });
+const none = (): Figures => ({ sold: 0, received: 0, sales: 0, cost: 0, usage: 0, bad: 0, difference: 0, profit: 0 });
 
-function FiguresTable({ label, rows }: { label: string; rows: { key: string; name: string; f: Figures }[] }) {
+function FiguresTable({ label, rows, onPayment }: { label: string; rows: { key: string; name: string; f: Figures }[]; onPayment?: boolean }) {
+  // Debts written off (ADR-043) get a column only once there is one, so a shop that never writes a debt off sees no new column.
+  const withBad = rows.some((r) => r.f.bad !== 0);
   // On a phone the cost and usage go under the name, so Sales and Profit stay in view.
   const phone = useIsPhone();
   return (
@@ -190,9 +194,12 @@ function FiguresTable({ label, rows }: { label: string; rows: { key: string; nam
       <thead>
         <tr>
           <th>{label}</th>
-          <th className="num">Sales</th>
+          {onPayment && !phone && <th className="num">Sold</th>}
+          {onPayment && <th className="num">Received</th>}
+          <th className="num">{onPayment ? 'Counted for profit' : 'Sales'}</th>
           {!phone && <th className="num">Cost</th>}
           {!phone && <th className="num">Usage</th>}
+          {withBad && !phone && <th className="num">Debts<br />written off</th>}
           {!phone && <th className="num">Stock-take<br />difference</th>}
           <th className="num">Profit</th>
         </tr>
@@ -200,10 +207,13 @@ function FiguresTable({ label, rows }: { label: string; rows: { key: string; nam
       <tbody>
         {rows.map(({ key, name, f }) => (
           <tr key={key}>
-            <td>{name}{phone && <><br /><span className="hint">Cost {money(f.cost)}<br />Usage {money(f.usage)}<br />Stock-take difference {money(f.difference)}</span></>}</td>
+            <td>{name}{phone && <><br /><span className="hint">{onPayment && <>Sold {money(f.sold)}<br /></>}Cost {money(f.cost)}<br />Usage {money(f.usage)}<br />{withBad && <>Debts written off {money(f.bad)}<br /></>}Stock-take difference {money(f.difference)}</span></>}</td>
+            {onPayment && !phone && <td className="num">{money(f.sold)}</td>}
+            {onPayment && <td className="num">{money(f.received)}</td>}
             <td className="num">{money(f.sales)}</td>
             {!phone && <td className="num">{money(f.cost)}</td>}
             {!phone && <td className="num">{money(f.usage)}</td>}
+            {withBad && !phone && <td className="num">{money(f.bad)}</td>}
             {!phone && <td className="num">{money(f.difference)}</td>}
             <td className="num">{money(f.profit)}{f.profit < 0 ? ' (loss)' : ''}</td>
           </tr>
@@ -226,18 +236,39 @@ export function ProfitTable({ report, nameOf }: { report: DailyProfit; nameOf?: 
     byBranch.set(r.branch_id ?? '', add(byBranch.get(r.branch_id ?? '') ?? none(), r));
   }
   const days = [...byDay.entries()].sort(([x], [y]) => x.localeCompare(y)).map(([date, f]) => ({ key: date, name: date, f }));
+  // ADR-043: with credit sales counted when the buyer pays, Sales becomes Received (money collected) and the profit is that of
+  // the money received; what was sold, and what is still owed, come beside it.
+  const onPayment = report.credit_sale_recognition === 'on_payment';
+  // Credit sales made before the rule started were counted at the sale; they are part of the profit but nobody has paid them yet.
+  const atSale = report.counted_at_sale_minor ?? 0;
   return (
     <>
-      <p className="rt-total">Profit for the period {money(report.profit_minor ?? 0)}</p>
+      <p className="rt-total">{onPayment && atSale === 0 ? 'Profit from money received, for the period' : 'Profit for the period'} {money(report.profit_minor ?? 0)}</p>
+      {onPayment && (
+        <ul className="an-stats" data-testid="credit-recognition-summary">
+          <li className="an-stat"><span className="an-stat-label">Sold</span><strong className="an-stat-value num">{money(report.sold_minor ?? 0)}</strong><span className="hint">Everything sold, credit included</span></li>
+          <li className="an-stat"><span className="an-stat-label">Received</span><strong className="an-stat-value num">{money(report.received_minor ?? 0)}</strong><span className="hint">Money collected, including payments on earlier credit sales</span></li>
+          {atSale !== 0 && <li className="an-stat"><span className="an-stat-label">Net credit profit counted at the sale</span><strong className="an-stat-value num">{money(atSale)}</strong><span className="hint">From credit made before the rule started, after returns. In the profit, not taken off Received</span></li>}
+          <li className="an-stat"><span className="an-stat-label">On credit now</span><strong className="an-stat-value num">{money(report.on_credit_minor ?? 0)}</strong><span className="hint">Not paid yet, not counted as profit. Credit sales from before the rule started are not in it</span></li>
+        </ul>
+      )}
       {nameOf && (
         <>
           <h2>By branch</h2>
-          <FiguresTable label="Branch" rows={[...byBranch.entries()].map(([id, f]) => ({ key: id, name: nameOf(id), f }))} />
+          <FiguresTable label="Branch" onPayment={onPayment} rows={[...byBranch.entries()].map(([id, f]) => ({ key: id, name: nameOf(id), f }))} />
           <h2>By day, all branches</h2>
         </>
       )}
-      <FiguresTable label="Day" rows={days} />
-      <p className="hint">Usage and damage reports count here. The stock-take difference is the value of what a count found missing (a minus) or extra (a plus), at cost, on the day the count was committed.</p>
+      <FiguresTable label="Day" onPayment={onPayment} rows={days} />
+      {onPayment && <p className="hint">A credit sale counts on the day the buyer pays, with its share of the profit. A part payment gives part of the profit. Savings use this profit.</p>}
+      {report.credit_recognition_starts_on && (
+        <p className="hint" data-testid="credit-starts-on">
+          {onPayment
+            ? `Credit sales entered and dated before ${report.credit_recognition_starts_on} count as they did, on the day of the sale.`
+            : `From ${report.credit_recognition_starts_on}, credit sales will count when the buyer pays.`}
+        </p>
+      )}
+      <p className="hint">Usage and damage reports count here. A debt written off is a loss on the day it was written off. The stock-take difference is the value of what a count found missing (a minus) or extra (a plus), at cost, on the day the count was committed.</p>
     </>
   );
 }

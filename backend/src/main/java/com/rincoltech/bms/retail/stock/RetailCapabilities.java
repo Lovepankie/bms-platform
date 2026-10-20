@@ -1,9 +1,11 @@
 package com.rincoltech.bms.retail.stock;
 
+import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.ModuleSettings;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailPricing;
+import java.time.LocalDate;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -27,14 +29,65 @@ public class RetailCapabilities {
     public static final String PURCHASING = "purchasing";
     private static final String MODULE = "retail";
 
-    private final ModuleSettings settings;
+    /** Credit sales count when they are made: the behaviour before ADR-043 and the default. */
+    public static final String ON_SALE = "on_sale";
 
-    RetailCapabilities(ModuleSettings settings) {
+    /** Credit sales count as sales, cash and profit only when the buyer pays (ADR-043). */
+    public static final String ON_PAYMENT = "on_payment";
+
+    public static final String CREDIT_RECOGNITION = "credit_sale_recognition";
+
+    private final ModuleSettings settings;
+    private final CurrentTenant tenant;
+
+    RetailCapabilities(ModuleSettings settings, CurrentTenant tenant) {
         this.settings = settings;
+        this.tenant = tenant;
     }
 
     public boolean enabled(String capability) {
         return Boolean.TRUE.equals(settings.group(MODULE).get(capability));
+    }
+
+    /** The tenant's credit sale recognition, {@link #ON_SALE} unless the owner chose {@link #ON_PAYMENT} (ADR-043). */
+    public String creditRecognition() {
+        // on_payment with no start day is no rule at all (the group never stores that, and a hand-edited row is read as
+        // on_sale).
+        Map<String, Object> g = settings.group(MODULE);
+        return ON_PAYMENT.equals(g.get(CREDIT_RECOGNITION))
+                        && g.get("credit_recognition_effective_from") instanceof String
+                ? ON_PAYMENT
+                : ON_SALE;
+    }
+
+    /**
+     * The credit sales counted when the buyer pays (ADR-043): those whose counting day (the later of the date and the entry day) is on or after the first business day of the rule. Empty for a tenant that
+     * never chose it, so every report reads as it always did.
+     */
+    public CreditPeriods onPaymentPeriods() {
+        Map<String, Object> g = settings.group(MODULE);
+        if (ON_PAYMENT.equals(g.get(CREDIT_RECOGNITION))
+                && g.get("credit_recognition_effective_from") instanceof String d) {
+            return new CreditPeriods(LocalDate.parse(d), tenant.profile().timezone());
+        }
+        return CreditPeriods.NONE;
+    }
+
+    /** The rule in force on {@code day}: {@link #ON_PAYMENT} once its first day has come, else {@link #ON_SALE}. */
+    public String creditRecognitionOn(LocalDate day) {
+        return onPaymentPeriods().contains(day) ? ON_PAYMENT : ON_SALE;
+    }
+
+    /** The day the current credit rule took effect, when it was ever changed (ADR-043). */
+    public LocalDate creditRecognitionEffectiveFrom() {
+        return settings.group(MODULE).get("credit_recognition_effective_from") instanceof String d
+                ? LocalDate.parse(d)
+                : null;
+    }
+
+    /** True when credit sales are reported as received money only (ADR-043). */
+    public boolean recognisesOnPayment() {
+        return ON_PAYMENT.equals(creditRecognition());
     }
 
     /** 404 {@code capability_not_enabled} for a route of a capability that is off. */

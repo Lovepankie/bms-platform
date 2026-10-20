@@ -87,7 +87,9 @@ export const adminWelcome: Tour = {
   // Version 8 adds the Branches step (issue #329): closing a branch and keeping its history.
   // Version 9 adds the Cash and change step (issue #346): the amount received and the change to give on a cash sale.
   // Version 10 adds the two correction steps (issue #351): a wrong quantity on the stock list, and a restock entered wrongly.
-  version: 10,
+  // Version 11 adds the step on when a credit sale counts as profit (issue #340, ADR-043).
+  // Version 12 adds the step on writing off a debt that will never be paid (issue #340).
+  version: 12,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -210,6 +212,26 @@ export const adminWelcome: Tour = {
       optional: true,
       title: 'When a buyer pays what they owe',
       body: 'Open Credit sales and pick Still owing to see every debt, or open the day of the sale. Then tap Record payment. A part payment is fine. If they pay it all, tap Mark as fully paid.',
+    },
+    {
+      id: 'credit-counting',
+      route: '/staff/retail',
+      target: 'retail-tiles',
+      module: 'retail',
+      needs: ['retail.profit.read'],
+      optional: true,
+      title: 'When a credit sale counts as profit',
+      body: 'A credit sale can wait to count until the buyer pays. Then the home page shows Sold, Received and On credit apart. The daily savings use only the profit of money received. You choose this in Retail settings, and it starts the next day and is not switched off again.',
+    },
+    {
+      id: 'write-off',
+      route: '/staff/retail',
+      target: 'retail-creditSales',
+      module: 'retail',
+      needs: ['retail.sale.read', 'retail.credit.write_off'],
+      optional: true,
+      title: 'A buyer who will never pay',
+      body: 'Open the credit sale and tap Write off. Give the reason. The debt becomes a loss on that day. The sale stays on record and reads Written off.',
     },
     {
       id: 'sales-grouping',
@@ -729,7 +751,9 @@ export const stocktakePage: Tour = {
 
 export const retailSettingsPage: Tour = {
   id: 'page-retail-settings',
-  version: 1,
+  // Version 2 adds the credit sale step (issue #340, ADR-043).
+  // Version 3 says in that step that the credit rule is one way: once it has started it is not switched off here.
+  version: 3,
   title: 'This page: retail settings',
   audience: isTenantAdmin,
   autoStart: false,
@@ -752,6 +776,12 @@ export const retailSettingsPage: Tour = {
       target: 'retail-settings-save',
       title: 'Check, then save',
       body: 'Tap Review changes to read what will change. Nothing is saved until you tap Confirm.',
+    },
+    {
+      id: 'credit',
+      target: 'retail-credit-recognition',
+      title: 'When a credit sale counts',
+      body: 'Choose whether a credit sale counts as income and profit when it is made, or only when the buyer pays. Your daily savings follow this choice. You read the change before you confirm it. Once "when the buyer pays" has started, it is not switched off here.',
     },
   ],
 };

@@ -64,13 +64,13 @@ class SalesAnalysisRepository {
      */
     static final String NET_LINES = """
               (SELECT s0.tenant_id, s0.id, s0.sale_date, s0.branch_id, s0.created_by, s0.status, s0.payment_method,
-                      l0.product_id, l0.qty, l0.line_total_minor, l0.line_cost_minor
+                      s0.historical, s0.sale_date AS origin_date, s0.created_at AS origin_created_at, l0.product_id, l0.qty, l0.line_total_minor, l0.line_cost_minor
                  FROM retail_sales s0
                  JOIN retail_sale_lines l0 ON l0.tenant_id = s0.tenant_id AND l0.sale_id = s0.id
                 WHERE s0.status = 'completed'
                UNION ALL
                SELECT s0.tenant_id, CAST(NULL AS uuid), r0.returned_on, r0.branch_id, s0.created_by, s0.status,
-                      s0.payment_method, rl0.product_id, -rl0.qty, -rl0.line_total_minor,
+                      s0.payment_method, s0.historical, s0.sale_date, s0.created_at, rl0.product_id, -rl0.qty, -rl0.line_total_minor,
                       CASE WHEN rl0.disposition = 'write_off' THEN 0 ELSE -rl0.line_cost_minor END
                  FROM retail_sale_returns r0
                  JOIN retail_sales s0 ON s0.tenant_id = r0.tenant_id AND s0.id = r0.sale_id

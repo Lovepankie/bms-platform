@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.reports.internal;
 
+import com.rincoltech.bms.retail.stock.CreditPeriods;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.time.LocalDate;
@@ -81,7 +82,13 @@ class ReportsRepository {
                 .list();
     }
 
-    record DayFigures(UUID branchId, LocalDate date, long sales, long costOfSales, long usageCost) {}
+    /** {@code badDebt} is the loss of credit sales written off on the day (ADR-043); the other figures are as ever. */
+    record DayFigures(UUID branchId, LocalDate date, long sales, long costOfSales, long usageCost, long badDebt) {
+
+        DayFigures(UUID branchId, LocalDate date, long sales, long costOfSales, long usageCost) {
+            this(branchId, date, sales, costOfSales, usageCost, 0);
+        }
+    }
 
     /**
      * FR-RET-10 per branch and day: the append-only lines of completed (not voided) sales, their
@@ -95,7 +102,41 @@ class ReportsRepository {
      * supplier invoice or credit note is not in this report, as it never was.
      */
     List<DayFigures> daily(List<UUID> branchIds, LocalDate from, LocalDate to) {
-        Map<String, Object> params = new LinkedHashMap<>();
+        return daily(branchIds, from, to, CreditPeriods.NONE);
+    }
+
+    /**
+     * The same figures; a credit sale that is not an imported one and counts from the start day of {@code periods} on (the later
+     * of its date and the day it was entered, so a backdated sale entered after the start too; counted when the buyer pays,
+     * ADR-043) leaves the sales leg, and so do the sales and cost of its returns, since its sales and
+     * cost reach the report through {@link CreditRecognition} on the days the money comes in. What a return writes off as
+     * damaged stays a usage cost on the day of the return: the goods are lost whether or not the buyer paid. Credit sales
+     * entered and dated before the start day count at the sale, as they always did.
+     */
+    List<DayFigures> daily(List<UUID> branchIds, LocalDate from, LocalDate to, CreditPeriods periods) {
+        return daily(branchIds, from, to, periods, false);
+    }
+
+    private List<DayFigures> daily(
+            List<UUID> branchIds, LocalDate from, LocalDate to, CreditPeriods periods, boolean cashOnly) {
+        Map<String, Object> periodParams = new LinkedHashMap<>();
+        String deferredSale = cashOnly
+                ? " AND s.payment_method <> 'credit'"
+                : periods.isEmpty()
+                        ? ""
+                        : " AND (s.payment_method <> 'credit' OR s.historical OR NOT "
+                                + periods.sql("s.sale_date", "s.created_at", periodParams, "crpS") + ")";
+        String deferredReturn = cashOnly
+                ? "true"
+                : periods.isEmpty()
+                        ? "false"
+                        : "EXISTS (SELECT 1 FROM retail_sales rs WHERE rs.tenant_id = r.tenant_id AND rs.id = r.sale_id"
+                                + " AND rs.payment_method = 'credit' AND NOT rs.historical AND "
+                                + periods.sql("rs.sale_date", "rs.created_at", periodParams, "crpR") + ")";
+        // Spelled outside the text blocks below, which strip the space at the end of a line.
+        String returnSales = " CASE WHEN " + deferredReturn + " THEN 0 ELSE -r.total_minor END,";
+        String returnCost = " CASE WHEN " + deferredReturn + " THEN 0 ELSE -r.cost_minor END,";
+        Map<String, Object> params = new LinkedHashMap<>(periodParams);
         params.put("from", Date.valueOf(from));
         params.put("to", Date.valueOf(to));
         String salesFilter = "";
@@ -119,18 +160,20 @@ class ReportsRepository {
                             SELECT s.branch_id, s.sale_date AS day, l.line_total_minor AS sales,
                                    l.line_cost_minor AS cost, 0 AS usage
                               FROM retail_sale_lines l JOIN retail_sales s ON s.id = l.sale_id
-                             WHERE s.status = 'completed' AND s.sale_date BETWEEN :from AND :to""" + salesFilter + """
+                             WHERE s.status = 'completed' AND s.sale_date BETWEEN :from AND :to""" + deferredSale + salesFilter + """
 
                             UNION ALL
                             SELECT branch_id, occurred_on, 0, 0, cost_total_minor FROM retail_usage_reports
                              WHERE occurred_on BETWEEN :from AND :to""" + usageFilter + """
 
                             UNION ALL
-                            SELECT r.branch_id, r.returned_on, -r.total_minor, -r.cost_minor,
+                            SELECT r.branch_id, r.returned_on,""" + returnSales + returnCost + """
+
                                    coalesce((SELECT sum(l.line_cost_minor) FROM retail_sale_return_lines l
                                               WHERE l.return_id = r.id AND l.disposition = 'write_off'), 0)
                               FROM retail_sale_returns r
-                             WHERE r.status = 'completed' AND r.returned_on BETWEEN :from AND :to""" + returnsFilter + """
+                             WHERE r.status = 'completed' AND r.returned_on BETWEEN :from AND :to"""
+                        + returnsFilter + """
 
                             UNION ALL
                             SELECT l.branch_id, d.cost_date, 0, l.to_cogs_minor, 0

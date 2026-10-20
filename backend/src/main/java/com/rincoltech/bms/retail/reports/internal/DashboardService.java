@@ -13,13 +13,16 @@ import com.rincoltech.bms.retail.reports.internal.DashboardApi.Stock;
 import com.rincoltech.bms.retail.reports.internal.DashboardApi.Today;
 import com.rincoltech.bms.retail.reports.internal.DashboardRepository.DaySales;
 import com.rincoltech.bms.retail.reports.internal.DashboardRepository.Position;
+import com.rincoltech.bms.retail.stock.CreditPeriods;
 import com.rincoltech.bms.retail.stock.Quantities;
+import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,13 +37,28 @@ class DashboardService {
     static final BigDecimal LOW_STOCK = new BigDecimal("5.000");
 
     private final DashboardRepository repo;
+    private final CreditRecognitionRepository credit;
+    private final RetailCapabilities capabilities;
     private final CurrentTenant tenant;
     private final BusinessClock clock;
 
-    DashboardService(DashboardRepository repo, CurrentTenant tenant, BusinessClock clock) {
+    DashboardService(
+            DashboardRepository repo,
+            CreditRecognitionRepository credit,
+            RetailCapabilities capabilities,
+            CurrentTenant tenant,
+            BusinessClock clock) {
         this.repo = repo;
+        this.credit = credit;
+        this.capabilities = capabilities;
         this.tenant = tenant;
         this.clock = clock;
+    }
+
+    private static void add(Map<LocalDate, long[]> into, LocalDate day, long revenue, long cost) {
+        long[] f = into.computeIfAbsent(day, x -> new long[2]);
+        f[0] += revenue;
+        f[1] += cost;
     }
 
     @Transactional(readOnly = true)
@@ -69,20 +87,82 @@ class DashboardService {
                 now[4] += d.cost();
             }
         }
+        // ADR-043: credit sales counted from the start day of the rule "when the buyer pays" bring profit through the
+        // money
+        // received (a
+        // payment on the day it was recorded, with its share of the sale's profit); Sold stays what was sold, and every
+        // other credit
+        // sale counts at the sale as it always did.
+        CreditPeriods periods = capabilities.onPaymentPeriods();
+        // The when-paid fields appear once the rule has started, not while its start day is still ahead.
+        boolean onPay = periods.contains(today);
+        LocalDate windowStart = today.minusDays(29);
+        Map<UUID, Map<LocalDate, long[]>> recBranch = new LinkedHashMap<>();
+        Map<LocalDate, long[]> recDay = new LinkedHashMap<>();
+        // Received (ADR-043): the money recorded as collected on the day it was entered, by any method. It is the sales
+        // paid at
+        // the sale plus every payment recorded on a credit sale, less money paid back, and is not the profit basis
+        // above.
+        Map<UUID, Map<LocalDate, long[]>> collBranch = new LinkedHashMap<>();
+        Map<LocalDate, long[]> collDay = new LinkedHashMap<>();
+        if (onPay) {
+            for (DaySales d : repo.sales(filter, windowStart, today, periods)) {
+                add(recBranch.computeIfAbsent(d.branchId(), x -> new LinkedHashMap<>()), d.day(), d.sales(), d.cost());
+                add(recDay, d.day(), d.sales(), d.cost());
+            }
+            for (ReportsRepository.DayFigures d : credit.cashSalesEntered(filter, windowStart, today)) {
+                add(collBranch.computeIfAbsent(d.branchId(), x -> new LinkedHashMap<>()), d.date(), d.sales(), 0);
+                add(collDay, d.date(), d.sales(), 0);
+            }
+            Set<UUID> scope = filter == null ? null : Set.copyOf(filter);
+            for (ReportsRepository.DayFigures d : CreditRecognition.deltas(
+                    credit.events(filter, windowStart, today, periods), windowStart, today, scope)) {
+                add(
+                        recBranch.computeIfAbsent(d.branchId(), x -> new LinkedHashMap<>()),
+                        d.date(),
+                        d.sales(),
+                        d.costOfSales());
+                add(recDay, d.date(), d.sales(), d.costOfSales());
+            }
+            // Received is money recorded as collected, by any method, the same figure as in the profit report
+            // (ADR-043): every
+            // payment on a credit sale, counted when the buyer pays or not, imported ones included, less reversals and
+            // refunds.
+            for (ReportsRepository.DayFigures d : credit.collections(filter, windowStart, today)) {
+                add(collBranch.computeIfAbsent(d.branchId(), x -> new LinkedHashMap<>()), d.date(), d.sales(), 0);
+                add(collDay, d.date(), d.sales(), 0);
+            }
+        }
+        Map<LocalDate, long[]> profitDay = onPay ? recDay : byDay;
+        Map<UUID, Map<LocalDate, long[]>> profitBranch = onPay ? recBranch : byBranch;
+        // A debt written off is a loss on its day in Daily profit and in the savings suggestion, so it is here too.
+        for (ReportsRepository.DayFigures d : credit.badDebt(filter, windowStart, today)) {
+            add(profitBranch.computeIfAbsent(d.branchId(), x -> new LinkedHashMap<>()), d.date(), 0, d.badDebt());
+            add(profitDay, d.date(), 0, d.badDebt());
+        }
         List<Day> days = new ArrayList<>();
         long last7 = 0;
         long last30 = 0;
-        long cost7 = 0;
-        long cost30 = 0;
+        long profit7 = 0;
+        long profit30 = 0;
+        long received7 = 0;
+        long received30 = 0;
         for (int i = 29; i >= 0; i--) {
             LocalDate date = today.minusDays(i);
             long[] f = byDay.getOrDefault(date, new long[2]);
-            days.add(new Day(date, f[0], profit ? f[0] - f[1] : null));
+            long[] p = profitDay.getOrDefault(date, new long[2]);
+            days.add(new Day(
+                    date,
+                    f[0],
+                    profit ? p[0] - p[1] : null,
+                    onPay ? collDay.getOrDefault(date, new long[2])[0] : null));
             last30 += f[0];
-            cost30 += f[1];
+            profit30 += p[0] - p[1];
+            received30 += onPay ? collDay.getOrDefault(date, new long[2])[0] : 0;
             if (i < 7) {
                 last7 += f[0];
-                cost7 += f[1];
+                profit7 += p[0] - p[1];
+                received7 += onPay ? collDay.getOrDefault(date, new long[2])[0] : 0;
             }
         }
 
@@ -112,7 +192,10 @@ class DashboardService {
 
         // A shop row for every branch with sales in the window or with stock, in scope.
         List<UUID> branches = new ArrayList<>(byBranch.keySet());
-        positions.keySet().stream().filter(b -> !byBranch.containsKey(b)).forEach(branches::add);
+        recBranch.keySet().stream().filter(b -> !branches.contains(b)).forEach(branches::add);
+        // A branch that only took payments on credit sales has money collected today and needs its row.
+        collBranch.keySet().stream().filter(b -> !branches.contains(b)).forEach(branches::add);
+        positions.keySet().stream().filter(b -> !branches.contains(b)).forEach(branches::add);
         branches.sort(null);
         List<Shop> shops = new ArrayList<>();
         for (UUID b : branches) {
@@ -126,6 +209,7 @@ class DashboardService {
                 }
             }
             long[] t = sales.getOrDefault(today, new long[2]);
+            long[] rt = onPay ? recBranch.getOrDefault(b, Map.of()).getOrDefault(today, new long[2]) : t;
             // A shop outside the caller's sales scope carries no sales figures, not invented zeros.
             boolean sold = principal.may(SALE_READ, b);
             boolean cost = sold && principal.may(PROFIT_READ, b);
@@ -135,23 +219,39 @@ class DashboardService {
                     sold ? t[0] : null,
                     sold ? s7 : null,
                     sold ? s30 : null,
-                    cost ? t[0] - t[1] : null,
+                    cost ? rt[0] - rt[1] : null,
                     p == null ? null : p.atPrice(),
                     p != null && cost ? p.atCost() : null,
                     p == null ? null : p.out(),
-                    p == null ? null : p.low()));
+                    p == null ? null : p.low(),
+                    onPay && sold ? collBranch.getOrDefault(b, Map.of()).getOrDefault(today, new long[2])[0] : null));
         }
+        long[] rToday = collDay.getOrDefault(today, new long[2]);
+        long[] owed = onPay ? credit.onCredit(filter, periods) : new long[2];
+        long[] pToday = profitDay.getOrDefault(today, new long[2]);
         return new Report(
                 today,
                 tenant.profile().currency(),
                 profit,
-                new Today(now[0], now[1], now[2], now[3], profit ? now[0] - now[4] : null),
+                new Today(
+                        now[0],
+                        now[1],
+                        now[2],
+                        now[3],
+                        profit ? pToday[0] - pToday[1] : null,
+                        onPay ? rToday[0] : null,
+                        onPay ? owed[0] : null,
+                        onPay ? (int) owed[1] : null),
                 days,
                 last7,
                 last30,
-                profit ? last7 - cost7 : null,
-                profit ? last30 - cost30 : null,
+                profit ? profit7 : null,
+                profit ? profit30 : null,
                 stock,
-                shops);
+                shops,
+                capabilities.creditRecognitionOn(today),
+                onPay ? received7 : null,
+                onPay ? received30 : null,
+                periods.from());
     }
 }

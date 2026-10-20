@@ -1,10 +1,12 @@
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useContext, useState, type ReactNode } from 'react';
 import { retail, type SalesSummaryGroup, type SalesSummaryQuery } from '../../../api/retail';
 import {
   LEVEL_PLURALS, emptyChainWords, isTimeLevel, offersSales, overLines, pathKey, readChain, selectGroup, shutGroup, toggleGroup, trailOf, wholeSalesNote, writeChain,
   type ChainLevel, type ChainList, type OpenGroups, type Selection,
 } from './sales-chain-state';
+import { StaffContext } from '../context';
+import { capabilityOn } from './permissions';
 import { methodLines, periodTitle, salesWord } from './sales-grouped-state';
 import { Problem, money } from './ui';
 
@@ -134,13 +136,16 @@ function LevelList({ index, sel, parent, root, empty, ...shared }: Shared & { in
 /** `lines`: the figures are summed over sale lines, so the number of sales is "in N sales" (those that hold the category or the item). */
 function Figures({ group, credit, lines: overLines }: { group: SalesSummaryGroup; credit: boolean; lines: boolean }) {
   const lines = credit ? [] : methodLines(group.by_method);
+  // With credit sales counted when the buyer pays (ADR-043) this profit is the profit of what was sold, not of the money received.
+  const staff = useContext(StaffContext);
+  const profitWord = staff && capabilityOn(staff.me, 'retail', 'credit_on_payment') ? 'profit of sales made' : 'profit';
   return (
     <>
       <span className="rt-group-total">{money(group.total_minor ?? 0)}</span>{' '}
       <span className="rt-group-meta">
         {group.quantity !== undefined && <>{group.quantity} sold, </>}
         {overLines ? 'in ' : ''}{salesWord(group.sales_count ?? 0)}
-        {group.profit_minor !== undefined && <>, profit {money(group.profit_minor)}</>}
+        {group.profit_minor !== undefined && <>, {profitWord} {money(group.profit_minor)}</>}
         {!credit && (group.voided_count ?? 0) > 0 && <>, {group.voided_count} voided (not counted)</>}
       </span>{' '}
       {lines.length > 0 && <span className="rt-group-methods">{lines.map((m) => `${m.label} ${m.count}, ${money(m.totalMinor)}`).join('. ')}</span>}

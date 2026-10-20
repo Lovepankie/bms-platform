@@ -185,7 +185,21 @@ final class SalesApi {
             Instant voidedAt,
             UUID voidedBy,
             String voidReason,
-            int version) {}
+            int version,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Present when the unpaid part of this credit sale was written off (ADR-043)")
+            WriteOffInfo writeOff,
+
+            @Schema(
+                    description =
+                            "True for a credit sale counted when the buyer pays (ADR-043): the later of its date and the day it was"
+                                    + " entered is on or after the first day of the rule on_payment, so a backdated sale entered after the"
+                                    + " start counts too; its payments are dated the day they are entered")
+            boolean countedWhenPaid) {}
+
+    @Schema(name = "RetailSaleWriteOffInfo", description = "A credit sale whose unpaid part was written off as a loss")
+    record WriteOffInfo(LocalDate writtenOffOn, long unpaidMinor, String reason) {}
 
     @Schema(name = "RetailSalePage")
     record SalePage(List<Sale> items, String nextCursor) {}
@@ -256,7 +270,14 @@ final class SalesApi {
                     description =
                             "True for an imported credit sale (never posted to the ledger, skipped by payment on account);"
                                     + " present only while the customer_accounts capability is on, and only when true")
-            Boolean historical) {}
+            Boolean historical,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "True for a credit sale counted when the buyer pays (ADR-043): a payment that pays it is dated today;"
+                                    + " present only while the customer_accounts capability is on, and only when true")
+            Boolean countedWhenPaid) {}
 
     @Schema(name = "RetailCustomerBalance", description = "Credit sales in the caller's branch scope")
     record CustomerBalance(UUID customerId, String currency, long balanceMinor, List<OpenSale> openSales) {}

@@ -41,7 +41,7 @@ const SALES_PERMISSIONS = [
 const CASHIER_PERMISSIONS = SALES_PERMISSIONS;
 const ADMIN_PERMISSIONS = [
   ...SALES_PERMISSIONS, 'retail.catalogue.manage', 'retail.price.edit', 'retail.sale.void',
-  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use', 'retail.credit.manage', 'retail.credit.override', 'retail.document.issue', 'retail.sale.return',
+  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use', 'retail.credit.manage', 'retail.credit.write_off', 'retail.credit.override', 'retail.document.issue', 'retail.sale.return',
   'retail.savings.record', 'retail.savings.overwrite', 'retail.banking.record', 'retail.expense.record', 'retail.expense.manage',
   'retail.withdrawal.record', 'retail.advance.create', 'retail.advance.repay', 'retail.cashbook.read', 'retail.cashbook.void', 'retail.payable.manage',
 ];
@@ -603,6 +603,20 @@ export function createMockRetail(): RetailApi {
         sale.void_reason = reason.trim();
         return visibleSale(sale);
       }),
+
+    writeOffSale: (saleId, reason, key) =>
+      run(() => once(`write-off|${key}`, { saleId, reason }, () => {
+        const sale = sales.find((x) => x.id === saleId) ?? refuse(404, 'not_found', 'That could not be found.');
+        if (sale.status === 'voided') refuse(409, 'sale_voided', 'This sale has been voided already.');
+        if (sale.payment_method !== 'credit') refuse(422, 'sale_not_credit', 'Only a sale on credit can be written off.');
+        if (sale.write_off) refuse(409, 'already_written_off', 'The unpaid part of this sale has been written off already.');
+        const unpaid = sale.balance_minor ?? 0;
+        if (unpaid <= 0) refuse(422, 'nothing_owing', 'This sale has nothing left to pay.');
+        sale.paid_minor = sale.total_minor;
+        sale.balance_minor = 0;
+        sale.write_off = { written_off_on: today(), unpaid_minor: unpaid, reason: reason.trim() };
+        return { executed: true, write_off: { id: nextId('wo'), sale_id: saleId, unpaid_minor: unpaid, reason: reason.trim(), written_off_on: today() } };
+      })),
 
     listCustomers: () =>
       delay(customers.map((c) => ({ ...c, ...figures(c.id), balance_minor: sales.filter((x) => x.payment_method === 'credit' && x.status === 'completed' && x.buyer_name === c.name).reduce((sum, x) => sum + (x.balance_minor ?? 0), 0) }))),

@@ -257,6 +257,7 @@ class DocumentModels {
             case "void" -> "Sale voided";
             case "return" -> "Goods returned (credit note)";
             case "return_void" -> "Credit note voided";
+            case "write_off" -> "Written off as a loss";
             default -> l.kind();
         };
     }

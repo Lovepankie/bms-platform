@@ -272,6 +272,7 @@ platform API and holds no tenant permissions.
 | `retail.pricelist.use` | Y | | | | | | | |
 | `retail.price.override` | Y | | | | | | | Y |
 | `retail.credit.manage` | Y | | | | | | | |
+| `retail.credit.write_off` | Y | | | | | | | |
 | `retail.credit.override` | Y | | | | | | | |
 | `retail.sale.return` | Y | | | | | | | |
 | `retail.payable.manage` | Y | | | | | | | |
@@ -397,7 +398,9 @@ Notes:
   the tenant's threshold for `retail_purchase_order` (section 8.4) cannot be its checker. Landed cost and supplier credit notes (issue #199, migration V48) add no permission: they use `retail.payable.manage` in the branch of every received line and of the invoice, and the cost columns of a line (the parts for inventory and cost of goods sold, the cost before and after, the landed amount on a receipt line) need `retail.profit.read` in the line's branch and are absent otherwise; no maker-checker action is registered for them.
   Each becomes a row of the matrix in the slice that seeds it, because `PermissionMatrixIT` compares
   the seeded permissions with the matrix; all of them go to administrators only.
-  `retail.credit.manage` alone sets credit limits and terms: `retail.customer.manage`, which the sales
+  `retail.credit.write_off` (issue #340, ADR-043, migration `V64`) writes off a debt that will never be paid: its own
+  permission, administrators only, kept apart from `retail.credit.manage` because a write-off cannot be taken back in this release; above the
+  tenant's threshold for `retail_sale_write_off` a second holder must approve it (section 8.4). `retail.credit.manage` alone sets credit limits and terms: `retail.customer.manage`, which the sales
   role holds, edits name and contact only. A branch role can only refuse an action, never grant a
   permission or widen scope; cost, margin and landed unit cost fields need `retail.profit.read` in
   the row's branch.
@@ -532,8 +535,9 @@ CHECK constraint as well as the service.
 | `retail_sale_return` | `retail.sale.return` | `retail.sale.return` | Yes, counted over the returns of the sale, and no checker at all while no threshold is set |
 | `retail_sale_return_void` | `retail.sale.return` | `retail.sale.return` | Reads the threshold of `retail_sale_return`: needed for a return that was approved or is worth it alone; none while no threshold is set |
 | `retail_purchase_order` | `retail.purchase.create` | `retail.purchase.approve` | Yes, on the order's total, and no checker at all while no threshold is set; it is the send of a draft order |
+| `retail_sale_write_off` | `retail.credit.write_off` | `retail.credit.write_off` | Yes, on the unpaid amount written off; with no positive threshold every write-off needs a second administrator when the tenant has two or more administrators who count (active, locked, or removed or deactivated within 30 days), and one alone may write off alone; any write-off done without a second person, even below a raised threshold, is flagged in the audit row (`only_one_active_administrator` or `below_threshold`) with the number told, and the administrators who count other than the maker are emailed (for a sole administrator a notice to themselves; accepted risk, ADR-043); default rule awaiting confirmation (issue #340) |
 
-Registered so far: `collateral_release` (#13); `retail_purchase_order` (#198, `retail.purchasing`, ADR-033: sending a purchase order, with the same open default as returns); `retail_sale_return` and `retail_sale_return_void` (#201, `retail.sales`, ADR-033: unlike the lending actions an unset threshold means no checker, so the
+Registered so far: `collateral_release` (#13); `retail_sale_write_off` (#340, `retail.sales`, ADR-043: writing off the unpaid part of a credit sale, with the same open default as returns); `retail_purchase_order` (#198, `retail.purchasing`, ADR-033: sending a purchase order, with the same open default as returns); `retail_sale_return` and `retail_sale_return_void` (#201, `retail.sales`, ADR-033: unlike the lending actions an unset threshold means no checker, so the
 action pends only at or above a threshold the tenant sets); `loan_disbursement`, `repayment_reversal` and
 `loan_write_off` (#108, `lending.loans`, ADR-026); `investment_funding`, `investment_early_withdrawal`
 and `investment_reversal` (#152, `lending.investments`, ADR-031). Increment 10 adds two checker

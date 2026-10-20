@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.reports.internal;
 
+import com.rincoltech.bms.retail.stock.CreditPeriods;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.time.LocalDate;
@@ -29,6 +30,15 @@ class DashboardRepository {
     record Position(UUID branchId, long atPrice, long atCost, int out, int low) {}
 
     List<DaySales> sales(List<UUID> branchIds, LocalDate from, LocalDate to) {
+        return sales(branchIds, from, to, CreditPeriods.NONE);
+    }
+
+    /**
+     * As above; a credit sale that is not an imported one and counts from the start day of {@code periods} on (the later of its date
+     * and the day it was entered; counted when the
+     * buyer pays, ADR-043) is left out, with the lines its returns took back, since it reaches the figures through the payments.
+     */
+    List<DaySales> sales(List<UUID> branchIds, LocalDate from, LocalDate to, CreditPeriods periods) {
         if (branchIds != null && branchIds.isEmpty()) {
             return List.of();
         }
@@ -45,6 +55,10 @@ class DashboardRepository {
                         + " count(DISTINCT s.id) AS sale_count"
                         + "  FROM " + SalesAnalysisRepository.NET_LINES
                         + " WHERE s.status = 'completed' AND s.sale_date BETWEEN :from AND :to" + branch
+                        + (periods.isEmpty()
+                                ? ""
+                                : " AND (s.payment_method <> 'credit' OR s.historical OR NOT "
+                                        + periods.sql("s.origin_date", "s.origin_created_at", params, "crpD") + ")")
                         + " GROUP BY s.branch_id, s.sale_date, (s.payment_method = 'credit')")
                 .params(params)
                 .query((rs, n) -> new DaySales(

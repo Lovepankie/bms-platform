@@ -6734,6 +6734,16 @@
           "branch_roles" : {
             "type" : "boolean"
           },
+          "credit_recognition_effective_from" : {
+            "description" : "Read only: the first business day of the rule on_payment (the day after it was asked for), when it was chosen; it can lie in the future. Credit sales dated before it keep counting the way they did (ADR-043); absent while the rule was never chosen",
+            "format" : "date",
+            "type" : "string"
+          },
+          "credit_sale_recognition" : {
+            "description" : "How credit sales count in the reports, the dashboard and the daily savings (ADR-043): on_sale (the default) counts them when they are made, on_payment only when the buyer pays. One way: on_payment starts the business day after it is asked for and cannot be switched off once it has started (422 credit_rule_cannot_be_switched_off); until then asking for on_sale cancels it",
+            "enum" : [ "on_sale", "on_payment" ],
+            "type" : "string"
+          },
           "customer_accounts" : {
             "type" : "boolean"
           },
@@ -7725,9 +7735,29 @@
       },
       "RetailDailyProfit" : {
         "properties" : {
+          "bad_debt_minor" : {
+            "description" : "The loss of credit sales written off on the day (ADR-043); included in profit_minor as a minus. With on_payment the unpaid share of the cost of goods, with on_sale the whole unpaid amount",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "cost_of_sales_minor" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "counted_at_sale_minor" : {
+            "description" : "Present only with on_payment: the profit counted at the sale for credit sales (not imported ones) entered and dated before the rule started, net of their returns (informational; part of the profit, never subtracted from Received)",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "credit_recognition_starts_on" : {
+            "description" : "The first business day of the rule on_payment, when it was chosen; it can lie in the future. credit_sale_recognition is on_payment once that day has come, whatever days the period spans",
+            "format" : "date",
+            "type" : "string"
+          },
+          "credit_sale_recognition" : {
+            "description" : "How credit sales were counted (ADR-043): on_sale when they are made, on_payment when the buyer pays",
+            "enum" : [ "on_sale", "on_payment" ],
+            "type" : "string"
           },
           "currency" : {
             "type" : "string"
@@ -7736,7 +7766,17 @@
             "format" : "date",
             "type" : "string"
           },
+          "on_credit_minor" : {
+            "description" : "Present only with on_payment: what buyers still owe now on the credit sales counted when the buyer pays, all dates (On credit); not part of the period. Credit sales from before the rule started were counted at the sale and are not in it",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "profit_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "received_minor" : {
+            "description" : "Present only with on_payment: the money recorded as collected on the day it was entered, by any method (cash, mobile money, bank) (Received): sales paid at the sale and every payment recorded on a credit sale, whatever the sale's date and whether or not it counts when the buyer pays, imported credit sales included; less payments reversed (on the day of the reversal) and money paid back on returns (on the day of the return, at the refund branch; given back on the day a return is voided). A payment dated earlier than it was entered counts on the day it was entered. Sales paid at the sale count on the day they were entered; cancelling a cash sale removes it from its own day. Not a profit basis",
             "format" : "int64",
             "type" : "integer"
           },
@@ -7747,6 +7787,11 @@
             "type" : "array"
           },
           "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sold_minor" : {
+            "description" : "Present only with on_payment: everything sold in the period, credit sales included (Sold)",
             "format" : "int64",
             "type" : "integer"
           },
@@ -7767,11 +7812,21 @@
       },
       "RetailDailyProfitRow" : {
         "properties" : {
+          "bad_debt_minor" : {
+            "description" : "The loss of credit sales written off on the day (ADR-043); included in profit_minor as a minus. With on_payment the unpaid share of the cost of goods, with on_sale the whole unpaid amount",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "branch_id" : {
             "format" : "uuid",
             "type" : "string"
           },
           "cost_of_sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "counted_at_sale_minor" : {
+            "description" : "Present only with on_payment: the profit counted at the sale for credit sales (not imported ones) entered and dated before the rule started, net of their returns (informational; part of the profit, never subtracted from Received)",
             "format" : "int64",
             "type" : "integer"
           },
@@ -7787,7 +7842,17 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "received_minor" : {
+            "description" : "Present only with on_payment: the money recorded as collected on the day it was entered, by any method (cash, mobile money, bank) (Received): sales paid at the sale and every payment recorded on a credit sale, whatever the sale's date and whether or not it counts when the buyer pays, imported credit sales included; less payments reversed (on the day of the reversal) and money paid back on returns (on the day of the return, at the refund branch; given back on the day a return is voided). A payment dated earlier than it was entered counts on the day it was entered. Sales paid at the sale count on the day they were entered; cancelling a cash sale removes it from its own day. Not a profit basis",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sold_minor" : {
+            "description" : "Present only when credit_sale_recognition is on_payment: everything sold on the day, credit sales included (Sold). Then sales_minor is the sales counted for profit (sales paid at the sale, the profit share of each payment on a credit sale counted when the buyer pays, and credit counted at the sale before the rule started) and the profit columns follow it; received_minor is the cash (ADR-043)",
             "format" : "int64",
             "type" : "integer"
           },
@@ -7804,6 +7869,16 @@
       },
       "RetailDashboard" : {
         "properties" : {
+          "credit_recognition_starts_on" : {
+            "description" : "The first business day of the rule on_payment, when it was chosen; it can lie in the future. credit_sale_recognition is on_payment once that day has come",
+            "format" : "date",
+            "type" : "string"
+          },
+          "credit_sale_recognition" : {
+            "description" : "How credit sales are counted (ADR-043): on_sale when they are made, on_payment when the buyer pays",
+            "enum" : [ "on_sale", "on_payment" ],
+            "type" : "string"
+          },
           "currency" : {
             "type" : "string"
           },
@@ -7823,12 +7898,22 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "last30_received_minor" : {
+            "description" : "Only with on_payment: money collected in the last 30 days",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "last30_sales_minor" : {
             "format" : "int64",
             "type" : "integer"
           },
           "last7_gross_profit_minor" : {
             "description" : "Present only with retail.profit.read in every branch the report covers",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "last7_received_minor" : {
+            "description" : "Only with on_payment: money collected in the last 7 days",
             "format" : "int64",
             "type" : "integer"
           },
@@ -7863,6 +7948,11 @@
           },
           "gross_profit_minor" : {
             "description" : "Present only with retail.profit.read in every branch the report covers",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "received_minor" : {
+            "description" : "Only with on_payment: money recorded as collected on the day, by any method (Received)",
             "format" : "int64",
             "type" : "integer"
           },
@@ -7913,6 +8003,11 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "today_received_minor" : {
+            "description" : "Only with on_payment, and with retail.sale.read in this branch: money collected today in this shop",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "today_sales_minor" : {
             "description" : "Present only with retail.sale.read in this branch",
             "format" : "int64",
@@ -7960,7 +8055,22 @@
             "type" : "integer"
           },
           "gross_profit_minor" : {
-            "description" : "Present only with retail.profit.read in every branch the report covers; sales less the cost snapshots",
+            "description" : "Present only with retail.profit.read in every branch the report covers; sales less the cost snapshots. With credit_sale_recognition on_payment: the profit of the money received today, a part payment giving part of the sale's profit (ADR-043)",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "on_credit_count" : {
+            "description" : "Only with on_payment: the number of credit sales still owing",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "on_credit_minor" : {
+            "description" : "Only with on_payment: what buyers still owe on the credit sales counted when the buyer pays, all dates (On credit)",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "received_minor" : {
+            "description" : "Only with on_payment: money recorded as collected today, by any method, for sales paid at the sale and for payments on credit sales, less money paid back (Received). sales_minor is then Sold, everything sold today",
             "format" : "int64",
             "type" : "integer"
           },
@@ -9594,6 +9704,10 @@
           "branch_id" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "counted_when_paid" : {
+            "description" : "True for a credit sale counted when the buyer pays (ADR-043): a payment that pays it is dated today; present only while the customer_accounts capability is on, and only when true",
+            "type" : "boolean"
           },
           "due_date" : {
             "format" : "date",
@@ -11736,6 +11850,10 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "counted_when_paid" : {
+            "description" : "True for a credit sale counted when the buyer pays (ADR-043): the later of its date and the day it was entered is on or after the first day of the rule on_payment, so a backdated sale entered after the start counts too; its payments are dated the day they are entered",
+            "type" : "boolean"
+          },
           "created_at" : {
             "format" : "date-time",
             "type" : "string"
@@ -11816,6 +11934,9 @@
           "voided_by" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "write_off" : {
+            "$ref" : "#/components/schemas/RetailSaleWriteOffInfo"
           }
         }
       },
@@ -12128,6 +12249,22 @@
             "type" : "string"
           },
           "voided_on" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSaleWriteOffInfo" : {
+        "description" : "A credit sale whose unpaid part was written off as a loss",
+        "properties" : {
+          "reason" : {
+            "type" : "string"
+          },
+          "unpaid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "written_off_on" : {
             "format" : "date",
             "type" : "string"
           }
@@ -15182,6 +15319,87 @@
         },
         "required" : [ "amount_minor" ]
       },
+      "RetailWriteOff" : {
+        "properties" : {
+          "approval_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "credit_sale_recognition" : {
+            "enum" : [ "on_sale", "on_payment" ],
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "loss_minor" : {
+            "description" : "Present only with retail.profit.read in the sale's branch: the loss the profit report shows on this day. With on_payment the unpaid share of the cost of goods; with on_sale the whole unpaid amount",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_no" : {
+            "type" : "string"
+          },
+          "unpaid_minor" : {
+            "description" : "What the buyer still owed, now cleared from trade debtors",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "written_off_on" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailWriteOffOutcome" : {
+        "description" : "201 with the write-off when it was done; 202 with approval_id when it waits for a second administrator (the unpaid amount reached the tenant's approval threshold for retail_sale_write_off, or, with no threshold set, the business has two or more active administrators)",
+        "properties" : {
+          "approval_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "executed" : {
+            "type" : "boolean"
+          },
+          "write_off" : {
+            "$ref" : "#/components/schemas/RetailWriteOff"
+          }
+        }
+      },
+      "RetailWriteOffRequest" : {
+        "properties" : {
+          "reason" : {
+            "description" : "Why the debt is written off; at least 5 characters, kept with the write-off and in the audit",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
       "Role" : {
         "properties" : {
           "key" : {
@@ -17215,6 +17433,10 @@
         "properties" : {
           "branch_roles" : {
             "type" : "boolean"
+          },
+          "credit_sale_recognition" : {
+            "enum" : [ "on_sale", "on_payment" ],
+            "type" : "string"
           },
           "customer_accounts" : {
             "type" : "boolean"
@@ -30048,6 +30270,51 @@
           }
         },
         "summary" : "Void a sale by reversal (FR-RET-04)",
+        "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/sales/{sale_id}/write-off" : {
+      "post" : {
+        "operationId" : "writeOffRetailSale",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sale_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailWriteOffRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailWriteOffOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Write off the unpaid part of a credit sale as a loss: clears the debt, never deletes (issue #340); M. 201 when done, 202 when it waits for a second administrator",
         "tags" : [ "retail-sales" ]
       }
     },

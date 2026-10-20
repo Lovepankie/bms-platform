@@ -15,7 +15,9 @@ import com.rincoltech.bms.retail.reports.internal.ReportsApi.Valuation;
 import com.rincoltech.bms.retail.reports.internal.ReportsApi.ValuationRow;
 import com.rincoltech.bms.retail.reports.internal.ReportsRepository.DayFigures;
 import com.rincoltech.bms.retail.reports.internal.ReportsRepository.Holding;
+import com.rincoltech.bms.retail.stock.CreditPeriods;
 import com.rincoltech.bms.retail.stock.Quantities;
+import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -40,12 +42,22 @@ class ReportsService {
     static final int MAX_DAYS = 366;
 
     private final ReportsRepository repo;
+    private final ProfitFigures profitFigures;
+    private final CreditRecognitionRepository credit;
     private final LedgerAccounts accounts;
     private final CurrentTenant tenant;
     private final BusinessClock clock;
 
-    ReportsService(ReportsRepository repo, LedgerAccounts accounts, CurrentTenant tenant, BusinessClock clock) {
+    ReportsService(
+            ReportsRepository repo,
+            ProfitFigures profitFigures,
+            CreditRecognitionRepository credit,
+            LedgerAccounts accounts,
+            CurrentTenant tenant,
+            BusinessClock clock) {
         this.repo = repo;
+        this.profitFigures = profitFigures;
+        this.credit = credit;
         this.accounts = accounts;
         this.tenant = tenant;
         this.clock = clock;
@@ -203,7 +215,8 @@ class ReportsService {
     DailyProfit dailyProfit(List<UUID> branchIds, LocalDate from, LocalDate to) {
         Principal principal = CurrentPrincipal.require();
         List<UUID> filter = principal.branchFilter(PROFIT_READ, branchIds);
-        LocalDate end = to == null ? clock.today(tenant.profile().timezone()) : to;
+        LocalDate today = clock.today(tenant.profile().timezone());
+        LocalDate end = to == null ? today : to;
         LocalDate start = from == null ? end.minusDays(29) : from;
         if (start.isAfter(end) || ChronoUnit.DAYS.between(start, end) >= MAX_DAYS) {
             throw ApiException.validation(List.of(
@@ -212,11 +225,57 @@ class ReportsService {
         Map<String, long[]> days = new java.util.TreeMap<>();
         Map<String, UUID> branchOf = new LinkedHashMap<>();
         Map<String, LocalDate> dateOf = new LinkedHashMap<>();
-        for (DayFigures d : repo.daily(filter, start, end)) {
+        // ADR-043: with credit sales counted when the buyer pays, the figures are the money received, and Sold
+        // (everything
+        // sold, credit included) comes beside them.
+        // The when-paid layout (Sold, Received, On credit) is for a report that holds days from the start on, or a
+        // credit sale that counts
+        // when the buyer pays (a backdated sale entered after the start is dated before it). Any other report, such as
+        // a month before the
+        // start, reads exactly as it did for a tenant that never switched, so a historical report is not relabelled.
+        CreditPeriods periods = profitFigures.periods();
+        LocalDate startsOn = periods.from();
+        boolean onPayment = startsOn != null
+                && !startsOn.isAfter(today)
+                && (!end.isBefore(startsOn) || credit.countedSaleDatedIn(filter, start, end, periods));
+        Map<String, Long> sold = new java.util.TreeMap<>();
+        for (DayFigures d : profitFigures.daily(filter, start, end)) {
             long[] f = figures(days, branchOf, dateOf, d.branchId(), d.date());
             f[0] = d.sales();
             f[1] = d.costOfSales();
             f[2] = d.usageCost();
+            f[4] = d.badDebt();
+        }
+        // Received is money recorded as collected, by any method (ADR-043), on the day it was entered: sales paid at
+        // the sale, and
+        // every payment recorded on a credit sale in the window,
+        // whatever the sale's date and whether it counts when the buyer pays, imported ones included. It is a cash
+        // figure and not a
+        // profit basis. The profit leg is separate: the profit counted at the sale for credit made before the rule
+        // started is shown
+        // for information (net of returns) and is never subtracted from Received.
+        Map<String, Long> received = new java.util.TreeMap<>();
+        Map<String, Long> atSale = new java.util.TreeMap<>();
+        if (onPayment) {
+            for (DayFigures d : repo.daily(filter, start, end)) {
+                figures(days, branchOf, dateOf, d.branchId(), d.date());
+                sold.put(d.date() + "|" + d.branchId(), d.sales());
+            }
+            for (DayFigures d : credit.cashSalesEntered(filter, start, end)) {
+                figures(days, branchOf, dateOf, d.branchId(), d.date());
+                received.merge(d.date() + "|" + d.branchId(), d.sales(), Long::sum);
+            }
+            for (DayFigures d : credit.collections(filter, start, end)) {
+                figures(days, branchOf, dateOf, d.branchId(), d.date());
+                received.merge(d.date() + "|" + d.branchId(), d.sales(), Long::sum);
+            }
+            CreditPeriods everyCredit = new CreditPeriods(LocalDate.of(1970, 1, 1), periods.zone());
+            for (DayFigures d : repo.daily(filter, start, end, periods)) {
+                atSale.merge(d.date() + "|" + d.branchId(), d.sales() - d.costOfSales(), Long::sum);
+            }
+            for (DayFigures d : repo.daily(filter, start, end, everyCredit)) {
+                atSale.merge(d.date() + "|" + d.branchId(), d.costOfSales() - d.sales(), Long::sum);
+            }
         }
         for (ReportsRepository.Difference d : repo.stocktakeDifferences(filter, start, end)) {
             long[] f = figures(days, branchOf, dateOf, d.branchId(), d.date());
@@ -228,6 +287,10 @@ class ReportsService {
         long costOfSales = 0;
         long usage = 0;
         long difference = 0;
+        long badDebt = 0;
+        long soldTotal = 0;
+        long atSaleTotal = 0;
+        long receivedTotal = 0;
         for (Map.Entry<String, long[]> e : days.entrySet()) {
             long[] f = e.getValue();
             long gross = Math.subtractExact(f[0], f[1]);
@@ -238,12 +301,20 @@ class ReportsService {
                     f[1],
                     gross,
                     f[2],
+                    f[4],
                     f[3],
-                    Math.addExact(Math.subtractExact(gross, f[2]), f[3])));
+                    Math.subtractExact(Math.addExact(Math.subtractExact(gross, f[2]), f[3]), f[4]),
+                    onPayment ? sold.getOrDefault(e.getKey(), 0L) : null,
+                    onPayment ? received.getOrDefault(e.getKey(), 0L) : null,
+                    onPayment ? atSale.getOrDefault(e.getKey(), 0L) : null));
+            soldTotal = Math.addExact(soldTotal, sold.getOrDefault(e.getKey(), 0L));
+            atSaleTotal = Math.addExact(atSaleTotal, atSale.getOrDefault(e.getKey(), 0L));
+            receivedTotal = Math.addExact(receivedTotal, received.getOrDefault(e.getKey(), 0L));
             sales = Math.addExact(sales, f[0]);
             costOfSales = Math.addExact(costOfSales, f[1]);
             usage = Math.addExact(usage, f[2]);
             difference = Math.addExact(difference, f[3]);
+            badDebt = Math.addExact(badDebt, f[4]);
         }
         return new DailyProfit(
                 start,
@@ -253,11 +324,20 @@ class ReportsService {
                 sales,
                 costOfSales,
                 usage,
+                badDebt,
                 difference,
-                Math.addExact(Math.subtractExact(Math.subtractExact(sales, costOfSales), usage), difference));
+                Math.subtractExact(
+                        Math.addExact(Math.subtractExact(Math.subtractExact(sales, costOfSales), usage), difference),
+                        badDebt),
+                onPayment ? RetailCapabilities.ON_PAYMENT : RetailCapabilities.ON_SALE,
+                onPayment ? soldTotal : null,
+                onPayment ? credit.onCredit(filter, periods)[0] : null,
+                startsOn,
+                onPayment ? receivedTotal : null,
+                onPayment ? atSaleTotal : null);
     }
 
-    /** One row of sales, cost of sales, usage and stock-take difference per day then branch (hex order, as the database sorts uuids). */
+    /** One row of sales, cost of sales, usage, stock-take difference and bad debt per day then branch (hex order, as the database sorts uuids). */
     private static long[] figures(
             Map<String, long[]> days,
             Map<String, UUID> branchOf,
@@ -267,6 +347,6 @@ class ReportsService {
         String key = date + "|" + branch;
         branchOf.putIfAbsent(key, branch);
         dateOf.putIfAbsent(key, date);
-        return days.computeIfAbsent(key, k -> new long[4]);
+        return days.computeIfAbsent(key, k -> new long[5]);
     }
 }

@@ -405,6 +405,16 @@ class RlsIsolationIT {
                           FROM retail_sale_lines l JOIN retail_sales s ON s.id = l.sale_id
                          WHERE l.tenant_id = ? LIMIT 1
                         """).params(t.tenantId(), saleReturn, t.tenantId()).update();
+        // A write-off of a credit sale (ADR-043, #340): one row, against the fixture sale.
+        // JUSTIFICATION-A3: a fixture row for each new table; the isolation test needs one row per tenant table.
+        owner.sql("""
+                        INSERT INTO retail_sale_writeoffs (id, tenant_id, sale_id, branch_id, written_off_on, currency,
+                                                           unpaid_minor, loss_minor, cost_share_minor, recognition, reason,
+                                                           journal_entry_id, created_by)
+                        SELECT gen_random_uuid(), ?, s.id, s.branch_id, DATE '2026-01-15', 'UGX', 10, 10, 5, 'on_sale',
+                               'Test write-off', ?, ?
+                          FROM retail_sales s WHERE s.tenant_id = ? LIMIT 1
+                        """).params(t.tenantId(), entry, user, t.tenantId()).update();
         // Optional purchasing (ADR-033, #198): an order and its line, a receipt against it and its line, a supplier
         // invoice
         // with its line and entry, a payment with its allocation, and the tolerances.

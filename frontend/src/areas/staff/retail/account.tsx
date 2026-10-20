@@ -7,7 +7,7 @@ import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { SkeletonList } from '../../../components/states';
 import { useStaff } from '../context';
 import {
-  MIN_REASON, accountFormOf, accountProblem, accountRequest, allocatableMinor, buildPaymentRequest, defaultStatementRange, kindWords, limitWords, methodWords, oldestFirst,
+  MIN_REASON, accountFormOf, accountProblem, accountRequest, allocatableMinor, buildPaymentRequest, defaultStatementRange, settledPayment, splitCountsWhenPaid, kindWords, limitWords, methodWords, oldestFirst,
   payableSales, paymentProblem, reasonOf, reversalKeys, termsWords, type AccountForm, type ManualRow, type PaymentForm,
 } from './account-state';
 import { usePersistedDraft, newIdempotencyKey } from './idempotency';
@@ -89,9 +89,11 @@ export function PaymentPanel({ form, open, branches, today, busy, error, onChang
   onSubmit: () => void;
 }) {
   const payable = payableSales(open);
-  const problem = paymentProblem(form, open, today);
+  const todayOnly = splitCountsWhenPaid(form, open);
+  const shown = settledPayment(form, open, today);
+  const problem = paymentProblem(shown, open, today);
   const amountText = form.amount.trim();
-  const preview = !form.manual && problem === null ? oldestFirst(open, buildPaymentRequest(form).amount_minor, form.paidOn).parts : [];
+  const preview = !form.manual && problem === null ? oldestFirst(open, buildPaymentRequest(shown).amount_minor, shown.paidOn).parts : [];
   const rowOf = (saleId: string): ManualRow => form.rows.find((r) => r.saleId === saleId) ?? { saleId, text: '' };
   const setRow = (saleId: string, text: string) =>
     onChange({ ...form, rows: [...form.rows.filter((r) => r.saleId !== saleId), { saleId, text }] });
@@ -115,7 +117,8 @@ export function PaymentPanel({ form, open, branches, today, busy, error, onChang
             {METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
           <label htmlFor="pay-date">Date received</label>
-          <input id="pay-date" type="date" value={form.paidOn} max={today} onChange={(e) => onChange({ ...form, paidOn: e.target.value })} />
+          <input id="pay-date" type="date" value={shown.paidOn} min={todayOnly ? today : undefined} max={today} readOnly={todayOnly} onChange={(e) => onChange({ ...form, paidOn: e.target.value })} />
+          {todayOnly && <p className="hint" data-testid="account-pay-today-only">A payment is dated today. If you took the money earlier, ask your administrator.</p>}
           <label className="check">
             <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={form.manual} onChange={(e) => onChange({ ...form, manual: e.target.checked, rows: [] })} />
             Choose which sales it pays
@@ -272,7 +275,7 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
     onSuccess: () => done('Saved the credit limit and terms.'),
   });
   const pay = useMutation({
-    mutationFn: () => retail.payOnAccount(customerId, buildPaymentRequest(draft), key),
+    mutationFn: () => retail.payOnAccount(customerId, buildPaymentRequest(settledPayment(draft, balance.data?.open_sales ?? [], today)), key),
     onMutate: () => setMessage(null),
     onSuccess: (r) => { discard(); done(`Saved ${r.receipt_no}: ${money(r.amount_minor ?? 0)}.`); },
   });

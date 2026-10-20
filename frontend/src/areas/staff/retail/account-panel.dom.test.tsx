@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AccountPayment, CustomerAccount, OpenSale } from '../../../api/retail';
 import { AccountSummary, PaymentPanel, ReceiptList, blankPayment } from './account';
-import { buildPaymentRequest, type PaymentForm } from './account-state';
+import { buildPaymentRequest, settledPayment, type PaymentForm } from './account-state';
 
 // The account forms as a person uses them (ADR-033, issue #196): the preview of where a payment goes follows what is typed,
 // the save button waits for a form the server would accept, a chosen split is checked, and a reversal needs its reason.
@@ -25,6 +25,44 @@ function Panel({ onSubmit }: { onSubmit: (form: PaymentForm) => void }) {
 
 const type = (label: RegExp | string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 const saveButton = () => screen.getByRole('button', { name: 'Save payment' }) as HTMLButtonElement;
+
+function CountedPanel({ open: sales, paidOn, onSubmit }: { open: OpenSale[]; paidOn: string; onSubmit: (form: PaymentForm) => void }) {
+  const [form, setForm] = useState({ ...blankPayment('b1', '2026-04-01'), paidOn });
+  return <PaymentPanel form={form} open={sales} branches={branches} today="2026-04-01" onChange={setForm} onSubmit={() => onSubmit(form)} />;
+}
+
+describe('the date of a payment on account', () => {
+  const counted: OpenSale[] = [{ ...sale('d', '2026-03-05', 1000), counted_when_paid: true }];
+
+  it('is locked to today when the payment would pay a sale counted when the buyer pays, even with a stale date', () => {
+    const sent = vi.fn();
+    render(<CountedPanel open={counted} paidOn="2026-03-30" onSubmit={sent} />);
+    type('Amount received', '500');
+    const date = screen.getByLabelText('Date received') as HTMLInputElement;
+    expect(date.value).toBe('2026-04-01');
+    expect(date.readOnly).toBe(true);
+    expect(screen.getByTestId('account-pay-today-only').textContent).toMatch(/dated today/);
+    fireEvent.click(saveButton());
+    const form = sent.mock.calls[0]?.[0] as PaymentForm;
+    expect(form.paidOn).toBe('2026-03-30');
+    expect(buildPaymentRequest(settledPayment(form, counted, '2026-04-01')).paid_on).toBe('2026-04-01');
+  });
+
+  it('keeps its freedom when every sale it pays is of the earlier era', () => {
+    render(<CountedPanel open={open} paidOn="2026-03-30" onSubmit={() => undefined} />);
+    type('Amount received', '500');
+    expect((screen.getByLabelText('Date received') as HTMLInputElement).value).toBe('2026-03-30');
+    expect(screen.queryByTestId('account-pay-today-only')).toBeNull();
+  });
+
+  it('is locked only when the chosen sales include a counted one', () => {
+    const mixed = [...open, ...counted];
+    expect(settledPayment({ ...blankPayment('b1', '2026-04-01'), paidOn: '2026-03-30', amount: '1500' }, mixed, '2026-04-01').paidOn)
+      .toBe('2026-03-30');
+    expect(settledPayment({ ...blankPayment('b1', '2026-04-01'), paidOn: '2026-03-30', amount: '2500' }, mixed, '2026-04-01').paidOn)
+      .toBe('2026-04-01');
+  });
+});
 
 describe('taking a payment on account', () => {
   it('waits for an amount, previews the oldest sales first, and refuses more than can be paid', () => {

@@ -1,25 +1,59 @@
 package com.rincoltech.bms.retail.manifest;
 
+import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.ModuleSettingsGroup;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
+import com.rincoltech.bms.kernel.BusinessClock;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
  * The tenant settings group {@code retail.capabilities} (ADR-033, docs/specs/trade-capabilities.md
- * section 1): eight booleans, absent meaning off, and the profile {@code shop} or {@code trade}.
+ * section 1): eight booleans, absent meaning off, the profile {@code shop} or {@code trade}, and the policy
+ * {@code credit_sale_recognition} ({@code on_sale} by default, or {@code on_payment}; ADR-043).
  * A profile is a preset that writes a bundle of the flags in one change; the module reads the
  * flags and never the profile. The core stores the group and calls this class to validate it.
  */
 @Component
 class RetailCapabilityGroup implements ModuleSettingsGroup {
 
+    private static final Logger log = LoggerFactory.getLogger(RetailCapabilityGroup.class);
+
+    private final BusinessClock clock;
+    private final CurrentTenant tenant;
+    /** The tenants whose stored rule without a start day was already reported, so a read does not log it again and again. */
+    private final Set<String> warned = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    RetailCapabilityGroup(BusinessClock clock, CurrentTenant tenant) {
+        this.clock = clock;
+        this.tenant = tenant;
+    }
+
     static final String PROFILE = "profile";
+    /** How credit sales count in the reports and the daily savings (ADR-043); {@code on_sale} is the default. */
+    static final String CREDIT_RECOGNITION = "credit_sale_recognition";
+
+    static final List<String> CREDIT_RECOGNITIONS = List.of("on_sale", "on_payment");
+
+    /**
+     * The first business day the rule {@code on_payment} counts from: the business day after it was asked for, worked out here, while
+     * the settings row is locked, from the business clock, and never given by the caller. Credit sales counted from before it keep counting at the sale (ADR-043). The rule
+     * is one-way: it is switched on once, and the only way back is to cancel it before this day has come. Absent while the rule is
+     * {@code on_sale}; a stored {@code on_payment} with no start day is no rule at all.
+     */
+    static final String EFFECTIVE_FROM = "credit_recognition_effective_from";
+
+    /** The name {@code /me} lists while the rule is on_payment, so the screens can say which profit they show. */
+    static final String ON_PAYMENT_FLAG = "credit_on_payment";
+
     static final List<String> CAPABILITIES = List.of(
             "branch_roles",
             "units",
@@ -47,12 +81,34 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
     public Map<String, Object> normalise(Map<String, Object> current, Map<String, Object> proposed) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put(PROFILE, current.get(PROFILE) instanceof String p && isProfile(p) ? p : "shop");
+        String mode =
+                current.get(CREDIT_RECOGNITION) instanceof String c && CREDIT_RECOGNITIONS.contains(c) ? c : "on_sale";
+        out.put(CREDIT_RECOGNITION, mode);
+        String effective = current.get(EFFECTIVE_FROM) instanceof String d && validDate(d) ? d : null;
+        if (mode.equals("on_payment") && effective == null) {
+            // No start day means no rule: never guess 1970, which would count every sale ever made when the buyer pays.
+            // The id comes from the thread's tenant context, no lookup: a read of a broken tenant costs nothing more.
+            String who = com.rincoltech.bms.kernel.TenantContext.current()
+                    .map(java.util.UUID::toString)
+                    .orElse("unbound");
+            if (warned.add(who)) {
+                log.warn(
+                        "retail.capabilities of tenant {} has credit_sale_recognition on_payment with no start day; reading it as on_sale",
+                        who);
+            }
+            mode = "on_sale";
+            out.put(CREDIT_RECOGNITION, mode);
+        }
         for (String key : CAPABILITIES) {
             out.put(key, Boolean.TRUE.equals(current.get(key)));
         }
         List<FieldProblem> problems = new ArrayList<>();
         proposed.forEach((key, value) -> {
-            if (!key.equals(PROFILE) && !CAPABILITIES.contains(key)) {
+            if (key.equals(CREDIT_RECOGNITION)) {
+                if (!(value instanceof String c && CREDIT_RECOGNITIONS.contains(c))) {
+                    problems.add(new FieldProblem(CREDIT_RECOGNITION, "invalid", "Use on_sale or on_payment."));
+                }
+            } else if (!key.equals(PROFILE) && !CAPABILITIES.contains(key)) {
                 problems.add(new FieldProblem(key, "unknown", "Not a retail capability."));
             } else if (key.equals(PROFILE) && !(value instanceof String p && isProfile(p))) {
                 problems.add(new FieldProblem(PROFILE, "invalid", "Use shop or trade."));
@@ -62,6 +118,30 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
         });
         if (!problems.isEmpty()) {
             throw ApiException.validation(problems);
+        }
+        if (proposed.get(CREDIT_RECOGNITION) instanceof String next && !next.equals(mode)) {
+            // Read here, inside the locked change, so a request that waited for the lock decides on the day it really
+            // is.
+            LocalDate today = clock.today(tenant.profile().timezone());
+            if (next.equals("on_payment")) {
+                // One way: on_payment is switched on once, and counts from the next business day.
+                effective = today.plusDays(1).toString();
+            } else {
+                // Going back is only the cancelling of a change that has not taken effect yet; nothing else goes back.
+                // This runs
+                // under the settings row lock, on the stored state.
+                if (effective == null || !LocalDate.parse(effective).isAfter(today)) {
+                    throw ApiException.rule(
+                            "credit_rule_cannot_be_switched_off",
+                            "This rule cannot be switched off once it has started. Ask Rincol support.");
+                }
+                effective = null;
+            }
+            mode = next;
+            out.put(CREDIT_RECOGNITION, mode);
+        }
+        if (effective != null) {
+            out.put(EFFECTIVE_FROM, effective);
         }
         if (proposed.get(PROFILE) instanceof String profile) {
             out.put(PROFILE, profile);
@@ -83,10 +163,23 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
 
     @Override
     public List<String> enabledCapabilities(Map<String, Object> normalised) {
-        return CAPABILITIES.stream()
+        List<String> out = new ArrayList<>(CAPABILITIES.stream()
                 .filter(k -> Boolean.TRUE.equals(normalised.get(k)))
-                .sorted()
-                .toList();
+                .toList());
+        if ("on_payment".equals(normalised.get(CREDIT_RECOGNITION))) {
+            out.add(ON_PAYMENT_FLAG);
+        }
+        out.sort(null);
+        return out;
+    }
+
+    private static boolean validDate(String d) {
+        try {
+            java.time.LocalDate.parse(d);
+            return true;
+        } catch (java.time.format.DateTimeParseException e) {
+            return false;
+        }
     }
 
     private static boolean isProfile(String p) {

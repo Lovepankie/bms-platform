@@ -373,7 +373,10 @@ class AccountsService {
         UUID branch = branches.resolve("retail.sale.create", r.branchId());
         // The buyer's row is locked first: payments, and credit sales that check the limit, queue behind each other.
         repo.terms(customerId, true).orElseThrow(ApiException::notFound);
-        LocalDate today = clock.today(tenant.profile().timezone());
+        // One read of the business clock: the day and the moment the payment is entered come from the same instant
+        // (ADR-043).
+        Instant now = clock.now();
+        LocalDate today = now.atZone(tenant.profile().timezone()).toLocalDate();
         LocalDate paidOn = r.paidOn() == null ? today : r.paidOn();
         if (paidOn.isAfter(today)) {
             throw ApiException.validation(
@@ -387,6 +390,20 @@ class AccountsService {
         // The sales were locked above, in the same order for every payment; read them back with their numbers.
         Map<UUID, OpenSale> byId = repo.lockSales(customerId, new ArrayList<>(split.keySet())).stream()
                 .collect(Collectors.toMap(OpenSale::id, s -> s, (a, b) -> a, LinkedHashMap::new));
+        // A payment that pays a sale counted when the buyer pays (its counting day, the later of its date and its entry
+        // day, is on or after the start) is dated today
+        // (ADR-043).
+        if (!paidOn.equals(today)
+                && byId.values().stream()
+                        .anyMatch(x -> !x.historical()
+                                && capabilities.onPaymentPeriods().counts(x.saleDate(), x.createdAt()))) {
+            throw ApiException.validation(
+                    List.of(
+                            new FieldProblem(
+                                    "paid_on",
+                                    "backdated_payment",
+                                    "Under the 'when the buyer pays' rule a payment is dated today. If you took the money earlier, ask your administrator.")));
+        }
         UUID id = UUID.randomUUID();
         String receiptNo = "RC%08d".formatted(sequences.next("retail_account_payment_no"));
         List<Leg> legs = new ArrayList<>();
@@ -405,7 +422,6 @@ class AccountsService {
                         legs))
                 .orElseThrow();
         String currency = tenant.profile().currency();
-        Instant now = clock.now();
         repo.insertReceipt(new Receipt(
                 id,
                 receiptNo,
@@ -674,6 +690,14 @@ class AccountsService {
                         "payment_not_reversible",
                         "Sale " + a.saleNo() + " no longer holds this payment, so it cannot be reversed.");
             }
+        }
+        // A sale whose unpaid part was written off holds that write-off in its paid amount; taking a payment back would
+        // make the cleared debt owing again (ADR-043).
+        if (!repo.writtenOffAmong(parts.stream().map(AllocationRow::saleId).toList())
+                .isEmpty()) {
+            throw ApiException.rule(
+                    "payment_not_reversible",
+                    "A sale this payment paid has had its unpaid part written off, so the payment cannot be reversed.");
         }
         // Money refunded on a return of these sales was paid out of what this receipt brought in; giving the full
         // amount

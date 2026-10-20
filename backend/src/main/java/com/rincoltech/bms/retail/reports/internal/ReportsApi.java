@@ -16,6 +16,10 @@ final class ReportsApi {
     static final String DIFFERENCE =
             "Committed stock-take differences at cost: negative for a loss, positive for a gain; included in profit_minor";
 
+    static final String BAD_DEBT =
+            "The loss of credit sales written off on the day (ADR-043); included in profit_minor as a minus. With on_payment the"
+                    + " unpaid share of the cost of goods, with on_sale the whole unpaid amount";
+
     private ReportsApi() {}
 
     @Schema(name = "RetailValuationRow")
@@ -121,8 +125,40 @@ final class ReportsApi {
             long costOfSalesMinor,
             long grossProfitMinor,
             long usageCostMinor,
+
+            @Schema(description = BAD_DEBT) long badDebtMinor,
             @Schema(description = DIFFERENCE) long stocktakeDifferenceMinor,
-            long profitMinor) {}
+            long profitMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Present only when credit_sale_recognition is on_payment: everything sold on the day, credit"
+                                    + " sales included (Sold). Then sales_minor is the sales counted for profit (sales paid at the sale,"
+                                    + " the profit share of each payment on a credit sale counted when the buyer pays, and credit counted at"
+                                    + " the sale before the rule started) and the profit columns follow it; received_minor is the cash"
+                                    + " (ADR-043)")
+            Long soldMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Present only with on_payment: the money recorded as collected on the day it was entered, by any method"
+                                    + " (cash, mobile money, bank) (Received): sales paid at the sale and every payment recorded on a credit"
+                                    + " sale, whatever the sale's date and whether or not it counts when the buyer pays, imported credit sales"
+                                    + " included; less payments reversed (on the day of the reversal) and money paid back on returns (on the"
+                                    + " day of the return, at the refund branch; given back on the day a return is voided). A payment dated"
+                                    + " earlier than it was entered counts on the day it was entered. Sales paid at the sale count on the day they"
+                                    + " were entered; cancelling a cash sale removes it from its own day. Not a profit basis")
+            Long receivedMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Present only with on_payment: the profit counted at the sale for credit sales (not imported ones)"
+                                    + " entered and dated before the rule started, net of their returns (informational; part of the profit,"
+                                    + " never subtracted from Received)")
+            Long countedAtSaleMinor) {}
 
     @Schema(name = "RetailDailyProfit")
     record DailyProfit(
@@ -133,6 +169,54 @@ final class ReportsApi {
             long salesMinor,
             long costOfSalesMinor,
             long usageCostMinor,
+            @Schema(description = BAD_DEBT) long badDebtMinor,
             @Schema(description = DIFFERENCE) long stocktakeDifferenceMinor,
-            long profitMinor) {}
+            long profitMinor,
+
+            @Schema(
+                    allowableValues = {"on_sale", "on_payment"},
+                    description =
+                            "How credit sales were counted (ADR-043): on_sale when they are made, on_payment when the buyer pays")
+            String creditSaleRecognition,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Present only with on_payment: everything sold in the period, credit sales included (Sold)")
+            Long soldMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Present only with on_payment: what buyers still owe now on the credit sales counted when the buyer"
+                                    + " pays, all dates (On credit); not part of the period. Credit sales from before the rule started"
+                                    + " were counted at the sale and are not in it")
+            Long onCreditMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "The first business day of the rule on_payment, when it was chosen; it can lie in the future. credit_sale_recognition"
+                                    + " is on_payment once that day has come, whatever days the period spans")
+            LocalDate creditRecognitionStartsOn,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Present only with on_payment: the money recorded as collected on the day it was entered, by any method"
+                                    + " (cash, mobile money, bank) (Received): sales paid at the sale and every payment recorded on a credit"
+                                    + " sale, whatever the sale's date and whether or not it counts when the buyer pays, imported credit sales"
+                                    + " included; less payments reversed (on the day of the reversal) and money paid back on returns (on the"
+                                    + " day of the return, at the refund branch; given back on the day a return is voided). A payment dated"
+                                    + " earlier than it was entered counts on the day it was entered. Sales paid at the sale count on the day they"
+                                    + " were entered; cancelling a cash sale removes it from its own day. Not a profit basis")
+            Long receivedMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Present only with on_payment: the profit counted at the sale for credit sales (not imported ones)"
+                                    + " entered and dated before the rule started, net of their returns (informational; part of the profit,"
+                                    + " never subtracted from Received)")
+            Long countedAtSaleMinor) {}
 }

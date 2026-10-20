@@ -39,28 +39,51 @@ export function DashboardView({ data, nameOf, stockLink }: { data: Dashboard; na
   const stock = data.stock;
   const shops = data.shops ?? [];
   const withProfit = data.profit_visible === true;
+  // ADR-043: with credit sales counted when the buyer pays, the cards say Sold, Received and On credit, and profit is that of
+  // the money received. The default way (when the sale is made) keeps its cards exactly as they were.
+  const onPayment = data.credit_sale_recognition === 'on_payment';
   const shopStock = shops.some((s) => s.stock_at_price_minor !== undefined);
   const shopProfit = shops.some((s) => s.today_gross_profit_minor !== undefined);
   return (
     <section aria-labelledby="dash-title" className="an-dashboard">
       <h2 id="dash-title">Today, {data.date}</h2>
       <ul className="an-stats">
-        <Stat label="Sales today" value={money(today.sales_minor ?? 0)} hint={`${today.sale_count ?? 0} ${today.sale_count === 1 ? 'sale' : 'sales'}`} />
-        <Stat label="Cash and mobile money" value={money(today.cash_minor ?? 0)} />
-        <Stat label="On credit" value={money(today.credit_minor ?? 0)} />
-        {withProfit && today.gross_profit_minor !== undefined && <Stat label="Profit today" value={money(today.gross_profit_minor)} />}
+        {onPayment ? (
+          <>
+            <Stat label="Sales today" value={money(today.sales_minor ?? 0)} hint={`${today.sale_count ?? 0} ${today.sale_count === 1 ? 'sale' : 'sales'} sold, including credit`} />
+            <Stat label="Money collected" value={money(today.received_minor ?? 0)} hint="Money received today by any method, with payments on earlier credit sales, less money paid back" />
+            <Stat label="On credit" value={money(today.on_credit_minor ?? 0)} hint={`${today.on_credit_count ?? 0} ${today.on_credit_count === 1 ? 'sale' : 'sales'} not paid yet. Not counted as profit`} />
+            {withProfit && today.gross_profit_minor !== undefined && <Stat label="Profit today" value={money(today.gross_profit_minor)} hint="From the money received" />}
+          </>
+        ) : (
+          <>
+            <Stat label="Sales today" value={money(today.sales_minor ?? 0)} hint={`${today.sale_count ?? 0} ${today.sale_count === 1 ? 'sale' : 'sales'}`} />
+            <Stat label="Cash and mobile money" value={money(today.cash_minor ?? 0)} />
+            <Stat label="On credit" value={money(today.credit_minor ?? 0)} />
+            {withProfit && today.gross_profit_minor !== undefined && <Stat label="Profit today" value={money(today.gross_profit_minor)} />}
+          </>
+        )}
       </ul>
+      {data.credit_recognition_starts_on && (
+        <p className="hint" data-testid="credit-starts-on">
+          {onPayment
+            ? `Credit sales entered and dated before ${data.credit_recognition_starts_on} count as they did, on the day of the sale.`
+            : `From ${data.credit_recognition_starts_on}, credit sales will count when the buyer pays.`}
+        </p>
+      )}
 
-      <h3>Sales, last 7 and 30 days</h3>
+      <h3>{onPayment ? 'Sold, last 7 and 30 days' : 'Sales, last 7 and 30 days'}</h3>
       <div className="an-sparks">
         <div>
           <p className="an-spark-title">Last 7 days <strong className="num">{money(data.last7_sales_minor ?? 0)}</strong></p>
           <Sparkline points={days.slice(-7).map((d) => d.sales_minor ?? 0)} label={`Sales a day for the last 7 days, ${money(data.last7_sales_minor ?? 0)} in all`} />
+          {onPayment && data.last7_received_minor !== undefined && <p className="hint">Received {money(data.last7_received_minor)}</p>}
           {withProfit && data.last7_gross_profit_minor !== undefined && <p className="hint">Profit {money(data.last7_gross_profit_minor)}</p>}
         </div>
         <div>
           <p className="an-spark-title">Last 30 days <strong className="num">{money(data.last30_sales_minor ?? 0)}</strong></p>
           <Sparkline points={days.map((d) => d.sales_minor ?? 0)} label={`Sales a day for the last 30 days, ${money(data.last30_sales_minor ?? 0)} in all`} />
+          {onPayment && data.last30_received_minor !== undefined && <p className="hint">Received {money(data.last30_received_minor)}</p>}
           {withProfit && data.last30_gross_profit_minor !== undefined && <p className="hint">Profit {money(data.last30_gross_profit_minor)}</p>}
         </div>
       </div>

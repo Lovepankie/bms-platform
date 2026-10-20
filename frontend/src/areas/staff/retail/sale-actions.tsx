@@ -3,10 +3,11 @@ import { useEffect, useRef, useState } from 'react';
 import { RetailError, retail, type Sale } from '../../../api/retail';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
-import { SALE_VOID, holdsAt } from './permissions';
+import { CREDIT_WRITE_OFF, SALE_VOID, holdsAt } from './permissions';
 import {
   IMPORTED_FULL, IMPORTED_SHORT, MIN_REASON, PAY_METHODS, blankPay, buildPayRequest, fullPay, importedAndOwing, keyReused, owedMinor, paidWords, payFailureWords, payProblem,
-  saleMovedOn, takesPayment, typedAmount, voidBlocked, voidReasonOf, type PayForm,
+  saleMovedOn, settledDate, takesPayment, typedAmount, voidBlocked, voidReasonOf, type PayForm,
+  WRITE_OFF_CHECKER, WRITE_OFF_PENDING, canWriteOff, writeOffAlreadyPending, writeOffFailureWords, writeOffMovedOn, writeOffReasonOf, writeOffWarning, writeOffWords,
 } from './sale-actions-state';
 import { Problem, Success, money } from './ui';
 
@@ -17,9 +18,11 @@ import { Problem, Success, money } from './ui';
 const SALE_CREATE = 'retail.sale.create';
 
 /** The payment form: amount (the balance to start with), how it was paid and the date. `full` fixes the amount at the whole balance. */
-export function PayFormView({ sale, today, form, full, busy, error, onChange, onSubmit, onCancel }: {
+export function PayFormView({ sale, today, form, full, busy, error, todayOnly, onChange, onSubmit, onCancel }: {
   sale: Sale;
   today: string;
+  /** Under the rule "when the buyer pays" a payment counts on the day it is entered, so it is dated today (ADR-043). */
+  todayOnly?: boolean;
   form: PayForm;
   full: boolean;
   busy?: boolean;
@@ -29,7 +32,7 @@ export function PayFormView({ sale, today, form, full, busy, error, onChange, on
   onCancel: () => void;
 }) {
   const id = `pay-${sale.id ?? ''}`;
-  const shown = full ? fullPay(form, sale) : form;
+  const shown = settledDate(full ? fullPay(form, sale) : form, todayOnly === true, today);
   const problem = payProblem(shown, sale, today);
   return (
     <form
@@ -48,7 +51,8 @@ export function PayFormView({ sale, today, form, full, busy, error, onChange, on
         {PAY_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
       </select>
       <label htmlFor={`${id}-date`}>Date received</label>
-      <input id={`${id}-date`} type="date" min={sale.sale_date} max={today} value={form.paidOn} onChange={(e) => onChange({ ...form, paidOn: e.target.value })} />
+      <input id={`${id}-date`} type="date" min={todayOnly ? today : sale.sale_date} max={today} value={todayOnly ? today : form.paidOn} readOnly={todayOnly} onChange={(e) => onChange({ ...form, paidOn: e.target.value })} />
+      {todayOnly && <p className="hint" data-testid="pay-today-only">A payment is dated today. If you took the money earlier, ask your administrator.</p>}
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
       <p className="cluster">
@@ -67,11 +71,13 @@ function PayPanel({ sale, today, full, onDone }: { sale: Sale; today: string; fu
   const { me } = useStaff();
   const queryClient = useQueryClient();
   const saleId = sale.id ?? '';
+  // The server says a sale is counted when the buyer pays; its payment is then dated today whatever a stored draft holds (ADR-043).
+  const todayOnly = sale.counted_when_paid === true;
   const { key, draft, setDraft, discard } = usePersistedDraft<PayForm>(`sale-pay:${me.user_id ?? ''}:${saleId}:${full ? 'full' : 'part'}`, blankPay(sale, today));
   // A second press before the first request has started must not send a second one: the ref answers at once, the mutation state a render later.
   const sending = useRef(false);
   const send = useMutation({
-    mutationFn: () => retail.paySale(saleId, buildPayRequest(full ? fullPay(draft, sale) : draft), key),
+    mutationFn: () => retail.paySale(saleId, buildPayRequest(settledDate(full ? fullPay(draft, sale) : draft, todayOnly, today)), key),
     onSuccess: (result) => {
       discard();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
@@ -94,6 +100,7 @@ function PayPanel({ sale, today, full, onDone }: { sale: Sale; today: string; fu
       today={today}
       form={draft}
       full={full}
+      todayOnly={todayOnly}
       busy={send.isPending}
       error={payFailureWords(send.error, full)}
       onChange={setDraft}
@@ -211,4 +218,92 @@ export function VoidSaleAction({ sale, branchName }: { sale: Sale; branchName?: 
     sending.current = true;
     send.mutate(reason);
   }} onCancel={() => setOpen(false)} />;
+}
+
+/** The write-off form: a reason of at least five characters, what will happen in plain words, and one clear button. */
+export function WriteOffFormView({ owed, reason, busy, error, onReason, onWriteOff, onCancel }: {
+  owed: number;
+  reason: string;
+  busy?: boolean;
+  error?: unknown;
+  onReason: (reason: string) => void;
+  onWriteOff: (reason: string) => void;
+  onCancel: () => void;
+}) {
+  const ready = writeOffReasonOf(reason);
+  return (
+    <form
+      className="stack"
+      aria-label="Write off this debt"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (ready && !busy) onWriteOff(ready);
+      }}
+    >
+      <label htmlFor="write-off-reason">Why will this buyer not pay? (at least {MIN_REASON} characters)</label>
+      <input id="write-off-reason" value={reason} maxLength={300} onChange={(e) => onReason(e.target.value)} />
+      <p className="hint" data-testid="write-off-warning">{writeOffWarning(owed)}</p>
+      <p className="hint" data-testid="write-off-checker">{WRITE_OFF_CHECKER}</p>
+      <Problem error={error} />
+      <p className="cluster">
+        <button type="submit" disabled={ready === null || busy}>{busy ? 'Writing off' : 'Write off'}</button>
+        <button type="button" className="btn-ghost" disabled={busy} onClick={onCancel}>Keep the debt</button>
+      </p>
+    </form>
+  );
+}
+
+/**
+ * Write off the unpaid part of a credit sale that the buyer will never pay (retail.credit.manage at the sale's branch). Offered only on a
+ * live credit sale made on the system that still owes; nothing shows for anyone else. Above the business's approval limit the write-off
+ * waits for a second administrator, and the screen says so. The sale is never deleted.
+ */
+export function WriteOffSaleAction({ sale }: { sale: Sale }) {
+  const { me } = useStaff();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  // A write-off waiting for a second administrator: the button stays away, so the same debt is not asked for twice.
+  const [pending, setPending] = useState(false);
+  const saleId = sale.id ?? '';
+  const { key, draft, setDraft, discard } = usePersistedDraft<{ reason: string }>(`sale-write-off:${me.user_id ?? ''}:${saleId}`, { reason: '' });
+  const sending = useRef(false);
+  const send = useMutation({
+    mutationFn: (reason: string) => retail.writeOffSale(saleId, reason, key),
+    onSuccess: (outcome) => {
+      discard();
+      setOpen(false);
+      setMessage(writeOffWords(outcome));
+      if (outcome.executed !== true) setPending(true);
+      void queryClient.invalidateQueries({ queryKey: ['retail'] });
+    },
+    onError: (error) => {
+      if (writeOffAlreadyPending(error)) {
+        setOpen(false);
+        setPending(true);
+      }
+      if (writeOffMovedOn(error)) void queryClient.invalidateQueries({ queryKey: ['retail'] });
+    },
+    onSettled: () => { sending.current = false; },
+  });
+  if (!holdsAt(me, CREDIT_WRITE_OFF, sale.branch_id)) return null;
+  if (message) return <Success>{message}</Success>;
+  if (pending) return <p className="hint" data-testid="write-off-pending">{WRITE_OFF_PENDING}</p>;
+  if (!canWriteOff(sale)) return null;
+  if (!open) return <p><button type="button" className="btn-sm" onClick={() => { send.reset(); setOpen(true); }}>Write off</button></p>;
+  return (
+    <WriteOffFormView
+      owed={owedMinor(sale)}
+      reason={draft.reason}
+      busy={send.isPending}
+      error={writeOffFailureWords(send.error)}
+      onReason={(reason) => setDraft({ reason })}
+      onWriteOff={(reason) => {
+        if (sending.current) return;
+        sending.current = true;
+        send.mutate(reason);
+      }}
+      onCancel={() => { discard(); setOpen(false); }}
+    />
+  );
 }

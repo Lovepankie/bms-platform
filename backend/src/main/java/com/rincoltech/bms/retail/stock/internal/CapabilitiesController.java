@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.MediaType;
@@ -52,6 +53,24 @@ class CapabilitiesController {
             boolean transferReceipt,
             boolean returns,
 
+            @Schema(
+                    allowableValues = {"on_sale", "on_payment"},
+                    description =
+                            "How credit sales count in the reports, the dashboard and the daily savings (ADR-043):"
+                                    + " on_sale (the default) counts them when they are made, on_payment only when the buyer pays."
+                                    + " One way: on_payment starts the business day after it is asked for and cannot be switched off"
+                                    + " once it has started (422 credit_rule_cannot_be_switched_off); until then asking for on_sale"
+                                    + " cancels it")
+            String creditSaleRecognition,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Read only: the first business day of the rule on_payment (the day after it was asked for), when it was"
+                                    + " chosen; it can lie in the future. Credit sales dated before it keep counting the way they did"
+                                    + " (ADR-043); absent while the rule was never chosen")
+            LocalDate creditRecognitionEffectiveFrom,
+
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(
                     description =
@@ -70,7 +89,10 @@ class CapabilitiesController {
             Boolean documents,
             Boolean purchasing,
             Boolean transferReceipt,
-            Boolean returns) {}
+            Boolean returns,
+
+            @Schema(allowableValues = {"on_sale", "on_payment"})
+            String creditSaleRecognition) {}
 
     @GetMapping
     @RequiresPermission("core.settings.manage")
@@ -97,6 +119,7 @@ class CapabilitiesController {
         put(proposed, "purchasing", r.purchasing());
         put(proposed, "transfer_receipt", r.transferReceipt());
         put(proposed, "returns", r.returns());
+        put(proposed, RetailCapabilities.CREDIT_RECOGNITION, r.creditSaleRecognition());
         transfers.guardSwitchOff(proposed);
         CapabilitiesResponse saved = response(capabilities.change(proposed, expected));
         return ResponseEntity.ok().eTag(String.valueOf(capabilities.version())).body(saved);
@@ -120,6 +143,8 @@ class CapabilitiesController {
                 flag(g, "purchasing"),
                 flag(g, "transfer_receipt"),
                 flag(g, "returns"),
+                g.get(RetailCapabilities.CREDIT_RECOGNITION) instanceof String c ? c : RetailCapabilities.ON_SALE,
+                g.get("credit_recognition_effective_from") instanceof String d ? LocalDate.parse(d) : null,
                 threshold > 0 ? threshold : null);
     }
 

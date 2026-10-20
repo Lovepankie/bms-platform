@@ -17,6 +17,7 @@
             "core.audit",
             "core.ledger",
             "core.documents",
+            "core.notifications",
             "core.operations",
             "retail.catalogue",
             "retail.stock"

@@ -89,6 +89,44 @@ describe('recording a payment', () => {
     expect(screen.getByTestId('imported-note').textContent).toBe('Imported from the old records; record this payment with your accountant.');
   });
 
+  it('locks the date to today only for a sale the server says is counted when the buyer pays', () => {
+    screenOf(admin, <PaySaleAction sale={{ ...credit, counted_when_paid: true }} today={today} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
+    expect(screen.getByTestId('pay-today-only').textContent).toMatch(/dated today/);
+    expect((screen.getByLabelText('Date received') as HTMLInputElement).readOnly).toBe(true);
+    cleanup();
+    // A sale of the earlier era keeps the old freedom, whatever the rule is now.
+    screenOf(admin, <PaySaleAction sale={{ ...credit, counted_when_paid: false }} today={today} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
+    expect(screen.queryByTestId('pay-today-only')).toBeNull();
+    expect((screen.getByLabelText('Date received') as HTMLInputElement).readOnly).toBe(false);
+  });
+
+  it('sends today for a sale counted when the buyer pays, whatever date a stored draft holds', async () => {
+    paySale.mockResolvedValue({ payment: { amount_minor: 4000 }, sale_paid_minor: 6000, sale_balance_minor: 6000 });
+    const stale = { key: 'draft-key-1', draft: { amount: '4000', method: 'cash', paidOn: '2026-10-18' } };
+    sessionStorage.setItem(`retail-draft:sale-pay:${admin.user_id ?? ''}:s1:part`, JSON.stringify(stale));
+    screenOf(admin, <PaySaleAction sale={{ ...credit, counted_when_paid: true }} today={today} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
+    expect((screen.getByLabelText('Date received') as HTMLInputElement).value).toBe(today);
+    fireEvent.click(save());
+    await waitFor(() => expect(paySale).toHaveBeenCalledTimes(1));
+    const [, body] = paySale.mock.calls[0] as [string, Record<string, unknown>];
+    expect(body).toEqual({ amount_minor: 4000, method: 'cash', paid_on: today });
+  });
+
+  it('keeps the stored date for a sale of the earlier era', async () => {
+    paySale.mockResolvedValue({ payment: { amount_minor: 4000 }, sale_paid_minor: 6000, sale_balance_minor: 6000 });
+    const stale = { key: 'draft-key-2', draft: { amount: '4000', method: 'cash', paidOn: '2026-10-18' } };
+    sessionStorage.setItem(`retail-draft:sale-pay:${admin.user_id ?? ''}:s1:part`, JSON.stringify(stale));
+    screenOf(admin, <PaySaleAction sale={{ ...credit, counted_when_paid: false }} today={today} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
+    fireEvent.click(save());
+    await waitFor(() => expect(paySale).toHaveBeenCalledTimes(1));
+    const [, body] = paySale.mock.calls[0] as [string, Record<string, unknown>];
+    expect(body).toEqual({ amount_minor: 4000, method: 'cash', paid_on: '2026-10-18' });
+  });
+
   it('starts with the balance and refuses an amount above it, nothing, or a date outside the sale and today', () => {
     screenOf(admin, <PaySaleAction sale={credit} today={today} />);
     fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));

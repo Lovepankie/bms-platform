@@ -15,6 +15,7 @@ export const KIND_WORDS: Record<string, string> = {
   void: 'Sale cancelled',
   return: 'Goods returned, credit note',
   return_void: 'Credit note voided',
+  write_off: 'Written off as a loss',
 };
 
 export const kindWords = (kind: string | undefined): string => KIND_WORDS[kind ?? ''] ?? kind ?? '';
@@ -111,6 +112,23 @@ export function paymentProblem(form: PaymentForm, open: readonly OpenSale[], tod
   const total = manualTotal(rows);
   return total === amount ? null : 'The amounts against the sales must add up to the payment.';
 }
+
+/**
+ * True when the payment would pay a sale the server says is counted when the buyer pays (ADR-043): then the payment is dated the day it
+ * is entered. The sales it pays are the chosen ones, or the oldest first.
+ */
+export function splitCountsWhenPaid(form: PaymentForm, open: readonly OpenSale[]): boolean {
+  const counted = new Set(open.filter((s) => s.counted_when_paid === true).map((s) => s.sale_id));
+  if (counted.size === 0) return false;
+  if (form.manual) return form.rows.some((r) => (manualAmount(r) ?? 0) > 0 && counted.has(r.saleId));
+  const amount = parseMinor(form.amount, RETAIL_CURRENCY);
+  if (amount === null || amount <= 0) return false;
+  return oldestFirst(open, amount, form.paidOn).parts.some((p) => counted.has(p.saleId));
+}
+
+/** The form as it is sent: dated today when any sale it pays is counted when the buyer pays, whatever date a stored draft holds. */
+export const settledPayment = (form: PaymentForm, open: readonly OpenSale[], today: string): PaymentForm =>
+  splitCountsWhenPaid(form, open) ? { ...form, paidOn: today } : form;
 
 /** The request for a valid form: no allocations for oldest first, the chosen sales and amounts otherwise. */
 export function buildPaymentRequest(form: PaymentForm): AccountPaymentRequest {

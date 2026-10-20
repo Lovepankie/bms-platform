@@ -20,7 +20,7 @@ class OutboxTemplates {
 
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-z_]+)}");
 
-    private static final Map<String, Template> EMAIL = Map.of(
+    private static final Map<String, Template> EMAIL_CORE = Map.of(
             // Sent to an address nobody has confirmed yet: it carries no text the applicant typed,
             // only the server's reference and link, so the form cannot be used to send someone
             // else's words from the platform's sender (review B1).
@@ -148,6 +148,31 @@ class OutboxTemplates {
             // from the tenant's own figures, ready for a WhatsApp relay later.
             "insights.daily_digest",
             new Template("{business_name}: daily brief for {date}", "{text}\n"));
+
+    // Retail (issue #340, ADR-043). Kept in its own map: Map.of takes ten pairs at most and the core map is full.
+    private static final Map<String, Template> EMAIL_RETAIL = Map.of(
+            // A debt of a credit sale was written off without a second administrator (issue #340, ADR-043): the
+            // administrators who
+            // count are told. No figure, no customer name.
+            "retail.write_off_alone", new Template("A debt was written off at {business_name}", """
+                    Hello,
+
+                    A debt on a credit sale was written off at {business_name} by one administrator, without a second
+                    administrator approving it.
+
+                    If you or another administrator did this, nothing more is needed. If you do not know about it, open
+                    Credit sales in BMS, check the sale, and change your password.
+
+                    Rincoltech
+                    """));
+
+    private static final Map<String, Template> EMAIL = emailTemplates();
+
+    private static Map<String, Template> emailTemplates() {
+        Map<String, Template> all = new java.util.HashMap<>(EMAIL_CORE);
+        all.putAll(EMAIL_RETAIL);
+        return Map.copyOf(all);
+    }
 
     private static final Map<String, Template> TELEGRAM = Map.of(
             "onboarding.operator_alert",

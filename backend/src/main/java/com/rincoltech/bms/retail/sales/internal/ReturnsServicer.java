@@ -156,6 +156,10 @@ class ReturnsServicer {
                     "Sale voided",
                     "This sale has been voided, which already took everything back.");
         }
+        if (s.writeOff() != null) {
+            throw SalesService.writtenOff(
+                    "The unpaid part of this sale was written off, so goods cannot be taken back against it.");
+        }
         LocalDate on = clock.today(tenant.profile().timezone());
         Map<UUID, SaleLine> byId = new HashMap<>();
         s.lines().forEach(l -> byId.put(l.id(), l));
@@ -593,7 +597,16 @@ class ReturnsServicer {
         Row seen = repo.find(returnId, false)
                 .filter(x -> principal.may(PERMISSION, x.branchId()))
                 .orElseThrow(ApiException::notFound);
-        sales.find(seen.saleId(), true).orElseThrow(ApiException::notFound);
+        Sale lockedSale = sales.find(seen.saleId(), true)
+                .orElseThrow(ApiException::notFound)
+                .sale();
+        if (lockedSale.writeOff() != null) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "sale_written_off",
+                    "Sale written off",
+                    "The unpaid part of this sale was written off, so its returns cannot be voided.");
+        }
         Row r = repo.find(returnId, true).orElseThrow(ApiException::notFound);
         if (r.status().equals("voided")) {
             throw new ApiException(
