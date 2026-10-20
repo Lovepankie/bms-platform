@@ -252,6 +252,22 @@ class PushIT extends IntegrationTest {
     }
 
     @Test
+    void paddedKeysAreAValidationErrorNeverADatabaseError() {
+        for (String field : List.of("p256dh", "auth")) {
+            Map<String, Object> body = subscription(endpoint());
+            @SuppressWarnings("unchecked")
+            Map<String, Object> keys = (Map<String, Object>) body.get("keys");
+            // The same bytes as the browser sends, with the '=' padding a base64 encoder would add.
+            keys.put(field, keys.get(field) + (field.equals("auth") ? "==" : "="));
+            ResponseEntity<JsonNode> response = call(HttpMethod.POST, BASE + "/subscriptions", alice, body);
+            assertThat(response.getStatusCode()).as(field).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(response.getBody().get("errors").get(0).get("field").asString())
+                    .isEqualTo("keys");
+        }
+        assertThat(devices(alice)).isEmpty();
+    }
+
+    @Test
     void eachPersonSeesOnlyTheirOwnDevicesAndAnotherBusinessSeesNone() {
         subscribe(alice, endpoint());
         assertThat(devices(alice)).hasSize(1);

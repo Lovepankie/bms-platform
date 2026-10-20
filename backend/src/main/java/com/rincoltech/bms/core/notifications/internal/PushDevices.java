@@ -154,6 +154,11 @@ class PushDevices {
                     "endpoint", "invalid", "This is not the address of a push service this server can use.")));
         }
         try {
+            // The browser sends unpadded base64url; padding would pass the decoder but fail the table's check (a 500).
+            if (request.keys().auth().indexOf('=') >= 0
+                    || request.keys().p256dh().indexOf('=') >= 0) {
+                throw new IllegalArgumentException();
+            }
             if (WebPushCrypto.decode(request.keys().auth()).length != 16) {
                 throw new IllegalArgumentException();
             }

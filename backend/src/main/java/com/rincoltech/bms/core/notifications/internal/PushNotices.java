@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,12 @@ class PushNotices {
 
     /** A notice that cannot be delivered within this time is no longer news; the outbox expires the row. */
     static final Duration LIFETIME = Duration.ofHours(12);
+
+    /**
+     * Notices about something already on its way to a branch: staff of a closed branch still receive it (a transfer may be
+     * received at a closed branch), so their branch need not be active. Every other notice needs an active branch.
+     */
+    private static final Set<String> ON_THE_ROAD = Set.of("retail.transfer_dispatched");
 
     private static final Logger log = LoggerFactory.getLogger(PushNotices.class);
 
@@ -76,7 +83,7 @@ class PushNotices {
     }
 
     private void write(PushNotice notice) {
-        List<UUID> people = recipients(notice.audience());
+        List<UUID> people = recipients(notice.template(), notice.audience());
         if (people.isEmpty()) {
             return;
         }
@@ -94,9 +101,9 @@ class PushNotices {
         }
     }
 
-    private List<UUID> recipients(PushNotice.Audience audience) {
+    private List<UUID> recipients(String template, PushNotice.Audience audience) {
         return switch (audience) {
-            case PushNotice.Holders h -> holders(h);
+            case PushNotice.Holders h -> holders(h, ON_THE_ROAD.contains(template));
             case PushNotice.Users u -> {
                 List<UUID> out = new ArrayList<>();
                 for (UUID id : u.userIds()) {
@@ -118,7 +125,7 @@ class PushNotices {
                         """).param(userId).query(Integer.class).single() > 0;
     }
 
-    private List<UUID> holders(PushNotice.Holders h) {
+    private List<UUID> holders(PushNotice.Holders h, boolean closedBranchOk) {
         return jdbc.sql("""
                         SELECT DISTINCT u.id
                           FROM users u
@@ -128,12 +135,12 @@ class PushNotices {
                          WHERE u.kind = 'staff' AND u.status = 'active'
                            AND (a.branch_id IS NULL
                                 OR (CAST(? AS uuid) IS NOT NULL AND a.branch_id = CAST(? AS uuid)
-                                    AND EXISTS (SELECT 1 FROM branches b WHERE b.id = a.branch_id AND b.status = 'active')))
+                                    AND (? OR EXISTS (SELECT 1 FROM branches b WHERE b.id = a.branch_id AND b.status = 'active'))))
                            AND (CAST(? AS uuid) IS NULL OR u.id <> CAST(? AS uuid))
                            AND EXISTS (SELECT 1 FROM push_subscriptions s
                                         WHERE s.tenant_id = u.tenant_id AND s.user_id = u.id)
                         """)
-                .params(h.permission(), h.branchId(), h.branchId(), h.exceptUserId(), h.exceptUserId())
+                .params(h.permission(), h.branchId(), h.branchId(), closedBranchOk, h.exceptUserId(), h.exceptUserId())
                 .query(UUID.class)
                 .list();
     }
