@@ -12,6 +12,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.PushNotice;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
 import com.rincoltech.bms.retail.stock.Quantities;
@@ -47,6 +48,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -93,6 +95,7 @@ class TransferService {
     private final BusinessClock clock;
     private final AuditLog audit;
     private final ObjectProvider<TransferOutGuard> guards;
+    private final ApplicationEventPublisher events;
 
     TransferService(
             TransferRepository repo,
@@ -106,7 +109,9 @@ class TransferService {
             CurrentTenant tenant,
             BusinessClock clock,
             AuditLog audit,
-            ObjectProvider<TransferOutGuard> guards) {
+            ObjectProvider<TransferOutGuard> guards,
+            ApplicationEventPublisher events) {
+        this.events = events;
         this.repo = repo;
         this.catalogue = catalogue;
         this.stock = stock;
@@ -268,6 +273,18 @@ class TransferService {
             after.put("status", "in_transit");
         }
         audit.record(AuditLog.Entry.created("retail.transfer.created", TRANSFER, id, from, after));
+        if (dispatchOnly) {
+            // The people who can receive at the destination hear on their devices (ADR-050): stock is on its way to
+            // them.
+            events.publishEvent(new PushNotice(
+                    "retail.transfer_dispatched",
+                    id.toString(),
+                    new PushNotice.Holders(PERMISSION, to.id(), by),
+                    Map.of(
+                            "from_branch_id", from.toString(),
+                            "to_branch_id", to.id().toString(),
+                            "path", "/staff/retail/in-transit")));
+        }
         return visible(repo.find(id, false).orElseThrow().transfer());
     }
 

@@ -3,6 +3,7 @@ import { type FormEvent, useState } from 'react';
 import { requestPasswordReset } from '../../api/sign-in-reset';
 import { illustrations } from '../../components/illustrations';
 import { StatusPanel } from '../../components/states';
+import { InstallPrompt } from '../../install/InstallPrompt';
 import { ErrorLine, StepHeader } from './steps';
 
 // "Forgot password?" (FR-IAM-15, ADR-042): one box for the email or phone, one button. The answer is the same words whether or not an
@@ -41,6 +42,7 @@ export function ForgotPassword({ initial = 'form' }: { initial?: 'form' | 'sent'
         <Link to="/sign-in" className="btn btn-primary btn-lg btn-block">
           Back to sign-in
         </Link>
+        <InstallPrompt />
       </main>
     );
   }
@@ -62,6 +64,7 @@ export function ForgotPassword({ initial = 'form' }: { initial?: 'form' | 'sent'
       <p>
         <Link to="/sign-in">Back to sign-in</Link>
       </p>
+      <InstallPrompt />
     </main>
   );
 }

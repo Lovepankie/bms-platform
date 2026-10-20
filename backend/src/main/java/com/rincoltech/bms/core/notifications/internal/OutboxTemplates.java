@@ -189,6 +189,36 @@ class OutboxTemplates {
         return Map.copyOf(all);
     }
 
+    // Web Push (ADR-050): the title is the template's subject and the body its text. A notification is shown on a lock
+    // screen, so
+    // no text names a person or carries a phone number, an identity number or an amount: it says what happened and
+    // where to
+    // look. {path} is not a placeholder here: the channel reads it from the row's parameters as the page a tap opens.
+    private static final Map<String, Template> PUSH = Map.of(
+            "retail.sale_voided",
+            new Template("A sale was voided", "A sale at {branch_name} was voided. Open it to see the reason."),
+            "retail.write_off_alone",
+            new Template(
+                    "A debt was written off",
+                    "One administrator wrote off a debt at {business_name} without a second approval. Check the sale."),
+            "core.approval_policy_weakened",
+            new Template(
+                    "An approval limit was raised",
+                    "The amount that can be done without a second person was raised for {action_label}. If you did not expect"
+                            + " this, check Business set-up."),
+            "core.signin_policy_weakened",
+            new Template(
+                    "Two-step sign-in is no longer required",
+                    "Two-step sign-in is no longer required of every user. If you did not expect this, check Business set-up."),
+            "retail.transfer_dispatched",
+            new Template(
+                    "Stock is on its way to you",
+                    "Stock was sent from {from_branch_name} to {to_branch_name}. Receive it when it arrives."),
+            "core.approval_waiting",
+            new Template(
+                    "An approval is waiting for you",
+                    "{action_label} is waiting for your decision. Open Approvals to see it."));
+
     private static final Map<String, Template> TELEGRAM = Map.of(
             "onboarding.operator_alert",
             new Template(
@@ -292,6 +322,7 @@ class OutboxTemplates {
             case "email" -> EMAIL;
             case "telegram" -> TELEGRAM;
             case "sms" -> SMS;
+            case "push" -> PUSH;
             default -> Map.of();
         };
     }

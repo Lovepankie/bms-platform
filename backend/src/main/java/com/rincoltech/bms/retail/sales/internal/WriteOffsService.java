@@ -11,6 +11,7 @@ import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
+import com.rincoltech.bms.kernel.PushNotice;
 import com.rincoltech.bms.retail.sales.internal.WriteOffsApi.WriteOff;
 import com.rincoltech.bms.retail.sales.internal.WriteOffsApi.WriteOffOutcome;
 import com.rincoltech.bms.retail.sales.internal.WriteOffsApi.WriteOffRequest;
@@ -20,6 +21,8 @@ import com.rincoltech.bms.retail.sales.internal.WriteOffsServicer.Plan;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +49,7 @@ class WriteOffsService {
     private final Outbox outbox;
     private final CurrentTenant tenant;
     private final BusinessClock clock;
+    private final ApplicationEventPublisher events;
 
     WriteOffsService(
             WriteOffsServicer servicer,
@@ -55,7 +59,9 @@ class WriteOffsService {
             WriteOffsRepository repo,
             Outbox outbox,
             CurrentTenant tenant,
-            BusinessClock clock) {
+            BusinessClock clock,
+            ApplicationEventPublisher events) {
+        this.events = events;
         this.outbox = outbox;
         this.tenant = tenant;
         this.clock = clock;
@@ -126,6 +132,14 @@ class WriteOffsService {
                     "retail.write_off_alone",
                     Map.of("business_name", business),
                     "retail.write_off_alone:" + written.id() + ":" + a.userId()));
+        }
+        // The same people hear on their devices (ADR-050), the maker excepted by the choice of `told`.
+        if (!told.isEmpty()) {
+            events.publishEvent(new PushNotice(
+                    "retail.write_off_alone",
+                    written.id().toString(),
+                    new PushNotice.Users(told.stream().map(Admin::userId).collect(Collectors.toSet())),
+                    Map.of("business_name", business, "path", "/staff/retail/credit-sales")));
         }
         return new WriteOffOutcome(true, null, written);
     }

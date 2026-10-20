@@ -359,6 +359,10 @@ class UserService implements TenantAdmins {
                         "UPDATE user_invitations SET revoked_at = ? WHERE user_id = ? AND accepted_at IS NULL AND revoked_at IS NULL")
                 .params(Timestamp.from(now), userId)
                 .update();
+        // A deactivated person's devices stop receiving notifications at once (ADR-050).
+        jdbc.sql("DELETE FROM push_subscriptions WHERE user_id = ?")
+                .param(userId)
+                .update();
         resets.revokeOpen(userId, now);
         int revoked = accounts.sessions().revokeAllOf(userId, "user_deactivated", now);
         audit.record(new AuditLog.Entry(

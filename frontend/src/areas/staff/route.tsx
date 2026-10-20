@@ -4,6 +4,8 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { api, fetchMe, fetchSettings, type Me } from '../../api/client';
 import { loadRetailMock, retailMockEnabled } from '../../api/retail';
 import { getAccessToken, refreshSession, setAccessToken, subscribe } from '../../auth/session';
+import { InstallPrompt } from '../../install/InstallPrompt';
+import { createPush } from '../../push/push';
 import { HelpMenu, TourProvider } from '../../tour/host';
 import { CrumbProvider, StaffBreadcrumbs } from '../../components/breadcrumbs';
 import { icons } from '../../components/icons';
@@ -33,6 +35,9 @@ function useAccessToken() {
   return useSyncExternalStore(subscribe, getAccessToken);
 }
 
+// This device's notifications (ADR-050): registered again under whoever is signed in, and dropped on sign-out.
+const push = createPush();
+
 // A tenant admin who has not dismissed the set-up checklist lands on it once per page load.
 let setupShown = false;
 
@@ -56,6 +61,10 @@ function StaffLayout() {
     enabled: token !== null || mock,
   });
   const { branch, choose, ready } = useActiveBranch(me.data);
+  const signedIn = me.data !== undefined;
+  useEffect(() => {
+    if (signedIn && !mock) void push.sync();
+  }, [signedIn, mock]);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const managesSettings = (me.data?.permissions ?? []).includes('core.settings.manage');
   const settings = useQuery({ queryKey: ['settings'], queryFn: fetchSettings, enabled: managesSettings && !mock });
@@ -74,6 +83,8 @@ function StaffLayout() {
   const profile = me.data;
   if (mock) void loadRetailMock().then((m) => m.setMockProfitAccess(canSeeProfit(profile)));
   async function signOut() {
+    // This device stops hearing this person's notifications before the session ends (it needs the session to say so).
+    if (!mock) await push.forget();
     await api.POST('/api/v1/auth/logout');
     setAccessToken(null);
     queryClient.clear();
@@ -87,6 +98,7 @@ function StaffLayout() {
       <TourProvider me={profile} saveProgress={!mock}>
         <CrumbProvider>
         <StaffBar me={profile} branch={branch} onBranch={choose} onSignOut={() => void signOut()} />
+        <InstallPrompt />
         {profile.mfa_enabled && recoveryCodesLeft <= 2 && (
           <p role="status" className="alert alert-warning">
             You have {recoveryCodesLeft} recovery codes left. Ask an admin to reset your MFA if you run out.
@@ -134,6 +146,7 @@ export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: 
         {showSms(me) && <Link to="/staff/sms">SMS</Link>}
         {showReceivePayments(me) && <Link to="/staff/payments">Receive payments</Link>}
         {showUsers(me) && <Link to="/staff/users" data-tour="nav-users">Users</Link>}
+        <Link to="/staff/notifications" data-tour="nav-notifications">Notifications</Link>
         {permissions.includes('core.settings.manage') && <Link to="/staff/setup">Business set-up</Link>}
       </nav>
     </header>

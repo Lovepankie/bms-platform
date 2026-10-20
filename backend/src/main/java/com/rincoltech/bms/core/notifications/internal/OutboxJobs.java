@@ -19,11 +19,12 @@ import org.springframework.context.annotation.Configuration;
  * the outbox (review N1). Platform work: no tenant is bound.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({NotificationProperties.class, SmsProperties.class})
+@EnableConfigurationProperties({NotificationProperties.class, SmsProperties.class, PushProperties.class})
 class OutboxJobs {
 
     static final String SENDER = "core.notifications.outbox-sender";
     static final String SMS_SENDER = "core.notifications.sms-sender";
+    static final String PUSH_SENDER = "core.notifications.push-sender";
     static final String PURGE = "core.notifications.outbox-purge";
     static final String EXPIRED_LINKS = "core.notifications.outbox-expired-links";
     static final int BATCH = 50;
@@ -48,6 +49,13 @@ class OutboxJobs {
     RecurringTask<Void> smsSender(OutboxDispatcher dispatcher) {
         return Tasks.recurring(SMS_SENDER, Schedules.fixedDelay(Duration.ofSeconds(30)))
                 .execute((instance, context) -> dispatcher.dispatchOnly(Outbox.SMS, SMS_BATCH, SMS_BUDGET));
+    }
+
+    /** Push is read on a lock screen: its own run every 10 seconds, so a notice does not wait for the 30 second sender. */
+    @Bean
+    RecurringTask<Void> pushSender(OutboxDispatcher dispatcher) {
+        return Tasks.recurring(PUSH_SENDER, Schedules.fixedDelay(Duration.ofSeconds(10)))
+                .execute((instance, context) -> dispatcher.dispatchOnly(Outbox.PUSH, BATCH, Duration.ofSeconds(8)));
     }
 
     /** Every 5 minutes: an expired link leaves the row's parameters (FR-IAM-15, ADR-042). */

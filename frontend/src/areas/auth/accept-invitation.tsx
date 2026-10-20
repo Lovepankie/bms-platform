@@ -4,6 +4,7 @@ import { api, type MfaEnrolment, problemOf, type SignInResponse } from '../../ap
 import { invitationToken, plainProblem } from '../../auth/codes';
 import { setAccessToken } from '../../auth/session';
 import { illustrations } from '../../components/illustrations';
+import { InstallPrompt } from '../../install/InstallPrompt';
 import { StatusPanel } from '../../components/states';
 import { ErrorLine, PasswordFields, RecoveryCodes, StepHeader, TwoStepSetup, passwordReady } from './steps';
 
@@ -133,6 +134,7 @@ export function AcceptInvitation({ token, initial = { kind: 'password' } }: { to
               {busy ? 'Saving' : 'Save and continue'}
             </button>
           </form>
+          <InstallPrompt />
         </>
       )}
 
@@ -193,6 +195,7 @@ export function AcceptInvitation({ token, initial = { kind: 'password' } }: { to
           <Link to="/sign-in" className="btn btn-primary btn-lg btn-block">
             Sign in
           </Link>
+          <InstallPrompt />
         </>
       )}
     </main>

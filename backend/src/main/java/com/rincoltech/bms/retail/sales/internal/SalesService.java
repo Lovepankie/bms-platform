@@ -12,6 +12,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.PushNotice;
 import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
@@ -62,6 +63,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -96,6 +98,7 @@ class SalesService {
     private final RetailPricing priceLists;
     private final AccountsService accounts;
     private final ReturnsRepository returns;
+    private final ApplicationEventPublisher events;
 
     SalesService(
             SalesRepository repo,
@@ -113,7 +116,9 @@ class SalesService {
             SalesPricing pricing,
             RetailPricing priceLists,
             AccountsService accounts,
-            ReturnsRepository returns) {
+            ReturnsRepository returns,
+            ApplicationEventPublisher events) {
+        this.events = events;
         this.repo = repo;
         this.catalogue = catalogue;
         this.stock = stock;
@@ -781,6 +786,13 @@ class SalesService {
                 s.branchId(),
                 Map.of("status", "completed"),
                 Map.of("status", "voided", "reason", reason)));
+        // The administrators with a device are told (ADR-050); the person who voided it is not. A push never fails the
+        // void.
+        events.publishEvent(new PushNotice(
+                "retail.sale_voided",
+                id.toString(),
+                new PushNotice.Holders("core.settings.manage", null, principal.userId()),
+                Map.of("branch_id", s.branchId().toString(), "path", "/staff/retail/sales")));
         return visible(repo.find(id, false).orElseThrow().sale());
     }
 

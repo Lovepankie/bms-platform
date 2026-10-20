@@ -21,6 +21,12 @@ public interface Outbox {
      * hour at most.
      */
     String SMS = "sms";
+    /**
+     * A Web Push notification to one signed-in person (ADR-050). The recipient is {@code user:<user id>}; the channel sends it
+     * to every device that person has subscribed. The row needs a bound tenant (the person is looked up in it), and the push
+     * template of the key renders the title and body. Off, and never queued, until the VAPID keys are set.
+     */
+    String PUSH = "push";
     /** Receipts, payment links: never held by the sending window (ADR-036 decision 5). */
     String TRANSACTIONAL = "transactional";
     /** Reminders before a due date: sent only inside the tenant's sending window. */
@@ -53,7 +59,7 @@ public interface Outbox {
     int countSince(String throttleKey, String templateKey, Instant since, Instant until);
 
     /**
-     * @param channel {@link #EMAIL}, {@link #TELEGRAM} or {@link #SMS}
+     * @param channel {@link #EMAIL}, {@link #TELEGRAM}, {@link #SMS} or {@link #PUSH}
      * @param recipient an email address, {@link #OPERATOR_CHAT}, {@link #TELEGRAM_CHAT_PREFIX} and a numeric
      *     chat id, or an E.164 phone number for SMS; never logged unmasked
      * @param templateKey for example {@code onboarding.activation}; rendered when sent

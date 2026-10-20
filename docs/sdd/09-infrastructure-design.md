@@ -160,6 +160,8 @@ migration) with status only, no details.
 - Host names: `BMS_TENANT_HOST_PATTERN` and `BMS_PLATFORM_HOST` for the API and the web
   container; on the production VM also `BMS_DNS_ZONE` and `BMS_CALLBACK_HOST` for the proxy; on
   the staging host `CLOUDFLARE_TUNNEL_TOKEN` and `CLOUDFLARED_IMAGE` for cloudflared.
+- Web Push (ADR-050), optional on every host: `BMS_PUSH_VAPID_PUBLIC_KEY`, `BMS_PUSH_VAPID_PRIVATE_KEY`, `BMS_PUSH_SUBJECT` and
+  `BMS_PUSH_EXTRA_ENDPOINT_HOSTS`; both compose files pass them; unset means push is off (`docs/runbooks/push-notifications.md`).
 - Outbox senders (ADR-024, spec section 11), optional on every host: `BMS_SMTP_HOST`,
   `BMS_SMTP_PORT` (465, implicit TLS; port 587 is blocked on the staging host), `BMS_SMTP_USER`,
   `BMS_SMTP_PASSWORD` and `BMS_MAIL_FROM` for email, `BMS_TELEGRAM_BOT_TOKEN` and

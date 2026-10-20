@@ -5,6 +5,7 @@ import { invitationToken, normaliseSecondFactor, plainProblem } from '../../auth
 import { setAccessToken } from '../../auth/session';
 import { illustrations } from '../../components/illustrations';
 import { StatusPanel } from '../../components/states';
+import { InstallPrompt } from '../../install/InstallPrompt';
 import { ErrorLine, PasswordFields, RecoveryCodes, StepHeader, TwoStepSetup, passwordReady } from './steps';
 
 // Choosing a new password with the link from "Forgot password?" or from an administrator (FR-IAM-15, ADR-042). The one-time token is
@@ -159,6 +160,7 @@ export function ResetPassword({ token, initial = { kind: 'password' } }: { token
               {busy ? 'Saving' : 'Save and sign in'}
             </button>
           </form>
+          <InstallPrompt />
         </>
       )}
 
@@ -203,6 +205,7 @@ export function ResetPassword({ token, initial = { kind: 'password' } }: { token
           <Link to="/sign-in" className="btn btn-primary btn-lg btn-block">
             Sign in
           </Link>
+          <InstallPrompt />
         </>
       )}
     </main>

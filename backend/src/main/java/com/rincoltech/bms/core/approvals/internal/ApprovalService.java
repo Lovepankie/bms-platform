@@ -14,6 +14,7 @@ import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.Principal.BranchScope;
+import com.rincoltech.bms.kernel.PushNotice;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -28,6 +29,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -66,6 +68,7 @@ class ApprovalService implements Approvals {
     private final AuditLog audit;
     private final BusinessClock clock;
     private final TransactionTemplate transactions;
+    private final ApplicationEventPublisher events;
 
     ApprovalService(
             List<ApprovalAction> actions,
@@ -74,7 +77,9 @@ class ApprovalService implements Approvals {
             TenantSettings settings,
             AuditLog audit,
             BusinessClock clock,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            ApplicationEventPublisher events) {
+        this.events = events;
         this.actions =
                 actions.stream().collect(Collectors.toUnmodifiableMap(ApprovalAction::actionType, Function.identity()));
         this.jdbc = jdbc;
@@ -145,7 +150,19 @@ class ApprovalService implements Approvals {
         }
         audit.record(AuditLog.Entry.created(
                 "core.approval.requested", "core.approval_request", id, request.branchId(), summary(request)));
+        // The checkers with a device hear that a decision waits for them (ADR-050); the maker is never one of them.
+        events.publishEvent(new PushNotice(
+                "core.approval_waiting",
+                id.toString(),
+                new PushNotice.Holders(action.checkerPermission(), request.branchId(), maker.userId()),
+                Map.of("action_label", label(action.actionType()), "path", "/staff/approvals")));
         return new Outcome(false, id);
+    }
+
+    /** "retail_purchase_order" read as "Retail purchase order": the action's name as a person says it. */
+    static String label(String actionType) {
+        String words = actionType.replace('_', ' ');
+        return words.substring(0, 1).toUpperCase(java.util.Locale.ROOT) + words.substring(1);
     }
 
     @Transactional

@@ -14,6 +14,8 @@
 	@hashed path /assets/*
 	header @hashed Cache-Control "public, max-age=31536000, immutable"
 	header /sw.js Cache-Control "no-cache"
+	# The push handlers are loaded into sw.js with importScripts, which the browser may serve from its HTTP cache (ADR-050).
+	header /push-sw.js Cache-Control "no-cache"
 	header /index.html Cache-Control "no-cache"
 
 	# Runtime host configuration (ADR-018): the same image serves staging and production, so the

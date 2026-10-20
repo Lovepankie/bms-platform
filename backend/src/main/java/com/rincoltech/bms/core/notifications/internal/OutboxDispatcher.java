@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.notifications.internal;
 
+import com.rincoltech.bms.core.notifications.Outbox;
 import com.rincoltech.bms.kernel.BusinessClock;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -90,8 +91,13 @@ class OutboxDispatcher {
 
     /** The senders of every channel but one: the general sender leaves SMS to its own, larger run. */
     int dispatchExcept(String channel, int max) {
+        // Push has its own, faster sender (OutboxJobs), so the general one leaves it too.
         return dispatch(
-                channels.stream().filter(c -> !c.channel().equals(channel)).toList(), max);
+                channels.stream()
+                        .filter(c ->
+                                !c.channel().equals(channel) && !c.channel().equals(Outbox.PUSH))
+                        .toList(),
+                max);
     }
 
     /** One channel only, with a time budget: the SMS sender (spec section 4.6, throughput). */
