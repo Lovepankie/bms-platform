@@ -325,7 +325,7 @@ class RlsIsolationIT {
                         INSERT INTO sms_template_overrides (id, tenant_id, event_key, body)
                         VALUES (?, ?, 'savings.deposit', 'Paid {amount} on {account_no}')
                         """).params(UUID.randomUUID(), t.tenantId()).update();
-        // A device that receives notifications (migration V90, ADR-050).
+        // A device that receives notifications (migration V68, ADR-050).
         owner.sql("""
                         INSERT INTO push_subscriptions (id, tenant_id, user_id, endpoint, endpoint_hash, p256dh, auth)
                         VALUES (?, ?, ?, 'https://fcm.googleapis.com/fcm/send/test-rls', repeat('c', 64), repeat('A', 87), repeat('B', 22))

@@ -22,7 +22,7 @@ function subscription(endpoint: string, key: Uint8Array = keyBytes(KEY)): PushSu
   return self;
 }
 
-function setup(over: { permission?: NotificationPermission; granted?: NotificationPermission; existing?: PushSubscriptionLike | null; supported?: boolean; enabled?: boolean } = {}) {
+function setup(over: { permission?: NotificationPermission; granted?: NotificationPermission; existing?: PushSubscriptionLike | null; supported?: boolean; enabled?: boolean; noWorker?: boolean } = {}) {
   let permission: NotificationPermission = over.permission ?? 'default';
   let current: PushSubscriptionLike | null = over.existing ?? null;
   const made = subscription('https://push.example.test/made');
@@ -39,7 +39,7 @@ function setup(over: { permission?: NotificationPermission; granted?: Notificati
     supported: () => over.supported ?? true,
     permission: () => permission,
     requestPermission,
-    registration: () => Promise.resolve({ pushManager: { getSubscription: () => Promise.resolve(current), subscribe } }),
+    registration: () => Promise.resolve(over.noWorker ? null : { pushManager: { getSubscription: () => Promise.resolve(current), subscribe } }),
   };
   const api: PushApi = {
     config: vi.fn(() => Promise.resolve({ enabled: over.enabled ?? true, publicKey: KEY })),
@@ -164,6 +164,18 @@ describe('turning it off, signing out and coming back', () => {
     (api.unsubscribe as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('offline'));
     await expect(push.sync()).resolves.toBeUndefined();
     await expect(push.forget()).resolves.toBeUndefined();
+  });
+});
+
+describe('a page with no service worker', () => {
+  it('lets sign-out, turning off, looking and syncing complete without one', async () => {
+    const { push, api } = setup({ permission: 'granted', noWorker: true });
+    await expect(push.forget()).resolves.toBeUndefined();
+    await expect(push.sync()).resolves.toBeUndefined();
+    expect(await push.disable()).toBe('off');
+    expect(await push.state()).toBe('off');
+    expect(api.unsubscribe).not.toHaveBeenCalled();
+    await expect(push.enable()).rejects.toThrow(/not ready/);
   });
 });
 

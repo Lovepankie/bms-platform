@@ -47,6 +47,7 @@ class MerchantAccountStepUpIT extends IntegrationTest {
     @Test
     void aRealAdminNeedsAFreshCodeEachTimeAndTheOtherAdminIsToldButAManagerCannotSave() {
         TestDatabase.Fixture t = TestDatabase.tenant("pay-realmfa", true);
+        Api.requireTwoStepForAdmins(t);
         String emailA = "admin-a-" + UUID.randomUUID() + "@example.test";
         String emailB = "admin-b-" + UUID.randomUUID() + "@example.test";
         String emailM = "manager-" + UUID.randomUUID() + "@example.test";
@@ -114,6 +115,7 @@ class MerchantAccountStepUpIT extends IntegrationTest {
     @Test
     void anAccountLockedByWrongCodesCannotStepUpAndItsSessionsEnd() {
         TestDatabase.Fixture t = TestDatabase.tenant("pay-locked", true);
+        Api.requireTwoStepForAdmins(t);
         String email = "admin-lock-" + UUID.randomUUID() + "@example.test";
         UUID admin = Api.staff(t, email, new Role("tenant_admin", null));
         Api api = Api.tenant(http, t.slug());
@@ -147,6 +149,7 @@ class MerchantAccountStepUpIT extends IntegrationTest {
     @Test
     void fourWrongCodesAndOneWrongPasswordDoNotHideAGuessingSession() {
         TestDatabase.Fixture t = TestDatabase.tenant("pay-mix-a", true);
+        Api.requireTwoStepForAdmins(t);
         String email = "admin-mix-a-" + UUID.randomUUID() + "@example.test";
         UUID admin = Api.staff(t, email, new Role("tenant_admin", null));
         Api api = Api.tenant(http, t.slug());
@@ -181,6 +184,7 @@ class MerchantAccountStepUpIT extends IntegrationTest {
     @Test
     void fourWrongPasswordsAndOneWrongCodeNeverLogStaffOut() {
         TestDatabase.Fixture t = TestDatabase.tenant("pay-mix-b", true);
+        Api.requireTwoStepForAdmins(t);
         String email = "admin-mix-b-" + UUID.randomUUID() + "@example.test";
         UUID admin = Api.staff(t, email, new Role("tenant_admin", null));
         Api api = Api.tenant(http, t.slug());
@@ -219,6 +223,7 @@ class MerchantAccountStepUpIT extends IntegrationTest {
     @Test
     void fiveWrongPasswordsLockTheAccountButNeverEndASessionBecauseAnyoneCanSendThem() {
         TestDatabase.Fixture t = TestDatabase.tenant("pay-pwlock", true);
+        Api.requireTwoStepForAdmins(t);
         String email = "admin-pw-" + UUID.randomUUID() + "@example.test";
         UUID admin = Api.staff(t, email, new Role("tenant_admin", null));
         Api api = Api.tenant(http, t.slug());

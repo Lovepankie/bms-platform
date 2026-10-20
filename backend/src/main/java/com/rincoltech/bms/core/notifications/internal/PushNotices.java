@@ -126,7 +126,9 @@ class PushNotices {
                             ON a.tenant_id = u.tenant_id AND a.user_id = u.id AND a.revoked_at IS NULL
                           JOIN role_permissions rp ON rp.role_key = a.role_key AND rp.permission_key = ?
                          WHERE u.kind = 'staff' AND u.status = 'active'
-                           AND (CAST(? AS uuid) IS NULL OR a.branch_id IS NULL OR a.branch_id = CAST(? AS uuid))
+                           AND (a.branch_id IS NULL
+                                OR (CAST(? AS uuid) IS NOT NULL AND a.branch_id = CAST(? AS uuid)
+                                    AND EXISTS (SELECT 1 FROM branches b WHERE b.id = a.branch_id AND b.status = 'active')))
                            AND (CAST(? AS uuid) IS NULL OR u.id <> CAST(? AS uuid))
                            AND EXISTS (SELECT 1 FROM push_subscriptions s
                                         WHERE s.tenant_id = u.tenant_id AND s.user_id = u.id)

@@ -386,6 +386,8 @@ class PlatformIT extends IntegrationTest {
         UUID adminId = UUID.fromString(invitation.get("user_id").asString());
         String url = invitation.get("url").asString();
         Api tenant = Api.tenant(http, slug);
+        // Two-step sign-in is optional by default (issue #348); this tenant requires it of its admins.
+        Api.requireTwoStepForAdmins(UUID.fromString(tenantId));
         tenant.post(
                 "/api/v1/auth/staff/invitations/accept",
                 Map.of("token", url.substring(url.indexOf("#token=") + 7), "password", Api.PASSWORD),

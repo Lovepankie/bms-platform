@@ -48,7 +48,14 @@ final class AuthApi {
     @Schema(
             name = "MfaEnrolRequest",
             description = "mfa_token when enrolment is forced at sign-in; empty when signed in")
-    record MfaEnrolRequest(String mfaToken) {}
+    record MfaEnrolRequest(
+            String mfaToken,
+
+            @Size(max = 200)
+            @Schema(
+                    description =
+                            "A signed-in user starting their own set-up gives their current password; not needed with an mfa_token")
+            String password) {}
 
     @Schema(name = "MfaConfirmRequest")
     record MfaConfirmRequest(

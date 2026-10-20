@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.tenancy.internal;
 
+import com.rincoltech.bms.core.tenancy.PolicyChangeGuard;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
@@ -9,9 +10,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -37,10 +40,12 @@ class SettingsController {
 
     private final SettingsService service;
     private final BrandingService branding;
+    private final PolicyChangeGuard guard;
 
-    SettingsController(SettingsService service, BrandingService branding) {
+    SettingsController(SettingsService service, BrandingService branding, PolicyChangeGuard guard) {
         this.service = service;
         this.branding = branding;
+        this.guard = guard;
     }
 
     /** Every key of chapter 6 table {@code tenant_settings}, with its default applied. */
@@ -54,6 +59,8 @@ class SettingsController {
             Integer maxActiveLoansPerMember,
             Map<String, Integer> appraisalWeights,
             List<String> disabledCollateralTypes,
+
+            @Schema(description = "Two-step sign-in is required of every staff user (FR-IAM-06, ADR-046)")
             boolean requireMfaAllStaff,
 
             @Schema(
@@ -75,6 +82,22 @@ class SettingsController {
                             "True when the report runs are switched on for this tenant (default false; extras slice D1, ADR-038)")
             boolean reportsEnabled,
 
+            @Schema(
+                    description =
+                            "Staff role keys whose holders must use two-step sign-in (ADR-046); empty when none is chosen")
+            List<String> requireMfaRoles,
+
+            @Schema(description = "The grace period in days last chosen for the two-step requirement, or null")
+            Integer mfaGraceDays,
+
+            @Schema(
+                    description =
+                            "When a covered user without a second factor must set one up; null means at once or no requirement (ADR-046)")
+            Instant mfaEnforceFrom,
+
+            @Schema(description = "The business's time zone, in which a two-step deadline is a day's end (ADR-046)")
+            String timezone,
+
             int version) {}
 
     /** Omitted (or null) fields are unchanged (chapter 7 section 7.5). */
@@ -94,7 +117,21 @@ class SettingsController {
             Map<String, Integer> appraisalWeights,
 
             List<@Pattern(regexp = "^[a-z_]{2,40}$") String> disabledCollateralTypes,
+
+            @Schema(description = "Require two-step sign-in of every staff user; the grace period applies (ADR-046)")
             Boolean requireMfaAllStaff,
+
+            @Schema(
+                    description =
+                            "Staff role keys whose holders must use two-step sign-in; an empty list clears the choice (ADR-046)")
+            List<@NotNull @Pattern(regexp = "^[a-z_]{2,40}$") String> requireMfaRoles,
+
+            @Min(0)
+            @Max(90)
+            @Schema(
+                    description =
+                            "Days a covered user without a second factor may keep signing in before it is required; 0 means at once. Sending it moves the deadline to now plus these days (ADR-046)")
+            Integer mfaGraceDays,
 
             @Pattern(regexp = "^(#[0-9A-Fa-f]{6})?$")
             @Schema(
@@ -103,7 +140,19 @@ class SettingsController {
             String themePrimary,
 
             Boolean setupDismissed,
-            Boolean reportsEnabled) {}
+            Boolean reportsEnabled,
+
+            @Size(max = 20)
+            @Schema(
+                    description =
+                            "Needed to turn two-step sign-in off or narrow it, from an administrator who has an authenticator: its current code (ADR-046). Never stored or logged")
+            String totpCode,
+
+            @Size(max = 200)
+            @Schema(
+                    description =
+                            "Needed to turn two-step sign-in off or narrow it, from an administrator with no authenticator: their own current password (ADR-046). Never stored or logged")
+            String password) {}
 
     @GetMapping
     @RequiresPermission("core.settings.read")
@@ -121,7 +170,12 @@ class SettingsController {
     ResponseEntity<SettingsResponse> update(
             @RequestHeader(name = "If-Match", required = false) String ifMatch,
             @Valid @RequestBody UpdateSettingsRequest request) {
-        SettingsResponse settings = service.update(ifMatch, request);
+        // Relaxing the two-step rule needs the proof of the admin reset of a sign-in, before the transaction (ADR-046).
+        boolean relaxes = service.relaxesTwoStep(request);
+        if (relaxes) {
+            guard.requireProof(request.totpCode(), request.password());
+        }
+        SettingsResponse settings = service.update(ifMatch, request, relaxes);
         return ResponseEntity.ok().eTag(String.valueOf(settings.version())).body(settings);
     }
 

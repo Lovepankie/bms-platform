@@ -51,9 +51,21 @@ class PasswordResetIT extends IntegrationTest {
     void setUp() {
         t = TestDatabase.tenant("reset", true);
         api = Api.tenant(http, t.slug());
+        // Two-step sign-in is optional by default (issue #348, ADR-046); most cases here are about a business that
+        // requires it of its admins, so setUp turns that on for this tenant and the few cases about the optional state
+        // turn it off.
+        Api.requireTwoStepForAdmins(t);
         String adminEmail = Api.email("admin");
         admin = Api.staff(t, adminEmail, new Role("tenant_admin", null));
         adminSession = api.signIn(admin, adminEmail, Api.PASSWORD, null);
+    }
+
+    /** Whether this tenant requires two-step sign-in of its tenant admins (the tenant setting, ADR-046). */
+    void adminsNeedTwoStep(boolean on) {
+        TestDatabase.owner()
+                .sql("UPDATE tenant_settings SET settings = settings || CAST(? AS jsonb) WHERE tenant_id = ?")
+                .params("{\"require_mfa_roles\": " + (on ? "[\"tenant_admin\"]" : "[]") + "}", t.tenantId())
+                .update();
     }
 
     static Map<String, String> from(String address) {
@@ -540,6 +552,8 @@ class PasswordResetIT extends IntegrationTest {
     @Test
     void aLinkOfOneTenantDoesNothingInAnother() {
         TestDatabase.Fixture other = TestDatabase.tenant("reset-b", true);
+        // The other tenant requires two-step sign-in of its admins too, so its admin gives a code, as before.
+        Api.requireTwoStepForAdmins(other);
         Api otherApi = Api.tenant(http, other.slug());
         String email = Api.email("cashier");
         UUID userId = user(email);
@@ -917,8 +931,7 @@ class PasswordResetIT extends IntegrationTest {
         dropTheAdminsSecondFactor();
         var owner = TestDatabase.owner();
         // The real admin must be able to sign in without a second factor for this scenario (the requirement is data).
-        owner.sql("UPDATE roles SET mfa_required = false WHERE key = 'tenant_admin'")
-                .update();
+        adminsNeedTwoStep(false);
         try {
             for (int i = 0; i < 3; i++) {
                 api.post(path, Map.of("password", "Not-The-Password-" + i), adminSession.accessToken());
@@ -960,8 +973,7 @@ class PasswordResetIT extends IntegrationTest {
             assertThat(later.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(stepUpFailures(admin)).isZero();
         } finally {
-            owner.sql("UPDATE roles SET mfa_required = true WHERE key = 'tenant_admin'")
-                    .update();
+            adminsNeedTwoStep(true);
         }
     }
 
@@ -1087,14 +1099,12 @@ class PasswordResetIT extends IntegrationTest {
     }
 
     /**
-     * Two-step sign-in is optional: a user whose role does not require it, on a tenant that does not, resets by mailbox as before,
-     * decided by the data (roles.mfa_required) and not by a name. The role is switched off for this test only.
+     * Two-step sign-in is optional: a user whom neither a role flag nor the tenant's policy covers resets by mailbox as before,
+     * decided by the data (the tenant setting) and not by a name. The tenant's requirement is switched off for this test only.
      */
     @Test
     void aRoleThatDoesNotRequireASecondFactorResetsByMailbox() {
-        var owner = TestDatabase.owner();
-        owner.sql("UPDATE roles SET mfa_required = false WHERE key = 'tenant_admin'")
-                .update();
+        adminsNeedTwoStep(false);
         try {
             String email = Api.email("optional");
             UUID userId = user(email, "tenant_admin");
@@ -1108,8 +1118,7 @@ class PasswordResetIT extends IntegrationTest {
             ResponseEntity<JsonNode> done = complete(tokenOf(emailedLink(email)), NEW_PASSWORD);
             assertThat(done.getBody().get("status").asString()).isEqualTo("signed_in");
         } finally {
-            owner.sql("UPDATE roles SET mfa_required = true WHERE key = 'tenant_admin'")
-                    .update();
+            adminsNeedTwoStep(true);
         }
     }
 

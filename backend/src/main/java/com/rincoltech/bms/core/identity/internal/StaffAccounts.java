@@ -3,6 +3,8 @@ package com.rincoltech.bms.core.identity.internal;
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.TenantSettings;
+import com.rincoltech.bms.core.tenancy.TwoStepPolicy;
+import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.PhoneNumbers;
 import com.rincoltech.bms.kernel.TenantContext;
 import java.sql.ResultSet;
@@ -33,8 +35,10 @@ class StaffAccounts implements Accounts {
     private final TenantSettings settings;
     private final CurrentTenant tenant;
     private final SessionStore sessions;
+    private final BusinessClock clock;
 
-    StaffAccounts(JdbcClient jdbc, AuditLog audit, TenantSettings settings, CurrentTenant tenant) {
+    StaffAccounts(JdbcClient jdbc, AuditLog audit, TenantSettings settings, CurrentTenant tenant, BusinessClock clock) {
+        this.clock = clock;
         this.jdbc = jdbc;
         this.audit = audit;
         this.settings = settings;
@@ -211,13 +215,39 @@ class StaffAccounts implements Accounts {
                 .single();
     }
 
+    /**
+     * Whether the user must have a second factor to sign in now: a role flagged in {@code roles.mfa_required}, or the tenant's
+     * policy covers the user and its grace period has ended (FR-IAM-06, ADR-046). Two-step sign-in is otherwise optional.
+     */
     @Override
     public boolean mfaRequired(UUID id) {
         boolean byRole = jdbc.sql("""
                                 SELECT count(*) FROM user_role_assignments a JOIN roles r ON r.key = a.role_key
                                  WHERE a.user_id = ? AND a.revoked_at IS NULL AND r.mfa_required
                                 """).param(id).query(Long.class).single() > 0;
-        return byRole || settings.requireMfaAllStaff();
+        if (byRole) {
+            return true;
+        }
+        TwoStepPolicy policy = settings.twoStepPolicy();
+        return policy.appliesTo(roleKeys(id)) && policy.enforcedAt(clock.now());
+    }
+
+    /**
+     * When a user the tenant's policy covers, who has no second factor yet, must set one up; empty when the policy does not
+     * cover them, they have one, or the deadline has passed (then {@link #mfaRequired} is true instead).
+     */
+    Optional<Instant> mfaDueBy(UUID id, boolean enrolled) {
+        TwoStepPolicy policy = settings.twoStepPolicy();
+        if (enrolled || policy.off() || policy.enforcedAt(clock.now()) || !policy.appliesTo(roleKeys(id))) {
+            return Optional.empty();
+        }
+        return Optional.of(policy.enforceFrom());
+    }
+
+    private List<String> roleKeys(UUID id) {
+        return jdbc.sql("""
+                        SELECT DISTINCT role_key FROM user_role_assignments WHERE user_id = ? AND revoked_at IS NULL
+                        """).param(id).query(String.class).list();
     }
 
     @Override

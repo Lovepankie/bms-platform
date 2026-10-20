@@ -1,6 +1,5 @@
--- V90: Web Push (ADR-050): installable app notifications. PLACEHOLDER NUMBER: Flyway runs with outOfOrder off, so the
--- coordinator renumbers this file to the first free number above main when the pull request merges. Nothing below depends on
--- the number.
+-- V68: Web Push (ADR-050): installable app notifications. Numbered V68: V67 is taken by #361. Flyway runs with outOfOrder off, so a
+-- number below one already applied would never run.
 --
 -- Expand only, safe on a populated database. One new table, push_subscriptions (one row per user per device: the push
 -- service's address for that browser, and the two public values a message is encrypted with), and the outbox's channel CHECK

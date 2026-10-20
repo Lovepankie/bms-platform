@@ -287,6 +287,16 @@ export function Setup() {
         )}
 
         <fieldset>
+          <legend>Two-step sign-in</legend>
+          <p>
+            <Link to={'/staff/setup/two-step' as never}>Two-step sign-in</Link>: ask your staff for a code from their phone as well as the password. It is optional until you choose who must use it.
+          </p>
+          <p>
+            <Link to={'/staff/two-step' as never}>Turn it on for yourself</Link>.
+          </p>
+        </fieldset>
+
+        <fieldset>
           <legend>Text messages</legend>
           <p>
             <Link to="/staff/sms">SMS settings, wording and opt-outs</Link>: switch text messages on, choose the sender name and sending hours, and reword the messages.

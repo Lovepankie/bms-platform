@@ -26,7 +26,8 @@ export interface PushEnv {
   supported(): boolean;
   permission(): NotificationPermission;
   requestPermission(): Promise<NotificationPermission>;
-  registration(): Promise<PushRegistrationLike>;
+  /** The page's service worker registration, or null when there is none (or it does not become ready in 2 seconds). */
+  registration(): Promise<PushRegistrationLike | null>;
 }
 
 export function browserEnv(): PushEnv {
@@ -35,7 +36,12 @@ export function browserEnv(): PushEnv {
       typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
     permission: () => Notification.permission,
     requestPermission: () => Notification.requestPermission(),
-    registration: () => navigator.serviceWorker.ready as unknown as Promise<PushRegistrationLike>,
+    // `serviceWorker.ready` never resolves without a registered worker (dev server, a blocked worker), which would hang sign-out.
+    registration: async () => {
+      if (!(await navigator.serviceWorker.getRegistration())) return null;
+      const ready = navigator.serviceWorker.ready as unknown as Promise<PushRegistrationLike>;
+      return Promise.race([ready, new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))]);
+    },
   };
 }
 
@@ -66,6 +72,7 @@ function body(subscription: PushSubscriptionLike) {
  */
 async function currentSubscription(env: PushEnv, publicKey: string): Promise<PushSubscriptionLike> {
   const registration = await env.registration();
+  if (!registration) throw new Error('The app is not ready for notifications yet. Reload the page and try again.');
   const wanted = keyBytes(publicKey);
   let subscription = await registration.pushManager.getSubscription();
   if (subscription && !sameKey(subscription.options?.applicationServerKey, wanted)) {
@@ -84,7 +91,7 @@ export function createPush(env: PushEnv = browserEnv(), api: PushApi = pushApi) 
       if (!config.enabled) return 'not_offered';
       if (env.permission() === 'denied') return 'blocked';
       if (env.permission() !== 'granted') return 'off';
-      const subscription = await (await env.registration()).pushManager.getSubscription();
+      const subscription = await (await env.registration())?.pushManager.getSubscription();
       return subscription ? 'on' : 'off';
     },
 
@@ -104,7 +111,7 @@ export function createPush(env: PushEnv = browserEnv(), api: PushApi = pushApi) 
     /** The switch off: the server forgets the device, then the browser drops the subscription. */
     async disable(): Promise<PushState> {
       if (!env.supported()) return 'unsupported';
-      const subscription = await (await env.registration()).pushManager.getSubscription();
+      const subscription = await (await env.registration())?.pushManager.getSubscription();
       if (subscription) {
         await api.unsubscribe(subscription.endpoint);
         await subscription.unsubscribe();
@@ -123,7 +130,7 @@ export function createPush(env: PushEnv = browserEnv(), api: PushApi = pushApi) 
         const config = await api.config();
         if (!config.enabled || !config.publicKey) return;
         const registration = await env.registration();
-        if (!(await registration.pushManager.getSubscription())) return;
+        if (!registration || !(await registration.pushManager.getSubscription())) return;
         await api.subscribe(body(await currentSubscription(env, config.publicKey)));
       } catch {
         // Notifications are a convenience: a failure here is not worth the person's attention.
@@ -134,7 +141,7 @@ export function createPush(env: PushEnv = browserEnv(), api: PushApi = pushApi) 
     async forget(): Promise<void> {
       try {
         if (!env.supported()) return;
-        const subscription = await (await env.registration()).pushManager.getSubscription();
+        const subscription = await (await env.registration())?.pushManager.getSubscription();
         if (subscription) await api.unsubscribe(subscription.endpoint);
       } catch {
         // Signing out must never wait on, or fail because of, a notification.

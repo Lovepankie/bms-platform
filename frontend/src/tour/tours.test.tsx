@@ -43,6 +43,7 @@ import { AssistantSettingsPage } from '../areas/staff/assistant/page';
 import { Setup } from '../areas/staff/setup';
 import { BranchesScreen } from '../areas/staff/branches/page';
 import { NotificationsPage } from '../areas/staff/notifications/page';
+import { TwoStepPolicyScreen } from '../areas/staff/two-step/page';
 import { UsersScreen } from '../areas/staff/users/page';
 import { FEATURES, type Tour, stepsFor } from './model';
 import { TOURS } from './tours';
@@ -87,6 +88,8 @@ function screen(path: string | undefined): ReactElement {
       return <BranchesScreen />;
     case '/staff/notifications':
       return <NotificationsPage />;
+    case '/staff/setup/two-step':
+      return <TwoStepPolicyScreen />;
     case '/staff/retail':
       return (
         <>
@@ -266,6 +269,7 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-users': [ADMIN],
   'page-branches': [ADMIN],
   'page-notifications': [ADMIN, CASHIER],
+  'page-two-step': [ADMIN],
   'page-members': [CLERK, OFFICER],
   'page-member-new': [CLERK],
   'page-member': [CLERK, CHECKER],

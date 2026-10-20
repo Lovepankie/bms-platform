@@ -53,13 +53,12 @@ protocol), who may be pushed to and how a device belongs to a person, which even
    `BMS_ENVIRONMENT` is staging or production), and the integration tests do the same with a fake sender. Changing the pair later
    strands every existing subscription (the browser bound it to the old key); the app notices on the next staff page load and
    subscribes again without a new permission question.
-5. **A subscription belongs to one user on one device.** Table `push_subscriptions` (migration V90, a placeholder number the
-   coordinator renumbers): tenant, user, the endpoint and its SHA-256, the subscription's public key and secret, a short user agent,
+5. **A subscription belongs to one user on one device.** Table `push_subscriptions` (migration V68): tenant, user, the endpoint and its SHA-256, the subscription's public key and secret, a short user agent,
    created and last used. Tenant-owned, forced row-level security with the standard policy, composite foreign key to the user. The
    endpoint is the device, so it is unique within the tenant: when a second person turns notifications on from a device the first
    person used, the row moves to them, and the first person stops hearing. A person keeps at most ten devices, the least recently
    used going first. Sign-out removes this device's row on the server (the browser keeps its subscription), and the staff area
-   registers the device again, quietly, under whoever is signed in next; turning the switch off removes both.
+   registers the device again, quietly, under whoever is signed in next, but only if that browser already holds a subscription and permission (so a shared device is registered for the next person only after someone on it turned notifications on; a person who never did is never registered without their own tap); turning the switch off removes both.
 6. **Routes are the caller's own.** `GET /notifications/push/config`, `GET` and `POST /notifications/push/subscriptions`,
    `POST /notifications/push/subscriptions/unsubscribe`, `DELETE /notifications/push/subscriptions/{device_id}`: all
    `authenticated` for a staff principal with no permission, because the user is the principal and never a parameter. The API
@@ -70,7 +69,7 @@ protocol), who may be pushed to and how a device belongs to a person, which even
    of the known push services or a subdomain of one (Chrome and Edge `fcm.googleapis.com`, Firefox `push.services.mozilla.com`,
    Safari and iOS `push.apple.com`, Windows `notify.windows.com`), or one named in `BMS_PUSH_EXTRA_ENDPOINT_HOSTS`. It is checked
    when a device subscribes and again before every send. The subscription's point is checked to be on the P-256 curve.
-8. **A channel of the outbox, with its rules.** `push` is a new channel value (the CHECK widened in V90). A row is addressed
+8. **A channel of the outbox, with its rules.** `push` is a new channel value (the CHECK widened in V68). A row is addressed
    `user:<id>`, carries its tenant, expires in 12 hours, and is sent by its own 10 second sender (the 30 second general sender would
    also pick it up). The channel sends to every device of the person in a short tenant transaction of its own, outside any
    transaction for the network call: sent when at least one device took it; a device the push service says is gone (404, 410) is

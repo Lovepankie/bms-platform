@@ -405,6 +405,45 @@ class PushIT extends IntegrationTest {
         assertThat(devices(alice)).hasSize(1);
     }
 
+    @Test
+    void aPersonDeactivatedAfterTheRowWasQueuedIsSentNothing() {
+        String device = endpoint();
+        subscribe(alice, device);
+        String key = queue(
+                alice,
+                "core.approval_waiting",
+                Map.of("action_label", "Test action", "path", "/staff/approvals"),
+                Instant.now().plus(Duration.ofHours(1)));
+        TestDatabase.owner()
+                .sql("UPDATE users SET status = 'deactivated' WHERE id = ?")
+                .param(alice)
+                .update();
+        send();
+        assertThat(fake.to(device)).isEmpty();
+        assertThat(row(key).get("status")).isEqualTo("failed");
+        assertThat(row(key).get("last_error").toString()).isEqualTo("user_inactive");
+    }
+
+    @Test
+    void aBranchScopedHolderIsToldOnlyForTheirOwnBranch() {
+        UUID scoped = Api.staff(t, Api.email("push-scoped"), new Api.Role("branch_manager", t.secondBranch()));
+        subscribe(scoped, endpoint());
+        String own = UUID.randomUUID().toString();
+        publish(new PushNotice(
+                "core.approval_waiting",
+                own,
+                new PushNotice.Holders("retail.stock.transfer", t.secondBranch(), bob),
+                Map.of("action_label", "Test action", "path", "/staff/approvals")));
+        String other = UUID.randomUUID().toString();
+        publish(new PushNotice(
+                "core.approval_waiting",
+                other,
+                new PushNotice.Holders("retail.stock.transfer", t.headOffice(), bob),
+                Map.of("action_label", "Test action", "path", "/staff/approvals")));
+        assertThat(recipientsOf(own)).contains("user:" + scoped);
+        assertThat(recipientsOf(other)).doesNotContain("user:" + scoped);
+    }
+
     // ---- The notice a module publishes -----------------------------------------------------------
 
     void publish(PushNotice notice) {

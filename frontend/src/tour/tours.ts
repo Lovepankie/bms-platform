@@ -98,8 +98,9 @@ export const adminWelcome: Tour = {
   // Version 11 adds the step on when a credit sale counts as profit (issue #340, ADR-043).
   // Version 12 adds the step on writing off a debt that will never be paid (issue #340).
   // Version 13 adds the Controls step (issue #357): sales cancelled, goods taken back, prices changed, restocks cancelled and quantities corrected, by shop and person.
-  // Version 14 adds the Notifications step: install the app and turn on notifications (ADR-050).
-  version: 14,
+  // Version 14 adds the Two-step sign-in step (issue #348): who must use a code from the phone, and how long they have to set it up.
+  // Version 15 adds the Notifications step: install the app and turn on notifications (ADR-050).
+  version: 15,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -155,6 +156,13 @@ export const adminWelcome: Tour = {
       optional: true,
       title: 'Your branches',
       body: 'Close a shop you no longer use. Its sales and stock records stay for your reports, and it leaves the branch lists. You can reopen it later.',
+    },
+    {
+      id: 'two-step',
+      route: '/staff/setup/two-step',
+      target: 'twostep-choice',
+      title: 'Two-step sign-in',
+      body: 'Ask your staff for a code from their phone as well as the password. It is optional until you choose who must use it.',
     },
     {
       id: 'modules',
@@ -933,6 +941,30 @@ export const branchesPage: Tour = {
   ],
 };
 
+// The Two-step sign-in page (issue #348): a page tour for whoever may change the settings.
+export const twoStepPage: Tour = {
+  id: 'page-two-step',
+  version: 1,
+  title: 'This page: two-step sign-in',
+  audience: isTenantAdmin,
+  autoStart: false,
+  page: '/staff/setup/two-step',
+  steps: [
+    {
+      id: 'intro',
+      target: 'twostep-intro',
+      title: 'A code from the phone',
+      body: 'Two-step sign-in asks for a code from a phone as well as the password. Then a stolen password is not enough to sign in.',
+    },
+    {
+      id: 'choice',
+      target: 'twostep-choice',
+      title: 'Who must use it',
+      body: 'Optional means nobody has to. Pick some roles, or everyone, to require it. Before you save, you see who will be asked and from which day.',
+    },
+  ],
+};
+
 export const branchRolesCapability: Tour = {
   id: 'capability-branch-roles',
   version: 1,
@@ -1481,5 +1513,5 @@ export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, notificationsPage, ...CUSTOMER_TOURS,
+  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, notificationsPage, ...CUSTOMER_TOURS,
 ];

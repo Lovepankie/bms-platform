@@ -43,7 +43,11 @@ jobs:
       # Unit and architecture tests (Surefire), formatting (Spotless), then the integration
       # tests against PostgreSQL 16 in Testcontainers (Failsafe): RLS isolation, ledger
       # invariants, members API, actuator exposure, route permissions, OpenAPI snapshot.
+      # The lending insights demo seed test runs one heavy report query that takes about 55 s on a
+      # hosted runner, close to the 60 s statement timeout; CI alone allows 180 s (production keeps 60 s).
       - name: Build and test
+        env:
+          BMS_DB_STATEMENT_TIMEOUT: 180s
         run: mvn -B verify
       - name: Keep test reports
         if: failure()

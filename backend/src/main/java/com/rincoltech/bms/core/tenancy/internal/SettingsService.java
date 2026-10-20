@@ -5,17 +5,22 @@ import com.rincoltech.bms.core.documents.Documents;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.ModuleSettings;
 import com.rincoltech.bms.core.tenancy.ModuleSettingsGroup;
+import com.rincoltech.bms.core.tenancy.PolicyChangeGuard;
 import com.rincoltech.bms.core.tenancy.TenantModules;
 import com.rincoltech.bms.core.tenancy.TenantSettings;
+import com.rincoltech.bms.core.tenancy.TwoStepPolicy;
 import com.rincoltech.bms.core.tenancy.internal.SettingsController.SettingsResponse;
 import com.rincoltech.bms.core.tenancy.internal.SettingsController.UpdateSettingsRequest;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
+import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.PushNotice;
 import com.rincoltech.bms.kernel.Versions;
+import java.time.Instant;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,6 +32,7 @@ import java.util.TreeMap;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +60,8 @@ class SettingsService implements TenantSettings, ModuleSettings {
     private final Documents documents;
     private final Map<String, ModuleSettingsGroup> groups = new TreeMap<>();
     private final TenantModules modules;
+    private final BusinessClock clock;
+    private final PolicyChangeGuard guard;
     private final ApplicationEventPublisher events;
 
     SettingsService(
@@ -64,6 +72,8 @@ class SettingsService implements TenantSettings, ModuleSettings {
             Documents documents,
             List<ModuleSettingsGroup> groupBeans,
             TenantModules modules,
+            BusinessClock clock,
+            @Lazy PolicyChangeGuard guard,
             ApplicationEventPublisher events) {
         this.events = events;
         this.jdbc = jdbc;
@@ -73,6 +83,8 @@ class SettingsService implements TenantSettings, ModuleSettings {
         this.documents = documents;
         groupBeans.forEach(g -> groups.put(g.moduleKey(), g));
         this.modules = modules;
+        this.clock = clock;
+        this.guard = guard;
     }
 
     private record Stored(Map<String, Object> values, int version) {}
@@ -83,21 +95,144 @@ class SettingsService implements TenantSettings, ModuleSettings {
         return resolve(stored.values(), stored.version());
     }
 
+    /**
+     * @param proved the administrator's proof was checked before this transaction (it is needed when the change relaxes the
+     *     two-step rule); the row is read again under its lock, and a change that relaxes it without that proof is refused
+     */
     @Transactional
-    SettingsResponse update(String ifMatch, UpdateSettingsRequest request) {
+    SettingsResponse update(String ifMatch, UpdateSettingsRequest request, boolean proved) {
         int expected = Versions.fromIfMatch(ifMatch);
         Stored stored = lock();
         if (stored.version() != expected) {
             throw Versions.conflict(stored.version());
         }
         validate(request);
+        Map<String, Object> changes = plan(stored, request);
+        boolean relaxes = relaxes(stored.values(), changes);
+        if (relaxes && !proved) {
+            throw ApiException.rule("proof_required", "Confirm that it is you, then save again.");
+        }
+        SettingsResponse after = write(stored, changes);
+        if (relaxes) {
+            // In this transaction: the change and the warning to the administrators commit together (ADR-046 decision
+            // 6).
+            guard.notifyRelaxed(
+                    after.requireMfaRoles().isEmpty() && !after.requireMfaAllStaff()
+                            ? "two-step sign-in is now optional for everyone"
+                            : "two-step sign-in is now required of fewer people, or its date was put back");
+            // The same change tells the administrators with a device (ADR-050): narrowing, switching off or postponing.
+            events.publishEvent(new PushNotice(
+                    "core.signin_policy_weakened",
+                    "settings-v" + after.version(),
+                    new PushNotice.Holders(
+                            "core.settings.manage",
+                            null,
+                            CurrentPrincipal.get().map(Principal::userId).orElse(null)),
+                    Map.of("path", "/staff/setup")));
+        }
+        return after;
+    }
+
+    /** The keys to write for a request, the deadline included. */
+    private Map<String, Object> plan(Stored stored, UpdateSettingsRequest request) {
         Map<String, Object> changes = mapper.convertValue(request, MAP);
         changes.values().removeIf(Objects::isNull);
+        // The proof of the administrator is not a setting: it is never stored, audited or echoed.
+        changes.remove("totp_code");
+        changes.remove("password");
         if (changes.get("theme_primary") instanceof String colour) {
             // An empty string clears the colour: back to the platform look.
             changes.put("theme_primary", colour.isEmpty() ? null : colour.toUpperCase(Locale.ROOT));
         }
-        return write(stored, changes);
+        if (changes.containsKey("require_mfa_roles")) {
+            changes.put(
+                    "require_mfa_roles",
+                    request.requireMfaRoles().stream().distinct().sorted().toList());
+        }
+        placeTwoStepDeadline(stored, changes);
+        return changes;
+    }
+
+    /**
+     * Whether this change needs the administrator's proof (ADR-046): it turns the two-step requirement off, narrows it, or puts a
+     * deadline back (a later date than the one set, or a date where people were required at once). Read without a lock, for the
+     * check that must come before the transaction; {@link #update} decides again on the locked row.
+     */
+    @Transactional(readOnly = true)
+    boolean relaxesTwoStep(UpdateSettingsRequest request) {
+        Stored stored = load(false);
+        return relaxes(stored.values(), plan(stored, request));
+    }
+
+    private static boolean relaxes(Map<String, Object> stored, Map<String, Object> changes) {
+        Map<String, Object> merged = new TreeMap<>(stored);
+        changes.forEach((k, v) -> {
+            if (v == null) {
+                merged.remove(k);
+            } else {
+                merged.put(k, v);
+            }
+        });
+        TwoStepPolicy before = policyOf(stored);
+        TwoStepPolicy after = policyOf(merged);
+        if (before.off()) {
+            return false;
+        }
+        if (after.off()) {
+            return true;
+        }
+        boolean narrower = before.everyone()
+                ? !after.everyone()
+                : !after.everyone() && !after.roles().containsAll(before.roles());
+        if (narrower) {
+            return true;
+        }
+        Object sent = changes.get("mfa_enforce_from");
+        return sent != null
+                && (before.enforceFrom() == null || Instant.parse((String) sent).isAfter(before.enforceFrom()));
+    }
+
+    /**
+     * ADR-046 decision 3: the deadline moves only when a grace period is sent, and is cleared when the policy is turned off. A grace
+     * of N days means people may sign in until the END of the day N days from today in the business's own time zone, so the stored
+     * instant is the start of the day after (0 days clears it: at once). Narrowing, widening or any other save without a grace
+     * period leaves the deadline where it is.
+     */
+    private void placeTwoStepDeadline(Stored stored, Map<String, Object> changes) {
+        if (!changes.containsKey("require_mfa_all_staff")
+                && !changes.containsKey("require_mfa_roles")
+                && !changes.containsKey("mfa_grace_days")) {
+            return;
+        }
+        Map<String, Object> merged = new TreeMap<>(stored.values());
+        merged.putAll(changes);
+        TwoStepPolicy after = policyOf(merged);
+        if (after.off()) {
+            changes.put("mfa_enforce_from", null);
+            return;
+        }
+        if (changes.containsKey("mfa_grace_days")) {
+            int days = after.graceDays() == null ? 0 : after.graceDays();
+            changes.put(
+                    "mfa_enforce_from", days == 0 ? null : deadlineAfter(days).toString());
+        }
+    }
+
+    /** The first instant of the day after today plus {@code days}, in the business's own time zone. */
+    Instant deadlineAfter(int days) {
+        ZoneId zone = tenant.profile().timezone();
+        return clock.today(zone).plusDays(days + 1L).atStartOfDay(zone).toInstant();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static TwoStepPolicy policyOf(Map<String, Object> s) {
+        Object grace = s.get("mfa_grace_days");
+        Object from = s.get("mfa_enforce_from");
+        return new TwoStepPolicy(
+                Boolean.TRUE.equals(s.get("require_mfa_all_staff")),
+                Set.copyOf((List<String>) s.getOrDefault("require_mfa_roles", List.of())),
+                grace == null ? null : ((Number) grace).intValue(),
+                from == null ? null : Instant.parse((String) from));
     }
 
     /** Stores a prepared logo as a core document of this tenant and makes it the current one (FR-TEN-08). */
@@ -171,7 +306,7 @@ class SettingsService implements TenantSettings, ModuleSettings {
 
     /**
      * The administrators with a device are told when a safeguard is loosened (ADR-050): the amount that needs a second person
-     * raised for an action, or two-step sign-in no longer required of every user. The person who changed it is not told. The
+     * raised for an action. The person who changed it is not told. The
      * names of the actions are the ones the approvals inbox shows.
      */
     private void announceWeakening(SettingsResponse before, SettingsResponse after) {
@@ -192,13 +327,6 @@ class SettingsService implements TenantSettings, ModuleSettings {
                             "path",
                             "/staff/setup")));
         }
-        if (before.requireMfaAllStaff() && !after.requireMfaAllStaff()) {
-            events.publishEvent(new PushNotice(
-                    "core.signin_policy_weakened",
-                    "settings-v" + after.version(),
-                    new PushNotice.Holders("core.settings.manage", null, by),
-                    Map.of("path", "/staff/setup")));
-        }
     }
 
     @Override
@@ -210,8 +338,8 @@ class SettingsService implements TenantSettings, ModuleSettings {
 
     @Override
     @Transactional(readOnly = true)
-    public boolean requireMfaAllStaff() {
-        return current().requireMfaAllStaff();
+    public TwoStepPolicy twoStepPolicy() {
+        return policyOf(load(false).values());
     }
 
     @Override
@@ -372,6 +500,14 @@ class SettingsService implements TenantSettings, ModuleSettings {
                         "appraisal_weights", "invalid", "Give all four weights, each 0 or more, summing to 100."));
             }
         }
+        if (request.requireMfaRoles() != null
+                && !Set.copyOf(jdbc.sql("SELECT key FROM roles WHERE kind = 'staff'")
+                                .query(String.class)
+                                .list())
+                        .containsAll(request.requireMfaRoles())) {
+            problems.add(
+                    new FieldProblem("require_mfa_roles", "invalid", "Choose roles from the list of staff roles."));
+        }
         if (request.displayName() != null && request.displayName().isBlank()) {
             problems.add(new FieldProblem("display_name", "invalid", "Must not be blank."));
         }
@@ -413,6 +549,10 @@ class SettingsService implements TenantSettings, ModuleSettings {
                 s.containsKey("display_name"),
                 (Boolean) s.getOrDefault("setup_dismissed", false),
                 (Boolean) s.getOrDefault("reports_enabled", false),
+                List.copyOf((List<String>) s.getOrDefault("require_mfa_roles", List.of())),
+                s.get("mfa_grace_days") == null ? null : ((Number) s.get("mfa_grace_days")).intValue(),
+                s.get("mfa_enforce_from") == null ? null : Instant.parse((String) s.get("mfa_enforce_from")),
+                tenant.profile().timezone().getId(),
                 version);
     }
 }

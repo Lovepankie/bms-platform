@@ -166,11 +166,26 @@ class OutboxTemplates {
                     Rincoltech
                     """));
 
+    // Sent to the administrators when two-step sign-in is turned off or narrowed (issue #348, ADR-046): what changed,
+    // who, when.
+    private static final Map<String, Template> EMAIL_POLICY = Map.of(
+            "identity.two_step_policy_weakened", new Template("Two-step sign-in was relaxed for {business_name}", """
+                    Hello,
+
+                    {who} changed the two-step sign-in rule of {business_name} on {when}: {change}.
+
+                    If you or another administrator did this, nothing more is needed. If you do not know about it,
+                    open Business set-up in BMS now, check the rule, and change your password.
+
+                    Rincoltech
+                    """));
+
     private static final Map<String, Template> EMAIL = emailTemplates();
 
     private static Map<String, Template> emailTemplates() {
         Map<String, Template> all = new java.util.HashMap<>(EMAIL_CORE);
         all.putAll(EMAIL_RETAIL);
+        all.putAll(EMAIL_POLICY);
         return Map.copyOf(all);
     }
 

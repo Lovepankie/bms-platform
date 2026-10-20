@@ -202,7 +202,7 @@ Prices are commercial and are not stored in this repository's seed data.
 | Table | Columns |
 |---|---|
 | `permissions` | `key text PK` (format `<module>.<resource>.<action>`, for example `lending.loans.approve`), `module text NOT NULL`, `description text NOT NULL`, `is_money_moving boolean NOT NULL` |
-| `roles` | `key text PK` [`tenant_admin`, `branch_manager`, `loan_officer`, `cashier`, `accountant`, `auditor`, `member`], `name text NOT NULL`, `kind text NOT NULL` [`staff`, `member`], `mfa_required boolean NOT NULL DEFAULT false` (true for `tenant_admin`, FR-IAM-06) |
+| `roles` | `key text PK` [`tenant_admin`, `branch_manager`, `loan_officer`, `cashier`, `accountant`, `auditor`, `member`], `name text NOT NULL`, `kind text NOT NULL` [`staff`, `member`], `mfa_required boolean NOT NULL DEFAULT false` (false for every seeded role since `V67`, issue #348, ADR-046: V2 set it true for `tenant_admin`; two-step sign-in is optional and a tenant requires it through its settings, FR-IAM-06, FR-IAM-16; a role flagged here would be required for every tenant that has it) |
 | `role_permissions` | `role_key text FK roles`, `permission_key text FK permissions`, PK both |
 
 Seeded from the matrix in chapter 8 by migration V2, with the two platform permissions
@@ -405,7 +405,10 @@ write. Keys and defaults:
 | `max_active_loans_per_member` | integer or null | null | FR-ORG-07 |
 | `appraisal_weights` | object | section 3.18.1 defaults | FR-ORG-04 |
 | `disabled_collateral_types` | string array | empty | FR-COL-05 |
-| `require_mfa_all_staff` | boolean | false | FR-IAM-06 |
+| `require_mfa_all_staff` | boolean | false; two-step sign-in is required of every staff user (issue #348, ADR-046) | FR-IAM-06, FR-IAM-16 |
+| `require_mfa_roles` | string array of staff role keys (`member` is refused) | empty; the holders of these roles are required to use two-step sign-in | FR-IAM-16 |
+| `mfa_grace_days` | integer 0 to 90 or null | null (read as 0, at once); the grace period last chosen | FR-IAM-16 |
+| `mfa_enforce_from` | ISO instant or absent | absent (at once); written by the server only, to now plus the grace days when the policy is turned on or widened or a grace period is sent, and cleared when the policy is turned off or the grace is 0; until then a covered user without a factor signs in and is shown the date | FR-IAM-16 |
 | `reports_enabled` | boolean | false; the tenant switch of the report runs (ADR-038, issue #214): off, nothing is queued, run or listed | FR-RPT-04 |
 
 `logo_document_id` is set only by the logo upload route, never by a settings patch: it names a
@@ -479,7 +482,7 @@ DELETE grant, and the function itself never deletes a row younger than 30 days, 
 
 ### `push_subscriptions` (RLS)
 
-(std without `updated_at` and `version`; ADR-050; migration `V90`, a placeholder number the coordinator renumbers at merge) One row per
+(std without `updated_at` and `version`; ADR-050; migration `V68`) One row per
 user per device that receives Web Push. `user_id uuid NOT NULL` (FK `(tenant_id, user_id)`), `endpoint text NOT NULL` (the push service's
 address for that browser; `https://` only, at most 2048 characters), `endpoint_hash char(64) NOT NULL` (SHA-256 of the endpoint in hex),
 `p256dh varchar(100) NOT NULL` (the subscription's public key, 65 bytes as unpadded base64url, 86 to 88 characters), `auth varchar(30) NOT NULL`

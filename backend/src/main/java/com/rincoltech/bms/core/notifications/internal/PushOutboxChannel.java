@@ -84,6 +84,10 @@ final class PushOutboxChannel implements OutboxChannel {
         }
         List<Device> devices;
         try {
+            if (!tenantJobs.callForTenant(tenantId, () -> activeStaff(userId))) {
+                // Deactivated after the row was queued: nothing is sent (ADR-050).
+                return Result.refused("user_inactive");
+            }
             devices = tenantJobs.callForTenant(tenantId, () -> devicesOf(userId));
         } catch (TenantJobs.InactiveTenantException e) {
             return Result.refused("tenant_inactive");
@@ -130,9 +134,20 @@ final class PushOutboxChannel implements OutboxChannel {
         return Result.refused("no_deliverable_device");
     }
 
+    private boolean activeStaff(UUID userId) {
+        return jdbc.sql("SELECT count(*) FROM users WHERE id = ? AND status = 'active' AND kind = 'staff'")
+                        .param(userId)
+                        .query(Integer.class)
+                        .single()
+                > 0;
+    }
+
     private List<Device> devicesOf(UUID userId) {
-        return jdbc.sql("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?"
-                        + " ORDER BY coalesce(last_used_at, created_at) DESC")
+        return jdbc.sql(
+                        "SELECT s.id, s.endpoint, s.p256dh, s.auth FROM push_subscriptions s"
+                                + " JOIN users u ON u.tenant_id = s.tenant_id AND u.id = s.user_id"
+                                + " AND u.status = 'active' AND u.kind = 'staff'"
+                                + " WHERE s.user_id = ? ORDER BY greatest(s.created_at, coalesce(s.last_used_at, s.created_at)) DESC")
                 .param(userId)
                 .query((rs, n) -> new Device(
                         rs.getObject("id", UUID.class),

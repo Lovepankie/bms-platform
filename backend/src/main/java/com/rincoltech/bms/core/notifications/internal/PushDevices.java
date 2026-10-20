@@ -63,20 +63,30 @@ class PushDevices {
         UUID user = CurrentPrincipal.require().userId();
         UUID id = UUID.randomUUID();
         String ua = userAgent == null ? null : cut(userAgent, 300);
+        String hash = hash(request.endpoint());
+        UUID before = jdbc.sql("SELECT user_id FROM push_subscriptions WHERE endpoint_hash = ?")
+                .param(hash)
+                .query(UUID.class)
+                .optional()
+                .orElse(null);
         Device device = jdbc.sql("""
                         INSERT INTO push_subscriptions (id, tenant_id, user_id, endpoint, endpoint_hash, p256dh, auth,
                                                         user_agent, created_at)
                         VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT (tenant_id, endpoint_hash) DO UPDATE
                             SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth,
-                                user_agent = excluded.user_agent
+                                user_agent = excluded.user_agent,
+                                created_at = CASE WHEN push_subscriptions.user_id <> excluded.user_id
+                                                  THEN excluded.created_at ELSE push_subscriptions.created_at END,
+                                last_used_at = CASE WHEN push_subscriptions.user_id <> excluded.user_id
+                                                    THEN NULL ELSE push_subscriptions.last_used_at END
                         RETURNING id, user_agent, created_at, last_used_at
                         """)
                 .params(
                         id,
                         user,
                         request.endpoint(),
-                        hash(request.endpoint()),
+                        hash,
                         request.keys().p256dh(),
                         request.keys().auth(),
                         ua,
@@ -87,10 +97,17 @@ class PushDevices {
         jdbc.sql("""
                         DELETE FROM push_subscriptions
                          WHERE id IN (SELECT id FROM push_subscriptions WHERE user_id = ?
-                                       ORDER BY coalesce(last_used_at, created_at) DESC OFFSET ?)
+                                       ORDER BY greatest(created_at, coalesce(last_used_at, created_at)) DESC OFFSET ?)
                         """).params(user, MAX_DEVICES).update();
-        audit.record(AuditLog.Entry.created(
-                "core.push.subscribed", "core.push_subscription", device.id(), null, Map.of("device", device.label())));
+        // Audited when the device is new or changes owner, not on every quiet refresh at page load.
+        if (before == null || !before.equals(user)) {
+            audit.record(AuditLog.Entry.created(
+                    "core.push.subscribed",
+                    "core.push_subscription",
+                    device.id(),
+                    null,
+                    Map.of("device", device.label())));
+        }
         return device;
     }
 

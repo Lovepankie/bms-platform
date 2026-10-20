@@ -8,6 +8,7 @@ import com.rincoltech.bms.core.identity.internal.UserApi.RoleCatalogue;
 import com.rincoltech.bms.core.identity.internal.UserApi.RoleResponse;
 import com.rincoltech.bms.core.identity.internal.UserApi.UserResponse;
 import com.rincoltech.bms.core.tenancy.Branches;
+import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.ModuleSettings;
 import com.rincoltech.bms.core.tenancy.TenantModules;
 import com.rincoltech.bms.core.tenancy.TenantSettings;
@@ -51,6 +52,7 @@ class MeController {
     private final TenantModules modules;
     private final ModuleSettings moduleSettings;
     private final TenantSettings settings;
+    private final CurrentTenant tenant;
 
     MeController(
             UserService users,
@@ -60,7 +62,8 @@ class MeController {
             TourProgress tours,
             TenantModules modules,
             ModuleSettings moduleSettings,
-            TenantSettings settings) {
+            TenantSettings settings,
+            CurrentTenant tenant) {
         this.users = users;
         this.accounts = accounts;
         this.branches = branches;
@@ -69,6 +72,7 @@ class MeController {
         this.modules = modules;
         this.moduleSettings = moduleSettings;
         this.settings = settings;
+        this.tenant = tenant;
     }
 
     @GetMapping("/me")
@@ -112,7 +116,10 @@ class MeController {
                 tours.of(user.id()),
                 modules.enabledKeys(),
                 moduleSettings.enabledCapabilities(),
-                settings.reportsEnabled());
+                settings.reportsEnabled(),
+                accounts.mfaDueBy(user.id(), user.mfaEnabled()).orElse(null),
+                settings.twoStepPolicy().mode(),
+                tenant.profile().timezone().getId());
     }
 
     /**
