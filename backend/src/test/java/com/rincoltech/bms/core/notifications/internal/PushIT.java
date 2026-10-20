@@ -432,13 +432,13 @@ class PushIT extends IntegrationTest {
         publish(new PushNotice(
                 "core.approval_waiting",
                 own,
-                new PushNotice.Holders("retail.stock.transfer", t.secondBranch(), bob),
+                new PushNotice.Holders("core.branches.read", t.secondBranch(), bob),
                 Map.of("action_label", "Test action", "path", "/staff/approvals")));
         String other = UUID.randomUUID().toString();
         publish(new PushNotice(
                 "core.approval_waiting",
                 other,
-                new PushNotice.Holders("retail.stock.transfer", t.headOffice(), bob),
+                new PushNotice.Holders("core.branches.read", t.headOffice(), bob),
                 Map.of("action_label", "Test action", "path", "/staff/approvals")));
         assertThat(recipientsOf(own)).contains("user:" + scoped);
         assertThat(recipientsOf(other)).doesNotContain("user:" + scoped);
