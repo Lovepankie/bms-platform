@@ -132,7 +132,11 @@ protocol), who may be pushed to and how a device belongs to a person, which even
   fails otherwise.
 - Who is notified is read from roles at publish time. A person who holds the permission through a role with no branch holds it
   everywhere; a branch-scoped holder is matched by the event's branch.
-- Deleting or deactivating a user does not delete their devices in this slice; a deactivated user is never selected as a
-  recipient, and the rows go when the person's device removes itself or the ten device limit pushes it out.
+- Deactivating a user deletes their devices in the same transaction, and a deactivated user is never selected as a recipient.
+  The one notice that reaches a closed branch is `retail.transfer_dispatched`, because a closed branch still receives what is on
+  its way; every other branch-scoped notice needs an active branch.
+- **Release note:** the manifest `id` moved from `/` to `/staff`. A browser treats a changed `id` as a different app, so a phone
+  that installed BMS earlier may show a second BMS icon after this release. Remove the old one; nothing is lost, since the account
+  lives on the server.
 - The service worker file is loaded by `importScripts`, which a browser may serve from its HTTP cache: the web container serves
   `/push-sw.js` with `Cache-Control: no-cache`, as it does `/sw.js`.
