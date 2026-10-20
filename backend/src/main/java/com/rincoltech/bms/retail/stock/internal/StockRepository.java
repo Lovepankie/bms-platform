@@ -2,6 +2,8 @@ package com.rincoltech.bms.retail.stock.internal;
 
 import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.retail.stock.Quantities;
+import com.rincoltech.bms.retail.stock.internal.StockApi.Correction;
+import com.rincoltech.bms.retail.stock.internal.StockApi.MovementCorrection;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementRow;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockRow;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Stocktake;
@@ -253,12 +255,16 @@ class StockRepository {
             LocalDate from,
             LocalDate to,
             String zone,
+            boolean newestFirst,
             Instant afterCreated,
             UUID afterId,
             int limit) {
         StringBuilder sql = new StringBuilder("""
                 SELECT id, occurred_at, branch_id, product_id, kind, qty, unit_cost_minor, source_type,
-                       source_id, reverses_movement_id, historical, note, recorded_by
+                       source_id, reverses_movement_id, historical, note, recorded_by,
+                       (SELECT c.reason_code FROM retail_stock_corrections c WHERE c.movement_id = retail_stock_movements.id) AS correction_reason,
+                       (SELECT c.old_qty FROM retail_stock_corrections c WHERE c.movement_id = retail_stock_movements.id) AS correction_old,
+                       (SELECT c.new_qty FROM retail_stock_corrections c WHERE c.movement_id = retail_stock_movements.id) AS correction_new
                   FROM retail_stock_movements WHERE true
                 """);
         Map<String, Object> params = new LinkedHashMap<>();
@@ -289,11 +295,17 @@ class StockRepository {
             params.put("zone", zone);
         }
         if (afterCreated != null) {
-            sql.append(" AND (occurred_at, id) > (:afterCreated, :afterId)");
+            sql.append(
+                    newestFirst
+                            ? " AND (occurred_at, id) < (:afterCreated, :afterId)"
+                            : " AND (occurred_at, id) > (:afterCreated, :afterId)");
             params.put("afterCreated", Timestamp.from(afterCreated));
             params.put("afterId", afterId);
         }
-        sql.append(" ORDER BY occurred_at, id LIMIT :limit");
+        sql.append(
+                newestFirst
+                        ? " ORDER BY occurred_at DESC, id DESC LIMIT :limit"
+                        : " ORDER BY occurred_at, id LIMIT :limit");
         params.put("limit", limit);
         return jdbc.sql(sql.toString())
                 .params(params)
@@ -310,8 +322,81 @@ class StockRepository {
                         rs.getObject("reverses_movement_id", UUID.class),
                         rs.getBoolean("historical"),
                         rs.getString("note"),
-                        rs.getObject("recorded_by", UUID.class)))
+                        rs.getObject("recorded_by", UUID.class),
+                        rs.getString("correction_reason") == null
+                                ? null
+                                : new MovementCorrection(
+                                        rs.getString("correction_reason"),
+                                        Quantities.format(rs.getBigDecimal("correction_old")),
+                                        Quantities.format(rs.getBigDecimal("correction_new")))))
                 .list();
+    }
+
+    // ---- Quantity corrections (issue #351, ADR-044) -----------------------------------------
+
+    /** True when a stock-take of the branch that is not committed yet counts the product (its variance is measured from the shelf now). */
+    boolean draftStocktakeCovers(UUID branchId, UUID productId) {
+        return jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM retail_stocktakes s
+                                         JOIN retail_stocktake_lines l ON l.tenant_id = s.tenant_id AND l.stocktake_id = s.id
+                                        WHERE s.branch_id = ? AND s.status = 'draft' AND l.product_id = ?)
+                        """).params(branchId, productId).query(Boolean.class).single();
+    }
+
+    void insertCorrection(
+            UUID id,
+            UUID branchId,
+            UUID productId,
+            UUID movementId,
+            BigDecimal oldQty,
+            BigDecimal newQty,
+            String reasonCode,
+            String note,
+            long unitCostMinor,
+            UUID journalEntryId,
+            UUID by) {
+        jdbc.sql("""
+                        INSERT INTO retail_stock_corrections (id, tenant_id, branch_id, product_id, movement_id, old_qty, new_qty,
+                            reason_code, note, unit_cost_minor, journal_entry_id, created_by)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """)
+                .params(
+                        id,
+                        branchId,
+                        productId,
+                        movementId,
+                        oldQty,
+                        newQty,
+                        reasonCode,
+                        note,
+                        unitCostMinor,
+                        journalEntryId,
+                        by)
+                .update();
+    }
+
+    Optional<Correction> correction(UUID id) {
+        return jdbc.sql("""
+                        SELECT c.id, c.branch_id, c.product_id, p.code, p.description, c.old_qty, c.new_qty, c.reason_code,
+                               c.note, c.movement_id, c.created_at, c.created_by
+                          FROM retail_stock_corrections c JOIN retail_products p ON p.id = c.product_id
+                         WHERE c.id = ?
+                        """)
+                .param(id)
+                .query((rs, n) -> new Correction(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("branch_id", UUID.class),
+                        rs.getObject("product_id", UUID.class),
+                        rs.getString("code"),
+                        rs.getString("description"),
+                        Quantities.format(rs.getBigDecimal("old_qty")),
+                        Quantities.format(rs.getBigDecimal("new_qty")),
+                        rs.getString("reason_code"),
+                        rs.getString("note"),
+                        rs.getObject("movement_id", UUID.class),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getObject("created_by", UUID.class)))
+                .optional();
     }
 
     // ---- Stock-takes -------------------------------------------------------------------

@@ -25,6 +25,7 @@ packages.
 | One React PWA with staff and member areas | ADR-009 |
 | Backend: Java 25, Spring Boot 4.1, Spring Modulith 2.1, Flyway | ADR-010 |
 | Retail vertical brought forward; stock as append-only movements; retail events post to the ledger | ADR-020 |
+| Entry mistakes corrected inside the app: one name per item and unit, a restock voided by reversal and entered again, a quantity corrected as an adjustment that is not shrinkage | ADR-044 (proposed; issues #351 and #352) |
 | First run signs the invitee in; guided tours are data with per-user progress on the server | ADR-025 (proposed) |
 | Mobile money and card collections through Pesapal v3: hosted orders, notification as a hint, status query as the truth | ADR-035 (proposed) |
 | Credit scoring model beyond the rules-based default | pending ADR-012 |
@@ -279,13 +280,20 @@ built yet keeps its steps behind a flag in `FEATURES` until its slice switches i
 payments, trial and agents are off today; the staff Users screen, issue #319, is on). The first-run
 tours cover set-up, retail selling, stock-take and the catalogue, and the loan list with its
 applications filter; page tours, started from Help, cover the sale, stock, stock-take, catalogue,
-set-up, loans and loan pages, and the staff Users page (`page-users`). A page tour's `page` may hold a `$name` segment that matches any one
+set-up, loans and loan pages, the staff Users page (`page-users`) and the Past restocks page (`page-restocks`, issue #351); the selling tour (version 7) and the welcome tour (version 10) gained the correction steps. A page tour's `page` may hold a `$name` segment that matches any one
 path segment, so one tour serves every loan. Tours start by themselves under three rules (issue #292):
 `autoTourFor` picks the first-run tour while it waits, else the next pending "New:" (capability) tour; the host
 starts at most one per page load, so the rest wait for the next visit; a user with no tour history gets only the
 first-run tour and every "New:" tour is recorded as completed for them at that moment; and "Do not show tours
 again" records the tour as dismissed plus the progress key `tours-off`, which stops every automatic tour. Money is formatted only in
 `components/`, from integer minor units and the currency exponent.
+
+Corrections of entry mistakes (issues #351 and #352, ADR-044) add no module and no port to the core. `retail.catalogue` holds
+the name key and the duplicate refusal and gains one public method, `RetailCatalogue.revertPurchasePrices`; `retail.purchasing`
+voids a restock through the stock ledger and `RetailBooks.reverse` it already used for receipts; `retail.stock` posts a
+quantity correction through the same two ports. The movement table gains no column: a void is an adjustment from the source
+type `retail.purchase_void` and a correction one from `retail.stock_correction`, so every reader that counts shrinkage by
+source (stock health, the dashboard, the daily profit) is untouched.
 
 ## 5.7 Where the retail vertical will fit
 

@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -121,6 +122,16 @@ class JdbcCatalogueHistory implements CatalogueHistory {
                         null),
                 id);
         return new Ensured(id, true, false);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<String> otherWithSameName(String code, String description, UUID unitId) {
+        String own = RetailCatalogue.normaliseCode(code).orElse(code);
+        return repo.sameName(description, null).stream()
+                .filter(m -> m.unitId().equals(unitId) && !m.code().equalsIgnoreCase(own))
+                .map(CatalogueRepository.NameMatch::code)
+                .findFirst();
     }
 
     @Override

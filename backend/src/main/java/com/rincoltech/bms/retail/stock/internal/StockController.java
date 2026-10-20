@@ -3,6 +3,8 @@ package com.rincoltech.bms.retail.stock.internal;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.retail.stock.internal.StockApi.AllBranchesPage;
+import com.rincoltech.bms.retail.stock.internal.StockApi.Correction;
+import com.rincoltech.bms.retail.stock.internal.StockApi.CorrectionRequest;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Stocktake;
@@ -36,10 +38,12 @@ class StockController {
 
     private final StockService service;
     private final UsageService usage;
+    private final StockCorrectionService corrections;
 
-    StockController(StockService service, UsageService usage) {
+    StockController(StockService service, UsageService usage, StockCorrectionService corrections) {
         this.service = service;
         this.usage = usage;
+        this.corrections = corrections;
     }
 
     @GetMapping("/stock")
@@ -81,9 +85,27 @@ class StockController {
             @RequestParam(name = "product_id", required = false) UUID productId,
             @RequestParam(name = "from", required = false) LocalDate from,
             @RequestParam(name = "to", required = false) LocalDate to,
+            @RequestParam(name = "newest_first", required = false, defaultValue = "false") boolean newestFirst,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.movements(branchIds, productId, from, to, limit, cursor);
+        return service.movements(branchIds, productId, from, to, newestFirst, limit, cursor);
+    }
+
+    @PostMapping("/stock/corrections")
+    @RequiresPermission("retail.stocktake.commit")
+    @Operation(
+            summary =
+                    "Correct the quantity of an item at a branch with a reason; an adjustment that is not shrinkage (issue #351); M",
+            operationId = "correctRetailStockQuantity")
+    ResponseEntity<Correction> correct(
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody CorrectionRequest request) {
+        Outcome<Correction> outcome = corrections.correct(idempotencyKey, request);
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.CREATED);
+        if (outcome.replayed()) {
+            response.header("Idempotent-Replayed", "true");
+        }
+        return response.body(outcome.body());
     }
 
     @PostMapping("/usage")

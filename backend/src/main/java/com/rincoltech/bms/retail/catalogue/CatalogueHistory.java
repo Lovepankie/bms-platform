@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.catalogue;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -28,6 +29,13 @@ public interface CatalogueHistory {
             long costMinor,
             long sellMinor,
             boolean active);
+
+    /**
+     * Issue #352: the code of another product of the tenant with the same name (folded to lower case, spaces and
+     * punctuation collapsed) in the same unit, for the importer to report as an anomaly. The product with the given
+     * code never counts. Empty when the name is not repeated.
+     */
+    Optional<String> otherWithSameName(String code, String description, UUID unitId);
 
     /** Every product of the tenant by its code, lower case. */
     Map<String, Product> productsByCode();

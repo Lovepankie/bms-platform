@@ -81,7 +81,10 @@ final class CatalogueApi {
             Long costMinor,
 
             @NotNull @PositiveOrZero @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
-            Long sellMinor) {}
+            Long sellMinor,
+
+            @Size(max = 300) @Schema(description = DUPLICATE_REASON)
+            String duplicateReason) {}
 
     @Schema(
             name = "UpdateRetailProductRequest",
@@ -91,7 +94,38 @@ final class CatalogueApi {
             @Size(min = 1, max = 300) String description,
             UUID categoryId,
             UUID unitId,
-            Boolean active) {}
+            Boolean active,
+
+            @Size(max = 300) @Schema(description = DUPLICATE_REASON)
+            String duplicateReason) {}
+
+    static final String DUPLICATE_REASON =
+            "Issue #352: only an administrator (core.settings.manage) may add or rename a product to a"
+                    + " name another product of the same unit has, and then with a reason of at least 5 characters, stored on the product."
+                    + " Without it that is refused with 422 duplicate_product_name.";
+
+    @Schema(name = "RetailSimilarProduct")
+    record SimilarProduct(
+            UUID id,
+            String code,
+            String description,
+            String unit,
+            boolean active,
+
+            @Schema(
+                    description =
+                            "Letters changed, added or removed to turn one name into the other (0 is the same name in another unit)")
+            int distance,
+
+            @Schema(description = "True when the unit is the one asked about, so the same name is a duplicate")
+            boolean sameUnit) {}
+
+    @Schema(
+            name = "RetailSimilarProducts",
+            description =
+                    "Issue #352: products whose name is the same (exact, same unit: a save is refused) or close to the"
+                            + " description (similar: a warning only)")
+    record SimilarProducts(List<SimilarProduct> exact, List<SimilarProduct> similar) {}
 
     @Schema(name = "RetailPriceEditRequest", description = "At least one price; FR-RET-02")
     record PriceEditRequest(

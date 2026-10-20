@@ -86,7 +86,8 @@ export const adminWelcome: Tour = {
   // Version 7 adds the Group by step (issue #341): the sales lists open from the shop down to the items.
   // Version 8 adds the Branches step (issue #329): closing a branch and keeping its history.
   // Version 9 adds the Cash and change step (issue #346): the amount received and the change to give on a cash sale.
-  version: 9,
+  // Version 10 adds the two correction steps (issue #351): a wrong quantity on the stock list, and a restock entered wrongly.
+  version: 10,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -231,6 +232,26 @@ export const adminWelcome: Tour = {
       body: 'Open All sales, open the sale and tap Void this sale. Give the reason. The items go back into stock and the sale stops counting.',
     },
     {
+      id: 'correct-stock',
+      route: '/staff/retail/stock',
+      target: 'stock-list',
+      module: 'retail',
+      needs: STOCKTAKE,
+      optional: true,
+      title: 'Fix a wrong quantity',
+      body: 'On Stock, tap Correct on an item. Give the right quantity and the reason: an entry mistake or a miscount. The old figure stays in its history and does not count as shrinkage. If you may change items, you can fix the category there too.',
+    },
+    {
+      id: 'void-restock',
+      route: '/staff/retail/restock',
+      target: 'restock-past',
+      module: 'retail',
+      needs: [RESTOCK],
+      optional: true,
+      title: 'Fix a restock entered wrongly',
+      body: 'Open Past restocks, tap Correct this restock and give the reason. The stock, the books and the prices go back. The restock stays in the list as Voided. Then enter it again with the right quantity.',
+    },
+    {
       id: 'catalogue',
       route: '/staff/retail',
       target: 'retail-catalogue',
@@ -269,7 +290,8 @@ export const retailSales: Tour = {
   // Version 4 words that step for the grouped lists (issue #328): the sales sit under a day, or in Still owing.
   // Version 5 adds the Group by step (issue #341): the sales lists open from the shop down to the items.
   // Version 6 adds the Cash and change step (issue #346): the amount received and the change to give on a cash sale.
-  version: 6,
+  // Version 7 adds the Correct step on the stock list (issue #351): fix a wrong quantity or category where you see it.
+  version: 7,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -362,6 +384,16 @@ export const retailSales: Tour = {
       optional: true,
       title: 'Search the stock',
       body: 'Type a name or code. An item marked negative needs a check, so tell your manager.',
+    },
+    {
+      id: 'correct-stock',
+      route: '/staff/retail/stock',
+      target: 'stock-list',
+      module: 'retail',
+      needs: STOCKTAKE,
+      optional: true,
+      title: 'Fix a mistake',
+      body: 'Typed a wrong quantity? Tap Correct on the item. Give the right quantity and the reason. The old figure stays in its history.',
     },
     {
       id: 'restock',
@@ -462,12 +494,27 @@ export const salePage: Tour = {
 
 export const stockPage: Tour = {
   id: 'page-stock',
-  version: 1,
+  // Version 2 adds the Correct step (issue #351).
+  version: 2,
   title: 'This page: stock',
   audience: (me) => held(me, 'retail.stock.read'),
   autoStart: false,
   page: '/staff/retail/stock',
-  steps: retailSales.steps.filter((s) => s.id === 'stock-search' || s.id === 'restock-ask'),
+  steps: retailSales.steps.filter((s) => s.id === 'stock-search' || s.id === 'restock-ask' || s.id === 'correct-stock'),
+};
+
+// JUSTIFICATION-A3: a page tour for the new Past restocks page (issue #351), of the same shape as the page tours around it.
+export const restocksPage: Tour = {
+  id: 'page-restocks',
+  version: 1,
+  title: 'This page: past restocks',
+  audience: (me) => held(me, RESTOCK),
+  autoStart: false,
+  page: '/staff/retail/restocks',
+  steps: [
+    { id: 'restocks-filters', target: 'restocks-filters', module: 'retail', title: 'Find the restock', body: 'Choose the first and last day, or show only the voided ones. Every restock is kept, even a voided one.' },
+    { id: 'restocks-list', target: 'restocks-list', module: 'retail', title: 'Correct this restock', body: 'Tap Correct this restock, give the reason, then enter it again with the right quantity or unit. If less than its quantity is left, use Correct on the Stock page instead.' },
+  ],
 };
 
 // JUSTIFICATION-A3: two page tours of the same shape as stockPage, one per grouped list (issue #328); no existing tour covers these pages.
@@ -1295,7 +1342,7 @@ export const landedCostsPage: Tour = {
 };
 
 export const TOURS: readonly Tour[] = [
-  adminWelcome, retailSales, staffWelcome, salePage, stockPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
+  adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
   purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, ...CUSTOMER_TOURS,

@@ -97,6 +97,9 @@ class ProductImportService {
         }
 
         Set<String> existing = repo.productCodes();
+        // Issue #352: a name is kept once per unit, like a code. The keys are the database's own (bms_name_key).
+        Map<String, String> existingNames = repo.productNames();
+        Map<String, Integer> namesInFile = new HashMap<>();
         Map<String, UUID> categories = repo.categoryIdsByName();
         Map<String, UUID> units = repo.unitIdsByName();
         Set<String> offCategories = repo.inactiveCategoryNames();
@@ -186,6 +189,34 @@ class ProductImportService {
             String categoryKey = category.toLowerCase(Locale.ROOT);
             String unitKey = unit.toLowerCase(Locale.ROOT);
             String packKey = packUnit.toLowerCase(Locale.ROOT);
+            // JUSTIFICATION-A3: the two duplicate-name skips of issue #352 sit beside the existing duplicate-code
+            // skips, in this loop.
+            String nameKey = repo.nameKey(description.strip()) + CatalogueRepository.NAME_SEP + unitKey;
+            String sameName = existingNames.get(nameKey);
+            if (sameName != null) {
+                seen.remove(key);
+                skipped++;
+                report.add(new ImportRow(
+                        line,
+                        code,
+                        description.strip(),
+                        "skipped",
+                        "An item with this name exists already (code " + sameName
+                                + "). Open it in Items, or give this one another name or unit."));
+                continue;
+            }
+            Integer sameLine = namesInFile.putIfAbsent(nameKey, line);
+            if (sameLine != null) {
+                seen.remove(key);
+                skipped++;
+                report.add(new ImportRow(
+                        line,
+                        code,
+                        description.strip(),
+                        "skipped",
+                        "This name is repeated in the file (same as line " + sameLine + "); the first row is used."));
+                continue;
+            }
             String off = offCategories.contains(categoryKey)
                     ? "category \"" + category + "\" is switched off. Switch it on or use another category."
                     : offUnits.contains(unitKey)
@@ -262,6 +293,20 @@ class ProductImportService {
             int added,
             int skipped,
             UUID by) {
+        // Issue #352: the names are locked in a fixed order before any row is written, so a person adding the same name
+        // through the screen at this moment queues behind the import (or the import behind them) and sees it.
+        pending.stream().map(Pending::description).sorted().distinct().forEach(repo::lockName);
+        for (Pending row : pending) {
+            if (repo.sameName(row.description(), null).stream()
+                    .anyMatch(m -> m.unit().equalsIgnoreCase(row.unit()))) {
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "import_conflict",
+                        "Import conflict",
+                        "Another change added an item named " + row.description()
+                                + " while this file was being applied. Nothing was added. Run the check again and apply the file again.");
+            }
+        }
         Map<String, UUID> categoryIds = new HashMap<>(categories);
         Map<String, UUID> unitIds = new HashMap<>(units);
         for (Map.Entry<String, String> e : newCategories.entrySet()) {
@@ -300,7 +345,7 @@ class ProductImportService {
                     1,
                     null,
                     null);
-            repo.insert(product, by);
+            repo.insert(product, by, null);
             repo.insertHistory(
                     new PriceChange(
                             UUID.randomUUID(),

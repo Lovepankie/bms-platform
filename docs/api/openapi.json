@@ -1388,6 +1388,12 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "duplicate_reason" : {
+            "description" : "Issue #352: only an administrator (core.settings.manage) may add or rename a product to a name another product of the same unit has, and then with a reason of at least 5 characters, stored on the product. Without it that is refused with 422 duplicate_product_name.",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "sell_minor" : {
             "format" : "int64",
             "maximum" : 10000000000000,
@@ -10481,6 +10487,10 @@
           "note" : {
             "type" : "string"
           },
+          "partial" : {
+            "description" : "True when the caller's branch scope hid other branches this restock added stock to",
+            "type" : "boolean"
+          },
           "payment_method" : {
             "type" : "string"
           },
@@ -10491,6 +10501,10 @@
             "format" : "date",
             "type" : "string"
           },
+          "status" : {
+            "description" : "posted, or voided once corrected by a void (issue #351); a voided restock is never deleted",
+            "type" : "string"
+          },
           "supplier_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -10498,11 +10512,31 @@
           "total_minor" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "void_reason" : {
+            "type" : "string"
+          },
+          "voided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "voided_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "voided_on" : {
+            "description" : "The business date of the void, the day the cash book gives the cash back",
+            "format" : "date",
+            "type" : "string"
           }
         }
       },
       "RetailPurchaseLine" : {
         "properties" : {
+          "base_unit" : {
+            "description" : "The unit the item is usually kept in (issue #351), to tell a line entered in another unit",
+            "type" : "string"
+          },
           "code" : {
             "type" : "string"
           },
@@ -10964,6 +10998,16 @@
           }
         },
         "required" : [ "lines", "payment_method", "purchased_on" ]
+      },
+      "RetailPurchaseVoidRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
       },
       "RetailPurchasingSettings" : {
         "properties" : {
@@ -12544,6 +12588,52 @@
           }
         }
       },
+      "RetailSimilarProduct" : {
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "distance" : {
+            "description" : "Letters changed, added or removed to turn one name into the other (0 is the same name in another unit)",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "same_unit" : {
+            "description" : "True when the unit is the one asked about, so the same name is a duplicate",
+            "type" : "boolean"
+          },
+          "unit" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSimilarProducts" : {
+        "description" : "Issue #352: products whose name is the same (exact, same unit: a save is refused) or close to the description (similar: a warning only)",
+        "properties" : {
+          "exact" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSimilarProduct"
+            },
+            "type" : "array"
+          },
+          "similar" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSimilarProduct"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "RetailStatementBeforeSystemStart" : {
         "description" : "Imported credit sales. They were never posted to the ledger (issue #96), so the statement lists them apart and the ledger-supported closing balance leaves them out",
         "properties" : {
@@ -12666,6 +12756,86 @@
           }
         }
       },
+      "RetailStockCorrection" : {
+        "properties" : {
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "movement_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "new_qty" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "old_qty" : {
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reason_code" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailStockCorrectionRequest" : {
+        "description" : "Issue #351: the right quantity of an item at a branch, with why it was wrong",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "expected_qty" : {
+            "description" : "The quantity the form showed when it was opened; 409 stock_moved when it has changed since",
+            "example" : "12.5",
+            "type" : "string"
+          },
+          "new_qty" : {
+            "description" : "The quantity there should be, not the difference",
+            "example" : "12.5",
+            "type" : "string"
+          },
+          "note" : {
+            "maxLength" : 280,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reason_code" : {
+            "description" : "entry_mistake (a restock or sale was entered wrongly) or miscount",
+            "pattern" : "entry_mistake|miscount",
+            "type" : "string"
+          }
+        },
+        "required" : [ "branch_id", "expected_qty", "new_qty", "product_id", "reason_code" ]
+      },
       "RetailStockHealth" : {
         "properties" : {
           "cover" : {
@@ -12730,6 +12900,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "correction" : {
+            "$ref" : "#/components/schemas/RetailStockMovementCorrection"
+          },
           "historical" : {
             "type" : "boolean"
           },
@@ -12765,6 +12938,20 @@
             "description" : "Present only with retail.profit.read",
             "format" : "int64",
             "type" : "integer"
+          }
+        }
+      },
+      "RetailStockMovementCorrection" : {
+        "description" : "Present on a quantity correction (issue #351): why, and the quantity before and after",
+        "properties" : {
+          "new_qty" : {
+            "type" : "string"
+          },
+          "old_qty" : {
+            "type" : "string"
+          },
+          "reason_code" : {
+            "type" : "string"
           }
         }
       },
@@ -16886,6 +17073,12 @@
           "description" : {
             "maxLength" : 300,
             "minLength" : 1,
+            "type" : "string"
+          },
+          "duplicate_reason" : {
+            "description" : "Issue #352: only an administrator (core.settings.manage) may add or rename a product to a name another product of the same unit has, and then with a reason of at least 5 characters, stored on the product. Without it that is refused with 422 duplicate_product_name.",
+            "maxLength" : 300,
+            "minLength" : 0,
             "type" : "string"
           },
           "unit_id" : {
@@ -26923,6 +27116,49 @@
         "tags" : [ "retail-catalogue" ]
       }
     },
+    "/api/v1/retail/products/similar" : {
+      "get" : {
+        "operationId" : "findSimilarRetailProducts",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "description",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "unit_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "exclude_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSimilarProducts"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Products with this name or a close one, before saving a new or renamed item (issue #352)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
     "/api/v1/retail/products/{product_id}" : {
       "get" : {
         "operationId" : "getRetailProduct",
@@ -27483,6 +27719,21 @@
           }
         }, {
           "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "newest_first",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
           "name" : "limit",
           "required" : false,
           "schema" : {
@@ -27545,6 +27796,79 @@
           }
         },
         "summary" : "Record a restock: prices, history, movements and journals in one transaction (FR-RET-06); M",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/purchases/{purchase_id}" : {
+      "get" : {
+        "operationId" : "getRetailPurchase",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "purchase_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchase"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One restock with its lines and, when voided, the void (issue #351)",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/purchases/{purchase_id}/void" : {
+      "post" : {
+        "operationId" : "voidRetailPurchase",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "purchase_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailPurchaseVoidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchase"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Void a restock as a whole by reversal, once; refused when its stock has moved (issue #351); M",
         "tags" : [ "retail-purchasing" ]
       }
     },
@@ -29798,6 +30122,43 @@
         "tags" : [ "retail-stock" ]
       }
     },
+    "/api/v1/retail/stock/corrections" : {
+      "post" : {
+        "operationId" : "correctRetailStockQuantity",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailStockCorrectionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailStockCorrection"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Correct the quantity of an item at a branch with a reason; an adjustment that is not shrinkage (issue #351); M",
+        "tags" : [ "retail-stock" ]
+      }
+    },
     "/api/v1/retail/stock/movements" : {
       "get" : {
         "operationId" : "listRetailStockMovements",
@@ -29835,6 +30196,14 @@
           "schema" : {
             "format" : "date",
             "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "newest_first",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
           }
         }, {
           "in" : "query",

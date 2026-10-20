@@ -3674,6 +3674,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/products/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Products with this name or a close one, before saving a new or renamed item (issue #352) */
+        get: operations["findSimilarRetailProducts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/products/{product_id}": {
         parameters: {
             query?: never;
@@ -3843,6 +3860,40 @@ export interface paths {
         put?: never;
         /** Record a restock: prices, history, movements and journals in one transaction (FR-RET-06); M */
         post: operations["createRetailPurchase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/purchases/{purchase_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One restock with its lines and, when voided, the void (issue #351) */
+        get: operations["getRetailPurchase"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/purchases/{purchase_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a restock as a whole by reversal, once; refused when its stock has moved (issue #351); M */
+        post: operations["voidRetailPurchase"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4514,6 +4565,23 @@ export interface paths {
         get: operations["listRetailStockAllBranches"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/stock/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Correct the quantity of an item at a branch with a reason; an adjustment that is not shrinkage (issue #351); M */
+        post: operations["correctRetailStockQuantity"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5856,6 +5924,8 @@ export interface components {
             /** Format: int64 */
             cost_minor: number;
             description: string;
+            /** @description Issue #352: only an administrator (core.settings.manage) may add or rename a product to a name another product of the same unit has, and then with a reason of at least 5 characters, stored on the product. Without it that is refused with 422 duplicate_product_name. */
+            duplicate_reason?: string;
             /** Format: int64 */
             sell_minor: number;
             /** Format: uuid */
@@ -10080,16 +10150,32 @@ export interface components {
             id?: string;
             lines?: components["schemas"]["RetailPurchaseLine"][];
             note?: string;
+            /** @description True when the caller's branch scope hid other branches this restock added stock to */
+            partial?: boolean;
             payment_method?: string;
             purchase_no?: string;
             /** Format: date */
             purchased_on?: string;
+            /** @description posted, or voided once corrected by a void (issue #351); a voided restock is never deleted */
+            status?: string;
             /** Format: uuid */
             supplier_id?: string;
             /** Format: int64 */
             total_minor?: number;
+            void_reason?: string;
+            /** Format: date-time */
+            voided_at?: string;
+            /** Format: uuid */
+            voided_by?: string;
+            /**
+             * Format: date
+             * @description The business date of the void, the day the cash book gives the cash back
+             */
+            voided_on?: string;
         };
         RetailPurchaseLine: {
+            /** @description The unit the item is usually kept in (issue #351), to tell a line entered in another unit */
+            base_unit?: string;
             code?: string;
             /**
              * Format: int64
@@ -10330,6 +10416,9 @@ export interface components {
              * @description Required for a credit purchase
              */
             supplier_id?: string;
+        };
+        RetailPurchaseVoidRequest: {
+            reason: string;
         };
         RetailPurchasingSettings: {
             /**
@@ -11180,6 +11269,26 @@ export interface components {
             /** Format: int32 */
             used_reports?: number;
         };
+        RetailSimilarProduct: {
+            active?: boolean;
+            code?: string;
+            description?: string;
+            /**
+             * Format: int32
+             * @description Letters changed, added or removed to turn one name into the other (0 is the same name in another unit)
+             */
+            distance?: number;
+            /** Format: uuid */
+            id?: string;
+            /** @description True when the unit is the one asked about, so the same name is a duplicate */
+            same_unit?: boolean;
+            unit?: string;
+        };
+        /** @description Issue #352: products whose name is the same (exact, same unit: a save is refused) or close to the description (similar: a warning only) */
+        RetailSimilarProducts: {
+            exact?: components["schemas"]["RetailSimilarProduct"][];
+            similar?: components["schemas"]["RetailSimilarProduct"][];
+        };
         /** @description Imported credit sales. They were never posted to the ledger (issue #96), so the statement lists them apart and the ledger-supported closing balance leaves them out */
         RetailStatementBeforeSystemStart: {
             sales?: components["schemas"]["RetailStatementHistoricalSale"][];
@@ -11231,6 +11340,46 @@ export interface components {
             next_cursor?: string;
             totals?: components["schemas"]["RetailLocationTotals"];
         };
+        RetailStockCorrection: {
+            /** Format: date-time */
+            at?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: uuid */
+            by?: string;
+            code?: string;
+            description?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            movement_id?: string;
+            new_qty?: string;
+            note?: string;
+            old_qty?: string;
+            /** Format: uuid */
+            product_id?: string;
+            reason_code?: string;
+        };
+        /** @description Issue #351: the right quantity of an item at a branch, with why it was wrong */
+        RetailStockCorrectionRequest: {
+            /** Format: uuid */
+            branch_id: string;
+            /**
+             * @description The quantity the form showed when it was opened; 409 stock_moved when it has changed since
+             * @example 12.5
+             */
+            expected_qty: string;
+            /**
+             * @description The quantity there should be, not the difference
+             * @example 12.5
+             */
+            new_qty: string;
+            note?: string;
+            /** Format: uuid */
+            product_id: string;
+            /** @description entry_mistake (a restock or sale was entered wrongly) or miscount */
+            reason_code: string;
+        };
         RetailStockHealth: {
             cover?: components["schemas"]["RetailCoverList"];
             /** Format: int32 */
@@ -11259,6 +11408,7 @@ export interface components {
             branch_id?: string;
             /** Format: uuid */
             by?: string;
+            correction?: components["schemas"]["RetailStockMovementCorrection"];
             historical?: boolean;
             /** Format: uuid */
             id?: string;
@@ -11277,6 +11427,12 @@ export interface components {
              * @description Present only with retail.profit.read
              */
             unit_cost_minor?: number;
+        };
+        /** @description Present on a quantity correction (issue #351): why, and the quantity before and after */
+        RetailStockMovementCorrection: {
+            new_qty?: string;
+            old_qty?: string;
+            reason_code?: string;
         };
         RetailStockMovementPage: {
             items?: components["schemas"]["RetailStockMovement"][];
@@ -13219,6 +13375,8 @@ export interface components {
             category_id?: string;
             code?: string;
             description?: string;
+            /** @description Issue #352: only an administrator (core.settings.manage) may add or rename a product to a name another product of the same unit has, and then with a reason of at least 5 characters, stored on the product. Without it that is refused with 422 duplicate_product_name. */
+            duplicate_reason?: string;
             /** Format: uuid */
             unit_id?: string;
         };
@@ -19871,6 +20029,30 @@ export interface operations {
             };
         };
     };
+    findSimilarRetailProducts: {
+        parameters: {
+            query: {
+                description: string;
+                unit_id?: string;
+                exclude_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSimilarProducts"];
+                };
+            };
+        };
+    };
     getRetailProduct: {
         parameters: {
             query?: never;
@@ -20211,6 +20393,8 @@ export interface operations {
                 from?: string;
                 to?: string;
                 supplier_id?: string;
+                status?: string;
+                newest_first?: boolean;
                 limit?: number;
                 cursor?: string;
             };
@@ -20243,6 +20427,56 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RetailPurchaseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchase"];
+                };
+            };
+        };
+    };
+    getRetailPurchase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                purchase_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchase"];
+                };
+            };
+        };
+    };
+    voidRetailPurchase: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                purchase_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPurchaseVoidRequest"];
             };
         };
         responses: {
@@ -21446,6 +21680,32 @@ export interface operations {
             };
         };
     };
+    correctRetailStockQuantity: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailStockCorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStockCorrection"];
+                };
+            };
+        };
+    };
     listRetailStockMovements: {
         parameters: {
             query?: {
@@ -21453,6 +21713,7 @@ export interface operations {
                 product_id?: string;
                 from?: string;
                 to?: string;
+                newest_first?: boolean;
                 limit?: number;
                 cursor?: string;
             };

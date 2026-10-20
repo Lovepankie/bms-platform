@@ -319,6 +319,7 @@ class RetailUnitsIT extends IntegrationTest {
                 ADMIN,
                 "*",
                 Map.of("If-Match", unitOff.getHeaders().getETag()));
+        // The pen has stock, so its unit is never converted through the API (issue #351, ADR-044) ...
         ResponseEntity<JsonNode> toCarton = api.call(
                 HttpMethod.PATCH,
                 "/products/" + pen,
@@ -328,7 +329,14 @@ class RetailUnitsIT extends IntegrationTest {
                 Map.of(
                         "If-Match",
                         api.get("/products/" + pen, ADMIN).getHeaders().getETag()));
-        assertThat(toCarton.getStatusCode()).as("%s", toCarton.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(toCarton.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(toCarton)).isEqualTo("unit_in_use_by_stock");
+        // ... so the base unit is set by the owner here, to keep testing the pack rule that follows a changed base
+        // unit.
+        TestDatabase.owner()
+                .sql("UPDATE retail_products SET unit_id = ?, version = version + 1 WHERE id = ?")
+                .params(carton, pen)
+                .update();
         ResponseEntity<JsonNode> nowTheBase = api.call(
                 HttpMethod.PATCH,
                 "/products/" + pen + "/units/" + carton,

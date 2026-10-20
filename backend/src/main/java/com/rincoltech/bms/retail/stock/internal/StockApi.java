@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -124,10 +125,65 @@ final class StockApi {
             UUID reversesMovementId,
             boolean historical,
             String note,
-            UUID by) {}
+            UUID by,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) MovementCorrection correction) {}
+
+    @Schema(
+            name = "RetailStockMovementCorrection",
+            description = "Present on a quantity correction (issue #351): why, and the quantity before and after")
+    record MovementCorrection(String reasonCode, String oldQty, String newQty) {}
 
     @Schema(name = "RetailStockMovementPage")
     record MovementPage(List<MovementRow> items, String nextCursor) {}
+
+    @Schema(
+            name = "RetailStockCorrectionRequest",
+            description = "Issue #351: the right quantity of an item at a branch, with why it was wrong")
+    record CorrectionRequest(
+            @NotNull UUID branchId,
+            @NotNull UUID productId,
+
+            @NotNull
+            @PositiveOrZero
+            @Digits(integer = 11, fraction = 3)
+            @Schema(
+                    type = "string",
+                    example = "12.500",
+                    description = "The quantity there should be, not the difference")
+            BigDecimal newQty,
+
+            @NotNull
+            @PositiveOrZero
+            @Digits(integer = 11, fraction = 3)
+            @Schema(
+                    type = "string",
+                    example = "12.5",
+                    description =
+                            "The quantity the form showed when it was opened; 409 stock_moved when it has changed since")
+            BigDecimal expectedQty,
+
+            @NotNull
+            @Pattern(regexp = "entry_mistake|miscount")
+            @Schema(description = "entry_mistake (a restock or sale was entered wrongly) or miscount")
+            String reasonCode,
+
+            @Size(max = 280) String note) {}
+
+    @Schema(name = "RetailStockCorrection")
+    record Correction(
+            UUID id,
+            UUID branchId,
+            UUID productId,
+            String code,
+            String description,
+            String oldQty,
+            String newQty,
+            String reasonCode,
+            String note,
+            UUID movementId,
+            Instant at,
+            UUID by) {}
 
     @Schema(name = "RetailStocktakeLineRequest")
     record StocktakeLineRequest(

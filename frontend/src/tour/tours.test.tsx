@@ -31,6 +31,8 @@ import { RetailNav } from '../areas/staff/retail/nav';
 import { RecordSale } from '../areas/staff/retail/sale';
 import { InTransitPage } from '../areas/staff/retail/in-transit';
 import { RetailSettings } from '../areas/staff/retail/settings';
+import { RestockPage } from '../areas/staff/retail/restock';
+import { RestocksPage } from '../areas/staff/retail/restocks';
 import { StockPage } from '../areas/staff/retail/stock';
 import { AllSales, CreditSales } from '../areas/staff/retail/sales';
 import { StockByLocationPage } from '../areas/staff/retail/stock-by-location';
@@ -92,6 +94,10 @@ function screen(path: string | undefined): ReactElement {
       return <RecordSale />;
     case '/staff/retail/stock':
       return <StockPage />;
+    case '/staff/retail/restock':
+      return <RestockPage />;
+    case '/staff/retail/restocks':
+      return <RestocksPage />;
     case '/staff/retail/sales':
       return <AllSales />;
     case '/staff/retail/credit-sales':
@@ -264,6 +270,7 @@ const AUDIENCE: Record<string, Me[]> = {
   'staff-welcome': [CASHIER, OFFICER],
   'page-sale': [SELLER],
   'page-stock': [SELLER],
+  'page-restocks': [ADMIN, MANAGER],
   'page-sales': [SELLER],
   'page-credit-sales': [SELLER],
   'page-setup': [ADMIN],

@@ -14,6 +14,7 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceEditReques
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceHistory;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Product;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ProductPage;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.SimilarProducts;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Unit;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitList;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitRequest;
@@ -145,6 +146,18 @@ class CatalogueController {
             @RequestParam(name = "dry_run", required = false, defaultValue = "true") boolean dryRun,
             @Valid @RequestBody ImportRequest request) {
         return importer.run(request.csv(), dryRun);
+    }
+
+    @GetMapping("/products/similar")
+    @RequiresPermission("retail.catalogue.manage")
+    @Operation(
+            summary = "Products with this name or a close one, before saving a new or renamed item (issue #352)",
+            operationId = "findSimilarRetailProducts")
+    SimilarProducts similar(
+            @RequestParam(name = "description") String description,
+            @RequestParam(name = "unit_id", required = false) UUID unitId,
+            @RequestParam(name = "exclude_id", required = false) UUID excludeId) {
+        return service.similar(description, unitId, excludeId);
     }
 
     @GetMapping("/products/{product_id}")

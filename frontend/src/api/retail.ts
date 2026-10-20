@@ -15,6 +15,11 @@ export type Product = S['RetailProduct'];
 /** A pack size of an item (units of measure, ADR-033): `factor` base units in one pack of `unit`, three places ("12.000"). */
 export type Pack = S['RetailPack'];
 export type StockRow = S['RetailStockRow'];
+/** A quantity corrected on the stock list (issue #351): the old and new quantity, why, who and when. */
+export type StockCorrection = S['RetailStockCorrection'];
+export type StockCorrectionRequest = S['RetailStockCorrectionRequest'];
+/** One line of a product's stock history; a correction carries `correction` (why, and the quantity before and after). */
+export type StockMovement = S['RetailStockMovement'];
 export type AllBranchesRow = S['RetailAllBranchesRow'];
 export type StockBranch = S['RetailStockBranch'];
 export type AllBranchesStock = { branches: StockBranch[]; items: AllBranchesRow[]; closed_branches?: number };
@@ -30,6 +35,9 @@ export type PriceChange = S['RetailPriceChange'];
 export type NewProduct = S['CreateRetailProductRequest'];
 export type ProductChange = S['UpdateRetailProductRequest'];
 export type PriceEdit = S['RetailPriceEditRequest'];
+/** A product with this name or a close one (issue #352): `exact` is the same name in the same unit, which a save refuses. */
+export type SimilarProducts = S['RetailSimilarProducts'];
+export type SimilarProduct = S['RetailSimilarProduct'];
 export type ImportResult = S['RetailProductImportResult'];
 export type ImportRow = S['RetailProductImportRow'];
 export type Customer = S['RetailCustomer'];
@@ -145,6 +153,7 @@ export type ResolvedLine = S['RetailPriceResolveLine'];
 export type ResolveRequest = S['RetailPriceResolveRequest'];
 export type PurchaseRequest = S['RetailPurchaseRequest'];
 export type Purchase = S['RetailPurchase'];
+export type PurchasePage = S['RetailPurchasePage'];
 /** `unit*` are present only for a line entered in a pack; `cost_minor` and `qty_total` are always per base unit. */
 export type PurchaseLine = S['RetailPurchaseLine'];
 export type UsageRequest = S['RetailUsageRequest'];
@@ -295,6 +304,8 @@ export interface RetailApi {
   /** Catalogue management (#146): one page of products, with the filters of the Products screen. */
   listCatalogue(q: { query?: string; categoryId?: string; active?: boolean; cursor?: string; signal?: AbortSignal }): Promise<ProductPage>;
   getProduct(id: string): Promise<Product>;
+  /** Before saving a new or renamed item: the products with this name or a close one (issue #352). */
+  similarProducts(q: { description: string; unitId?: string; excludeId?: string }): Promise<SimilarProducts>;
   createProduct(body: NewProduct): Promise<Product>;
   /** Non-price fields, under If-Match with the version read. */
   updateProduct(id: string, version: number, body: ProductChange): Promise<Product>;
@@ -313,6 +324,10 @@ export interface RetailApi {
   listUnits(): Promise<Unit[]>;
   createUnit(name: string): Promise<Unit>;
   updateUnit(id: string, version: number, body: { name?: string; active?: boolean }): Promise<Unit>;
+  /** Corrects the quantity of an item at a branch (retail.stocktake.commit there); takes the Idempotency-Key of its form (issue #351). */
+  correctStock(body: StockCorrectionRequest, idempotencyKey: string): Promise<StockCorrection>;
+  /** The stock history of an item at a branch, newest first (issue #351). */
+  stockHistory(q: { productId: string; branchId: string; cursor?: string; limit?: number; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
   listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel; signal?: AbortSignal }): Promise<StockRow[]>;
   /** One page of sales, newest first, narrowed by the filters (#145). */
   listSales(q: SalesQuery): Promise<SalePage>;
@@ -441,6 +456,11 @@ export interface RetailApi {
   updateCustomer(id: string, version: number, body: { name?: string; contact?: string }): Promise<Customer>;
   createSale(body: SaleRequest, idempotencyKey: string): Promise<Sale>;
   createPurchase(body: PurchaseRequest, idempotencyKey: string): Promise<Purchase>;
+  /** The restocks (retail.purchase.create), a voided one included and marked; newest first with the filters of the past restocks screen (issue #351). */
+  listPurchases(q: { from?: string; to?: string; status?: 'posted' | 'voided'; cursor?: string; limit?: number; signal?: AbortSignal }): Promise<PurchasePage>;
+  getPurchase(id: string): Promise<Purchase>;
+  /** Voids a restock by reversal, once (retail.purchase.create at every branch it touched); takes the Idempotency-Key of its form. */
+  voidPurchase(id: string, reason: string, idempotencyKey: string): Promise<Purchase>;
   createUsage(body: UsageRequest, idempotencyKey: string): Promise<Usage>;
   createStocktake(body: StocktakeRequest): Promise<Stocktake>;
   commitStocktake(id: string): Promise<Stocktake>;
@@ -579,6 +599,12 @@ const realRetail: RetailApi = {
     return unwrap(await api.GET('/api/v1/retail/products/{product_id}', { params: { path: { product_id: id } } }));
   },
 
+  async similarProducts({ description, unitId, excludeId }) {
+    return unwrap(
+      await api.GET('/api/v1/retail/products/similar', { params: { query: { description, ...(unitId ? { unit_id: unitId } : {}), ...(excludeId ? { exclude_id: excludeId } : {}) } } }),
+    );
+  },
+
   async createProduct(body) {
     return unwrap(await api.POST('/api/v1/retail/products', { body }));
   },
@@ -638,6 +664,20 @@ const realRetail: RetailApi = {
 
   async updateUnit(id, version, body) {
     return unwrap(await api.PATCH('/api/v1/retail/units/{unit_id}', { params: { path: { unit_id: id }, header: { 'If-Match': `"${version}"` } }, body }));
+  },
+
+  async correctStock(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/stock/corrections', { params: { header: { 'Idempotency-Key': key } }, body }));
+  },
+
+  async stockHistory({ productId, branchId, cursor, limit, signal }) {
+    const page = unwrap(
+      await api.GET('/api/v1/retail/stock/movements', {
+        params: { query: { product_id: productId, branch_id: [branchId], newest_first: true, ...(cursor ? { cursor } : {}), ...(limit ? { limit } : {}) } },
+        signal,
+      }),
+    );
+    return { items: page.items ?? [], ...(page.next_cursor ? { next_cursor: page.next_cursor } : {}) };
   },
 
   async listStock({ branchId, query, categoryId, negativeOnly, level, signal }) {
@@ -1043,6 +1083,23 @@ const realRetail: RetailApi = {
 
   async createPurchase(body, key) {
     return unwrap(await api.POST('/api/v1/retail/purchases', { body, params: { header: { 'Idempotency-Key': key } } }));
+  },
+
+  async listPurchases({ from, to, status, cursor, limit, signal }) {
+    return unwrap(
+      await api.GET('/api/v1/retail/purchases', {
+        params: { query: { newest_first: true, ...(from ? { from } : {}), ...(to ? { to } : {}), ...(status ? { status } : {}), ...(cursor ? { cursor } : {}), ...(limit ? { limit } : {}) } },
+        signal,
+      }),
+    );
+  },
+
+  async getPurchase(id) {
+    return unwrap(await api.GET('/api/v1/retail/purchases/{purchase_id}', { params: { path: { purchase_id: id } } }));
+  },
+
+  async voidPurchase(id, reason, key) {
+    return unwrap(await api.POST('/api/v1/retail/purchases/{purchase_id}/void', { params: { path: { purchase_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
   },
 
   async createUsage(body, key) {

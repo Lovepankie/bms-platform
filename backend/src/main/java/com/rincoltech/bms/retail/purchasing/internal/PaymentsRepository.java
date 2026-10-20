@@ -331,6 +331,7 @@ class PaymentsRepository {
                           FROM retail_purchases pu
                           JOIN retail_suppliers s ON s.tenant_id = pu.tenant_id AND s.id = pu.supplier_id
                          WHERE pu.payment_method = 'credit' AND NOT pu.historical
+                           AND NOT EXISTS (SELECT 1 FROM retail_purchase_voids v WHERE v.tenant_id = pu.tenant_id AND v.purchase_id = pu.id)
                            AND (CAST(:supplier AS uuid) IS NULL OR pu.supplier_id = CAST(:supplier AS uuid))
                            AND pu.total_minor > %s
                          ORDER BY pu.id

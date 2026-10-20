@@ -136,7 +136,12 @@ final class PurchasingApi {
             String unitQtyTotal,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = "Cost per unit as entered")
-            Long unitCostMinor) {}
+            Long unitCostMinor,
+
+            @Schema(
+                    description =
+                            "The unit the item is usually kept in (issue #351), to tell a line entered in another unit")
+            String baseUnit) {}
 
     @Schema(name = "RetailPurchase")
     record Purchase(
@@ -150,7 +155,86 @@ final class PurchasingApi {
             String note,
             List<PurchaseLine> lines,
             Instant createdAt,
-            UUID createdBy) {}
+            UUID createdBy,
+
+            @Schema(
+                    description =
+                            "posted, or voided once corrected by a void (issue #351); a voided restock is never deleted")
+            String status,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) Instant voidedAt,
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID voidedBy,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The business date of the void, the day the cash book gives the cash back")
+            LocalDate voidedOn,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) String voidReason,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "True when the caller's branch scope hid other branches this restock added stock to")
+            Boolean partial) {
+
+        // JUSTIFICATION-A3: a restock gained the void fields of issue #351; the short constructor keeps the three
+        // existing callers as they are.
+        /** A restock that stands: the shape every read had before voids. */
+        Purchase(
+                UUID id,
+                String purchaseNo,
+                UUID supplierId,
+                LocalDate purchasedOn,
+                String paymentMethod,
+                String currency,
+                long totalMinor,
+                String note,
+                List<PurchaseLine> lines,
+                Instant createdAt,
+                UUID createdBy) {
+            this(
+                    id,
+                    purchaseNo,
+                    supplierId,
+                    purchasedOn,
+                    paymentMethod,
+                    currency,
+                    totalMinor,
+                    note,
+                    lines,
+                    createdAt,
+                    createdBy,
+                    "posted",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+        }
+
+        Purchase withLinesAndTotal(List<PurchaseLine> newLines, long newTotal, boolean hidden) {
+            return new Purchase(
+                    id,
+                    purchaseNo,
+                    supplierId,
+                    purchasedOn,
+                    paymentMethod,
+                    currency,
+                    newTotal,
+                    note,
+                    newLines,
+                    createdAt,
+                    createdBy,
+                    status,
+                    voidedAt,
+                    voidedBy,
+                    voidedOn,
+                    voidReason,
+                    hidden ? Boolean.TRUE : null);
+        }
+    }
+
+    @Schema(name = "RetailPurchaseVoidRequest")
+    record VoidPurchaseRequest(
+            @NotBlank @Size(min = 5, max = 300) String reason) {}
 
     @Schema(name = "RetailPurchasePage")
     record PurchasePage(List<Purchase> items, String nextCursor) {}

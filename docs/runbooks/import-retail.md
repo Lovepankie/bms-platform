@@ -130,6 +130,12 @@ balances checksum: rows=60 total_qty=2210.500 source_sha256=... derived_sha256=.
 
 - **read, written, existing, skipped.** `existing` is what the tenant already had or an earlier
   run imported. Every skipped row is an anomaly line with its file and line number.
+- **The same name twice (issue #352).** A product name is kept once per unit in the app. The import cannot skip such a
+  row, because the history refers to every code, so it keeps both products and reports an anomaly, for example
+  `products.jsonl:9: product TP-009 has the same name as product TP-002 in the same unit; both were kept, check whether they are one item`.
+  Look at each pair: if they are one item, move the history to one code in the export and run again; if they are different
+  items (two brands with one name), give them different names in the export. The app refuses to add such a pair by hand
+  unless an administrator gives a reason. The CSV item import (Catalogue, Import items) skips a repeated name instead and says so in its report.
 - **Anomalies.** Fix the export for each skipped row that matters (an unknown product code usually
   means the product master is missing a product) and run the dry run again. Rows reported but not
   skipped (a category or supplier not in its file, a credit buyer not in the list) are informational.

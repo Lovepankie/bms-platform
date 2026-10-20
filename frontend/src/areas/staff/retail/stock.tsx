@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type AllBranchesStock, type StockLevel, type StockRow } from '../../../api/retail';
@@ -10,6 +10,8 @@ import { GroupControls, GroupedBodies, GroupedCards, sameUnitQty, useCategoryGro
 import { lineTotalMinor, milliOf, showQty } from './maths';
 import { EmptyState, SkeletonList } from '../../../components/states';
 import { BranchRequired, CategoryLabel, Gate, NoStockHere, Problem, money, useBranchView, useIsPhone, useProfitAccess } from './ui';
+import { CorrectItem, mayCorrect } from './stock-correct';
+import { useStaff } from '../context';
 import { needsOf } from './permissions';
 
 // Stock per branch (FR-RET-03): balances with a negative flag and a search box. The cost column
@@ -19,29 +21,46 @@ import { needsOf } from './permissions';
 /** Search and filters of a stock list, so its groups start again when they change (category-groups.tsx). */
 type Narrowing = { searching?: boolean; filterKey?: string; pending?: boolean };
 
+/** Set by the stock page for one branch when the session may correct something there: each row then offers Correct (issue #351). */
+type Correctable = { branchId: string };
+
 /** A category group's subtotal: its quantity when the items share a unit, and what it holds at the selling price. */
 function stockSubtotal(rows: { qty?: string; unit?: string; sell_minor?: number }[]): string {
   const value = rows.reduce((sum, r) => sum + lineTotalMinor(r.sell_minor ?? 0, milliOf(r.qty ?? '0')), 0);
   return [sameUnitQty(rows), `${money(value)} at price`].filter(Boolean).join(', ');
 }
 
-export function StockTable({ rows, showCost, searching = false, filterKey = '', pending = false }: { rows: StockRow[]; showCost: boolean } & Narrowing) {
+export function StockTable({ rows, showCost, searching = false, filterKey = '', pending = false, correctable }: { rows: StockRow[]; showCost: boolean; correctable?: Correctable } & Narrowing) {
   // On a phone the category sits under the item's name, so the table keeps room for the quantity and price.
   const phone = useIsPhone();
+  const [corrected, setCorrected] = useState<string | null>(null);
   const g = useCategoryGroups({ screen: 'stock', items: rows, categoryOf: (r) => r.category, subtotalOf: stockSubtotal, resetKey: filterKey, searching, pending });
   if (rows.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
   const showCategory = !g.active && phone;
+  const columns = 3 + (!phone && !g.active ? 1 : 0) + (showCost ? 1 : 0);
   const row = (r: StockRow) => (
-    <tr key={r.product_id}>
-      <td>{r.description}{showCategory && r.category && <><br /><CategoryLabel category={r.category} /></>}</td>
-      {!phone && !g.active && <td>{r.category}</td>}
-      <td className="num">
-        {showQty(r.qty ?? '0')} {r.unit}
-        {r.negative && <div className="rt-flag">Negative</div>}
-      </td>
-      {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
-      <td className="num">{money(r.sell_minor ?? 0)}</td>
-    </tr>
+    <Fragment key={r.product_id}>
+      <tr>
+        <td>
+          {r.description}{showCategory && r.category && <><br /><CategoryLabel category={r.category} /></>}
+          {correctable && (
+            <div>
+              <button type="button" className="btn-sm" aria-expanded={corrected === r.product_id} aria-label={`Correct ${r.description}`} onClick={() => setCorrected(corrected === r.product_id ? null : (r.product_id ?? null))}>Correct</button>
+            </div>
+          )}
+        </td>
+        {!phone && !g.active && <td>{r.category}</td>}
+        <td className="num">
+          {showQty(r.qty ?? '0')} {r.unit}
+          {r.negative && <div className="rt-flag">Negative</div>}
+        </td>
+        {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
+        <td className="num">{money(r.sell_minor ?? 0)}</td>
+      </tr>
+      {correctable && corrected === r.product_id && (
+        <tr><td colSpan={columns}><CorrectItem row={r} branchId={correctable.branchId} onClose={() => setCorrected(null)} /></td></tr>
+      )}
+    </Fragment>
   );
   return (
     <>
@@ -179,6 +198,7 @@ export function StockLevelFilter({ level, onChange }: { level: StockLevel | ''; 
 }
 
 export function StockPage() {
+  const { me } = useStaff();
   const { all, branchId, branchName: name } = useBranchView();
   const canProfit = useProfitAccess();
   const phone = useIsPhone();
@@ -237,10 +257,12 @@ export function StockPage() {
       {result.isPending && (all || branchId !== null) && <SkeletonList label="Loading stock" />}
       <Problem error={result.error} />
       {shown === 0 && query && <NoResults term={query} onClear={search.clear} noun="items" />}
+      <div data-tour="stock-list">
       <SearchResults fetching={finding}>
-        {!all && one.data && <StockTable rows={one.data} showCost={canProfit} {...narrowing} />}
+        {!all && one.data && <StockTable rows={one.data} showCost={canProfit} correctable={mayCorrect(me, branchId) && branchId !== null ? { branchId } : undefined} {...narrowing} />}
         {all && many.data && (phone ? <AllBranchesList data={many.data} showCost={canProfit} {...narrowing} /> : <AllBranchesTable data={many.data} showCost={canProfit} {...narrowing} />)}
       </SearchResults>
+      </div>
     </Gate>
   );
 }

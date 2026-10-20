@@ -10,6 +10,7 @@ import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
+import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.PackUnit;
@@ -23,6 +24,7 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.Supplier;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierList;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.UpdateSupplierRequest;
+import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.VoidPurchaseRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingRepository.NewLine;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
@@ -32,6 +34,7 @@ import com.rincoltech.bms.retail.stock.RetailBranchContext;
 import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.Movement;
+import com.rincoltech.bms.retail.stock.StockLedger.Recorded;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -376,7 +379,18 @@ class PurchasingService {
     }
 
     @Transactional(readOnly = true)
-    PurchasePage list(LocalDate from, LocalDate to, UUID supplierId, Integer limit, String cursor) {
+    PurchasePage list(
+            LocalDate from,
+            LocalDate to,
+            UUID supplierId,
+            String status,
+            boolean newestFirst,
+            Integer limit,
+            String cursor) {
+        if (status != null && !status.equals("posted") && !status.equals("voided")) {
+            throw ApiException.validation(
+                    List.of(new FieldProblem("status", "invalid", "status is posted or voided.")));
+        }
         List<UUID> filter = CurrentPrincipal.require().branchFilter(PERMISSION, null);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         Instant afterCreated = null;
@@ -386,7 +400,8 @@ class PurchasingService {
             afterCreated = after.at();
             afterId = after.id();
         }
-        List<Purchase> rows = repo.page(filter, from, to, supplierId, afterCreated, afterId, size + 1);
+        List<Purchase> rows =
+                repo.page(filter, from, to, supplierId, status, newestFirst, afterCreated, afterId, size + 1);
         boolean more = rows.size() > size;
         List<Purchase> items = more ? rows.subList(0, size) : rows;
         String next = more
@@ -394,6 +409,136 @@ class PurchasingService {
                         items.getLast().createdAt() + "|" + items.getLast().id())
                 : null;
         return new PurchasePage(List.copyOf(items), next);
+    }
+
+    /** One restock with the quantities of the branches the caller may see; absent when it added stock to none of them. */
+    @Transactional(readOnly = true)
+    Purchase get(UUID id) {
+        List<UUID> filter = CurrentPrincipal.require().branchFilter(PERMISSION, null);
+        if (filter != null && filter.isEmpty()) {
+            throw ApiException.notFound();
+        }
+        return repo.find(id, filter).orElseThrow(ApiException::notFound);
+    }
+
+    // ---- Void a restock (issue #351, ADR-044) -----------------------------------------------
+
+    static final int MIN_REASON = 5;
+    static final String PURCHASE_VOID = "retail.purchase_void";
+
+    @Transactional
+    Outcome<Purchase> voidPurchase(String idempotencyKey, UUID id, VoidPurchaseRequest r) {
+        return idempotency.once(
+                idempotencyKey, "POST", PATH + "/" + id + "/void", r, Purchase.class, () -> voidNow(id, r));
+    }
+
+    /**
+     * Undoes a restock as a whole, once, in one transaction: the stock it added is taken out again (refused when some of it
+     * was sold, used or moved since), its journal entries are reversed today, the product prices it set go back while it is
+     * still the latest price event, and a row records who, when and why. Nothing is deleted: the restock shows as Voided.
+     * Needs {@code retail.purchase.create} at every branch the restock added stock to. Locks: the restock, the supplier, the
+     * products in id order, then the stock balances in branch and product order, as a restock takes them.
+     */
+    private Purchase voidNow(UUID id, VoidPurchaseRequest request) {
+        Principal principal = CurrentPrincipal.require();
+        String reason = request.reason().trim();
+        if (reason.length() < MIN_REASON) {
+            throw ApiException.validation(List.of(
+                    new FieldProblem("reason", "invalid", "Give a reason of at least " + MIN_REASON + " characters.")));
+        }
+        Purchase seen = repo.find(id).orElseThrow(ApiException::notFound);
+        List<Recorded> moved = stock.bySource(PURCHASE, id);
+        List<UUID> touched =
+                moved.stream().map(Recorded::branchId).distinct().sorted().toList();
+        if (touched.stream().noneMatch(b -> principal.may(PERMISSION, b))) {
+            throw ApiException.notFound();
+        }
+        if (!touched.stream().allMatch(b -> principal.may(PERMISSION, b))) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "permission_denied",
+                    "Permission denied",
+                    "This restock added stock at a branch you do not manage, so only someone who manages every branch it"
+                            + " touched can void it.");
+        }
+        repo.lockPurchase(id);
+        // A closed branch, or one that keeps no goods, takes no stock movement and no entry (issue #329, ADR-041).
+        touched.forEach(b -> branches.requireStocks(b, "branch_id"));
+        if (seen.supplierId() != null) {
+            repo.lockSupplier(seen.supplierId());
+        }
+        if (repo.voidOf(id).isPresent()) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT, "purchase_voided", "Restock voided", "This restock has been voided already.");
+        }
+        if (repo.historical(id)) {
+            throw ApiException.rule(
+                    "purchase_historical",
+                    "This restock was imported from the old records, so it cannot be voided here. Use Correct the quantity"
+                            + " on the stock list instead.");
+        }
+        if (repo.paidAgainst(id)) {
+            throw ApiException.rule(
+                    "purchase_paid",
+                    "A payment to the supplier has been recorded against this restock. Reverse that payment first, then"
+                            + " void the restock.");
+        }
+        moved.stream().map(Recorded::productId).distinct().sorted().forEach(catalogue::lock);
+        Map<UUID, Map<UUID, BigDecimal>> added = new TreeMap<>();
+        for (Recorded m : moved) {
+            added.computeIfAbsent(m.branchId(), k -> new TreeMap<>()).merge(m.productId(), m.qty(), BigDecimal::add);
+        }
+        for (Map.Entry<UUID, Map<UUID, BigDecimal>> branch : added.entrySet()) {
+            for (Map.Entry<UUID, BigDecimal> product : branch.getValue().entrySet()) {
+                BigDecimal onHand = stock.lock(branch.getKey(), product.getKey());
+                if (onHand.compareTo(product.getValue()) < 0) {
+                    ProductSnapshot p = catalogue.find(product.getKey()).orElseThrow();
+                    throw ApiException.rule(
+                            "purchase_stock_moved",
+                            p.description() + ": this restock added " + plain(product.getValue()) + " " + p.unit()
+                                    + " but only " + plain(onHand) + " are in stock there now, because some were sold,"
+                                    + " used or moved. It cannot be voided. Use Correct the quantity on the stock list,"
+                                    + " or count the stock.");
+                }
+            }
+        }
+        LocalDate today = clock.today(tenant.profile().timezone());
+        stock.record(
+                today,
+                moved.stream()
+                        .map(m -> new Movement(
+                                m.branchId(),
+                                m.productId(),
+                                "adjustment",
+                                m.qty().negate(),
+                                m.unitCostMinor(),
+                                PURCHASE_VOID,
+                                id,
+                                m.sourceLineId(),
+                                m.id(),
+                                reason))
+                        .toList());
+        for (UUID entry : repo.entriesOf(id)) {
+            books.reverse(entry, today, seen.purchaseNo(), PURCHASE_VOID + ":" + entry);
+        }
+        for (UUID productId :
+                moved.stream().map(Recorded::productId).distinct().sorted().toList()) {
+            catalogue.revertPurchasePrices(
+                    productId, id, "Restock " + seen.purchaseNo() + " voided", repo.laterPurchase(productId, id));
+        }
+        repo.insertVoid(id, today, reason, principal.userId());
+        audit.record(new AuditLog.Entry(
+                "retail.purchase.voided",
+                PURCHASE,
+                id,
+                null,
+                Map.of("status", "posted"),
+                Map.of("status", "voided", "reason", reason, "purchase_no", seen.purchaseNo())));
+        return repo.find(id, principal.branchFilter(PERMISSION, null)).orElseThrow();
+    }
+
+    private static String plain(BigDecimal qty) {
+        return qty.stripTrailingZeros().toPlainString();
     }
 
     static String blankToNull(String s) {

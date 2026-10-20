@@ -223,12 +223,21 @@ class RlsIsolationIT {
                         VALUES (?, ?, ?, 'initial', 100, 150, 'UGX')
                         """).params(UUID.randomUUID(), t.tenantId(), retailProduct).update();
         // Retail tables (migration V11, ADR-020).
+        UUID openingMovement = UUID.randomUUID();
         owner.sql("""
                         INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, business_date, branch_id, product_id, kind, qty,
                                                             unit_cost_minor, source_type)
                         VALUES (?, ?, now(), current_date, ?, ?, 'opening', 2, 100, 'test')
                         """)
-                .params(UUID.randomUUID(), t.tenantId(), t.headOffice(), retailProduct)
+                .params(openingMovement, t.tenantId(), t.headOffice(), retailProduct)
+                .update();
+        // A quantity correction (migration V63, issue #351).
+        owner.sql("""
+                        INSERT INTO retail_stock_corrections (id, tenant_id, branch_id, product_id, movement_id, old_qty, new_qty,
+                                                              reason_code, unit_cost_minor, created_by)
+                        VALUES (?, ?, ?, ?, ?, 2, 1, 'miscount', 100, ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), t.headOffice(), retailProduct, openingMovement, user)
                 .update();
         owner.sql("INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, qty) VALUES (?, ?, ?, 2)")
                 .params(t.tenantId(), t.headOffice(), retailProduct)
@@ -281,6 +290,11 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), purchase, retailProduct)
                 .update();
+        // A restock voided (migration V63, issue #351).
+        owner.sql("""
+                        INSERT INTO retail_purchase_voids (id, tenant_id, purchase_id, voided_on, reason, voided_by)
+                        VALUES (?, ?, ?, DATE '2026-01-16', 'Test void', ?)
+                        """).params(UUID.randomUUID(), t.tenantId(), purchase, user).update();
         UUID usage = UUID.randomUUID();
         owner.sql("""
                         INSERT INTO retail_usage_reports (id, tenant_id, branch_id, kind, reason, occurred_on, currency,

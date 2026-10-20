@@ -235,7 +235,13 @@ class StockService {
 
     @Transactional(readOnly = true)
     MovementPage movements(
-            List<UUID> branchIds, UUID productId, LocalDate from, LocalDate to, Integer limit, String cursor) {
+            List<UUID> branchIds,
+            UUID productId,
+            LocalDate from,
+            LocalDate to,
+            boolean newestFirst,
+            Integer limit,
+            String cursor) {
         Principal principal = CurrentPrincipal.require();
         List<UUID> filter = principal.branchFilter("retail.stock.read", branchIds);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
@@ -246,6 +252,7 @@ class StockService {
                 from,
                 to,
                 tenant.profile().timezone().getId(),
+                newestFirst,
                 after == null ? null : after.at(),
                 after == null ? null : after.id(),
                 size + 1);
@@ -271,7 +278,8 @@ class StockService {
                                         m.reversesMovementId(),
                                         m.historical(),
                                         m.note(),
-                                        m.by()))
+                                        m.by(),
+                                        m.correction()))
                         .toList(),
                 next);
     }

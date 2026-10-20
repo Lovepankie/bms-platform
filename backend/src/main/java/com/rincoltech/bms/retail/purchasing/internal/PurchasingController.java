@@ -9,6 +9,7 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.Supplier;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierList;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.UpdateSupplierRequest;
+import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.VoidPurchaseRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -92,8 +93,36 @@ class PurchasingController {
             @RequestParam(name = "from", required = false) LocalDate from,
             @RequestParam(name = "to", required = false) LocalDate to,
             @RequestParam(name = "supplier_id", required = false) UUID supplierId,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "newest_first", required = false, defaultValue = "false") boolean newestFirst,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
-        return service.list(from, to, supplierId, limit, cursor);
+        return service.list(from, to, supplierId, status, newestFirst, limit, cursor);
+    }
+
+    @GetMapping("/purchases/{purchase_id}")
+    @RequiresPermission("retail.purchase.create")
+    @Operation(
+            summary = "One restock with its lines and, when voided, the void (issue #351)",
+            operationId = "getRetailPurchase")
+    Purchase get(@PathVariable("purchase_id") UUID id) {
+        return service.get(id);
+    }
+
+    @PostMapping("/purchases/{purchase_id}/void")
+    @RequiresPermission("retail.purchase.create")
+    @Operation(
+            summary = "Void a restock as a whole by reversal, once; refused when its stock has moved (issue #351); M",
+            operationId = "voidRetailPurchase")
+    ResponseEntity<Purchase> voidPurchase(
+            @PathVariable("purchase_id") UUID id,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody VoidPurchaseRequest request) {
+        Outcome<Purchase> outcome = service.voidPurchase(idempotencyKey, id, request);
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok();
+        if (outcome.replayed()) {
+            response.header("Idempotent-Replayed", "true");
+        }
+        return response.body(outcome.body());
     }
 }

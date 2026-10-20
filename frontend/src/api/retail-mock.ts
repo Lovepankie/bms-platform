@@ -1,5 +1,5 @@
 import type {
-  AllBranchesRow, Category, CapabilitiesRead, Pack, Customer, InFlightReport, LocationRow, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, Stocktake, StockByLocation, StockRow,
+  AllBranchesRow, Category, CapabilitiesRead, Pack, Customer, InFlightReport, LocationRow, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, SimilarProduct, StockMovement, Stocktake, StockByLocation, StockRow,
   Supplier, Transfer, Unit, Usage, Valuation, ValuationRow,
 } from './retail';
 import type { SalesQuery } from './retail';
@@ -110,6 +110,8 @@ const PRODUCTS: MockProduct[] = [
 /** The server's level filter: out is zero or less, low is at or below 5 (so it includes out). */
 const atLevel = (qty: number, level?: 'out' | 'low'): boolean => level === undefined || qty <= (level === 'out' ? 0 : 5);
 const toMilli = (text: string): number => Math.round(Number(text) * 1000);
+/** A quantity without trailing zeros: 10.000 is 10. */
+const plainQty = (q: string): string => (q.includes('.') ? q.replace(/0+$/, '').replace(/\.$/, '') : q);
 const fromMilli = (m: number): string => `${m < 0 ? '-' : ''}${Math.floor(Math.abs(m) / 1000)}.${String(Math.abs(m) % 1000).padStart(3, '0')}`;
 const lineTotal = (price: number, qtyMilli: number): number => Number((BigInt(price) * BigInt(qtyMilli) + 500n) / 1000n);
 const today = (): string => businessToday();
@@ -124,8 +126,24 @@ const run = <T>(fn: () => T): Promise<T> => {
 };
 
 /** A refusal in the server's problem shape, so the screens show the same message as with the real API. */
-const refuse = (status: number, code: string, detail: string): never => {
-  throw new RetailError(retailMessage({ code, detail }, status), status, code);
+const refuse = (status: number, code: string, detail: string, extra?: Record<string, unknown>): never => {
+  throw new RetailError(retailMessage({ code, detail }, status), status, code, extra ? { code, detail, ...extra } : undefined);
+};
+
+/** The server's name key (issue #352): lower case, every run of spaces and punctuation one space. */
+const nameKey = (text: string): string => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/** Letters added, removed or changed to turn one text into the other. */
+const editDistance = (a: string, b: string): number => {
+  let previous = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j++) {
+      current[j] = Math.min((previous[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1), (previous[j] ?? 0) + 1, (current[j - 1] ?? 0) + 1);
+    }
+    previous = current;
+  }
+  return previous[b.length] ?? 0;
 };
 
 const MOCK_FLAGS = ['branch_roles', 'units', 'price_lists', 'customer_accounts', 'documents', 'purchasing', 'transfer_receipt', 'returns'] as const;
@@ -164,6 +182,21 @@ export function createMockRetail(): RetailApi {
   const stale = (p: MockProduct, version: number) => {
     if ((p.version ?? 1) !== version) refuse(412, 'version_conflict', 'This item was changed by someone else. Reload and try again.');
   };
+  /** Issue #352: a name is kept once per unit; a reason from an administrator adds it anyway (the mock user is one). */
+  const sameNameCheck = (description: string, unit: string, selfId: string | undefined, reason: string | undefined) => {
+    const same = [...products.values()].find((x) => x.id !== selfId && x.unit === unit && nameKey(x.description) === nameKey(description));
+    if (!same) return;
+    if ((reason ?? '').trim() === '') {
+      refuse(422, 'duplicate_product_name', `This product already exists: ${same.description} (${same.code}).`, { existing_id: same.id, existing_code: same.code, existing_name: same.description, may_add_anyway: true });
+    }
+    if ((reason ?? '').trim().length < 5) refuse(422, 'validation_failed', 'Give a reason of at least 5 characters.');
+  };
+  // The stock history of this mock instance (issue #351): restocks, their voids and quantity corrections, in order.
+  const stockLog: StockMovement[] = [];
+  const logMove = (m: Omit<StockMovement, 'id' | 'at' | 'by' | 'historical'>) =>
+    stockLog.push({ id: nextId('m'), at: new Date().toISOString(), by: mockMe('admin').user_id, historical: false, ...m });
+  // Restocks of this mock instance (issue #351): kept with the prices before each, so a void can give them back.
+  const purchases: (Purchase & { before: Record<string, { cost: number; sell: number }> })[] = [];
   const customers: Customer[] = [{ id: 'c0000000-0000-4000-8000-000000000001', name: 'Test Buyer 01', contact: '+256700000001', version: 1 }];
   // The second supplier row is a forwarder, who is owed the landed cost of imported goods (issue #199).
   const suppliers: Supplier[] = [
@@ -321,6 +354,24 @@ export function createMockRetail(): RetailApi {
 
     getProduct: (id) => run(() => asProduct(find(id))),
 
+    similarProducts: ({ description, unitId, excludeId }) =>
+      run(() => {
+        const key = nameKey(description);
+        const unit = unitRows.find((u) => u.id === unitId)?.name;
+        const exact: SimilarProduct[] = [];
+        const similar: SimilarProduct[] = [];
+        for (const p of products.values()) {
+          if (p.id === excludeId || key === '') continue;
+          const other = nameKey(p.description);
+          const distance = other === key ? 0 : editDistance(key, other);
+          const allowed = Math.max(key.length, other.length) < 5 ? 0 : Math.max(key.length, other.length) < 10 ? 1 : Math.max(key.length, other.length) < 20 ? 2 : 3;
+          if (distance > allowed) continue;
+          const row: SimilarProduct = { id: p.id, code: p.code, description: p.description, unit: p.unit, active: p.active !== false, distance, same_unit: distance === 0 && p.unit === unit };
+          (row.same_unit ? exact : similar).push(row);
+        }
+        return { exact, similar: similar.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0)) };
+      }),
+
     createProduct: (body) =>
       run(() => {
         const code = (body.code ?? '').trim();
@@ -329,6 +380,7 @@ export function createMockRetail(): RetailApi {
         const unit = unitRows.find((u) => u.id === body.unit_id);
         if (!category || !unit) return refuse(422, 'validation_failed', 'Choose a category and a unit.');
         if (!category.active || !unit.active) refuse(422, 'inactive_category', 'This category or unit is switched off. Choose another one.');
+        sameNameCheck(body.description ?? '', unit.name, undefined, body.duplicate_reason);
         const p: MockProduct = { id: nextId('b'), code, description: (body.description ?? '').trim(), category: category.name, unit: unit.name, costMinor: body.cost_minor ?? 0, sellMinor: body.sell_minor ?? 0, active: true, version: 1 };
         products.set(p.id, p);
         history.set(p.id, [{ id: nextId('h'), at: new Date().toISOString(), source: 'initial', new_sell_minor: p.sellMinor, currency: 'UGX', ...(profitAccess ? { new_cost_minor: p.costMinor } : {}) }]);
@@ -344,6 +396,7 @@ export function createMockRetail(): RetailApi {
         const category = body.category_id ? cats.find((c) => c.id === body.category_id) : undefined;
         const unit = body.unit_id ? unitRows.find((u) => u.id === body.unit_id) : undefined;
         if (category && !category.active && category.name !== p.category) refuse(422, 'inactive_category', 'This category is switched off. Choose another one.');
+        if (body.description !== undefined || unit) sameNameCheck(body.description ?? p.description, unit?.name ?? p.unit, id, body.duplicate_reason);
         Object.assign(p, {
           code, description: body.description === undefined ? p.description : body.description.trim(),
           category: category?.name ?? p.category, unit: unit?.name ?? p.unit, active: body.active ?? p.active, version: (p.version ?? 1) + 1,
@@ -654,19 +707,85 @@ export function createMockRetail(): RetailApi {
     createPurchase: (body, key) =>
       run(() => once(`purchase|${key}`, body, (): Purchase => {
       let total = 0;
+      const before: Record<string, { cost: number; sell: number }> = {};
       const lines = body.lines.map((l, n) => {
         const p = find(l.product_id);
+        before[p.id] ??= { cost: p.costMinor, sell: p.sellMinor };
         p.costMinor = l.cost_minor;
         if (l.sell_minor !== undefined) p.sellMinor = l.sell_minor;
         let qtyTotal = 0;
         l.qty_by_branch.forEach((q) => {
           move(q.branch_id, p.id, toMilli(q.qty));
           qtyTotal += toMilli(q.qty);
+          logMove({ branch_id: q.branch_id, product_id: p.id, kind: 'purchase', qty: fromMilli(toMilli(q.qty)), source_type: 'retail.purchase' });
         });
         total += lineTotal(l.cost_minor, qtyTotal);
-        return { id: nextId('p'), line_no: n + 1, product_id: p.id, code: p.code, description: p.description, cost_minor: l.cost_minor, sell_minor: p.sellMinor, qty_total: fromMilli(qtyTotal), qty_by_branch: l.qty_by_branch, line_total_minor: lineTotal(l.cost_minor, qtyTotal) };
+        return { id: nextId('p'), line_no: n + 1, product_id: p.id, code: p.code, description: p.description, cost_minor: l.cost_minor, sell_minor: p.sellMinor, qty_total: fromMilli(qtyTotal), qty_by_branch: l.qty_by_branch, line_total_minor: lineTotal(l.cost_minor, qtyTotal), base_unit: p.unit };
       });
-      return { id: nextId('6'), purchase_no: `P-${String(seq).padStart(6, '0')}`, purchased_on: body.purchased_on, payment_method: body.payment_method, currency: 'UGX', lines, total_minor: total };
+      const made: Purchase = { id: nextId('6'), purchase_no: `P-${String(seq).padStart(6, '0')}`, ...(body.supplier_id ? { supplier_id: body.supplier_id } : {}), purchased_on: body.purchased_on, payment_method: body.payment_method, currency: 'UGX', lines, total_minor: total, status: 'posted' };
+      purchases.push({ ...made, before });
+      return made;
+      })),
+
+    correctStock: (body, key) =>
+      run(() => once(`correct-stock|${key}`, body, () => {
+        const p = find(body.product_id);
+        const was = bal(body.branch_id, p.id);
+        const next = toMilli(body.new_qty);
+        if (next < 0) refuse(422, 'validation_failed', 'The quantity cannot be below none.');
+        if (toMilli(body.expected_qty) !== was) refuse(409, 'stock_moved', `The quantity changed while you were typing: it is ${plainQty(fromMilli(was))} ${p.unit} now. Look at the list again and type the right quantity.`);
+        if (next === was) refuse(422, 'quantity_unchanged', `The quantity is ${plainQty(fromMilli(was))} ${p.unit} already. Type the right quantity.`);
+        move(body.branch_id, p.id, next - was);
+        const label = body.reason_code === 'entry_mistake' ? 'Entry mistake' : 'Miscount';
+        const id = nextId('c');
+        logMove({ branch_id: body.branch_id, product_id: p.id, kind: 'adjustment', qty: fromMilli(next - was), source_type: 'retail.stock_correction', note: body.note ? `${label}: ${body.note}` : label, correction: { reason_code: body.reason_code, old_qty: fromMilli(was), new_qty: fromMilli(next) } });
+        return { id, branch_id: body.branch_id, product_id: p.id, code: p.code, description: p.description, old_qty: fromMilli(was), new_qty: fromMilli(next), reason_code: body.reason_code, ...(body.note ? { note: body.note } : {}), at: new Date().toISOString(), by: mockMe('admin').user_id };
+      })),
+
+    stockHistory: ({ productId, branchId }) =>
+      run(() => ({ items: stockLog.filter((m) => m.product_id === productId && m.branch_id === branchId).reverse() })),
+
+    listPurchases: ({ from, to, status }) =>
+      run(() => ({
+        items: purchases
+          .filter((p) => (!from || (p.purchased_on ?? '') >= from) && (!to || (p.purchased_on ?? '') <= to) && (!status || p.status === status))
+          .map(({ before: _before, ...p }) => p)
+          .reverse(),
+      })),
+
+    getPurchase: (id) => run(() => {
+      const found = purchases.find((p) => p.id === id);
+      if (!found) return refuse(404, 'not_found', 'The resource does not exist.');
+      const { before: _before, ...p } = found;
+      return p;
+    }),
+
+    voidPurchase: (id, reason, key) =>
+      run(() => once(`void-purchase|${key}`, { id, reason }, (): Purchase => {
+        const found = purchases.find((p) => p.id === id);
+        if (!found) return refuse(404, 'not_found', 'The resource does not exist.');
+        if (found.status === 'voided') refuse(409, 'purchase_voided', 'This restock has been voided already.');
+        if (reason.trim().length < 5) refuse(422, 'validation_failed', 'Give a reason of at least 5 characters.');
+        for (const l of found.lines ?? []) {
+          for (const b of l.qty_by_branch ?? []) {
+            const have = bal(b.branch_id ?? '', l.product_id ?? '');
+            if (have < toMilli(b.qty ?? '0')) {
+              refuse(422, 'purchase_stock_moved', `${l.description}: this restock added ${plainQty(b.qty ?? '0')} ${l.base_unit ?? ''} but only ${plainQty(fromMilli(have))} are in stock there now, because some were sold, used or moved. It cannot be voided. Use Correct the quantity on the stock list, or count the stock.`);
+            }
+          }
+        }
+        for (const l of found.lines ?? []) {
+          for (const b of l.qty_by_branch ?? []) {
+            move(b.branch_id ?? '', l.product_id ?? '', -toMilli(b.qty ?? '0'));
+            logMove({ branch_id: b.branch_id, product_id: l.product_id, kind: 'adjustment', qty: fromMilli(-toMilli(b.qty ?? '0')), source_type: 'retail.purchase_void', note: reason.trim() });
+          }
+          const was = found.before[l.product_id ?? ''];
+          const p = products.get(l.product_id ?? '');
+          if (was && p) Object.assign(p, { costMinor: was.cost, sellMinor: was.sell, version: (p.version ?? 1) + 1 });
+        }
+        Object.assign(found, { status: 'voided', void_reason: reason.trim(), voided_on: today(), voided_at: new Date().toISOString() });
+        const { before: _before, ...voided } = found;
+        return voided;
       })),
 
     createUsage: (body, key) =>

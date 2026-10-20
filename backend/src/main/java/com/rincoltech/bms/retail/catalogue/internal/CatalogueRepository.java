@@ -171,6 +171,91 @@ class CatalogueRepository {
                 .list());
     }
 
+    // ---- Names (issue #352) ---------------------------------------------------------------
+
+    /** A product found by its name key, for the duplicate refusal and the near-duplicate warning. */
+    record NameMatch(
+            UUID id, String code, String description, UUID unitId, String unit, boolean active, String nameKey) {}
+
+    private static final String SELECT_NAME = """
+            SELECT p.id, p.code, p.description, p.unit_id, u.name AS unit, p.active, p.name_key
+              FROM retail_products p JOIN retail_units u ON u.id = p.unit_id
+            """;
+
+    private static NameMatch nameMatch(ResultSet rs, int n) throws SQLException {
+        return new NameMatch(
+                rs.getObject("id", UUID.class),
+                rs.getString("code"),
+                rs.getString("description"),
+                rs.getObject("unit_id", UUID.class),
+                rs.getString("unit"),
+                rs.getBoolean("active"),
+                rs.getString("name_key"));
+    }
+
+    /**
+     * Takes the tenant's lock for one name for the rest of the transaction, so two people adding the same name at the same
+     * moment cannot both pass the check. The key is the database's own, the one the generated column holds.
+     */
+    void lockName(String description) {
+        jdbc.sql(
+                        "SELECT pg_advisory_xact_lock(hashtextextended(current_setting('app.tenant_id') || ':' || bms_name_key(:d), 0))")
+                .param("d", description)
+                .query(rs -> {});
+    }
+
+    /** The name key of a description, as the database computes it. */
+    String nameKey(String description) {
+        return jdbc.sql("SELECT bms_name_key(:d)")
+                .param("d", description)
+                .query(String.class)
+                .single();
+    }
+
+    /** Between a name key and a unit in {@link #productNames()}; the key holds only letters, digits and single spaces. */
+    static final String NAME_SEP = "\0";
+
+    /** Every product's name key and unit (lower-cased), as {@code key + NAME_SEP + unit}, to its code: the import's duplicate check. */
+    Map<String, String> productNames() {
+        Map<String, String> out = new java.util.HashMap<>();
+        jdbc.sql(
+                        "SELECT p.name_key, lower(btrim(u.name)) AS unit, p.code FROM retail_products p JOIN retail_units u ON u.id = p.unit_id ORDER BY p.code")
+                .query((rs, n) -> {
+                    out.putIfAbsent(rs.getString("name_key") + NAME_SEP + rs.getString("unit"), rs.getString("code"));
+                    return 0;
+                })
+                .list();
+        return out;
+    }
+
+    /** Products whose name has the same key as the description, other than {@code excludeId}. */
+    List<NameMatch> sameName(String description, UUID excludeId) {
+        return jdbc.sql(SELECT_NAME
+                        + " WHERE p.name_key = bms_name_key(:d) AND (CAST(:exclude AS uuid) IS NULL OR p.id <> CAST(:exclude AS uuid))"
+                        + " ORDER BY p.code, p.id")
+                .param("d", description)
+                .param("exclude", excludeId)
+                .query(CatalogueRepository::nameMatch)
+                .list();
+    }
+
+    /**
+     * Products whose name key is within {@code spread} characters of the given key's length: the only ones that can be a few
+     * letters apart. The caller measures the edit distance; no text search operator is used, because none is usable under
+     * row-level security (V40) and a catalogue is small.
+     */
+    List<NameMatch> neighbours(String nameKey, UUID excludeId, int spread, int limit) {
+        return jdbc.sql(SELECT_NAME
+                        + " WHERE length(p.name_key) BETWEEN :shortest AND :longest AND (CAST(:exclude AS uuid) IS NULL OR p.id <> CAST(:exclude AS uuid))"
+                        + " ORDER BY p.code, p.id LIMIT :limit")
+                .param("shortest", Math.max(0, nameKey.length() - spread))
+                .param("longest", nameKey.length() + spread)
+                .param("exclude", excludeId)
+                .param("limit", limit)
+                .query(CatalogueRepository::nameMatch)
+                .list();
+    }
+
     // ---- Products ------------------------------------------------------------------------
 
     Optional<Product> find(UUID id) {
@@ -264,13 +349,14 @@ class CatalogueRepository {
                 .list();
     }
 
-    void insert(Product p, UUID createdBy) {
+    void insert(Product p, UUID createdBy, String duplicateReason) {
         jdbc.sql("""
                         INSERT INTO retail_products (id, tenant_id, code, description, category_id, unit_id, cost_minor,
-                                                     sell_minor, currency, active, created_by)
+                                                     sell_minor, currency, active, created_by, duplicate_reason)
                         VALUES (:id, current_setting('app.tenant_id')::uuid, :code, :description, :categoryId, :unitId,
-                                :costMinor, :sellMinor, :currency, true, :createdBy)
+                                :costMinor, :sellMinor, :currency, true, :createdBy, :duplicateReason)
                         """)
+                .param("duplicateReason", duplicateReason)
                 .param("id", p.id())
                 .param("code", p.code())
                 .param("description", p.description())
@@ -283,12 +369,15 @@ class CatalogueRepository {
                 .update();
     }
 
-    void update(Product p) {
+    void update(Product p, String duplicateReason, boolean nameChanged) {
         jdbc.sql("""
                         UPDATE retail_products SET code = :code, description = :description, category_id = :categoryId,
-                               unit_id = :unitId, active = :active, updated_at = now(), version = version + 1
+                               unit_id = :unitId, active = :active, updated_at = now(), version = version + 1,
+                               duplicate_reason = CASE WHEN :nameChanged THEN :duplicateReason ELSE duplicate_reason END
                          WHERE id = :id
                         """)
+                .param("duplicateReason", duplicateReason, java.sql.Types.VARCHAR)
+                .param("nameChanged", nameChanged)
                 .param("id", p.id())
                 .param("code", p.code())
                 .param("description", p.description())
@@ -431,6 +520,14 @@ class CatalogueRepository {
                 .param(productId)
                 .query(Boolean.class)
                 .single();
+    }
+
+    /** Any stock movement of the product, or a balance that is not zero: its quantities are counted in its unit (issue #351). */
+    boolean productHasStock(UUID productId) {
+        return jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM retail_stock_movements WHERE product_id = ?)
+                            OR EXISTS (SELECT 1 FROM retail_stock_balances WHERE product_id = ? AND qty <> 0)
+                        """).params(productId, productId).query(Boolean.class).single();
     }
 
     boolean unitHasPacks(UUID unitId) {

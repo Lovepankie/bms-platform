@@ -579,16 +579,20 @@ public class RetailImporter {
                 if (!namedUnits.contains(unit.toLowerCase(Locale.ROOT))) {
                     report.anomaly(file.name, row.line(), "unit " + unit + " is not in units.jsonl");
                 }
+                UUID unitId = catalogue.ensureUnit(unit).id();
                 Ensured product = catalogue.ensureProduct(
-                        code,
-                        description,
-                        catalogue.ensureCategory(category).id(),
-                        catalogue.ensureUnit(unit).id(),
-                        cost,
-                        sell,
-                        active);
+                        code, description, catalogue.ensureCategory(category).id(), unitId, cost, sell, active);
                 if (product.created()) {
                     c.written++;
+                    // Issue #352: a name is kept once per unit. History needs every code, so both rows are kept; the
+                    // report tells the owner which items to look at.
+                    catalogue
+                            .otherWithSameName(code, description, unitId)
+                            .ifPresent(other -> report.anomaly(
+                                    file.name,
+                                    row.line(),
+                                    "product " + code + " has the same name as product " + other
+                                            + " in the same unit; both were kept, check whether they are one item"));
                 } else {
                     c.existing++;
                     if (product.changed()) {

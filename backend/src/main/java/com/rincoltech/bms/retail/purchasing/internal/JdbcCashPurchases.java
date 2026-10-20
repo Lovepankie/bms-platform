@@ -47,6 +47,29 @@ class JdbcCashPurchases implements CashPurchases {
                     return 0;
                 })
                 .list();
+        // JUSTIFICATION-A3: the cash a voided cash restock gives back (issue #351) has to join the cash-out figure of
+        // this method.
+        // A voided cash restock gives its cash back on the day it was voided, valued as it was bought, so a closed day
+        // is never changed.
+        jdbc.sql("""
+                        SELECT v.voided_on AS day, m.qty, m.unit_cost_minor
+                          FROM retail_stock_movements m
+                          JOIN retail_purchases p ON p.id = m.source_id
+                          JOIN retail_purchase_voids v ON v.tenant_id = p.tenant_id AND v.purchase_id = p.id
+                         WHERE m.branch_id = :branch AND m.kind = 'purchase' AND m.source_type = 'retail.purchase'
+                           AND p.payment_method = 'cash' AND v.voided_on BETWEEN :from AND :to
+                        """)
+                .param("branch", branchId)
+                .param("from", Date.valueOf(from))
+                .param("to", Date.valueOf(to))
+                .query((rs, n) -> {
+                    out.merge(
+                            rs.getDate("day").toLocalDate(),
+                            -Quantities.value(rs.getBigDecimal("qty"), rs.getLong("unit_cost_minor")),
+                            Math::addExact);
+                    return 0;
+                })
+                .list();
         // A cash payment to a supplier (purchasing capability, issue #198) is a cash-out of the paying branch's till on
         // the
         // day it was paid, so the expected-to-bank amount never makes the till look short; its reversal puts the cash

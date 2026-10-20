@@ -414,6 +414,15 @@ Notes:
   `retail.catalogue.manage` (add, change), a pack sale uses `retail.sale.create` and a pack restock `retail.purchase.create`, each with the
   branch scope it had. A pack line is judged against `retail.price.below_cost` on its line total. A restock line's pack cost and the
   purchase response's `unit_cost_minor` are as sensitive as the existing `cost_minor` and are shown to the same callers.
+- Corrections of entry mistakes (issues #351 and #352, ADR-044, FR-RET-44 to FR-RET-46) add no permission, so the matrix is unchanged. Voiding a
+  restock (`POST /retail/purchases/{id}/void`) and reading one restock need `retail.purchase.create`; the void needs it at **every** branch the
+  restock added stock to (403 `permission_denied` when one is outside the caller's scope), because it takes stock out of all of them. Correcting a
+  quantity (`POST /retail/stock/corrections`) needs `retail.stocktake.commit` at the branch, the permission that already adjusts quantities; the
+  issue called it `retail.stock.manage`, which does not exist. Adding a product whose name another product of the same unit has needs
+  `core.settings.manage` (administrators) and a reason, kept on the product and in the audit entry; `GET /retail/products/similar` needs
+  `retail.catalogue.manage`. All three of those permissions are administrator-only today. No maker-checker action is registered for the void or
+  the correction (ADR-044 decision 5): a tenant approval threshold for them is a follow-up, so section 8.4 is unchanged. The audit entries
+  `retail.purchase.voided`, `retail.stock.corrected` and `retail.product.updated` (with the old and new category) carry the reason.
 - `retail.price.below_cost` (issue #64, ADR-020 decision 5) lets a sale line be priced at or below
   the product's cost. It is in the catalogue (migration V13) but no default role holds it, not even
   the tenant admin: it is meant for a custom role, and roles are not yet tenant-editable, so today

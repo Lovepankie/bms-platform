@@ -1,13 +1,14 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
-import { RETAIL_CURRENCY, RETAIL_ZONE, retail, type PriceChange, type Product } from '../../../api/retail';
+import { RETAIL_CURRENCY, RETAIL_ZONE, retail, type PriceChange, type Product, type SimilarProduct } from '../../../api/retail';
 import { formatMinor, parseMinor } from '../../../components/money';
 import { useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { BackToCatalogue } from './catalogue';
+import { ExistsPanel, SimilarPanel, existingOf, type ExistingItem } from './catalogue-names';
 import { PackEditor } from './catalogue-packs';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
@@ -82,7 +83,8 @@ export function ProductCard({ product, showCost, canPrice, onEdit, onPrice }: {
   );
 }
 
-export function ProductForm({ product, onSaved, onCancel }: { product?: Product; onSaved: (text: string) => void; onCancel: () => void }) {
+export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: Product; onSaved: (text: string) => void; onCancel: () => void; onOpen?: (id: string) => void }) {
+  const { me } = useStaff();
   const profit = useProfitAccess();
   const queryClient = useQueryClient();
   const categories = useQuery({ queryKey: ['retail', 'catalogue', 'categories'], queryFn: () => retail.listCategories() });
@@ -100,30 +102,68 @@ export function ProductForm({ product, onSaved, onCancel }: { product?: Product;
   const categoryChoices = (categories.data ?? []).filter((c) => c.active !== false || c.id === product?.category_id);
   const unitChoices = (units.data ?? []).filter((u) => u.active !== false || u.id === product?.unit_id);
   const complete = code.trim() !== '' && description.trim() !== '' && categoryId !== '' && unitId !== '' && (product ? true : sellMinor !== null && costMinor !== null);
+  // The name is kept once per unit (issue #352): a close name is a warning, the same name is refused, an administrator may add it anyway.
+  const [similar, setSimilar] = useState<SimilarProduct[] | null>(null);
+  const [exists, setExists] = useState<ExistingItem | null>(null);
+  const [acceptedKey, setAcceptedKey] = useState('');
+  const nameKey = `${description.trim()}|${unitId}`;
+  const nameChanged = !product || description.trim() !== product.description || unitId !== product.unit_id;
+  const canAddAnyway = (me.permissions ?? []).includes('core.settings.manage');
+  // A second press before the first request has started must not send another: the ref answers at once, the mutation state a render later.
+  const sending = useRef(false);
   const save = useMutation({
-    mutationFn: () =>
-      product
-        ? retail.updateProduct(product.id ?? '', product.version ?? 1, { code: code.trim(), description: description.trim(), category_id: categoryId, unit_id: unitId, active })
-        : retail.createProduct({ code: code.trim(), description: description.trim(), category_id: categoryId, unit_id: unitId, sell_minor: sellMinor ?? 0, cost_minor: profit ? (costMinor ?? 0) : 0 }),
+    mutationFn: (duplicateReason?: string) => {
+      const reason = duplicateReason ? { duplicate_reason: duplicateReason } : {};
+      return product
+        ? retail.updateProduct(product.id ?? '', product.version ?? 1, { code: code.trim(), description: description.trim(), category_id: categoryId, unit_id: unitId, active, ...reason })
+        : retail.createProduct({ code: code.trim(), description: description.trim(), category_id: categoryId, unit_id: unitId, sell_minor: sellMinor ?? 0, cost_minor: profit ? (costMinor ?? 0) : 0, ...reason });
+    },
     onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       onSaved(product ? `Saved the changes to "${saved.description}".` : `Added the item "${saved.description}" (${saved.code}).`);
     },
+    onError: (error) => {
+      const found = existingOf(error);
+      if (found) setExists({ ...found, mayAddAnyway: found.mayAddAnyway && canAddAnyway });
+    },
+    onSettled: () => { sending.current = false; },
   });
+  const check = useMutation({
+    mutationFn: () => retail.similarProducts({ description: description.trim(), unitId, ...(product ? { excludeId: product.id } : {}) }),
+    onSuccess: (found) => {
+      const same = (found.exact ?? [])[0];
+      if (same) setExists({ id: same.id ?? '', code: same.code ?? '', name: same.description ?? '', mayAddAnyway: canAddAnyway });
+      else if ((found.similar ?? []).length > 0) setSimilar(found.similar ?? []);
+      else {
+        save.mutate(undefined);
+        return;
+      }
+      sending.current = false;
+    },
+    onError: () => { sending.current = false; },
+  });
+  const busy = save.isPending || check.isPending;
+  const submit = () => {
+    if (!complete || busy || sending.current) return;
+    sending.current = true;
+    if (nameChanged && acceptedKey !== nameKey) check.mutate();
+    else save.mutate(undefined);
+  };
+  const forget = () => { setExists(null); setSimilar(null); save.reset(); };
   return (
-    <form onSubmit={(e) => { e.preventDefault(); if (complete) save.mutate(); }}>
+    <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
       <h2>{product ? 'Change this item' : 'Add an item'}</h2>
       <label htmlFor="item-code">Code</label>
       <input id="item-code" value={code} maxLength={40} onChange={(e) => setCode(e.target.value)} autoComplete="off" />
       <label htmlFor="item-description">Description</label>
-      <input id="item-description" value={description} maxLength={300} onChange={(e) => setDescription(e.target.value)} autoComplete="off" />
+      <input id="item-description" value={description} maxLength={300} onChange={(e) => { setDescription(e.target.value); forget(); }} autoComplete="off" />
       <label htmlFor="item-category">Category</label>
       <select id="item-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
         <option value="">Choose a category</option>
         {categoryChoices.map((c) => <option key={c.id} value={c.id}>{c.name}{c.active === false ? ' (switched off)' : ''}</option>)}
       </select>
       <label htmlFor="item-unit">Unit</label>
-      <select id="item-unit" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+      <select id="item-unit" value={unitId} onChange={(e) => { setUnitId(e.target.value); forget(); }}>
         <option value="">Choose a unit</option>
         {unitChoices.map((u) => <option key={u.id} value={u.id}>{u.name}{u.active === false ? ' (switched off)' : ''}</option>)}
       </select>
@@ -150,8 +190,27 @@ export function ProductForm({ product, onSaved, onCancel }: { product?: Product;
           )}
         </>
       )}
-      <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={!complete || save.isPending}>{save.isPending ? 'Saving' : product ? 'Save changes' : 'Add item'}</button>
+      {exists && (
+        <ExistsPanel
+          item={exists}
+          canAddAnyway={exists.mayAddAnyway}
+          busy={save.isPending}
+          onOpen={(id) => (onOpen ?? (() => undefined))(id)}
+          onAddAnyway={(reason) => { if (sending.current) return; sending.current = true; save.mutate(reason); }}
+          onChangeName={forget}
+        />
+      )}
+      {similar && !exists && (
+        <SimilarPanel
+          items={similar}
+          busy={save.isPending}
+          onOpen={(id) => (onOpen ?? (() => undefined))(id)}
+          onSaveAnyway={() => { if (sending.current) return; sending.current = true; setAcceptedKey(nameKey); setSimilar(null); save.mutate(undefined); }}
+          onChangeName={forget}
+        />
+      )}
+      {!exists && <Problem error={save.error ?? check.error} />}
+      <button type="submit" className="rt-primary" disabled={!complete || busy || exists !== null || similar !== null}>{busy ? 'Saving' : product ? 'Save changes' : 'Add item'}</button>
       <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>
     </form>
   );
@@ -220,12 +279,12 @@ export function PriceForm({ product, onSaved, onCancel }: { product: Product; on
 
 type View = { mode: 'list' } | { mode: 'new' } | { mode: 'edit' | 'price'; id: string };
 
-function Editing({ id, mode, onSaved, onCancel }: { id: string; mode: 'edit' | 'price'; onSaved: (text: string) => void; onCancel: () => void }) {
+function Editing({ id, mode, onSaved, onCancel, onOpen }: { id: string; mode: 'edit' | 'price'; onSaved: (text: string) => void; onCancel: () => void; onOpen: (id: string) => void }) {
   const product = useQuery({ queryKey: ['retail', 'product', id], queryFn: () => retail.getProduct(id), gcTime: 0 });
   useCrumbTail(product.data?.description, onCancel);
   if (product.isPending) return <p className="loading">Loading</p>;
   if (!product.data) return <Problem error={product.error} />;
-  return mode === 'edit' ? <ProductForm product={product.data} onSaved={onSaved} onCancel={onCancel} /> : <PriceForm product={product.data} onSaved={onSaved} onCancel={onCancel} />;
+  return mode === 'edit' ? <ProductForm key={product.data.id} product={product.data} onSaved={onSaved} onCancel={onCancel} onOpen={onOpen} /> : <PriceForm product={product.data} onSaved={onSaved} onCancel={onCancel} />;
 }
 
 export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) => void; onPrice: (id: string) => void; onAdd: () => void }) {
@@ -288,13 +347,14 @@ function ProductsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const { show, toast } = useToast();
   const back = () => setView({ mode: 'list' });
+  const open = (id: string) => { setMessage(null); setView({ mode: 'edit', id }); };
   const saved = (text: string) => { setMessage(text); show(text); back(); };
   return (
     <Gate screen="products" title="Items">
       {message && view.mode === 'list' && <Success>{message}</Success>}
       {view.mode === 'list' && <ProductList onAdd={() => { setMessage(null); setView({ mode: 'new' }); }} onEdit={(id) => { setMessage(null); setView({ mode: 'edit', id }); }} onPrice={(id) => { setMessage(null); setView({ mode: 'price', id }); }} />}
-      {view.mode === 'new' && <ProductForm onSaved={saved} onCancel={back} />}
-      {(view.mode === 'edit' || view.mode === 'price') && <Editing id={view.id} mode={view.mode} onSaved={saved} onCancel={back} />}
+      {view.mode === 'new' && <ProductForm onSaved={saved} onCancel={back} onOpen={open} />}
+      {(view.mode === 'edit' || view.mode === 'price') && <Editing id={view.id} mode={view.mode} onSaved={saved} onCancel={back} onOpen={open} />}
       {toast}
     </Gate>
   );

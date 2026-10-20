@@ -23,6 +23,8 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceEditReques
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceHistory;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Product;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ProductPage;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.SimilarProduct;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.SimilarProducts;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Unit;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitList;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UnitRequest;
@@ -30,6 +32,8 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateCategoryR
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdatePackRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateProductRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateUnitRequest;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -219,6 +223,7 @@ class CatalogueService {
     @Transactional
     Product create(CreateProductRequest r) {
         requireCategoryAndUnit(r.categoryId(), r.unitId(), null, null);
+        String duplicateReason = acceptName(r.description().trim(), r.unitId(), null, r.duplicateReason());
         UUID by = CurrentPrincipal.require().userId();
         Product p = new Product(
                 UUID.randomUUID(),
@@ -238,7 +243,7 @@ class CatalogueService {
                 null,
                 null);
         try {
-            repo.insert(p, by);
+            repo.insert(p, by, duplicateReason);
         } catch (DuplicateKeyException e) {
             throw duplicateCode();
         }
@@ -262,6 +267,9 @@ class CatalogueService {
         after.put("category_id", p.categoryId());
         after.put("unit_id", p.unitId());
         after.put("sell_minor", p.sellMinor());
+        if (duplicateReason != null) {
+            after.put("duplicate_reason", duplicateReason);
+        }
         audit.record(AuditLog.Entry.created("retail.product.created", PRODUCT, p.id(), null, after));
         return withPacks(visible(repo.find(p.id()).orElseThrow()));
     }
@@ -346,6 +354,13 @@ class CatalogueService {
         if (now.isEmpty()) {
             return withPacks(visible(before));
         }
+        if (!before.categoryId().equals(after.categoryId())) {
+            // Issue #351: a category correction is audited with the old and the new category by name as well as by id.
+            was.put("category", before.category());
+            now.put(
+                    "category",
+                    repo.category(after.categoryId()).map(Category::name).orElse(null));
+        }
         if (!before.unitId().equals(after.unitId()) && repo.productHasPacks(id)) {
             throw ApiException.rule(
                     "unit_in_use_by_pack",
@@ -356,13 +371,151 @@ class CatalogueService {
                     "unit_in_use_by_price_list",
                     "The unit cannot change while a price list has a price for the product: prices are per unit.");
         }
+        if (!before.unitId().equals(after.unitId()) && repo.productHasStock(id)) {
+            // Issue #351, ADR-044: a unit is never converted. Stock, sales and restocks were counted in the old unit,
+            // so
+            // changing the label would turn 10 rolls into 10 metres.
+            throw ApiException.rule(
+                    "unit_in_use_by_stock",
+                    "This item has stock or stock history counted in " + before.unit() + ", so its unit cannot change: "
+                            + "the numbers would only be relabelled, not converted. Add a new item with the right unit, "
+                            + "correct this one to none on the Stock page, and restock the new one.");
+        }
+        String duplicateReason = null;
+        // A new name or unit settles the question again: the reason of an earlier add-anyway goes unless this one needs
+        // its own.
+        boolean nameChanged = !before.description().equals(after.description())
+                || !before.unitId().equals(after.unitId());
+        if (nameChanged) {
+            duplicateReason = acceptName(after.description(), after.unitId(), id, r.duplicateReason());
+            if (duplicateReason != null) {
+                now.put("duplicate_reason", duplicateReason);
+            }
+        }
         try {
-            repo.update(after);
+            repo.update(after, duplicateReason, nameChanged);
         } catch (DuplicateKeyException e) {
             throw duplicateCode();
         }
         audit.record(new AuditLog.Entry("retail.product.updated", PRODUCT, id, null, was, now));
         return withPacks(visible(repo.find(id).orElseThrow()));
+    }
+
+    // ---- Names (issue #352, ADR-044) ----------------------------------------------------------
+
+    static final String ADD_ANYWAY = "core.settings.manage";
+    static final int MIN_REASON = 5;
+
+    /**
+     * A product name is kept once per unit: the key is the description folded to lower case without accents, with spaces
+     * and punctuation collapsed ({@code bms_name_key}). Under the name's advisory lock, a second product of the same unit
+     * with the same key is refused with 422 {@code duplicate_product_name} carrying the existing product, unless an
+     * administrator adds it anyway with a reason (returned, to be stored on the product). A different unit is allowed.
+     *
+     * @param selfId the product being edited, which never counts as its own duplicate; null on create
+     * @return the reason of an accepted duplicate, or null when the name is new
+     */
+    private String acceptName(String description, UUID unitId, UUID selfId, String reason) {
+        repo.lockName(description);
+        List<CatalogueRepository.NameMatch> same = repo.sameName(description, selfId).stream()
+                .filter(m -> m.unitId().equals(unitId))
+                .toList();
+        if (same.isEmpty()) {
+            return null;
+        }
+        CatalogueRepository.NameMatch existing = same.getFirst();
+        boolean admin = CurrentPrincipal.require().hasPermission(ADD_ANYWAY);
+        String why = reason == null ? "" : reason.trim();
+        if (why.isEmpty()) {
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "duplicate_product_name",
+                    "Business rule failed",
+                    "This product already exists: " + existing.description() + " (" + existing.code() + ").",
+                    List.of(),
+                    Map.of(
+                            "existing_id", existing.id(),
+                            "existing_code", existing.code(),
+                            "existing_name", existing.description(),
+                            "may_add_anyway", admin));
+        }
+        if (!admin) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "permission_denied",
+                    "Permission denied",
+                    "Only an administrator can add a product whose name exists already.");
+        }
+        if (why.length() < MIN_REASON) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "duplicate_reason", "invalid", "Give a reason of at least " + MIN_REASON + " characters.")));
+        }
+        return why;
+    }
+
+    /**
+     * The warning before saving: products with this name in the unit asked about ({@code exact}, a save is refused), and
+     * products whose name is close ({@code similar}, a few letters apart, or the same name in another unit). Reads one
+     * tenant's catalogue and measures the edit distance here; nothing is written.
+     */
+    @Transactional(readOnly = true)
+    SimilarProducts similar(String description, UUID unitId, UUID excludeId) {
+        String text = description == null ? "" : description.trim();
+        if (text.isEmpty()) {
+            return new SimilarProducts(List.of(), List.of());
+        }
+        String key = repo.nameKey(text);
+        List<SimilarProduct> exact = new ArrayList<>();
+        List<SimilarProduct> close = new ArrayList<>();
+        for (CatalogueRepository.NameMatch m : repo.sameName(text, excludeId)) {
+            boolean sameUnit = unitId != null && unitId.equals(m.unitId());
+            (sameUnit ? exact : close).add(similarOf(m, 0, sameUnit));
+        }
+        for (CatalogueRepository.NameMatch m : repo.neighbours(key, excludeId, MAX_DISTANCE, NEIGHBOURS)) {
+            if (m.nameKey().equals(key)) {
+                continue;
+            }
+            int distance = editDistance(key, m.nameKey());
+            if (distance <= allowedDistance(key, m.nameKey())) {
+                close.add(similarOf(m, distance, false));
+            }
+        }
+        close.sort(Comparator.comparingInt(SimilarProduct::distance).thenComparing(SimilarProduct::code));
+        return new SimilarProducts(exact, close.size() > SIMILAR_SHOWN ? close.subList(0, SIMILAR_SHOWN) : close);
+    }
+
+    static final int MAX_DISTANCE = 3;
+    static final int NEIGHBOURS = 5000;
+    static final int SIMILAR_SHOWN = 8;
+
+    private static SimilarProduct similarOf(CatalogueRepository.NameMatch m, int distance, boolean sameUnit) {
+        return new SimilarProduct(m.id(), m.code(), m.description(), m.unit(), m.active(), distance, sameUnit);
+    }
+
+    /** How many letters may differ for two names to count as close: none for a short name, a few for a long one. */
+    static int allowedDistance(String a, String b) {
+        int longest = Math.max(a.length(), b.length());
+        return longest < 5 ? 0 : longest < 10 ? 1 : longest < 20 ? 2 : 3;
+    }
+
+    /** The Levenshtein distance between two strings: single letters added, removed or changed. */
+    static int editDistance(String a, String b) {
+        int[] previous = new int[b.length() + 1];
+        int[] current = new int[b.length() + 1];
+        for (int j = 0; j <= b.length(); j++) {
+            previous[j] = j;
+        }
+        for (int i = 1; i <= a.length(); i++) {
+            current[0] = i;
+            for (int j = 1; j <= b.length(); j++) {
+                int change = previous[j - 1] + (a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1);
+                current[j] = Math.min(change, Math.min(previous[j] + 1, current[j - 1] + 1));
+            }
+            int[] swap = previous;
+            previous = current;
+            current = swap;
+        }
+        return previous[b.length()];
     }
 
     // ---- Pack sizes (ADR-033, issue #194; docs/specs/trade-capabilities.md section 4) ---------------
@@ -517,6 +670,36 @@ class CatalogueService {
             now.put("source_id", sourceId);
         }
         audit.record(new AuditLog.Entry("retail.product.price_changed", PRODUCT, locked.id(), null, was, now));
+    }
+
+    /**
+     * A voided restock (issue #351) gives back the prices it set while it is still the product's latest price event; see
+     * {@link RetailCatalogue#revertPurchasePrices}. The product is already locked by the caller.
+     */
+    boolean revertPurchasePrices(Product locked, UUID purchaseId, String reason, boolean laterPurchase) {
+        List<PriceChange> history = repo.history(locked.id());
+        List<PriceChange> mine = history.stream()
+                .filter(h -> "purchase".equals(h.source())
+                        && purchaseId.equals(h.sourceId())
+                        && h.oldCostMinor() != null
+                        && h.oldSellMinor() != null
+                        && (h.oldCostMinor().longValue() != h.newCostMinor().longValue()
+                                || h.oldSellMinor().longValue() != h.newSellMinor()))
+                .toList();
+        if (mine.isEmpty()) {
+            return false;
+        }
+        if (laterPurchase || !history.getLast().id().equals(mine.getLast().id())) {
+            noteCostUnchanged(
+                    locked,
+                    purchaseId,
+                    reason
+                            + ". The prices were left as they are: later stock came in or they changed after the restock.");
+            return false;
+        }
+        PriceChange first = mine.getFirst();
+        changePrices(locked, first.oldCostMinor(), first.oldSellMinor(), "purchase", purchaseId, reason);
+        return true;
     }
 
     /**

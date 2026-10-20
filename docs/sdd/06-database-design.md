@@ -1560,8 +1560,11 @@ lets one line column be set once, and a partial index on the transfers in transi
 existing row and no existing behaviour; the flow is behind the `transfer_receipt` capability.
 `V42__loan_reopen_restores_pledges.sql` (#176) replaces `lending_loan_collateral_guard` so a
 reversal that reopens a closed loan can restore that loan's own pledges (section 6.7).
-`V43__payment_methods.sql` (#160, ADR-026) adds the `payment_methods` table (section 6.5). The next
-migration takes the number above the highest on `main` (`MigrationOrderIT`, chapter 15 section
+`V43__payment_methods.sql` (#160, ADR-026) adds the `payment_methods` table (section 6.5).
+`V63__retail_catalogue_corrections.sql` (#351 and #352, ADR-044) is expand only:
+`bms_name_key`, the generated `retail_products.name_key` with its index, `retail_products.duplicate_reason`,
+`retail_purchase_voids` and `retail_stock_corrections` (section 6.11.2a). No column or check of the movement and balance tables
+changes. The next migration takes the number above the highest on `main` (`MigrationOrderIT`, chapter 15 section
 15.4.3).
 
 ## 6.10 Open items
@@ -1622,6 +1625,8 @@ module on again adds nothing. `S` marks `is_system_controlled`.
 | `id`, `tenant_id`, `created_at`, `updated_at`, `version`, `created_by` | standard | |
 | `code` | varchar(40) | Normalised by `RetailCatalogue.normaliseCode` (Unicode spaces stripped at the ends, then NFKC); no control character and no space other than U+0020 inside (CHECK `retail_products_code_check`, V14); unique per tenant on `lower(code)` (data dictionary rule 1) |
 | `description` | varchar(300) | Trigram index for search |
+| `name_key` | text, generated stored | `bms_name_key(description)` (V63, issue #352): the description folded to lower case without accents (`bms_fold`, V40) with every run of spaces and punctuation collapsed to one space and the ends trimmed. Indexed on `(tenant_id, name_key)`; the application refuses a second product of the same unit with the same key (422 `duplicate_product_name`, ADR-044), it is not a unique index because an administrator may add one anyway |
+| `duplicate_reason` | varchar(300), null | Why an administrator added a product whose name another product of the same unit has (V63); null otherwise |
 | `category_id`, `unit_id` | uuid | Composite FKs to `retail_categories`, `retail_units` |
 | `cost_minor`, `sell_minor` | bigint >= 0 | The current prices. Changed only by the statement that also writes `retail_price_history` (ADR-020 decision 5) |
 | `currency` | char(3) | The tenant currency at creation |
@@ -1697,7 +1702,7 @@ Imported history (sales, purchases, adjustments, returns, usage, legacy balances
 | `kind` | text | `opening`, `purchase`, `return`, `transfer_in` (positive); `sale`, `usage`, `damage`, `transfer_out` (negative); `adjustment`, `legacy_balance` (either sign). CHECK on the sign |
 | `qty` | numeric(14,3) | Signed, never zero |
 | `unit_cost_minor` | bigint | The product's cost at the time: the valuation snapshot |
-| `source_type`, `source_id`, `source_line_id` | | The document that wrote it: `retail.sale`, `retail.sale_void`, `retail.stocktake`, the R3 sources, `retail.transfer` and `retail.transfer_void` (source id the transfer, line id its line) |
+| `source_type`, `source_id`, `source_line_id` | | The document that wrote it: `retail.sale`, `retail.sale_void`, `retail.stocktake`, the R3 sources, `retail.transfer` and `retail.transfer_void` (source id the transfer, line id its line), `retail.purchase_void` (source id the restock voided, an `adjustment` per movement of the restock, V63, issue #351) and `retail.stock_correction` (source id the correction, one `adjustment`; the reports that count shrinkage read `retail.stocktake` only, ADR-044) |
 | `reverses_movement_id` | uuid | Set on a void's `return`, and on a transfer void's opposite movement; unique, so a movement is reversed at most once |
 | `transfer_id` | uuid | The transfer a `transfer_out` or `transfer_in` belongs to, and only on those kinds (CHECK `retail_stock_movements_transfer_link`, V22); composite FK to `retail_transfers`, checked at commit because the movements are written under their balance locks before the header |
 | `historical` | boolean | Imported history (FR-RET-12); default false |
@@ -1852,6 +1857,23 @@ CHECK `paid_minor <= total_minor` makes an overpayment impossible.
 Every retail unit amount a request can set (product and purchase cost and sell price, sale line
 price and cost snapshot, payment amount, movement, usage and stock-take unit cost, price history)
 has a CHECK of at most 10^13 minor units (V14, review F7), the bound the API validates.
+
+### 6.11.2a Corrections of entry mistakes (ADR-044; issues #351 and #352; V63)
+
+Both tables have `tenant_id`, forced RLS, `bms_app` SELECT and INSERT only, and the append-only trigger.
+
+`retail_purchase_voids`: one row per restock voided. `purchase_id` (composite FK to `retail_purchases`, unique with the tenant, so a
+restock is voided once and two voids at once cannot both commit), `voided_on` (the business date of the void, the day the cash
+book gives a cash restock's cash back), `reason` (not blank), `voided_by`, `created_at`. `retail_purchases` itself is never
+changed: a restock is voided when a row names it, and the reads join the table. The stock reversals are `adjustment` movements
+of the source type `retail.purchase_void` with `reverses_movement_id` set; the journal reversals are the ledger's own
+(`reverses_entry_id`), written on the void's date.
+
+`retail_stock_corrections`: one row per quantity corrected on the stock list. `branch_id`, `product_id`, `movement_id` (the
+`adjustment` movement it wrote, unique), `old_qty` and `new_qty` (numeric(14,3); `new_qty >= 0` and different from `old_qty`),
+`reason_code` (`entry_mistake` or `miscount`), `note`, `unit_cost_minor` (the cost the movement was valued at), `journal_entry_id`
+(null when the cost is zero and nothing posts) and `created_by`. The movement list reads it through `movement_id` to show a
+correction with its reason and the old and new quantity.
 
 ### 6.11.3 Valuation and profit (FR-RET-09, FR-RET-10; #54)
 

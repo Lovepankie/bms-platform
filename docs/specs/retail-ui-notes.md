@@ -746,6 +746,46 @@ again under the sale's lock; the screens only save a round trip and say each ref
 - **Tests.** `branches/state.test.ts` (the rules), `branches/branches.dom.test.tsx` (hidden then shown closed branches, the badge and reason, confirm once, the warning
   and reason, refusals in plain words, reopen, the stocking switch, a reader sees no action), `retail/not-stocking.test.tsx`, `auth/branch.test.ts`, `tour/*`.
 
+## Correcting entry mistakes (#351, #352, ADR-044)
+
+The owner fixes a mistake where he sees it, with a trail the spreadsheet never had. Everything below is phone first, in plain words, and
+shows an action only to someone who may take it; the server decides again.
+
+- **One name per item (#352).** On the Items form (add and change), pressing Save first asks the server for similar names
+  (`GET /retail/products/similar`). The same name in the same unit shows "This product already exists: <name> (code). Open it?" with Open it,
+  Change the name and, for an administrator (`core.settings.manage`) only, Add anyway: it asks "Why is this a different item?" (5 characters at
+  least), keeps the reason with the item and saves. Anyone else sees no Add anyway. A close name shows "An item with a similar name exists. Check you
+  are not adding the same item twice." with each neighbour, an Open button on each, "This is a different item, save it" and Change the name; the
+  same name in another unit is listed there as "the same name in another unit". Editing the description or unit clears the panels and asks
+  again; an edit that leaves both alone saves at once. If the server refuses at the moment of saving (someone else added the name), the same
+  panel appears from its answer. One request however often Save is pressed (`sending` ref). Open it and Open go to the Items edit screen of that item.
+  The CSV import reports a repeated name as skipped ("An item with this name exists already (code ...)").
+- **Past restocks (`/staff/retail/restocks`, crumbs Home, Retail, Past restocks; a link on the Restock screen).** Every restock, newest first, a
+  voided one marked Voided with its date and reason and never hidden; filters From, To and Show (all, not voided, voided). Each card shows the
+  number, date, supplier, payment, total and each line with its quantity; a line entered in a unit that is not the item's usual one adds "Entered in
+  metre but this item is kept in roll? If that is wrong, correct this restock and enter it again in the right unit." **Correct this restock**
+  (for someone who holds `retail.purchase.create` at every branch it touched; otherwise a line says why not) opens a form with what a void does
+  in plain words, a reason (5 characters at least) and three buttons: **Void and enter it again**, **Void only** and Keep the restock. The reason
+  and the `Idempotency-Key` are kept per restock in the tab (`usePersistedDraft`), so a lost answer and a retry send the same key; one request
+  however often a button is pressed. A refusal shows the server's words (stock sold or moved, paid, imported). Void and enter it again goes to
+  `/staff/retail/restock?again=<id>`: the restock form opens with the same supplier, date, payment and lines (quantities in the unit they were
+  entered in) dated today (the old date may be banked in the cash book; a plain warning shows if it is moved back), in a draft of its own, so a restock in progress is never overwritten, under "You are entering restock RP... again, which you
+  voided. Check each quantity, unit and price, then save." On the restock form a line whose chosen pack unit is not the item's usual unit shows the same
+  hint.
+- **Correct on a stock row.** On the stock list of one branch (not All branches) each row has Correct, for someone who holds
+  `retail.stocktake.commit` at that branch or `retail.catalogue.manage`. It opens four small choices, each on its own: *The quantity is wrong*
+  (In stock now, the right quantity, "That takes away 4 roll.", a reason: Entry mistake or Miscount, an optional note, a hint that the old figure
+  stays in the history and is not counted as shrinkage, Save the right quantity; one request, one key kept in the tab), *The category is wrong*
+  (the right category; "<item> is now in <new>. It was in <old>."; audited with both), *The unit, name or price is wrong* (where to go:
+  Past restocks for a restock entered in the wrong pack unit or at the wrong price, Items for a name or price; a unit in use is never converted, so the way out is a new item in the right unit, this one corrected to none, and a restock of the new one) and *See its history* (the item at this branch, newest first: date, what it was, the quantity with its sign,
+  "Corrected from 10 to 6. Entry mistake.", the note, "By you" or "By a colleague"). Nothing is edited underneath.
+- **Tours.** `retail-sales` is version 7 and `admin-welcome` version 10 (a Correct step on the stock list for whoever may count stock, and for the
+  welcome tour a Past restocks step); `page-stock` is version 2; `page-restocks` is new (version 1). Anchors: `stock-list`, `restock-past`,
+  `restocks-filters`, `restocks-list`.
+- **Mock.** `api/retail-mock.ts` implements `similarProducts`, the duplicate refusal (`sameNameCheck`), `listPurchases`, `getPurchase`,
+  `voidPurchase`, `correctStock` and `stockHistory` in memory, with the server's codes and words.
+- **Tests.** `catalogue-names.dom.test.tsx`, `restocks.dom.test.tsx`, `stock-correct.dom.test.tsx`, `tour/*`.
+
 ## Left to do
 
 - Analytics: export to PDF and Excel and the daily WhatsApp summary (#149 items 8), and the cash view per shop per day (item 5), which need the cash book.
