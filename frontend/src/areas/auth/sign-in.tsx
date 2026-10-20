@@ -1,4 +1,4 @@
-import { createLazyRoute, useNavigate } from '@tanstack/react-router';
+import { Link, createLazyRoute, useNavigate } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { api, type MfaEnrolment, problemOf, type SignInResponse } from '../../api/client';
 import { normaliseSecondFactor, plainProblem } from '../../auth/codes';
@@ -17,7 +17,7 @@ type Step =
   | { kind: 'enrol'; mfaToken: string; enrolment: MfaEnrolment }
   | { kind: 'codes'; codes: string[] };
 
-function SignIn() {
+export function SignIn() {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>({ kind: 'password' });
   const [login, setLogin] = useState('');
@@ -104,7 +104,7 @@ function SignIn() {
       {step.kind === 'password' && (
         <>
           <span className="auth-art">{illustrations.secure}</span>
-          <StepHeader title="Staff sign-in" lead="Use the email or phone and the password you set from your invitation." />
+          <StepHeader title="Staff sign-in" lead="Sign in with your email or phone and your password. First time here? Open the link you were sent to choose a password." />
           <ErrorLine message={message} />
           <form onSubmit={submitPassword} className="form-stack">
             <div>
@@ -129,6 +129,9 @@ function SignIn() {
             </div>
             <button className="btn-primary btn-lg" disabled={busy}>{busy ? 'Signing in' : 'Sign in'}</button>
           </form>
+          <p>
+            <Link to="/forgot-password">Forgot password?</Link>
+          </p>
         </>
       )}
 

@@ -26,6 +26,14 @@ const signInRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sign-
   import('../areas/auth/sign-in').then((m) => m.Route),
 );
 
+const forgotPasswordRoute = createRoute({ getParentRoute: () => rootRoute, path: '/forgot-password' }).lazy(() =>
+  import('../areas/auth/forgot-password').then((m) => m.Route),
+);
+
+const resetPasswordRoute = createRoute({ getParentRoute: () => rootRoute, path: '/reset-password' }).lazy(() =>
+  import('../areas/auth/reset-password').then((m) => m.Route),
+);
+
 const acceptInvitationRoute = createRoute({ getParentRoute: () => rootRoute, path: '/accept-invitation' }).lazy(() =>
   import('../areas/auth/accept-invitation').then((m) => m.Route),
 );
@@ -244,6 +252,8 @@ export const router = createRouter({
   routeTree: rootRoute.addChildren([
     indexRoute,
     signInRoute,
+    forgotPasswordRoute,
+    resetPasswordRoute,
     acceptInvitationRoute,
     staffRoute.addChildren([staffHomeRoute, staffApprovalsRoute, staffSetupRoute, staffBranchesRoute, staffRetailRoute.addChildren([
         retailHomeRoute,

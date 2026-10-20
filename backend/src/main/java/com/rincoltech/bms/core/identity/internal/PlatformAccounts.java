@@ -113,6 +113,16 @@ class PlatformAccounts implements Accounts {
                 .update();
     }
 
+    // Intentionally unused for now: there is no platform password step-up (operators always enrol, so the platform
+    // routes use a
+    // code). It is here because the Accounts contract has the method; a platform password step-up would call it.
+    @Override
+    public void clearFailedLogins(UUID id) {
+        jdbc.sql("UPDATE platform_users SET failed_login_count = 0 WHERE id = ? AND failed_login_count <> 0")
+                .param(id)
+                .update();
+    }
+
     @Override
     public void recordSuccess(UUID id, Instant at) {
         jdbc.sql(

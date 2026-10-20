@@ -47,6 +47,12 @@ interface Accounts {
     void recordSuccess(UUID id, Instant at);
 
     /**
+     * A right password proved again by a signed-in user (the step-up of ADR-042): the consecutive failure count starts again, as at
+     * sign-in, but a lock that is set is left alone (nothing here lifts a lock) and no sign-in is recorded.
+     */
+    void clearFailedLogins(UUID id);
+
+    /**
      * The same atomic count-and-lock as {@link #recordFailure}, on the separate step-up counter (issue #309): wrong codes
      * entered by a signed-in session. Never touches the password counter.
      */

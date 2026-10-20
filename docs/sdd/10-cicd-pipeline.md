@@ -80,7 +80,9 @@ Runs on every pull request and every push to `main`.
 | Delivery | `actionlint`, `shellcheck` on `deploy/` (including the puller), `docker compose config` on the three compose files, `systemd-analyze verify` on the staging slice and timer | Workflows, scripts, compose files and unit files are valid |
 
 The documentation guards (`dash-guard`, `adr-citation-guard`, `architecture-model`,
-`linked-issue-guard`) run as their own workflows (ADR-005).
+`linked-issue-guard`) run as their own workflows (ADR-005), and so does `placeholder-migration-guard`, which fails a pull request that
+still holds a migration numbered `V99` (the placeholder a branch uses when it cannot know the next free number; a `V99` on main would
+block every later migration, because Flyway runs with `outOfOrder` off), until the number is taken: there is no override. The first job of `deploy.yml` refuses the same file, so no image is built and the staging pointer never moves to a commit that holds one.
 
 `pull_request` is used, never `pull_request_target`: a run for a fork's pull request gets a
 read-only token and no secrets. Nothing in CI pushes images or deploys.

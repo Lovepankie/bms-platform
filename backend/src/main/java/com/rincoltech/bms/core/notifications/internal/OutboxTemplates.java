@@ -101,6 +101,49 @@ class OutboxTemplates {
 
                     Rincoltech
                     """),
+            // A staff user who forgot the password asks for a link on the sign-in page (FR-IAM-15, ADR-042). Plain, no
+            // name, no figure; the link is the only secret and lapses with the row.
+            "identity.password_reset",
+            new Template("Reset your BMS password for {tenant_name}", """
+                    Hello,
+
+                    Someone asked to reset the password for your BMS sign-in at {tenant_name}. If that was you, open
+                    this link and choose a new password. The link works once, until {expires_at}.
+
+                    {link}
+
+                    If you did not ask for this, ignore this email: your password stays as it is. If you keep
+                    getting it, tell your administrator.
+
+                    Rincoltech
+                    """),
+            // Sent to the user when an administrator or the platform operator issues a reset link for them. No link: it
+            // is handed over, and nothing has changed until it is used.
+            "identity.password_reset_issued",
+            new Template("A password reset was issued for your BMS sign-in", """
+                    Hello,
+
+                    {who} issued a password reset for your BMS sign-in at {tenant_name} on {when}.
+                    Nothing has changed yet: your password stays as it is until the reset link, which you are
+                    given in person or by message, is used.
+
+                    If you did not expect this, tell your business's administrators, or Rincoltech support, at once.
+
+                    Rincoltech
+                    """),
+            // Sent after a reset is used, to the address on file, so the owner of the mailbox hears of it. No link.
+            "identity.password_changed",
+            new Template("Your BMS password was changed", """
+                    Hello,
+
+                    The password for your BMS sign-in at {tenant_name} was changed on {when}, and every device you were
+                    signed in on was signed out.
+
+                    If this was you, nothing more is needed. If it was not, ask your administrator to reset your
+                    sign-in at once.
+
+                    Rincoltech
+                    """),
             // The insights digest (ADR-030): the text is built by lending.insights as plain text
             // from the tenant's own figures, ready for a WhatsApp relay later.
             "insights.daily_digest",

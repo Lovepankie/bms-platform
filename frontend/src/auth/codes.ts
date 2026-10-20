@@ -49,6 +49,9 @@ const PLAIN: Record<string, string> = {
   mfa_enrolment_not_started: 'Start again: open the set-up step once more to get a new code.',
   invitation_invalid: 'This invitation link has been used or replaced. Ask your administrator for a new one.',
   invitation_expired: 'This invitation link has expired. Ask your administrator for a new one.',
+  reset_link_invalid: 'This reset link has been used or replaced. Ask for a new one from the sign-in page.',
+  reset_link_expired: 'This reset link has expired (it works for one hour). Ask for a new one from the sign-in page.',
+  rate_limited: 'Too many tries from here. Wait a few minutes and try again.',
 };
 
 /** A plain sentence for a failed sign-in step; never echoes a token, code or password. */

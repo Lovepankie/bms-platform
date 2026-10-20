@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.identity.internal;
 
 import com.rincoltech.bms.core.identity.AdminSecurity;
 import com.rincoltech.bms.core.identity.DataKeys;
+import com.rincoltech.bms.core.identity.PasswordStepUp;
 import com.rincoltech.bms.core.identity.SealedSecrets;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import java.util.List;
@@ -11,7 +12,7 @@ import org.springframework.stereotype.Component;
 
 /** {@link AdminSecurity} and {@link SealedSecrets} over the staff accounts, the role tables and the data key. */
 @Component
-class AdminSecurityService implements AdminSecurity, SealedSecrets {
+class AdminSecurityService implements AdminSecurity, PasswordStepUp, SealedSecrets {
 
     private final AuthFlow flow;
     private final StaffAccounts accounts;
@@ -28,6 +29,12 @@ class AdminSecurityService implements AdminSecurity, SealedSecrets {
     @Override
     public void requireTotp(String code) {
         flow.confirmTotp(accounts, CurrentPrincipal.require().userId(), code);
+    }
+
+    @Override
+    public void requirePassword(String password) {
+        var caller = CurrentPrincipal.require();
+        flow.confirmPassword(accounts, caller.userId(), caller.sessionId(), password);
     }
 
     @Override

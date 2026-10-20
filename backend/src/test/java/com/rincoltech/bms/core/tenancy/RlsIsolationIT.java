@@ -70,6 +70,12 @@ class RlsIsolationIT {
                         + " VALUES (?, ?, ?, ?, now() + interval '72 hours', ?)")
                 .params(UUID.randomUUID(), t.tenantId(), user, randomHash(), user)
                 .update();
+        // A password reset link (the forgotten staff password, FR-IAM-15, ADR-042). JUSTIFICATION-A3: one factory row
+        // per tenant table.
+        owner.sql("INSERT INTO user_password_resets (id, tenant_id, user_id, token_hash, expires_at, origin)"
+                        + " VALUES (?, ?, ?, ?, now() + interval '1 hour', 'self')")
+                .params(UUID.randomUUID(), t.tenantId(), user, randomHash())
+                .update();
         owner.sql(
                         "INSERT INTO auth_sessions (id, tenant_id, user_id, family_id, refresh_token_hash, expires_at, idle_expires_at)"
                                 + " VALUES (?, ?, ?, ?, ?, now() + interval '7 days', now() + interval '12 hours')")

@@ -58,6 +58,25 @@ final class UserApi {
     @Schema(name = "InvitationLink")
     record InvitationLink(String url, Instant expiresAt) {}
 
+    /**
+     * The one-time link a tenant admin hands to a user who forgot the password (FR-IAM-15): shown once, valid for one hour, and
+     * never sent by email on this path.
+     */
+    @Schema(name = "SignInResetLink")
+    record SignInResetLink(String url, Instant expiresAt) {}
+
+    @Schema(
+            name = "ResetSignInRequest",
+            description =
+                    "Proof that the signed-in admin is still themselves: the code from their authenticator app when they have two-step sign-in, otherwise their own password. Exactly the one that applies is required; never logged")
+    record ResetSignInRequest(
+            @Size(max = 20) @Schema(description = "The current 6 digit code from the admin's own authenticator app")
+            String totpCode,
+
+            @Size(max = 200)
+            @Schema(description = "The admin's own current password, for an admin with no two-step sign-in")
+            String password) {}
+
     @Schema(name = "InvitedUser")
     record InvitedUserResponse(UserResponse user, InvitationLink invitation) {}
 

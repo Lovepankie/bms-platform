@@ -64,6 +64,20 @@ final class AuthApi {
             @NotBlank @Size(max = 200) String token,
             @NotBlank @Size(max = 200) String password) {}
 
+    @Schema(name = "PasswordResetRequest")
+    record PasswordResetRequest(
+            @NotBlank @Size(max = 320) @Schema(description = "Email or phone of the staff account")
+            String login) {}
+
+    /** The same body whether or not an account matched (FR-IAM-15). */
+    @Schema(name = "PasswordResetRequested")
+    record PasswordResetRequested(String message) {}
+
+    @Schema(name = "PasswordResetCompleteRequest")
+    record PasswordResetCompleteRequest(
+            @NotBlank @Size(max = 200) String token,
+            @NotBlank @Size(max = 200) String password) {}
+
     @Schema(name = "MfaEnrolment")
     record MfaEnrolmentResponse(
             @Schema(description = "Base32 secret for manual entry; shown once")
@@ -78,7 +92,8 @@ final class AuthApi {
             List<String> recoveryCodes) {}
 
     /**
-     * {@code status} is {@code signed_in}, {@code mfa_required} or {@code mfa_enrolment_required}.
+     * {@code status} is {@code signed_in}, {@code mfa_required}, {@code mfa_enrolment_required} or, after a password reset
+     * that cannot sign the user in (the account is locked), {@code sign_in_required}.
      * The refresh token travels only in the {@code HttpOnly} cookie, never in the body.
      */
     @Schema(name = "SignInResponse")

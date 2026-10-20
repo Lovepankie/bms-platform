@@ -5226,6 +5226,39 @@
           }
         }
       },
+      "PasswordResetCompleteRequest" : {
+        "properties" : {
+          "password" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "token" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "password", "token" ]
+      },
+      "PasswordResetRequest" : {
+        "properties" : {
+          "login" : {
+            "description" : "Email or phone of the staff account",
+            "maxLength" : 320,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "login" ]
+      },
+      "PasswordResetRequested" : {
+        "properties" : {
+          "message" : {
+            "type" : "string"
+          }
+        }
+      },
       "PaymentIntent" : {
         "properties" : {
           "amount_minor" : {
@@ -5463,6 +5496,29 @@
             "type" : "string"
           }
         }
+      },
+      "PlatformSignInResetLink" : {
+        "description" : "Shown once to the operator, who hands it to the tenant admin",
+        "properties" : {
+          "expires_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PlatformStepUpRequest" : {
+        "properties" : {
+          "totp_code" : {
+            "description" : "A current 6 digit code from the operator's own authenticator app",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "totp_code" ]
       },
       "PlatformTenant" : {
         "properties" : {
@@ -5815,6 +5871,23 @@
           },
           "report_key" : {
             "description" : "A key from the catalogue, for example lending.par",
+            "type" : "string"
+          }
+        }
+      },
+      "ResetSignInRequest" : {
+        "description" : "Proof that the signed-in admin is still themselves: the code from their authenticator app when they have two-step sign-in, otherwise their own password. Exactly the one that applies is required; never logged",
+        "properties" : {
+          "password" : {
+            "description" : "The admin's own current password, for an admin with no two-step sign-in",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "totp_code" : {
+            "description" : "The current 6 digit code from the admin's own authenticator app",
+            "maxLength" : 20,
+            "minLength" : 0,
             "type" : "string"
           }
         }
@@ -15753,6 +15826,17 @@
         },
         "required" : [ "login", "password" ]
       },
+      "SignInResetLink" : {
+        "properties" : {
+          "expires_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        }
+      },
       "SignInResponse" : {
         "properties" : {
           "access_token" : {
@@ -17549,6 +17633,64 @@
           }
         },
         "summary" : "Second factor: TOTP or recovery code (FR-IAM-06, FR-IAM-11)",
+        "tags" : [ "auth" ]
+      }
+    },
+    "/api/v1/auth/staff/password/forgot" : {
+      "post" : {
+        "operationId" : "requestPasswordReset",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PasswordResetRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PasswordResetRequested"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask for a password reset link by email or phone; the answer never says whether an account matched (FR-IAM-15)",
+        "tags" : [ "auth" ]
+      }
+    },
+    "/api/v1/auth/staff/password/reset" : {
+      "post" : {
+        "operationId" : "completePasswordReset",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PasswordResetCompleteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set a new password with the one-time reset token, end every session, then sign in (FR-IAM-15)",
         "tags" : [ "auth" ]
       }
     },
@@ -23839,12 +23981,68 @@
             "type" : "string"
           }
         } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformStepUpRequest"
+              }
+            }
+          },
+          "required" : true
+        },
         "responses" : {
           "200" : {
             "description" : "OK"
           }
         },
-        "summary" : "Reset the lost second factor of a tenant admin (FR-IAM-12)",
+        "summary" : "Reset the lost second factor of a tenant admin; needs a current code from the operator's own authenticator (FR-IAM-12)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/users/{user_id}/reset-sign-in" : {
+      "post" : {
+        "operationId" : "platformResetAdminSignIn",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformStepUpRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformSignInResetLink"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Issue a one-time password reset link for a tenant admin; shown once, valid one hour; needs a current code from the operator's own authenticator (FR-IAM-15)",
         "tags" : [ "platform" ]
       }
     },
@@ -31708,6 +31906,44 @@
           }
         },
         "summary" : "Reset another user's lost second factor (FR-IAM-12)",
+        "tags" : [ "users" ]
+      }
+    },
+    "/api/v1/users/{user_id}/reset-sign-in" : {
+      "post" : {
+        "operationId" : "resetUserSignIn",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ResetSignInRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SignInResetLink"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Issue a one-time link to set a new password for an active user who is not a tenant admin; shown once, valid for one hour; needs the admin's authenticator code, or their own password when they have no two-step sign-in (FR-IAM-15)",
         "tags" : [ "users" ]
       }
     },

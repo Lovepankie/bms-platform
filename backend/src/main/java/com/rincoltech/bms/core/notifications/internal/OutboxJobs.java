@@ -25,6 +25,7 @@ class OutboxJobs {
     static final String SENDER = "core.notifications.outbox-sender";
     static final String SMS_SENDER = "core.notifications.sms-sender";
     static final String PURGE = "core.notifications.outbox-purge";
+    static final String EXPIRED_LINKS = "core.notifications.outbox-expired-links";
     static final int BATCH = 50;
     /**
      * SMS gets its own run (spec section 4.6): a larger batch, and a time budget so a provider outage at
@@ -47,6 +48,13 @@ class OutboxJobs {
     RecurringTask<Void> smsSender(OutboxDispatcher dispatcher) {
         return Tasks.recurring(SMS_SENDER, Schedules.fixedDelay(Duration.ofSeconds(30)))
                 .execute((instance, context) -> dispatcher.dispatchOnly(Outbox.SMS, SMS_BATCH, SMS_BUDGET));
+    }
+
+    /** Every 5 minutes: an expired link leaves the row's parameters (FR-IAM-15, ADR-042). */
+    @Bean
+    RecurringTask<Void> outboxExpiredLinks(OutboxDispatcher dispatcher) {
+        return Tasks.recurring(EXPIRED_LINKS, Schedules.fixedDelay(Duration.ofMinutes(5)))
+                .execute((instance, context) -> dispatcher.clearExpiredLinks());
     }
 
     @Bean

@@ -1,15 +1,22 @@
 package com.rincoltech.bms.core.identity.internal;
 
+import com.rincoltech.bms.core.identity.AdminSecurity;
+import com.rincoltech.bms.core.identity.PasswordStepUp;
 import com.rincoltech.bms.core.identity.internal.UserApi.InvitationLink;
 import com.rincoltech.bms.core.identity.internal.UserApi.InviteUserRequest;
 import com.rincoltech.bms.core.identity.internal.UserApi.InvitedUserResponse;
+import com.rincoltech.bms.core.identity.internal.UserApi.ResetSignInRequest;
 import com.rincoltech.bms.core.identity.internal.UserApi.RoleAssignmentRequest;
+import com.rincoltech.bms.core.identity.internal.UserApi.SignInResetLink;
 import com.rincoltech.bms.core.identity.internal.UserApi.UpdateUserRequest;
 import com.rincoltech.bms.core.identity.internal.UserApi.UserPage;
 import com.rincoltech.bms.core.identity.internal.UserApi.UserResponse;
+import com.rincoltech.bms.kernel.ApiException;
+import com.rincoltech.bms.kernel.NoStore;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import java.net.URI;
@@ -37,9 +44,15 @@ import org.springframework.web.bind.annotation.RestController;
 class UserController {
 
     private final UserService service;
+    private final PasswordResets resets;
+    private final AdminSecurity security;
+    private final PasswordStepUp passwords;
 
-    UserController(UserService service) {
+    UserController(UserService service, PasswordResets resets, AdminSecurity security, PasswordStepUp passwords) {
         this.service = service;
+        this.resets = resets;
+        this.security = security;
+        this.passwords = passwords;
     }
 
     @GetMapping
@@ -114,5 +127,39 @@ class UserController {
     @Operation(summary = "Reset another user's lost second factor (FR-IAM-12)", operationId = "resetUserMfa")
     UserResponse resetMfa(@PathVariable("user_id") UUID userId) {
         return service.resetMfa(userId);
+    }
+
+    /**
+     * The order matters: the target is checked first (read-only), then the acting admin proves they are still themselves, then
+     * the link is made, which checks the target again under a lock. The proof is a fresh code from their own authenticator when
+     * they have one enrolled, otherwise their own current password (counted on the sign-in lock like a wrong password at sign-in):
+     * two-step sign-in is optional, so an admin without it must not be locked out of this route, and a stolen session or token
+     * alone gives neither (ADR-042). The step-up runs before the transaction of the action, as {@link AdminSecurity#requireTotp}
+     * requires. Neither credential is ever logged.
+     */
+    @PostMapping("/{user_id}/reset-sign-in")
+    @RequiresPermission("core.users.manage")
+    @Operation(
+            summary =
+                    "Issue a one-time link to set a new password for an active user who is not a tenant admin; shown once, valid for one hour; needs the admin's authenticator code, or their own password when they have no two-step sign-in (FR-IAM-15)",
+            operationId = "resetUserSignIn")
+    SignInResetLink resetSignIn(
+            @PathVariable("user_id") UUID userId,
+            @Valid @RequestBody ResetSignInRequest request,
+            HttpServletResponse response) {
+        NoStore.apply(response);
+        resets.precheckForAdmin(userId);
+        if (resets.actorHasSecondFactor()) {
+            if (request.totpCode() == null || request.totpCode().isBlank()) {
+                throw ApiException.rule("totp_required", "Enter the current code from your authenticator app.");
+            }
+            security.requireTotp(request.totpCode());
+        } else {
+            if (request.password() == null || request.password().isEmpty()) {
+                throw ApiException.rule("password_required", "Enter your own password to confirm.");
+            }
+            passwords.requirePassword(request.password());
+        }
+        return resets.issueForAdmin(userId);
     }
 }

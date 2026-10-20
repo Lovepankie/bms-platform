@@ -45,7 +45,9 @@ class AuthFlow {
     enum Step {
         SIGNED_IN,
         MFA_REQUIRED,
-        MFA_ENROLMENT_REQUIRED
+        MFA_ENROLMENT_REQUIRED,
+        /** The password was reset but no session is issued: the user signs in with the new password. */
+        SIGN_IN_REQUIRED
     }
 
     /** What a step returns: tokens when signed in, an MFA token between the two factors. */
@@ -120,6 +122,34 @@ class AuthFlow {
                     tokens.mfa(account.id(), accounts.tenantId(), accounts.kind(), issuer, now));
         }
         return signIn(accounts, account.id(), now, issuer, userAgent, List.of(), "invitation");
+    }
+
+    /**
+     * The sign-in right after a password reset (FR-IAM-15, ADR-042): the link and the new password have just proved who the
+     * user is, as for {@link #afterInvitation}, and a second factor is still asked for exactly as {@link #login} would. A reset
+     * does not clear the failed-attempt lock (it would let a mailbox thief keep guessing the code between resets), so a
+     * locked account is told to sign in later and gets no session.
+     */
+    @Transactional(noRollbackFor = ApiException.class)
+    Outcome afterReset(Accounts accounts, UUID userId, String issuer, String userAgent) {
+        Instant now = clock.now();
+        Account account = accounts.byIdForUpdate(userId).orElseThrow(AuthFlow::invalidCredentials);
+        if (!account.active()) {
+            throw invalidCredentials();
+        }
+        if (account.lockedAt(now)) {
+            return new Outcome(Step.SIGN_IN_REQUIRED, null, null, null, List.of());
+        }
+        if (account.mfaEnabled()) {
+            return Outcome.mfa(
+                    Step.MFA_REQUIRED, tokens.mfa(account.id(), accounts.tenantId(), accounts.kind(), issuer, now));
+        }
+        if (accounts.mfaRequired(account.id())) {
+            return Outcome.mfa(
+                    Step.MFA_ENROLMENT_REQUIRED,
+                    tokens.mfa(account.id(), accounts.tenantId(), accounts.kind(), issuer, now));
+        }
+        return signIn(accounts, account.id(), now, issuer, userAgent, List.of(), "password_reset");
     }
 
     /** The second factor: a TOTP code or one unused recovery code (FR-IAM-06, FR-IAM-11). */
@@ -204,6 +234,10 @@ class AuthFlow {
             throw invalidCode(HttpStatus.UNPROCESSABLE_CONTENT);
         }
         accounts.enableTotp(userId, account.totpPendingSecret(), step.getAsLong());
+        // Wrong passwords at the password step-up share this counter with wrong codes at the code step-up: someone who
+        // made four
+        // wrong passwords and then enrols must not be one wrong code from losing every session (ADR-042).
+        accounts.clearStepUpFailures(userId);
         List<String> codes = issueRecoveryCodes(accounts, userId);
         accounts.audit("core.mfa.enrolled", userId, Map.of("recovery_codes_issued", codes.size()));
         if (signIn) {
@@ -236,6 +270,62 @@ class AuthFlow {
             throw invalidCode(HttpStatus.UNPROCESSABLE_CONTENT);
         }
         accounts.clearStepUpFailures(userId);
+    }
+
+    /**
+     * A re-entry of the signed-in user's own password for one sensitive action, for an account with no second factor (the admin
+     * reset of a sign-in, ADR-042): the step-up of {@link #confirmTotp} where there is no authenticator to ask. A stolen session or
+     * token does not give the password. The account must be active and not locked, and a wrong password:
+     *
+     * <ul>
+     *   <li>counts on the account's sign-in counter and lock exactly as a wrong password at sign-in does (the fifth locks the
+     *       account for 15 minutes, audited; the count is the shared one, so a stranger's wrong sign-ins add to it);
+     *   <li>also counts on the step-up counter, which only an authenticated session can feed. The fifth wrong password there
+     *       locks step-up for 15 minutes and ends the CALLING session's family and no other: a stolen token cannot go on guessing
+     *       the password from a live session (about 480 tries a day on the sign-in lock alone), while a stranger's wrong sign-ins
+     *       and the admin's other devices are untouched. This is the counterpart of {@link #failStepUp}, which ends every session
+     *       because a wrong code is only ever sent by a caller who holds a session.
+     * </ul>
+     *
+     * A right password starts the sign-in failure count again, as at sign-in, and leaves any lock alone. The password is never
+     * logged, audited or echoed.
+     *
+     * @param sessionId the calling session, whose family a fifth wrong password ends; {@code null} for a caller with no session
+     */
+    @Transactional(noRollbackFor = ApiException.class)
+    void confirmPassword(Accounts accounts, UUID userId, UUID sessionId, String password) {
+        Instant now = clock.now();
+        Account account = accounts.byIdForUpdate(userId).orElseThrow(AuthFlow::invalidCredentials);
+        if (!account.active()) {
+            throw invalidCredentials();
+        }
+        if (account.lockedAt(now) || accounts.stepUpLockedAt(account.id(), now)) {
+            accounts.audit("core.auth.step_up_refused_locked", account.id(), Map.of());
+            throw locked();
+        }
+        if (!passwords.matches(password == null ? "" : password, account.passwordHash())) {
+            fail(accounts, account, now, "core.auth.step_up_password_failed");
+            Accounts.Failures stepUp = accounts.recordStepUpFailure(account.id(), now, MAX_FAILURES, now.plus(LOCK));
+            if (stepUp.consecutive() == MAX_FAILURES) {
+                int ended = sessionId == null
+                        ? 0
+                        : accounts.sessions()
+                                .byId(sessionId)
+                                .map(row -> accounts.sessions().revokeFamily(row.familyId(), "admin", now))
+                                .orElse(0);
+                accounts.audit(
+                        "core.auth.step_up_session_ended",
+                        account.id(),
+                        Map.of("locked_minutes", LOCK.toMinutes(), "sessions_ended", ended));
+            }
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "invalid_password",
+                    "Invalid password",
+                    "The password is not correct.");
+        }
+        accounts.clearFailedLogins(account.id());
+        accounts.clearStepUpFailures(account.id());
     }
 
     /** New recovery codes replace every old one; needs a current TOTP code (FR-IAM-11). */

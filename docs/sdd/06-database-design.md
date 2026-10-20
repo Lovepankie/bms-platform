@@ -462,13 +462,24 @@ replaced as a set. FR-IAM-11.
 `invited_by uuid NOT NULL` (a staff user, or the platform operator who created the tenant; no
 foreign key).
 
+### `user_password_resets` (RLS)
+
+(std, no `version`; issue #320, FR-IAM-15, ADR-042; migration `V62`)
+`user_id uuid NOT NULL` (FK `(tenant_id, user_id)`), `token_hash char(64) NOT NULL UNIQUE` (SHA-256 of the one-time token),
+`expires_at timestamptz NOT NULL` (one hour), `origin text NOT NULL` [`self`, `admin`, `operator`], `requested_by uuid` (the tenant admin
+who issued an `admin` link or the platform operator who issued an `operator` link; null for `self`; no foreign key; a CHECK ties the two), `used_at timestamptz` (the link set a password),
+`revoked_at timestamptz` (a newer link, or a deactivation, replaced it; a CHECK keeps used and revoked apart). Index
+`(tenant_id, user_id, created_at DESC)`. Grants `SELECT, INSERT, UPDATE`; `created_at` is written by the application's clock. Rows are deleted 30
+days after they were made by `user_password_resets_purge(timestamptz)` (a definer function the nightly job `core.identity.password-reset-purge` calls; there is no
+DELETE grant, and the function itself never deletes a row younger than 30 days, whatever cutoff it is given). `origin` `operator` rows are the platform operator's. The token itself is never stored.
+
 ### `auth_sessions` (RLS)
 
 (std, no `version`) `user_id uuid NOT NULL`, `family_id uuid NOT NULL`,
 `refresh_token_hash char(64) NOT NULL UNIQUE`, `expires_at timestamptz NOT NULL`,
 `idle_expires_at timestamptz NOT NULL`, `rotated_at timestamptz`,
 `revoked_at timestamptz`, `revoked_reason text` [`sign_out`, `rotation_reuse`,
-`user_deactivated`, `admin`, `mfa_reset`], `ip inet`, `user_agent text`.
+`user_deactivated`, `admin`, `mfa_reset`, `password_reset` (added by the migration of #320)], `ip inet`, `user_agent text`.
 One row per refresh token: a rotation marks the row `rotated_at` and inserts the next row of the
 same family; the access token's `sid` is the row id.
 Index `(tenant_id, user_id) WHERE revoked_at IS NULL`. FR-IAM-07, FR-IAM-08.

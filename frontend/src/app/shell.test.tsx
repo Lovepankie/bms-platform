@@ -49,7 +49,8 @@ describe('the shared shell (FR-TEN-08)', () => {
 
   it('is the root of every area, so each inherits the footer and the theme', () => {
     const areas = ((router.routeTree.children ?? []) as unknown as { path?: string }[]).map((route) => route.path);
-    for (const path of ['/', 'sign-in', 'accept-invitation', 'staff', 'member', 'style']) {
+    // JUSTIFICATION-A3: the two new pre-sign-in routes of the forgotten password (FR-IAM-15) are listed with the others; no case changed.
+    for (const path of ['/', 'sign-in', 'forgot-password', 'reset-password', 'accept-invitation', 'staff', 'member', 'style']) {
       expect(areas).toContain(path);
     }
   });

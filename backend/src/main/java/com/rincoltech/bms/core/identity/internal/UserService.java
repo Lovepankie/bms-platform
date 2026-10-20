@@ -70,6 +70,7 @@ class UserService implements TenantAdmins {
     private final Notifier notifier;
     private final AuditLog audit;
     private final BusinessClock clock;
+    private final PasswordResets resets;
 
     UserService(
             JdbcClient jdbc,
@@ -82,7 +83,8 @@ class UserService implements TenantAdmins {
             PlatformHost hosts,
             Notifier notifier,
             AuditLog audit,
-            BusinessClock clock) {
+            BusinessClock clock,
+            PasswordResets resets) {
         this.jdbc = jdbc;
         this.grants = grants;
         this.accounts = accounts;
@@ -94,6 +96,7 @@ class UserService implements TenantAdmins {
         this.notifier = notifier;
         this.audit = audit;
         this.clock = clock;
+        this.resets = resets;
     }
 
     // ---- Invitations (FR-IAM-01) ----------------------------------------------------------
@@ -203,6 +206,27 @@ class UserService implements TenantAdmins {
                 AuditLog.Entry.created("core.user.invited", "core.user", id, null, after), platformUserId, "platform");
         InvitationLink link = issueInvitation(id, platformUserId, user.email(), user.phoneE164());
         return new Invitation(id, link.url(), link.expiresAt());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ResetLink resetAdminSignIn(UUID userId, UUID platformUserId) {
+        return resets.issueForOperator(userId, platformUserId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public void requireResettableAdmin(UUID userId) {
+        resets.precheckForOperator(userId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public void requireTenantAdmin(UUID userId) {
+        find(userId).orElseThrow(ApiException::notFound);
+        if (!isTenantAdmin(userId)) {
+            throw ApiException.rule("not_a_tenant_admin", "The platform resets the MFA of tenant admins only.");
+        }
     }
 
     // ---- Reads ----------------------------------------------------------------------------
@@ -335,6 +359,7 @@ class UserService implements TenantAdmins {
                         "UPDATE user_invitations SET revoked_at = ? WHERE user_id = ? AND accepted_at IS NULL AND revoked_at IS NULL")
                 .params(Timestamp.from(now), userId)
                 .update();
+        resets.revokeOpen(userId, now);
         int revoked = accounts.sessions().revokeAllOf(userId, "user_deactivated", now);
         audit.record(new AuditLog.Entry(
                 "core.user.deactivated",

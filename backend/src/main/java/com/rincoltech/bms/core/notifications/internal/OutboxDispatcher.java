@@ -264,6 +264,20 @@ class OutboxDispatcher {
     }
 
     /**
+     * The frequent job of {@link OutboxJobs}: an unsent row whose own expiry has passed loses its parameters and is marked
+     * failed ("expired"), so a one-time link (a password reset, FR-IAM-15) is in the database in plain text for its lifetime
+     * and the job's interval, not until the nightly purge. Deletes nothing: the same function as {@link #purge()} with
+     * thresholds that match no age.
+     */
+    int clearExpiredLinks() {
+        Instant now = clock.now();
+        return transactions.execute(status -> jdbc.sql("SELECT notification_outbox_purge(?, ?, ?)")
+                .params(Timestamp.from(Instant.EPOCH), Timestamp.from(Instant.EPOCH), Timestamp.from(now))
+                .query(Integer.class)
+                .single());
+    }
+
+    /**
      * The exception class, plus the message of a {@link OutboxChannel.SendFailure}, which the
      * senders write to carry no recipient, text or secret. Any other exception's message (a
      * provider's, or the JDK's, which can quote a URL holding the bot token) is dropped.

@@ -43,7 +43,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
 
                 # ---------------- core ----------------
                 tenancy       = component "Tenancy" "Tenants, plans and limits, module switching, settings (including a vertical's settings group, stored as opaque jsonb and validated by the vertical, ADR-033), branding (logo, theme colour), branches (create, rename, close and reopen with history kept, and the not-stocking flag, ADR-041; the retail module reports what it still holds through the branch closing check port). Resolves the tenant from the host, binds app.tenant_id, and makes a suspended tenant read only." "core" "core"
-                identity      = component "Identity and Access" "Staff and platform sign-in (argon2id, TOTP with recovery codes, ADR-014), revocable server-side sessions, invitations whose acceptance signs the user in (ADR-025), roles, permission matrix, per-permission branch scope, and each user's own guided tour progress (users.preferences, migration V31)." "core" "core"
+                identity      = component "Identity and Access" "Staff and platform sign-in (argon2id, TOTP with recovery codes, ADR-014), revocable server-side sessions, invitations whose acceptance signs the user in (ADR-025), the forgotten password (a one-time hashed link by email or from a tenant admin, every session ended on use, the second factor and the lock untouched, ADR-042), roles, permission matrix, per-permission branch scope, and each user's own guided tour progress (users.preferences, migration V31)." "core" "core"
                 audit         = component "Audit" "Append-only audit log written in the same transaction as each change; platform audit log; search and CSV export." "core" "core"
                 approvals     = component "Approvals" "Maker-checker requests with payload snapshots; executes approved actions through actions registered by the owning modules (ADR-015)." "core" "core"
                 platform      = component "Platform Console" "Tenant creation with head office, modules and first admin; module switching; subscriptions and suspension; tenant admin MFA reset. Served only on the platform host to platform operators (ADR-016, ADR-018)." "core" "core"
@@ -95,7 +95,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         smsAggregator  = softwareSystem "SMS Provider" "Outbound SMS and delivery reports through Africa's Talking (ADR-036); USSD sessions in phase 2 are pending ADR-013." "external"
         paymentGateway = softwareSystem "Payment Gateway (Pesapal)" "Hosted mobile money and card collections in UGX, notifications, transaction status queries (ADR-035). No payouts, no settlement API." "external"
         mobileMoney    = softwareSystem "Mobile Money Operators" "MTN MoMo and Airtel Money wallets. Reached only through the payment gateway." "external"
-        emailService   = softwareSystem "Transactional Email Service" "SMTP over implicit TLS (port 465): activation and applicant links, operator alerts; later staff invitations, password resets, report-ready notices (ADR-024)." "external"
+        emailService   = softwareSystem "Transactional Email Service" "SMTP over implicit TLS (port 465): activation and applicant links, operator alerts, staff password reset links (ADR-042); later staff invitations, report-ready notices (ADR-024)." "external"
         telegram       = softwareSystem "Telegram Bot API" "sendMessage to the operator chat: alerts for new applications (ADR-024)." "external"
         llmProvider    = softwareSystem "Language Model Provider" "OpenAI-compatible chat API (DeepSeek as a first test, ADR-037). Receives aggregated, aliased portfolio figures only; off by default." "external"
 
@@ -292,9 +292,9 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.tenancy     -> bms.api.audit "Audits branch and settings changes"
         bms.api.tenancy     -> bms.api.documents "Stores the tenant logo and reads it for the public branding route (FR-TEN-08)"
         bms.api.identity    -> bms.db "Reads sessions and role assignments; revocation takes effect at once"
-        bms.api.identity    -> bms.api.audit "Writes sign-in, MFA, invitation and user events"
+        bms.api.identity    -> bms.api.audit "Writes sign-in, MFA, invitation, password reset and user events"
         bms.api.identity    -> bms.api.tenancy "Reads branches, settings and plan limits"
-        bms.api.identity    -> bms.api.notifications "Sends invitation links through the notification port"
+        bms.api.identity    -> bms.api.notifications "Sends invitation links through the notification port; queues password reset links and the password changed notice in the outbox (ADR-042)"
         bms.api.approvals   -> bms.api.tenancy "Reads approval thresholds"
         bms.api.approvals   -> bms.db "Stores requests; checker is never maker (database CHECK)"
         bms.api.platform    -> bms.db "Creates and changes tenants through the platform SECURITY DEFINER functions"

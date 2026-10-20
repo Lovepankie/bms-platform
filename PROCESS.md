@@ -164,6 +164,7 @@ commit it and delete it later, because a commit is permanent.
 |---|---|
 | `.github/workflows/dash-guard.yml` | No em dashes or en dashes in any changed text file |
 | `.github/workflows/adr-citation-guard.yml` | Every cited ADR exists or is marked pending |
+| `.github/workflows/placeholder-migration-guard.yml` | No migration keeps the placeholder number `V99` (renumbered to the next free number at merge, no override; Flyway runs with `outOfOrder` off; the first job of `deploy.yml` refuses it too) |
 | `.github/workflows/architecture-model.yml` | `docs/workspace.dsl` validates against the pinned CLI and the static site builds |
 | `.github/workflows/linked-issue-guard.yml` | Every code or architecture pull request closes an issue |
 | `.github/workflows/estimate-guard.yml` | Leaf-only estimates, every item typed, no orphans (runs once the board is configured) |

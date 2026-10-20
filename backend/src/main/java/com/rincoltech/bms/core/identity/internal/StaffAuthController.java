@@ -5,6 +5,9 @@ import com.rincoltech.bms.core.identity.internal.AuthApi.MfaConfirmRequest;
 import com.rincoltech.bms.core.identity.internal.AuthApi.MfaEnrolRequest;
 import com.rincoltech.bms.core.identity.internal.AuthApi.MfaEnrolmentResponse;
 import com.rincoltech.bms.core.identity.internal.AuthApi.MfaVerifyRequest;
+import com.rincoltech.bms.core.identity.internal.AuthApi.PasswordResetCompleteRequest;
+import com.rincoltech.bms.core.identity.internal.AuthApi.PasswordResetRequest;
+import com.rincoltech.bms.core.identity.internal.AuthApi.PasswordResetRequested;
 import com.rincoltech.bms.core.identity.internal.AuthApi.RecoveryCodesRequest;
 import com.rincoltech.bms.core.identity.internal.AuthApi.RecoveryCodesResponse;
 import com.rincoltech.bms.core.identity.internal.AuthApi.SignInRequest;
@@ -14,12 +17,14 @@ import com.rincoltech.bms.kernel.AuthenticatedEndpoint;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.PublicEndpoint;
+import com.rincoltech.bms.kernel.RequestContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.Duration;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +34,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Staff sign-in, second factor, invitation acceptance and sessions (chapter 7 section 7.11.2). */
+/**
+ * Staff sign-in, second factor, invitation acceptance, the forgotten password and sessions (chapter 7 section 7.11.2).
+ */
 @RestController
 @RequestMapping(path = "/api/v1/auth", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "auth")
@@ -38,11 +45,23 @@ class StaffAuthController {
     private final AuthFlow flow;
     private final StaffAccounts accounts;
     private final UserService users;
+    private final PasswordResets resets;
+    private final ResetThrottle throttle;
+    private final long resetMinResponseMillis;
 
-    StaffAuthController(AuthFlow flow, StaffAccounts accounts, UserService users) {
+    StaffAuthController(
+            AuthFlow flow,
+            StaffAccounts accounts,
+            UserService users,
+            PasswordResets resets,
+            ResetThrottle throttle,
+            @Value("${bms.auth.reset-min-response-ms:400}") long resetMinResponseMillis) {
         this.flow = flow;
         this.accounts = accounts;
         this.users = users;
+        this.resets = resets;
+        this.throttle = throttle;
+        this.resetMinResponseMillis = resetMinResponseMillis;
     }
 
     @PostMapping("/staff/login")
@@ -101,6 +120,42 @@ class StaffAuthController {
         return respond(flow.afterInvitation(accounts, userId, http.getServerName(), agent(http)));
     }
 
+    /**
+     * Always the same answer, after about the same time, whether or not an account matched (FR-IAM-15): the work that differs
+     * (a lookup, or a lookup and a link and an outbox row) is padded to a floor, outside any transaction.
+     */
+    @PostMapping("/staff/password/forgot")
+    @PublicEndpoint
+    @Operation(
+            summary =
+                    "Ask for a password reset link by email or phone; the answer never says whether an account matched (FR-IAM-15)",
+            operationId = "requestPasswordReset")
+    ResponseEntity<PasswordResetRequested> requestReset(@Valid @RequestBody PasswordResetRequest request) {
+        throttle.acquire(ResetThrottle.REQUEST_PER_IP, RequestContext.clientIp());
+        long started = System.nanoTime();
+        try {
+            resets.request(request.login());
+        } finally {
+            pad(started);
+        }
+        return ResponseEntity.accepted()
+                .body(new PasswordResetRequested(
+                        "If an account matches, a reset link has been sent to the email address we hold for it."
+                                + " The link works once, for one hour."));
+    }
+
+    @PostMapping("/staff/password/reset")
+    @PublicEndpoint
+    @Operation(
+            summary = "Set a new password with the one-time reset token, end every session, then sign in (FR-IAM-15)",
+            operationId = "completePasswordReset")
+    ResponseEntity<SignInResponse> completeReset(
+            @Valid @RequestBody PasswordResetCompleteRequest request, HttpServletRequest http) {
+        throttle.acquire(ResetThrottle.COMPLETE_PER_IP, RequestContext.clientIp());
+        UUID userId = resets.complete(request.token(), request.password());
+        return respond(flow.afterReset(accounts, userId, http.getServerName(), agent(http)));
+    }
+
     @PostMapping("/refresh")
     @PublicEndpoint
     @Operation(
@@ -124,6 +179,17 @@ class StaffAuthController {
                         HttpHeaders.SET_COOKIE,
                         AuthApi.cookie(AuthApi.STAFF_COOKIE, "", AuthApi.STAFF_COOKIE_PATH, Duration.ZERO))
                 .build();
+    }
+
+    private void pad(long startedNanos) {
+        long remaining = resetMinResponseMillis - (System.nanoTime() - startedNanos) / 1_000_000;
+        if (remaining > 0) {
+            try {
+                Thread.sleep(remaining);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     private UUID enrollee(String mfaToken) {

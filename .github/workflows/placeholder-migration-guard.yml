@@ -1,0 +1,27 @@
+name: Placeholder migration guard
+
+# A branch that cannot know the next free Flyway number names its migration V99. Flyway runs with outOfOrder off, so a V99 that
+# reaches a server makes every later migration (V61 to V98) a number below an applied one, and none of them can run.
+# This fails any pull request or push to main that holds a V99__ file. There is no override: a renumbered file is no longer V99.
+# Branch protection is not available, so the first job of deploy.yml (which every push to main runs) refuses too, before any
+# image is built or the staging pointer moves. See .github/scripts/placeholder_migration_guard.py.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  placeholder:
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","jerome-laptop"]') }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: The guard itself behaves as documented
+        run: python3 .github/scripts/test_placeholder_migration_guard.py
+      - name: No migration may keep the placeholder number V99
+        run: python3 .github/scripts/placeholder_migration_guard.py

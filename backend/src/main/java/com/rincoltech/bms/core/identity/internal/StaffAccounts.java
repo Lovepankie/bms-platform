@@ -149,6 +149,13 @@ class StaffAccounts implements Accounts {
     }
 
     @Override
+    public void clearFailedLogins(UUID id) {
+        jdbc.sql("UPDATE users SET failed_login_count = 0 WHERE id = ? AND failed_login_count <> 0")
+                .param(id)
+                .update();
+    }
+
+    @Override
     public void setPendingTotp(UUID id, byte[] sealedSecret) {
         ensureCredentials(id);
         jdbc.sql("UPDATE user_credentials SET totp_pending_secret_enc = ?, updated_at = now() WHERE user_id = ?")

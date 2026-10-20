@@ -259,6 +259,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/staff/password/forgot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask for a password reset link by email or phone; the answer never says whether an account matched (FR-IAM-15) */
+        post: operations["requestPasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/staff/password/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set a new password with the one-time reset token, end every session, then sign in (FR-IAM-15) */
+        post: operations["completePasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/branches": {
         parameters: {
             query?: never;
@@ -2680,8 +2714,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reset the lost second factor of a tenant admin (FR-IAM-12) */
+        /** Reset the lost second factor of a tenant admin; needs a current code from the operator's own authenticator (FR-IAM-12) */
         post: operations["platformResetAdminMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/users/{user_id}/reset-sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a one-time password reset link for a tenant admin; shown once, valid one hour; needs a current code from the operator's own authenticator (FR-IAM-15) */
+        post: operations["platformResetAdminSignIn"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5196,6 +5247,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/{user_id}/reset-sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a one-time link to set a new password for an active user who is not a tenant admin; shown once, valid for one hour; needs the admin's authenticator code, or their own password when they have no two-step sign-in (FR-IAM-15) */
+        post: operations["resetUserSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/{user_id}/roles": {
         parameters: {
             query?: never;
@@ -7380,6 +7448,17 @@ export interface components {
             enabled_channels?: string[];
             failures?: components["schemas"]["OutboxFailure"][];
         };
+        PasswordResetCompleteRequest: {
+            password: string;
+            token: string;
+        };
+        PasswordResetRequest: {
+            /** @description Email or phone of the staff account */
+            login: string;
+        };
+        PasswordResetRequested: {
+            message?: string;
+        };
         PaymentIntent: {
             /** Format: int64 */
             amount_minor?: number;
@@ -7482,6 +7561,16 @@ export interface components {
             permissions?: string[];
             /** Format: uuid */
             user_id?: string;
+        };
+        /** @description Shown once to the operator, who hands it to the tenant admin */
+        PlatformSignInResetLink: {
+            /** Format: date-time */
+            expires_at?: string;
+            url?: string;
+        };
+        PlatformStepUpRequest: {
+            /** @description A current 6 digit code from the operator's own authenticator app */
+            totp_code: string;
         };
         PlatformTenant: {
             /** Format: date-time */
@@ -7632,6 +7721,13 @@ export interface components {
             };
             /** @description A key from the catalogue, for example lending.par */
             report_key?: string;
+        };
+        /** @description Proof that the signed-in admin is still themselves: the code from their authenticator app when they have two-step sign-in, otherwise their own password. Exactly the one that applies is required; never logged */
+        ResetSignInRequest: {
+            /** @description The admin's own current password, for an admin with no two-step sign-in */
+            password?: string;
+            /** @description The current 6 digit code from the admin's own authenticator app */
+            totp_code?: string;
         };
         RetailAccountAllocation: {
             /** Format: int64 */
@@ -12679,6 +12775,11 @@ export interface components {
             login: string;
             password: string;
         };
+        SignInResetLink: {
+            /** Format: date-time */
+            expires_at?: string;
+            url?: string;
+        };
         SignInResponse: {
             access_token?: string;
             /** Format: int64 */
@@ -13557,6 +13658,54 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MfaVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInResponse"];
+                };
+            };
+        };
+    };
+    requestPasswordReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordResetRequested"];
+                };
+            };
+        };
+    };
+    completePasswordReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetCompleteRequest"];
             };
         };
         responses: {
@@ -17868,7 +18017,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformStepUpRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -17876,6 +18029,33 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    platformResetAdminSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformStepUpRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSignInResetLink"];
+                };
             };
         };
     };
@@ -22642,6 +22822,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    resetUserSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetSignInRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInResetLink"];
                 };
             };
         };
