@@ -605,3 +605,55 @@ th[scope='rowgroup'] .cat-head {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
+
+/* The Controls page (issue #357): cards that are buttons, the day choice, the records under a group, the patterns. */
+.rt-periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+
+.rt-periods button {
+  min-height: var(--tap);
+}
+
+.ctl-period-on {
+  background: var(--color-accent-tint);
+  border-color: var(--color-accent);
+}
+
+.ctl-cards .ctl-card {
+  width: 100%;
+  min-height: var(--tap);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ctl-cards .ctl-card[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-tint);
+}
+
+.ctl-record {
+  padding: var(--space-3);
+}
+
+.ctl-record-line {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ctl-record .rt-group-meta {
+  display: block;
+}
+
+.ctl-patterns {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-4);
+}
+
+.ctl-patterns li {
+  margin: var(--space-2) 0;
+}

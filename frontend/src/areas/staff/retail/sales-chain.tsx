@@ -76,26 +76,31 @@ function useLevel(level: ChainLevel, chain: ChainLevel[], filter: ChainFilter, s
   return { query, items };
 }
 
-export function SalesChain({ range, rootLabel, empty, ...shared }: Shared & { range: Selection; rootLabel: string; empty?: ReactNode }) {
-  const { view } = shared;
+/** The way back up from the open group: "All sales > Head Office > 2026", each crumb shutting what is below it. Shared with the Controls page. */
+export function GroupTrail({ view, rootLabel }: { view: Pick<ChainView, 'open' | 'shut' | 'shutAll'>; rootLabel: string }) {
   const crumbs = trailOf(view.open);
+  if (crumbs.length === 0) return null;
+  return (
+    <nav aria-label="Where you are" className="rt-group-trail">
+      <ol>
+        <li><button type="button" className="btn-link" onClick={view.shutAll}>{rootLabel}</button></li>
+        {crumbs.map((c, i) => {
+          const next = crumbs[i + 1];
+          return (
+            <li key={c.key}>
+              {next ? <button type="button" className="btn-link" onClick={() => view.shut(next.key)}>{c.label}</button> : <span aria-current="page">{c.label}</span>}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+export function SalesChain({ range, rootLabel, empty, ...shared }: Shared & { range: Selection; rootLabel: string; empty?: ReactNode }) {
   return (
     <div data-tour="sales-groups" className="rt-groups">
-      {crumbs.length > 0 && (
-        <nav aria-label="Where you are" className="rt-group-trail">
-          <ol>
-            <li><button type="button" className="btn-link" onClick={view.shutAll}>{rootLabel}</button></li>
-            {crumbs.map((c, i) => {
-              const next = crumbs[i + 1];
-              return (
-                <li key={c.key}>
-                  {next ? <button type="button" className="btn-link" onClick={() => view.shut(next.key)}>{c.label}</button> : <span aria-current="page">{c.label}</span>}
-                </li>
-              );
-            })}
-          </ol>
-        </nav>
-      )}
+      <GroupTrail view={shared.view} rootLabel={rootLabel} />
       <LevelList index={0} sel={range} parent="" root empty={empty} {...shared} />
     </div>
   );

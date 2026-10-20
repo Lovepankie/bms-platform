@@ -19,29 +19,27 @@ export const LEVEL_PLURALS: Record<ChainLevel, string> = {
 
 export const isTimeLevel = (level: ChainLevel) => level === 'year' || level === 'month' || level === 'day';
 
-const isLevel = (x: unknown): x is ChainLevel => typeof x === 'string' && (DEFAULT_CHAIN as readonly string[]).includes(x);
-
 /** The chain with `level` moved one place up or down; a level already at the end stays. */
-export function moveLevel(chain: readonly ChainLevel[], level: ChainLevel, by: -1 | 1): ChainLevel[] {
+export function moveLevel<L extends string = ChainLevel>(chain: readonly L[], level: L, by: -1 | 1): L[] {
   const i = chain.indexOf(level);
   const j = i + by;
   if (i < 0 || j < 0 || j >= chain.length) return [...chain];
   const next = [...chain];
-  next[i] = chain[j] as ChainLevel;
+  next[i] = chain[j] as L;
   next[j] = level;
   return next;
 }
 
 /** The chain without `level`. The last level cannot be dropped: a list needs at least one level. */
-export function dropLevel(chain: readonly ChainLevel[], level: ChainLevel): ChainLevel[] {
+export function dropLevel<L extends string = ChainLevel>(chain: readonly L[], level: L): L[] {
   return chain.length <= 1 ? [...chain] : chain.filter((l) => l !== level);
 }
 
 /** The chain with a dropped level back in, before the first level that comes after it in the usual order. */
-export function addLevel(chain: readonly ChainLevel[], level: ChainLevel): ChainLevel[] {
+export function addLevel<L extends string = ChainLevel>(chain: readonly L[], level: L, order: readonly L[] = DEFAULT_CHAIN as readonly string[] as readonly L[]): L[] {
   if (chain.includes(level)) return [...chain];
-  const rank = DEFAULT_CHAIN.indexOf(level);
-  const at = chain.findIndex((l) => DEFAULT_CHAIN.indexOf(l) > rank);
+  const rank = order.indexOf(level);
+  const at = chain.findIndex((l) => order.indexOf(l) > rank);
   return at < 0 ? [...chain, level] : [...chain.slice(0, at), level, ...chain.slice(at)];
 }
 
@@ -55,14 +53,14 @@ export function usableChain(chain: readonly ChainLevel[], sellerAllowed: boolean
 }
 
 /** The levels not in the chain, in the usual order. */
-export const droppedLevels = (chain: readonly ChainLevel[], usable: readonly ChainLevel[] = DEFAULT_CHAIN): ChainLevel[] => usable.filter((l) => !chain.includes(l));
+export const droppedLevels = <L extends string = ChainLevel>(chain: readonly L[], usable: readonly L[] = DEFAULT_CHAIN as readonly string[] as readonly L[]): L[] => usable.filter((l) => !chain.includes(l));
 
 /** A stored chain, or null when the text is not a non-empty list of known levels, each once. */
-export function parseChain(text: string | null): ChainLevel[] | null {
+export function parseChain<L extends string = ChainLevel>(text: string | null, known: readonly L[] = DEFAULT_CHAIN as readonly string[] as readonly L[]): L[] | null {
   if (!text) return null;
   try {
     const value: unknown = JSON.parse(text);
-    if (!Array.isArray(value) || value.length === 0 || !value.every(isLevel) || new Set(value).size !== value.length) return null;
+    if (!Array.isArray(value) || value.length === 0 || !value.every((x): x is L => typeof x === 'string' && known.includes(x as L)) || new Set(value).size !== value.length) return null;
     return value;
   } catch {
     return null;
@@ -95,7 +93,7 @@ export function writeChain(user: string, list: ChainList, chain: readonly ChainL
 }
 
 /** With one shop already chosen at the top of the page the shop level would be a single row: leave it out. */
-export function effectiveChain(chain: readonly ChainLevel[], shopChosen: boolean): ChainLevel[] {
+export function effectiveChain<L extends string = ChainLevel>(chain: readonly L[], shopChosen: boolean): L[] {
   const without = chain.filter((l) => l !== 'branch');
   return shopChosen && without.length > 0 ? without : [...chain];
 }
@@ -152,7 +150,7 @@ export function wholeSalesNote(sel: Selection): string | null {
   return null;
 }
 
-export const pathKey = (parent: string, level: ChainLevel, key: string) => `${parent}/${level}:${key}`;
+export const pathKey = (parent: string, level: string, key: string) => `${parent}/${level}:${key}`;
 
 /** The open groups, each with the words shown for it, in the order they were opened. */
 export type OpenGroups = ReadonlyMap<string, string>;

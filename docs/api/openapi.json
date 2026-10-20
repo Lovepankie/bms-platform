@@ -7170,6 +7170,347 @@
           }
         }
       },
+      "RetailControls" : {
+        "properties" : {
+          "cards" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailControlsCard"
+            },
+            "type" : "array"
+          },
+          "cost_visible" : {
+            "description" : "Present only with retail.profit.read in every branch the figures cover; the below_cost card is sent only then",
+            "type" : "boolean"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "period" : {
+            "$ref" : "#/components/schemas/RetailControlsPeriod"
+          },
+          "previous" : {
+            "$ref" : "#/components/schemas/RetailControlsPeriod"
+          },
+          "within_minutes" : {
+            "description" : "A sale cancelled within this many minutes of being entered is a quick cancel",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailControlsCard" : {
+        "properties" : {
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "metric" : {
+            "description" : "voided_sales, quick_cancels, returns, price_overrides, discounts, below_cost, restock_voids or quantity_corrections; the key to ask groups and records for",
+            "type" : "string"
+          },
+          "previous_count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "previous_rate_per_100" : {
+            "description" : "The same for the previous period",
+            "type" : "string"
+          },
+          "previous_value_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rate_per_100" : {
+            "description" : "Sales with such an event per 100 sales entered in the period, one decimal; absent when no sale was entered",
+            "type" : "string"
+          },
+          "sales_affected" : {
+            "description" : "Sales with such an event; a sale with two changed lines counts once",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "share_of_sales_bp" : {
+            "description" : "The value over the completed sales of the period, in basis points; absent without sales",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tracked" : {
+            "description" : "False while the capability the card depends on is off and nothing was ever recorded: the card then reads 'not switched on', not 'all clear'",
+            "type" : "boolean"
+          },
+          "value_minor" : {
+            "description" : "At sale prices; for discounts, the money given up against the price the system chose",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailControlsGroup" : {
+        "properties" : {
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "day" : {
+            "description" : "Day level only",
+            "format" : "date",
+            "type" : "string"
+          },
+          "key" : {
+            "description" : "A branch id, a user id, a day (2026-10-19) or the reason text lower-cased; pass it back as the matching filter of the next level",
+            "type" : "string"
+          },
+          "label" : {
+            "description" : "The branch, person or reason to show, or the day",
+            "type" : "string"
+          },
+          "rate_per_100" : {
+            "description" : "Sales with such an event per 100 sales the group entered, one decimal; absent when it entered none",
+            "type" : "string"
+          },
+          "sales_affected" : {
+            "description" : "Sales with such an event; the rate is over these",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_count" : {
+            "description" : "Sales entered by the group (the shop, the person or the day) in the period; the rate is over these",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "user_status" : {
+            "description" : "User level only: active, invited or deactivated; absent when the person is unknown",
+            "type" : "string"
+          },
+          "value_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailControlsGroups" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "group_by" : {
+            "type" : "string"
+          },
+          "has_more" : {
+            "type" : "boolean"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailControlsGroup"
+            },
+            "type" : "array"
+          },
+          "level" : {
+            "description" : "The level these groups are: the one answered, the first of the chain unless level is sent",
+            "type" : "string"
+          },
+          "levels" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "metric" : {
+            "type" : "string"
+          },
+          "next_level" : {
+            "description" : "The level under this one in the chain; absent at the end of the chain",
+            "type" : "string"
+          },
+          "next_offset" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailControlsPattern" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "branch_name" : {
+            "type" : "string"
+          },
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "key" : {
+            "description" : "A user id or a product id",
+            "type" : "string"
+          },
+          "metric" : {
+            "description" : "voided_sales, returns, price_overrides or below_cost",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "out_of" : {
+            "description" : "Sales entered by the user (or lines sold of the item) in that shop in the period",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rate_per_100" : {
+            "type" : "string"
+          },
+          "shop_rate_per_100" : {
+            "description" : "The shop's own rate for the same thing",
+            "type" : "string"
+          },
+          "subject" : {
+            "description" : "user or product",
+            "type" : "string"
+          },
+          "times" : {
+            "description" : "How many times the shop's rate, one decimal",
+            "type" : "string"
+          },
+          "user_status" : {
+            "description" : "Users only: active, invited or deactivated",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailControlsPatterns" : {
+        "properties" : {
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailControlsPattern"
+            },
+            "type" : "array"
+          },
+          "min_events" : {
+            "description" : "A rate counts only from this many events and this many sales or lines",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "min_out_of" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailControlsPeriod" : {
+        "properties" : {
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "sales_count" : {
+            "description" : "Sales entered in the period, voided ones included, imported history left out",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "description" : "Total of the completed sales of the period",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailControlsRecord" : {
+        "properties" : {
+          "approver_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "approver_name" : {
+            "description" : "Who cancelled the sale, took the goods back or voided the restock; absent for a price, a cost and a correction",
+            "type" : "string"
+          },
+          "approver_status" : {
+            "type" : "string"
+          },
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "branch_name" : {
+            "type" : "string"
+          },
+          "item" : {
+            "description" : "Price changes, discounts, below cost and quantity corrections only: the item",
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "reference" : {
+            "description" : "Returns only: the number of the credit note",
+            "type" : "string"
+          },
+          "sale_id" : {
+            "description" : "The sale; for restock_voids the restock's id, and for quantity_corrections absent",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_no" : {
+            "description" : "The sale number; for restock_voids the restock's number, and for quantity_corrections absent",
+            "type" : "string"
+          },
+          "user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "user_name" : {
+            "description" : "The person whose sale it was; absent when unknown",
+            "type" : "string"
+          },
+          "user_status" : {
+            "type" : "string"
+          },
+          "value_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailControlsRecords" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "has_more" : {
+            "type" : "boolean"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailControlsRecord"
+            },
+            "type" : "array"
+          },
+          "metric" : {
+            "type" : "string"
+          },
+          "next_offset" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
       "RetailCoverList" : {
         "description" : "Items with cover below lead_days, the lowest first, with a suggested quantity",
         "properties" : {
@@ -25502,6 +25843,308 @@
         },
         "summary" : "Rename or deactivate a category (#146); never deleted",
         "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/controls/groups" : {
+      "get" : {
+        "operationId" : "listRetailControlsGroups",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "metric",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "group_by",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "level",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "user_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "approver_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "reason",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "within_minutes",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "offset",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailControlsGroups"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One metric grouped by shop, person, day or reason, with a rate per 100 sales (issue #357)",
+        "tags" : [ "retail-controls" ]
+      }
+    },
+    "/api/v1/retail/controls/patterns" : {
+      "get" : {
+        "operationId" : "getRetailControlsPatterns",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailControlsPatterns"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "People and items whose rate is more than twice their shop's own (issue #357)",
+        "tags" : [ "retail-controls" ]
+      }
+    },
+    "/api/v1/retail/controls/records" : {
+      "get" : {
+        "operationId" : "listRetailControlsRecords",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "metric",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "user_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "approver_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "reason",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "within_minutes",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "offset",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailControlsRecords"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The individual records behind a metric and a group, newest first (issue #357)",
+        "tags" : [ "retail-controls" ]
+      }
+    },
+    "/api/v1/retail/controls/summary" : {
+      "get" : {
+        "operationId" : "getRetailControlsSummary",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "within_minutes",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailControls"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cards of the actions that deserve a second look, with the previous period (issue #357)",
+        "tags" : [ "retail-controls" ]
       }
     },
     "/api/v1/retail/customer-groups" : {

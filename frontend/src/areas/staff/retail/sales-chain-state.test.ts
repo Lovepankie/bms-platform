@@ -31,6 +31,9 @@ describe('changing the chain', () => {
     expect(addLevel(chain('day', 'category'), 'branch')).toEqual(['branch', 'day', 'category']);
     expect(addLevel(chain('year'), 'item')).toEqual(['year', 'item']);
     expect(addLevel(chain('year'), 'year')).toEqual(['year']);
+    // The order is the one the screen offers (a level list without the salesperson), not only the usual one.
+    expect(addLevel(chain('day', 'item'), 'category', ['branch', 'year', 'month', 'day', 'category', 'item'])).toEqual(['day', 'category', 'item']);
+    expect(addLevel(chain('branch', 'day'), 'month', ['branch', 'year', 'month', 'day', 'category', 'item'])).toEqual(['branch', 'month', 'day']);
     expect(droppedLevels(chain('year', 'day'))).toEqual(['branch', 'month', 'seller', 'category', 'item']);
   });
 

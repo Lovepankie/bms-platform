@@ -3033,6 +3033,74 @@ export interface paths {
         patch: operations["updateRetailCategory"];
         trace?: never;
     };
+    "/api/v1/retail/controls/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One metric grouped by shop, person, day or reason, with a rate per 100 sales (issue #357) */
+        get: operations["listRetailControlsGroups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/controls/patterns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** People and items whose rate is more than twice their shop's own (issue #357) */
+        get: operations["getRetailControlsPatterns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/controls/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The individual records behind a metric and a group, newest first (issue #357) */
+        get: operations["listRetailControlsRecords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/controls/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cards of the actions that deserve a second look, with the previous period (issue #357) */
+        get: operations["getRetailControlsSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/customer-groups": {
         parameters: {
             query?: never;
@@ -8461,6 +8529,188 @@ export interface components {
         RetailCategoryUpdate: {
             active?: boolean;
             name?: string;
+        };
+        RetailControls: {
+            cards?: components["schemas"]["RetailControlsCard"][];
+            /** @description Present only with retail.profit.read in every branch the figures cover; the below_cost card is sent only then */
+            cost_visible?: boolean;
+            currency?: string;
+            period?: components["schemas"]["RetailControlsPeriod"];
+            previous?: components["schemas"]["RetailControlsPeriod"];
+            /**
+             * Format: int32
+             * @description A sale cancelled within this many minutes of being entered is a quick cancel
+             */
+            within_minutes?: number;
+        };
+        RetailControlsCard: {
+            /** Format: int64 */
+            count?: number;
+            /** @description voided_sales, quick_cancels, returns, price_overrides, discounts, below_cost, restock_voids or quantity_corrections; the key to ask groups and records for */
+            metric?: string;
+            /** Format: int64 */
+            previous_count?: number;
+            /** @description The same for the previous period */
+            previous_rate_per_100?: string;
+            /** Format: int64 */
+            previous_value_minor?: number;
+            /** @description Sales with such an event per 100 sales entered in the period, one decimal; absent when no sale was entered */
+            rate_per_100?: string;
+            /**
+             * Format: int64
+             * @description Sales with such an event; a sale with two changed lines counts once
+             */
+            sales_affected?: number;
+            /**
+             * Format: int32
+             * @description The value over the completed sales of the period, in basis points; absent without sales
+             */
+            share_of_sales_bp?: number;
+            /** @description False while the capability the card depends on is off and nothing was ever recorded: the card then reads 'not switched on', not 'all clear' */
+            tracked?: boolean;
+            /**
+             * Format: int64
+             * @description At sale prices; for discounts, the money given up against the price the system chose
+             */
+            value_minor?: number;
+        };
+        RetailControlsGroup: {
+            /** Format: int64 */
+            count?: number;
+            /**
+             * Format: date
+             * @description Day level only
+             */
+            day?: string;
+            /** @description A branch id, a user id, a day (2026-10-19) or the reason text lower-cased; pass it back as the matching filter of the next level */
+            key?: string;
+            /** @description The branch, person or reason to show, or the day */
+            label?: string;
+            /** @description Sales with such an event per 100 sales the group entered, one decimal; absent when it entered none */
+            rate_per_100?: string;
+            /**
+             * Format: int64
+             * @description Sales with such an event; the rate is over these
+             */
+            sales_affected?: number;
+            /**
+             * Format: int64
+             * @description Sales entered by the group (the shop, the person or the day) in the period; the rate is over these
+             */
+            sales_count?: number;
+            /** @description User level only: active, invited or deactivated; absent when the person is unknown */
+            user_status?: string;
+            /** Format: int64 */
+            value_minor?: number;
+        };
+        RetailControlsGroups: {
+            currency?: string;
+            group_by?: string;
+            has_more?: boolean;
+            items?: components["schemas"]["RetailControlsGroup"][];
+            /** @description The level these groups are: the one answered, the first of the chain unless level is sent */
+            level?: string;
+            levels?: string[];
+            metric?: string;
+            /** @description The level under this one in the chain; absent at the end of the chain */
+            next_level?: string;
+            /** Format: int32 */
+            next_offset?: number;
+        };
+        RetailControlsPattern: {
+            /** Format: uuid */
+            branch_id?: string;
+            branch_name?: string;
+            /** Format: int64 */
+            count?: number;
+            /** @description A user id or a product id */
+            key?: string;
+            /** @description voided_sales, returns, price_overrides or below_cost */
+            metric?: string;
+            name?: string;
+            /**
+             * Format: int64
+             * @description Sales entered by the user (or lines sold of the item) in that shop in the period
+             */
+            out_of?: number;
+            rate_per_100?: string;
+            /** @description The shop's own rate for the same thing */
+            shop_rate_per_100?: string;
+            /** @description user or product */
+            subject?: string;
+            /** @description How many times the shop's rate, one decimal */
+            times?: string;
+            /** @description Users only: active, invited or deactivated */
+            user_status?: string;
+        };
+        RetailControlsPatterns: {
+            /** Format: date */
+            from?: string;
+            items?: components["schemas"]["RetailControlsPattern"][];
+            /**
+             * Format: int32
+             * @description A rate counts only from this many events and this many sales or lines
+             */
+            min_events?: number;
+            /** Format: int32 */
+            min_out_of?: number;
+            /** Format: date */
+            to?: string;
+        };
+        RetailControlsPeriod: {
+            /** Format: date */
+            from?: string;
+            /**
+             * Format: int64
+             * @description Sales entered in the period, voided ones included, imported history left out
+             */
+            sales_count?: number;
+            /**
+             * Format: int64
+             * @description Total of the completed sales of the period
+             */
+            sales_minor?: number;
+            /** Format: date */
+            to?: string;
+        };
+        RetailControlsRecord: {
+            /** Format: uuid */
+            approver_id?: string;
+            /** @description Who cancelled the sale, took the goods back or voided the restock; absent for a price, a cost and a correction */
+            approver_name?: string;
+            approver_status?: string;
+            /** Format: date-time */
+            at?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            branch_name?: string;
+            /** @description Price changes, discounts, below cost and quantity corrections only: the item */
+            item?: string;
+            reason?: string;
+            /** @description Returns only: the number of the credit note */
+            reference?: string;
+            /**
+             * Format: uuid
+             * @description The sale; for restock_voids the restock's id, and for quantity_corrections absent
+             */
+            sale_id?: string;
+            /** @description The sale number; for restock_voids the restock's number, and for quantity_corrections absent */
+            sale_no?: string;
+            /** Format: uuid */
+            user_id?: string;
+            /** @description The person whose sale it was; absent when unknown */
+            user_name?: string;
+            user_status?: string;
+            /** Format: int64 */
+            value_minor?: number;
+        };
+        RetailControlsRecords: {
+            currency?: string;
+            has_more?: boolean;
+            items?: components["schemas"]["RetailControlsRecord"][];
+            metric?: string;
+            /** Format: int32 */
+            next_offset?: number;
         };
         /** @description Items with cover below lead_days, the lowest first, with a suggested quantity */
         RetailCoverList: {
@@ -19095,6 +19345,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailCategory"];
+                };
+            };
+        };
+    };
+    listRetailControlsGroups: {
+        parameters: {
+            query: {
+                metric: string;
+                group_by: string;
+                level?: string;
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                user_id?: string;
+                approver_id?: string;
+                reason?: string;
+                within_minutes?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailControlsGroups"];
+                };
+            };
+        };
+    };
+    getRetailControlsPatterns: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailControlsPatterns"];
+                };
+            };
+        };
+    };
+    listRetailControlsRecords: {
+        parameters: {
+            query: {
+                metric: string;
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                user_id?: string;
+                approver_id?: string;
+                reason?: string;
+                within_minutes?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailControlsRecords"];
+                };
+            };
+        };
+    };
+    getRetailControlsSummary: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                within_minutes?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailControls"];
                 };
             };
         };

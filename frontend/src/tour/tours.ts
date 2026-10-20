@@ -89,7 +89,8 @@ export const adminWelcome: Tour = {
   // Version 10 adds the two correction steps (issue #351): a wrong quantity on the stock list, and a restock entered wrongly.
   // Version 11 adds the step on when a credit sale counts as profit (issue #340, ADR-043).
   // Version 12 adds the step on writing off a debt that will never be paid (issue #340).
-  version: 12,
+  // Version 13 adds the Controls step (issue #357): sales cancelled, goods taken back, prices changed, restocks cancelled and quantities corrected, by shop and person.
+  version: 13,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -272,6 +273,16 @@ export const adminWelcome: Tour = {
       optional: true,
       title: 'Fix a restock entered wrongly',
       body: 'Open Past restocks, tap Correct this restock and give the reason. The stock, the books and the prices go back. The restock stays in the list as Voided. Then enter it again with the right quantity.',
+    },
+    {
+      id: 'controls',
+      route: '/staff/retail',
+      target: 'retail-controls',
+      module: 'retail',
+      needs: ['retail.controls.read'],
+      optional: true,
+      title: 'What deserves a second look',
+      body: 'Open Controls to see sales cancelled, goods taken back, prices changed, restocks cancelled and quantities corrected, by shop and by person. Items about sales are shown per 100 sales, so a busy person and a quiet one can be compared fairly.',
     },
     {
       id: 'catalogue',
@@ -1401,9 +1412,27 @@ export const landedCostsPage: Tour = {
   ],
 };
 
+// The Controls page tour (issue #357): for whoever may read the controls, the administrator's permission by default.
+// JUSTIFICATION-A3: a new tour for the new screen; each tour is data, like the ones above it.
+export const controlsPage: Tour = {
+  id: 'page-controls',
+  version: 1,
+  title: 'This page: controls',
+  audience: (me) => held(me, 'retail.controls.read'),
+  autoStart: false,
+  page: '/staff/retail/controls',
+  steps: [
+    { id: 'period', target: 'controls-period', module: 'retail', title: 'Pick the days', body: 'Choose today, this week, this month or your own days. Every count is set against the days just before.' },
+    { id: 'cards', target: 'controls-cards', module: 'retail', title: 'The figures', body: 'Each card is one kind of thing to look at. Tap a card to see where and who. A rate is the number per 100 sales, so a busy person and a quiet one can be compared.' },
+    { id: 'group-by', target: 'controls-group-by', module: 'retail', title: 'Group by', body: 'Choose how the lines are grouped: shop, person, day and reason. Move a line up or down, or take it out. We remember your choice.' },
+    { id: 'tables', target: 'controls-tables', module: 'retail', title: 'Open a line', body: 'Tap a line to open it, down to the single sales. Tap Open sale to see one. Export CSV saves what you see.' },
+    { id: 'patterns', target: 'controls-patterns', module: 'retail', title: 'Repeat patterns', body: "People or items whose rate is more than twice their shop's own. It is a reason to look, not a finding." },
+  ],
+};
+
 export const TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, ...CUSTOMER_TOURS,
+  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, ...CUSTOMER_TOURS,
 ];

@@ -26,6 +26,8 @@ describe('retail permission gating', () => {
     expect(only('retail.stock.read')).toEqual(['stock', 'transfers', 'valuation', 'stockHealth']);
     expect(only('retail.profit.read')).toEqual(['profit', 'margins', 'evaluation']);
     expect(only('retail.sale.read')).toEqual(['creditSales', 'salesHistory', 'salesAnalysis', 'creditControl']);
+    // Controls name staff and rank them by a rate, so it is its own permission, never a sales read.
+    expect(only('retail.controls.read')).toEqual(['controls']);
   });
 
   it('offers everything to an admin', () => {
@@ -35,7 +37,7 @@ describe('retail permission gating', () => {
     expect(screensFor(admin).map((s) => s.screen)).toEqual(
       [
         'sale', 'creditSales', 'salesHistory', 'restock', 'usage', 'stock', 'stocktake', 'transfer', 'transfers', 'valuation', 'profit',
-        'salesAnalysis', 'margins', 'stockHealth', 'creditControl', 'evaluation', 'catalogue',
+        'salesAnalysis', 'margins', 'stockHealth', 'creditControl', 'evaluation', 'controls', 'catalogue',
         'banking', 'savings', 'expenses', 'withdrawals', 'advances', 'cashSummary', 'bankingReport', 'expensesReport', 'expenseSetup',
         'settings',
       ],

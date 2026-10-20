@@ -1900,6 +1900,10 @@ error. Daily profit per branch and day is the sum of `retail_sale_lines.line_tot
 lines, never the sale header, review F10), less `retail_usage_reports.cost_total_minor` by
 `occurred_on`; snapshots only, never current prices.
 
+### 6.11.3b Controls (FR-RET-48, issue #358, ADR-047)
+
+No table: `retail.reports` reads `retail_sales` (voids: `voided_at`, `voided_by`, `void_reason`; sales entered: `sale_date`, `created_by`, `historical`), `retail_sale_returns` (`returned_on`, `created_by`, `note`, `status`) and `retail_sale_lines` (`price_source`, `resolved_unit_price_minor`, `price_override_reason`, `line_total_minor`, `line_cost_minor`), and the `users` and `branches` names. Migration `V66` adds the permission `retail.controls.read`, granted to `tenant_admin` (a global role row, so every existing tenant has it). No index is added: the voids of a window are found by `retail_sales_voided (tenant_id, branch_id, voided_at) WHERE voided_at IS NOT NULL` (V34, section 6.11) and every other metric by the sale date (`retail_sales_by_date`). Expand only.
+
 ### 6.11.3a Trade capabilities (ADR-033)
 
 Built: `retail_branch_roles` (issue #191, migration V37). One row per branch at most:

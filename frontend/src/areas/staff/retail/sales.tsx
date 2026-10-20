@@ -152,7 +152,7 @@ export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: str
   );
 }
 
-function OpenSale({ id, onClose }: { id: string; onClose: () => void }) {
+export function OpenSale({ id, onClose }: { id: string; onClose: () => void }) {
   const nameOf = useBranchName();
   const { me } = useStaff();
   const sale = useQuery({ queryKey: ['retail', 'sale', id], queryFn: () => retail.getSale(id) });
