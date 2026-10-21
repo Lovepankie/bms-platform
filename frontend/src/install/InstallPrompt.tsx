@@ -31,6 +31,7 @@ export function IosSteps() {
 export function InstallPrompt() {
   const { installed, canPrompt, dismissed } = useInstall();
   const [message, setMessage] = useState<string | null>(null);
+  const [showSteps, setShowSteps] = useState(false);
   const ios = isIosDevice();
   if (installed || dismissed || (!canPrompt && !ios)) return null;
 
@@ -48,11 +49,17 @@ export function InstallPrompt() {
           ? 'Add BMS to your home screen. It opens like any other app and can tell you when something needs you.'
           : 'Add BMS to your phone or computer. It opens like any other app, starts faster and can tell you when something needs you.'}
       </p>
-      {ios && !canPrompt && <IosSteps />}
+      {ios && !canPrompt && showSteps && <IosSteps />}
       {message && <p role="status">{message}</p>}
       <p className="cluster">
         {canPrompt && (
           <button type="button" className="btn-primary" onClick={() => void install()}>
+            Install
+          </button>
+        )}
+        {ios && !canPrompt && !showSteps && (
+          // An iPhone cannot install from a button (Apple allows only Share, then Add to Home Screen), so the button shows the taps.
+          <button type="button" className="btn-primary" onClick={() => setShowSteps(true)}>
             Install
           </button>
         )}
@@ -68,6 +75,7 @@ export function InstallPrompt() {
 export function InstallPanel() {
   const { installed, canPrompt } = useInstall();
   const [message, setMessage] = useState<string | null>(null);
+  const [showSteps, setShowSteps] = useState(false);
   const ios = isIosDevice();
 
   async function install() {
@@ -96,7 +104,14 @@ export function InstallPanel() {
           </button>
         </p>
       )}
-      {!canPrompt && ios && <IosSteps />}
+      {!canPrompt && ios && !showSteps && (
+        <p>
+          <button type="button" className="btn-primary" onClick={() => setShowSteps(true)}>
+            Install the app
+          </button>
+        </p>
+      )}
+      {!canPrompt && ios && showSteps && <IosSteps />}
       {!canPrompt && !ios && (
         <p>
           Open your browser's menu and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>. If you do not see it, this
