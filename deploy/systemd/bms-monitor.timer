@@ -1,0 +1,13 @@
+# Every five minutes, run the host checks (ADR-058).
+# Install: docs/runbooks/monitoring-and-alerts.md section 2.
+[Unit]
+Description=BMS: run the host checks every five minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=5min
+RandomizedDelaySec=20s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

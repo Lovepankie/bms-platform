@@ -129,7 +129,9 @@ jobs:
         # user on the host, the only identity that can read the workspace (ADR-018).
         run: docker run --rm --user 0:0 -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
       - name: shellcheck
-        run: docker run --rm --user 0:0 -v "$PWD:/repo" -w /repo koalaman/shellcheck:v0.10.0 deploy/*.sh deploy/postgres/initdb/*.sh
+        run: docker run --rm --user 0:0 -v "$PWD:/repo" -w /repo koalaman/shellcheck:v0.10.0 -x deploy/*.sh deploy/tests/*.sh deploy/postgres/initdb/*.sh
+      - name: Host script tests
+        run: bash deploy/tests/monitor-test.sh
       - name: Compose files parse
         env:
           API_IMAGE: ghcr.io/rincoltech-solutions-ltd/bms-platform-api:sha-0000000
@@ -162,4 +164,4 @@ jobs:
           for unit in deploy/systemd/*; do
             grep -Eq '^\[(Unit|Service|Timer|Slice)\]' "$unit" || { echo "::error::$unit has no unit section"; exit 1; }
           done
-          systemd-analyze verify deploy/systemd/bms.slice deploy/systemd/bms-pull.timer
+          systemd-analyze verify deploy/systemd/bms.slice deploy/systemd/bms-pull.timer deploy/systemd/bms-monitor.timer deploy/systemd/bms-restore-drill.timer

@@ -5,8 +5,11 @@
 #   2. encrypted on this host with AES-256 (openssl, PBKDF2) before anything leaves it;
 #   3. uploaded with rclone to r2:<bucket>/<environment>/daily/, and on the first day of a month
 #      also to monthly/;
-#   4. daily copies older than 30 days and monthly copies older than 365 days are deleted;
-#   5. state/last_backup_ok records the time, for the missing-backup alert (26 hours).
+#   4. daily copies older than 30 days and monthly copies older than 365 days are deleted, unless
+#      BACKUP_RETENTION_ON_HOST=false hands retention to the bucket's own lifecycle and lock rules
+#      (docs/runbooks/restore-from-backup.md section 7, ADR-058);
+#   5. state/last_backup_ok records the time, for the missing-backup alert (26 hours); a failed run
+#      writes state/last_backup_error instead, which monitor.sh reports at once.
 #
 # Schedule (cron, as the deploy user):  15 1 * * *  /opt/bms/backup.sh >> /opt/bms/state/backup.log 2>&1
 # Reads /opt/bms/.env: BMS_ENVIRONMENT, BACKUP_ENCRYPTION_KEY, R2_ENDPOINT, R2_ACCESS_KEY_ID,
@@ -36,7 +39,14 @@ NAME="bms-${BMS_ENVIRONMENT}-${STAMP}.dump.enc"
 PREFIX="r2:${R2_BACKUP_BUCKET}/${BMS_ENVIRONMENT}"
 
 log() { echo "[backup $(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }
-trap 'rm -f "backups/${NAME}"' EXIT
+on_exit() {
+    local status=$?
+    rm -f "backups/${NAME}"
+    if (( status != 0 )); then
+        printf '%s FAILED exit %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$status" > state/last_backup_error
+    fi
+}
+trap on_exit EXIT
 
 log "dumping and encrypting to backups/${NAME}"
 "${COMPOSE[@]}" exec -T postgres pg_dump --username bms_owner --dbname bms --format custom --compress 6 \
@@ -72,9 +82,14 @@ if [[ "$(date -u +%d)" == "01" ]]; then
     rclone copyto "/backups/${NAME}" "${PREFIX}/monthly/${NAME}"
 fi
 
-log "applying retention: daily 30 days, monthly 365 days"
-rclone delete --min-age 30d "${PREFIX}/daily/"
-rclone delete --min-age 365d "${PREFIX}/monthly/"
+if [[ "${BACKUP_RETENTION_ON_HOST:-true}" == "true" ]]; then
+    log "applying retention: daily 30 days, monthly 365 days"
+    rclone delete --min-age 30d "${PREFIX}/daily/"
+    rclone delete --min-age 365d "${PREFIX}/monthly/"
+else
+    log "retention is the bucket's lifecycle rules; this host deletes nothing"
+fi
 
 date -u +%Y-%m-%dT%H:%M:%SZ > state/last_backup_ok
+rm -f state/last_backup_error
 log "backup ${NAME} complete"

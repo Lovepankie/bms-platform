@@ -7,10 +7,13 @@
 #      by the same postgres/initdb/01-roles.sh as the real one, and pg_restore into it;
 #   3. check it: Flyway history is intact and not ahead of the live database, the row counts are read,
 #      and the application role can read a tenant's rows under row-level security;
-#   4. record state/last_restore_drill (one line) on success, state/last_restore_drill_error on failure.
+#   4. record the result as one line with its time in seconds against the 2 hour RTO: state/last_restore_drill
+#      on success, state/last_restore_drill_error on failure, every run appended to
+#      state/restore-drill-history.log and the latest uploaded to <environment>/drill/last_restore_drill.txt
+#      in R2, so the record outlives the host. monitor.sh alerts on a failed, late or slow drill.
 # Everything it created, including the decrypted dump, is removed whatever the outcome.
 #
-# Schedule (cron, as the deploy user):  30 3 * * 0  /opt/bms/restore-drill.sh >> /opt/bms/state/restore-drill.log 2>&1
+# Schedule: bms-restore-drill.timer, Sunday 03:30 host time, as the deploy user (docs/runbooks/monitoring-and-alerts.md).
 # Reads /opt/bms/.env like backup.sh, plus POSTGRES_IMAGE.
 set -uo pipefail
 
@@ -24,16 +27,41 @@ set +a
 : "${R2_SECRET_ACCESS_KEY:?}" "${R2_BACKUP_BUCKET:?}" "${RCLONE_IMAGE:?}" "${POSTGRES_IMAGE:?}"
 
 IMAGE_TAG="$(cat state/current_tag)"
+# Staging stages each release under releases/<tag>/; production untars straight into /opt/bms.
 INITDB="$PWD/releases/${IMAGE_TAG}/postgres/initdb"
+[[ -d "$INITDB" ]] || INITDB="$PWD/postgres/initdb"
 PREFIX="r2:${R2_BACKUP_BUCKET}/${BMS_ENVIRONMENT}"
 DRILL="bms-restore-drill-$$"
 ENC="backups/drill-$$.dump.enc"
 DUMP="backups/drill-$$.dump"
 
+STARTED="$(date -u +%s)"
+
 log() { echo "[drill $(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }
+elapsed() { echo $(( $(date -u +%s) - STARTED )); }
+# record <state file> <line>: the line starts with the time, which monitor.sh reads.
+# Write-then-rename for the state file (ADR-018); the history and the log keep their last 200 lines.
+record() {
+    printf '%s\n' "$2" > "$1.tmp.$$" && mv -f "$1.tmp.$$" "$1"
+    printf '%s\n' "$2" >> state/restore-drill-history.log
+    trim state/restore-drill-history.log
+    trim state/restore-drill.log
+    printf '%s\n' "$2" > "backups/drill-result-$$.txt"
+    if declare -F rclone > /dev/null; then
+        rclone copyto "/backups/drill-result-$$.txt" "${PREFIX}/drill/last_restore_drill.txt" > /dev/null 2>&1 \
+            || log "could not upload the result to ${PREFIX}/drill/"
+    fi
+    rm -f "backups/drill-result-$$.txt"
+}
+# trim <file>: keep the last 200 lines.
+trim() {
+    [[ -f "$1" ]] || return 0
+    tail -n 200 "$1" > "$1.tmp.$$" && cat "$1.tmp.$$" > "$1"
+    rm -f "$1.tmp.$$"
+}
 fail() {
     log "FAILED: $*"
-    printf '%s FAILED %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" > state/last_restore_drill_error
+    record state/last_restore_drill_error "$(date -u +%Y-%m-%dT%H:%M:%SZ) FAILED seconds=$(elapsed) $*"
     exit 1
 }
 cleanup() {
@@ -44,6 +72,8 @@ trap cleanup EXIT
 
 [[ -d "$INITDB" ]] || fail "no initdb folder at ${INITDB}"
 
+# Staging runs inside bms.slice; everywhere else the memory caps on each container (64 MB rclone, 384 MB
+# postgres) are the limit, so the drill cannot starve the live stack on the 4 GB production VM.
 CGROUP_ARGS=()
 if [[ "$BMS_ENVIRONMENT" == "staging" ]]; then
     CGROUP_ARGS=(--cgroup-parent bms.slice)
@@ -91,7 +121,8 @@ done
 
 log "restoring"
 docker exec -i "$DRILL" pg_restore -U bms_owner -d bms --exit-on-error < "$DUMP" > /dev/null 2> state/restore-drill-pg_restore.err \
-    || fail "pg_restore failed: $(head -c 300 state/restore-drill-pg_restore.err | tr '\n' ' ')"
+    || { log "pg_restore stderr (host only, never sent or uploaded): $(head -c 2000 state/restore-drill-pg_restore.err | tr '\n' ' ')"; false; } \
+    || fail "pg_restore failed, see state/restore-drill.log"
 
 q() { docker exec "$DRILL" psql -U bms_owner -d bms -tAc "$1"; }
 live() { docker exec bms-postgres-1 psql -U bms_owner -d bms -tAc "$1"; }
@@ -111,7 +142,10 @@ first_tenant="$(q "SELECT id FROM tenants ORDER BY created_at LIMIT 1")"
 app_users="$(docker exec "$DRILL" psql -U bms_app -d bms -tAc "SELECT set_config('app.tenant_id', '${first_tenant}', false); SELECT count(*) FROM users" 2> /dev/null | tail -n 1)"
 [[ "$app_users" =~ ^[0-9]+$ ]] || fail "bms_app cannot read users under row-level security"
 
-printf '%s OK %s flyway=%s live_flyway=%s tenants=%s users=%s audit=%s app_visible_users=%s\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$NAME" "$restored_ver" "$live_ver" "$tenants" "$users" "$audit" "$app_users" > state/last_restore_drill
+seconds="$(elapsed)"
+rto_ok=yes
+(( seconds <= 7200 )) || rto_ok=no
+record state/last_restore_drill "$(printf '%s OK %s seconds=%s rto_ok=%s flyway=%s live_flyway=%s tenants=%s users=%s audit=%s app_visible_users=%s' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$NAME" "$seconds" "$rto_ok" "$restored_ver" "$live_ver" "$tenants" "$users" "$audit" "$app_users")"
 rm -f state/last_restore_drill_error state/restore-drill-pg_restore.err
 log "OK: $(cat state/last_restore_drill)"

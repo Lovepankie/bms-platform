@@ -53,9 +53,11 @@ runs:
       env:
         TARGET: ${{ inputs.ssh-user }}@${{ inputs.host }}
       run: |
-        tar -C deploy -czf - compose.yml deploy.sh backup.sh postgres sql cosign.pub \
+        # systemd/ is for reference: the monitor and restore drill units are installed by hand
+        # (docs/runbooks/monitoring-and-alerts.md section 2).
+        tar -C deploy -czf - compose.yml deploy.sh backup.sh restore-drill.sh monitor.sh postgres sql systemd cosign.pub \
           | ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes "$TARGET" \
-              'mkdir -p /opt/bms && tar -xzf - -C /opt/bms && chmod 755 /opt/bms/deploy.sh /opt/bms/backup.sh'
+              'mkdir -p /opt/bms && tar -xzf - -C /opt/bms && chmod 755 /opt/bms/deploy.sh /opt/bms/backup.sh /opt/bms/restore-drill.sh /opt/bms/monitor.sh'
 
     - name: Deploy
       shell: bash

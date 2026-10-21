@@ -1,0 +1,28 @@
+# One run of the host checks (deploy/monitor.sh, ADR-058): site, jobs, disk, certificates, backups and
+# the restore drill, posted to the Telegram operator chat. Started by bms-monitor.timer.
+# Runs as the bms user on staging; on production add a drop-in with User=deploy and Group=deploy.
+# Install: docs/runbooks/monitoring-and-alerts.md section 2.
+[Unit]
+Description=BMS: host checks with Telegram alerts
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=bms
+Group=bms
+WorkingDirectory=/opt/bms
+ExecStart=/opt/bms/monitor.sh
+TimeoutStartSec=4min
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/bms
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+UMask=0077

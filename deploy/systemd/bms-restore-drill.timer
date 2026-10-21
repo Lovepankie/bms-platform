@@ -1,0 +1,13 @@
+# Sunday 03:30 host time, after the 01:15 backup (ADR-058). Persistent: a drill missed while the
+# host was off runs at the next boot.
+# Install: docs/runbooks/monitoring-and-alerts.md section 2.
+[Unit]
+Description=BMS: weekly restore drill, Sunday 03:30
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30:00
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

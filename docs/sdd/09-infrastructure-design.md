@@ -263,18 +263,25 @@ deletion 90 days after closing), all Africa/Kampala (ADR-024).
    file) to `r2:<R2_BACKUP_BUCKET>/<environment>/daily/`, and on the first of the month also to
    `monthly/`;
 4. daily copies older than 30 days and monthly copies older than 365 days are deleted
-   (NFR-BAK-03);
-5. `state/last_backup_ok` is written on the host; the alert does not read it (it would die with
-   the host). Instead a watchdog on the dev lead's workstation checks R2 itself every hour: the
-   newest object under `daily/` is younger than 26 hours and not under half the recent median
-   size, and the last restore drill is younger than 9 days. A problem is sent to the dev lead's
-   phone, repeated at most every 12 hours, with one message when it clears (issue #46).
-6. `deploy/restore-drill.sh`, run weekly by cron (Sunday 03:30 host time), restores the newest
-   daily dump into a throwaway PostgreSQL (no network, 384 MB, inside `bms.slice` on staging),
-   checks the Flyway history against the live one, reads the row counts and proves the
-   application role can read a tenant's rows under row-level security, then removes everything,
-   including the decrypted dump. It writes `state/last_restore_drill` or
-   `state/last_restore_drill_error`.
+   (NFR-BAK-03), by `backup.sh` until the bucket's lifecycle rules take over; with
+   `BACKUP_RETENTION_ON_HOST=false` the host deletes nothing, and R2 bucket lock rules keep every
+   object under `daily/` for 30 days and under `monthly/` for 365, so the host's object read and
+   write token cannot delete or overwrite a backup inside its window (ADR-058,
+   `docs/runbooks/restore-from-backup.md` section 7);
+5. `state/last_backup_ok` is written on the host, or `state/last_backup_error` when a run fails.
+   `deploy/monitor.sh` (section 9.11) reports a failed run, no good backup in 26 hours, and once an
+   hour a newest object under `daily/` older than 26 hours. The external heartbeat of section 9.11
+   alerts when the host itself goes quiet; it replaces the workstation watchdog this section used to
+   name (ADR-058).
+6. `deploy/restore-drill.sh`, run weekly by `bms-restore-drill.timer` (Sunday 03:30 host time),
+   restores the newest daily dump into a throwaway PostgreSQL (no network, 384 MB, inside
+   `bms.slice` on staging), checks the Flyway history against the live one, reads the row counts and
+   proves the application role can read a tenant's rows under row-level security, then removes
+   everything, including the decrypted dump. It records one line with its time in seconds against
+   the 2 hour RTO in `state/last_restore_drill` or `state/last_restore_drill_error`, appends it to
+   `state/restore-drill-history.log` and uploads it to `<environment>/drill/` in R2. `monitor.sh`
+   alerts on a failed drill, no good drill in 9 days, or a drill over the RTO. The quarterly timed
+   restore onto a fresh VM stays a human drill recorded in `docs/meetings/<date>/`.
 
 The R2 token is scoped to the backup bucket. The encryption key has an offline copy held by
 the dev lead (chapter 8 section 8.7). The restore procedure and the quarterly drill
@@ -282,16 +289,31 @@ the dev lead (chapter 8 section 8.7). The restore procedure and the quarterly dr
 
 ## 9.11 Monitoring and alerts
 
-To be configured when the hosts are provisioned (NFR-OBS-04): an external uptime check on
-`https://<platform host>/healthz` (staging `https://bms-staging.rincoltech.com/healthz`) and on one
-tenant host every minute; an alert when
-the newest R2 backup is older than 26 hours or the last restore drill failed or is older than 9 days
-(the watchdog of section 9.10); disk above 70 percent; failed db-scheduler
-executions (`scheduled_tasks.consecutive_failures > 0`); the nightly job failure alerts of
-chapter 5; and, for the client extras (spec section 9.2), notifications per hour, unknown references and reconciliation
-differences for payments, failed and unknown SMS and the daily cap at 80 percent, AI fallbacks, validation failures and
-cap hits, and report run time and queue age. The API logs JSON (ECS format) with the request id on every line in the `server`
-profile.
+Two layers, one channel: the Telegram operator chat the API already uses (`BMS_TELEGRAM_BOT_TOKEN`,
+`BMS_TELEGRAM_OPERATOR_CHAT_ID`, from the host env file only), ADR-058, runbook
+`docs/runbooks/monitoring-and-alerts.md`.
+
+- **External uptime monitor** (a hosted free tier, Hillary's choice): `https://<platform host>/healthz`
+  (staging `https://bms-staging.rincoltech.com/healthz`) and one tenant sign-in page every minute,
+  alerting after three failures (NFR-AVL-01, NFR-OBS-04); and a heartbeat that every `monitor.sh`
+  run pings, which alerts when the host goes quiet.
+- **Host checks**, `deploy/monitor.sh` every five minutes (`bms-monitor.timer`): the site from the
+  host; db-scheduler executions with `scheduled_tasks.consecutive_failures > 0`, picked with no
+  heartbeat for 15 minutes, or due 30 minutes ago and not picked (this covers the nightly job
+  failures of chapter 5, since a tenant job that fails for any tenant fails its execution); disk
+  above 70 percent on `/` and `/opt/bms`; a certificate of the platform, callback or tenant host
+  expiring within 14 days (the DNS-01 renewal fails silently when the Cloudflare token breaks); and
+  the backup and restore drill results of section 9.10. A problem is sent once, repeated every six
+  hours and cleared with one message; an unsent message is retried on the next run. Messages carry
+  check names, hosts and numbers only.
+
+Not built yet: the worker queue age, the subledger reconciliation difference, and, for the client
+extras (spec section 9.2), notifications per hour, unknown references and reconciliation differences
+for payments, failed and unknown SMS and the daily cap at 80 percent, outbox failures and the SMS
+balance, AI fallbacks, validation failures and cap hits, and report run time and queue age. The API
+logs JSON (ECS format) with the request id on every line in the `server` profile. Incidents follow
+`docs/runbooks/security-incident.md`; support hours and the on-call rota are
+`docs/runbooks/support-and-on-call.md`.
 
 ## 9.12 Host layout
 
@@ -300,19 +322,23 @@ profile.
   compose.yml            production: copied from deploy/ on every deploy. Staging: refreshed from
                           releases/<tag>/ only after deploy.sh succeeds (ADR-018 finding M3)
   deploy.sh, backup.sh   as above
+  restore-drill.sh, monitor.sh   the weekly drill and the five-minute host checks (section 9.11)
   pull-staging.sh        staging only: the puller; also refreshed only after a successful deploy
   releases/<tag>/        staging only: each release's host files, staged before deploy.sh runs;
                           the previous one to two releases are kept for inspection and rollback
   current                staging only: symlink to the live releases/<tag>/, updated only on success
   cosign.pub             the signing public key (ADR-018 finding H2): committed at deploy/cosign.pub,
                           provisioned once by hand, never replaced by a release
-  systemd/               staging only: the unit files, for reference; installed by hand
-  postgres/initdb/       copied from deploy/ on every deploy
+  systemd/               the unit files, for reference; installed by hand
+  postgres/initdb/       copied from deploy/ on every deploy. Production: the restore drill reads its init scripts here.
+                          Staging: the drill reads releases/<tag>/postgres/initdb (the staged release it matches)
   sql/                   onboarding scripts (docs/runbooks/onboard-tenant.md)
   .env                   written once by hand (docs/runbooks/provision-host.md); mode 600
   state/current_tag, current_created   the live release and when it was built (for the downgrade guard)
   state/history.log      every deploy, rollback and failure with its time
-  state/last_backup_ok   time of the last good backup
+  state/last_backup_ok   time of the last good backup; state/last_backup_error the last failed run
+  state/last_restore_drill, last_restore_drill_error, restore-drill-history.log   the drill results
+  state/alerts/<check>   monitor.sh: when a problem was first seen and last sent
   state/deploy.lock      one deploy at a time
   state/last_failed_tag  staging only: a release the puller will not retry
   state/pull.lock        staging only: one puller run at a time

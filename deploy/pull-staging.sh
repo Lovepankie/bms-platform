@@ -19,7 +19,7 @@
 #   5. Run releases/<tag>/deploy.sh <sha-tag>: migrations before the swap, readiness gate, automatic
 #      rollback, all against the shared state/ directory.
 #   6. Only on success: point the `current` symlink at this release and refresh the live top-level
-#      copies of compose.yml, deploy.sh, backup.sh and pull-staging.sh from it. A failed release
+#      copies of compose.yml and the host scripts from it. A failed release
 #      keeps the previous release live and this script un-replaced; releases/<tag>/ stays for
 #      inspection.
 #   7. On success, keep the images of this and the previous release and remove older ones (the SD
@@ -123,7 +123,7 @@ docker cp "$container:/usr/share/bms-deploy" "$work/deploy" > /dev/null
 src="$work/deploy"
 
 install -m 644 "$src/$COMPOSE_SOURCE" "$release_dir/compose.yml"
-for script in deploy.sh backup.sh restore-drill.sh pull-staging.sh; do
+for script in deploy.sh backup.sh restore-drill.sh monitor.sh pull-staging.sh; do
     install -m 755 "$src/$script" "$release_dir/$script"
 done
 for dir in postgres sql systemd; do
@@ -145,7 +145,7 @@ case "$status" in
         # never displaces what is actually running or this script's own next run.
         ln -sfn "releases/$tag" current
         install -m 644 "$release_dir/compose.yml" compose.yml.new && mv -f compose.yml.new compose.yml
-        for script in deploy.sh backup.sh restore-drill.sh pull-staging.sh; do
+        for script in deploy.sh backup.sh restore-drill.sh monitor.sh pull-staging.sh; do
             install -m 755 "$release_dir/$script" "$script.new" && mv -f "$script.new" "$script"
         done
         for dir in postgres sql systemd; do

@@ -105,8 +105,10 @@ crontab -u deploy -e
 15 1 * * * /opt/bms/backup.sh >> /opt/bms/state/backup.log 2>&1
 ```
 
-Run `/opt/bms/backup.sh` once by hand and confirm the file appears in R2. Then set up the
-monitoring of chapter 9 section 9.11, onboard a fabricated tenant
+Run `/opt/bms/backup.sh` once by hand and confirm the file appears in R2. Then install the host
+checks and the weekly restore drill timer, set up the external uptime monitor
+(`docs/runbooks/monitoring-and-alerts.md` sections 1 and 2), lock the backup bucket
+(`docs/runbooks/restore-from-backup.md` section 7), onboard a fabricated tenant
 (`docs/runbooks/onboard-tenant.md`), and on staging run the isolation checks of chapter 15 against
 two fabricated tenants.
 
@@ -269,4 +271,5 @@ crontab -u bms -e
 15 1 * * * /opt/bms/backup.sh >> /opt/bms/state/backup.log 2>&1
 ```
 
-Run `/opt/bms/backup.sh` once as `bms` and confirm the file appears in R2 under `staging/`.
+Run `/opt/bms/backup.sh` once as `bms` and confirm the file appears in R2 under `staging/`. Then install
+`bms-monitor.timer` and `bms-restore-drill.timer` (`docs/runbooks/monitoring-and-alerts.md` section 2).
