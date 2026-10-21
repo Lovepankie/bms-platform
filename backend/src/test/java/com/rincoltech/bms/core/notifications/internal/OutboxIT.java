@@ -531,7 +531,8 @@ class OutboxIT extends IntegrationTest {
                 Map.entry("reason", "provider_auth_failed"),
                 Map.entry("change", "saved"),
                 Map.entry("who", "Test Administrator"),
-                Map.entry("when", "18 Oct 2026 10:00 UTC"));
+                Map.entry("when", "18 Oct 2026 10:00 UTC"),
+                Map.entry("links", "Test Shop\nhttps://test-bms-staging.rincoltech.test/sign-in"));
         for (String channel : List.of("email", "telegram", "sms")) {
             for (String key : OutboxTemplates.keys(channel)) {
                 OutboxTemplates.Rendered rendered = templates.render(channel, key, params);

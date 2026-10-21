@@ -395,6 +395,7 @@ The refresh token never appears in a response body: it is the `__Host-bms_rt` co
 | POST | `/platform/tenants/{tenant_id}/support-sessions` | | FR-TEN-07 (P2) |
 | GET | `/platform/tenants/{tenant_id}/usage` | | Users, members, SMS segments. FR-NTF-07. Not built yet |
 | POST | `/platform/sign-up/applications` | public | The sign-up form (FR-ONB-01). Always 202 `{status: check_your_email}`, for a new, a known or a honeypot request (FR-ONB-03); 429 `rate_limited` |
+| POST | `/platform/find-sign-in` | public | **Built (#383).** `{email}`. Always 202 `{message}` with the same words and after at least a 400 ms floor, whether or not the address is an active staff user of any active business. When it is, the sign-in page of each such business is emailed to that address only (`identity.find_sign_in`, through the outbox). Limited to 10 an hour per client address (429 `rate_limited`) and 3 emails an hour per mailbox (counted from the outbox, answered like any other request); every call is audited in `platform_audit_log` with the address masked |
 | POST | `/platform/sign-up/verify` | public (link token) | `{token}`: confirms the email on first use and returns the applicant view (FR-ONB-02) |
 | POST | `/platform/sign-up/status` | public (link token) | `{token}`: the applicant view, no contact details (FR-ONB-04) |
 | POST | `/platform/sign-up/reply` | public (link token) | `{token, reply}`: answers a `needs_info` note; back to `submitted` (FR-ONB-04) |

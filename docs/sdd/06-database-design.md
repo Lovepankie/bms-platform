@@ -151,6 +151,13 @@ status of an active or suspended tenant, for request-time resolution (a suspende
 served read only, FR-TEN-06), and `app_list_active_tenants_with_module(module)` returns the
 active tenants with a module switched on, for a vertical's jobs (FR-TEN-03).
 
+Migration V72 (issue #383, FR-IAM-17) adds `app_staff_sign_in_pages(email)`: for one email it returns the public slug and
+name of each active tenant where that address is an active staff user (at most 20 rows, no user id, role or status). It
+serves the platform home page's "Find your sign-in page", which emails the result to that same address and shows the asker
+nothing; the only caller is `core.onboarding`. The same migration adds the partial index
+`users_staff_email_any_tenant` on `users (lower(email))` for staff, because the lookup crosses tenants and the per-tenant
+`users_staff_email` index cannot serve it.
+
 The platform functions `platform_create_tenant`, `platform_set_tenant_modules`,
 `platform_set_subscription_status` and `platform_list_tenants` (also `SECURITY DEFINER`, owned by
 `bms_owner`) are the only way the application changes `tenants`, `tenant_modules` and

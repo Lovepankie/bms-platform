@@ -29,6 +29,9 @@ class SignUpRateLimiter {
     /** Link reads (verify, status, reply): 30 in 10 minutes from one address. */
     static final Limit LINK_PER_IP = new Limit("link-ip", 30, Duration.ofMinutes(10));
 
+    /** Asks for a staff sign-in page by email (issue #383): 10 an hour from one address. */
+    static final Limit FIND_PER_IP = new Limit("find-sign-in-ip", 10, Duration.ofHours(1));
+
     static final int MAX_KEYS = 10_000;
 
     private final BusinessClock clock;

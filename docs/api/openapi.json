@@ -1704,6 +1704,26 @@
           }
         }
       },
+      "FindSignInAccepted" : {
+        "description" : "The same words whether or not the address matched",
+        "properties" : {
+          "message" : {
+            "type" : "string"
+          }
+        }
+      },
+      "FindSignInRequest" : {
+        "properties" : {
+          "email" : {
+            "format" : "email",
+            "maxLength" : 254,
+            "minLength" : 0,
+            "pattern" : "^[\\x21-\\x7E]+$",
+            "type" : "string"
+          }
+        },
+        "required" : [ "email" ]
+      },
       "FirstAdminInvitation" : {
         "description" : "Shown once to the operator, and sent to the admin",
         "properties" : {
@@ -25707,6 +25727,35 @@
         },
         "summary" : "Set the first password with the one-time setup token",
         "tags" : [ "platform-auth" ]
+      }
+    },
+    "/api/v1/platform/find-sign-in" : {
+      "post" : {
+        "operationId" : "findStaffSignIn",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/FindSignInRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FindSignInAccepted"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Email the sign-in page of every business where this address is an active staff user; the answer never says whether any matched (issue #383)",
+        "tags" : [ "sign-up" ]
       }
     },
     "/api/v1/platform/me" : {

@@ -41,8 +41,10 @@ describe('every staff route has a page tour (ADR-049)', () => {
   });
 
   it('points every page tour at a route that exists', () => {
+    // The public pages (find your sign-in page, issue #383) have a tour too, outside /staff.
+    const every = Object.keys(router.routesByPath);
     for (const tour of TOURS.filter((t) => t.page !== undefined)) {
-      expect(routes.some((route) => covers(tour.page as string, route)), `${tour.id}: ${tour.page}`).toBe(true);
+      expect(every.some((route) => covers(tour.page as string, route)), `${tour.id}: ${tour.page}`).toBe(true);
     }
   });
 });

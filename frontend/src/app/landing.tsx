@@ -154,6 +154,11 @@ export function Landing() {
               </Link>
             </li>
             <li>
+              <Link to="/find-sign-in" className="btn btn-lg btn-block">
+                Staff of a business? Find your sign-in page
+              </Link>
+            </li>
+            <li>
               <Link to="/platform/sign-in" className="btn btn-lg btn-block">
                 Operator sign-in
               </Link>
@@ -169,7 +174,7 @@ export function Landing() {
           <li className="card feature-card">
             <span className="icon-chip">{icons.user}</span>
             <h2>Already a customer</h2>
-            <p>Sign in at the address in your activation email.</p>
+            <p>Sign in at the address in your activation email. If you work for a business, we can email you that address.</p>
           </li>
         </ul>
       </main>

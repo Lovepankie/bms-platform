@@ -2448,6 +2448,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/find-sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Email the sign-in page of every business where this address is an active staff user; the answer never says whether any matched (issue #383) */
+        post: operations["findStaffSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/me": {
         parameters: {
             query?: never;
@@ -6572,6 +6589,14 @@ export interface components {
         };
         DuplicateCheckResponse: {
             candidates?: components["schemas"]["DuplicateCandidate"][];
+        };
+        /** @description The same words whether or not the address matched */
+        FindSignInAccepted: {
+            message?: string;
+        };
+        FindSignInRequest: {
+            /** Format: email */
+            email: string;
         };
         /** @description Shown once to the operator, and sent to the admin */
         FirstAdminInvitation: {
@@ -19367,6 +19392,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    findStaffSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindSignInRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindSignInAccepted"];
+                };
             };
         };
     };

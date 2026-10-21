@@ -35,6 +35,11 @@ export function OperatorSignInView(p: OperatorSignInViewProps) {
   return (
     <main className="card auth-card">
       <h1>Operator sign-in</h1>
+      {p.step.kind === 'password' && (
+        <p className="muted">
+          Staff of a business sign in on your business page. <a href="/find-sign-in">Find your sign-in page</a>
+        </p>
+      )}
       {p.message && (
         <p role="alert" className="alert alert-danger">
           {p.message}

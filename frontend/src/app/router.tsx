@@ -240,6 +240,10 @@ const investmentCertificateRoute = lendingScreen('/investments/$investmentId/cer
 const signUpRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sign-up' }).lazy(() =>
   import('../areas/onboarding/sign-up').then((m) => m.Route),
 );
+// Staff of a business find their own sign-in page from the platform home (issue #383).
+const findSignInRoute = createRoute({ getParentRoute: () => rootRoute, path: '/find-sign-in' }).lazy(() =>
+  import('../areas/onboarding/find-sign-in').then((m) => m.Route),
+);
 const signUpVerifyRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sign-up/verify' }).lazy(() =>
   import('../areas/onboarding/applicant').then((m) => m.VerifyRoute),
 );
@@ -383,6 +387,7 @@ export const router = createRouter({
     memberRoute,
     styleRoute,
     signUpRoute,
+    findSignInRoute,
     signUpVerifyRoute,
     applicationStatusRoute,
     operatorSignInRoute,
