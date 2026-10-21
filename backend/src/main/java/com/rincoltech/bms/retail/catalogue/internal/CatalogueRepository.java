@@ -27,7 +27,8 @@ class CatalogueRepository {
     private static final String SELECT_PRODUCT = """
             SELECT p.id, p.code, p.description, p.category_id, c.name AS category, p.unit_id, u.name AS unit,
                    p.sell_minor, p.cost_minor, p.currency, p.active, p.created_at, p.updated_at, p.version,
-                   p.family_id, f.name AS family_name, p.variant_size, p.variant_colour, p.variant_sort
+                   p.family_id, f.name AS family_name, p.variant_size, p.variant_colour, p.variant_sort,
+                   p.photo_document_id AS photo_id, f.photo_document_id AS item_photo_id
               FROM retail_products p
               JOIN retail_categories c ON c.id = p.category_id
               JOIN retail_units u ON u.id = p.unit_id
@@ -600,7 +601,9 @@ class CatalogueRepository {
     }
 
     static Product product(ResultSet rs, int n) throws SQLException {
-        return plainProduct(rs).withVariant(variantOf(rs));
+        return plainProduct(rs)
+                .withVariant(variantOf(rs))
+                .withPhoto(rs.getObject("photo_id", UUID.class), rs.getObject("item_photo_id", UUID.class));
     }
 
     /** The item a product is a variant of (issue #384), or null for an item without variants. */
@@ -660,6 +663,7 @@ class CatalogueRepository {
                         q.signum() < 0,
                         null)
                 .withVariant(p.variant())
+                .withPhoto(p.photoId(), p.itemPhotoId())
                 .withReserved(reserved(rs));
     }
 
@@ -681,11 +685,12 @@ class CatalogueRepository {
             UUID unitId,
             String unit,
             Instant createdAt,
-            int version) {}
+            int version,
+            UUID photoId) {}
 
     private static final String SELECT_FAMILY = """
             SELECT f.id, f.name, f.base_code, f.category_id, c.name AS category, f.unit_id, u.name AS unit, f.created_at,
-                   f.version
+                   f.version, f.photo_document_id
               FROM retail_product_families f
               JOIN retail_categories c ON c.id = f.category_id
               JOIN retail_units u ON u.id = f.unit_id
@@ -701,7 +706,8 @@ class CatalogueRepository {
                 rs.getObject("unit_id", UUID.class),
                 rs.getString("unit"),
                 instant(rs, "created_at"),
-                rs.getInt("version"));
+                rs.getInt("version"),
+                rs.getObject("photo_document_id", UUID.class));
     }
 
     Optional<FamilyRow> family(UUID id) {
@@ -851,6 +857,37 @@ class CatalogueRepository {
                 .param("colour", colour, java.sql.Types.VARCHAR)
                 .query(Boolean.class)
                 .single();
+    }
+
+    /** Issue #384: a product's own photo (a document of core.documents), or none; its row's version moves. */
+    void setProductPhoto(UUID productId, UUID documentId) {
+        jdbc.sql("""
+                        UPDATE retail_products SET photo_document_id = :doc, updated_at = now(), version = version + 1
+                         WHERE id = :id
+                        """)
+                .param("doc", documentId, java.sql.Types.OTHER)
+                .param("id", productId)
+                .update();
+    }
+
+    /** Issue #384: an item's photo, shown for every size and colour that has none of its own. */
+    void setFamilyPhoto(UUID familyId, UUID documentId) {
+        jdbc.sql("""
+                        UPDATE retail_product_families SET photo_document_id = :doc, updated_at = now(), version = version + 1
+                         WHERE id = :id
+                        """)
+                .param("doc", documentId, java.sql.Types.OTHER)
+                .param("id", familyId)
+                .update();
+    }
+
+    /** The document id of a product's own photo (not its item's), for the audit row of a change. */
+    Optional<UUID> ownPhoto(UUID productId) {
+        return jdbc.sql("SELECT photo_document_id FROM retail_products WHERE id = ?")
+                .param(productId)
+                .query((rs, n) -> Optional.ofNullable(rs.getObject(1, UUID.class)))
+                .optional()
+                .flatMap(x -> x);
     }
 
     /** Every variant of an item follows its new category. */

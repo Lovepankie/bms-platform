@@ -3877,6 +3877,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/photos/{photo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The image of an item photo, from the same origin; size=small is the 240 px copy for the item cards and pickers (issue #384) */
+        get: operations["getRetailPhoto"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/price-lists": {
         parameters: {
             query?: never;
@@ -4034,6 +4051,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/product-families/{family_id}/photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set the photo of an item with sizes and colours, shown for every size without its own (issue #384) */
+        post: operations["setRetailProductFamilyPhoto"];
+        /** Take the photo of an item with sizes and colours off (issue #384) */
+        delete: operations["clearRetailProductFamilyPhoto"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/product-families/{family_id}/variants": {
         parameters: {
             query?: never;
@@ -4133,6 +4168,24 @@ export interface paths {
         /** Give an item without variants sizes and colours; it keeps its stock and history as one of them (issue #384) */
         post: operations["makeRetailProductFamily"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products/{product_id}/photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set an item's photo: PNG, JPEG or WebP, 5 MB, re-encoded without metadata (issue #384) */
+        post: operations["setRetailProductPhoto"];
+        /** Take an item's own photo off; a size then shows its item's photo (issue #384) */
+        delete: operations["clearRetailProductPhoto"];
         options?: never;
         head?: never;
         patch?: never;
@@ -10091,6 +10144,11 @@ export interface components {
             /** Format: uuid */
             id?: string;
             name?: string;
+            /**
+             * Format: uuid
+             * @description Issue #384: the document id of the item's photo, which a size without its own shows; absent when none
+             */
+            photo_id?: string;
             /** @description The sizes in the item's order */
             sizes?: string[];
             /** @description The item's stock per branch the caller may read, where it is not zero */
@@ -11366,10 +11424,20 @@ export interface components {
             description?: string;
             /** Format: uuid */
             id?: string;
+            /**
+             * Format: uuid
+             * @description Issue #384: the id of the photo of the item this size belongs to, which it shows while it has none of its own; absent when the item has none
+             */
+            item_photo_id?: string;
             /** @description True when the branch balance is below zero */
             negative?: boolean;
             /** @description The pack sizes of the product; present only while the units capability is on */
             packs?: components["schemas"]["RetailPack"][];
+            /**
+             * Format: uuid
+             * @description Issue #384: the id of this product's own photo; show it with GET /retail/photos/{photo_id}. Absent when it has none (a size then shows item_photo_id)
+             */
+            photo_id?: string;
             /** @description The branch balance, when branch_id was given */
             qty?: string;
             /** @description Issue #385: of the branch balance, what open customer orders keep aside (so not free to sell); sent only with branch_id, and only when something is kept */
@@ -21834,6 +21902,30 @@ export interface operations {
             };
         };
     };
+    getRetailPhoto: {
+        parameters: {
+            query?: {
+                size?: string;
+            };
+            header?: never;
+            path: {
+                photo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
     listRetailPriceLists: {
         parameters: {
             query?: never;
@@ -22157,6 +22249,57 @@ export interface operations {
             };
         };
     };
+    setRetailProductFamilyPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                family_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailFamily"];
+                };
+            };
+        };
+    };
+    clearRetailProductFamilyPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                family_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailFamily"];
+                };
+            };
+        };
+    };
     addRetailProductVariants: {
         parameters: {
             query?: never;
@@ -22356,6 +22499,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailFamily"];
+                };
+            };
+        };
+    };
+    setRetailProductPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+        };
+    };
+    clearRetailProductPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
                 };
             };
         };

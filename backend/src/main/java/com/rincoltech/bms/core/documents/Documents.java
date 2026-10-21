@@ -49,6 +49,24 @@ public interface Documents {
 
     record AssetMeta(String contentType, String sha256, long sizeBytes) {}
 
+    /**
+     * Issue #384, ADR-053: the bytes of an uploaded image of {@code subjectType} for its owning module to show on its own
+     * screens from the same origin (an item photo in a list), after the owning module's {@link DocumentAccess} says the
+     * caller may read its subject: 404 when the document is missing or of another subject type, 403 when the caller may
+     * not read it (audited, as every refusal). A read is not audited, unlike a signed URL: the module serves pictures, not
+     * records. Only images (PNG, JPEG, WebP) are returned; any other type is 404.
+     */
+    Image readImage(String subjectType, UUID documentId);
+
+    /**
+     * As {@link #readImage} for the newest image stored for a subject (the small copy of an item photo, whose subject is the
+     * photo itself). 404 when the subject has none. No connection is held while the bytes are fetched.
+     */
+    Image readImageOf(String subjectType, UUID subjectId);
+
+    /** A stored image: its bytes, its type and its checksum (an ETag). */
+    record Image(byte[] bytes, String contentType, String sha256) {}
+
     /** Stores and records a prepared file in the caller's transaction. */
     StoredDocument store(Prepared prepared, String subjectType, UUID subjectId, UUID branchId);
 

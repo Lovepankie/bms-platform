@@ -9396,6 +9396,11 @@
           "name" : {
             "type" : "string"
           },
+          "photo_id" : {
+            "description" : "Issue #384: the document id of the item's photo, which a size without its own shows; absent when none",
+            "format" : "uuid",
+            "type" : "string"
+          },
           "sizes" : {
             "description" : "The sizes in the item's order",
             "items" : {
@@ -11922,6 +11927,11 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "item_photo_id" : {
+            "description" : "Issue #384: the id of the photo of the item this size belongs to, which it shows while it has none of its own; absent when the item has none",
+            "format" : "uuid",
+            "type" : "string"
+          },
           "negative" : {
             "description" : "True when the branch balance is below zero",
             "type" : "boolean"
@@ -11932,6 +11942,11 @@
               "$ref" : "#/components/schemas/RetailPack"
             },
             "type" : "array"
+          },
+          "photo_id" : {
+            "description" : "Issue #384: the id of this product's own photo; show it with GET /retail/photos/{photo_id}. Absent when it has none (a size then shows item_photo_id)",
+            "format" : "uuid",
+            "type" : "string"
           },
           "qty" : {
             "description" : "The branch balance, when branch_id was given",
@@ -29703,6 +29718,42 @@
         "tags" : [ "retail-orders" ]
       }
     },
+    "/api/v1/retail/photos/{photo_id}" : {
+      "get" : {
+        "operationId" : "getRetailPhoto",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "photo_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "size",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The image of an item photo, from the same origin; size=small is the 240 px copy for the item cards and pickers (issue #384)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
     "/api/v1/retail/price-lists" : {
       "get" : {
         "operationId" : "listRetailPriceLists",
@@ -30163,6 +30214,76 @@
         "tags" : [ "retail-catalogue" ]
       }
     },
+    "/api/v1/retail/product-families/{family_id}/photo" : {
+      "delete" : {
+        "operationId" : "clearRetailProductFamilyPhoto",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "family_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailFamily"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Take the photo of an item with sizes and colours off (issue #384)",
+        "tags" : [ "retail-catalogue" ]
+      },
+      "post" : {
+        "operationId" : "setRetailProductFamilyPhoto",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "family_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "required" : [ "file" ],
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailFamily"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set the photo of an item with sizes and colours, shown for every size without its own (issue #384)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
     "/api/v1/retail/product-families/{family_id}/variants" : {
       "post" : {
         "operationId" : "addRetailProductVariants",
@@ -30480,6 +30601,76 @@
           }
         },
         "summary" : "Give an item without variants sizes and colours; it keeps its stock and history as one of them (issue #384)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/products/{product_id}/photo" : {
+      "delete" : {
+        "operationId" : "clearRetailProductPhoto",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailProduct"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Take an item's own photo off; a size then shows its item's photo (issue #384)",
+        "tags" : [ "retail-catalogue" ]
+      },
+      "post" : {
+        "operationId" : "setRetailProductPhoto",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "required" : [ "file" ],
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailProduct"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set an item's photo: PNG, JPEG or WebP, 5 MB, re-encoded without metadata (issue #384)",
         "tags" : [ "retail-catalogue" ]
       }
     },

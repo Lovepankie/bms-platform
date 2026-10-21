@@ -11,6 +11,7 @@ import { BackToCatalogue } from './catalogue';
 import { ExistsPanel, SimilarPanel, existingOf, type ExistingItem } from './catalogue-names';
 import { PackEditor } from './catalogue-packs';
 import { MakeFamilyPanel, SIZES_JOIN, SIZES_NEW, VariantNote } from './catalogue-variants';
+import { ItemPhoto, PhotoEditor, shownPhoto } from './item-photo';
 import { ScreenLink } from './screen-link';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
@@ -71,6 +72,7 @@ export function ProductCard({ product, showCost, canPrice, onEdit, onPrice, extr
 }) {
   return (
     <li className="rt-card">
+      <ItemPhoto photoId={shownPhoto(product)} label={product.description ?? ''} />
       <p>
         <strong>{product.description}</strong> {product.active === false && <span className="badge badge-warning">Inactive</span>}
       </p>
@@ -217,6 +219,16 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
           )}
           <p className="hint">To change the price, use Change price on the list.</p>
           <PackEditor product={product} />
+          {canManage && (
+            <PhotoEditor
+              inputId={product.id ?? 'item'}
+              photoId={product.photo_id}
+              shownId={shownPhoto(product)}
+              label={product.description ?? ''}
+              onUpload={(file) => retail.setProductPhoto(product.id ?? '', file)}
+              onClear={() => retail.clearProductPhoto(product.id ?? '')}
+            />
+          )}
           <MakeFamilyPanel product={product} />
         </>
       ) : (

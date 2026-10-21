@@ -1,5 +1,6 @@
 import { api, problemOf } from './client';
 import { retailMessage } from './retail-errors';
+import { postFile } from './lending-forms';
 import type { components } from './schema';
 
 // The retail API client, typed by the generated schema (ADR-009; `npm run gen:api`), as client.ts
@@ -382,6 +383,15 @@ export interface RetailApi {
   makeFamily(productId: string, body: MakeFamily): Promise<Family>;
   /** Items kept apart become the sizes and colours of a new item (familyId null) or of one that exists; each keeps its stock and history. */
   joinFamily(familyId: string | null, body: JoinRequest): Promise<Family>;
+  /** An item's photo (issue #384): PNG, JPEG or WebP, at most 5 MB; the server re-encodes it without metadata. */
+  setProductPhoto(productId: string, file: Blob): Promise<Product>;
+  /** Takes an item's own photo off; a size then shows its item's photo. */
+  clearProductPhoto(productId: string): Promise<Product>;
+  /** The photo of an item with sizes and colours, shown for every size without its own. */
+  setFamilyPhoto(familyId: string, file: Blob): Promise<Family>;
+  clearFamilyPhoto(familyId: string): Promise<Family>;
+  /** The image of a photo (`photo_id` or `item_photo_id`), from the same origin; `small` is the 240 px copy for cards and pickers. */
+  photo(photoId: string, signal?: AbortSignal, small?: boolean): Promise<Blob>;
   /** The pack sizes of an item (the units capability, issue #194); 404 capability_not_enabled while it is off. */
   listPacks(productId: string): Promise<Pack[]>;
   addPack(productId: string, body: { unit_id: string; factor: string }): Promise<Pack>;
@@ -727,6 +737,28 @@ const realRetail: RetailApi = {
     return familyId
       ? unwrap(await api.POST('/api/v1/retail/product-families/{family_id}/join', { params: { path: { family_id: familyId } }, body }))
       : unwrap(await api.POST('/api/v1/retail/product-families/join', { body }));
+  },
+
+  async setProductPhoto(productId, file) {
+    return postFile<Product>(`/api/v1/retail/products/${encodeURIComponent(productId)}/photo`, file, 'photo', {});
+  },
+
+  async clearProductPhoto(productId) {
+    return unwrap(await api.DELETE('/api/v1/retail/products/{product_id}/photo', { params: { path: { product_id: productId } } }));
+  },
+
+  async setFamilyPhoto(familyId, file) {
+    return postFile<Family>(`/api/v1/retail/product-families/${encodeURIComponent(familyId)}/photo`, file, 'photo', {});
+  },
+
+  async clearFamilyPhoto(familyId) {
+    return unwrap(await api.DELETE('/api/v1/retail/product-families/{family_id}/photo', { params: { path: { family_id: familyId } } }));
+  },
+
+  async photo(photoId, signal, small) {
+    const result = await api.GET('/api/v1/retail/photos/{photo_id}', { params: { path: { photo_id: photoId }, query: { size: small ? 'small' : undefined } }, parseAs: 'blob', signal });
+    if (!result.response.ok || !result.data) throw new RetailError('The photo could not be shown.', result.response.status, 'photo_unavailable');
+    return result.data as Blob;
   },
 
   async listPacks(productId) {

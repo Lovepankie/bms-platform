@@ -1923,6 +1923,10 @@ colour). The partial unique index `retail_products_variant` on `(tenant_id, fami
 lower(coalesce(variant_colour, '')))` where `family_id` is not null keeps one variant per size and colour in an item and serves the
 lookup of an item's variants. A query that reads "per item" groups by `coalesce(family_id, product_id)`.
 
+Item photos (FR-RET-58, ADR-053, V71): `retail_products.photo_document_id` and `retail_product_families.photo_document_id`, nullable
+composite foreign keys to `documents (tenant_id, id)`. The photo is a `documents` row of type `upload` and subject type
+`retail.item_photo`; a product's photo is its own, else its item's.
+
 ### 6.11.3 Valuation and profit (FR-RET-09, FR-RET-10; #54)
 
 No table: `retail.reports` reads the tables above. Valuation per branch and product is the

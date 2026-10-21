@@ -1158,7 +1158,10 @@ stock list shows it on its own row.
   `catalogue-family.tsx` (the item's page), `api/retail-variants.ts` (the same combination and code rules as the server; tests in
   `retail-variants.test.ts`), `catalogue-variants.dom.test.tsx`, `api/retail-variants-mock.test.ts`.
 - **Tours.** `page-products` version 2 (a Sizes and colours step), `page-sizes-new` and `page-sizes`.
-- **Not yet.** Item photos are the second slice of the issue.
+- **Photos (slice 2, ADR-053).** Add a photo on an item's edit form, on the item's page (for every size) and on a size's Change form
+  (for that size alone). A PNG, JPEG or WebP up to 5 MB; a larger file or another type is refused in words before it is sent. The
+  photo shows on the item cards, the item's page and in the item picker of the sale, restock and stock screens, so the right print
+  is easy to pick. Take the photo off removes it from the screens; the file is kept. `item-photo.tsx`; tour `page-sizes` version 2.
 
 ## Orders (issue #385, ADR-052)
 

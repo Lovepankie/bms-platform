@@ -359,7 +359,8 @@ class FamilyService {
                 qty(total),
                 stock,
                 f.createdAt(),
-                f.version());
+                f.version(),
+                f.photoId());
     }
 
     /** A new name renames every variant (each keeps its size and colour); a new category moves every variant. */

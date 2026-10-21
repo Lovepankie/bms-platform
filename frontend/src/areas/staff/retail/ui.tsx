@@ -9,6 +9,7 @@ import { formatMinor } from '../../../components/money';
 import { useStockedBranches } from '../branch-picker';
 import { useStaff } from '../context';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
+import { ItemPhoto, shownPhoto } from './item-photo';
 import { showQty } from './maths';
 import { BRANCH_ROLES, branchesWhere, canSeeProfit, canUse, capabilityOn, sellingBranches, type RetailScreen } from './permissions';
 import { keptWords } from './orders-state';
@@ -266,6 +267,7 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
   const card = (p: Product) => (
     <li key={p.id} className="rt-card">
       <div className="rt-row">
+        <ItemPhoto photoId={shownPhoto(p)} label={p.description ?? ''} size={44} />
         <span>
           <strong>{p.description}</strong> ({p.code})
           <br />

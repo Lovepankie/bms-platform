@@ -83,6 +83,8 @@ interface MockProduct {
   id: string; code: string; description: string; category: string; unit: string; costMinor: number; sellMinor: number; active?: boolean; version?: number;
   /** Issue #384: the item with sizes and colours this product is a variant of, its size, colour and place. */
   familyId?: string; size?: string; colour?: string; position?: number;
+  /** Issue #384: the product's own photo. */
+  photoId?: string;
 }
 
 /** The mock's page size for credit buyers, as the API's default limit is 50. */
@@ -178,13 +180,19 @@ export function createMockRetail(): RetailApi {
   const used = <K extends 'category' | 'unit'>(key: K, name: string) => [...products.values()].filter((p) => p[key] === name).length;
   const refreshed = <T extends { name?: string }>(row: T, key: 'category' | 'unit') => ({ ...row, product_count: used(key, row.name ?? '') });
   // Items with sizes and colours of this mock instance (issue #384): the item's own row; its variants are products.
-  const families = new Map<string, { id: string; name: string; baseCode: string; category: string; unit: string; version: number; createdAt: string }>();
+  const families = new Map<string, { id: string; name: string; baseCode: string; category: string; unit: string; version: number; createdAt: string; photoId?: string }>();
+  // Item photos of this mock instance (issue #384): kept as blobs by their id.
+  const photos = new Map<string, Blob>();
+  const photoOf = (p: MockProduct): { photo_id?: string; item_photo_id?: string } => {
+    const item = p.familyId ? families.get(p.familyId)?.photoId : undefined;
+    return { ...(p.photoId ? { photo_id: p.photoId } : {}), ...(item ? { item_photo_id: item } : {}) };
+  };
   const variantOf = (p: MockProduct) => {
     const f = p.familyId ? families.get(p.familyId) : undefined;
     return f ? { variant: { family_id: f.id, family_name: f.name, ...(p.size ? { size: p.size } : {}), ...(p.colour ? { colour: p.colour } : {}), position: p.position ?? 0 } } : {};
   };
   const asProduct = (p: MockProduct): Product =>
-    cost({ id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, unit_id: unitRows.find((u) => u.name === p.unit)?.id, sell_minor: p.sellMinor, currency: 'UGX', active: p.active !== false, version: p.version ?? 1, ...variantOf(p) }, { cost_minor: p.costMinor });
+    cost({ id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, unit_id: unitRows.find((u) => u.name === p.unit)?.id, sell_minor: p.sellMinor, currency: 'UGX', active: p.active !== false, version: p.version ?? 1, ...variantOf(p), ...photoOf(p) }, { cost_minor: p.costMinor });
   const clash = (list: { id: string; name: string }[], id: string, name: string, code: string, what: string) => {
     if (list.some((x) => x.id !== id && x.name.toLowerCase() === name.trim().toLowerCase())) refuse(409, code, `A ${what} with this name exists.`);
   };
@@ -361,7 +369,7 @@ export function createMockRetail(): RetailApi {
     const colours = [...new Map(mine.filter((p) => p.colour).map((p) => [(p.colour ?? '').toLowerCase(), p.colour ?? ''])).values()];
     return {
       id: f.id, name: f.name, base_code: f.baseCode, category_id: categoryId(f.category), category: f.category, unit_id: unitRows.find((u) => u.name === f.unit)?.id, unit: f.unit,
-      sizes, colours, created_at: f.createdAt, version: f.version,
+      sizes, colours, created_at: f.createdAt, version: f.version, ...(f.photoId ? { photo_id: f.photoId } : {}),
       variants: mine.map((p) => {
         const held = MOCK_BRANCHES.map((b) => bal(b.id, p.id)).filter((m) => m !== 0);
         return { ...asProduct(p), stock_on_hand: fromMilli(held.reduce((x, y) => x + y, 0)), stock_branches: held.length };
@@ -382,7 +390,7 @@ export function createMockRetail(): RetailApi {
     listProducts: ({ query, branchId }) =>
       delay([...products.values()].filter((p) => p.active !== false && matches(p, query)).map((p): Product => {
         const row: Product = {
-          id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, unit_id: unitRows.find((u) => u.name === p.unit)?.id, sell_minor: p.sellMinor, currency: 'UGX', active: true,
+          id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, unit_id: unitRows.find((u) => u.name === p.unit)?.id, sell_minor: p.sellMinor, currency: 'UGX', active: true, ...photoOf(p),
         };
         if (branchId) {
           row.qty = fromMilli(bal(branchId, p.id));
@@ -563,6 +571,39 @@ export function createMockRetail(): RetailApi {
         addPlanned(id, body.sizes ?? [], body.colours ?? [], body.variants, p.costMinor, p.sellMinor, 1);
         return familyOf(id);
       }),
+
+    setProductPhoto: (productId, file) =>
+      run(() => {
+        const p = find(productId);
+        if (file.size > 5 * 1024 * 1024) refuse(413, 'file_too_large', 'The photo is larger than 5 MB.');
+        const id = nextId('d');
+        photos.set(id, file);
+        Object.assign(p, { photoId: id, version: (p.version ?? 1) + 1 });
+        return asProduct(p);
+      }),
+    clearProductPhoto: (productId) =>
+      run(() => {
+        const p = find(productId);
+        Object.assign(p, { photoId: undefined, version: (p.version ?? 1) + 1 });
+        return asProduct(p);
+      }),
+    setFamilyPhoto: (familyId, file) =>
+      run(() => {
+        const f = families.get(familyId) ?? refuse(404, 'not_found', 'That could not be found.');
+        const id = nextId('d');
+        photos.set(id, file);
+        f.photoId = id;
+        f.version += 1;
+        return familyOf(familyId);
+      }),
+    clearFamilyPhoto: (familyId) =>
+      run(() => {
+        const f = families.get(familyId) ?? refuse(404, 'not_found', 'That could not be found.');
+        f.photoId = undefined;
+        f.version += 1;
+        return familyOf(familyId);
+      }),
+    photo: (photoId) => run(() => photos.get(photoId) ?? refuse(404, 'not_found', 'That could not be found.')),
 
     priceHistory: (id) => run(() => ((find(id) && history.get(id)) || undefined)?.map((h) => (profitAccess ? h : { ...h, old_cost_minor: undefined, new_cost_minor: undefined })) || [{ id: nextId('h'), at: '2026-09-01T08:00:00Z', source: 'initial', new_sell_minor: find(id).sellMinor, currency: 'UGX', ...(profitAccess ? { new_cost_minor: find(id).costMinor } : {}) }]),
 

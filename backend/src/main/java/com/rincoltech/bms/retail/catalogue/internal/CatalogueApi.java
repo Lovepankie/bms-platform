@@ -207,7 +207,116 @@ final class CatalogueApi {
                     description =
                             "Issue #385: of the branch balance, what open customer orders keep aside (so not free to"
                                     + " sell); sent only with branch_id, and only when something is kept")
-            String reservedQty) {
+            String reservedQty,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #384: the id of this product's own photo; show it with GET /retail/photos/{photo_id}."
+                                    + " Absent when it has none (a size then shows item_photo_id)")
+            UUID photoId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #384: the id of the photo of the item this size belongs to, which it shows while it has"
+                                    + " none of its own; absent when the item has none")
+            UUID itemPhotoId) {
+
+        /** Every field but the photo, the shape every read had before item photos (issue #384). */
+        Product(
+                UUID id,
+                String code,
+                String description,
+                UUID categoryId,
+                String category,
+                UUID unitId,
+                String unit,
+                long sellMinor,
+                Long costMinor,
+                String currency,
+                boolean active,
+                Instant createdAt,
+                Instant updatedAt,
+                int version,
+                String qty,
+                Boolean negative,
+                List<Pack> packs,
+                String stockOnHand,
+                Integer stockBranches,
+                VariantOf variant) {
+            this(
+                    id,
+                    code,
+                    description,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sellMinor,
+                    costMinor,
+                    currency,
+                    active,
+                    createdAt,
+                    updatedAt,
+                    version,
+                    qty,
+                    negative,
+                    packs,
+                    stockOnHand,
+                    stockBranches,
+                    variant,
+                    null);
+        }
+
+        /** Every field but the photos, the shape every read had before item photos (issue #384). */
+        Product(
+                UUID id,
+                String code,
+                String description,
+                UUID categoryId,
+                String category,
+                UUID unitId,
+                String unit,
+                long sellMinor,
+                Long costMinor,
+                String currency,
+                boolean active,
+                Instant createdAt,
+                Instant updatedAt,
+                int version,
+                String qty,
+                Boolean negative,
+                List<Pack> packs,
+                String stockOnHand,
+                Integer stockBranches,
+                VariantOf variant,
+                String reservedQty) {
+            this(
+                    id,
+                    code,
+                    description,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sellMinor,
+                    costMinor,
+                    currency,
+                    active,
+                    createdAt,
+                    updatedAt,
+                    version,
+                    qty,
+                    negative,
+                    packs,
+                    stockOnHand,
+                    stockBranches,
+                    variant,
+                    reservedQty,
+                    null,
+                    null);
+        }
 
         /** Every field but the variant, the shape every read had before sizes and colours (issue #384). */
         Product(
@@ -355,7 +464,9 @@ final class CatalogueApi {
                     stockOnHand,
                     stockBranches,
                     variant,
-                    reservedQty);
+                    reservedQty,
+                    photoId,
+                    itemPhotoId);
         }
 
         Product withStock(String total, int branches) {
@@ -380,7 +491,9 @@ final class CatalogueApi {
                     total,
                     branches,
                     variant,
-                    reservedQty);
+                    reservedQty,
+                    photoId,
+                    itemPhotoId);
         }
 
         Product withoutCost() {
@@ -405,7 +518,9 @@ final class CatalogueApi {
                     stockOnHand,
                     stockBranches,
                     variant,
-                    reservedQty);
+                    reservedQty,
+                    photoId,
+                    itemPhotoId);
         }
 
         /** The same product with what customer orders keep aside of the branch balance (issue #385). */
@@ -431,7 +546,9 @@ final class CatalogueApi {
                     stockOnHand,
                     stockBranches,
                     variant,
-                    reserved);
+                    reserved,
+                    photoId,
+                    itemPhotoId);
         }
 
         Product withVariant(VariantOf v) {
@@ -456,7 +573,36 @@ final class CatalogueApi {
                     stockOnHand,
                     stockBranches,
                     v,
-                    reservedQty);
+                    reservedQty,
+                    photoId,
+                    itemPhotoId);
+        }
+
+        Product withPhoto(UUID photo, UUID itemPhoto) {
+            return new Product(
+                    id,
+                    code,
+                    description,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sellMinor,
+                    costMinor,
+                    currency,
+                    active,
+                    createdAt,
+                    updatedAt,
+                    version,
+                    qty,
+                    negative,
+                    packs,
+                    stockOnHand,
+                    stockBranches,
+                    variant,
+                    reservedQty,
+                    photo,
+                    itemPhoto);
         }
     }
 
@@ -658,7 +804,13 @@ final class CatalogueApi {
             Instant createdAt,
 
             @Schema(description = "Send as If-Match when updating")
-            int version) {}
+            int version,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #384: the document id of the item's photo, which a size without its own shows; absent when none")
+            UUID photoId) {}
 
     @Schema(name = "RetailProductPage")
     record ProductPage(List<Product> items, String nextCursor) {}

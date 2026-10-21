@@ -132,6 +132,9 @@ class DocumentService implements Documents {
     /** Writes a denial's audit row in its own transaction, so it survives the refused request. */
     private final TransactionTemplate ownTransaction;
 
+    /** A short read-only transaction of its own, for a read that then fetches from storage with no connection held. */
+    private final TransactionTemplate reads;
+
     private final PdfRenderer pdf;
 
     DocumentService(
@@ -144,6 +147,8 @@ class DocumentService implements Documents {
             PdfRenderer pdf) {
         this.pdf = pdf;
         this.ownTransaction = new TransactionTemplate(transactionManager);
+        this.reads = new TransactionTemplate(transactionManager);
+        this.reads.setReadOnly(true);
         this.ownTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.jdbc = jdbc;
         this.storage = storage;
@@ -234,6 +239,49 @@ class DocumentService implements Documents {
                 .query(String.class)
                 .optional()
                 .flatMap(storage::get);
+    }
+
+    /**
+     * The metadata and the access check run in one short read-only transaction; the bytes are fetched from storage after it
+     * has ended, so no database connection waits on the object store.
+     */
+    @Override
+    public Image readImage(String subjectType, UUID documentId) {
+        ImageRef ref = reads.execute(s -> imageRef(find(documentId)
+                .filter(x -> subjectType.equals(x.subjectType()))
+                .orElse(null)));
+        return fetch(ref);
+    }
+
+    @Override
+    public Image readImageOf(String subjectType, UUID subjectId) {
+        ImageRef ref = reads.execute(s -> imageRef(jdbc.sql("SELECT " + COLUMNS + " FROM documents"
+                        + " WHERE subject_type = ? AND subject_id = ? ORDER BY created_at DESC, id LIMIT 1")
+                .params(subjectType, subjectId)
+                .query(DocumentService::map)
+                .optional()
+                .orElse(null)));
+        return fetch(ref);
+    }
+
+    private record ImageRef(String key, String contentType, String sha256) {}
+
+    /** 404 unless the document is an image; 403 (audited) unless its owning module lets the caller read it. */
+    private ImageRef imageRef(StoredDocument d) {
+        if (d == null || !d.contentType().startsWith("image/")) {
+            throw ApiException.notFound();
+        }
+        readable(d.id());
+        String key = jdbc.sql("SELECT object_key FROM documents WHERE id = ?")
+                .param(d.id())
+                .query(String.class)
+                .single();
+        return new ImageRef(key, d.contentType(), d.sha256());
+    }
+
+    private Image fetch(ImageRef ref) {
+        byte[] bytes = storage.get(ref.key()).orElseThrow(ApiException::notFound);
+        return new Image(bytes, ref.contentType(), ref.sha256());
     }
 
     @Override

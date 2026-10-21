@@ -242,6 +242,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
 
         bms.web -> bms.api.retailCatalogue "Manages categories, units and products; edits prices; asks for similar names before saving an item and adds a repeated name anyway as an administrator; makes items with sizes and colours and reads an item's stock over its variants"
         bms.api.retailCatalogue -> bms.api.audit "Writes audit rows"
+        bms.api.retailCatalogue -> bms.api.documents "Stores item photos as checked, re-encoded uploads and reads them back for the PWA (ADR-053)"
         bms.api.retailCatalogue -> bms.api.tenancy "Reads the tenant currency and the units capability"
         bms.api.retailCatalogue -> bms.db "Products, the append-only price history, pack sizes, price lists and their items; the generated name key and the reason a repeated name was added; the items with sizes and colours (retail_product_families) and each variant's size, colour and place"
         bms.web -> bms.api.retailStock "Stock by branch, stock by store and shop, the stock summary by shop and category, movements, stock-takes, usage and damage reports, stock transfers with receive and cancel, transfers in flight; corrects the quantity of an item with a reason and reads its history"

@@ -83,12 +83,13 @@ export const sizesJoinPage: Tour = {
 /** Issue #384: the page of an item with sizes and colours. */
 export const sizesPage: Tour = {
   id: 'page-sizes',
-  version: 1,
+  version: 2,
   title: 'This page: sizes and colours',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/catalogue/products/sizes/$familyId',
   steps: [
+    step({ id: 'photo', target: 'family-photo', title: 'A photo', body: 'Add a photo of the item. It shows in the item list and in a sale, so the right print is easy to find.' }),
     step({ id: 'stock', target: 'family-stock', title: 'All its stock', body: 'This is the stock of every size and colour together, in each shop and store you can see.' }),
     step({ id: 'variants', target: 'family-variants', title: 'Each size and colour', body: 'Each one has its own code, price and stock. Tap Change price for one size, or Change to fix its size, colour or code.' }),
     step({ id: 'add', target: 'family-add', title: 'Add more', body: 'Type a new size or a new print. It is made in every colour or size the item has, at the price of the first one.' }),

@@ -7,6 +7,7 @@ import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { PriceForm } from './catalogue-products';
 import { OptionBoxes, VariantPreview, linesOf, previewProblem, usePreview } from './catalogue-variants';
+import { ItemPhoto, PhotoEditor, shownPhoto } from './item-photo';
 import { showQty } from './maths';
 import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
@@ -59,6 +60,21 @@ export function FamilyScreen({ familyId }: { familyId: string }) {
       {editing?.kind === 'variant' && <VariantForm product={editing.product} onSaved={done} onCancel={() => setEditing(null)} />}
       {!editing && (
         <>
+          <section data-tour="family-photo" aria-label="Photo of this item">
+            <h2>Photo</h2>
+            {f && canManage && (
+              <PhotoEditor
+                inputId={f.id ?? 'item'}
+                photoId={f.photo_id}
+                label={f.name ?? ''}
+                onUpload={(file) => retail.setFamilyPhoto(f.id ?? '', file)}
+                onClear={() => retail.clearFamilyPhoto(f.id ?? '')}
+                onSaved={(text) => { setMessage(text); show(text); }}
+              />
+            )}
+            {f && !canManage && (f.photo_id ? <ItemPhoto photoId={f.photo_id} label={f.name ?? ''} size={96} /> : <p className="empty-state">No photo yet.</p>)}
+            <p className="hint">Every size and colour shows this photo unless it has its own, which you add with Change.</p>
+          </section>
           <section data-tour="family-stock" aria-label="Stock of this item">
             <h2>Stock</h2>
             {f && <StockOf family={f} />}
@@ -69,6 +85,7 @@ export function FamilyScreen({ familyId }: { familyId: string }) {
               <ul style={{ listStyle: 'none', padding: 0 }}>
                 {(f.variants ?? []).map((v) => (
                   <li key={v.id} className="rt-card">
+                    <ItemPhoto photoId={shownPhoto(v)} label={v.description ?? ''} />
                     <p>
                       <strong>{variantLabel(v.variant?.size, v.variant?.colour)}</strong>{' '}
                       {v.active === false && <span className="badge badge-warning">Inactive</span>}
@@ -225,6 +242,15 @@ function VariantForm({ product, onSaved, onCancel }: { product: Product; onSaved
         <input id="variant-inactive" type="checkbox" checked={!active} onChange={(e) => setActive(!e.target.checked)} /> Inactive
       </label>
       <p className="hint">An inactive size is not offered when selling, restocking or moving stock. It is never deleted: its history stays.</p>
+      <PhotoEditor
+        inputId={product.id ?? 'size'}
+        photoId={product.photo_id}
+        shownId={shownPhoto(product)}
+        label={product.description ?? ''}
+        onUpload={(file) => retail.setProductPhoto(product.id ?? '', file)}
+        onClear={() => retail.clearProductPhoto(product.id ?? '')}
+      />
+      <p className="hint">A photo here is for this size alone. Without one, it shows the item's photo.</p>
       <Problem error={save.error} />
       <button type="submit" className="rt-primary" disabled={!ready}>{save.isPending ? 'Saving' : 'Save changes'}</button>
       <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>
