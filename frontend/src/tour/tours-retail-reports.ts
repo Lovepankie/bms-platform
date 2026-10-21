@@ -150,7 +150,8 @@ export const marginsPage: Tour = {
 
 export const stockHealthPage: Tour = {
   id: 'page-stock-health',
-  version: 1,
+  // Version 2 adds the slow movers step (issue #414).
+  version: 2,
   title: 'This page: stock health',
   audience: (me) => held(me, STOCK_READ),
   autoStart: false,
@@ -159,6 +160,7 @@ export const stockHealthPage: Tour = {
     rangeStep('health-range', 'It sets the days for used, damaged and missing stock.'),
     retail({ id: 'buy', target: 'health-buy', title: 'When to buy', body: 'Choose how many days of stock is too low, and how many days you want to buy for.' }),
     retail({ id: 'results', target: 'health-results', title: 'What to buy and what is stuck', body: 'See what to reorder, how long each item lasts, and what has not sold for 90 days. Tap an item to open it in Stock.' }),
+    retail({ id: 'slow', target: 'health-slow', title: 'Slow movers', body: 'Items that sell, but slowly: the months it takes to sell what you hold. If it sells better at another branch, tap Move to send some there. Managers who see costs also see the money tied up.' }),
   ],
 };
 

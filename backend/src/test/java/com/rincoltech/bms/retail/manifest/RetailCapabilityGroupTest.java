@@ -65,6 +65,29 @@ class RetailCapabilityGroupTest {
     }
 
     @Test
+    void theSlowMoverRulesDefaultToFourMonthsAndNoThresholdAndTakeWholeNumbersInRange() {
+        Map<String, Object> g = group.normalise(Map.of(), Map.of());
+        assertThat(g.get("slow_mover_months")).isEqualTo(4);
+        assertThat(g.get("slow_mover_min_sold")).isEqualTo(0);
+
+        Map<String, Object> set = group.normalise(g, Map.of("slow_mover_months", 6, "slow_mover_min_sold", 12));
+        assertThat(set.get("slow_mover_months")).isEqualTo(6);
+        assertThat(set.get("slow_mover_min_sold")).isEqualTo(12);
+        assertThat(group.normalise(set, Map.of("units", true)).get("slow_mover_months"))
+                .isEqualTo(6);
+        assertThat(group.enabledCapabilities(set)).isEmpty();
+
+        for (Object bad : new Object[] {0, 25, 2.5, "4", true}) {
+            assertThatThrownBy(() -> group.normalise(g, Map.of("slow_mover_months", bad)))
+                    .isInstanceOf(ApiException.class);
+        }
+        assertThatThrownBy(() -> group.normalise(g, Map.of("slow_mover_min_sold", -1)))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> group.normalise(g, Map.of("slow_mover_min_sold", 1_000_001)))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
     void anUnknownKeyOrAWrongTypeIsRefused() {
         assertThatThrownBy(() -> group.normalise(Map.of(), Map.of("wholesale", true)))
                 .isInstanceOf(ApiException.class);

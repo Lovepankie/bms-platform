@@ -90,6 +90,16 @@ public class RetailCapabilities {
         return ON_PAYMENT.equals(creditRecognition());
     }
 
+    /** Months of stock at the recent pace above which an item is a slow mover (issue #414); 4 unless the business chose. */
+    public int slowMoverMonths() {
+        return settings.group(MODULE).get("slow_mover_months") instanceof Number n ? n.intValue() : 4;
+    }
+
+    /** Units sold in 90 days below which an item is a slow mover (issue #414); 0, the default, means the rule is off. */
+    public int slowMoverMinSold() {
+        return settings.group(MODULE).get("slow_mover_min_sold") instanceof Number n ? n.intValue() : 0;
+    }
+
     /** 404 {@code capability_not_enabled} for a route of a capability that is off. */
     public void require(String capability) {
         if (!enabled(capability)) {

@@ -76,7 +76,19 @@ class CapabilitiesController {
                     description =
                             "Read only: the tenant's approval threshold for customer returns (action retail_sale_return),"
                                     + " present only when one is set; while it is absent a return needs no second administrator")
-            Long returnsApprovalThresholdMinor) {}
+            Long returnsApprovalThresholdMinor,
+
+            @Schema(
+                    description =
+                            "Stock health (issue #414): an item that sold in the last 90 days is a slow mover when its stock"
+                                    + " lasts more than this many months at that pace; 1 to 24, default 4")
+            int slowMoverMonths,
+
+            @Schema(
+                    description =
+                            "Stock health (issue #414): an item is also a slow mover when fewer than this many units sold"
+                                    + " in the branch in the last 90 days; 0 (the default) switches this rule off")
+            int slowMoverMinSold) {}
 
     /** Omitted fields are unchanged; choosing a profile first writes its preset of the flags. */
     @Schema(name = "UpdateRetailCapabilitiesRequest")
@@ -92,7 +104,12 @@ class CapabilitiesController {
             Boolean returns,
 
             @Schema(allowableValues = {"on_sale", "on_payment"})
-            String creditSaleRecognition) {}
+            String creditSaleRecognition,
+
+            @Schema(description = "1 to 24") Integer slowMoverMonths,
+
+            @Schema(description = "0 to 1,000,000; 0 is off")
+            Integer slowMoverMinSold) {}
 
     @GetMapping
     @RequiresPermission("core.settings.manage")
@@ -120,6 +137,8 @@ class CapabilitiesController {
         put(proposed, "transfer_receipt", r.transferReceipt());
         put(proposed, "returns", r.returns());
         put(proposed, RetailCapabilities.CREDIT_RECOGNITION, r.creditSaleRecognition());
+        put(proposed, "slow_mover_months", r.slowMoverMonths());
+        put(proposed, "slow_mover_min_sold", r.slowMoverMinSold());
         transfers.guardSwitchOff(proposed);
         CapabilitiesResponse saved = response(capabilities.change(proposed, expected));
         return ResponseEntity.ok().eTag(String.valueOf(capabilities.version())).body(saved);
@@ -145,7 +164,9 @@ class CapabilitiesController {
                 flag(g, "returns"),
                 g.get(RetailCapabilities.CREDIT_RECOGNITION) instanceof String c ? c : RetailCapabilities.ON_SALE,
                 g.get("credit_recognition_effective_from") instanceof String d ? LocalDate.parse(d) : null,
-                threshold > 0 ? threshold : null);
+                threshold > 0 ? threshold : null,
+                g.get("slow_mover_months") instanceof Number m ? m.intValue() : 4,
+                g.get("slow_mover_min_sold") instanceof Number n ? n.intValue() : 0);
     }
 
     private static boolean flag(Map<String, Object> g, String key) {

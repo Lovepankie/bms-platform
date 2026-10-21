@@ -89,6 +89,81 @@ final class StockHealthApi {
             @Schema(description = "All reported branches; " + COST_ONLY + " in every branch reported (ADR-055)")
             Long valueAtPriceMinor) {}
 
+    @Schema(
+            name = "RetailSellsBetterAt",
+            description =
+                    "Another branch in the caller's scope where the same item sells faster, and what to move there")
+    record SellsBetterAt(
+            UUID branchId,
+
+            @Schema(description = "Units sold there in the last 90 days, or since the item first came there")
+            String soldLast90,
+
+            @Schema(
+                    description = "Whole units to move: what that branch sells in cover_days, less its stock, at most"
+                            + " what this branch holds above slow_months of its own sales")
+            String suggestedQty) {}
+
+    @Schema(name = "RetailSlowMover", description = "An item that sold in the branch in the last 90 days, but slowly")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record SlowItem(
+            UUID branchId,
+            UUID productId,
+            String code,
+            String description,
+            String unit,
+            String qtyOnHand,
+
+            @Schema(description = "Units sold in this branch in the last 90 days, or in days_counted for a newer item")
+            String soldLast90,
+
+            @Schema(description = "The last day the item sold in this branch")
+            LocalDate lastSoldOn,
+
+            @Schema(
+                    description = "The days the pace is taken over: 90, or fewer for an item that came to this branch"
+                            + " (its first stock movement or sale there) less than 90 days ago, today included")
+            int daysCounted,
+
+            @Schema(
+                    description = "Months of stock: the stock over the monthly pace of days_counted (30 days a month),"
+                            + " one place")
+            String monthsOfStock,
+
+            @Schema(description = "True when the months are above 120 and months_of_stock shows 120.0")
+            boolean capped,
+
+            @Schema(description = COST_ONLY + "; the money tied up: quantity times the current cost")
+            Long valueAtCostMinor,
+
+            @Schema(description = "Absent when no other branch in the caller's scope sells it faster")
+            SellsBetterAt betterAt) {}
+
+    @Schema(
+            name = "RetailSlowMovers",
+            description = "Items that sell, but slowly: more than slow_months of stock at the pace of the last 90 days,"
+                    + " or fewer than min_sold units sold in 90 days. Never dead stock (no sale in 90 days)")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record SlowMovers(
+            int days,
+
+            @Schema(description = "The business's setting slow_mover_months")
+            int slowMonths,
+
+            @Schema(description = "The business's setting slow_mover_min_sold; 0 means the rule is off")
+            int minSold,
+
+            @Schema(description = "The longest to sell first")
+            List<SlowItem> items,
+
+            @Schema(description = "Rows before the row limit")
+            int total,
+
+            @Schema(
+                    description = "Money tied up in all slow stock reported, at cost; present only for a caller with"
+                            + " retail.profit.read in every branch of the business (an administrator)")
+            Long valueAtCostMinor) {}
+
     @Schema(name = "RetailShrinkageBranch")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record Shrinkage(
@@ -137,5 +212,6 @@ final class StockHealthApi {
             CoverList reorder,
 
             DeadStock deadStock,
+            SlowMovers slowMovers,
             List<Shrinkage> shrinkage) {}
 }

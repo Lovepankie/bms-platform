@@ -65,6 +65,10 @@ and never deleted when it is switched off; it is simply not offered and not appl
 that changes how a sale is computed (`price_lists`, `units`, `branch_roles`, `customer_accounts`, `returns`)
 is ignored by the sale path when off, even if rows exist. This is what makes switching off safe.
 
+The group also holds two settings that are not capabilities and are never listed in `/me`: the slow mover rules of Stock
+health (issue #414), `slow_mover_months` (whole, 1 to 24, default 4) and `slow_mover_min_sold` (whole, 0 to 1,000,000, default
+0 meaning off). A profile never changes them.
+
 ### 1.2 The tenant profile switch
 
 `retail.profile` in the same settings group is `shop` (default) or `trade`. A profile is a

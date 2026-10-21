@@ -12,6 +12,9 @@ export type AnalysisRow = S['RetailSalesAnalysisRow'];
 export type StockedItem = S['RetailStockedItem'];
 export type StockHealth = S['RetailStockHealth'];
 export type CoverRow = S['RetailCoverRow'];
+/** Slow movers on Stock health (issue #414): money tied up is absent without retail.profit.read in the row's branch. */
+export type SlowMovers = S['RetailSlowMovers'];
+export type SlowMover = S['RetailSlowMover'];
 export type CreditControl = S['RetailCreditControl'];
 export type Ageing = S['RetailAgeing'];
 /** Customer accounts (issue #196): ageing per credit buyer with a record, with the limit and the terms. */

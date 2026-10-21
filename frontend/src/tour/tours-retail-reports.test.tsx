@@ -1,4 +1,8 @@
+import type { QueryClient } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
+import type { Me } from '../api/client';
+import type { StockHealth } from '../api/retail-analytics';
+import { defaultRange } from '../areas/staff/retail/analytics-ui';
 import { mockMe } from '../api/retail-mock';
 import { CreditControlPage } from '../areas/staff/retail/credit-control';
 import { EvaluationPage } from '../areas/staff/retail/evaluation';
@@ -38,6 +42,19 @@ function screen(path: string): ReactElement {
   }
 }
 
+/** Stock health with its report loaded, so the sections drawn from the data (slow movers, issue #414) are on the page. */
+function seed(client: QueryClient, me: Me): void {
+  const { from, to } = defaultRange();
+  const health: StockHealth = {
+    from, to, currency: 'UGX', top: 10, velocity_days: 30, lead_days: 14, cover_days: 30, profit_visible: false,
+    cover: { items: [], total: 0 }, reorder: { items: [], total: 0 },
+    dead_stock: { days: 90, branches: [], items: [], items_total: 0, value_at_price_minor: 0 },
+    slow_movers: { days: 90, slow_months: 4, min_sold: 0, items: [], total: 0 },
+    shrinkage: [],
+  };
+  client.setQueryData(['retail', 'stock-health', me.branches?.[0]?.id ?? null, from, to, 10, 14, 30], health);
+}
+
 describeTours('retail reports', RETAIL_REPORT_TOURS, {
   'page-retail-home': [ADMIN, SELLER],
   'page-restock': [ADMIN],
@@ -51,4 +68,4 @@ describeTours('retail reports', RETAIL_REPORT_TOURS, {
   'page-stock-health': [ADMIN],
   'page-credit-control': [ADMIN],
   'page-evaluation': [ADMIN],
-}, screen);
+}, screen, seed);

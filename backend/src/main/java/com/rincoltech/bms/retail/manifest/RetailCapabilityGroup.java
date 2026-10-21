@@ -21,6 +21,8 @@ import org.springframework.stereotype.Component;
  * {@code credit_sale_recognition} ({@code on_sale} by default, or {@code on_payment}; ADR-043).
  * A profile is a preset that writes a bundle of the flags in one change; the module reads the
  * flags and never the profile. The core stores the group and calls this class to validate it.
+ * It also holds the two slow mover rules of the stock health report (issue #414): {@code slow_mover_months}
+ * (1 to 24, default 4) and {@code slow_mover_min_sold} (units sold in 90 days, 0 to 1,000,000, default 0 meaning off).
  */
 @Component
 class RetailCapabilityGroup implements ModuleSettingsGroup {
@@ -53,6 +55,16 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
 
     /** The name {@code /me} lists while the rule is on_payment, so the screens can say which profit they show. */
     static final String ON_PAYMENT_FLAG = "credit_on_payment";
+
+    /** Slow when the stock lasts more than this many months at the pace of the last 90 days (issue #414). */
+    static final String SLOW_MONTHS = "slow_mover_months";
+
+    /** Slow when fewer than this many units sold in the last 90 days; 0 switches the rule off (issue #414). */
+    static final String SLOW_MIN_SOLD = "slow_mover_min_sold";
+
+    static final int DEFAULT_SLOW_MONTHS = 4;
+    static final int MAX_SLOW_MONTHS = 24;
+    static final int MAX_SLOW_MIN_SOLD = 1_000_000;
 
     static final List<String> CAPABILITIES = List.of(
             "branch_roles",
@@ -102,9 +114,20 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
         for (String key : CAPABILITIES) {
             out.put(key, Boolean.TRUE.equals(current.get(key)));
         }
+        out.put(SLOW_MONTHS, whole(current.get(SLOW_MONTHS), 1, MAX_SLOW_MONTHS, DEFAULT_SLOW_MONTHS));
+        out.put(SLOW_MIN_SOLD, whole(current.get(SLOW_MIN_SOLD), 0, MAX_SLOW_MIN_SOLD, 0));
         List<FieldProblem> problems = new ArrayList<>();
         proposed.forEach((key, value) -> {
-            if (key.equals(CREDIT_RECOGNITION)) {
+            if (key.equals(SLOW_MONTHS) || key.equals(SLOW_MIN_SOLD)) {
+                int max = key.equals(SLOW_MONTHS) ? MAX_SLOW_MONTHS : MAX_SLOW_MIN_SOLD;
+                int min = key.equals(SLOW_MONTHS) ? 1 : 0;
+                if (whole(value, min, max, -1) < 0) {
+                    problems.add(
+                            new FieldProblem(key, "invalid", "Use a whole number from " + min + " to " + max + "."));
+                } else {
+                    out.put(key, whole(value, min, max, -1));
+                }
+            } else if (key.equals(CREDIT_RECOGNITION)) {
                 if (!(value instanceof String c && CREDIT_RECOGNITIONS.contains(c))) {
                     problems.add(new FieldProblem(CREDIT_RECOGNITION, "invalid", "Use on_sale or on_payment."));
                 }
@@ -171,6 +194,17 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
         }
         out.sort(null);
         return out;
+    }
+
+    /** {@code value} when it is a whole number from {@code min} to {@code max}, else {@code fallback}. */
+    private static int whole(Object value, int min, int max, int fallback) {
+        if (value instanceof Number n && n.doubleValue() == Math.rint(n.doubleValue())) {
+            double v = n.doubleValue();
+            if (v >= min && v <= max) {
+                return (int) v;
+            }
+        }
+        return fallback;
     }
 
     private static boolean validDate(String d) {

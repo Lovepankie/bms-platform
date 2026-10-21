@@ -793,7 +793,8 @@ export const retailSettingsPage: Tour = {
   id: 'page-retail-settings',
   // Version 2 adds the credit sale step (issue #340, ADR-043).
   // Version 3 says in that step that the credit rule is one way: once it has started it is not switched off here.
-  version: 3,
+  // Version 4 adds the slow movers step (issue #414).
+  version: 4,
   title: 'This page: retail settings',
   audience: isTenantAdmin,
   autoStart: false,
@@ -822,6 +823,12 @@ export const retailSettingsPage: Tour = {
       target: 'retail-credit-recognition',
       title: 'When a credit sale counts',
       body: 'Choose whether a credit sale counts as income and profit when it is made, or only when the buyer pays. Your daily savings follow this choice. You read the change before you confirm it. Once "when the buyer pays" has started, it is not switched off here.',
+    },
+    {
+      id: 'slow-movers',
+      target: 'retail-slow-movers',
+      title: 'Slow movers',
+      body: 'Choose when an item counts as slow on Stock health: how many months of stock is too much. You can also count an item as slow when few sold in 90 days. Tap Save.',
     },
   ],
 };

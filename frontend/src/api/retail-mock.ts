@@ -163,7 +163,7 @@ export function createMockRetail(): RetailApi {
   // Branch roles and capabilities of this mock instance (ADR-033): every branch both, every capability off.
   const roles = new Map<string, 'store' | 'shop' | 'both'>();
   const roleOf = (branch: string): 'store' | 'shop' | 'both' => roles.get(branch) ?? 'both';
-  let caps: { value: Record<string, unknown>; version: number } = { value: { profile: 'shop' }, version: 1 };
+  let caps: { value: Record<string, unknown>; version: number } = { value: { profile: 'shop', slow_mover_months: 4, slow_mover_min_sold: 0 }, version: 1 };
   const twoStep = () => transferReceipt || caps.value['transfer_receipt'] === true;
   const read = (): CapabilitiesRead => ({ capabilities: { ...caps.value, ...Object.fromEntries(MOCK_FLAGS.map((k) => [k, caps.value[k] === true])) }, version: caps.version });
   const balances = new Map<string, number>();
@@ -1102,6 +1102,9 @@ export function createMockRetail(): RetailApi {
         for (const key of MOCK_FLAGS) next[key] = body.profile === 'shop' ? false : MOCK_TRADE_PRESET.includes(key) ? true : next[key];
       }
       for (const key of MOCK_FLAGS) if (typeof body[key] === 'boolean') next[key] = body[key];
+      // The slow mover rules of Stock health (issue #414), whole numbers in the server's ranges.
+      if (typeof body.slow_mover_months === 'number') next.slow_mover_months = body.slow_mover_months;
+      if (typeof body.slow_mover_min_sold === 'number') next.slow_mover_min_sold = body.slow_mover_min_sold;
       caps = { value: next, version: caps.version + 1 };
       return delay(read());
     },

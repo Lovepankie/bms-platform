@@ -182,6 +182,10 @@ describe('stock health', () => {
       branches: [{ branch_id: 'b1', item_count: 1, value_at_price_minor: 2100, value_at_cost_minor: 1200 }],
       items: [{ branch_id: 'b1', product_id: 'p3', code: 'ANA-3', description: 'Test Product ANA-3', unit: 'piece', qty_on_hand: '3.000', value_at_price_minor: 2100, value_at_cost_minor: 1200 }],
     },
+    slow_movers: {
+      days: 90, slow_months: 4, min_sold: 0, total: 1, value_at_cost_minor: 4400,
+      items: [{ branch_id: 'b1', product_id: 'p7', code: 'ANA-7', description: 'Test Product ANA-7', unit: 'piece', qty_on_hand: '44.000', sold_last90: '3.000', last_sold_on: '2026-09-30', months_of_stock: '44.0', capped: false, value_at_cost_minor: 4400 }],
+    },
     shrinkage: [{ branch_id: 'b1', used_reports: 1, damaged_reports: 1, short_lines: 1, over_lines: 0, used_cost_minor: 1000, damaged_cost_minor: 400, stocktake_loss_minor: 400, stocktake_gain_minor: 0, net_cost_minor: 1800 }],
   };
   const nameOf = (id?: string) => (id === 'b1' ? 'Head office' : 'Branch');
@@ -197,6 +201,10 @@ describe('stock health', () => {
     expect(html).toContain('6.0 days');
     expect(html).toContain('4 piece');
     expect(html).toContain('Dead stock: no sale in 90 days');
+    expect(html).toContain('Slow movers: more than 4 months of stock');
+    expect(html).toContain('44.0');
+    expect(html).toContain('Money tied up in slow stock: UGX 4,400');
+    expect(html.indexOf('Slow movers')).toBeLessThan(html.indexOf('Dead stock'));
     expect(html).toContain('UGX 1,200');
     expect(html).toContain('UGX 1,800');
     expect(html).toContain('Head office');
@@ -206,6 +214,9 @@ describe('stock health', () => {
     const html = renderToString(<StockHealthView data={plain()} nameOf={nameOf} />);
     expect(html).toContain('UGX 2,100');
     expect(html).not.toMatch(/cost/i);
+    expect(html).not.toMatch(/tied up/i);
+    expect(html).not.toContain('4,400');
+    expect(html).toContain('44.0');
     expect(html).not.toContain('1,200');
     expect(html).not.toContain('1,800');
   });

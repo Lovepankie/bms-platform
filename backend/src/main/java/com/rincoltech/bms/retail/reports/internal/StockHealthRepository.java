@@ -169,6 +169,135 @@ class StockHealthRepository {
                 .list();
     }
 
+    record SlowRow(
+            UUID branchId,
+            UUID productId,
+            String code,
+            String description,
+            String unit,
+            BigDecimal qty,
+            BigDecimal sold,
+            LocalDate lastSold,
+            int days,
+            long atCost,
+            int total,
+            long totalAtCost) {}
+
+    private static String soldWithLastCte(List<UUID> branchIds) {
+        return "WITH sold AS (SELECT s.branch_id, l.product_id, sum(l.qty) AS sold, max(s.sale_date) AS last_sold,"
+                + " min(s.sale_date) AS first_sold"
+                + "  FROM retail_sales s JOIN retail_sale_lines l ON l.tenant_id = s.tenant_id AND l.sale_id = s.id"
+                + " WHERE s.status = 'completed' AND s.sale_date BETWEEN :since AND :today"
+                + in(branchIds, "s.branch_id") + " GROUP BY s.branch_id, l.product_id)";
+    }
+
+    /**
+     * The days of the pace window for an item in a branch (issue #414): the window, or fewer for an item that is
+     * newer in the branch than the window, counted from its first stock movement there (its first receipt or
+     * opening) or its first sale in the window, whichever is earlier, today included. {@code t}, {@code br},
+     * {@code pr} and {@code first} are the SQL of the tenant, branch, product and first sale columns.
+     */
+    private static String ageDays(String t, String br, String pr, String first) {
+        return "least(:window, CAST(:today AS date) - least(" + first
+                + ", (SELECT min(m.business_date) FROM retail_stock_movements m WHERE m.tenant_id = " + t
+                + " AND m.branch_id = " + br + " AND m.product_id = " + pr + ")) + 1)";
+    }
+
+    /**
+     * Slow movers (issue #414): stock on hand of an item that did sell in the branch in the window (so it is not
+     * dead stock), where the stock lasts more than {@code months} months at that pace, judged exactly as stock
+     * times the item's days over {@code months} times 30 times units sold, or where fewer than {@code minSold}
+     * units sold ({@code minSold} 0 is no such rule). The item's days are the window, or fewer for an item newer
+     * in the branch ({@link #ageDays}), so a new item is judged on the days it has been there. The longest to sell
+     * first, never ordered by cost; the count and the value at cost are over every such row, so they do not depend
+     * on the row limit. Sales are counted gross of customer returns, as in the cover list and the sales analysis.
+     */
+    List<SlowRow> slow(
+            List<UUID> branchIds,
+            LocalDate since,
+            LocalDate today,
+            int windowDays,
+            int months,
+            int minSold,
+            int limit) {
+        if (branchIds != null && branchIds.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Object> params = deadParams(branchIds, since, today);
+        params.put("window", windowDays);
+        params.put("months", months);
+        params.put("minSold", minSold);
+        params.put("limit", limit);
+        return jdbc.sql(soldWithLastCte(branchIds)
+                        + " SELECT sold.branch_id, p.id, p.code, p.description,"
+                        + " (SELECT u.name FROM retail_units u WHERE u.tenant_id = p.tenant_id AND u.id = p.unit_id) AS unit,"
+                        + " b.qty, sold.sold, sold.last_sold, age.days, round(b.qty * p.cost_minor) AS at_cost,"
+                        + " count(*) OVER () AS total, sum(round(b.qty * p.cost_minor)) OVER () AS total_at_cost"
+                        + "  FROM sold"
+                        + "  JOIN retail_products p ON p.tenant_id = current_setting('app.tenant_id')::uuid AND p.id = sold.product_id"
+                        + "  JOIN retail_stock_balances b ON b.tenant_id = p.tenant_id"
+                        + "       AND b.branch_id = sold.branch_id AND b.product_id = sold.product_id"
+                        + "  CROSS JOIN LATERAL (SELECT "
+                        + ageDays("p.tenant_id", "sold.branch_id", "sold.product_id", "sold.first_sold")
+                        + " AS days) age"
+                        + " WHERE p.active AND b.qty > 0 AND sold.sold > 0"
+                        + "   AND (b.qty * age.days > :months * 30 * sold.sold OR sold.sold < :minSold)"
+                        + " ORDER BY b.qty * age.days / sold.sold DESC, p.code, sold.branch_id, p.id LIMIT :limit")
+                .params(params)
+                .query((rs, n) -> new SlowRow(
+                        rs.getObject("branch_id", UUID.class),
+                        rs.getObject("id", UUID.class),
+                        rs.getString("code"),
+                        rs.getString("description"),
+                        rs.getString("unit"),
+                        rs.getBigDecimal("qty"),
+                        rs.getBigDecimal("sold"),
+                        rs.getObject("last_sold", LocalDate.class),
+                        rs.getInt("days"),
+                        rs.getLong("at_cost"),
+                        rs.getInt("total"),
+                        rs.getLong("total_at_cost")))
+                .list();
+    }
+
+    record BranchPace(UUID branchId, UUID productId, BigDecimal qty, BigDecimal sold, int days) {}
+
+    /**
+     * The pace of the given items in every branch of {@code branchIds} (null for all) where they sold in the
+     * window, with the stock there (none counts as zero) and the item's days there ({@link #ageDays}); the
+     * candidates of "sells better at" (issue #414). Only an active branch that stocks goods can take stock, so a
+     * closed branch or one that keeps no goods is never a candidate.
+     */
+    List<BranchPace> paceOf(
+            List<UUID> branchIds, List<UUID> productIds, LocalDate since, LocalDate today, int windowDays) {
+        if ((branchIds != null && branchIds.isEmpty()) || productIds.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Object> params = deadParams(branchIds, since, today);
+        params.put("productIds", productIds);
+        params.put("window", windowDays);
+        return jdbc.sql("SELECT x.branch_id, x.product_id, x.sold,"
+                        + " (SELECT coalesce(max(b.qty), 0) FROM retail_stock_balances b WHERE b.tenant_id = x.tenant_id"
+                        + "   AND b.branch_id = x.branch_id AND b.product_id = x.product_id) AS qty, "
+                        + ageDays("x.tenant_id", "x.branch_id", "x.product_id", "x.first_sold") + " AS days"
+                        + " FROM (SELECT s.tenant_id, s.branch_id, l.product_id, sum(l.qty) AS sold,"
+                        + " min(s.sale_date) AS first_sold"
+                        + "  FROM retail_sales s JOIN retail_sale_lines l ON l.tenant_id = s.tenant_id AND l.sale_id = s.id"
+                        + "  JOIN branches br ON br.tenant_id = s.tenant_id AND br.id = s.branch_id"
+                        + " WHERE s.status = 'completed' AND s.sale_date BETWEEN :since AND :today"
+                        + "   AND br.status = 'active' AND br.stocks_goods"
+                        + "   AND l.product_id IN (:productIds)" + in(branchIds, "s.branch_id")
+                        + " GROUP BY s.tenant_id, s.branch_id, l.product_id) x")
+                .params(params)
+                .query((rs, n) -> new BranchPace(
+                        rs.getObject("branch_id", UUID.class),
+                        rs.getObject("product_id", UUID.class),
+                        rs.getBigDecimal("qty"),
+                        rs.getBigDecimal("sold"),
+                        rs.getInt("days")))
+                .list();
+    }
+
     record Usage(UUID branchId, String kind, int reports, long cost) {}
 
     List<Usage> usage(List<UUID> branchIds, LocalDate from, LocalDate to) {

@@ -26,7 +26,7 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 | `/staff/retail/profit` | Daily profit per branch, with the stock-take difference as its own column (#121) | `retail.profit.read` |
 | `/staff/retail/sales-analysis` | Sales analysis: totals by day, week or month, top items as bars, by branch, category, item and seller, slow movers, items with no sale (#149) | `retail.sale.read` (profit columns: `retail.profit.read`) |
 | `/staff/retail/margins` | Margins: profit and margin by item and category, items under a margin target, price change impact (#149) | `retail.profit.read` |
-| `/staff/retail/stock-health` | Stock health: days of cover, reorder suggestions, dead stock, used, damaged and found missing (#149) | `retail.stock.read` (cost: `retail.profit.read`) |
+| `/staff/retail/stock-health` | Stock health: days of cover, reorder suggestions, slow movers (#414), dead stock, used, damaged and found missing (#149) | `retail.stock.read` (cost: `retail.profit.read`) |
 | `/staff/retail/credit-control` | Credit control: what credit buyers owe by age, the overdue list, payments received (#149) | `retail.sale.read` |
 | `/staff/retail/evaluation` | Business evaluation: profit to date, expected profit of the stock at today's prices, a 30 day pace (#149) | `retail.profit.read` |
 | `/staff/retail/catalogue` | Catalogue home: links to the screens below the session may use | any one of the catalogue screens' permissions |
@@ -1053,10 +1053,10 @@ therefore as far as the existing routes go: Stock, and Past restocks and Stock m
 | `/staff/retail/sales` | All sales | `page-sales` v2 (existing) | none added |
 | `/staff/retail/sales-analysis` | Sales analysis | `page-sales-analysis` v1 (added) | sales total and count open All sales; item and branch names open Stock |
 | `/staff/retail/savings` | Savings | `page-savings` v1 (added) | link to Cash summary |
-| `/staff/retail/settings` | Retail settings | `page-retail-settings` v1 (existing) | none added |
+| `/staff/retail/settings` | Retail settings | `page-retail-settings` v4 (slow movers step, #414) | none added |
 | `/staff/retail/stock` | Stock | `page-stock` v3 (existing) | none added |
 | `/staff/retail/stock-by-location` | Stores and shops | `page-stock-by-location` v1 (existing) | none added |
-| `/staff/retail/stock-health` | Stock health | `page-stock-health` v1 (added) | item and branch names open Stock |
+| `/staff/retail/stock-health` | Stock health | `page-stock-health` v2 (slow movers step, #414) | item and branch names open Stock; Move on a slow mover opens Move stock filled in |
 | `/staff/retail/stocktake` | Stock-take | `page-stocktake` v1 (existing) | none added |
 | `/staff/retail/supplier-bills` | Supplier invoices | `page-supplier-bills` v1 (added) | none added |
 | `/staff/retail/supplier-bills/$billId` | Supplier invoice | `page-supplier-bill` v1 (added) | supplier opens its open items; delivery number opens the delivery |
@@ -1192,3 +1192,24 @@ own: the order is copied from the chat, so the form asks for the phone first and
   balance that open orders hold part of (`reserved_qty`).
 - Tours: `page-orders`, `page-order`, `page-orders-report` (`frontend/src/tour/tours-retail-orders.ts`). The retail menu has an Orders
   shortcut right after Sale, and the retail home an Orders tile, for whoever holds `retail.order.manage`.
+
+## Slow movers on Stock health (issue #414, FR-RET-64)
+
+- Stock health has a Slow movers section between Days of cover and Dead stock: items that sold in the branch in the last 90
+  days, but whose stock lasts more than the business's months at that pace (or that sold fewer than its minimum). The title
+  says the months; the hint says the minimum when one is set, and that items with no sale are under Dead stock.
+- Each row: the item (opens Stock), its code and branch, the stock, the last day it sold, the months of stock ("over 120.0"
+  when capped; "new, pace of N days" under it for an item in the branch less than 90 days) and, only when the body carries it, the money tied up at cost. On a phone the stock, the last sale and the money
+  tied up move under the item. Below the table, for a caller with `retail.profit.read` in every branch, "Money tied up in slow
+  stock" with the total at cost (only for such a caller, unlike the dead stock totals, which follow the branches shown). Units sold
+  are counted before customer returns, as in Days of cover.
+- "Sells better at Test Branch B (30 sold in 90 days). Move 8 piece there." under the item when another branch of the caller's
+  sells it faster; only an open branch that stocks goods is named. A Move button follows for a person who may move stock from the row's branch; it opens Move stock at
+  `/staff/retail/transfer?from=...&to=...&product=...&code=...&qty=...`, which uses that source branch when the person may move
+  stock there and fills an empty form once (the destination and the item with the quantity, the item read with the source's
+  stock so the usual "Only N in stock" hint shows). The person still reviews and saves; the server checks everything as for
+  any stock move.
+- Retail settings has a Slow movers card: the months (1 to 24) and the minimum sold in 90 days (0 for none), saved with the
+  settings version like the other retail settings and audited as `retail.capabilities.changed`.
+- Tours: `page-stock-health` v2 adds the Slow movers step (`health-slow`), `page-retail-settings` v4 the settings step
+  (`retail-slow-movers`).

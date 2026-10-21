@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, createLazyRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { Link, createLazyRoute, useRouter } from '@tanstack/react-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { businessToday, retail, type Product, type Transfer } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
 import { useStaff } from '../context';
@@ -9,7 +9,7 @@ import { ToStock } from './analytics-ui';
 import { showQty } from './maths';
 import { buildTransfer, transferLineHint, transferProblem, type TransferDraft } from './transfer-state';
 import { milliOf } from './maths';
-import { TRANSFER_RECEIPT, capabilityOn, needsOf } from './permissions';
+import { TRANSFER, TRANSFER_RECEIPT, capabilityOn, holdsAt, needsOf } from './permissions';
 import { BranchRequired, Gate, NoStockHere, ProductPicker, Problem, money, useProfitAccess, useStockingBranch } from './ui';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
@@ -22,7 +22,22 @@ export function useBranchLabel(): (id: string | undefined) => string {
   return (id) => branchLabel((me.branches ?? []).find((x) => x.id === id)) || 'another branch';
 }
 
-export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; onSaved?: (t: Transfer) => void }) {
+/** What a "Sells better at" link on Stock health (issue #414) fills in: the destination and one item with its quantity. */
+export interface TransferPrefill {
+  to: string;
+  product: string;
+  code: string;
+  qty: string;
+}
+
+/** The prefill in the address, or null; every value a plain string, as the link writes them. */
+export function prefillOf(params: Record<string, unknown>): (TransferPrefill & { from: string }) | null {
+  const text = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : '');
+  const out = { from: text(params.from), to: text(params.to), product: text(params.product), code: text(params.code), qty: text(params.qty) };
+  return out.to && out.product && out.qty ? out : null;
+}
+
+export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId: string; onSaved?: (t: Transfer) => void; prefill?: TransferPrefill | null }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
   const label = useBranchLabel();
@@ -41,7 +56,23 @@ export function TransferForm({ fromBranchId, onSaved }: { fromBranchId: string; 
   const update = (patch: Partial<TransferDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const add = (p: Product) =>
     setDraft((d) => (d.lines.some((l) => l.product.id === p.id) ? d : { ...d, lines: [...d.lines, { product: p, qty: '1' }] }));
-  const destinations = (me.branches ?? []).filter((b) => b.id !== fromBranchId && b.stocks_goods !== false);
+  // Memoised so the prefill effect below does not run again on every render.
+  const destinations = useMemo(
+    () => (me.branches ?? []).filter((b) => b.id !== fromBranchId && b.stocks_goods !== false),
+    [me.branches, fromBranchId],
+  );
+  // A link from Stock health fills an empty form once: the branch it sells better at and the item with the suggested quantity.
+  // The item is read with this branch's stock, so the usual hint shows if the stock has gone since.
+  const prefilled = useRef(false);
+  useEffect(() => {
+    if (!prefill || prefilled.current || draft.lines.length > 0 || draft.toBranchId !== '') return;
+    prefilled.current = true;
+    if (destinations.some((b) => b.id === prefill.to)) setDraft((d) => ({ ...d, toBranchId: prefill.to }));
+    void retail.listProducts({ query: prefill.code, branchId: fromBranchId }).then((found) => {
+      const p = found.find((x) => x.id === prefill.product);
+      if (p) setDraft((d) => (d.lines.length > 0 ? d : { ...d, lines: [{ product: p, qty: prefill.qty }] }));
+    }, () => undefined);
+  }, [prefill, draft.lines.length, draft.toBranchId, destinations, fromBranchId, setDraft]);
   const problem = transferProblem(fromBranchId, draft);
   // With the two-step transfer on (ADR-033) the stock leaves now and is counted at the destination once received.
   const sends = capabilityOn(me, 'retail', TRANSFER_RECEIPT);
@@ -134,7 +165,14 @@ export function TransferSummary({ transfer, onNew }: { transfer: Transfer; onNew
 }
 
 export function MoveStock() {
-  const { branchId } = useStockingBranch();
+  const { me } = useStaff();
+  const session = useStockingBranch();
+  // Read once from the address this screen opened at; the form keeps its own draft after that.
+  const search = useRouter({ warn: false })?.state.location.search;
+  const prefill = useMemo(() => prefillOf((search ?? {}) as Record<string, unknown>), [search]);
+  // The link names the branch the stock leaves; it is used when this person may move stock from there.
+  const linked = prefill && (me.branches ?? []).some((b) => b.id === prefill.from && b.stocks_goods !== false) && holdsAt(me, TRANSFER, prefill.from);
+  const branchId = linked ? prefill.from : session.branchId;
   const [done, setDone] = useState<Transfer | null>(null);
   const [round, setRound] = useState(0);
   return (
@@ -144,7 +182,7 @@ export function MoveStock() {
       ) : done ? (
         <TransferSummary transfer={done} onNew={() => { setDone(null); setRound((n) => n + 1); }} />
       ) : (
-        <TransferForm key={`${branchId}-${round}`} fromBranchId={branchId} onSaved={setDone} />
+        <TransferForm key={`${branchId}-${round}`} fromBranchId={branchId} onSaved={setDone} prefill={round === 0 ? prefill : null} />
       )}
       <p><Link to={'/staff/retail/transfers' as never}>See stock moves</Link></p>
     </Gate>

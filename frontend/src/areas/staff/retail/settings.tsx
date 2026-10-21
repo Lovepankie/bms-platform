@@ -9,6 +9,7 @@ import {
 } from './capabilities-state';
 import { CreditRecognitionSetting } from './credit-recognition';
 import { PurchasingSettings } from './purchasing-settings';
+import { SlowMoverSetting } from './slow-movers';
 import { Gate, Problem, Success, changeFailureText, useToast } from './ui';
 
 // Retail settings (ADR-033, trade slice 2, issue #192): the administrator chooses the shop or the
@@ -151,6 +152,7 @@ export function RetailSettings() {
       {/* Keyed by the version, so a fresh read after someone else's change starts from what is saved. */}
       {read.data && <Editor key={read.data.version} read={read.data} onSaved={() => { setSaved(true); show('Saved'); }} onEdit={() => setSaved(false)} />}
       {read.data && <CreditRecognitionSetting key={`credit-${read.data.version}`} read={read.data} onSaved={() => show('Saved')} />}
+      {read.data && <SlowMoverSetting key={`slow-${read.data.version}`} read={read.data} onSaved={() => show('Saved')} />}
       <PurchasingSettings />
     </Gate>
   );

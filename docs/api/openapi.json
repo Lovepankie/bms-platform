@@ -7281,6 +7281,16 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "slow_mover_min_sold" : {
+            "description" : "Stock health (issue #414): an item is also a slow mover when fewer than this many units sold in the branch in the last 90 days; 0 (the default) switches this rule off",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "slow_mover_months" : {
+            "description" : "Stock health (issue #414): an item that sold in the last 90 days is a slow mover when its stock lasts more than this many months at that pace; 1 to 24, default 4",
+            "format" : "int32",
+            "type" : "integer"
+          },
           "transfer_receipt" : {
             "type" : "boolean"
           },
@@ -14553,6 +14563,23 @@
         },
         "required" : [ "suggestion_token" ]
       },
+      "RetailSellsBetterAt" : {
+        "description" : "Another branch in the caller's scope where the same item sells faster, and what to move there",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sold_last90" : {
+            "description" : "Units sold there in the last 90 days, or since the item first came there",
+            "type" : "string"
+          },
+          "suggested_qty" : {
+            "description" : "Whole units to move: what that branch sells in cover_days, less its stock, at most what this branch holds above slow_months of its own sales",
+            "type" : "string"
+          }
+        }
+      },
       "RetailShrinkageBranch" : {
         "properties" : {
           "branch_id" : {
@@ -14647,6 +14674,97 @@
               "$ref" : "#/components/schemas/RetailSimilarProduct"
             },
             "type" : "array"
+          }
+        }
+      },
+      "RetailSlowMover" : {
+        "description" : "An item that sold in the branch in the last 90 days, but slowly",
+        "properties" : {
+          "better_at" : {
+            "$ref" : "#/components/schemas/RetailSellsBetterAt"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "capped" : {
+            "description" : "True when the months are above 120 and months_of_stock shows 120.0",
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "days_counted" : {
+            "description" : "The days the pace is taken over: 90, or fewer for an item that came to this branch (its first stock movement or sale there) less than 90 days ago, today included",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "last_sold_on" : {
+            "description" : "The last day the item sold in this branch",
+            "format" : "date",
+            "type" : "string"
+          },
+          "months_of_stock" : {
+            "description" : "Months of stock: the stock over the monthly pace of days_counted (30 days a month), one place",
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty_on_hand" : {
+            "type" : "string"
+          },
+          "sold_last90" : {
+            "description" : "Units sold in this branch in the last 90 days, or in days_counted for a newer item",
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "value_at_cost_minor" : {
+            "description" : "Present only with retail.profit.read in this branch; the money tied up: quantity times the current cost",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailSlowMovers" : {
+        "description" : "Items that sell, but slowly: more than slow_months of stock at the pace of the last 90 days, or fewer than min_sold units sold in 90 days. Never dead stock (no sale in 90 days)",
+        "properties" : {
+          "days" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "items" : {
+            "description" : "The longest to sell first",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSlowMover"
+            },
+            "type" : "array"
+          },
+          "min_sold" : {
+            "description" : "The business's setting slow_mover_min_sold; 0 means the rule is off",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "slow_months" : {
+            "description" : "The business's setting slow_mover_months",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "total" : {
+            "description" : "Rows before the row limit",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "value_at_cost_minor" : {
+            "description" : "Money tied up in all slow stock reported, at cost; present only for a caller with retail.profit.read in every branch of the business (an administrator)",
+            "format" : "int64",
+            "type" : "integer"
           }
         }
       },
@@ -14887,6 +15005,9 @@
               "$ref" : "#/components/schemas/RetailShrinkageBranch"
             },
             "type" : "array"
+          },
+          "slow_movers" : {
+            "$ref" : "#/components/schemas/RetailSlowMovers"
           },
           "to" : {
             "format" : "date",
@@ -19630,6 +19751,16 @@
           },
           "returns" : {
             "type" : "boolean"
+          },
+          "slow_mover_min_sold" : {
+            "description" : "0 to 1,000,000; 0 is off",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "slow_mover_months" : {
+            "description" : "1 to 24",
+            "format" : "int32",
+            "type" : "integer"
           },
           "transfer_receipt" : {
             "type" : "boolean"

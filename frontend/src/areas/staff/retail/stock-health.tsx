@@ -5,11 +5,12 @@ import { retailAnalytics, type CoverRow, type StockHealth } from '../../../api/r
 import { SkeletonList } from '../../../components/states';
 import { Choice, DateRange, Empty, Section, ToStock, defaultRange, moneyOrNone, plural, rangeProblem } from './analytics-ui';
 import { showQty } from './maths';
+import { SlowMoversSection } from './slow-movers';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 
 // Stock health (issue #149, step 3): how long the stock lasts at the pace of the last 30 days, what to
-// buy, what has not sold in 90 days, and what was used, damaged or found missing. Cost figures arrive
-// only with retail.profit.read in the branch.
+// buy, what sells too slowly (issue #414), what has not sold in 90 days, and what was used, damaged or found
+// missing. Cost figures arrive only with retail.profit.read in the branch.
 
 const TOPS = [5, 10, 20, 50].map((n) => ({ value: n, label: `Top ${n}` }));
 const LEADS = [7, 14, 21, 30, 45].map((n) => ({ value: n, label: `${n} days` }));
@@ -65,6 +66,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
       <Section title="Days of cover" hint="How long the stock lasts if sales go on at the pace of the last 30 days. The lowest first. Items with no sale in 30 days are not listed.">
         <CoverTable rows={cover.items ?? []} nameOf={nameOf} reorder={false} />
       </Section>
+      <SlowMoversSection data={data.slow_movers} nameOf={nameOf} />
       <Section title={`Dead stock: no sale in ${dead?.days ?? 90} days`} hint="Stock on hand that did not sell in the branch.">
         {(dead?.branches ?? []).length === 0 ? <Empty>Everything in stock has sold lately.</Empty> : (
           <>
