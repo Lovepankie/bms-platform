@@ -126,7 +126,10 @@ class CreditRecognitionRepository {
             params.put("branchIds", branchIds);
             branch = " AND w.branch_id IN (:branchIds)";
         }
-        return jdbc.sql("SELECT w.branch_id, w.written_off_on AS day, sum(w.loss_minor) AS loss"
+        // Issue #385: a delivery fee written off is not a loss on the goods sold; the profit of goods never held the
+        // fee, so it is
+        // left out here (the fee's own income and loss are in the ledger, 4120 and bad debt loss).
+        return jdbc.sql("SELECT w.branch_id, w.written_off_on AS day, sum(w.loss_minor - w.fee_minor) AS loss"
                         + "  FROM retail_sale_writeoffs w"
                         + " WHERE w.written_off_on BETWEEN :from AND :to" + branch
                         + " GROUP BY w.branch_id, w.written_off_on")
@@ -157,10 +160,13 @@ class CreditRecognitionRepository {
             params.put("branchIds", branchIds);
             branch = " AND s.branch_id IN (:branchIds)";
         }
-        return jdbc.sql("SELECT coalesce(sum(s.total_minor - s.paid_minor), 0) AS owed, count(*) AS n"
+        // Issue #385: a delivery fee left on the buyer's account and not yet paid is owed with the sale.
+        String fee = "coalesce((SELECT o.delivery_fee_minor FROM retail_customer_orders o WHERE o.sale_id = s.id"
+                + " AND o.fee_method = 'account' AND o.fee_paid_at IS NULL), 0)";
+        return jdbc.sql("SELECT coalesce(sum(s.total_minor - s.paid_minor + " + fee + "), 0) AS owed, count(*) AS n"
                         + "  FROM retail_sales s"
                         + " WHERE s.payment_method = 'credit' AND s.status = 'completed' AND NOT s.historical"
-                        + "   AND s.total_minor > s.paid_minor AND "
+                        + "   AND (s.total_minor > s.paid_minor OR " + fee + " > 0) AND "
                         + periods.sql("s.sale_date", "s.created_at", params, "crpO") + branch)
                 .params(params)
                 .query((rs, n) -> new long[] {rs.getLong("owed"), rs.getLong("n")})
@@ -198,7 +204,8 @@ class CreditRecognitionRepository {
      * when the buyer pays, imported sales included; less a payment on account when it is reversed, on the day of the reversal; less the
      * money paid back on any return, cash sale or credit sale, on the day of the return and at the refund branch, and given back on the
      * day a return is voided. A payment dated earlier than it was entered counts on the day it was entered, so a day already reported is
-     * not rewritten. Voiding a cash sale does rewrite that sale's own day, as it always did (the sale leaves its day).
+     * not rewritten. Voiding a cash sale does rewrite that sale's own day, as it always did (the sale leaves its day). A delivery fee
+     * left on a buyer's account and paid later (issue #385) counts on the day it was paid.
      */
     List<ReportsRepository.DayFigures> collections(List<UUID> branchIds, LocalDate from, LocalDate to) {
         if (branchIds != null && branchIds.isEmpty()) {
@@ -243,6 +250,14 @@ class CreditRecognitionRepository {
                         + " SELECT r.refund_branch_id, r.voided_on, r.refund_minor"
                         + " FROM retail_sale_returns r"
                         + " WHERE r.status = 'voided' AND r.refund_minor > 0 AND r.voided_on BETWEEN :from AND :to"
+                        // Issue #385: a delivery fee left on a buyer's account and paid later, on the day it was
+                        // entered and at
+                        // the order's branch, as the cash book counts it (a fee written off is no money received).
+                        + " UNION ALL"
+                        + " SELECT o.branch_id, CAST((o.fee_paid_at AT TIME ZONE :zone) AS date), o.delivery_fee_minor"
+                        + " FROM retail_customer_orders o"
+                        + " WHERE o.fee_method = 'account' AND o.fee_paid_method IN ('cash', 'mobile_money', 'bank')"
+                        + " AND o.fee_paid_at >= :fromTs AND o.fee_paid_at < :toTs"
                         + ") x" + branch + " GROUP BY x.br, x.d")
                 .params(params)
                 .query((rs, n) -> new ReportsRepository.DayFigures(

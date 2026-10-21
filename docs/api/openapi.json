@@ -6970,6 +6970,43 @@
           }
         }
       },
+      "RetailCancelledOrder" : {
+        "description" : "At most 500, newest first",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cancelled_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cancelled_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "customer_name" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "items_total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "order_no" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          }
+        }
+      },
       "RetailCapabilities" : {
         "properties" : {
           "branch_roles" : {
@@ -7984,7 +8021,7 @@
             "type" : "integer"
           },
           "balance_minor" : {
-            "description" : "Owed on credit sales in the caller's branch scope, historical imports included",
+            "description" : "Owed on credit sales in the caller's branch scope, historical imports included: what a payment on account can settle",
             "format" : "int64",
             "type" : "integer"
           },
@@ -7999,6 +8036,17 @@
           "customer_id" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "delivery_fees" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDeliveryFeeOwed"
+            },
+            "type" : "array"
+          },
+          "delivery_fees_owed_minor" : {
+            "description" : "Issue #385: delivery fees of customer orders left on the account and not yet paid, owed besides balance_minor and paid on each order",
+            "format" : "int64",
+            "type" : "integer"
           },
           "exposure_minor" : {
             "description" : "What the limit is measured against: owed on credit sales in every branch. Present only when the caller's scope covers every branch, so no other branch's sales leak",
@@ -8121,6 +8169,7 @@
         "description" : "Credit sales in the caller's branch scope",
         "properties" : {
           "balance_minor" : {
+            "description" : "Owed on the open credit sales: what a payment on account can settle",
             "format" : "int64",
             "type" : "integer"
           },
@@ -8130,6 +8179,17 @@
           "customer_id" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "delivery_fees" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDeliveryFeeOwed"
+            },
+            "type" : "array"
+          },
+          "delivery_fees_owed_minor" : {
+            "description" : "Issue #385: delivery fees of customer orders left on the account and not yet paid, owed besides balance_minor and paid on each order (POST /retail/orders/{order_id}/fee-payment)",
+            "format" : "int64",
+            "type" : "integer"
           },
           "open_sales" : {
             "items" : {
@@ -8753,6 +8813,37 @@
           "value_at_price_minor" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        }
+      },
+      "RetailDeliveryFeeOwed" : {
+        "description" : "A delivery fee left on the buyer's account, paid on its order",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "delivered_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "fee_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "order_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "order_no" : {
+            "type" : "string"
+          },
+          "sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_no" : {
+            "type" : "string"
           }
         }
       },
@@ -10501,6 +10592,623 @@
           }
         }
       },
+      "RetailOrder" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cancel_reason" : {
+            "type" : "string"
+          },
+          "cancelled_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "customer_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "customer_name" : {
+            "type" : "string"
+          },
+          "customer_phone" : {
+            "type" : "string"
+          },
+          "delivered_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "delivered_by" : {
+            "type" : "string"
+          },
+          "delivered_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "delivery_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "delivery_fee_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "delivery_place" : {
+            "type" : "string"
+          },
+          "fee_method" : {
+            "description" : "cash, mobile_money, bank (paid at the door) or account (on the credit buyer's account)",
+            "type" : "string"
+          },
+          "fee_paid_method" : {
+            "type" : "string"
+          },
+          "fee_paid_on" : {
+            "description" : "When a fee on account was paid",
+            "format" : "date",
+            "type" : "string"
+          },
+          "history" : {
+            "description" : "Who did what, when; on a single order only",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailOrderEvent"
+            },
+            "type" : "array"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "items_total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailOrderLine"
+            },
+            "type" : "array"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "order_no" : {
+            "type" : "string"
+          },
+          "ordered_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "packed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_no" : {
+            "type" : "string"
+          },
+          "sale_voided" : {
+            "description" : "True when the sale this order became was voided (its delivery fee was reversed with it)",
+            "type" : "boolean"
+          },
+          "sent_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "ordered, packed, out_for_delivery, delivered or cancelled",
+            "type" : "string"
+          },
+          "total_minor" : {
+            "description" : "items_total_minor plus delivery_fee_minor",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailOrderBoard" : {
+        "description" : "How many open orders are at each step, and the deliveries of today",
+        "properties" : {
+          "delivered_today" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "due_today" : {
+            "description" : "Open orders to deliver today",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "ordered" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "out_for_delivery" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "overdue" : {
+            "description" : "Open orders whose delivery day has passed",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "packed" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "today" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailOrderCancelRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 3,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "RetailOrderCancellationsReport" : {
+        "description" : "Orders cancelled, and why",
+        "properties" : {
+          "by_source" : {
+            "description" : "By source; fees_minor is 0",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailOrderReportRow"
+            },
+            "type" : "array"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "items" : {
+            "description" : "At most 500, newest first",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailCancelledOrder"
+            },
+            "type" : "array"
+          },
+          "items_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "orders" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailOrderChangeRequest" : {
+        "description" : "A field left out keeps its value; an empty text clears it",
+        "properties" : {
+          "clear_delivery_date" : {
+            "description" : "True takes the delivery day off the order",
+            "type" : "boolean"
+          },
+          "customer_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "customer_phone" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "delivery_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "delivery_fee_minor" : {
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "delivery_place" : {
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "notes" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
+      "RetailOrderCustomerLookup" : {
+        "description" : "What the last orders of a phone number say about its customer",
+        "properties" : {
+          "customer_id" : {
+            "description" : "A credit buyer whose contact is this number",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "customer_name" : {
+            "type" : "string"
+          },
+          "customer_phone" : {
+            "type" : "string"
+          },
+          "delivery_fee_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "delivery_place" : {
+            "type" : "string"
+          },
+          "found" : {
+            "type" : "boolean"
+          },
+          "orders" : {
+            "description" : "Orders this number made before, in the caller's branches",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailOrderDeliverRequest" : {
+        "properties" : {
+          "credit_override_reason" : {
+            "description" : "As on a credit sale above the buyer's limit",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "due_date" : {
+            "description" : "Credit only: when the customer will pay the rest",
+            "format" : "date",
+            "type" : "string"
+          },
+          "fee_on_account" : {
+            "description" : "Credit only, for a credit buyer on the list: the delivery fee goes on the buyer's account (trade debtors, against the sale) instead of being paid at the door; paid later with POST /retail/orders/{order_id}/fee-payment",
+            "type" : "boolean"
+          },
+          "note" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "paid_now_method" : {
+            "description" : "Credit only: how the money taken at the door was paid",
+            "pattern" : "cash|mobile_money|bank",
+            "type" : "string"
+          },
+          "paid_now_minor" : {
+            "description" : "Credit only: the money taken at the door; the delivery fee first, the rest on the sale",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "payment_method" : {
+            "description" : "cash, mobile_money or bank: everything paid at the door; credit: the goods on credit, with paid_now_minor taken at the door (at least the delivery fee)",
+            "pattern" : "cash|mobile_money|bank|credit",
+            "type" : "string"
+          }
+        },
+        "required" : [ "payment_method" ]
+      },
+      "RetailOrderDelivered" : {
+        "properties" : {
+          "order" : {
+            "$ref" : "#/components/schemas/RetailOrder"
+          },
+          "owed_minor" : {
+            "description" : "Left on credit",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "paid_now_minor" : {
+            "description" : "Money taken at the door, delivery fee included",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_no" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailOrderEvent" : {
+        "description" : "Who did what, when; on a single order only",
+        "properties" : {
+          "at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "by_name" : {
+            "type" : "string"
+          },
+          "by_user" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "step" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailOrderFeePaymentRequest" : {
+        "properties" : {
+          "method" : {
+            "pattern" : "cash|mobile_money|bank",
+            "type" : "string"
+          }
+        },
+        "required" : [ "method" ]
+      },
+      "RetailOrderFeesReport" : {
+        "description" : "Delivered orders and the delivery fees taken, by day, source or rider",
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "fees_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "group_by" : {
+            "type" : "string"
+          },
+          "items_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "orders" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailOrderReportRow"
+            },
+            "type" : "array"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailOrderLine" : {
+        "properties" : {
+          "base_qty" : {
+            "description" : "What the order keeps aside, in the product's base unit",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "line_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "line_total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "description" : "In unit",
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          },
+          "unit_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit_price_minor" : {
+            "description" : "The price agreed per unit",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailOrderLineRequest" : {
+        "properties" : {
+          "price_override_reason" : {
+            "description" : "As on a sale: why the price differs from the price list's (price_lists capability)",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "qty" : {
+            "example" : "2",
+            "type" : "string"
+          },
+          "unit_id" : {
+            "description" : "A pack unit of the product (units capability); absent means the base unit",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit_price_minor" : {
+            "description" : "The price agreed per unit_id (per base unit when none); defaults to the price a sale would take today",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "product_id", "qty" ]
+      },
+      "RetailOrderPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailOrder"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailOrderReportRow" : {
+        "properties" : {
+          "fees_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "items_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "orders" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailOrderRequest" : {
+        "properties" : {
+          "branch_id" : {
+            "description" : "Defaults to the caller's one branch; a shop, never a store",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "customer_id" : {
+            "description" : "A credit buyer on the list; then customer_name defaults to theirs",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "customer_name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "customer_phone" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "delivery_date" : {
+            "description" : "The day it should be delivered; not in the past",
+            "format" : "date",
+            "type" : "string"
+          },
+          "delivery_fee_minor" : {
+            "description" : "Charged on top of the items and paid on delivery; defaults to 0",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "delivery_place" : {
+            "description" : "Where to deliver; absent means the customer collects at the shop",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailOrderLineRequest"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "notes" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "source" : {
+            "description" : "Where the order came from: whatsapp, instagram, facebook, phone, walk_in or other",
+            "pattern" : "whatsapp|instagram|facebook|phone|walk_in|other",
+            "type" : "string"
+          }
+        },
+        "required" : [ "lines", "source" ]
+      },
+      "RetailOrderSendRequest" : {
+        "properties" : {
+          "delivered_by" : {
+            "description" : "Who takes it out, for example the rider's name",
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "note" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "delivered_by" ]
+      },
+      "RetailOrderStepRequest" : {
+        "properties" : {
+          "note" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
       "RetailOverdueSale" : {
         "properties" : {
           "branch_id" : {
@@ -11227,6 +11935,10 @@
           },
           "qty" : {
             "description" : "The branch balance, when branch_id was given",
+            "type" : "string"
+          },
+          "reserved_qty" : {
+            "description" : "Issue #385: of the branch balance, what open customer orders keep aside (so not free to sell); sent only with branch_id, and only when something is kept",
             "type" : "string"
           },
           "sell_minor" : {
@@ -12658,6 +13370,11 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "delivery_fee_owed_minor" : {
+            "description" : "Issue #385: the delivery fee of the customer order this credit sale came from, left on the buyer's account and not yet paid: owed besides balance_minor, and written off with the sale",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "due_date" : {
             "format" : "date",
             "type" : "string"
@@ -12821,7 +13538,7 @@
             "type" : "integer"
           },
           "source" : {
-            "description" : "retail (the product's sell price), list (a price list item) or override (the seller's price instead of the resolved one)",
+            "description" : "retail (the product's sell price), list (a price list item), override (the seller's price instead of the resolved one) or order_agreed (the price agreed on a customer order that today's list would price otherwise, issue #385)",
             "type" : "string"
           }
         }
@@ -13046,10 +13763,16 @@
       "RetailSaleWriteOffInfo" : {
         "description" : "A credit sale whose unpaid part was written off as a loss",
         "properties" : {
+          "delivery_fee_minor" : {
+            "description" : "Issue #385: the part of unpaid_minor that was a delivery fee left on the account",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "reason" : {
             "type" : "string"
           },
           "unpaid_minor" : {
+            "description" : "Everything the write-off cleared, a delivery fee on the account included",
             "format" : "int64",
             "type" : "integer"
           },
@@ -14054,6 +14777,10 @@
             "type" : "string"
           },
           "qty" : {
+            "type" : "string"
+          },
+          "reserved_qty" : {
+            "description" : "Issue #385: of qty, what open customer orders keep aside (not free to sell); absent when nothing is kept",
             "type" : "string"
           },
           "sell_minor" : {
@@ -28432,6 +29159,548 @@
         },
         "summary" : "Void a landed cost as a whole by reversal, once; refused while a payment stands against the payee's invoice, while a credit note touches its lines, or when the goods have moved on (issue #199); M",
         "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/orders" : {
+      "get" : {
+        "operationId" : "listRetailOrders",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "due",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "source",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrderPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Orders in the caller's branch scope, newest first, by step, delivery day and source (issue #385)",
+        "tags" : [ "retail-orders" ]
+      },
+      "post" : {
+        "operationId" : "createRetailOrder",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailOrderRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrder"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Take a customer order: priced, numbered, its stock kept aside, nothing paid yet (issue #385)",
+        "tags" : [ "retail-orders" ]
+      }
+    },
+    "/api/v1/retail/orders/board" : {
+      "get" : {
+        "operationId" : "getRetailOrderBoard",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrderBoard"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "How many open orders are at each step, and today's deliveries (issue #385)",
+        "tags" : [ "retail-orders" ]
+      }
+    },
+    "/api/v1/retail/orders/customer-lookup" : {
+      "get" : {
+        "operationId" : "lookUpRetailOrderCustomer",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "phone",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrderCustomerLookup"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The customer of a phone number, from earlier orders and the credit buyers, to fill an order in (issue #385)",
+        "tags" : [ "retail-orders" ]
+      }
+    },
+    "/api/v1/retail/orders/reports/cancellations" : {
+      "get" : {
+        "operationId" : "getRetailOrderCancellationsReport",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrderCancellationsReport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Orders cancelled and why, by source (issue #385)",
+        "tags" : [ "retail-orders" ]
+      }
+    },
+    "/api/v1/retail/orders/reports/delivery-fees" : {
+      "get" : {
+        "operationId" : "getRetailOrderFeesReport",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "group_by",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrderFeesReport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Delivered orders and the delivery fees taken, by day, source or rider (issue #385)",
+        "tags" : [ "retail-orders" ]
+      }
+    },
+    "/api/v1/retail/orders/{order_id}" : {
+      "get" : {
+        "operationId" : "getRetailOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "order_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrder"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "An order with its lines and its history (issue #385)",
+        "tags" : [ "retail-orders" ]
+      },
+      "patch" : {
+        "operationId" : "updateRetailOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "order_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailOrderChangeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrder"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change the customer's name, phone, delivery place, day or fee, or the notes, of an open order (issue #385)",
+        "tags" : [ "retail-orders" ]
+      }
+    },
+    "/api/v1/retail/orders/{order_id}/cancel" : {
+      "post" : {
+        "operationId" : "cancelRetailOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "order_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailOrderCancelRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrder"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cancel an open order with a reason; its stock goes back (issue #385)",
+        "tags" : [ "retail-orders" ]
+      }
+    },
+    "/api/v1/retail/orders/{order_id}/deliver" : {
+      "post" : {
+        "operationId" : "deliverRetailOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "order_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailOrderDeliverRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrderDelivered"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mark an order delivered and paid: it becomes a sale through the ordinary sale path, the delivery fee posted on its own; M (issue #385)",
+        "tags" : [ "retail-orders" ]
+      }
+    },
+    "/api/v1/retail/orders/{order_id}/fee-payment" : {
+      "post" : {
+        "operationId" : "payRetailOrderFee",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "order_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailOrderFeePaymentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrder"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Take the payment of a delivery fee left on a credit buyer's account; M (issue #385)",
+        "tags" : [ "retail-orders" ]
+      }
+    },
+    "/api/v1/retail/orders/{order_id}/pack" : {
+      "post" : {
+        "operationId" : "packRetailOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "order_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailOrderStepRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrder"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mark an order packed (issue #385)",
+        "tags" : [ "retail-orders" ]
+      }
+    },
+    "/api/v1/retail/orders/{order_id}/send" : {
+      "post" : {
+        "operationId" : "sendRetailOrder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "order_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailOrderSendRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrder"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Mark an order out for delivery, with who takes it (issue #385)",
+        "tags" : [ "retail-orders" ]
       }
     },
     "/api/v1/retail/price-lists" : {

@@ -27,6 +27,14 @@ export const icons = {
       <circle cx="17" cy="20" r="1.2" />
     </Svg>
   ),
+  // A parcel on its way: customer orders with delivery (issue #385).
+  orders: (
+    <Svg>
+      <path d="M3 7l9-4 9 4v10l-9 4-9-4z" />
+      <path d="M3 7l9 4 9-4" />
+      <path d="M12 11v10" />
+    </Svg>
+  ),
   creditSales: (
     <Svg>
       <rect x="3" y="6" width="18" height="12" rx="2" />

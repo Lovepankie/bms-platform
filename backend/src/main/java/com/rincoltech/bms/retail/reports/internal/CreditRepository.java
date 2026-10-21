@@ -24,11 +24,19 @@ class CreditRepository {
         this.jdbc = jdbc;
     }
 
-    private static final String OWED = "(s.total_minor - s.paid_minor)";
+    /**
+     * Issue #385: the delivery fee of a customer order left on the buyer's account and not yet paid is owed on the sale it came
+     * with, so it is part of what the sale still owes and keeps the sale open.
+     */
+    private static final String FEE = "coalesce((SELECT o.delivery_fee_minor FROM retail_customer_orders o"
+            + " WHERE o.sale_id = s.id AND o.fee_method = 'account' AND o.fee_paid_at IS NULL), 0)";
+
+    private static final String OWED = "(s.total_minor - s.paid_minor + " + FEE + ")";
     private static final String DAYS = "(CAST(:today AS date) - s.due_date)";
 
     private static final String OPEN =
-            " WHERE s.payment_method = 'credit' AND s.status = 'completed' AND s.total_minor > s.paid_minor";
+            " WHERE s.payment_method = 'credit' AND s.status = 'completed' AND (s.total_minor > s.paid_minor OR " + FEE
+                    + " > 0)";
 
     /** The five ageing sums as SELECT items; a sale with no due date is not yet due. */
     private static final String BUCKETS = "sum(" + OWED + ") AS owed,"

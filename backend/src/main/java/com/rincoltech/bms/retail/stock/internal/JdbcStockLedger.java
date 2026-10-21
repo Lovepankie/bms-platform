@@ -53,14 +53,25 @@ class JdbcStockLedger implements StockLedger {
         Timestamp now = Timestamp.from(clock.now());
         for (int i : order) {
             Movement m = movements.get(i);
-            BigDecimal current = lockBalance(m.branchId(), m.productId());
+            Locked locked = lockRow(m.branchId(), m.productId());
+            BigDecimal current = locked.qty();
             BigDecimal next = current.add(m.qty());
-            if (GUARDED.contains(m.kind()) && m.qty().signum() < 0 && next.signum() < 0) {
+            if (GUARDED.contains(m.kind()) && m.qty().signum() < 0 && next.compareTo(locked.reserved()) < 0) {
+                if (next.signum() < 0 || locked.reserved().signum() == 0) {
+                    throw ApiException.rule(
+                            "insufficient_stock",
+                            "Product " + m.productId() + " has "
+                                    + current.stripTrailingZeros().toPlainString()
+                                    + " in stock at this branch, so this quantity cannot be taken.");
+                }
+                // Issue #385, ADR-052: the units are on the shelf but kept for customer orders.
                 throw ApiException.rule(
                         "insufficient_stock",
                         "Product " + m.productId() + " has "
-                                + current.stripTrailingZeros().toPlainString()
-                                + " in stock at this branch, so this quantity cannot be taken.");
+                                + current.stripTrailingZeros().toPlainString() + " in stock at this branch, of which "
+                                + locked.reserved().stripTrailingZeros().toPlainString()
+                                + " are kept for customer orders, so this quantity cannot be taken. Deliver or cancel"
+                                + " the order first.");
             }
             UUID id = UUID.randomUUID();
             jdbc.sql("""
@@ -101,17 +112,76 @@ class JdbcStockLedger implements StockLedger {
         return lockBalance(branchId, productId);
     }
 
+    /** The balance and what customer orders keep of it, read under the row's lock. */
+    private record Locked(BigDecimal qty, BigDecimal reserved) {}
+
     /** Creates the balance row on first use, then takes its lock for the rest of the transaction. */
     private BigDecimal lockBalance(UUID branchId, UUID productId) {
+        return lockRow(branchId, productId).qty();
+    }
+
+    private Locked lockRow(UUID branchId, UUID productId) {
         jdbc.sql("""
                         INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id)
                         VALUES (current_setting('app.tenant_id')::uuid, ?, ?)
                         ON CONFLICT (tenant_id, branch_id, product_id) DO NOTHING
                         """).params(branchId, productId).update();
-        return jdbc.sql("SELECT qty FROM retail_stock_balances WHERE branch_id = ? AND product_id = ? FOR UPDATE")
+        return jdbc.sql(
+                        "SELECT qty, reserved_qty FROM retail_stock_balances WHERE branch_id = ? AND product_id = ? FOR UPDATE")
                 .params(branchId, productId)
-                .query(BigDecimal.class)
+                .query((rs, n) -> new Locked(rs.getBigDecimal("qty"), rs.getBigDecimal("reserved_qty")))
                 .single();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void reserve(List<Hold> holds) {
+        for (Hold h : inLockOrder(holds)) {
+            Locked locked = lockRow(h.branchId(), h.productId());
+            BigDecimal free = locked.qty().subtract(locked.reserved());
+            if (free.compareTo(h.qty()) < 0) {
+                BigDecimal shown = free.signum() < 0 ? BigDecimal.ZERO : free;
+                throw ApiException.rule(
+                        "insufficient_stock",
+                        "Product " + h.productId() + " has "
+                                + shown.stripTrailingZeros().toPlainString()
+                                + " free at this branch ("
+                                + locked.reserved().stripTrailingZeros().toPlainString()
+                                + " kept for other orders), so this order cannot keep "
+                                + h.qty().stripTrailingZeros().toPlainString() + ".");
+            }
+            jdbc.sql("""
+                            UPDATE retail_stock_balances SET reserved_qty = reserved_qty + ?, updated_at = now()
+                             WHERE branch_id = ? AND product_id = ?
+                            """).params(h.qty(), h.branchId(), h.productId()).update();
+        }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void release(List<Hold> holds) {
+        for (Hold h : inLockOrder(holds)) {
+            Locked locked = lockRow(h.branchId(), h.productId());
+            if (locked.reserved().compareTo(h.qty()) < 0) {
+                throw new IllegalStateException("releasing more than is kept for orders: " + h);
+            }
+            jdbc.sql("""
+                            UPDATE retail_stock_balances SET reserved_qty = reserved_qty - ?, updated_at = now()
+                             WHERE branch_id = ? AND product_id = ?
+                            """).params(h.qty(), h.branchId(), h.productId()).update();
+        }
+    }
+
+    /** Holds of one branch and product added together, in branch and product order, so concurrent orders cannot deadlock. */
+    private static List<Hold> inLockOrder(List<Hold> holds) {
+        java.util.Map<List<UUID>, BigDecimal> sums = new java.util.TreeMap<>(
+                Comparator.<List<UUID>, UUID>comparing(k -> k.get(0)).thenComparing(k -> k.get(1)));
+        for (Hold h : holds) {
+            sums.merge(List.of(h.branchId(), h.productId()), h.qty(), BigDecimal::add);
+        }
+        return sums.entrySet().stream()
+                .map(e -> new Hold(e.getKey().get(0), e.getKey().get(1), e.getValue()))
+                .toList();
     }
 
     @Override

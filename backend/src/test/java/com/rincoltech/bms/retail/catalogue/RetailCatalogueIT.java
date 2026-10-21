@@ -191,6 +191,8 @@ class RetailCatalogueIT extends IntegrationTest {
                         "retail.cashbook.read",
                         "retail.customer.manage",
                         "retail.expense.record",
+                        // Migration V70 (#385): the sales role takes and delivers customer orders.
+                        "retail.order.manage",
                         // Migration V41 (#195): the sales role holds the price override, as it holds
                         // retail.sale.create.
                         "retail.price.override",

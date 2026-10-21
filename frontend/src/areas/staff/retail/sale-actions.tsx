@@ -7,8 +7,7 @@ import { CREDIT_WRITE_OFF, SALE_VOID, holdsAt } from './permissions';
 import {
   IMPORTED_FULL, IMPORTED_SHORT, MIN_REASON, PAY_METHODS, blankPay, buildPayRequest, fullPay, importedAndOwing, keyReused, owedMinor, paidWords, payFailureWords, payProblem,
   saleMovedOn, settledDate, takesPayment, typedAmount, voidBlocked, voidReasonOf, type PayForm,
-  WRITE_OFF_CHECKER, WRITE_OFF_PENDING, canWriteOff, writeOffAlreadyPending, writeOffFailureWords, writeOffMovedOn, writeOffReasonOf, writeOffWarning, writeOffWords,
-} from './sale-actions-state';
+  WRITE_OFF_CHECKER, WRITE_OFF_PENDING, canWriteOff, writeOffAlreadyPending, writeOffFailureWords, writeOffMovedOn, writeOffReasonOf, writeOffAmount, writeOffWarning, writeOffWords, } from './sale-actions-state';
 import { Problem, Success, money } from './ui';
 
 // Two actions on a sale, for a shop owner (issues #326 and #327): take a payment on a credit sale, from the credit sales list and from
@@ -221,8 +220,10 @@ export function VoidSaleAction({ sale, branchName }: { sale: Sale; branchName?: 
 }
 
 /** The write-off form: a reason of at least five characters, what will happen in plain words, and one clear button. */
-export function WriteOffFormView({ owed, reason, busy, error, onReason, onWriteOff, onCancel }: {
+export function WriteOffFormView({ owed, fee, reason, busy, error, onReason, onWriteOff, onCancel }: {
   owed: number;
+  /** The part of owed that is a delivery fee left on the account (issue #385). */
+  fee?: number;
   reason: string;
   busy?: boolean;
   error?: unknown;
@@ -242,7 +243,7 @@ export function WriteOffFormView({ owed, reason, busy, error, onReason, onWriteO
     >
       <label htmlFor="write-off-reason">Why will this buyer not pay? (at least {MIN_REASON} characters)</label>
       <input id="write-off-reason" value={reason} maxLength={300} onChange={(e) => onReason(e.target.value)} />
-      <p className="hint" data-testid="write-off-warning">{writeOffWarning(owed)}</p>
+      <p className="hint" data-testid="write-off-warning">{writeOffWarning(owed, fee)}</p>
       <p className="hint" data-testid="write-off-checker">{WRITE_OFF_CHECKER}</p>
       <Problem error={error} />
       <p className="cluster">
@@ -293,7 +294,8 @@ export function WriteOffSaleAction({ sale }: { sale: Sale }) {
   if (!open) return <p><button type="button" className="btn-sm" onClick={() => { send.reset(); setOpen(true); }}>Write off</button></p>;
   return (
     <WriteOffFormView
-      owed={owedMinor(sale)}
+      owed={writeOffAmount(sale)}
+      fee={sale.delivery_fee_owed_minor ?? 0}
       reason={draft.reason}
       busy={send.isPending}
       error={writeOffFailureWords(send.error)}

@@ -900,6 +900,70 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), t.headOffice(), intent, UUID.randomUUID(), entry)
                 .update();
+        // Customer orders with delivery (migration V70, #385): an order, its line and its history row.
+        // JUSTIFICATION-A3: a fixture row for each new table; the isolation test needs one row per tenant table.
+        UUID customerOrder = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO retail_customer_orders (id, tenant_id, created_by, order_no, branch_id, ordered_on, source,
+                                                            customer_name, customer_phone, currency, items_total_minor)
+                        VALUES (?, ?, ?, 'OR000001', ?, DATE '2026-01-15', 'whatsapp', 'Test Customer 01', '+256700000012',
+                                'UGX', 150)
+                        """).params(customerOrder, t.tenantId(), user, t.headOffice()).update();
+        owner.sql("""
+                        INSERT INTO retail_customer_order_lines (id, tenant_id, order_id, line_no, product_id, qty, base_qty,
+                                                                 unit_price_minor, line_total_minor)
+                        VALUES (?, ?, ?, 1, ?, 1, 1, 150, 150)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), customerOrder, retailProduct)
+                .update();
+        owner.sql("""
+                        INSERT INTO retail_customer_order_events (id, tenant_id, order_id, step, by_user)
+                        VALUES (?, ?, ?, 'ordered', ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), customerOrder, user)
+                .update();
+    }
+
+    /**
+     * Customer orders (V70, #385): bound to A, no order, line or history row of B is read, changed or written stamped with B, and
+     * the lines and the history are append-only.
+     */
+    @Test
+    void customerOrdersAreIsolatedPerTenant() throws SQLException {
+        for (String table :
+                List.of("retail_customer_orders", "retail_customer_order_lines", "retail_customer_order_events")) {
+            long ofB = asApp(
+                    a.tenantId(),
+                    c -> count(c, "SELECT count(*) FROM " + table + " WHERE tenant_id = ?", b.tenantId()));
+            long ofA = asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM " + table));
+            assertThat(ofB).as("rows of B in %s", table).isZero();
+            assertThat(ofA).as("rows of A in %s", table).isPositive();
+        }
+        int changed = asApp(a.tenantId(), c -> {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE retail_customer_orders SET notes = 'x', version = version + 1 WHERE tenant_id = ?")) {
+                ps.setObject(1, b.tenantId());
+                return ps.executeUpdate();
+            }
+        });
+        assertThat(changed).isZero();
+        assertThatThrownBy(() -> asApp(a.tenantId(), c -> {
+                    try (PreparedStatement ps = c.prepareStatement("""
+                            INSERT INTO retail_customer_order_events (id, tenant_id, order_id, step, by_user)
+                            SELECT gen_random_uuid(), ?, id, 'changed', gen_random_uuid() FROM retail_customer_orders LIMIT 1
+                            """)) {
+                        ps.setObject(1, b.tenantId());
+                        return ps.executeUpdate();
+                    }
+                }))
+                .hasStackTraceContaining("row-level security");
+        for (String table : List.of("retail_customer_order_lines", "retail_customer_order_events")) {
+            assertThatThrownBy(() -> asApp(
+                            a.tenantId(),
+                            c -> count(c, "WITH d AS (DELETE FROM " + table + " RETURNING 1) SELECT count(*) FROM d")))
+                    .as(table)
+                    .hasStackTraceContaining("permission denied");
+        }
     }
 
     /** The two platform payment tables have no grant for the application role: only the definer functions reach them (V54). */

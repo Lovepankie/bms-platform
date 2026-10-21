@@ -73,7 +73,15 @@ class WriteOffsServicer {
     }
 
     /** What a write-off would do to a sale as it is now. */
-    record Plan(Sale sale, long unpaidMinor, long lossMinor, long costShareMinor, String recognition) {}
+    record Plan(
+            Sale sale,
+            long unpaidMinor,
+            long lossMinor,
+            long costShareMinor,
+            String recognition,
+            long itemsUnpaidMinor,
+            long feeMinor,
+            UUID feeOrderId) {}
 
     Plan plan(UUID saleId) {
         Principal principal = CurrentPrincipal.require();
@@ -102,7 +110,12 @@ class WriteOffsServicer {
                     "Already written off",
                     "The unpaid part of this sale has been written off already.");
         }
-        long unpaid = Math.subtractExact(s.totalMinor(), s.paidMinor());
+        long itemsUnpaid = Math.subtractExact(s.totalMinor(), s.paidMinor());
+        // Issue #385: a delivery fee of a customer order left on the account and not yet paid is owed with the sale and
+        // written off with it; its income was taken at the delivery, so all of it is a loss.
+        SalesRepository.OrderFee order = sales.orderFee(saleId).orElse(null);
+        long fee = order != null && "account".equals(order.feeMethod()) && !order.feePaidLater() ? order.feeMinor() : 0;
+        long unpaid = Math.addExact(itemsUnpaid, fee);
         if (unpaid <= 0) {
             throw ApiException.rule("nothing_owing", "This sale has nothing left to pay.");
         }
@@ -113,8 +126,16 @@ class WriteOffsServicer {
                 ? RetailCapabilities.ON_PAYMENT
                 : RetailCapabilities.ON_SALE;
         long costShare = unrecognisedCost(s);
-        long loss = recognition.equals(RetailCapabilities.ON_PAYMENT) ? costShare : unpaid;
-        return new Plan(s, unpaid, loss, costShare, recognition);
+        long itemsLoss = recognition.equals(RetailCapabilities.ON_PAYMENT) ? costShare : itemsUnpaid;
+        return new Plan(
+                s,
+                unpaid,
+                Math.addExact(itemsLoss, fee),
+                costShare,
+                recognition,
+                itemsUnpaid,
+                fee,
+                fee > 0 ? order.orderId() : null);
     }
 
     /**
@@ -148,12 +169,16 @@ class WriteOffsServicer {
         LocalDate today = clock.today(tenant.profile().timezone());
         long unpaid = plan.unpaidMinor();
         long loss = plan.lossMinor();
+        // The fee is all loss; only the items' part moves sales revenue (the profit a sale counted when paid never
+        // took).
+        long itemsUnpaid = plan.itemsUnpaidMinor();
+        long itemsLoss = loss - plan.feeMinor();
         List<Leg> legs = new ArrayList<>();
         legs.add(Leg.debit("bad_debt_loss", loss));
-        if (unpaid > loss) {
-            legs.add(Leg.debit("sales_revenue", unpaid - loss));
-        } else if (loss > unpaid) {
-            legs.add(Leg.credit("sales_revenue", loss - unpaid));
+        if (itemsUnpaid > itemsLoss) {
+            legs.add(Leg.debit("sales_revenue", itemsUnpaid - itemsLoss));
+        } else if (itemsLoss > itemsUnpaid) {
+            legs.add(Leg.credit("sales_revenue", itemsLoss - itemsUnpaid));
         }
         legs.add(Leg.credit("trade_debtors", unpaid).withSubledger(SALE, s.id()));
         PostedEntry entry = books.post(new Posting(
@@ -182,12 +207,34 @@ class WriteOffsServicer {
                 approvalId,
                 checkerId,
                 makerId,
-                clock.now());
+                clock.now(),
+                plan.feeMinor());
         repo.insert(row);
-        sales.addPaid(s.id(), unpaid);
+        if (itemsUnpaid > 0) {
+            sales.addPaid(s.id(), itemsUnpaid);
+        }
+        if (plan.feeOrderId() != null) {
+            // The fee on the account is settled by this entry: no longer owed, no longer holding the branch open.
+            if (sales.markOrderFeeWrittenOff(plan.feeOrderId(), makerId, today, entry.entryId()) != 1) {
+                // The fee was paid or settled by someone else after the plan was made: nothing is written off twice.
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "write_off_changed",
+                        "The debt changed",
+                        "The delivery fee of this sale was paid or settled meanwhile. Open the sale again and check what is owed.");
+            }
+            sales.orderEvent(
+                    plan.feeOrderId(),
+                    "fee_written_off",
+                    "Delivery fee of " + plan.feeMinor() + " written off with sale " + s.saleNo() + ".",
+                    makerId);
+        }
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("write_off_id", id);
         after.put("unpaid_minor", unpaid);
+        if (plan.feeMinor() > 0) {
+            after.put("delivery_fee_minor", plan.feeMinor());
+        }
         after.put("reason", row.reason());
         after.put("approved", approvalId != null);
         if (alone != null) {

@@ -14,7 +14,7 @@ describe('retail permission gating', () => {
     expect(canUse(sales, 'stocktake')).toBe(false);
     // Stock value is a stock read; only its cost columns need retail.profit.read.
     // The seeded sales role also holds four cash book permissions (chapter 8 matrix).
-    expect(screensFor(sales).map((s) => s.screen)).toEqual(['sale', 'creditSales', 'salesHistory', 'usage', 'stock', 'transfers', 'valuation', 'salesAnalysis', 'stockHealth', 'creditControl', 'catalogue', 'banking', 'savings', 'expenses', 'cashSummary', 'bankingReport', 'expensesReport']);
+    expect(screensFor(sales).map((s) => s.screen)).toEqual(['sale', 'creditSales', 'salesHistory', 'orders', 'ordersReport', 'usage', 'stock', 'transfers', 'valuation', 'salesAnalysis', 'stockHealth', 'creditControl', 'catalogue', 'banking', 'savings', 'expenses', 'cashSummary', 'bankingReport', 'expensesReport']);
     expect(canUse(sales, 'transfer')).toBe(false);
   });
 
@@ -28,6 +28,8 @@ describe('retail permission gating', () => {
     expect(only('retail.sale.read')).toEqual(['creditSales', 'salesHistory', 'salesAnalysis', 'creditControl']);
     // Controls name staff and rank them by a rate, so it is its own permission, never a sales read.
     expect(only('retail.controls.read')).toEqual(['controls']);
+    // Customer orders (issue #385): the orders and their report are one permission; delivering also needs a sale permission.
+    expect(only('retail.order.manage')).toEqual(['orders', 'ordersReport']);
   });
 
   it('offers everything to an admin', () => {
@@ -36,7 +38,7 @@ describe('retail permission gating', () => {
     // features on. The tile of a capability (Branch roles) is absent while the capability is off.
     expect(screensFor(admin).map((s) => s.screen)).toEqual(
       [
-        'sale', 'creditSales', 'salesHistory', 'restock', 'usage', 'stock', 'stocktake', 'transfer', 'transfers', 'valuation', 'profit',
+        'sale', 'creditSales', 'salesHistory', 'orders', 'ordersReport', 'restock', 'usage', 'stock', 'stocktake', 'transfer', 'transfers', 'valuation', 'profit',
         'salesAnalysis', 'margins', 'stockHealth', 'creditControl', 'evaluation', 'controls', 'catalogue',
         'banking', 'savings', 'expenses', 'withdrawals', 'advances', 'cashSummary', 'bankingReport', 'expensesReport', 'expenseSetup',
         'settings',
@@ -89,22 +91,22 @@ describe('retail permission gating', () => {
 });
 
 describe('the retail bottom bar', () => {
-  it('follows the pilot order: Sales, Banked, Savings, Expenses, Advances', () => {
-    expect(shortcutsFor(mockMe('admin')).map((s) => s.screen)).toEqual(['sale', 'banking', 'savings', 'expenses', 'advances']);
+  it('follows the pilot order: Sales, Orders (issue #385), Banked, Savings, Expenses', () => {
+    expect(shortcutsFor(mockMe('admin')).map((s) => s.screen)).toEqual(['sale', 'orders', 'banking', 'savings', 'expenses']);
   });
 
-  it('gives a cashier only the shortcuts their permissions allow, then the stock ones', () => {
-    expect(shortcutsFor(mockMe('cashier')).map((s) => s.screen)).toEqual(['sale', 'banking', 'savings', 'expenses', 'stock']);
+  it('gives a cashier only the shortcuts their permissions allow, then orders and the stock ones', () => {
+    expect(shortcutsFor(mockMe('cashier')).map((s) => s.screen)).toEqual(['sale', 'orders', 'banking', 'savings', 'expenses']);
   });
 
-  it('gives the seeded sales role its sale shortcut, the three it records, then stock', () => {
-    expect(shortcutsFor(mockMe('sales')).map((s) => s.screen)).toEqual(['sale', 'banking', 'savings', 'expenses', 'stock']);
+  it('gives the seeded sales role its sale shortcut, the three it records, then orders', () => {
+    expect(shortcutsFor(mockMe('sales')).map((s) => s.screen)).toEqual(['sale', 'orders', 'banking', 'savings', 'expenses']);
   });
 
   it('keeps the old shortcuts for a user with no cash book permission', () => {
     const me = mockMe('sales');
     const plain = { ...me, permissions: (me.permissions ?? []).filter((p) => !/cash|savings|banking|expense/.test(p)) };
-    expect(shortcutsFor(plain).map((s) => s.screen)).toEqual(['sale', 'stock', 'usage']);
+    expect(shortcutsFor(plain).map((s) => s.screen)).toEqual(['sale', 'orders', 'stock', 'usage']);
   });
 });
 

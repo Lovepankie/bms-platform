@@ -110,6 +110,25 @@ class RetailSupplierCreditIT extends LandedCostTestBase {
 
     // ---- goods sent back ---------------------------------------------------------------------
 
+    /** Issue #385, FR-RET-54: units kept for a customer order are not sent back to the supplier. */
+    @Test
+    void goodsKeptForACustomerOrderAreNotSentBack() {
+        JsonNode r = receive(hq, product, "10", 100);
+        JsonNode bill = billOf("INV-K", 120, r);
+        Map<String, Object> order = new LinkedHashMap<>();
+        order.put("branch_id", hq);
+        order.put("source", "phone");
+        order.put("customer_name", "Test Customer 07");
+        order.put("lines", List.of(Map.of("product_id", product, "qty", "8")));
+        ResponseEntity<JsonNode> held = keyed("/orders", order, PAYER + ",retail.order.manage");
+        assertThat(held.getStatusCode()).as("%s", held.getBody()).isEqualTo(HttpStatus.CREATED);
+        ResponseEntity<JsonNode> back =
+                creditRaw(creditBody(uuid(bill, "id"), "goods", "CN-K", 480, goodsLine(billLine(bill, 0), "4", null)));
+        assertThat(back.getStatusCode()).as("%s", back.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(back)).isEqualTo("insufficient_stock");
+        assertThat(stockAt(hq, product)).isEqualByComparingTo("10");
+    }
+
     @Test
     void goodsSentBackLeaveStockAndInventoryAndTakeTheCreditOffTheInvoice() {
         JsonNode r = receive(hq, product, "10", 100);

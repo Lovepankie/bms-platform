@@ -200,7 +200,14 @@ final class CatalogueApi {
                     description =
                             "Issue #384: the item with sizes and colours this product is one variant of; absent for an item"
                                     + " without variants")
-            VariantOf variant) {
+            VariantOf variant,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #385: of the branch balance, what open customer orders keep aside (so not free to"
+                                    + " sell); sent only with branch_id, and only when something is kept")
+            String reservedQty) {
 
         /** Every field but the variant, the shape every read had before sizes and colours (issue #384). */
         Product(
@@ -243,6 +250,7 @@ final class CatalogueApi {
                     packs,
                     stockOnHand,
                     stockBranches,
+                    null,
                     null);
         }
 
@@ -346,7 +354,8 @@ final class CatalogueApi {
                     packs,
                     stockOnHand,
                     stockBranches,
-                    variant);
+                    variant,
+                    reservedQty);
         }
 
         Product withStock(String total, int branches) {
@@ -370,7 +379,8 @@ final class CatalogueApi {
                     packs,
                     total,
                     branches,
-                    variant);
+                    variant,
+                    reservedQty);
         }
 
         Product withoutCost() {
@@ -394,7 +404,34 @@ final class CatalogueApi {
                     packs,
                     stockOnHand,
                     stockBranches,
-                    variant);
+                    variant,
+                    reservedQty);
+        }
+
+        /** The same product with what customer orders keep aside of the branch balance (issue #385). */
+        Product withReserved(String reserved) {
+            return new Product(
+                    id,
+                    code,
+                    description,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sellMinor,
+                    costMinor,
+                    currency,
+                    active,
+                    createdAt,
+                    updatedAt,
+                    version,
+                    qty,
+                    negative,
+                    packs,
+                    stockOnHand,
+                    stockBranches,
+                    variant,
+                    reserved);
         }
 
         Product withVariant(VariantOf v) {
@@ -418,7 +455,8 @@ final class CatalogueApi {
                     packs,
                     stockOnHand,
                     stockBranches,
-                    v);
+                    v,
+                    reservedQty);
         }
     }
 

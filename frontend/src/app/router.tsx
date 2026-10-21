@@ -74,6 +74,10 @@ const retailHomeRoute = retailScreen('/').lazy(() => import('../areas/staff/reta
 const retailSaleRoute = retailScreen('/sale', 'Record a sale').lazy(() => import('../areas/staff/retail/sale').then((m) => m.Route));
 const retailCreditSalesRoute = retailScreen('/credit-sales', 'Credit sales').lazy(() => import('../areas/staff/retail/sales').then((m) => m.CreditRoute));
 const retailSalesRoute = retailScreen('/sales', 'All sales').lazy(() => import('../areas/staff/retail/sales').then((m) => m.Route));
+// Customer orders with delivery (issue #385): the list by step, one order with its history, and the fees and cancellations report.
+const retailOrdersRoute = retailScreen('/orders', 'Orders').lazy(() => import('../areas/staff/retail/orders').then((m) => m.Route));
+const retailOrderRoute = retailScreen('/orders/$orderId', 'Order').lazy(() => import('../areas/staff/retail/order').then((m) => m.Route));
+const retailOrdersReportRoute = retailScreen('/orders-report', 'Delivery fees and cancellations').lazy(() => import('../areas/staff/retail/orders-report').then((m) => m.Route));
 const retailRestockRoute = retailScreen('/restock', 'Restock').lazy(() => import('../areas/staff/retail/restock').then((m) => m.Route));
 const retailRestocksRoute = retailScreen('/restocks', 'Past restocks').lazy(() => import('../areas/staff/retail/restocks').then((m) => m.Route));
 const retailUsageRoute = retailScreen('/usage', 'Usage and damage').lazy(() => import('../areas/staff/retail/usage').then((m) => m.Route));
@@ -279,6 +283,9 @@ export const router = createRouter({
         retailSaleRoute,
         retailCreditSalesRoute,
         retailSalesRoute,
+        retailOrdersRoute,
+        retailOrderRoute,
+        retailOrdersReportRoute,
         retailRestockRoute,
         retailRestocksRoute,
         retailUsageRoute,

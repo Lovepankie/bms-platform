@@ -9,7 +9,7 @@ import type { BranchRole } from '../../../api/retail';
 export const PROFIT = 'retail.profit.read';
 
 export type RetailScreen =
-  | 'sale' | 'creditSales' | 'salesHistory' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit' | 'salesAnalysis' | 'margins' | 'stockHealth' | 'creditControl' | 'evaluation' | 'controls'
+  | 'sale' | 'creditSales' | 'salesHistory' | 'orders' | 'ordersReport' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit' | 'salesAnalysis' | 'margins' | 'stockHealth' | 'creditControl' | 'evaluation' | 'controls'
   | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer'
   // The trade screens of ADR-033: offered only while their capability is on (SCREEN_CAPABILITY below).
   | 'stockByLocation' | 'inTransit' | 'priceLists' | 'customerGroups' | 'customerAccounts' | 'customerAgeing' | 'documents' | 'quotations' | 'returns'
@@ -51,6 +51,8 @@ export const SCREEN_CAPABILITY: Partial<Record<RetailScreen, string>> = {
 export const CATALOGUE_SCREENS: RetailScreen[] = ['products', 'categories', 'units', 'suppliers', 'buyers'];
 
 export const TRANSFER = 'retail.stock.transfer';
+/** Take, pack, send, deliver and cancel customer orders, and read their reports (issue #385). */
+export const ORDER_MANAGE = 'retail.order.manage';
 export const PRICELIST_MANAGE = 'retail.pricelist.manage';
 /** Price a sale from a list other than the customer's own or the group's. */
 export const PRICELIST_USE = 'retail.pricelist.use';
@@ -94,6 +96,10 @@ const NEEDS: Record<RetailScreen, string[]> = {
   // The sales lists read sales in the caller's branch scope.
   creditSales: ['retail.sale.read'],
   salesHistory: ['retail.sale.read'],
+  // Customer orders with delivery (issue #385): taken, moved and cancelled with retail.order.manage; delivering one also needs
+  // retail.sale.create at its shop, checked where Delivered is offered.
+  orders: [ORDER_MANAGE],
+  ordersReport: [ORDER_MANAGE],
   restock: ['retail.purchase.create'],
   usage: ['retail.usage.report'],
   stock: ['retail.stock.read'],
@@ -293,6 +299,8 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'sale', path: '/staff/retail/sale', label: 'Record a sale', hint: 'Sell items and take payment' },
   { screen: 'creditSales', path: '/staff/retail/credit-sales', label: 'Credit sales', hint: 'Who owes, how much, and by when' },
   { screen: 'salesHistory', path: '/staff/retail/sales', label: 'All sales', hint: 'Every sale, with filters' },
+  { screen: 'orders', path: '/staff/retail/orders', label: 'Orders', hint: 'Orders by WhatsApp, Instagram, Facebook or phone, packed, delivered and paid' },
+  { screen: 'ordersReport', path: '/staff/retail/orders-report', label: 'Delivery fees and cancellations', hint: 'Delivery fees taken, and orders cancelled and why' },
   { screen: 'restock', path: '/staff/retail/restock', label: 'Restock', hint: 'Record stock bought from a supplier' },
   { screen: 'usage', path: '/staff/retail/usage', label: 'Usage and damage', hint: 'Items used or damaged' },
   { screen: 'stock', path: '/staff/retail/stock', label: 'Stock', hint: 'What is on the shelf' },

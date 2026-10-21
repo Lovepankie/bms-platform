@@ -187,6 +187,7 @@ class BranchService implements BranchProvisioning {
         }
         if (before.sellsGoods() && !sells) {
             refuseWhileSalesOpen(before);
+            refuseWhileOrdersOpen(before, "marked as a store that does not sell");
         }
         int changed = jdbc.sql("""
                         UPDATE branches SET name = ?, location = ?, stocks_goods = ?, sells_goods = ?, updated_at = now(),
@@ -239,6 +240,7 @@ class BranchService implements BranchProvisioning {
         }
         String why = reason == null || reason.isBlank() ? null : reason.trim();
         List<Finding> findings = findings(branchId);
+        refuseWhileOrdersOpen(before, findings, "closed");
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("status", "inactive");
         if (!findings.isEmpty()) {
@@ -319,6 +321,36 @@ class BranchService implements BranchProvisioning {
                 facts(findings));
     }
 
+    /**
+     * A branch with open customer orders, or stock kept aside for them, is not closed or made a Store: the orders are delivered
+     * and sold there (issue #385, ADR-052). A module reports them as the finding {@code open_orders}; no reason overrides it. The
+     * branch row is held FOR UPDATE by the close and the flag change, and taking or delivering an order or collecting its fee reads
+     * it FOR SHARE, so no order slips in between the check and the change.
+     */
+    private void refuseWhileOrdersOpen(BranchResponse branch, String what) {
+        refuseWhileOrdersOpen(branch, findings(branch.id()), what);
+    }
+
+    private void refuseWhileOrdersOpen(BranchResponse branch, List<Finding> findings, String what) {
+        Finding orders = findings.stream()
+                .filter(f -> f.kind().equals("open_orders"))
+                .findFirst()
+                .orElse(null);
+        if (orders == null) {
+            return;
+        }
+        throw new ApiException(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "branch_has_open_orders",
+                "This branch still has customer orders",
+                branch.name() + " has " + orders.count()
+                        + (orders.count() == 1 ? " customer order" : " customer orders")
+                        + " not finished: to deliver, with the items kept aside, or with a delivery fee still owed on a"
+                        + " buyer's account. Deliver, cancel or collect them before it is " + what + ".",
+                List.of(),
+                Map.of("open_orders", orders.count()));
+    }
+
     /** Marking a branch as a Store needs no credit sale of it still owing: its payments are taken at the till that stops selling. */
     private void refuseWhileSalesOpen(BranchResponse branch) {
         int open = sellingChecks.stream()
@@ -351,6 +383,11 @@ class BranchService implements BranchProvisioning {
                         .append(" (")
                         .append(f.count())
                         .append(f.count() == 1 ? " item)" : " items)");
+            } else if (f.kind().equals("open_orders")) {
+                words.append("has ")
+                        .append(f.count())
+                        .append(f.count() == 1 ? " customer order" : " customer orders")
+                        .append(" not finished");
             } else if (f.kind().equals("open_stocktakes")) {
                 words.append("has ")
                         .append(f.count())
@@ -374,6 +411,8 @@ class BranchService implements BranchProvisioning {
             if (f.kind().equals("stock")) {
                 facts.put("stock_items", f.count());
                 facts.put("stock_value_minor", f.valueMinor());
+            } else if (f.kind().equals("open_orders")) {
+                facts.put("open_orders", f.count());
             } else if (f.kind().equals("open_stocktakes")) {
                 facts.put("open_stocktakes", f.count());
             } else {

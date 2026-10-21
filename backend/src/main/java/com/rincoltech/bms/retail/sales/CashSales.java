@@ -23,9 +23,10 @@ public interface CashSales {
 
     /**
      * @param cashTakingsMinor cash sales by sale date plus cash payments on credit sales by paid-on date, plus the cash
-     *     refund of a return voided on this day
+     *     refund of a return voided on this day, plus the delivery fees of customer orders paid in cash on the day of delivery (or, left on the account, on the day they
+     *     were paid)
      * @param cashSaleVoidsMinor total of the cash sales voided on this day, payments on account reversed on it, and cash
-     *     refunded on customer returns on it
+     *     refunded on customer returns on it, and the cash delivery fees of orders whose sale was voided on it
      * @param totalSoldMinor total of the completed (not voided) sales dated this day, any payment method
      * @param hasHistorical true when an imported row contributes to the day
      */

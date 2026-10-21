@@ -202,6 +202,9 @@ class AccountsService {
         long balance = sales.openSales(id, filter).stream()
                 .mapToLong(SalesApi.OpenSale::balanceMinor)
                 .reduce(0, Math::addExact);
+        // Issue #385: the fees left on the account are owed besides, listed apart and paid on their orders.
+        List<SalesApi.FeeOwed> fees = sales.unpaidOrderFees(id, filter);
+        long feesOwed = fees.stream().mapToLong(SalesApi.FeeOwed::feeMinor).reduce(0, Math::addExact);
         // The exposure spans every branch, so it is shown only to a caller whose scope does: nothing of another
         // branch's sales leaks through it.
         Long exposure = filter == null ? repo.exposure(id) : null;
@@ -213,6 +216,8 @@ class AccountsService {
                 limit,
                 t.termsDays(),
                 balance,
+                fees.isEmpty() ? null : feesOwed,
+                fees.isEmpty() ? null : fees,
                 exposure,
                 exposure == null || limit == null ? null : Math.max(0, limit - exposure),
                 exposure == null || limit == null ? null : exposure > limit,

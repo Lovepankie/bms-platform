@@ -156,6 +156,27 @@ class SalesService {
 
     /** FR-RET-04, FR-RET-05, FR-RET-11. */
     Sale record(SaleRequest r) {
+        return record(r, null, null);
+    }
+
+    /**
+     * How a line of a customer order was priced when the order was taken (issue #385): {@code source} is the order line's price
+     * source (null without price lists), {@code overriddenBy} who changed the price then (the person who took the order), when
+     * the source is override.
+     */
+    record Agreement(String source, UUID overriddenBy) {}
+
+    /**
+     * As {@link #record(SaleRequest)}, for the delivery of a customer order (issue #385, ADR-052): {@code creditDelta}, when not
+     * null, is added to the sale's total to give what actually goes on the buyer's credit (less the part paid at the door, plus a
+     * delivery fee left on the account), the amount the credit limit is checked against; {@code agreements}, one per line, means
+     * the lines carry the prices agreed when the order was taken, already checked then, so the price floor, the price override
+     * permission and the inactive product are not checked again (the stock is). A price changed when the order was taken stays an
+     * override, for the person who changed it; an agreed price that today's price list would price otherwise is order_agreed,
+     * which the Controls page does not count again. Every other rule of a sale holds.
+     */
+    Sale record(SaleRequest r, Long creditDelta, List<Agreement> agreements) {
+        boolean agreed = agreements != null;
         UUID branch = branches.resolveStocking("retail.sale.create", r.branchId());
         // ADR-033: a store never sells; with branch_roles off every branch acts as both.
         roles.requireMaySell(branch);
@@ -198,14 +219,19 @@ class SalesService {
         LocalDate dueDate = r.dueDate() != null || account == null ? r.dueDate() : account.dueDate(saleDate);
         String currency = tenant.profile().currency();
         Principal principal = CurrentPrincipal.require();
-        Priced priced = priceLines(branch, saleDate, buyer, r.priceListId(), r.lines(), problems);
+        Priced priced = priceLines(branch, saleDate, buyer, r.priceListId(), r.lines(), problems, agreements);
         Chosen list = priced.list();
         List<NewLine> lines = priced.lines();
         long total = lines.stream().mapToLong(NewLine::lineTotalMinor).reduce(0, Math::addExact);
         long cost = lines.stream().mapToLong(NewLine::lineCostMinor).reduce(0, Math::addExact);
         AccountsService.Override creditOverride = account == null
                 ? null
-                : accounts.enforceLimit(buyer.id(), account, total, branch, r.creditOverrideReason());
+                : accounts.enforceLimit(
+                        buyer.id(),
+                        account,
+                        creditDelta == null ? total : Math.addExact(total, creditDelta),
+                        branch,
+                        r.creditOverrideReason());
         UUID id = UUID.randomUUID();
         UUID by = principal.userId();
         String saleNo = "RS%08d".formatted(sequences.next("retail_sale_no"));
@@ -237,7 +263,8 @@ class SalesService {
                 null,
                 1,
                 null,
-                false);
+                false,
+                null);
         repo.insert(header);
         lines.forEach(l -> repo.insertLine(id, l));
         stock.record(
@@ -335,6 +362,19 @@ class SalesService {
             UUID priceListId,
             List<SaleLineRequest> requests,
             List<FieldProblem> problems) {
+        return priceLines(branch, saleDate, buyer, priceListId, requests, problems, null);
+    }
+
+    /** As above; {@code agreements} prices lines a customer order agreed on (issue #385): see {@link #record(SaleRequest, Long, List)}. */
+    Priced priceLines(
+            UUID branch,
+            LocalDate saleDate,
+            Customer buyer,
+            UUID priceListId,
+            List<SaleLineRequest> requests,
+            List<FieldProblem> problems,
+            List<Agreement> agreements) {
+        boolean agreed = agreements != null;
         String currency = tenant.profile().currency();
         Principal principal = CurrentPrincipal.require();
         boolean priced = pricing.on();
@@ -352,7 +392,7 @@ class SalesService {
                 problems.add(new FieldProblem(field + ".product_id", "unknown_product", "No such product."));
                 continue;
             }
-            if (!p.active()) {
+            if (!p.active() && !agreed) {
                 problems.add(new FieldProblem(
                         field + ".product_id",
                         "product_inactive",
@@ -367,7 +407,7 @@ class SalesService {
                 problems.add(new FieldProblem(field + ".qty", "invalid", "At most three decimal places."));
                 continue;
             }
-            SaleUnit unit = saleUnit(field, p, l.unitId(), l.qty(), problems);
+            SaleUnit unit = saleUnit(field, p, l.unitId(), l.qty(), problems, agreed);
             if (unit == null) {
                 continue;
             }
@@ -388,7 +428,21 @@ class SalesService {
                 price = d.priceMinor();
                 String source = d.source();
                 String reason = null;
-                if (l.unitPriceMinor() != null && l.unitPriceMinor() != d.priceMinor()) {
+                Agreement agreement = agreed ? agreements.get(i) : null;
+                UUID overriddenBy = null;
+                if (agreement != null && "override".equals(agreement.source()) && l.unitPriceMinor() != null) {
+                    // A price changed when the customer order was taken (issue #385): an override once, for whoever
+                    // changed it.
+                    price = l.unitPriceMinor();
+                    source = "override";
+                    reason = blankToNull(l.priceOverrideReason());
+                    overriddenBy = agreement.overriddenBy();
+                } else if (agreed && l.unitPriceMinor() != null && l.unitPriceMinor() != d.priceMinor()) {
+                    // The price agreed on the order, which today's list would price otherwise: kept, not a new change.
+                    price = l.unitPriceMinor();
+                    source = "order_agreed";
+                    reason = blankToNull(l.priceOverrideReason());
+                } else if (l.unitPriceMinor() != null && l.unitPriceMinor() != d.priceMinor()) {
                     if (!principal.may(SalesPricing.OVERRIDE, branch)) {
                         throw new ApiException(
                                 HttpStatus.FORBIDDEN,
@@ -406,7 +460,8 @@ class SalesService {
                     price = l.unitPriceMinor();
                     source = "override";
                 }
-                linePricing = new LinePricing(source, d.listId(), d.breakMinQty(), d.priceMinor(), reason);
+                linePricing =
+                        new LinePricing(source, d.listId(), d.breakMinQty(), d.priceMinor(), reason, overriddenBy);
             }
             if (pack != null) {
                 BigDecimal baseQty = unit.baseQty();
@@ -452,8 +507,11 @@ class SalesService {
         if (!problems.isEmpty()) {
             throw ApiException.validation(problems);
         }
-        // ADR-020 decision 5: the message never carries the cost, which a sales caller cannot read.
-        if (!principal.may("retail.price.below_cost", branch)) {
+        // ADR-020 decision 5: the message never carries the cost, which a sales caller cannot read. The prices of a
+        // customer
+        // order were held to the floor when it was taken; a cost that rose since does not block its delivery (issue
+        // #385).
+        if (!agreed && !principal.may("retail.price.below_cost", branch)) {
             for (NewLine l : lines) {
                 // A pack line is judged on its line total, never on the rounded price per base unit (spec 3.3).
                 boolean below = l.saleUnitId() == null
@@ -478,6 +536,12 @@ class SalesService {
      */
     private SaleUnit saleUnit(
             String field, ProductSnapshot p, UUID unitId, BigDecimal qty, List<FieldProblem> problems) {
+        return saleUnit(field, p, unitId, qty, problems, false);
+    }
+
+    /** As above; {@code agreed} keeps a pack switched off since a customer order was taken (issue #385). */
+    private SaleUnit saleUnit(
+            String field, ProductSnapshot p, UUID unitId, BigDecimal qty, List<FieldProblem> problems, boolean agreed) {
         if (unitId == null || unitId.equals(p.unitId())) {
             return new SaleUnit(null, qty);
         }
@@ -487,7 +551,7 @@ class SalesService {
             return null;
         }
         PackUnit pack = catalogue.packUnit(p.id(), unitId).orElse(null);
-        if (pack == null || !pack.active()) {
+        if (pack == null || !pack.active() && !agreed) {
             problems.add(
                     new FieldProblem(field + ".unit_id", "unknown_pack_unit", "This item is not sold in that unit."));
             return null;
@@ -754,6 +818,14 @@ class SalesService {
             throw ApiException.rule(
                     "sale_has_returns", "A sale with returns against it cannot be voided. Void its returns first.");
         }
+        SalesRepository.OrderFee order = repo.orderFee(id).orElse(null);
+        if (order != null && order.feePaidLater()) {
+            throw ApiException.rule(
+                    "order_fee_paid",
+                    "This sale came from order " + order.orderNo()
+                            + ", whose delivery fee was paid on the account later. It"
+                            + " cannot be voided here; ask your accountant to correct it.");
+        }
         String reason = r.reason().trim();
         List<Recorded> moved = stock.bySource(SALE, id);
         LocalDate today = clock.today(tenant.profile().timezone());
@@ -777,6 +849,16 @@ class SalesService {
         }
         if (h.costEntryId() != null) {
             books.reverse(h.costEntryId(), today, "Void " + s.saleNo(), "retail.sale_cost_void:" + id);
+        }
+        // Issue #385, ADR-052: the delivery fee of the customer order this sale came from is reversed with it.
+        SalesRepository.OrderFee fee = order;
+        if (fee != null && fee.feeEntryId() != null) {
+            books.reverse(fee.feeEntryId(), today, "Void " + s.saleNo(), "retail.order_fee_void:" + fee.orderId());
+            repo.orderEvent(
+                    fee.orderId(),
+                    "sale_voided",
+                    "Sale " + s.saleNo() + " voided; the delivery fee of " + fee.feeMinor() + " was reversed.",
+                    principal.userId());
         }
         repo.markVoided(id, principal.userId(), reason);
         audit.record(new AuditLog.Entry(
@@ -814,7 +896,7 @@ class SalesService {
      * the paid amount past the total. Debits the payment method's account and credits trade
      * debtors with the sale as subledger, in the sale's branch.
      */
-    private PaymentResult recordPayment(UUID saleId, PaymentRequest r) {
+    PaymentResult recordPayment(UUID saleId, PaymentRequest r) {
         Principal principal = CurrentPrincipal.require();
         Sale s = repo.find(saleId, true)
                 .map(Header::sale)
@@ -1042,7 +1124,15 @@ class SalesService {
                                     : null);
                 })
                 .toList();
-        return new CustomerBalance(customerId, tenant.profile().currency(), owed, open);
+        List<SalesApi.FeeOwed> fees = repo.unpaidOrderFees(customerId, filter);
+        long feesOwed = fees.stream().mapToLong(SalesApi.FeeOwed::feeMinor).reduce(0, Math::addExact);
+        return new CustomerBalance(
+                customerId,
+                tenant.profile().currency(),
+                owed,
+                open,
+                fees.isEmpty() ? null : feesOwed,
+                fees.isEmpty() ? null : fees);
     }
 
     /**
@@ -1117,7 +1207,8 @@ class SalesService {
                 s.voidReason(),
                 s.version(),
                 s.writeOff(),
-                counted);
+                counted,
+                s.deliveryFeeOwedMinor());
     }
 
     /** 409 {@code sale_written_off}: what a sale whose unpaid part was written off refuses (ADR-043). */

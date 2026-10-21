@@ -16,6 +16,7 @@ import { needsOf } from './permissions';
 import { ListGroupBy, ViewSwitch, useListView } from './list-chain';
 import { STOCK_NAMES, STOCK_ORDER, listUser, withoutShop, type ListSelection } from './list-chain-state';
 import { GroupedStock, type StockFilter } from './stock-grouped';
+import { keptWords } from './orders-state';
 
 // Stock per branch (FR-RET-03): balances with a negative flag and a search box. The cost column
 // exists only for a session holding retail.profit.read: showCost is the screen's choice and the server
@@ -57,6 +58,7 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
         <td className="num">
           {showQty(r.qty ?? '0')} {r.unit}
           {r.negative && <div className="rt-flag">Negative</div>}
+          {keptWords(r.qty, r.reserved_qty) && <div className="hint">{keptWords(r.qty, r.reserved_qty)}</div>}
         </td>
         {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
         <td className="num">{money(r.sell_minor ?? 0)}</td>

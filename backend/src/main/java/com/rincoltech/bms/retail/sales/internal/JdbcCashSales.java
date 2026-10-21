@@ -156,6 +156,52 @@ class JdbcCashSales implements CashSales {
                     return 0;
                 })
                 .list();
+        // Delivery fees of customer orders (issue #385, ADR-052) paid in cash at the door come into the till on the day
+        // of the
+        // delivery, and a fee left on a buyer's account and paid later in cash on the day it was paid.
+        jdbc.sql("""
+                        SELECT day, sum(fee) AS fees FROM (
+                            SELECT delivered_on AS day, delivery_fee_minor AS fee FROM retail_customer_orders
+                             WHERE branch_id = :branch AND status = 'delivered' AND fee_method = 'cash' AND fee_entry_id IS NOT NULL
+                               AND delivered_on BETWEEN :from AND :to
+                            UNION ALL
+                            SELECT fee_paid_on, delivery_fee_minor FROM retail_customer_orders
+                             WHERE branch_id = :branch AND fee_paid_method = 'cash' AND fee_paid_on BETWEEN :from AND :to) f
+                         GROUP BY day
+                        """)
+                .param("branch", branchId)
+                .param("from", java.sql.Date.valueOf(from))
+                .param("to", java.sql.Date.valueOf(to))
+                .query((rs, n) -> {
+                    acc.merge(
+                            rs.getDate("day").toLocalDate(),
+                            new Acc(rs.getLong("fees"), 0, 0, false),
+                            (a, b) -> a.plus(b.takings(), b.voids(), b.sold(), b.historical()));
+                    return 0;
+                })
+                .list();
+        // The sale of a delivered order voided: its fee was reversed with it, so a fee taken in cash at the door leaves
+        // the
+        // till on the day of the void, like the voided cash sale itself; the day of the delivery is never rewritten.
+        jdbc.sql("""
+                        SELECT (s.voided_at AT TIME ZONE :zone)::date AS day, sum(o.delivery_fee_minor) AS fees
+                          FROM retail_customer_orders o JOIN retail_sales s ON s.id = o.sale_id
+                         WHERE o.branch_id = :branch AND o.fee_method = 'cash' AND o.fee_entry_id IS NOT NULL
+                           AND s.status = 'voided' AND s.voided_at >= :start AND s.voided_at < :end
+                         GROUP BY 1
+                        """)
+                .param("zone", zone.getId())
+                .param("branch", branchId)
+                .param("start", start)
+                .param("end", end)
+                .query((rs, n) -> {
+                    acc.merge(
+                            rs.getDate("day").toLocalDate(),
+                            new Acc(0, rs.getLong("fees"), 0, false),
+                            (a, b) -> a.plus(b.takings(), b.voids(), b.sold(), b.historical()));
+                    return 0;
+                })
+                .list();
         Map<LocalDate, Day> out = new TreeMap<>();
         acc.forEach((d, a) -> out.put(d, new Day(a.takings(), a.voids(), a.sold(), a.historical())));
         return out;

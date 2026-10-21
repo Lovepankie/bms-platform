@@ -40,7 +40,14 @@ final class StockApi {
             long sellMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)
-            Long costMinor) {}
+            Long costMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #385: of qty, what open customer orders keep aside (not free to sell); absent when"
+                                    + " nothing is kept")
+            String reservedQty) {}
 
     @Schema(name = "RetailStockPage")
     record StockPage(

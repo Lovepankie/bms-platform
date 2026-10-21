@@ -105,7 +105,8 @@ export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: str
     ...(sale.buyer_contact ? [['Contact', sale.buyer_contact] as [string, string]] : []),
     ...(sale.due_date ? [['Due', showDate(sale.due_date)] as [string, string]] : []),
     ...(sale.status === 'voided' && sale.void_reason ? [['Voided because', sale.void_reason] as [string, string]] : []),
-    ...(sale.write_off ? [['Written off', `${showDate(sale.write_off.written_off_on)}, ${money(sale.write_off.unpaid_minor ?? 0)} owed was cleared: ${sale.write_off.reason ?? ''}`] as [string, string]] : []),
+    ...(sale.delivery_fee_owed_minor ? [['Delivery fee owed', `${money(sale.delivery_fee_owed_minor)} on the account, paid on its order`] as [string, string]] : []),
+    ...(sale.write_off ? [['Written off', `${showDate(sale.write_off.written_off_on)}, ${money(sale.write_off.unpaid_minor ?? 0)} owed was cleared${sale.write_off.delivery_fee_minor ? `, of which ${money(sale.write_off.delivery_fee_minor)} was the delivery fee` : ''}: ${sale.write_off.reason ?? ''}`] as [string, string]] : []),
   ];
   return (
     <section aria-label="Sale">

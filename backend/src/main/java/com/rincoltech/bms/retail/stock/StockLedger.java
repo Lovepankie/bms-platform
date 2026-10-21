@@ -15,7 +15,9 @@ import java.util.UUID;
  *
  * <p>A {@code sale}, {@code usage}, {@code damage}, {@code transfer_out} or {@code return_to_supplier} movement that would take a
  * balance below zero is always refused with 422 {@code insufficient_stock}; there is no setting to allow it (ADR-020
- * decision 4). Imports ({@code legacy_balance}) and stock-take adjustments are not guarded.
+ * decision 4). Imports ({@code legacy_balance}) and stock-take adjustments are not guarded. A guarded movement also may not take a
+ * balance below the quantity open customer orders keep aside ({@link #reserve}, issue #385, ADR-052), so a unit kept for an order is
+ * never sold at the till: it is refused with the same code and words that say the units are kept for orders.
  */
 public interface StockLedger {
 
@@ -26,6 +28,20 @@ public interface StockLedger {
      * @return the new movement ids, in the order given
      */
     List<UUID> record(LocalDate businessDate, List<Movement> movements);
+
+    /**
+     * Keeps stock aside for a customer order (issue #385, ADR-052): each hold raises the balance row's {@code reserved_qty} under
+     * the row's lock, rows locked in branch and product order like {@link #record}. A hold larger than what is free (the balance
+     * less what other orders keep) is refused with 422 {@code insufficient_stock}, so two orders for the last unit are serialised
+     * and one of them is refused. Nothing moves and nothing is posted.
+     */
+    void reserve(List<Hold> holds);
+
+    /** Gives back what {@link #reserve} kept (an order cancelled, or delivered just before its sale moves the stock). */
+    void release(List<Hold> holds);
+
+    /** A quantity in base units kept aside at a branch. */
+    record Hold(UUID branchId, UUID productId, BigDecimal qty) {}
 
     /** The movements a source document wrote, in the order they were recorded. */
     List<Recorded> bySource(String sourceType, UUID sourceId);

@@ -183,13 +183,19 @@ class ControlsRepository {
         };
     }
 
+    /**
+     * The columns of a sale line event. The person is whoever made the sale, or, for a price changed when a customer order was
+     * taken (issue #385), whoever changed it then: a delivered order counts that change once, never for the one who delivered.
+     * The rate per 100 sales keeps the sales each person entered as its denominator: an order taker credited with a change made
+     * on an order someone else delivered has it counted against the sales they entered themselves (ADR-052).
+     */
     private static String lineColumns(String reason, String value) {
         return COLUMNS.formatted(
                 "s.id",
                 "s.sale_no",
                 "CAST(NULL AS text)",
                 "s.branch_id",
-                "s.created_by",
+                "coalesce(l.price_overridden_by, s.created_by)",
                 "s.sale_date",
                 "s.created_at",
                 reason,

@@ -14,7 +14,8 @@ public interface BranchClosingCheck {
     List<Finding> findings(UUID branchId);
 
     /**
-     * @param kind {@code stock}, {@code transfers_in_flight} or {@code open_stocktakes}
+     * @param kind {@code stock}, {@code transfers_in_flight}, {@code open_stocktakes} or {@code open_orders} (customer orders not
+     *     yet delivered or stock kept aside for them; refuses a close and a Store outright)
      * @param count products with a balance (stock), transfers on their way, or stock-takes started and not committed
      * @param valueMinor the value at the products' current cost, in minor units of the tenant's currency
      */

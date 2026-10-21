@@ -60,8 +60,20 @@ final class AccountsApi {
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = "Absent means no terms")
             Integer termsDays,
 
-            @Schema(description = "Owed on credit sales in the caller's branch scope, historical imports included")
+            @Schema(
+                    description =
+                            "Owed on credit sales in the caller's branch scope, historical imports included: what a"
+                                    + " payment on account can settle")
             long balanceMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #385: delivery fees of customer orders left on the account and not yet paid, owed"
+                                    + " besides balance_minor and paid on each order")
+            Long deliveryFeesOwedMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<SalesApi.FeeOwed> deliveryFees,
 
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(

@@ -296,6 +296,7 @@ platform API and holds no tenant permissions.
 | `retail.purchase.approve` | Y | | | | | | | |
 | `retail.document.issue` | Y | | | | | | | |
 | `retail.controls.read` | Y | | | | | | | |
+| `retail.order.manage` | Y | | | | | | | Y |
 
 The staff member and collateral screens (issue #280) offer an action only when the session holds its permission in the record's branch, from `permission_scopes`; the API remains the authority. An ID image is listed and opened only with `lending.members.verify_kyc`. No permission was added.
 
@@ -456,6 +457,13 @@ Notes:
   below cost) and its repeat patterns are sent only when the caller also holds `retail.profit.read` in every branch the figures
   cover, and asking for that metric without it is 403. No cost field is ever returned. Imported history is neither an event nor a
   sale in a rate.
+- `retail.order.manage` (issue #385, ADR-052, migration V70) takes, lists, packs, sends, delivers and cancels customer orders and
+  reads their two reports (delivery fees, cancellations). It goes to the administrator and to every role that holds
+  `retail.sale.create`, the shop staff who answer the phone and the chats. It is money moving: delivering an order records a sale and
+  posts its delivery fee. Delivering also needs `retail.sale.create` at the order's shop (403 otherwise), and the sale it makes
+  applies every rule of a sale (the price floor, a price list override, the credit limit and its override). An order carries the
+  prices agreed and never a cost. The customer's phone is personal data: the audit entry of a change says the phone or the place
+  changed, never what it is, and no log line carries it. Scoped by branch like every retail permission.
 - `retail.price.below_cost` (issue #64, ADR-020 decision 5) lets a sale line be priced at or below
   the product's cost. It is in the catalogue (migration V13) but no default role holds it, not even
   the tenant admin: it is meant for a custom role, and roles are not yet tenant-editable, so today

@@ -336,7 +336,7 @@ class CatalogueRepository {
         } else {
             // The balance of retail_stock_balances (the stock module's table), read for the search row.
             sql = new StringBuilder(
-                    select.replace(" FROM retail_products p", ", b.qty FROM retail_products p")
+                    select.replace(" FROM retail_products p", ", b.qty, b.reserved_qty FROM retail_products p")
                             + " LEFT JOIN retail_stock_balances b ON b.product_id = p.id AND b.branch_id = :branchId WHERE true");
             params.put("branchId", branchId);
         }
@@ -659,7 +659,14 @@ class CatalogueRepository {
                         q.toPlainString(),
                         q.signum() < 0,
                         null)
-                .withVariant(p.variant());
+                .withVariant(p.variant())
+                .withReserved(reserved(rs));
+    }
+
+    /** What customer orders keep aside of the branch balance (issue #385), or null when nothing is. */
+    private static String reserved(ResultSet rs) throws SQLException {
+        BigDecimal kept = rs.getBigDecimal("reserved_qty");
+        return kept == null || kept.signum() == 0 ? null : kept.setScale(3).toPlainString();
     }
 
     // ---- Items with sizes and colours (issue #384, ADR-051) --------------------------------------------

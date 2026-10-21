@@ -37,7 +37,7 @@ const MOCK_BRANCHES = [
 // (ADR-022 decision 13, chapter 8 matrix).
 const SALES_PERMISSIONS = [
   'retail.sale.create', 'retail.sale.read', 'retail.stock.read', 'retail.usage.report', 'retail.customer.manage', 'retail.price.override',
-  'retail.savings.record', 'retail.banking.record', 'retail.expense.record', 'retail.cashbook.read',
+  'retail.order.manage', 'retail.savings.record', 'retail.banking.record', 'retail.expense.record', 'retail.cashbook.read',
 ];
 const CASHIER_PERMISSIONS = SALES_PERMISSIONS;
 const ADMIN_PERMISSIONS = [

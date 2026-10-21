@@ -57,7 +57,7 @@ class StockRepository {
         Search.Match match = query == null ? null : query.match(SEARCH);
         StringBuilder sql = new StringBuilder("""
                 SELECT p.id, p.code, p.description, p.category_id, c.name AS category, u.name AS unit, p.sell_minor,
-                       p.cost_minor, coalesce(b.qty, 0) AS qty
+                       p.cost_minor, coalesce(b.qty, 0) AS qty, coalesce(b.reserved_qty, 0) AS reserved_qty
                   FROM retail_products p
                   JOIN retail_units u ON u.id = p.unit_id
                   JOIN retail_categories c ON c.id = p.category_id
@@ -117,7 +117,10 @@ class StockRepository {
                                     Quantities.format(qty),
                                     qty.signum() < 0,
                                     rs.getLong("sell_minor"),
-                                    rs.getLong("cost_minor"));
+                                    rs.getLong("cost_minor"),
+                                    rs.getBigDecimal("reserved_qty").signum() == 0
+                                            ? null
+                                            : Quantities.format(rs.getBigDecimal("reserved_qty")));
                         },
                         match != null))
                 .list();

@@ -58,6 +58,7 @@ export function receiptNote(line: SaleLine, money: (minor: number) => string): s
   const list = p.price_list ? `Price list ${p.price_list}` : '';
   const from = Number(p.break_min_qty ?? '0') > 0 ? `, from ${showQty(p.break_min_qty ?? '')}` : '';
   if (p.source === 'list') return `${list}${from}`;
+  if (p.source === 'order_agreed') return `Price agreed on the order (today ${money(p.resolved_unit_price_minor ?? 0)})`;
   if (p.source === 'override') return `Price changed from ${money(p.resolved_unit_price_minor ?? 0)}${list ? ` (${list}${from})` : ''}: ${p.override_reason ?? ''}`;
   return 'Retail price';
 }

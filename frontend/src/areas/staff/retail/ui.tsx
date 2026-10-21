@@ -11,6 +11,7 @@ import { useStaff } from '../context';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { showQty } from './maths';
 import { BRANCH_ROLES, branchesWhere, canSeeProfit, canUse, capabilityOn, sellingBranches, type RetailScreen } from './permissions';
+import { keptWords } from './orders-state';
 
 // Shared pieces of the retail screens. Phone first: one column, 44px tap targets, labels on every
 // input, a visible focus ring, and state shown in words as well as colour.
@@ -276,6 +277,7 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
               in stock here:{' '}
               {p.qty !== undefined && p.qty.startsWith('-') ? <span className="rt-flag">{showQty(p.qty)} (negative)</span> : showQty(p.qty ?? '0')}{' '}
               {p.unit}
+              {keptWords(p.qty, p.reserved_qty) && <> ({keptWords(p.qty, p.reserved_qty)})</>}
             </>
           )}
         </span>

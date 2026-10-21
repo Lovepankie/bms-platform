@@ -106,7 +106,11 @@ class WriteOffsService {
                     plan.sale().version(),
                     plan.unpaidMinor(),
                     plan.sale().currency(),
-                    Map.of(SaleWriteOffAction.REASON, r.reason().trim())));
+                    Map.of(
+                            SaleWriteOffAction.REASON,
+                            r.reason().trim(),
+                            SaleWriteOffAction.UNPAID,
+                            plan.unpaidMinor())));
             return new WriteOffOutcome(false, o.approvalId(), null);
         }
         // Done without a second person. The others who count are told; when the maker is the only one it is a notice to

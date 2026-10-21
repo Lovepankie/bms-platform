@@ -95,10 +95,16 @@ class AccountsRepository {
 
     /** What a buyer owes on completed credit sales in every branch, imported ones included: exposure. */
     long exposure(UUID customerId) {
+        // Issue #385: a delivery fee left on the buyer's account and not yet paid is owed as well, while its sale
+        // stands.
         return jdbc.sql("""
-                        SELECT coalesce(sum(total_minor - paid_minor), 0) FROM retail_sales
-                         WHERE customer_id = ? AND payment_method = 'credit' AND status = 'completed'
-                        """).param(customerId).query(Long.class).single();
+                        SELECT coalesce((SELECT sum(total_minor - paid_minor) FROM retail_sales
+                                          WHERE customer_id = :customer AND payment_method = 'credit' AND status = 'completed'), 0)
+                             + coalesce((SELECT sum(o.delivery_fee_minor) FROM retail_customer_orders o
+                                           JOIN retail_sales s ON s.id = o.sale_id
+                                          WHERE o.customer_id = :customer AND o.fee_method = 'account' AND o.fee_paid_at IS NULL
+                                            AND s.status = 'completed'), 0)
+                        """).param("customer", customerId).query(Long.class).single();
     }
 
     /** Rows changed: 0 when the version moved since it was read (the predicate is the optimistic lock). */
@@ -335,7 +341,9 @@ class AccountsRepository {
      * A sale and its void are a debit and a credit; a payment, or all of a receipt's allocations in scope, a credit; the
      * reversal of a receipt a debit; the account credit of a return (issue #201) a credit on the day it was returned, and a
      * voided return a debit on the day it was voided (a return that paid money out only is not listed: the ledger's trade
-     * debtors do not change for money that went back to a buyer who had paid, and the statement is of what is owed). Imported sales (historical) have no debit here, because the ledger never held one;
+     * debtors do not change for money that went back to a buyer who had paid, and the statement is of what is owed). A customer
+     * order's delivery fee left on the account (issue #385) is a debit on the day of delivery, a credit when it is paid, and a
+     * credit on the day its sale is voided (the fee is reversed with the sale). Imported sales (historical) have no debit here, because the ledger never held one;
      * a payment that was recorded against one is still a credit, because the ledger did hold that.
      */
     private static String movements(boolean scoped) {
@@ -393,7 +401,28 @@ class AccountsRepository {
                 SELECT w.written_off_on, 7, w.created_at, w.id, 'write_off', s.sale_no, s.id, CAST(NULL AS uuid),
                        CAST(NULL AS text), CAST(0 AS bigint), w.unpaid_minor
                   FROM retail_sale_writeoffs w JOIN retail_sales s ON s.id = w.sale_id
-                 WHERE s.customer_id = :customer AND s.payment_method = 'credit' AND NOT s.historical""" + sb + "\n";
+                 WHERE s.customer_id = :customer AND s.payment_method = 'credit' AND NOT s.historical""" + sb + """
+
+                UNION ALL
+                SELECT o.delivered_on, 8, o.delivered_at, o.id, 'delivery_fee', o.order_no, s.id, CAST(NULL AS uuid),
+                       CAST(NULL AS text), o.delivery_fee_minor, CAST(0 AS bigint)
+                  FROM retail_customer_orders o JOIN retail_sales s ON s.id = o.sale_id
+                 WHERE s.customer_id = :customer AND o.fee_method = 'account'""" + sb + """
+
+                UNION ALL
+                SELECT o.fee_paid_on, 9, o.fee_paid_at, o.id, 'delivery_fee_paid', o.order_no, s.id, CAST(NULL AS uuid),
+                       o.fee_paid_method, CAST(0 AS bigint), o.delivery_fee_minor
+                  FROM retail_customer_orders o JOIN retail_sales s ON s.id = o.sale_id
+                 WHERE s.customer_id = :customer AND o.fee_method = 'account' AND o.fee_paid_at IS NOT NULL
+                   AND o.fee_paid_method <> 'written_off'""" + sb + """
+
+                UNION ALL
+                SELECT CAST((s.voided_at AT TIME ZONE :zone) AS date), 10, s.voided_at, o.id, 'delivery_fee_void', o.order_no,
+                       s.id, CAST(NULL AS uuid), CAST(NULL AS text), CAST(0 AS bigint), o.delivery_fee_minor
+                  FROM retail_customer_orders o JOIN retail_sales s ON s.id = o.sale_id
+                 WHERE s.customer_id = :customer AND o.fee_method = 'account' AND o.fee_paid_at IS NULL
+                   AND s.status = 'voided'"""
+                + sb + "\n";
     }
 
     private static Map<String, Object> statementParams(UUID customerId, List<UUID> branchIds, String zone) {

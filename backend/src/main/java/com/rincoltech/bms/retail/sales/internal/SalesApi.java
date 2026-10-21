@@ -92,9 +92,9 @@ final class SalesApi {
                     "How the price of a line was chosen; absent on a line made without the price_lists capability")
     record LinePrice(
             @Schema(
-                    description =
-                            "retail (the product's sell price), list (a price list item) or override (the seller's"
-                                    + " price instead of the resolved one)")
+                    description = "retail (the product's sell price), list (a price list item), override (the seller's"
+                            + " price instead of the resolved one) or order_agreed (the price agreed on a customer"
+                            + " order that today's list would price otherwise, issue #385)")
             String source,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) UUID priceListId,
@@ -196,10 +196,27 @@ final class SalesApi {
                             "True for a credit sale counted when the buyer pays (ADR-043): the later of its date and the day it was"
                                     + " entered is on or after the first day of the rule on_payment, so a backdated sale entered after the"
                                     + " start counts too; its payments are dated the day they are entered")
-            boolean countedWhenPaid) {}
+            boolean countedWhenPaid,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #385: the delivery fee of the customer order this credit sale came from, left on the"
+                                    + " buyer's account and not yet paid: owed besides balance_minor, and written off with the sale")
+            Long deliveryFeeOwedMinor) {}
 
     @Schema(name = "RetailSaleWriteOffInfo", description = "A credit sale whose unpaid part was written off as a loss")
-    record WriteOffInfo(LocalDate writtenOffOn, long unpaidMinor, String reason) {}
+    record WriteOffInfo(
+            LocalDate writtenOffOn,
+
+            @Schema(description = "Everything the write-off cleared, a delivery fee on the account included")
+            long unpaidMinor,
+
+            String reason,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Issue #385: the part of unpaid_minor that was a delivery fee left on the account")
+            Long deliveryFeeMinor) {}
 
     @Schema(name = "RetailSalePage")
     record SalePage(List<Sale> items, String nextCursor) {}
@@ -280,7 +297,35 @@ final class SalesApi {
             Boolean countedWhenPaid) {}
 
     @Schema(name = "RetailCustomerBalance", description = "Credit sales in the caller's branch scope")
-    record CustomerBalance(UUID customerId, String currency, long balanceMinor, List<OpenSale> openSales) {}
+    record CustomerBalance(
+            UUID customerId,
+            String currency,
+
+            @Schema(description = "Owed on the open credit sales: what a payment on account can settle")
+            long balanceMinor,
+
+            List<OpenSale> openSales,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #385: delivery fees of customer orders left on the account and not yet paid, owed"
+                                    + " besides balance_minor and paid on each order (POST /retail/orders/{order_id}/fee-payment)")
+            Long deliveryFeesOwedMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<FeeOwed> deliveryFees) {}
+
+    @Schema(
+            name = "RetailDeliveryFeeOwed",
+            description = "A delivery fee left on the buyer's account, paid on its order")
+    record FeeOwed(
+            UUID orderId,
+            String orderNo,
+            UUID saleId,
+            String saleNo,
+            UUID branchId,
+            LocalDate deliveredOn,
+            long feeMinor) {}
 
     @Schema(name = "RetailPaymentRequest")
     record PaymentRequest(

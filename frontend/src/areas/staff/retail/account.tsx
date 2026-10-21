@@ -34,7 +34,19 @@ export function AccountSummary({ account, canManage, busy, error, onSave }: {
   return (
     <section aria-label="Account" className="rt-card" data-tour="account-summary">
       <p className="rt-total" data-testid="owed">{account.balance_minor && account.balance_minor > 0 ? `Owes ${money(account.balance_minor)}` : 'Owes nothing'}</p>
-      <p className="hint">Counted over the branches you may read.</p>
+      <p className="hint">Counted over the branches you may read. A payment on account pays these sales.</p>
+      {(account.delivery_fees ?? []).length > 0 && (
+        <div data-testid="delivery-fees-owed">
+          <p className="rt-total">Also owes {money(account.delivery_fees_owed_minor ?? 0)} of delivery fees, paid on each order:</p>
+          <ul>
+            {(account.delivery_fees ?? []).map((f) => (
+              <li key={f.order_id}>
+                <Link to="/staff/retail/orders/$orderId" params={{ orderId: f.order_id ?? '' }}>Order {f.order_no}</Link>, sale {f.sale_no}: {money(f.fee_minor ?? 0)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <p data-testid="limit">{limitWords(account, money)}</p>
       <p data-testid="terms">{termsWords(account.terms_days)}</p>
       {canManage && !editing && (

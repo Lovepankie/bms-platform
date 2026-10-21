@@ -16,6 +16,9 @@ export const KIND_WORDS: Record<string, string> = {
   return: 'Goods returned, credit note',
   return_void: 'Credit note voided',
   write_off: 'Written off as a loss',
+  delivery_fee: 'Delivery fee of an order, on the account',
+  delivery_fee_paid: 'Delivery fee paid',
+  delivery_fee_void: 'Delivery fee cancelled with the sale',
 };
 
 export const kindWords = (kind: string | undefined): string => KIND_WORDS[kind ?? ''] ?? kind ?? '';

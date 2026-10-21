@@ -37,14 +37,15 @@ class WriteOffsRepository {
             UUID approvalId,
             UUID approvedBy,
             UUID createdBy,
-            Instant createdAt) {}
+            Instant createdAt,
+            long feeMinor) {}
 
     void insert(Row w) {
         jdbc.sql("""
                         INSERT INTO retail_sale_writeoffs (id, tenant_id, sale_id, branch_id, written_off_on, currency,
                             unpaid_minor, loss_minor, cost_share_minor, recognition, reason, journal_entry_id, approval_id,
-                            approved_by, created_by)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            approved_by, created_by, fee_minor)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """)
                 .params(
                         w.id(),
@@ -60,7 +61,8 @@ class WriteOffsRepository {
                         w.journalEntryId(),
                         w.approvalId(),
                         w.approvedBy(),
-                        w.createdBy())
+                        w.createdBy(),
+                        w.feeMinor())
                 .update();
     }
 
@@ -143,7 +145,8 @@ class WriteOffsRepository {
                         rs.getObject("approval_id", UUID.class),
                         rs.getObject("approved_by", UUID.class),
                         rs.getObject("created_by", UUID.class),
-                        rs.getTimestamp("created_at").toInstant()))
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getLong("fee_minor")))
                 .optional();
     }
 }

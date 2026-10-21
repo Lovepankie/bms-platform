@@ -110,15 +110,19 @@ export function payFailureWords(error: unknown, full: boolean): unknown {
 // deletes: the sale stays and reads Written off, and the debt leaves the owing and overdue lists. The server checks every rule again.
 
 /** True for a live credit sale made on the system that still owes money and has not been written off. */
-export const canWriteOff = (sale: Pick<Sale, 'payment_method' | 'status' | 'balance_minor' | 'historical' | 'write_off'>): boolean =>
-  sale.payment_method === 'credit' && sale.status === 'completed' && owedMinor(sale) > 0 && sale.historical !== true && sale.write_off === undefined;
+export const canWriteOff = (sale: Pick<Sale, 'payment_method' | 'status' | 'balance_minor' | 'historical' | 'write_off' | 'delivery_fee_owed_minor'>): boolean =>
+  sale.payment_method === 'credit' && sale.status === 'completed' && writeOffAmount(sale) > 0 && sale.historical !== true && sale.write_off === undefined;
+
+/** Everything a write-off clears: what the sale still owes and a delivery fee of its order left on the account (issue #385). */
+export const writeOffAmount = (sale: Pick<Sale, 'balance_minor' | 'delivery_fee_owed_minor'>): number =>
+  owedMinor(sale) + Math.max(0, sale.delivery_fee_owed_minor ?? 0);
 
 /** The reason to send, or null while it is too short. */
 export const writeOffReasonOf = (text: string): string | null => reasonOf(text);
 
 /** What the person is told before they confirm: the amount, that it is a loss, that nothing is deleted and that it cannot be undone. */
-export const writeOffWarning = (owed: number): string =>
-  `${formatMinor(owed, RETAIL_CURRENCY)} owed will be cleared as a bad debt. The sale stays on record and reads Written off, the buyer no longer owes it, and it leaves the owing and overdue lists. The loss shows in Daily profit on the day it is written off; if a second administrator has to approve it, that is the day it is approved. This cannot be undone.`;
+export const writeOffWarning = (owed: number, fee = 0): string =>
+  `${formatMinor(owed, RETAIL_CURRENCY)} owed${fee > 0 ? `, of which ${formatMinor(fee, RETAIL_CURRENCY)} is the delivery fee of its order,` : ''} will be cleared as a bad debt. The sale stays on record and reads Written off, the buyer no longer owes it, and it leaves the owing and overdue lists. The loss shows in Daily profit on the day it is written off; if a second administrator has to approve it, that is the day it is approved. This cannot be undone.`;
 
 /** A sentence for the result of a write-off: done, or waiting for a second administrator. */
 export const writeOffWords = (outcome: Pick<WriteOffOutcome, 'executed' | 'write_off'>): string =>
@@ -136,7 +140,7 @@ export const WRITE_OFF_PENDING = 'A write-off of this debt is waiting for a seco
 export const writeOffAlreadyPending = (error: unknown): boolean => codeOf(error) === 'approval_already_pending';
 
 /** Refusals that mean the sale moved on since the screen read it. */
-export const writeOffMovedOn = (error: unknown): boolean => ['already_written_off', 'nothing_owing', 'sale_voided'].includes(codeOf(error) ?? '');
+export const writeOffMovedOn = (error: unknown): boolean => ['already_written_off', 'nothing_owing', 'sale_voided', 'write_off_changed'].includes(codeOf(error) ?? '');
 
 /** What to tell the person about a failed write-off, when the plain refusal alone would leave them stuck. */
 export function writeOffFailureWords(error: unknown): unknown {

@@ -6,11 +6,11 @@ import { useCanSellAnywhere } from './ui';
 
 // The retail menu (#95): the retail home and the first shortcuts the session may use, with the short
 // names a phone's bottom bar has room for. The pilot's order comes first (Sales, Banked, Savings,
-// Expenses, Advances, FR-RET-31), then the stock shortcuts; five fit at 360px beside Retail. Fixed to
+// Expenses, Advances, FR-RET-31), with customer orders right after Sale (issue #385), then the stock shortcuts; five fit at 360px beside Retail. Fixed to
 // the bottom on a phone, a row of links above the title on a wider screen. Drawn by the staff layout.
 
 const SHORTCUTS: Partial<Record<RetailScreen, string>> = {
-  sale: 'Sale', banking: 'Banked', savings: 'Savings', expenses: 'Expenses', advances: 'Advances', stock: 'Stock', restock: 'Restock', stocktake: 'Count', usage: 'Usage',
+  sale: 'Sale', orders: 'Orders', banking: 'Banked', savings: 'Savings', expenses: 'Expenses', advances: 'Advances', stock: 'Stock', restock: 'Restock', stocktake: 'Count', usage: 'Usage',
 };
 const MAX_SHORTCUTS = 5;
 

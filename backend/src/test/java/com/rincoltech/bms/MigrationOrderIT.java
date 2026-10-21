@@ -45,6 +45,12 @@ class MigrationOrderIT {
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26",
             "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46");
 
+    /**
+     * Columns a later migration adds to a table these cases watch, left out of the "keeps its shape" comparisons: each case
+     * answers for its own migration. V70 (customer orders, #385) adds retail_sale_lines.price_overridden_by.
+     */
+    static final String LATER_COLUMNS = " AND column_name <> 'price_overridden_by'";
+
     /** Every migration file on the classpath in numeric order: a new migration only adds its file. */
     static final List<String> VERSIONS = discoveredVersions();
 
@@ -886,7 +892,9 @@ class MigrationOrderIT {
         String sales = "('retail_sales', 'retail_sale_lines', 'retail_sale_payments')";
         String columns =
                 "SELECT string_agg(table_name || '.' || column_name || ':' || data_type, ',' ORDER BY table_name,"
-                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN "
+                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public'"
+                        + LATER_COLUMNS
+                        + " AND table_name IN "
                         + sales;
         String before = owner.sql(columns).query(String.class).single();
 
@@ -997,7 +1005,9 @@ class MigrationOrderIT {
         String large = "('retail_sales', 'retail_sale_lines', 'retail_sale_payments', 'retail_stock_movements')";
         String columns =
                 "SELECT string_agg(table_name || '.' || column_name || ':' || data_type, ',' ORDER BY table_name,"
-                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN "
+                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public'"
+                        + LATER_COLUMNS
+                        + " AND table_name IN "
                         + large;
         String before = owner.sql(columns).query(String.class).single();
 
@@ -1115,7 +1125,9 @@ class MigrationOrderIT {
         String sales = "('retail_sales', 'retail_sale_lines', 'retail_sale_payments', 'retail_transfers')";
         String columns =
                 "SELECT string_agg(table_name || '.' || column_name || ':' || data_type, ',' ORDER BY table_name,"
-                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN "
+                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public'"
+                        + LATER_COLUMNS
+                        + " AND table_name IN "
                         + sales;
         String before = owner.sql(columns).query(String.class).single();
 
@@ -1318,7 +1330,9 @@ class MigrationOrderIT {
                 + " 'journal_entries', 'journal_lines', 'gl_accounts')";
         String columns =
                 "SELECT string_agg(table_name || '.' || column_name || ':' || data_type, ',' ORDER BY table_name,"
-                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN "
+                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public'"
+                        + LATER_COLUMNS
+                        + " AND table_name IN "
                         + existing;
         String before = owner.sql(columns).query(String.class).single();
 
@@ -1442,7 +1456,9 @@ class MigrationOrderIT {
                         + " 'journal_lines', 'gl_accounts')";
         String columns =
                 "SELECT string_agg(table_name || '.' || column_name || ':' || data_type, ',' ORDER BY table_name,"
-                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN "
+                        + " ordinal_position) FROM information_schema.columns WHERE table_schema = 'public'"
+                        + LATER_COLUMNS
+                        + " AND table_name IN "
                         + existing;
         String before = owner.sql(columns).query(String.class).single();
         long permissions =
@@ -1463,13 +1479,18 @@ class MigrationOrderIT {
         // one, which are not V48's to answer for.
         assertThat(owner.sql(
                                 "SELECT count(*) FROM permissions WHERE key NOT IN ('lending.advisor.use', 'lending.advisor.configure',"
-                                        + " 'core.payment_account.manage', 'retail.controls.read', 'retail.credit.write_off')")
+                                        + " 'core.payment_account.manage', 'retail.controls.read', 'retail.credit.write_off',"
+                                        + " 'retail.order.manage')")
                         .query(Long.class)
                         .single())
                 .as("no permission is added")
                 .isEqualTo(permissions);
-        // V64 (the write-off of a credit sale, #340) adds the chart account 5140, which is not V48's to answer for.
-        assertThat(owner.sql("SELECT count(*) FROM gl_accounts WHERE system_key IS DISTINCT FROM 'bad_debt_loss'")
+        // V64 (the write-off of a credit sale, #340) adds the chart account 5140 and V70 (customer orders, #385) the
+        // account
+        // 4120, which are not V48's to answer for.
+        assertThat(owner.sql(
+                                "SELECT count(*) FROM gl_accounts WHERE system_key IS NULL OR system_key NOT IN ('bad_debt_loss',"
+                                        + " 'delivery_income')")
                         .query(Long.class)
                         .single())
                 .as("no chart account is added")

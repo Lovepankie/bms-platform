@@ -232,7 +232,8 @@ class StockService {
                                         r.qty(),
                                         r.negative(),
                                         r.sellMinor(),
-                                        null))
+                                        null,
+                                        r.reservedQty()))
                         .toList(),
                 Quantities.format(lowStock()),
                 next);
