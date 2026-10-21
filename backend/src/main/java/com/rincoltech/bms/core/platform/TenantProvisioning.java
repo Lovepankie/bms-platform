@@ -43,14 +43,18 @@ public interface TenantProvisioning {
             String adminPhone,
             String subscriptionStatus) {}
 
-    /** The new tenant and the first admin's one-time invitation link (72 hours, FR-IAM-01). */
+    /**
+     * The new tenant and the first admin's one-time invitation link (72 hours, FR-IAM-01), and whether that admin must turn
+     * on two-step sign-in (issue #396).
+     */
     record Created(
             UUID tenantId,
             String slug,
             UUID headOfficeBranchId,
             UUID adminUserId,
             String invitationUrl,
-            Instant invitationExpiresAt) {}
+            Instant invitationExpiresAt,
+            boolean adminTwoStepRequired) {}
 
     /** Work of the caller inside the creating transaction. */
     interface Steps {

@@ -20,6 +20,11 @@ class TenancyHosts implements PlatformHost {
     }
 
     @Override
+    public boolean servesTenant(String host) {
+        return tenantHosts.slugFromHost(host).isPresent();
+    }
+
+    @Override
     public boolean isValidSlug(String slug) {
         return tenantHosts.isValidSlug(slug);
     }

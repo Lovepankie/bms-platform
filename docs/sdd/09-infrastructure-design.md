@@ -164,7 +164,8 @@ migration) with status only, no details.
   `BMS_PUSH_EXTRA_ENDPOINT_HOSTS`; both compose files pass them; unset means push is off (`docs/runbooks/push-notifications.md`).
 - Outbox senders (ADR-024, spec section 11), optional on every host: `BMS_SMTP_HOST`,
   `BMS_SMTP_PORT` (465, implicit TLS; port 587 is blocked on the staging host), `BMS_SMTP_USER`,
-  `BMS_SMTP_PASSWORD` and `BMS_MAIL_FROM` for email, `BMS_TELEGRAM_BOT_TOKEN` and
+  `BMS_SMTP_PASSWORD` and `BMS_MAIL_FROM` for email (with `BMS_SUPPORT_CONTACT`, the optional support line in
+  the footer of every email, empty by default; issue #396, ADR-054), `BMS_TELEGRAM_BOT_TOKEN` and
   `BMS_TELEGRAM_OPERATOR_CHAT_ID` for operator alerts. Both compose files pass them to the API
   only. With a sender's values unset it is off: its messages wait as `pending` and nothing fails.
   The staging host's `/opt/bms/.env` holds them since 2026-10-06 (issue #89). Outbound traffic is

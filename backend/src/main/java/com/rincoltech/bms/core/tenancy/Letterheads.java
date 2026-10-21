@@ -12,6 +12,13 @@ public interface Letterheads {
     Letterhead current();
 
     /**
+     * The same-origin path of the bound tenant's servable logo, versioned by its document id
+     * ({@code /api/v1/branding/logo?v=<id>}, as the public branding route gives it), when one is set; read from the
+     * database only. For links to the logo that leave the app, such as the header of an email (issue #396).
+     */
+    Optional<String> logoPath();
+
+    /**
      * @param brandColour {@code #RRGGBB}, the tenant's when it passes the contrast rule, else the default
      * @param textOnBrand the text colour that passes the contrast rule on {@code brandColour}
      * @param logo the stored logo (PNG or JPEG, re-encoded at upload), when there is one and storage answers

@@ -169,6 +169,9 @@ bms:
     telegram:
       bot-token: ${BMS_TELEGRAM_BOT_TOKEN:}
       operator-chat-id: ${BMS_TELEGRAM_OPERATOR_CHAT_ID:}
+    # The support line in the footer of every email (issue #396, ADR-054), for example an address and a phone number.
+    # Empty by default: the line is left out. Never hard-coded.
+    support-contact: ${BMS_SUPPORT_CONTACT:}
   # Web Push (ADR-050, docs/runbooks/push-notifications.md). Off unless both VAPID keys are set; the subject is a mailto: address or an
   # https: URL the push services can reach. Never logged. Generate the pair with: npx web-push generate-vapid-keys (docs/runbooks/push-notifications.md).
   push:

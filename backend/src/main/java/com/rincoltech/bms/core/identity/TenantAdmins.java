@@ -42,7 +42,11 @@ public interface TenantAdmins {
      */
     void requireTenantAdmin(UUID userId);
 
-    record Invitation(UUID userId, String url, Instant expiresAt) {}
+    /**
+     * @param twoStepRequired whether the new admin must turn on two-step sign-in (a role that requires it, or the tenant's
+     *     policy, ADR-046); the activation email says so only then (issue #396)
+     */
+    record Invitation(UUID userId, String url, Instant expiresAt, boolean twoStepRequired) {}
 
     record ResetLink(String url, Instant expiresAt) {}
 }

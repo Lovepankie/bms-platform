@@ -78,7 +78,7 @@ class BrandingService implements Letterheads {
                 s.displayName(),
                 text.isPresent() ? s.themePrimary() : null,
                 text.orElse(null),
-                s.logoDocumentId() == null ? null : "/api/v1/branding/logo?v=" + s.logoDocumentId(),
+                s.logoDocumentId() == null ? null : LOGO_PATH + "?v=" + s.logoDocumentId(),
                 modules.enabledKeys());
     }
 
@@ -109,6 +109,14 @@ class BrandingService implements Letterheads {
                 s.receiptFooter() == null ? "" : s.receiptFooter(),
                 logo);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> logoPath() {
+        return logo().map(l -> LOGO_PATH + "?v=" + l.id());
+    }
+
+    static final String LOGO_PATH = "/api/v1/branding/logo";
 
     /** The current logo's id and checksum, from the database only: a conditional request reads no storage. */
     record Logo(UUID id, AssetMeta meta) {}

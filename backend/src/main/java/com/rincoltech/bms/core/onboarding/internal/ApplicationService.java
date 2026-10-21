@@ -472,7 +472,11 @@ class ApplicationService {
                         outbox.enqueue(new Outbox.Message(
                                 Outbox.EMAIL,
                                 application.contactEmail(),
-                                "onboarding.activation",
+                                // Two-step sign-in is optional by default (ADR-046): the email asks
+                                // for it only when the new administrator must turn it on (#396).
+                                tenant.adminTwoStepRequired()
+                                        ? "onboarding.activation_two_step"
+                                        : "onboarding.activation",
                                 params,
                                 "onboarding.activation:" + id,
                                 null,

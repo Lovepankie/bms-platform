@@ -216,6 +216,15 @@ EmailProvider
 Used for staff invitations, password resets and report-ready notices. SPF, DKIM and
 DMARC for the sending domain are set up with the mail provider (chapter 9).
 
+As built (ADR-024, ADR-054): the outbox's SMTP sender sends every email as `multipart/alternative`,
+the template's plain text first and an HTML part built from the same template and values
+(`EmailLayout`): table-based and inline-styled, at most 600 px wide, no external stylesheet, script
+or font, images by absolute URL with alt text, width and height (the Rincol Tech logo from the
+platform host, or a business's logo from its public logo route on its own staff emails), one button
+for the main link with the raw link below it, and a footer with the sender line, the reason the
+reader got the email and the optional `BMS_SUPPORT_CONTACT`. Every value is HTML-escaped and only
+the link parameters become anchors.
+
 ## 12.7 Configuration
 
 Each adapter reads its settings from environment variables documented in `.env.example`

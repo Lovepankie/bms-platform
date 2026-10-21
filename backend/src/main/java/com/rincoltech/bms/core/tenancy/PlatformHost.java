@@ -10,6 +10,9 @@ public interface PlatformHost {
     /** True only for the platform host, compared case-insensitively. */
     boolean servesPlatform(String host);
 
+    /** True for a host that is exactly a tenant's host under the pattern, for a valid slug (issue #396: trusted email links). */
+    boolean servesTenant(String host);
+
     /**
      * FR-TEN-02: lower case letters, digits and hyphens, 3 to 63 characters, not starting or
      * ending with a hyphen, not a reserved label, and short enough that its host label under the

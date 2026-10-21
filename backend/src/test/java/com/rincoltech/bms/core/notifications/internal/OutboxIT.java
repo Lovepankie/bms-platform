@@ -114,8 +114,9 @@ class OutboxIT extends IntegrationTest {
         enqueue("email", "test-op@example.test", key);
         assertThat(dispatcher.dispatch(10)).isZero();
         assertThat(row(key).get("status")).isEqualTo("pending");
-        assertThat(new NotificationProperties(null, null).smtp().configured()).isFalse();
-        assertThat(new NotificationProperties(null, null).telegram().configured())
+        assertThat(new NotificationProperties(null, null, null).smtp().configured())
+                .isFalse();
+        assertThat(new NotificationProperties(null, null, null).telegram().configured())
                 .isFalse();
         assertThat(new NotificationProperties.Smtp("smtp.example.test", null, "u", "secret-value", "a@example.test")
                         .toString())
@@ -471,20 +472,23 @@ class OutboxIT extends IntegrationTest {
         tools.jackson.databind.ObjectMapper mapper = new tools.jackson.databind.ObjectMapper();
         String good = "123456789:" + "A".repeat(35);
         assertThat(new TelegramChannel(
-                                new NotificationProperties(null, new NotificationProperties.Telegram(good, "-1001")),
+                                new NotificationProperties(
+                                        null, new NotificationProperties.Telegram(good, "-1001"), null),
                                 mapper)
                         .enabled())
                 .isTrue();
         for (String bad : List.of(good + "\r", good + " ", "123456789:short", "not a token")) {
             assertThat(new TelegramChannel(
-                                    new NotificationProperties(null, new NotificationProperties.Telegram(bad, "-1001")),
+                                    new NotificationProperties(
+                                            null, new NotificationProperties.Telegram(bad, "-1001"), null),
                                     mapper)
                             .enabled())
                     .as("token %s", bad.length())
                     .isFalse();
         }
         assertThat(new TelegramChannel(
-                                new NotificationProperties(null, new NotificationProperties.Telegram(good, "x y")),
+                                new NotificationProperties(
+                                        null, new NotificationProperties.Telegram(good, "x y"), null),
                                 mapper)
                         .enabled())
                 .isFalse();

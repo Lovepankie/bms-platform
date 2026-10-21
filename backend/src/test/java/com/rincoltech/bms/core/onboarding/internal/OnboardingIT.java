@@ -863,6 +863,37 @@ class OnboardingIT extends IntegrationTest {
                         .query(String.class)
                         .single())
                 .isEqualTo("trial");
+        // Two-step sign-in is optional for a new business (ADR-046): the activation email does not ask for it.
+        assertThat(outboxRows("onboarding.activation_two_step", email)).isZero();
+    }
+
+    /**
+     * Issue #396: when the tenant admin role requires two-step sign-in (a platform-wide role flag), the activation email
+     * is the variant that asks the new administrator to turn it on. The flag is restored afterwards.
+     * JUSTIFICATION-A3: a new integration test the reviewer asked for; it reuses the class's helpers.
+     */
+    @Test
+    void activationAsksForTwoStepSignInWhenTheAdminRoleRequiresIt() {
+        String email = Api.email("activate-two-step");
+        UUID id = verified(email, "Test Two Step Shop " + email);
+        JdbcClient owner = owner();
+        boolean before = owner.sql("SELECT mfa_required FROM roles WHERE key = 'tenant_admin'")
+                .query(Boolean.class)
+                .single();
+        owner.sql("UPDATE roles SET mfa_required = true WHERE key = 'tenant_admin'")
+                .update();
+        try {
+            ResponseEntity<JsonNode> done = activate(id, activation(slug(), "trial", null));
+            assertThat(done.getStatusCode()).as("%s", done.getBody()).isEqualTo(HttpStatus.OK);
+            assertThat(outboxRows("onboarding.activation_two_step", email)).isEqualTo(1);
+            assertThat(outboxRows("onboarding.activation", email)).isZero();
+            assertThat(outboxParams("onboarding.activation_two_step", email).get("link"))
+                    .isEqualTo(done.getBody().get("admin_invitation_url").asString());
+        } finally {
+            owner.sql("UPDATE roles SET mfa_required = ? WHERE key = 'tenant_admin'")
+                    .param(before)
+                    .update();
+        }
     }
 
     /** FR-ONB-07: two concurrent activations create one tenant. */

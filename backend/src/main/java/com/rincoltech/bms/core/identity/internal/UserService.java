@@ -205,7 +205,10 @@ class UserService implements TenantAdmins {
         audit.record(
                 AuditLog.Entry.created("core.user.invited", "core.user", id, null, after), platformUserId, "platform");
         InvitationLink link = issueInvitation(id, platformUserId, user.email(), user.phoneE164());
-        return new Invitation(id, link.url(), link.expiresAt());
+        // For the wording of the activation email a running grace period counts as required (issue #396).
+        boolean twoStep =
+                accounts.mfaRequired(id) || accounts.mfaDueBy(id, false).isPresent();
+        return new Invitation(id, link.url(), link.expiresAt(), twoStep);
     }
 
     @Override

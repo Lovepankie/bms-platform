@@ -233,8 +233,14 @@ class PlatformService implements TenantProvisioning {
                             operator,
                             "platform");
                     platformAudit.record("platform.tenant.created", operator, tenantId, after);
-                    Created created =
-                            new Created(tenantId, slug, headOffice, admin.userId(), admin.url(), admin.expiresAt());
+                    Created created = new Created(
+                            tenantId,
+                            slug,
+                            headOffice,
+                            admin.userId(),
+                            admin.url(),
+                            admin.expiresAt(),
+                            admin.twoStepRequired());
                     steps.after(created);
                     return created;
                 })));

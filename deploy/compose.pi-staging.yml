@@ -142,6 +142,8 @@ services:
       BMS_SMTP_USER: ${BMS_SMTP_USER:-}
       BMS_SMTP_PASSWORD: ${BMS_SMTP_PASSWORD:-}
       BMS_MAIL_FROM: ${BMS_MAIL_FROM:-}
+      # The support line in the footer of every email (issue #396, ADR-054); empty leaves it out.
+      BMS_SUPPORT_CONTACT: ${BMS_SUPPORT_CONTACT:-}
       BMS_TELEGRAM_BOT_TOKEN: ${BMS_TELEGRAM_BOT_TOKEN:-}
       BMS_TELEGRAM_OPERATOR_CHAT_ID: ${BMS_TELEGRAM_OPERATOR_CHAT_ID:-}
       # SMS (ADR-036, docs/runbooks/sms-setup.md). Off unless a mode and a provider are set; staging
