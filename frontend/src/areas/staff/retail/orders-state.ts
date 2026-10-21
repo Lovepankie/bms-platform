@@ -1,4 +1,5 @@
-import type { DeliverRequest, Order, OrderRequest, OrderSource, OrderStatus } from '../../../api/retail-orders';
+import type { Product } from '../../../api/retail';
+import type { DeliverRequest, ItemsRequest, Order, OrderRequest, OrderSource, OrderStatus } from '../../../api/retail-orders';
 import { milliOf, qtyString, showQty } from './maths';
 import { defaultPrice, lineFigures, lineHint, type DraftLine } from './sale-state';
 import { chosenPack } from './units-state';
@@ -44,6 +45,52 @@ export function nextSteps(o: Pick<Order, 'status'>): ('pack' | 'send' | 'deliver
   if (o.status === 'packed') return ['send', 'deliver', 'cancel'];
   if (o.status === 'out_for_delivery') return ['deliver', 'cancel'];
   return [];
+}
+
+/** The items of an order change only before it goes out (issue #393): while it is ordered or packed. */
+export const itemsMayChange = (o: Pick<Order, 'status'>): boolean => o.status === 'ordered' || o.status === 'packed';
+
+/** The order's items as lines to change, each with its product (as read now) and the price agreed; null until every product is read. */
+export function itemsDraft(o: Pick<Order, 'lines'>, products: Record<string, Product | undefined>): DraftLine[] | null {
+  const lines: DraftLine[] = [];
+  for (const l of o.lines ?? []) {
+    const product = products[l.product_id ?? ''];
+    if (!product) return null;
+    lines.push({ product, qty: l.qty ?? '1', price: String(l.unit_price_minor ?? 0), ...(l.unit_id ? { unitId: l.unit_id } : {}) });
+  }
+  return lines;
+}
+
+/** What stops the new items being saved, in plain words, or null. */
+export function itemsProblem(lines: DraftLine[]): string | null {
+  if (lines.length === 0) return 'Keep at least one item. To take every item off, cancel the order.';
+  if (lines.some((l) => lineFigures(l) === null)) return 'Check the quantity and price on each item.';
+  if (lines.some((l) => (lineHint(l) ?? '').includes('does not convert exactly'))) return 'Fix the items marked above.';
+  return null;
+}
+
+/**
+ * The new items for the server. An item already on the order in the same unit sends its price, so the price agreed is kept when
+ * it is unchanged (the server compares); a new item sends a price only when it differs from today's, as a new order does.
+ */
+export function buildItemsRequest(o: Pick<Order, 'lines'>, lines: DraftLine[], note: string): ItemsRequest {
+  const onOrder = new Set((o.lines ?? []).map((l) => `${l.product_id}|${l.unit_id ?? ''}`));
+  return {
+    lines: lines.map((l) => {
+      const f = lineFigures(l);
+      if (!f) throw new Error('invalid line');
+      const pack = chosenPack(l.product, l.unitId);
+      const known = onOrder.has(`${l.product.id}|${pack?.unit_id ?? ''}`);
+      return {
+        product_id: l.product.id ?? '',
+        qty: qtyString(f.qtyMilli),
+        ...(pack ? { unit_id: pack.unit_id } : {}),
+        ...(known || f.priceMinor !== defaultPrice(l.product, pack?.unit_id) ? { unit_price_minor: f.priceMinor } : {}),
+        ...(l.reason?.trim() ? { price_override_reason: l.reason.trim() } : {}),
+      };
+    }),
+    ...(note.trim() ? { note: note.trim() } : {}),
+  };
 }
 
 export interface OrderDraft {

@@ -14,6 +14,7 @@ export type OrderPage = S['RetailOrderPage'];
 export type OrderBoard = S['RetailOrderBoard'];
 export type OrderRequest = S['RetailOrderRequest'];
 export type OrderChange = S['RetailOrderChangeRequest'];
+export type ItemsRequest = S['RetailOrderItemsRequest'];
 export type DeliverRequest = S['RetailOrderDeliverRequest'];
 export type Delivered = S['RetailOrderDelivered'];
 export type CustomerLookup = S['RetailOrderCustomerLookup'];
@@ -54,6 +55,13 @@ export const retailOrders = {
   },
   async change(id: string, version: number, body: OrderChange): Promise<Order> {
     return unwrap(await api.PATCH('/api/v1/retail/orders/{order_id}', { params: { ...path(id), header: { 'If-Match': String(version) } }, body }));
+  },
+  /** The whole new set of items of an order that is ordered or packed (issue #393): the stock kept follows, the number stays. */
+  async changeItems(id: string, version: number, body: ItemsRequest, key: string): Promise<Order> {
+    return unwrap(await api.POST('/api/v1/retail/orders/{order_id}/items', {
+      params: { ...path(id), header: { 'If-Match': String(version), 'Idempotency-Key': key } },
+      body,
+    }));
   },
   async pack(id: string, note?: string): Promise<Order> {
     return unwrap(await api.POST('/api/v1/retail/orders/{order_id}/pack', { params: path(id), body: note ? { note } : {} }));

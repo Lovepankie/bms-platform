@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Product } from '../../../api/retail';
+import type { Order } from '../../../api/retail-orders';
 import {
-  blankDeliver, blankOrder, keptWords, payChoicesFor, buildDeliverRequest, buildOrderRequest, deliverFigures, deliverProblem, feeOf, lookupKey, nextSteps, orderProblem, sourceLabel, stepOf,
+  blankDeliver, blankOrder, keptWords, payChoicesFor, buildDeliverRequest, buildItemsRequest, buildOrderRequest, deliverFigures, deliverProblem, feeOf, itemsDraft,
+  itemsMayChange, itemsProblem, lookupKey, nextSteps, orderProblem, sourceLabel, stepOf,
 } from './orders-state';
 import { canWriteOff, writeOffAmount, writeOffWarning } from './sale-actions-state';
 import { newLine } from './sale-state';
@@ -100,5 +102,41 @@ describe('writing off a sale with a fee on the account', () => {
     expect(writeOffAmount(sale)).toBe(2000);
     expect(canWriteOff(sale)).toBe(true);
     expect(writeOffWarning(12000, 2000)).toContain('of which UGX 2,000 is the delivery fee');
+  });
+});
+
+describe('changing the items of an order (issue #393)', () => {
+  const taken: Pick<Order, 'status' | 'lines'> = {
+    status: 'ordered',
+    lines: [{ line_no: 1, product_id: 'p1', code: 'ROMPER', description: 'Test Romper', qty: '2', unit: 'piece', unit_price_minor: 9000, line_total_minor: 18000, base_qty: '2' }],
+  };
+
+  it('is offered while the order is ordered or packed, not once it is out', () => {
+    expect(itemsMayChange({ status: 'ordered' })).toBe(true);
+    expect(itemsMayChange({ status: 'packed' })).toBe(true);
+    expect(itemsMayChange({ status: 'out_for_delivery' })).toBe(false);
+    expect(itemsMayChange({ status: 'delivered' })).toBe(false);
+    expect(itemsMayChange({ status: 'cancelled' })).toBe(false);
+  });
+
+  it('starts from the items on the order at the price agreed, once every product is read', () => {
+    expect(itemsDraft(taken, {})).toBeNull();
+    const lines = itemsDraft(taken, { p1: romper });
+    expect(lines).toEqual([{ product: romper, qty: '2', price: '9000' }]);
+  });
+
+  it('keeps the price agreed on an item already on the order, and sends a new item at its own price only when changed', () => {
+    const lines = itemsDraft(taken, { p1: romper }) ?? [];
+    const r = buildItemsRequest(taken, [{ ...lines[0]!, qty: '3' }, newLine({ ...romper, id: 'p2' })], ' Bigger size ');
+    expect(r.lines[0]).toEqual({ product_id: 'p1', qty: '3.000', unit_price_minor: 9000 });
+    expect(r.lines[1]).toEqual({ product_id: 'p2', qty: '1.000' });
+    expect(r.note).toBe('Bigger size');
+    expect(buildItemsRequest(taken, lines, '')).not.toHaveProperty('note');
+  });
+
+  it('needs at least one item and a valid quantity on each', () => {
+    expect(itemsProblem([])).toMatch(/cancel the order/i);
+    expect(itemsProblem([{ ...newLine(romper), qty: 'two' }])).toMatch(/quantity/i);
+    expect(itemsProblem([newLine(romper)])).toBeNull();
   });
 });
