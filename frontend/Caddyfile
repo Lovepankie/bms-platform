@@ -9,14 +9,6 @@
 	root * /srv
 	encode zstd gzip
 
-	# Hashed assets never change; everything else (index.html, sw.js, the manifest) must be
-	# revalidated so a deploy is picked up at once.
-	@hashed path /assets/*
-	header @hashed Cache-Control "public, max-age=31536000, immutable"
-	header /sw.js Cache-Control "no-cache"
-	# The push handlers are loaded into sw.js with importScripts, which the browser may serve from its HTTP cache (ADR-050).
-	header /push-sw.js Cache-Control "no-cache"
-	header /index.html Cache-Control "no-cache"
 
 	# Runtime host configuration (ADR-018): the same image serves staging and production, so the
 	# PWA reads the hosts from the container's environment instead of from its build. When the
@@ -27,10 +19,39 @@
 		respond `{"tenantHostPattern":"{$BMS_TENANT_HOST_PATTERN}","platformHost":"{$BMS_PLATFORM_HOST}"}` 200
 	}
 
+	# Everything the build names with a content hash is served here, never through the single-page
+	# fallback below. A hash that is not on disk (a service worker or a page held over a deploy
+	# asking for the previous build) must answer 404. Through the fallback it would answer 200 with
+	# index.html as text/html, which the browser refuses as a stylesheet or a module
+	# (X-Content-Type-Options: nosniff) and then keeps for a year under the immutable header, so the
+	# app would render unstyled on that device until its site data is cleared. Errors are not
+	# cached, so the next load repairs itself.
+	#
+	# Vite writes the bundle under /assets, but vite-plugin-pwa emits the workbox runtime at the
+	# ROOT as workbox-<hash>.js and sw.js reaches it with importScripts. Served index.html instead,
+	# importScripts throws a SyntaxError and the service worker fails to install, which costs
+	# offline and push rather than only the styling, so it belongs in the same matcher.
+	@hashed path /assets/* /workbox-*.js
+	handle @hashed {
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
 	# Single-page app: unknown paths serve index.html and the router takes over. Inside its own
 	# handle, because try_files would otherwise rewrite /app-config.json before the handle above.
+	# Nothing served here may be held without asking: index.html names the hashed assets of its
+	# own build, so a copy kept from an earlier deploy sends the browser after files that are gone.
+	# A path matcher cannot do it, since `header /index.html` matches the literal path only and
+	# every real page comes in as /, /staff/... or another route. The service worker, the manifest
+	# and the icons revalidate with it, which costs a 304 each and keeps a deploy honest.
 	handle {
+		header Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
+	}
+
+	handle_errors {
+		header Cache-Control "no-store"
+		respond "{err.status_code} {err.status_text}" {err.status_code}
 	}
 }
