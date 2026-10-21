@@ -32,19 +32,21 @@ const MOCK_BRANCHES = [
   { id: BRANCH_B, code: 'BR2', name: 'Test Branch B', is_head_office: false },
 ];
 
-// The seeded sales role: its sale permissions and, in the cash book, what a shop user may do without seeing
-// profit: record savings (the standard amount only), banking and expenses, and read the lists and reports
-// (ADR-022 decision 13, chapter 8 matrix).
+// The seeded sales role: its sale permissions. Since V74 (ADR-055, the owner's decision of 21 October 2026) the cash book is
+// the till's, given per person: the cashier below is a seller who was also given "Can close the till and do the banking", which
+// records savings (the standard amount only), banking and expenses and reads the lists and reports (ADR-022 decision 13).
 const SALES_PERMISSIONS = [
   'retail.sale.create', 'retail.sale.read', 'retail.stock.read', 'retail.usage.report', 'retail.customer.manage', 'retail.price.override',
-  'retail.order.manage', 'retail.savings.record', 'retail.banking.record', 'retail.expense.record', 'retail.cashbook.read',
+  'retail.order.manage',
 ];
-const CASHIER_PERMISSIONS = SALES_PERMISSIONS;
+const TILL_PERMISSIONS = ['retail.savings.record', 'retail.banking.record', 'retail.expense.record', 'retail.cashbook.read', 'retail.till.close'];
+const CASHIER_PERMISSIONS = [...SALES_PERMISSIONS, ...TILL_PERMISSIONS];
 const ADMIN_PERMISSIONS = [
   ...SALES_PERMISSIONS, 'retail.catalogue.manage', 'retail.price.edit', 'retail.sale.void',
-  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use', 'retail.credit.manage', 'retail.credit.write_off', 'retail.credit.override', 'retail.document.issue', 'retail.sale.return', 'retail.controls.read',
+  'retail.stocktake.commit', 'retail.purchase.create', 'retail.stock.transfer', 'retail.profit.read', 'core.settings.manage', 'retail.branch_role.manage', 'retail.pricelist.manage', 'retail.pricelist.use', 'retail.credit.manage', 'retail.credit.write_off', 'retail.credit.override', 'retail.document.issue', 'retail.sale.return', 'retail.controls.read', 'retail.sale.all_sellers',
   'retail.savings.record', 'retail.savings.overwrite', 'retail.banking.record', 'retail.expense.record', 'retail.expense.manage',
   'retail.withdrawal.record', 'retail.advance.create', 'retail.advance.repay', 'retail.cashbook.read', 'retail.cashbook.void', 'retail.payable.manage',
+  'retail.till.close',
 ];
 
 /** A fake signed-in user for the mock session, so the app runs without a backend. */

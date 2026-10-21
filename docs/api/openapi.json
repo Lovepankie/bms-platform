@@ -11361,6 +11361,7 @@
             "type" : "string"
           },
           "created_by" : {
+            "description" : "Who took it: shown to the owner (retail.profit.read at the branch) and to the person (ADR-055)",
             "format" : "uuid",
             "type" : "string"
           },
@@ -26628,6 +26629,7 @@
     },
     "/api/v1/retail/advances" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "listRetailAdvances",
         "parameters" : [ {
           "in" : "query",
@@ -26704,6 +26706,7 @@
         "tags" : [ "retail-cashbook" ]
       },
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "createRetailAdvance",
         "parameters" : [ {
           "in" : "header",
@@ -26741,6 +26744,7 @@
     },
     "/api/v1/retail/advances/{advance_id}" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "getRetailAdvance",
         "parameters" : [ {
           "in" : "path",
@@ -26769,6 +26773,7 @@
     },
     "/api/v1/retail/advances/{advance_id}/repayments" : {
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "createRetailAdvanceRepayment",
         "parameters" : [ {
           "in" : "header",
@@ -26814,6 +26819,7 @@
     },
     "/api/v1/retail/advances/{advance_id}/repayments/{repayment_id}/void" : {
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "voidRetailAdvanceRepayment",
         "parameters" : [ {
           "in" : "header",
@@ -26867,6 +26873,7 @@
     },
     "/api/v1/retail/advances/{advance_id}/void" : {
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "voidRetailAdvance",
         "parameters" : [ {
           "in" : "header",
@@ -26912,6 +26919,7 @@
     },
     "/api/v1/retail/bankings" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "listRetailBankings",
         "parameters" : [ {
           "in" : "query",
@@ -26980,6 +26988,7 @@
         "tags" : [ "retail-cashbook" ]
       },
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "createRetailBanking",
         "parameters" : [ {
           "in" : "header",
@@ -27017,6 +27026,7 @@
     },
     "/api/v1/retail/bankings/expected" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "getRetailBankingExpected",
         "parameters" : [ {
           "in" : "query",
@@ -27053,6 +27063,7 @@
     },
     "/api/v1/retail/bankings/{banking_id}/void" : {
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "voidRetailBanking",
         "parameters" : [ {
           "in" : "header",
@@ -27155,6 +27166,7 @@
     },
     "/api/v1/retail/cash-parties" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "listRetailCashParties",
         "parameters" : [ {
           "in" : "query",
@@ -27202,6 +27214,7 @@
         "tags" : [ "retail-cashbook" ]
       },
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "createRetailCashParty",
         "requestBody" : {
           "content" : {
@@ -28409,6 +28422,7 @@
     },
     "/api/v1/retail/expense-categories" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "listRetailExpenseCategories",
         "parameters" : [ {
           "in" : "query",
@@ -28434,6 +28448,7 @@
         "tags" : [ "retail-cashbook" ]
       },
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "createRetailExpenseCategory",
         "requestBody" : {
           "content" : {
@@ -28463,6 +28478,7 @@
     },
     "/api/v1/retail/expense-categories/{category_id}" : {
       "patch" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "updateRetailExpenseCategory",
         "parameters" : [ {
           "in" : "path",
@@ -28508,6 +28524,7 @@
     },
     "/api/v1/retail/expense-categories/{category_id}/items" : {
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "createRetailExpenseItem",
         "parameters" : [ {
           "in" : "path",
@@ -28546,6 +28563,7 @@
     },
     "/api/v1/retail/expense-categories/{category_id}/items/{item_id}" : {
       "patch" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "updateRetailExpenseItem",
         "parameters" : [ {
           "in" : "path",
@@ -28599,6 +28617,7 @@
     },
     "/api/v1/retail/expenses" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "listRetailExpenses",
         "parameters" : [ {
           "in" : "query",
@@ -28683,6 +28702,7 @@
         "tags" : [ "retail-cashbook" ]
       },
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "createRetailExpense",
         "parameters" : [ {
           "in" : "header",
@@ -28720,6 +28740,7 @@
     },
     "/api/v1/retail/expenses/{expense_id}/void" : {
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "voidRetailExpense",
         "parameters" : [ {
           "in" : "header",
@@ -29406,6 +29427,7 @@
     },
     "/api/v1/retail/orders/reports/cancellations" : {
       "get" : {
+        "description" : "ADR-055: it adds up everybody's orders, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied",
         "operationId" : "getRetailOrderCancellationsReport",
         "parameters" : [ {
           "in" : "query",
@@ -29453,6 +29475,7 @@
     },
     "/api/v1/retail/orders/reports/delivery-fees" : {
       "get" : {
+        "description" : "ADR-055: it adds up everybody's orders, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied",
         "operationId" : "getRetailOrderFeesReport",
         "parameters" : [ {
           "in" : "query",
@@ -31821,6 +31844,7 @@
     },
     "/api/v1/retail/reports/cash/advances" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "getRetailCashAdvancesReport",
         "parameters" : [ {
           "in" : "query",
@@ -31852,6 +31876,7 @@
     },
     "/api/v1/retail/reports/cash/banking" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "getRetailCashBankingReport",
         "parameters" : [ {
           "in" : "query",
@@ -31906,6 +31931,7 @@
     },
     "/api/v1/retail/reports/cash/daily" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "getRetailCashDailyReport",
         "parameters" : [ {
           "in" : "query",
@@ -31953,6 +31979,7 @@
     },
     "/api/v1/retail/reports/cash/expenses" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "getRetailCashExpensesReport",
         "parameters" : [ {
           "in" : "query",
@@ -32015,6 +32042,7 @@
     },
     "/api/v1/retail/reports/cash/savings" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "getRetailCashSavingsReport",
         "parameters" : [ {
           "in" : "query",
@@ -32163,6 +32191,7 @@
     },
     "/api/v1/retail/reports/dashboard" : {
       "get" : {
+        "description" : "ADR-055: it adds up every seller's sales, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied; without branch_id a Supervisor gets the shops it supervises",
         "operationId" : "getRetailDashboard",
         "parameters" : [ {
           "in" : "query",
@@ -32304,6 +32333,7 @@
     },
     "/api/v1/retail/reports/sales-analysis" : {
       "get" : {
+        "description" : "ADR-055: it adds up every seller's sales, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied; without branch_id a Supervisor gets the shops it supervises",
         "operationId" : "getRetailSalesAnalysis",
         "parameters" : [ {
           "in" : "query",
@@ -32793,6 +32823,7 @@
     },
     "/api/v1/retail/sales" : {
       "get" : {
+        "description" : "ADR-055: without retail.sale.all_sellers in every branch covered, only the caller's own sales; a seller_id other than one's own is 403",
         "operationId" : "listRetailSales",
         "parameters" : [ {
           "in" : "query",
@@ -32958,6 +32989,7 @@
     },
     "/api/v1/retail/sales/summary" : {
       "get" : {
+        "description" : "ADR-055: without retail.sale.all_sellers in every branch covered, only the caller's own sales; a seller_id other than one's own is 403",
         "operationId" : "summariseRetailSales",
         "parameters" : [ {
           "in" : "query",
@@ -33415,6 +33447,7 @@
     },
     "/api/v1/retail/savings" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "listRetailSavings",
         "parameters" : [ {
           "in" : "query",
@@ -33483,6 +33516,7 @@
         "tags" : [ "retail-cashbook" ]
       },
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "createRetailSavings",
         "parameters" : [ {
           "in" : "header",
@@ -33520,6 +33554,7 @@
     },
     "/api/v1/retail/savings/suggestion" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "getRetailSavingsSuggestion",
         "parameters" : [ {
           "in" : "query",
@@ -33556,6 +33591,7 @@
     },
     "/api/v1/retail/savings/{savings_id}/void" : {
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "voidRetailSavings",
         "parameters" : [ {
           "in" : "header",
@@ -35324,6 +35360,7 @@
     },
     "/api/v1/retail/withdrawals" : {
       "get" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "listRetailWithdrawals",
         "parameters" : [ {
           "in" : "query",
@@ -35392,6 +35429,7 @@
         "tags" : [ "retail-cashbook" ]
       },
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "createRetailWithdrawal",
         "parameters" : [ {
           "in" : "header",
@@ -35429,6 +35467,7 @@
     },
     "/api/v1/retail/withdrawals/{withdrawal_id}/void" : {
       "post" : {
+        "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
         "operationId" : "voidRetailWithdrawal",
         "parameters" : [ {
           "in" : "header",

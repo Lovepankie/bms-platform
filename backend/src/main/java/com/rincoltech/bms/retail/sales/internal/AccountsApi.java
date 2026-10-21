@@ -196,7 +196,7 @@ final class AccountsApi {
             List<Allocation> allocations,
             UUID journalEntryId,
             Instant createdAt,
-            UUID createdBy,
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID createdBy,
             @JsonInclude(JsonInclude.Include.NON_NULL) Instant reversedAt,
             @JsonInclude(JsonInclude.Include.NON_NULL) UUID reversedBy,
             @JsonInclude(JsonInclude.Include.NON_NULL) String reverseReason) {}

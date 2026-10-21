@@ -611,6 +611,18 @@ class AccountsService {
         return out;
     }
 
+    /**
+     * ADR-055 (the owner's decision of 21 October 2026): a buyer's account is open to the sellers of its branches, so they can
+     * take payments, but it never says which colleague took a payment or reversed one: who is shown only to someone who may
+     * read profit there (the owner), or when it is the caller.
+     */
+    private static UUID who(UUID user, UUID branchId) {
+        Principal principal = CurrentPrincipal.require();
+        return user == null || principal.may("retail.profit.read", branchId) || user.equals(principal.userId())
+                ? user
+                : null;
+    }
+
     private static AccountPayment view(Receipt r, List<Allocation> allocations) {
         return new AccountPayment(
                 r.id(),
@@ -626,9 +638,9 @@ class AccountsService {
                 allocations,
                 r.journalEntryId(),
                 r.createdAt(),
-                r.createdBy(),
+                who(r.createdBy(), r.branchId()),
                 r.reversedAt(),
-                r.reversedBy(),
+                who(r.reversedBy(), r.branchId()),
                 r.reverseReason());
     }
 

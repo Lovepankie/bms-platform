@@ -81,8 +81,9 @@ describe('sales analysis', () => {
     expect(html).not.toContain('1,800');
   });
 
-  it('is open to a seller and closed to a user without sale read', () => {
-    expect(canUse(mockMe('sales'), 'salesAnalysis')).toBe(true);
+  it('is the owner\'s: closed to a seller, who sees only their own figures (ADR-055), and to a user without sale read', () => {
+    expect(canUse(mockMe('sales'), 'salesAnalysis')).toBe(false);
+    expect(canUse(mockMe('admin'), 'salesAnalysis')).toBe(true);
     expect(canUse({ permissions: ['retail.stock.read'] }, 'salesAnalysis')).toBe(false);
     const closed = renderToString(
       <StaffContext.Provider value={{ me: { ...mockMe('sales'), permissions: ['retail.stock.read'] }, branch }}>
@@ -91,7 +92,7 @@ describe('sales analysis', () => {
     );
     expect(closed).toContain('You do not have access');
     expect(closed).not.toContain('SECRET-CONTENT');
-    expect(page('sales', <Gate screen="salesAnalysis" title="Sales analysis"><p>CONTENT</p></Gate>)).toContain('CONTENT');
+    expect(page('admin', <Gate screen="salesAnalysis" title="Sales analysis"><p>CONTENT</p></Gate>)).toContain('CONTENT');
   });
 });
 

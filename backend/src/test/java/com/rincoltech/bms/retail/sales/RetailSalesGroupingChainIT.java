@@ -328,7 +328,11 @@ class RetailSalesGroupingChainIT extends IntegrationTest {
         assertThat(call(one, "group_by=branch,seller&level=branch", SALES, Map.of())
                         .getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
+        // ADR-055: a seller sees only their own sales, so naming oneself is allowed and naming a colleague is not.
         assertThat(call(one, "group_by=day&seller_id=" + one.userId(), SALES, Map.of())
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(call(one, "group_by=day&seller_id=" + two.userId(), SALES, Map.of())
                         .getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
 
@@ -389,10 +393,21 @@ class RetailSalesGroupingChainIT extends IntegrationTest {
         assertThat(one.get("/sales?seller_id=" + two.userId(), ADMIN).getStatusCode())
                 .isEqualTo(HttpStatus.OK);
 
+        // ADR-055: a cashier who made no sale sees none; the second seller sees their one sale, as theirs.
         ResponseEntity<JsonNode> list = cashier.get("/sales?limit=100", SALES);
         assertThat(list.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(list.getBody().get("items")).hasSize(5);
-        for (JsonNode row : list.getBody().get("items")) {
+        assertThat(list.getBody().get("items")).isEmpty();
+        JsonNode own = two.get("/sales?limit=100", SALES).getBody().get("items");
+        assertThat(own).hasSize(1);
+        assertThat(own.get(0).get("created_by").asString())
+                .isEqualTo(two.userId().toString());
+        // On the debts list, which shows every debt still owed so the till can take a payment, a colleague's row does
+        // not
+        // say who made it, so it cannot be summed per person.
+        JsonNode debts =
+                cashier.get("/sales?limit=100&owing=owing", SALES).getBody().get("items");
+        assertThat(debts).isNotEmpty();
+        for (JsonNode row : debts) {
             for (String who : List.of("created_by", "voided_by")) {
                 JsonNode v = row.get(who);
                 assertThat(v == null || v.isNull())
@@ -400,7 +415,7 @@ class RetailSalesGroupingChainIT extends IntegrationTest {
                         .isTrue();
             }
         }
-        // The detail of a sale somebody else made says no more than the list.
+        // The detail of a sale somebody else made is not found.
         JsonNode theirs = null;
         for (JsonNode row : one.get("/sales?limit=100", ADMIN).getBody().get("items")) {
             if (row.get("created_by").asString().equals(two.userId().toString())) {
@@ -410,10 +425,7 @@ class RetailSalesGroupingChainIT extends IntegrationTest {
         assertThat(theirs).isNotNull();
         ResponseEntity<JsonNode> detail =
                 cashier.get("/sales/" + theirs.get("id").asString(), SALES);
-        assertThat(detail.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(detail.getBody().get("created_by") == null
-                        || detail.getBody().get("created_by").isNull())
-                .isTrue();
+        assertThat(detail.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         // A person still sees their own sales as theirs, and a manager sees everybody's.
         ResponseEntity<JsonNode> mine = two.get("/sales/" + theirs.get("id").asString(), SALES);
         assertThat(mine.getBody().get("created_by").asString())

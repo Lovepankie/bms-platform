@@ -719,13 +719,23 @@ class SalesService {
         }
         Principal principal = CurrentPrincipal.require();
         List<UUID> filter = principal.branchFilter("retail.sale.read", branchIds);
-        if (sellerId != null && !SalesSummaryService.profitVisible(principal, filter)) {
+        // ADR-055: without retail.sale.all_sellers in every branch shown, a seller's list is their own sales only.
+        UUID own = SalesSummaryService.debtsOnly(owing)
+                ? null
+                : SalesSummaryService.ownSellerOnly(principal, filter, sellerId);
+        if (own == null
+                && sellerId != null
+                && !sellerId.equals(principal.userId())
+                && !SalesSummaryService.profitVisible(principal, filter)) {
             // A person's takings are management information, as in the salesperson level of the summary.
             throw new ApiException(
                     HttpStatus.FORBIDDEN,
                     "permission_denied",
                     "Permission denied",
                     "Listing a salesperson's sales is for people who may read profit in every branch shown.");
+        }
+        if (own != null) {
+            sellerId = own;
         }
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         Instant afterCreated = null;
@@ -785,6 +795,10 @@ class SalesService {
         return repo.find(id, false)
                 .map(Header::sale)
                 .filter(s -> principal.may("retail.sale.read", s.branchId()))
+                // ADR-055: someone else's sale is not found by a seller who sees only their own figures.
+                .filter(s -> principal.may(SalesSummaryService.ALL_SELLERS, s.branchId())
+                        || java.util.Objects.equals(principal.userId(), s.createdBy())
+                        || SalesSummaryService.stillOwed(s))
                 .map(this::visible)
                 .orElseThrow(ApiException::notFound);
     }
@@ -987,7 +1001,25 @@ class SalesService {
     @Transactional(readOnly = true)
     PaymentList payments(UUID saleId) {
         Sale s = get(saleId);
-        return new PaymentList(repo.payments(s.id()));
+        // ADR-055 (the owner's decision of 21 October 2026): a debt is open to every seller of the branch, but who took
+        // each
+        // payment is shown only to the owner (profit read there) or to the person who took it.
+        Principal principal = CurrentPrincipal.require();
+        boolean everyone = principal.may("retail.profit.read", s.branchId());
+        return new PaymentList(repo.payments(s.id()).stream()
+                .map(p -> everyone || principal.userId().equals(p.createdBy())
+                        ? p
+                        : new Payment(
+                                p.id(),
+                                p.saleId(),
+                                p.amountMinor(),
+                                p.currency(),
+                                p.method(),
+                                p.paidOn(),
+                                p.journalEntryId(),
+                                p.createdAt(),
+                                null))
+                .toList());
     }
 
     // ---- Customers -------------------------------------------------------------------------

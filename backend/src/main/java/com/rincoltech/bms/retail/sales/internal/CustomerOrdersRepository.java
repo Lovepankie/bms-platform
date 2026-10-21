@@ -236,6 +236,18 @@ class CustomerOrdersRepository {
                 .list();
     }
 
+    /** ADR-055: of these sales, the ones the user made, in one query for a page of orders. */
+    java.util.Set<UUID> salesMadeBy(List<UUID> saleIds, UUID user) {
+        if (saleIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return java.util.Set.copyOf(jdbc.sql("SELECT id FROM retail_sales WHERE id IN (:ids) AND created_by = :user")
+                .param("ids", saleIds)
+                .param("user", user)
+                .query(UUID.class)
+                .list());
+    }
+
     List<OrderEvent> events(UUID orderId) {
         return jdbc.sql("""
                         SELECT e.step, e.note, e.by_user, u.full_name, e.created_at

@@ -76,14 +76,17 @@ class SalesSummaryService {
         // the
         // figures cover, the rule of profit_minor.
         boolean sellers = profitVisible(principal, filter);
+        // ADR-055: without retail.sale.all_sellers in every branch shown, every figure is the caller's own sales, debts
+        // included: a colleague's debt is found in the list to take its payment, never summed here.
+        UUID own = ownSellerOnly(principal, filter, q.sellerId());
         // Issue #384: the variant level is offered only to a tenant that has an item with sizes and colours.
         boolean variants = repo.anyItemWithVariants();
         List<String> available = SalesSummaryRepository.LEVELS.stream()
-                .filter(l -> sellers || !l.equals("seller"))
+                .filter(l -> (sellers && own == null) || !l.equals("seller"))
                 .filter(l -> variants || !l.equals("variant"))
                 .toList();
         List<String> chain = chain(q.groupBy());
-        if (!sellers && (chain.contains("seller") || q.sellerId() != null)) {
+        if ((!sellers || own != null) && (chain.contains("seller") || (own == null && q.sellerId() != null))) {
             throw new ApiException(
                     HttpStatus.FORBIDDEN,
                     "permission_denied",
@@ -137,7 +140,7 @@ class SalesSummaryService {
                 Search.parse(q.buyer()),
                 q.owing(),
                 today,
-                q.sellerId(),
+                own != null ? own : q.sellerId(),
                 q.categoryId(),
                 q.itemId(),
                 offset,
@@ -166,6 +169,48 @@ class SalesSummaryService {
                     "group_by is a list of branch, year, month, seller, day, category, item or variant, each once.")));
         }
         return chain;
+    }
+
+    /** ADR-055: see the sales of every seller, not only one's own (the tenant administrator's by default). */
+    static final String ALL_SELLERS = "retail.sale.all_sellers";
+
+    /**
+     * ADR-055: the debts still owed at the caller's branches (the {@code owing} and {@code overdue} filters) are listed whoever
+     * made the sale, so whoever is at the till can take a buyer's payment; a debt is the buyer's figure, not a colleague's
+     * takings. Only the sales list uses it: the grouped summary stays the caller's own, so no colleague's debts are summed.
+     */
+    static boolean debtsOnly(String owing) {
+        return "owing".equals(owing) || "overdue".equals(owing);
+    }
+
+    /** ADR-055: a credit sale that still owes opens for any seller of its branch, to take the buyer's payment. */
+    static boolean stillOwed(SalesApi.Sale s) {
+        return "credit".equals(s.paymentMethod())
+                && "completed".equals(s.status())
+                && s.writeOff() == null
+                && s.totalMinor() > s.paidMinor();
+    }
+
+    /**
+     * ADR-055: a caller who does not hold {@code retail.sale.all_sellers} in every branch the figures cover sees only the
+     * sales they made, so the list, the summary and the totals are their own. Returns the caller's id to filter by, or
+     * null when every seller's sales may be shown. A {@code seller_id} other than the caller's own is refused (403).
+     */
+    static UUID ownSellerOnly(Principal principal, List<UUID> filter, UUID sellerId) {
+        boolean everyone = filter == null
+                ? principal.scopeOf(ALL_SELLERS).map(Principal.BranchScope::all).orElse(false)
+                : filter.stream().allMatch(b -> principal.may(ALL_SELLERS, b));
+        if (everyone) {
+            return null;
+        }
+        if (sellerId != null && !sellerId.equals(principal.userId())) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "permission_denied",
+                    "Permission denied",
+                    "You see your own sales only; another person's sales are for the owner.");
+        }
+        return principal.userId();
     }
 
     /**

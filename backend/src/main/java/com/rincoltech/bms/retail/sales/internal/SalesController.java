@@ -73,7 +73,11 @@ class SalesController {
 
     @GetMapping("/sales")
     @RequiresPermission("retail.sale.read")
-    @Operation(summary = "Sales in the caller's branch scope", operationId = "listRetailSales")
+    @Operation(
+            summary = "Sales in the caller's branch scope",
+            operationId = "listRetailSales",
+            description =
+                    "ADR-055: without retail.sale.all_sellers in every branch covered, only the caller's own sales; a seller_id other than one's own is 403")
     SalePage list(
             @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
             @RequestParam(name = "from", required = false) LocalDate from,
@@ -112,7 +116,9 @@ class SalesController {
     @RequiresPermission("retail.sale.read")
     @Operation(
             summary = "Sales grouped by a chain of levels with a summary per group (issues #328, #341)",
-            operationId = "summariseRetailSales")
+            operationId = "summariseRetailSales",
+            description =
+                    "ADR-055: without retail.sale.all_sellers in every branch covered, only the caller's own sales; a seller_id other than one's own is 403")
     Summary summary(
             @RequestParam(name = "group_by") String groupBy,
             @RequestParam(name = "level", required = false) String level,

@@ -568,7 +568,8 @@ class RetailCreditRecognitionIT extends IntegrationTest {
         onPaymentFromTheStart();
         UUID s = creditSale(hq, 2, ago(1));
         pay(s, 2_000, today());
-        JsonNode dash = api.get("/reports/dashboard", RetailTestSupport.SALES).getBody();
+        JsonNode dash = api.get("/reports/dashboard", RetailTestSupport.SALES + ",retail.sale.all_sellers")
+                .getBody();
         assertThat(dash.get("today").get("received_minor").asLong()).isEqualTo(2_000);
         assertThat(dash.get("today").has("gross_profit_minor")).isFalse();
         assertThat(api.get("/reports/profit/daily", RetailTestSupport.SALES).getStatusCode())
@@ -1530,7 +1531,8 @@ class RetailCreditRecognitionIT extends IntegrationTest {
                 UUID.randomUUID().toString());
         assertThat(receipt.getStatusCode()).as("%s", receipt.getBody()).isEqualTo(HttpStatus.CREATED);
 
-        JsonNode dash = api.get("/reports/dashboard", "retail.sale.read").getBody();
+        JsonNode dash = api.get("/reports/dashboard", "retail.sale.read,retail.sale.all_sellers")
+                .getBody();
         assertThat(shopOf(dash, br2).get("today_received_minor").asLong())
                 .as("a branch with no sales and no stock access still has the money it took")
                 .isEqualTo(600);

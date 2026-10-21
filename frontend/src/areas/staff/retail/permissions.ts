@@ -7,6 +7,11 @@ import type { BranchRole } from '../../../api/retail';
 // otherwise (docs/sdd/07-api-design.md section 7.11.20, chapter 8 section 8.3.2).
 
 export const PROFIT = 'retail.profit.read';
+/**
+ * See the sales and totals of every seller, not only one's own (issue #399, ADR-055): the owner's. Without it the sales lists and
+ * their totals are the person's own sales (the server filters them), and the reports that add up everybody's sales are not offered.
+ */
+export const ALL_SELLERS = 'retail.sale.all_sellers';
 
 export type RetailScreen =
   | 'sale' | 'creditSales' | 'salesHistory' | 'orders' | 'ordersReport' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit' | 'salesAnalysis' | 'margins' | 'stockHealth' | 'creditControl' | 'evaluation' | 'controls'
@@ -78,6 +83,8 @@ export const PURCHASE_APPROVE = 'retail.purchase.approve';
 export const PAYABLE_MANAGE = 'retail.payable.manage';
 export const SETTINGS_MANAGE = 'core.settings.manage';
 export const SAVINGS_RECORD = 'retail.savings.record';
+/** Close the till and do the banking (ADR-055, the owner's decision of 21 October 2026): given per person, the administrators everywhere. */
+export const TILL = 'retail.till.close';
 export const SAVINGS_OVERWRITE = 'retail.savings.overwrite';
 export const CASHBOOK_READ = 'retail.cashbook.read';
 export const CASHBOOK_VOID = 'retail.cashbook.void';
@@ -99,7 +106,8 @@ const NEEDS: Record<RetailScreen, string[]> = {
   // Customer orders with delivery (issue #385): taken, moved and cancelled with retail.order.manage; delivering one also needs
   // retail.sale.create at its shop, checked where Delivered is offered.
   orders: [ORDER_MANAGE],
-  ordersReport: [ORDER_MANAGE],
+  // The delivery fees and the value of everybody's orders are the owner's figures (ADR-055).
+  ordersReport: [ORDER_MANAGE, ALL_SELLERS],
   restock: ['retail.purchase.create'],
   usage: ['retail.usage.report'],
   stock: ['retail.stock.read'],
@@ -139,7 +147,8 @@ const NEEDS: Record<RetailScreen, string[]> = {
   valuation: ['retail.stock.read', PROFIT],
   profit: [PROFIT],
   // The analytics reports (issue #149); profit columns arrive only with retail.profit.read.
-  salesAnalysis: ['retail.sale.read'],
+  // The sales analysis adds up every seller's sales (ADR-055).
+  salesAnalysis: ['retail.sale.read', ALL_SELLERS],
   margins: [PROFIT],
   stockHealth: ['retail.stock.read'],
   creditControl: ['retail.sale.read'],
@@ -158,13 +167,13 @@ const NEEDS: Record<RetailScreen, string[]> = {
   importer: ['retail.catalogue.manage', 'retail.stock.read', 'core.settings.manage'],
   // The cash book screens each need the permission that records on them; the lists and reports on
   // them need retail.cashbook.read, and a void needs retail.cashbook.void (checked where it is offered).
-  savings: [SAVINGS_RECORD],
-  banking: ['retail.banking.record'],
+  savings: [SAVINGS_RECORD, TILL],
+  banking: ['retail.banking.record', TILL],
   expenses: ['retail.expense.record'],
   withdrawals: ['retail.withdrawal.record'],
   // Advances open to whoever may record an advance or a repayment (see ANY_OF).
   advances: [],
-  cashSummary: [CASHBOOK_READ],
+  cashSummary: [CASHBOOK_READ, TILL],
   bankingReport: [CASHBOOK_READ],
   expensesReport: [CASHBOOK_READ],
   expenseSetup: ['retail.expense.manage', CASHBOOK_READ],

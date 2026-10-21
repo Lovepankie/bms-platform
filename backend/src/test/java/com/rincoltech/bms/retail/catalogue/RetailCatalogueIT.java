@@ -187,10 +187,8 @@ class RetailCatalogueIT extends IntegrationTest {
                 .toList();
         assertThat(held)
                 .containsExactly(
-                        "retail.banking.record",
-                        "retail.cashbook.read",
+                        // Migration V74 (#399, ADR-055): the cash book moved to the till, given per person.
                         "retail.customer.manage",
-                        "retail.expense.record",
                         // Migration V70 (#385): the sales role takes and delivers customer orders.
                         "retail.order.manage",
                         // Migration V41 (#195): the sales role holds the price override, as it holds
@@ -198,7 +196,6 @@ class RetailCatalogueIT extends IntegrationTest {
                         "retail.price.override",
                         "retail.sale.create",
                         "retail.sale.read",
-                        "retail.savings.record",
                         "retail.stock.read",
                         "retail.usage.report");
 

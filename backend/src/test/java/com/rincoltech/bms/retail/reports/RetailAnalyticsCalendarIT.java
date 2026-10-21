@@ -137,7 +137,7 @@ class RetailAnalyticsCalendarIT extends IntegrationTest {
 
     @Test
     void aSaleOnlyCallerGetsNeitherStockedListNorAnyStockQuantity() {
-        JsonNode a = analysis("", "retail.sale.read");
+        JsonNode a = analysis("", "retail.sale.read,retail.sale.all_sellers");
         assertThat(a.get("totals").get("sales_minor").asLong()).isEqualTo(1_800);
         assertThat(a.has("slow_movers")).isFalse();
         assertThat(a.has("slow_movers_total")).isFalse();

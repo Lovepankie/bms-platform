@@ -2901,10 +2901,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Advances with their balances, newest first */
+        /**
+         * Advances with their balances, newest first
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["listRetailAdvances"];
         put?: never;
-        /** Record an advance to the owner or a related party (FR-RET-26); M */
+        /**
+         * Record an advance to the owner or a related party (FR-RET-26); M
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["createRetailAdvance"];
         delete?: never;
         options?: never;
@@ -2919,7 +2925,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** An advance with its repayments */
+        /**
+         * An advance with its repayments
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["getRetailAdvance"];
         put?: never;
         post?: never;
@@ -2938,7 +2947,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record a repayment of an advance (FR-RET-26); M */
+        /**
+         * Record a repayment of an advance (FR-RET-26); M
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["createRetailAdvanceRepayment"];
         delete?: never;
         options?: never;
@@ -2955,7 +2967,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Void a repayment and restore the balance (FR-RET-28); M */
+        /**
+         * Void a repayment and restore the balance (FR-RET-28); M
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["voidRetailAdvanceRepayment"];
         delete?: never;
         options?: never;
@@ -2972,7 +2987,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Void an advance that has no repayments (FR-RET-28); M */
+        /**
+         * Void an advance that has no repayments (FR-RET-28); M
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["voidRetailAdvance"];
         delete?: never;
         options?: never;
@@ -2987,10 +3005,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Banking records, newest first */
+        /**
+         * Banking records, newest first
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["listRetailBankings"];
         put?: never;
-        /** Record cash banked (FR-RET-22); M */
+        /**
+         * Record cash banked (FR-RET-22); M
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["createRetailBanking"];
         delete?: never;
         options?: never;
@@ -3005,7 +3029,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The amount expected to be banked for a shop and day (FR-RET-21) */
+        /**
+         * The amount expected to be banked for a shop and day (FR-RET-21)
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["getRetailBankingExpected"];
         put?: never;
         post?: never;
@@ -3024,7 +3051,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Void a banking record (FR-RET-28); M */
+        /**
+         * Void a banking record (FR-RET-28); M
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["voidRetailBanking"];
         delete?: never;
         options?: never;
@@ -3073,10 +3103,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Beneficiaries and advance parties */
+        /**
+         * Beneficiaries and advance parties
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["listRetailCashParties"];
         put?: never;
-        /** Add a beneficiary or advance party on the fly */
+        /**
+         * Add a beneficiary or advance party on the fly
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["createRetailCashParty"];
         delete?: never;
         options?: never;
@@ -3470,10 +3506,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Expense categories with their items */
+        /**
+         * Expense categories with their items
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["listRetailExpenseCategories"];
         put?: never;
-        /** Add an expense category (FR-RET-17) */
+        /**
+         * Add an expense category (FR-RET-17)
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["createRetailExpenseCategory"];
         delete?: never;
         options?: never;
@@ -3494,7 +3536,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Rename, remap, switch off or reorder a category; needs If-Match */
+        /**
+         * Rename, remap, switch off or reorder a category; needs If-Match
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         patch: operations["updateRetailExpenseCategory"];
         trace?: never;
     };
@@ -3507,7 +3552,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Add an item to a category */
+        /**
+         * Add an item to a category
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["createRetailExpenseItem"];
         delete?: never;
         options?: never;
@@ -3528,7 +3576,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Rename, switch off or flag an item as needing an explanation; needs If-Match */
+        /**
+         * Rename, switch off or flag an item as needing an explanation; needs If-Match
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         patch: operations["updateRetailExpenseItem"];
         trace?: never;
     };
@@ -3539,10 +3590,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Expenses, newest first */
+        /**
+         * Expenses, newest first
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["listRetailExpenses"];
         put?: never;
-        /** Record a company expense paid from the till (FR-RET-24); M */
+        /**
+         * Record a company expense paid from the till (FR-RET-24); M
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["createRetailExpense"];
         delete?: never;
         options?: never;
@@ -3559,7 +3616,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Void an expense (FR-RET-28); M */
+        /**
+         * Void an expense (FR-RET-28); M
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["voidRetailExpense"];
         delete?: never;
         options?: never;
@@ -3764,7 +3824,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Orders cancelled and why, by source (issue #385) */
+        /**
+         * Orders cancelled and why, by source (issue #385)
+         * @description ADR-055: it adds up everybody's orders, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied
+         */
         get: operations["getRetailOrderCancellationsReport"];
         put?: never;
         post?: never;
@@ -3781,7 +3844,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Delivered orders and the delivery fees taken, by day, source or rider (issue #385) */
+        /**
+         * Delivered orders and the delivery fees taken, by day, source or rider (issue #385)
+         * @description ADR-055: it adds up everybody's orders, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied
+         */
         get: operations["getRetailOrderFeesReport"];
         put?: never;
         post?: never;
@@ -4527,7 +4593,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Outstanding advances by party (FR-RET-29) */
+        /**
+         * Outstanding advances by party (FR-RET-29)
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["getRetailCashAdvancesReport"];
         put?: never;
         post?: never;
@@ -4544,7 +4613,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Expected against banked per shop and day, with the running unbanked total (FR-RET-23) */
+        /**
+         * Expected against banked per shop and day, with the running unbanked total (FR-RET-23)
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["getRetailCashBankingReport"];
         put?: never;
         post?: never;
@@ -4561,7 +4633,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The daily cash summary per shop and day (FR-RET-27) */
+        /**
+         * The daily cash summary per shop and day (FR-RET-27)
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["getRetailCashDailyReport"];
         put?: never;
         post?: never;
@@ -4578,7 +4653,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Expenses by category, item, shop or month (FR-RET-29) */
+        /**
+         * Expenses by category, item, shop or month (FR-RET-29)
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["getRetailCashExpensesReport"];
         put?: never;
         post?: never;
@@ -4595,7 +4673,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Savings per shop and day (FR-RET-29) */
+        /**
+         * Savings per shop and day (FR-RET-29)
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["getRetailCashSavingsReport"];
         put?: never;
         post?: never;
@@ -4646,7 +4727,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Owner dashboard: today, 7 and 30 days, stock value and counts, by shop (issue #149) */
+        /**
+         * Owner dashboard: today, 7 and 30 days, stock value and counts, by shop (issue #149)
+         * @description ADR-055: it adds up every seller's sales, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied; without branch_id a Supervisor gets the shops it supervises
+         */
         get: operations["getRetailDashboard"];
         put?: never;
         post?: never;
@@ -4697,7 +4781,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Sales by period, branch, category, product and seller, with slow movers (issue #149) */
+        /**
+         * Sales by period, branch, category, product and seller, with slow movers (issue #149)
+         * @description ADR-055: it adds up every seller's sales, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied; without branch_id a Supervisor gets the shops it supervises
+         */
         get: operations["getRetailSalesAnalysis"];
         put?: never;
         post?: never;
@@ -4867,7 +4954,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Sales in the caller's branch scope */
+        /**
+         * Sales in the caller's branch scope
+         * @description ADR-055: without retail.sale.all_sellers in every branch covered, only the caller's own sales; a seller_id other than one's own is 403
+         */
         get: operations["listRetailSales"];
         put?: never;
         /** Record a sale: snapshots, stock and journals in one transaction (FR-RET-04); M */
@@ -4885,7 +4975,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Sales grouped by a chain of levels with a summary per group (issues #328, #341) */
+        /**
+         * Sales grouped by a chain of levels with a summary per group (issues #328, #341)
+         * @description ADR-055: without retail.sale.all_sellers in every branch covered, only the caller's own sales; a seller_id other than one's own is 403
+         */
         get: operations["summariseRetailSales"];
         put?: never;
         post?: never;
@@ -5007,10 +5100,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Savings records, newest first */
+        /**
+         * Savings records, newest first
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["listRetailSavings"];
         put?: never;
-        /** Record the day's savings (FR-RET-18 to FR-RET-20); M */
+        /**
+         * Record the day's savings (FR-RET-18 to FR-RET-20); M
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["createRetailSavings"];
         delete?: never;
         options?: never;
@@ -5025,7 +5124,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The day's savings suggestion token, and the suggestion with profit read (FR-RET-18) */
+        /**
+         * The day's savings suggestion token, and the suggestion with profit read (FR-RET-18)
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["getRetailSavingsSuggestion"];
         put?: never;
         post?: never;
@@ -5044,7 +5146,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Void a savings record and free its day (FR-RET-28); M */
+        /**
+         * Void a savings record and free its day (FR-RET-28); M
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["voidRetailSavings"];
         delete?: never;
         options?: never;
@@ -5610,10 +5715,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Withdrawals from the bank, newest first */
+        /**
+         * Withdrawals from the bank, newest first
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         get: operations["listRetailWithdrawals"];
         put?: never;
-        /** Record cash withdrawn from the bank (FR-RET-25); M */
+        /**
+         * Record cash withdrawn from the bank (FR-RET-25); M
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["createRetailWithdrawal"];
         delete?: never;
         options?: never;
@@ -5630,7 +5741,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Void a withdrawal (FR-RET-28); M */
+        /**
+         * Void a withdrawal (FR-RET-28); M
+         * @description ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied
+         */
         post: operations["voidRetailWithdrawal"];
         delete?: never;
         options?: never;
@@ -11163,7 +11277,10 @@ export interface components {
             amount_minor?: number;
             /** Format: date-time */
             created_at?: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Who took it: shown to the owner (retail.profit.read at the branch) and to the person (ADR-055)
+             */
             created_by?: string;
             currency?: string;
             /** Format: uuid */

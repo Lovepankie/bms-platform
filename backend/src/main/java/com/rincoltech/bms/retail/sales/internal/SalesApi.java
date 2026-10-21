@@ -348,6 +348,11 @@ final class SalesApi {
             LocalDate paidOn,
             UUID journalEntryId,
             Instant createdAt,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Who took it: shown to the owner (retail.profit.read at the branch) and to the person (ADR-055)")
             UUID createdBy) {}
 
     @Schema(name = "RetailPaymentResult")

@@ -116,7 +116,9 @@ class CustomerOrdersController {
     @RequiresPermission(CustomerOrdersService.MANAGE)
     @Operation(
             summary = "Delivered orders and the delivery fees taken, by day, source or rider (issue #385)",
-            operationId = "getRetailOrderFeesReport")
+            operationId = "getRetailOrderFeesReport",
+            description =
+                    "ADR-055: it adds up everybody's orders, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied")
     FeesReport fees(
             @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
             @RequestParam(name = "from", required = false) LocalDate from,
@@ -131,7 +133,9 @@ class CustomerOrdersController {
     @RequiresPermission(CustomerOrdersService.MANAGE)
     @Operation(
             summary = "Orders cancelled and why, by source (issue #385)",
-            operationId = "getRetailOrderCancellationsReport")
+            operationId = "getRetailOrderCancellationsReport",
+            description =
+                    "ADR-055: it adds up everybody's orders, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied")
     CancellationsReport cancellations(
             @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
             @RequestParam(name = "from", required = false) LocalDate from,

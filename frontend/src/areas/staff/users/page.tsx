@@ -9,6 +9,7 @@ import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { useStaff } from '../context';
 import { LinkBox, type ShownLink } from './link-box';
 import { RoleEditor } from './role-editor';
+import { WhoCanDoWhat } from './who-can-do-what';
 import { ResetPanel } from './reset-panel';
 import { canManageUsers, canResetSignIn, contactLine, matchesSearch, roleChoices, roleLines, showUsers, statusWords } from './state';
 
@@ -132,6 +133,7 @@ export function UsersScreen() {
       ) : (
         <p className="hint">Only an administrator can invite people or change roles.</p>
       )}
+      <WhoCanDoWhat roles={roleList} modules={me.modules} />
       {link && <LinkBox link={link} business={brand.name} onDone={() => setLink(null)} doneLabel="I have sent it" />}
       {notice && <p role="status" className="alert alert-success">{notice}</p>}
       {error && mode?.kind !== 'deactivate' && <p role="alert" className="alert alert-danger">{error}</p>}

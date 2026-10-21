@@ -24,8 +24,8 @@ describe('cash book routes and tiles', () => {
     const sales = screensFor(sessionOf('sales')).map((s) => s.screen);
     for (const s of CASH_SCREENS) expect(admin).toContain(s);
     expect(cashier.filter((s) => CASH_SCREENS.includes(s))).toEqual(['banking', 'savings', 'expenses', 'cashSummary', 'bankingReport', 'expensesReport']);
-    // The seeded sales role holds the four cash book permissions (read, savings, banking, expense record).
-    expect(sales.filter((s) => CASH_SCREENS.includes(s))).toEqual(['banking', 'savings', 'expenses', 'cashSummary', 'bankingReport', 'expensesReport']);
+    // Since V74 (ADR-055) the seeded sales role holds no cash book permission: the till is given per person.
+    expect(sales.filter((s) => CASH_SCREENS.includes(s))).toEqual([]);
     // A session with none of them sees no cash book tile.
     const none = sessionOf('sales', ['retail.cashbook.read', 'retail.savings.record', 'retail.banking.record', 'retail.expense.record']);
     expect(screensFor(none).map((s) => s.screen).filter((s) => CASH_SCREENS.includes(s))).toEqual([]);

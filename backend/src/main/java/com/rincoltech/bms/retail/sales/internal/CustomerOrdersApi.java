@@ -172,7 +172,7 @@ final class CustomerOrdersApi {
     record OrderEvent(
             String step,
             @JsonInclude(JsonInclude.Include.NON_NULL) String note,
-            UUID byUser,
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID byUser,
             @JsonInclude(JsonInclude.Include.NON_NULL) String byName,
             Instant at) {}
 
@@ -229,7 +229,7 @@ final class CustomerOrdersApi {
             Boolean saleVoided,
 
             Instant createdAt,
-            UUID createdBy,
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID createdBy,
             int version,
             List<OrderLine> lines,
 

@@ -21,7 +21,7 @@ const rangeStep = (target: string, what: string): TourStep =>
 
 export const retailHomePage: Tour = {
   id: 'page-retail-home',
-  version: 1,
+  version: 2,
   title: 'This page: Retail',
   audience: (me) => (me.permissions ?? []).some((p) => p.startsWith('retail.')),
   autoStart: false,
@@ -31,6 +31,8 @@ export const retailHomePage: Tour = {
     retail({ id: 'sale', target: 'retail-sale', needs: [SELL], optional: true, title: 'Record a sale', body: 'Tap here when a customer pays. Pick the items, then save the sale.' }),
     retail({ id: 'restock', target: 'retail-restock', needs: [RESTOCK], optional: true, title: 'Restock', body: 'Tap here when new goods arrive. Stock goes up and the cost is saved.' }),
     retail({ id: 'stock', target: 'retail-stock', needs: [STOCK_READ], optional: true, title: 'Check your stock', body: 'Tap here to see how much of each item you hold, shop by shop.' }),
+    // ADR-055: a seller sees their own figures; everybody's sales, profit and the value of the stock are the owner's.
+    retail({ id: 'own-sales', target: 'own-sales', needs: [SALES_READ], unless: ['retail.sale.all_sellers'], optional: true, title: 'Your sales', body: 'What you sold today and in the last 7 days. Only your own sales are counted. All sales lists them one by one.' }),
   ],
 };
 

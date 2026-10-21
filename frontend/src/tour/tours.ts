@@ -854,7 +854,7 @@ export const assistantPage: Tour = {
 // The Users page (issue #319): a page tour for whoever may read the staff list; the steps about changing people need the manage permission.
 export const usersPage: Tour = {
   id: 'page-users',
-  version: 3,
+  version: 4,
   title: 'This page: staff users',
   audience: (me) => held(me, 'core.users.read'),
   autoStart: false,
@@ -866,6 +866,12 @@ export const usersPage: Tour = {
       needs: ['core.users.manage'],
       title: 'Invite someone',
       body: 'Tap here to add a person. You type their name and phone, choose what they do, and get a link to send them. The link is shown once.',
+    },
+    {
+      id: 'roles-card',
+      target: 'who-can-do-what',
+      title: 'Who can do what',
+      body: 'Open this to see what each role may do. There is one short line for every role.',
     },
     {
       id: 'search',

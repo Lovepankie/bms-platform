@@ -70,7 +70,9 @@ class ReportsController {
     @RequiresPermission("retail.sale.read")
     @Operation(
             summary = "Sales by period, branch, category, product and seller, with slow movers (issue #149)",
-            operationId = "getRetailSalesAnalysis")
+            operationId = "getRetailSalesAnalysis",
+            description =
+                    "ADR-055: it adds up every seller's sales, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied; without branch_id a Supervisor gets the shops it supervises")
     SalesAnalysisApi.Analysis salesAnalysis(
             @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
             @RequestParam(name = "from", required = false) LocalDate from,
@@ -152,7 +154,9 @@ class ReportsController {
     @RequiresPermission("retail.sale.read")
     @Operation(
             summary = "Owner dashboard: today, 7 and 30 days, stock value and counts, by shop (issue #149)",
-            operationId = "getRetailDashboard")
+            operationId = "getRetailDashboard",
+            description =
+                    "ADR-055: it adds up every seller's sales, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied; without branch_id a Supervisor gets the shops it supervises")
     DashboardApi.Report dashboard(@RequestParam(name = "branch_id", required = false) List<UUID> branchIds) {
         return dashboard.dashboard(branchIds);
     }

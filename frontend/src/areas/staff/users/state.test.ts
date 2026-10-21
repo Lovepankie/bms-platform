@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { planLimitWords } from '../../../api/users';
 import {
-  EVERY_BRANCH, assignmentFor, assignmentsFor, branchUnavailable, purchasingOffered, roleRows, canManageUsers, canResetSignIn, contactLine, resetProofProblem, emptyInvite, hasProblems, inviteBody, inviteProblems, matchesSearch, roleChoice, roleChoices, roleLines, showUsers, whatsappLink,
+  EVERY_BRANCH, whoCanDoWhat, assignmentFor, assignmentsFor, branchUnavailable, purchasingOffered, roleRows, canManageUsers, canResetSignIn, contactLine, resetProofProblem, emptyInvite, hasProblems, inviteBody, inviteProblems, matchesSearch, roleChoice, roleChoices, roleLines, showUsers, whatsappLink,
 } from './state';
 
 // The rules of the Users screen (issue #319), with fabricated people and numbers only.
@@ -97,7 +97,7 @@ describe('roles in plain words', () => {
     const c = roleChoice({ key: 'retail_sales', name: 'Sales' });
     expect(c.label).toBe('Sales person');
     expect(c.label).not.toMatch(/retail_sales/);
-    expect(c.about).toMatch(/Sells in the shop/);
+    expect(c.about).toMatch(/Sells in their shops/);
   });
 
   it('keeps a role it has no words for, under the name the server gives it, administrator first', () => {
@@ -120,12 +120,43 @@ describe('roles in plain words', () => {
   });
 
   it('names the Storekeeper and Purchasing roles in plain words, and leaves retail roles out of a business without retail', () => {
-    expect(roleChoice({ key: 'retail_storekeeper', name: 'Storekeeper' }).about).toMatch(/Does not sell, set prices, handle money or see costs/);
+    expect(roleChoice({ key: 'retail_storekeeper', name: 'Storekeeper' }).about).toMatch(/Sees no prices and no money, and does not sell/);
     expect(roleChoice({ key: 'retail_purchasing', name: 'Purchasing' }).about).toMatch(/purchases and restocks/);
     const all = [{ key: 'tenant_admin' }, { key: 'loan_officer' }, { key: 'retail_sales' }, { key: 'retail_storekeeper' }];
     expect(roleChoices(all, ['lending']).map((c) => c.key)).toEqual(['tenant_admin', 'loan_officer']);
     expect(roleChoices(all, ['retail']).map((c) => c.key)).toHaveLength(4);
     expect(roleChoices(all, undefined).map((c) => c.key)).toHaveLength(4);
+  });
+});
+
+// Issue #399, ADR-055: the card says what each role does in the words of the pick-list, so the two cannot drift apart.
+describe('who can do what', () => {
+  const roles = [
+    { key: 'retail_sales' }, { key: 'tenant_admin' }, { key: 'retail_supervisor' }, { key: 'retail_storekeeper' },
+    { key: 'retail_purchasing' }, { key: 'retail_till' }, { key: 'loan_officer' },
+  ];
+  it('has one line per role, the administrator first, in the pick-list words', () => {
+    const lines = whoCanDoWhat(roles, ['retail', 'lending']);
+    expect(lines.map((l) => l.title)).toEqual([
+      'Administrator', 'Sales person', 'Supervisor', 'Storekeeper', 'Purchasing', 'Can close the till and do the banking', 'Loan officer',
+    ]);
+    expect(lines.map((l) => l.about)).toEqual(roleChoices(roles, ['retail', 'lending']).map((c) => c.about));
+    expect(lines[0]?.about).toMatch(/every shop and store, profit and costs/);
+    expect(lines.find((l) => l.title === 'Storekeeper')?.about).toMatch(/no prices and no money/);
+    expect(lines.find((l) => l.title === 'Supervisor')?.about).toMatch(/No profit, costs/);
+    expect(lines.find((l) => l.title === 'Purchasing')?.about).toMatch(/buying prices of what they buy/);
+    expect(lines.map((l) => `${l.title} ${l.about}`).join(' ')).not.toMatch(/[\u2013\u2014]/);
+  });
+
+  it('leaves the retail roles out of a business without retail', () => {
+    expect(whoCanDoWhat(roles, ['lending']).map((l) => l.title)).toEqual(['Administrator', 'Loan officer']);
+  });
+
+  it('adds the till in the same shops and stores when it is ticked', () => {
+    const body = inviteBody({ ...good, roleKey: 'retail_sales', branchIds: ['h1'], till: true });
+    expect(body.roles).toEqual([{ role_key: 'retail_sales', branch_id: 'h1' }, { role_key: 'retail_till', branch_id: 'h1' }]);
+    expect(purchasingOffered('retail_sales', roles, 'retail_till')).toBe(true);
+    expect(purchasingOffered('retail_till', roles, 'retail_till')).toBe(false);
   });
 });
 

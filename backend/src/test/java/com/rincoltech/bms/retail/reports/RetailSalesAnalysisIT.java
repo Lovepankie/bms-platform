@@ -125,14 +125,15 @@ class RetailSalesAnalysisIT extends IntegrationTest {
 
     @Test
     void theStockedListsNeedStockReadAndAreOtherwiseLeftOut() {
-        JsonNode saleOnly = analysis("", "retail.sale.read");
+        JsonNode saleOnly = analysis("", "retail.sale.read,retail.sale.all_sellers");
         assertThat(saleOnly.get("totals").get("sales_minor").asLong()).isEqualTo(5_400);
         assertThat(saleOnly.has("slow_movers")).isFalse();
         assertThat(saleOnly.has("no_sales")).isFalse();
         assertThat(AnalyticsData.hasKey(saleOnly, "qty_on_hand")).isFalse();
         assertThat(AnalyticsData.hasKey(saleOnly, "stock_at_price")).isFalse();
         // A seller with stock read keeps them.
-        assertThat(analysis("", SALES).has("slow_movers")).isTrue();
+        assertThat(analysis("", SALES + ",retail.sale.all_sellers").has("slow_movers"))
+                .isTrue();
     }
 
     @Test
@@ -146,7 +147,7 @@ class RetailSalesAnalysisIT extends IntegrationTest {
     @Test
     void aCallerWithoutProfitReadNeverSeesCostOrProfitAndWritesNoAudit() {
         long audit = AnalyticsData.auditRows();
-        JsonNode a = analysis("", SALES);
+        JsonNode a = analysis("", SALES + ",retail.sale.all_sellers");
         assertThat(a.get("profit_visible").asBoolean()).isFalse();
         assertThat(a.get("totals").get("sales_minor").asLong()).isEqualTo(5_400);
         for (String fragment : new String[] {"cost", "profit_minor", "margin", "gross"}) {

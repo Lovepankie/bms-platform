@@ -43,6 +43,8 @@ class CashbookSupport {
     static final String ADVANCE_REPAY = "retail.advance.repay";
     static final String VOID = "retail.cashbook.void";
     static final String PROFIT_READ = "retail.profit.read";
+    /** ADR-055 (the owner's decision of 21 October 2026): closing the till and doing the banking, given per person. */
+    static final String TILL = "retail.till.close";
 
     static final int DEFAULT_LIMIT = 50;
     static final int MAX_LIMIT = 200;
@@ -137,6 +139,22 @@ class CashbookSupport {
 
     static Principal principal() {
         return CurrentPrincipal.require();
+    }
+
+    /**
+     * ADR-055: the till's figures (the daily cash summary, the expected banking, the savings suggestion) and closing the till
+     * (savings and banking recorded) are for the people the owner gave "Can close the till and do the banking" (the role
+     * {@code retail_till}) and the administrators; a seller is refused with 403. The branch is checked by the route's own
+     * permission, which the same role carries for the same branches.
+     */
+    static void requireTill() {
+        if (!CurrentPrincipal.require().hasPermission(TILL)) {
+            throw new ApiException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "permission_denied",
+                    "Permission denied",
+                    "Closing the till and the banking are for the people the owner chose.");
+        }
     }
 
     static ApiException notFound() {

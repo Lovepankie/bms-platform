@@ -6,7 +6,8 @@ import { useShellBrand } from '../../../app/branding';
 import { useStaff } from '../context';
 import { LinkBox, type ShownLink } from './link-box';
 import { RolePick } from './role-pick';
-import { PURCHASING, canManageUsers, emptyInvite, hasProblems, inviteBody, inviteProblems, purchasingOffered, roleChoices, type InviteDraft, type InviteProblems } from './state';
+import { WhoCanDoWhat } from './who-can-do-what';
+import { ADD_ONS, TILL, canManageUsers, emptyInvite, hasProblems, inviteBody, inviteProblems, purchasingOffered, roleChoices, type InviteDraft, type InviteProblems } from './state';
 
 // Invite a staff user (issue #319; FR-IAM-01). Phone first: most staff are reached on a phone, so the phone box comes before the
 // email and either one is enough. After the invitation the one-time link is shown once, in a box with Copy and WhatsApp buttons.
@@ -120,7 +121,7 @@ export function InviteScreen() {
 
         <div data-tour="invite-role">
         <RolePick
-          roles={roleChoices(roles.data ?? [], me.modules).filter((r) => r.key !== PURCHASING)}
+          roles={roleChoices(roles.data ?? [], me.modules).filter((r) => !(ADD_ONS as readonly string[]).includes(r.key))}
           branches={branches.data ?? []}
           roleKey={draft.roleKey}
           branchIds={draft.branchIds}
@@ -136,6 +137,13 @@ export function InviteScreen() {
             Can also record purchases and restocks (with the buying prices), in the same shops and stores
           </label>
         )}
+        {purchasingOffered(draft.roleKey, roleChoices(roles.data ?? [], me.modules), TILL) && (
+          <label className="check">
+            <input type="checkbox" checked={draft.till === true} onChange={(e) => set({ till: e.target.checked })} />
+            Can close the till and do the banking, in the same shops and stores
+          </label>
+        )}
+        <WhoCanDoWhat roles={roles.data ?? []} modules={me.modules} />
 
         {error && <p role="alert" className="alert alert-danger">{error}</p>}
         {error && lookInList && (

@@ -18,11 +18,14 @@ public final class CashbookTestSupport {
     /** The admin column for the cash book (chapter 8): all ten permissions. */
     public static final String CASHBOOK_ADMIN = "retail.cashbook.read,retail.savings.record,retail.savings.overwrite,"
             + "retail.banking.record,retail.expense.record,retail.expense.manage,retail.withdrawal.record,"
-            + "retail.advance.create,retail.advance.repay,retail.cashbook.void";
+            + "retail.advance.create,retail.advance.repay,retail.cashbook.void,retail.till.close";
 
-    /** The sales role's cash book column: read, savings record, banking record, expense record. */
+    /**
+     * The till column (ADR-055, the role retail_till since V74; the Sales role held it before): read, savings record, banking
+     * record, expense record and closing the till.
+     */
     public static final String CASHBOOK_SALES =
-            "retail.cashbook.read,retail.savings.record,retail.banking.record,retail.expense.record";
+            "retail.cashbook.read,retail.savings.record,retail.banking.record,retail.expense.record,retail.till.close";
 
     /** Everything an administrator holds for retail, cash book included. */
     public static final String ALL = RetailTestSupport.ADMIN + "," + CASHBOOK_ADMIN;

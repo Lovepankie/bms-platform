@@ -591,7 +591,8 @@ class RetailCustomerOrdersIT extends IntegrationTest {
         UUID id = placed("1", 3_000);
         deliver(id, Map.of("payment_method", "cash"));
         ResponseEntity<JsonNode> daily = api.get(
-                "/reports/cash/daily?branch_id=" + hq + "&from=" + today() + "&to=" + today(), "retail.cashbook.read");
+                "/reports/cash/daily?branch_id=" + hq + "&from=" + today() + "&to=" + today(),
+                "retail.cashbook.read,retail.till.close");
         assertThat(daily.getStatusCode()).as("%s", daily.getBody()).isEqualTo(HttpStatus.OK);
         JsonNode day = daily.getBody().get("items").get(0);
         assertThat(day.get("cash_takings_minor").asLong()).isEqualTo(13_000);
@@ -689,7 +690,7 @@ class RetailCustomerOrdersIT extends IntegrationTest {
         assertThat(account("delivery_income", false)).isZero();
         JsonNode day = api.get(
                         "/reports/cash/daily?branch_id=" + hq + "&from=" + today() + "&to=" + today(),
-                        "retail.cashbook.read")
+                        "retail.cashbook.read,retail.till.close")
                 .getBody()
                 .get("items")
                 .get(0);
@@ -1067,7 +1068,7 @@ class RetailCustomerOrdersIT extends IntegrationTest {
                 .isFalse();
         JsonNode day = api.get(
                         "/reports/cash/daily?branch_id=" + hq + "&from=" + today() + "&to=" + today(),
-                        "retail.cashbook.read")
+                        "retail.cashbook.read,retail.till.close")
                 .getBody()
                 .get("items")
                 .get(0);

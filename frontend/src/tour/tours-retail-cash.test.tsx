@@ -24,8 +24,9 @@ import { describeTours } from './test-kit';
 // tour is for and prove every step's data-tour anchor is on it. Fabricated users only.
 
 const ADMIN: Me = { ...mockMe('admin'), module_capabilities: { retail: ['branch_roles', 'price_lists', 'customer_accounts'] } };
-// A shop user: records banking, expenses and savings and reads the cash book, but holds none of the administrator's permissions.
-const SELLER: Me = { ...mockMe('sales'), full_name: 'Test Seller 02' };
+// A shop user given the till (ADR-055): records banking, expenses and savings and reads the cash book, but holds none of the
+// administrator's permissions.
+const SELLER: Me = { ...mockMe('cashier'), full_name: 'Test Seller 02' };
 
 function screen(path: string): ReactElement {
   switch (path) {

@@ -2,7 +2,8 @@ import { Link, createLazyRoute } from '@tanstack/react-router';
 import { icons } from '../../../components/icons';
 import { useStaff } from '../context';
 import { RetailDashboard } from './dashboard';
-import { canUse, screensFor, showRetail } from './permissions';
+import { OwnSales } from './own-sales';
+import { ALL_SELLERS, canUse, holds, screensFor, showRetail } from './permissions';
 import { useCanSellAnywhere } from './ui';
 
 // The Retail landing page: one big tile per screen the session may use. Nothing else is listed.
@@ -11,8 +12,10 @@ export function RetailHome() {
   const { me } = useStaff();
   const sells = useCanSellAnywhere(me);
   const screens = showRetail(me) ? screensFor(me, { sells }) : [];
-  // The dashboard is a sales read; its profit and stock parts depend on the other permissions.
-  const dashboard = showRetail(me) && canUse(me, 'salesHistory');
+  // The dashboard adds up every seller's sales, so it is the owner's (ADR-055); its profit and stock parts depend on the other
+  // permissions. A seller who sees only their own figures gets their own sales instead.
+  const dashboard = showRetail(me) && canUse(me, 'salesHistory') && holds(me, ALL_SELLERS);
+  const ownSales = showRetail(me) && canUse(me, 'salesHistory') && !holds(me, ALL_SELLERS);
   // The owner reads the figures first; a seller starts from the tiles (Record a sale) and finds them below.
   const ownerFirst = canUse(me, 'profit');
   return (
@@ -37,6 +40,7 @@ export function RetailHome() {
         ))}
       </ul>
       {dashboard && !ownerFirst && <RetailDashboard />}
+      {ownSales && <OwnSales />}
     </main>
   );
 }

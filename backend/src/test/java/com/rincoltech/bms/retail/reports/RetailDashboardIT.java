@@ -128,7 +128,7 @@ class RetailDashboardIT extends IntegrationTest {
     @Test
     void withoutProfitReadTheSalesAndStockPartsStayAndEveryCostAndProfitFigureGoes() {
         long audit = AnalyticsData.auditRows();
-        JsonNode r = dashboard(SALES);
+        JsonNode r = dashboard(SALES + ",retail.sale.all_sellers");
         assertThat(r.get("profit_visible").asBoolean()).isFalse();
         assertThat(r.get("today").get("sales_minor").asLong()).isEqualTo(3_600);
         // ADR-055: the value of the stock, even at the selling price, goes with the cost permission; the counts stay.
@@ -143,7 +143,7 @@ class RetailDashboardIT extends IntegrationTest {
 
     @Test
     void withoutStockReadOnlyTheSalesPartsAreShown() {
-        JsonNode r = dashboard("retail.sale.read");
+        JsonNode r = dashboard("retail.sale.read,retail.sale.all_sellers");
         assertThat(r.has("stock")).isFalse();
         assertThat(r.get("today").get("sales_minor").asLong()).isEqualTo(3_600);
         JsonNode hq = shop(r, t.headOffice());

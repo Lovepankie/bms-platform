@@ -134,7 +134,7 @@ describe('the invite form', () => {
   it('shows the plain-language description of the chosen role and asks for a branch unless it is the administrator', async () => {
     shell(<InviteScreen />);
     await fillInvite();
-    expect(screen.getByText(/Takes and records money at the counter/)).toBeTruthy();
+    expect(screen.getAllByText(/Takes and records money at the counter/).length).toBeGreaterThan(0);
     expect(screen.getByRole('group', { name: 'Where does this person work?' })).toBeTruthy();
     expect((screen.getByRole('checkbox', { name: 'Every shop and store' }) as HTMLInputElement).checked).toBe(true);
     // Taking every one off leaves nothing chosen, which is refused, never every branch.

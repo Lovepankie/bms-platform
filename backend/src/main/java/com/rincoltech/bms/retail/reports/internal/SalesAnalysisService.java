@@ -63,7 +63,7 @@ class SalesAnalysisService {
                     List.of(new FieldProblem("slow_days", "invalid", "slow_days is from 7 to 180.")));
         }
         Principal principal = CurrentPrincipal.require();
-        List<UUID> filter = principal.branchFilter("retail.sale.read", branchIds);
+        List<UUID> filter = AnalyticsSupport.everySellerFilter(principal, branchIds);
         LocalDate today = clock.today(tenant.profile().timezone());
         Window w = AnalyticsSupport.window(from, to, today);
         int top = AnalyticsSupport.top(topParam);

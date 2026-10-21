@@ -4,7 +4,7 @@
 
 Proposed (2026-10-21, issue #399; the product owner's go of 21 October 2026 on a retail owner's ask of 19 and 20 October). Built in two
 slices: slice 1 (branch assignment, the Storekeeper and Purchasing roles, the administrator never limited by branch; migration `V73`) and
-slice 2 (sellers see only their own figures; its own migration, the next free number at its merge). Builds on ADR-017 (per-permission branch
+slice 2 (sellers see only their own figures; migration `V74`; both renamed to the next free numbers at merge if needed). Builds on ADR-017 (per-permission branch
 scope), ADR-020 (the retail Sales role and `retail.profit.read`) and ADR-048 (a Store does not sell). Renumbered at merge if another ADR takes 055
 first.
 
@@ -57,15 +57,39 @@ own figures.
    adds to the union and never narrows it, because no check reads a role name: every check is a permission and its scope. Integration tests
    prove an administrator with no branch assignment sees every branch's data and reports, and that adding a branch-limited role to the same
    person changes nothing.
-5. **Sellers see only their own figures (slice 2).** A new permission lets a holder see everybody's sales at its branches (the tenant
-   administrator's by default). A holder of `retail.sale.read` without it sees only the sales they made, in every list, summary, report, export,
-   search and API response, enforced in the queries on the server and not only hidden in the PWA; it never sees profit, margins, buying prices
-   or costs (already absent without `retail.profit.read`) nor the value of the stock, which needs `retail.profit.read` too. The exact permission
-   key, the routes it covers and its migration are recorded in the slice 2 amendment of this ADR.
+5. **Sellers see only their own figures (slice 2, migration `V74`).** A new permission, `retail.sale.all_sellers`, lets a holder see
+   everybody's sales at its branches; the tenant administrator holds it, no other seeded role does. A holder of `retail.sale.read`
+   without it (in every branch the figures cover) sees only the sales they made: the sales list and its grouped summary are filtered on
+   the seller in the query, one sale and its payments are not found when they are someone else's, a `seller_id` other than one's own
+   and the salesperson level are refused, and the reports that add up everybody's sales (the owner dashboard, the sales analysis, the
+   delivery fees) are refused with 403; the Retail home shows the seller "Your sales" (today and the last 7 days) from the summary
+   instead of the dashboard. Profit, margins, buying prices, costs and the value of the stock are absent without `retail.profit.read`
+   (slice 1 extends that rule to the value at the selling price). One exception keeps the till working: the debts still owed
+   (`owing` and `overdue`, and opening a credit sale that still owes) are shown whoever made the sale, so whoever is at the till can
+   take a buyer's payment. A debt is the buyer's figure, not a colleague's takings; the grouped summary is never widened by it and stays the caller's own sales. The owner decided the rest on 21 October 2026. **The cash book** is hidden from ordinary
+   sellers: the Sales role lost its four cash book permissions in `V74`, and a new one, `retail.till.close` ("Can close the till and do
+   the banking"), is given per person through the role `retail_till` at the branches the person works in, with those four; every cash
+   book route (its lists, reports, savings, banking, expenses and advances) also needs it, checked in code; administrators have it
+   everywhere and no one else gets it by default. **A buyer's account** (the account, the statement and its PDF, the payments on
+   account, credit control, customer ageing, and opening a credit sale that still owes) stays open to the sellers of its branches so
+   they can take payments: its totals include colleagues' sales, which are the buyer's debt, but it never names who made a sale or took
+   or reversed a payment (only the owner, holding `retail.profit.read` there, or the person themselves), and cost and profit stay out.
+   **The order list** stays the shop's shared work: every seller of the branch sees the orders and their values, but the sale a
+   colleague made on delivery is not linked (its id and number are left out, and the history does not name it), and the
+   order and its history name only the caller's own steps (who took, moved or delivered it); the payments list of a sale
+   names only the caller's own payments. **A Supervisor** (`retail_supervisor`: sale read,
+   `retail.sale.all_sellers` and stock read, scoped to its branches) sees every seller's sales and totals, the dashboard and the sales
+   analysis at its branches, with no profit, cost, margin, stock value, Users or Controls, and can be combined with the till.
+   The order reports (delivery fees, cancellations) are the owner's (403).
+   Two consequences to know: the stock list still shows each item's quantity and selling price, so a seller can multiply them for one
+   item (a shelf price times a count, never a total over the stock); and imported history, whose `created_by` is the import actor
+   (`RetailHistory.IMPORT_ACTOR`), belongs to no seller, so only the owner (or a holder of `retail.sale.all_sellers`) sees it.
 6. **Existing users keep what they have.** The administrator and every lending role keep exactly their permissions, the Sales role keeps its
    permissions, and every existing assignment keeps its branch; the only rows `V73` changes are administrator rows limited to a branch, which
    it widens. Slice 2 narrows what the Sales role sees of other people's sales, which is the change the owner asked for.
-7. **Plain words.** The Users screen names the roles "Administrator", "Sales person", "Storekeeper" and "Purchasing (records purchases and
+7. **Plain words.** The Users screen and the invitation carry a "Who can do what" card, one line per role, built from the same words as the
+   role pick-list so the two cannot disagree; the invitation offers Purchasing and "Can close the till and do the banking" as tick
+   boxes. The Users screen names the roles "Administrator", "Sales person", "Storekeeper" and "Purchasing (records purchases and
    restocks)" with one sentence each, the branches as shops and stores, and says that an administrator works in every shop and store.
 
 ## Consequences
@@ -85,7 +109,12 @@ own figures.
 - Purchasing as a role means the owner gives it per branch; a person who buys for every branch gets one assignment for every branch.
 - Seeded roles are global: a business cannot rename them or make its own mix; a custom role remains future work.
 
+- Slice 2: a seller loses the owner dashboard, the sales analysis and the order reports (their own sales are on the Retail home
+  and in the sales lists); the cash book, the buyer's account and the order list still show branch figures until the owner decides.
+
 **Watch for:**
+- The own-sales filter is `created_by` on `retail_sales` with no index of its own: the list and summary scan the branch's sales in
+  the date range, as before, and drop the others; add an index on `(tenant_id, created_by, sale_date)` if a busy shop needs it.
 - A new retail route must keep declaring a permission and checking the branch of what it touches; a route that reads across branches without
   the scope would leak to a storekeeper or a seller. `RetailRolesIT` is the place to add the new route to the role matrix.
 - A future check that reads a role name (for example "is this a storekeeper") would break decision 4; check permissions, never role keys.

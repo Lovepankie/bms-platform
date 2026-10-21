@@ -13,8 +13,8 @@ describe('retail permission gating', () => {
     expect(canUse(sales, 'restock')).toBe(false);
     expect(canUse(sales, 'stocktake')).toBe(false);
     // Stock value, even at the selling price, is the owner's figure (ADR-055), so the seller has no Stock value tile.
-    // The seeded sales role also holds four cash book permissions (chapter 8 matrix).
-    expect(screensFor(sales).map((s) => s.screen)).toEqual(['sale', 'creditSales', 'salesHistory', 'orders', 'ordersReport', 'usage', 'stock', 'transfers', 'salesAnalysis', 'stockHealth', 'creditControl', 'catalogue', 'banking', 'savings', 'expenses', 'cashSummary', 'bankingReport', 'expensesReport']);
+    // Since V74 the cash book is the till's (ADR-055), so the seeded sales role has no cash book tile.
+    expect(screensFor(sales).map((s) => s.screen)).toEqual(['sale', 'creditSales', 'salesHistory', 'orders', 'usage', 'stock', 'transfers', 'stockHealth', 'creditControl', 'catalogue']);
     expect(canUse(sales, 'transfer')).toBe(false);
   });
 
@@ -25,11 +25,13 @@ describe('retail permission gating', () => {
     expect(only('retail.usage.report')).toEqual(['usage']);
     expect(only('retail.stock.read')).toEqual(['stock', 'transfers', 'stockHealth']);
     expect(only('retail.profit.read')).toEqual(['profit', 'margins', 'evaluation']);
-    expect(only('retail.sale.read')).toEqual(['creditSales', 'salesHistory', 'salesAnalysis', 'creditControl']);
+    expect(only('retail.sale.read')).toEqual(['creditSales', 'salesHistory', 'creditControl']);
+    // ADR-055: the sales analysis and the orders report add up everybody's sales, so they are the owner's.
+    expect(screensFor({ permissions: ['retail.sale.read', 'retail.sale.all_sellers'] }).map((s) => s.screen)).toContain('salesAnalysis');
     // Controls name staff and rank them by a rate, so it is its own permission, never a sales read.
     expect(only('retail.controls.read')).toEqual(['controls']);
     // Customer orders (issue #385): the orders and their report are one permission; delivering also needs a sale permission.
-    expect(only('retail.order.manage')).toEqual(['orders', 'ordersReport']);
+    expect(only('retail.order.manage')).toEqual(['orders']);
   });
 
   it('offers everything to an admin', () => {
@@ -48,16 +50,19 @@ describe('retail permission gating', () => {
 
   it('shows each cash book tile only with its permission', () => {
     const only = (...p: string[]) => screensFor({ permissions: p }).map((s) => s.screen);
-    expect(only('retail.savings.record')).toEqual(['savings']);
-    expect(only('retail.banking.record')).toEqual(['banking']);
+    // Savings and banking close the till (ADR-055): they need the till too.
+    expect(only('retail.savings.record')).toEqual([]);
+    expect(only('retail.savings.record', 'retail.till.close')).toEqual(['savings']);
+    expect(only('retail.banking.record', 'retail.till.close')).toEqual(['banking']);
     expect(only('retail.expense.record')).toEqual(['expenses']);
     expect(only('retail.withdrawal.record')).toEqual(['withdrawals']);
     expect(only('retail.advance.create')).toEqual(['advances']);
     expect(only('retail.advance.repay')).toEqual(['advances']);
     // The lists and reports need the cash book read; setting up the lists needs expense.manage as well.
-    expect(only('retail.cashbook.read')).toEqual(['cashSummary', 'bankingReport', 'expensesReport']);
+    expect(only('retail.cashbook.read')).toEqual(['bankingReport', 'expensesReport']);
+    expect(only('retail.cashbook.read', 'retail.till.close')).toEqual(['cashSummary', 'bankingReport', 'expensesReport']);
     expect(only('retail.expense.manage')).toEqual([]);
-    expect(only('retail.expense.manage', 'retail.cashbook.read')).toEqual(['cashSummary', 'bankingReport', 'expensesReport', 'expenseSetup']);
+    expect(only('retail.expense.manage', 'retail.cashbook.read')).toEqual(['bankingReport', 'expensesReport', 'expenseSetup']);
     expect(only('retail.cashbook.void', 'retail.savings.overwrite', 'retail.profit.read')).toEqual(['profit', 'margins', 'evaluation']);
   });
 
@@ -99,8 +104,10 @@ describe('the retail bottom bar', () => {
     expect(shortcutsFor(mockMe('cashier')).map((s) => s.screen)).toEqual(['sale', 'orders', 'banking', 'savings', 'expenses']);
   });
 
-  it('gives the seeded sales role its sale shortcut, the three it records, then orders', () => {
-    expect(shortcutsFor(mockMe('sales')).map((s) => s.screen)).toEqual(['sale', 'orders', 'banking', 'savings', 'expenses']);
+  it('gives a seller with the till its sale shortcut, the three it records, then orders', () => {
+    expect(shortcutsFor(mockMe('cashier')).map((s) => s.screen)).toEqual(['sale', 'orders', 'banking', 'savings', 'expenses']);
+    // ADR-055: the seeded sales role has no cash book, so it keeps the stock shortcuts.
+    expect(shortcutsFor(mockMe('sales')).map((s) => s.screen)).toEqual(['sale', 'orders', 'stock', 'usage']);
   });
 
   it('keeps the old shortcuts for a user with no cash book permission', () => {

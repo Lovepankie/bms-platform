@@ -28,10 +28,26 @@ const ROLE_WORDS: Record<string, { title: string; about: string }> = {
   cashier: { title: 'Cashier', about: 'Takes and records money at the counter: repayments, deposits and withdrawals.' },
   accountant: { title: 'Accountant', about: 'Reads the books and reports, and keeps the accounts and periods.' },
   auditor: { title: 'Auditor', about: 'Can look at everything but change nothing.' },
-  retail_sales: { title: 'Sales person', about: 'Sells in the shop and checks stock. Sees no costs or profit.' },
-  retail_storekeeper: { title: 'Storekeeper', about: 'Moves stock between the stores and shops, receives it, counts it and reports damage. Does not sell, set prices, handle money or see costs.' },
-  retail_purchasing: { title: 'Purchasing', about: 'Records purchases and restocks, with the buying prices. Give it on top of another role to the people you trust with buying.' },
+  retail_sales: { title: 'Sales person', about: 'Sells in their shops, checks stock and takes buyers\' payments. Sees their own sales only, and no costs, profit or cash book.' },
+  retail_storekeeper: { title: 'Storekeeper', about: 'Moves stock between the stores and shops, receives it, counts it and reports damage. Sees no prices and no money, and does not sell.' },
+  retail_purchasing: { title: 'Purchasing', about: 'Records purchases and restocks at their shops and stores, and sees the buying prices of what they buy. Give it on top of another role.' },
+  retail_till: { title: 'Can close the till and do the banking', about: 'Sees the cash book of their shops: the day\'s takings, the savings and the banking. Give it on top of another role.' },
+  retail_supervisor: { title: 'Supervisor', about: 'Sees every seller\'s sales and totals, the dashboard and the sales analysis at their shops. No profit, costs, staff or Controls.' },
 };
+
+/** The role that closes the till and does the banking (ADR-055): given on top of another role, so the invitation offers it as a tick box. */
+export const TILL = 'retail_till';
+
+/** The roles given on top of another one, as tick boxes on the invitation: buying, and the till. */
+export const ADD_ONS = ['retail_purchasing', 'retail_till'] as const;
+
+/**
+ * "Who can do what": one plain line per role the business can give, from the same words as the pick-list, so the card and the
+ * choices never disagree. The administrator first; roles the business does not have (retail without the module) are left out.
+ */
+export function whoCanDoWhat(roles: StaffRole[], modules?: string[] | null): { title: string; about: string }[] {
+  return roleChoices(roles, modules).map((c) => ({ title: c.label, about: c.about }));
+}
 
 /** The role that records purchases and restocks (ADR-055): given on top of another role, so the invitation offers it as a tick box. */
 export const PURCHASING = 'retail_purchasing';
@@ -76,6 +92,8 @@ export interface InviteDraft {
   branchIds: string[];
   /** Also records purchases and restocks there (the Purchasing role, ADR-055). */
   purchasing: boolean;
+  /** Also closes the till and does the banking there (the till role, ADR-055). */
+  till?: boolean;
 }
 
 export const emptyInvite = (): InviteDraft => ({ fullName: '', phone: '', email: '', roleKey: '', branchIds: [], purchasing: false });
@@ -132,13 +150,14 @@ export function assignmentsFor(roleKey: string, branchIds: string[]): RoleAssign
 }
 
 /** Whether the invitation may add Purchasing: a role that is neither the administrator (who has it) nor Purchasing itself. */
-export const purchasingOffered = (roleKey: string, roles: Pick<StaffRole, 'key'>[]): boolean =>
-  roleKey !== '' && roleKey !== TENANT_ADMIN && roleKey !== PURCHASING && roles.some((r) => r.key === PURCHASING);
+export const purchasingOffered = (roleKey: string, roles: Pick<StaffRole, 'key'>[], addOn: string = PURCHASING): boolean =>
+  roleKey !== '' && roleKey !== TENANT_ADMIN && !(ADD_ONS as readonly string[]).includes(roleKey) && roles.some((r) => r.key === addOn);
 
 /** The request body. A phone is written as the server would store it, so what is sent is what is checked here. */
 export function inviteBody(draft: InviteDraft): InviteUserBody {
   const roles = assignmentsFor(draft.roleKey, draft.branchIds);
   if (draft.purchasing && draft.roleKey !== TENANT_ADMIN && draft.roleKey !== PURCHASING) roles.push(...assignmentsFor(PURCHASING, draft.branchIds));
+  if (draft.till && draft.roleKey !== TENANT_ADMIN && draft.roleKey !== TILL) roles.push(...assignmentsFor(TILL, draft.branchIds));
   const body: InviteUserBody = { full_name: draft.fullName.trim(), roles };
   if (draft.phone.trim() !== '') body.phone = normaliseUganda(draft.phone) ?? draft.phone.trim();
   if (draft.email.trim() !== '') body.email = draft.email.trim();

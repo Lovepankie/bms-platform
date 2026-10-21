@@ -293,7 +293,7 @@ class ReceiptsService {
                                 && catalogue
                                         .find(x.productId())
                                         .map(p -> p.sellMinor() != x.sellMinor())
-                                        .orElse(true))
+                                        .orElse(false))
                 && !CurrentPrincipal.require().hasPermission("retail.price.edit")) {
             throw new ApiException(
                     HttpStatus.FORBIDDEN,

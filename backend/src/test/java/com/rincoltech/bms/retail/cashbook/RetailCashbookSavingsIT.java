@@ -33,7 +33,7 @@ class RetailCashbookSavingsIT extends IntegrationTest {
     static final String PROFIT_RECORDER = CASHBOOK_SALES + ",retail.profit.read";
 
     /** The audit reader of ADR-022 decision 12: reads the audit log, never profit. */
-    static final String AUDIT_ONLY = "core.audit.read,retail.cashbook.read";
+    static final String AUDIT_ONLY = "core.audit.read,retail.cashbook.read,retail.till.close";
 
     @Autowired
     TestRestTemplate http;

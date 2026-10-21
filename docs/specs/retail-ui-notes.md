@@ -1004,7 +1004,7 @@ therefore as far as the existing routes go: Stock, and Past restocks and Stock m
 | `/staff/lending/savings/products` | Savings products | `page-savings-products` v1 (added) | the account count opens the savings list |
 | `/staff/payments` | Receive payments | `page-payments` v1 (added) | none added |
 | `/staff/reports` | Reports | `page-reports` v1 (added) | none added |
-| `/staff/retail` | Retail | `page-retail-home` v1 (added) | none added |
+| `/staff/retail` | Retail | `page-retail-home` v2 (the seller's own sales, ADR-055) | none added |
 | `/staff/retail/accounts` | Customer accounts | `page-accounts` v1 (existing) | none added |
 | `/staff/retail/accounts/$customerId` | Account | `page-account` v1 (added) | none added |
 | `/staff/retail/advances` | Advances | `page-advances` v1 (added) | link to Cash summary |
