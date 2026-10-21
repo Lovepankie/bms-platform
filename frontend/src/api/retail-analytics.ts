@@ -80,7 +80,8 @@ export const retailAnalytics = {
       }),
     );
   },
-  async dashboard({ branchId }: { branchId?: string }): Promise<Dashboard> {
-    return unwrap(await api.GET('/api/v1/retail/reports/dashboard', { params: { query: { branch_id: branchId ? [branchId] : undefined } } }));
+  /** With a period, or period custom with from and to, the body has the range of issue #428. */
+  async dashboard({ branchId, period, from, to }: { branchId?: string; period?: 'today' | '7d' | '30d' | 'ytd' | '1y' | 'all' | 'custom'; from?: string; to?: string }): Promise<Dashboard> {
+    return unwrap(await api.GET('/api/v1/retail/reports/dashboard', { params: { query: { branch_id: branchId ? [branchId] : undefined, period, from, to } } }));
   },
 };

@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -157,6 +158,24 @@ class SalesAnalysisRepository {
             Order order,
             Integer belowTargetBp,
             int limit) {
+        return grouped(dimension, branchIds, from, to, order, belowTargetBp, limit, null);
+    }
+
+    /** The sums of one branch, category, product or seller over the window, if it sold (the dashboard's comparison, issue #428). */
+    Optional<Agg> one(Dimension dimension, List<UUID> branchIds, LocalDate from, LocalDate to, UUID id) {
+        return grouped(dimension, branchIds, from, to, Order.SALES, null, 1, id).stream()
+                .findFirst();
+    }
+
+    private List<Agg> grouped(
+            Dimension dimension,
+            List<UUID> branchIds,
+            LocalDate from,
+            LocalDate to,
+            Order order,
+            Integer belowTargetBp,
+            int limit,
+            UUID only) {
         if (branchIds != null && branchIds.isEmpty()) {
             return List.of();
         }
@@ -213,10 +232,15 @@ class SalesAnalysisRepository {
             params.put("target", belowTargetBp);
         }
         params.put("limit", limit);
+        String one = "";
+        if (only != null) {
+            one = " AND " + key + " = :only";
+            params.put("only", only);
+        }
         return jdbc.sql("SELECT " + key + " AS k, " + code + " AS code, " + label + " AS label, " + unit + " AS unit,"
                         + " sum(l.qty) AS qty, sum(l.line_total_minor) AS sales, sum(l.line_cost_minor) AS cost,"
                         + " count(DISTINCT s.id) AS sale_count, count(*) OVER () AS total"
-                        + BASE + join + WHERE + branchClause(branchIds)
+                        + BASE + join + WHERE + branchClause(branchIds) + one
                         + " GROUP BY " + groupBy + having + " ORDER BY " + orderBy + ", 1 LIMIT :limit")
                 .params(params)
                 .query((rs, n) -> new Agg(

@@ -8829,7 +8829,7 @@
             "type" : "string"
           },
           "days" : {
-            "description" : "The last 30 days ending today, one entry a day, oldest first",
+            "description" : "The last 30 days ending today, one entry a day, oldest first; absent with a range",
             "items" : {
               "$ref" : "#/components/schemas/RetailDashboardDay"
             },
@@ -8867,6 +8867,9 @@
             "description" : "True when profit figures are included",
             "type" : "boolean"
           },
+          "range" : {
+            "$ref" : "#/components/schemas/RetailDashboardRange"
+          },
           "shops" : {
             "items" : {
               "$ref" : "#/components/schemas/RetailDashboardShop"
@@ -8881,8 +8884,30 @@
           }
         }
       },
+      "RetailDashboardBusiestDay" : {
+        "description" : "The day with the most sales; absent with no sale",
+        "properties" : {
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "previous_date" : {
+            "description" : "The busiest day of the period before",
+            "format" : "date",
+            "type" : "string"
+          },
+          "previous_sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "RetailDashboardDay" : {
-        "description" : "The last 30 days ending today, one entry a day, oldest first",
+        "description" : "The last 30 days ending today, one entry a day, oldest first; absent with a range",
         "properties" : {
           "date" : {
             "format" : "date",
@@ -8904,6 +8929,143 @@
           }
         }
       },
+      "RetailDashboardFigures" : {
+        "description" : "The figures of a range or of the period before it (issue #428)",
+        "properties" : {
+          "average_sale_minor" : {
+            "description" : "sales_minor over sale_count, half up; absent with no sale",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "gross_profit_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers; by the rule of credit_sale_recognition, as on the Today card",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "received_minor" : {
+            "description" : "Only with on_payment: money recorded as collected, by any method (Received)",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sale_count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "description" : "Everything sold, credit included, net of goods taken back",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailDashboardLeader" : {
+        "description" : "The best shop, the best seller (an item) or the top salesperson of the range; previous_sales_minor is the same one's sales in the period before",
+        "properties" : {
+          "code" : {
+            "description" : "The item code; an item only",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "label" : {
+            "description" : "The item or person name; a shop is named from the branch list",
+            "type" : "string"
+          },
+          "previous_sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sale_count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailDashboardPoint" : {
+        "description" : "One step of the range chart: a day, seven days or a month",
+        "properties" : {
+          "gross_profit_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "previous_sales_minor" : {
+            "description" : "Sales of the same step of the period before, counted from its first day",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sales_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "start" : {
+            "description" : "First day of the step",
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailDashboardRange" : {
+        "description" : "The range chosen on the dashboard (issue #428)",
+        "properties" : {
+          "best_seller" : {
+            "$ref" : "#/components/schemas/RetailDashboardLeader"
+          },
+          "best_shop" : {
+            "$ref" : "#/components/schemas/RetailDashboardLeader"
+          },
+          "busiest_day" : {
+            "$ref" : "#/components/schemas/RetailDashboardBusiestDay"
+          },
+          "current" : {
+            "$ref" : "#/components/schemas/RetailDashboardFigures"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "group" : {
+            "description" : "A step of the chart: a day up to 62 days, seven days from the first day up to a year, else a month",
+            "enum" : [ "day", "week", "month" ],
+            "type" : "string"
+          },
+          "period" : {
+            "enum" : [ "today", "7d", "30d", "ytd", "1y", "all", "custom" ],
+            "type" : "string"
+          },
+          "previous" : {
+            "$ref" : "#/components/schemas/RetailDashboardFigures"
+          },
+          "previous_from" : {
+            "description" : "The period before, as long as the range (This year: the same days of last year); absent for all",
+            "format" : "date",
+            "type" : "string"
+          },
+          "previous_to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "series" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailDashboardPoint"
+            },
+            "type" : "array"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "top_salesperson" : {
+            "$ref" : "#/components/schemas/RetailDashboardLeader"
+          }
+        }
+      },
       "RetailDashboardShop" : {
         "properties" : {
           "branch_id" : {
@@ -8911,12 +9073,12 @@
             "type" : "string"
           },
           "last30_sales_minor" : {
-            "description" : "Present only with retail.sale.read in this branch",
+            "description" : "Present only with retail.sale.read in this branch; absent with a range",
             "format" : "int64",
             "type" : "integer"
           },
           "last7_sales_minor" : {
-            "description" : "Present only with retail.sale.read in this branch",
+            "description" : "Present only with retail.sale.read in this branch; absent with a range",
             "format" : "int64",
             "type" : "integer"
           },
@@ -8928,6 +9090,21 @@
           "out_of_stock" : {
             "description" : "Present only with retail.stock.read",
             "format" : "int32",
+            "type" : "integer"
+          },
+          "previous_sales_minor" : {
+            "description" : "With a range that has a period before it, and Present only with retail.sale.read in this branch: sales in that period",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "range_gross_profit_minor" : {
+            "description" : "With a range, and with retail.profit.read in this branch: profit in the range",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "range_sales_minor" : {
+            "description" : "With a range (issue #428) and Present only with retail.sale.read in this branch: sales in the range",
+            "format" : "int64",
             "type" : "integer"
           },
           "stock_at_cost_minor" : {
@@ -33462,7 +33639,7 @@
     },
     "/api/v1/retail/reports/dashboard" : {
       "get" : {
-        "description" : "ADR-055: it adds up every seller's sales, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied; without branch_id a Supervisor gets the shops it supervises",
+        "description" : "ADR-055: it adds up every seller's sales, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied; without branch_id a Supervisor gets the shops it supervises. With period (today, 7d, 30d, ytd, 1y, all) or period custom with from and to (at most 366 days), the body also has range: its figures, chart and best shop, seller and day against the period before; days is then left out",
         "operationId" : "getRetailDashboard",
         "parameters" : [ {
           "in" : "query",
@@ -33474,6 +33651,29 @@
               "type" : "string"
             },
             "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "period",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -33488,7 +33688,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Owner dashboard: today, 7 and 30 days, stock value and counts, by shop (issue #149)",
+        "summary" : "Owner dashboard: today, 7 and 30 days, stock value and counts, by shop (issue #149); a chosen range (issue #428)",
         "tags" : [ "retail-reports" ]
       }
     },

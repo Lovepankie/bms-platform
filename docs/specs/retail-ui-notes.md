@@ -346,8 +346,18 @@ Each screen is a date range (the last 30 days, at most 366, checked on the scree
   and 30 day sparklines, stock at price and at cost with the out of stock and low stock counts, and a table by shop; the
   tiles of the screens follow, each only with its permission. For an owner (a profit reader) the dashboard comes first. For a
   seller the tiles come first (Record a sale is one tap away) and the sales and stock parts follow. Two dashed slots,
-  "Banked against expected" and "Savings", are marked placeholders for the cash book: they carry `data-placeholder="cash-book"`,
-  show no number and call no endpoint, since the cash book is not on this server yet.
+  "Banked against expected" and "Savings", were placeholders for the cash book until the range of #428 filled them.
+- **The home follows one range (#428, ADR-060).** A row of buttons under the heading: Today, 7 days, 30 days, This year,
+  1 year, All and Choose days (two dates and Show these days; at most 366 days, checked before asking). The choice is kept per
+  person in this browser (`bms.homeRange.<host>.<user>`), 7 days at first. Under it: the total of the range in large type with
+  Up or Down, the amount and the percent on the period before (green up, red down, with an arrow and the words); the chart,
+  320 by 150 in SVG, the range as a line and the period before dashed, a step picked by hover, tap or the arrow keys and read out
+  under it ("Wed 21 Oct UGX 3,600 (before: UGX 1,500)"); then cards for the number of sales, average sale, profit (profit
+  readers), money collected and on credit now (`on_payment`), busiest day, best shop, best seller and top salesperson (profit
+  readers), each with its change; links to Sales analysis and All sales; the shops in the range with the period before; the stock
+  now (it does not follow the range, and says so); and, for a person who closes the till, the cash book of the range (banked,
+  expected to bank, savings set aside, expenses) up to 31 days, with links to the Cash summary and the Banking report. A seller's
+  Your sales card has the same row and chart from their own sales only. The home tour (version 3) has the step on the row.
 - **Business evaluation says what it is.** The page opens with "an estimate from today's prices and the last 30 days
   of sales; not a forecast or a promise" (the server sends the same sentence as `note`), and repeats it at the end.
 - **Credit control** counts days from the due date; a sale with no due date counts as not yet due, as the line under the

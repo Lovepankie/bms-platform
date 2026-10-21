@@ -71,6 +71,26 @@ class DashboardRepository {
                 .list();
     }
 
+    /** The first day with a completed sale in the branches (every branch when null), or null with none: where All starts (issue #428). */
+    LocalDate firstSaleDay(List<UUID> branchIds) {
+        if (branchIds != null && branchIds.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> params = new LinkedHashMap<>();
+        String branch = "";
+        if (branchIds != null) {
+            params.put("branchIds", branchIds);
+            branch = " AND branch_id IN (:branchIds)";
+        }
+        // min() over no rows is one row holding NULL, which single() refuses; optional() maps it to no value.
+        return jdbc.sql("SELECT min(sale_date) FROM retail_sales WHERE status = 'completed'" + branch)
+                .params(params)
+                .query(Date.class)
+                .optional()
+                .map(Date::toLocalDate)
+                .orElse(null);
+    }
+
     /**
      * Stock value above zero per branch (active items) and, per branch, the items out of stock or low by
      * the stock list's rule: every active item judged on its balance in that branch (an inactive item, issue
