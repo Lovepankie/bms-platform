@@ -525,7 +525,7 @@ Notes:
   below cost) and its repeat patterns are sent only when the caller also holds `retail.profit.read` in every branch the figures
   cover, and asking for that metric without it is 403. No cost field is ever returned. Imported history is neither an event nor a
   sale in a rate.
-- `retail.order.manage` (issue #385, ADR-052, migration V70) takes, lists, packs, sends, delivers and cancels customer orders and
+- `retail.order.manage` (issue #385, ADR-052, migration V70) takes, lists, changes the items of (issue #393), packs, sends, delivers and cancels customer orders and
   reads their two reports (delivery fees, cancellations). It goes to the administrator and to every role that holds
   `retail.sale.create`, the shop staff who answer the phone and the chats. It is money moving: delivering an order records a sale and
   posts its delivery fee. Delivering also needs `retail.sale.create` at the order's shop (403 otherwise), and the sale it makes
