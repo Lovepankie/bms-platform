@@ -11479,7 +11479,7 @@ export interface components {
             /** Format: date */
             to?: string;
         };
-        /** @description The whole new set of items. A line of an item already on the order, in the same unit, with no price or the price agreed, keeps the price agreed; any other line is priced as a new order's would be */
+        /** @description The whole new set of items. A line left as it was (the same item, unit and quantity, with no price or the price agreed) keeps the price agreed; any other line is priced as a new order's would be */
         RetailOrderItemsRequest: {
             lines: components["schemas"]["RetailOrderLineRequest"][];
             /** @description Why the items changed, kept in the order's history */

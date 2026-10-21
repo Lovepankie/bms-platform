@@ -55,9 +55,7 @@ import com.rincoltech.bms.retail.stock.StockLedger.Hold;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -435,7 +433,7 @@ class CustomerOrdersService {
      * in one transaction under the order row's lock, then the balance rows' locks, the stock kept for the removed or reduced
      * lines is given back and the stock for the new or larger ones is kept (refused with {@code insufficient_stock} when not
      * enough is free), the new lines are written as the order's next items revision and the history says what changed. The
-     * order keeps its number.
+     * order keeps its number; a packed order goes back to ordered, to be packed again.
      */
     @Transactional
     Outcome<Order> changeItems(String idempotencyKey, UUID id, String ifMatch, ItemsRequest r) {
@@ -453,11 +451,18 @@ class CustomerOrdersService {
 
     /** A line of the new items as it is written: in the unit ordered, at its price, with how that price was chosen. */
     private record NewItem(
-            NewLine line, BigDecimal qty, long unitPriceMinor, long totalMinor, LinePricing pricing, UUID by) {
+            int lineNo,
+            UUID productId,
+            UUID unitId,
+            BigDecimal qty,
+            BigDecimal baseQty,
+            long unitPriceMinor,
+            long totalMinor,
+            LinePricing pricing,
+            UUID by) {
 
         String key() {
-            return line.productId() + "|" + line.saleUnitId() + "|"
-                    + qty.stripTrailingZeros().toPlainString() + "|" + unitPriceMinor;
+            return productId + "|" + unitId + "|" + qty.stripTrailingZeros().toPlainString() + "|" + unitPriceMinor;
         }
     }
 
@@ -475,34 +480,46 @@ class CustomerOrdersService {
         roles.requireMaySell(h.branchId());
         branches.requireSells(h.branchId(), "branch_id");
         List<StoredLine> was = repo.lines(id);
-        Map<LineKey, Deque<StoredLine>> agreed = new HashMap<>();
+        Map<LineKey, List<StoredLine>> onOrder = new HashMap<>();
         for (StoredLine l : was) {
-            agreed.computeIfAbsent(new LineKey(l.productId(), l.unitId()), k -> new ArrayDeque<>())
+            onOrder.computeIfAbsent(new LineKey(l.productId(), l.unitId()), k -> new ArrayList<>())
                     .add(l);
         }
-        // A line the customer keeps (the same item in the same unit, with no price typed or the price agreed) keeps the
-        // price agreed when the order was taken; it is priced below at today's price only to check it and convert its
-        // quantity, as a new order's line would be. Any other line is priced as a new order's line, an override
-        // included.
+        // A line left as it was (the same item, unit and quantity, with no price or the price agreed)
+        // keeps the price agreed and how it was chosen: it goes to priceLines with an Agreement, as on
+        // delivery, so an item switched off or a cost risen since does not block the change. Every other
+        // line, one whose quantity changed included, is priced as a new order's line would be: price
+        // breaks found again, a typed price an override with the permission and a reason, credited to
+        // the person changing it. An agreed break or resolved price is never carried to a new quantity.
         List<StoredLine> kept = new ArrayList<>();
         List<SaleLineRequest> requested = new ArrayList<>();
+        List<SalesService.Agreement> agreements = new ArrayList<>();
         for (CustomerOrdersApi.OrderLineRequest l : r.lines()) {
-            Deque<StoredLine> same = agreed.get(new LineKey(l.productId(), l.unitId()));
-            StoredLine keep = same == null || same.isEmpty() ? null : same.peek();
-            if (keep != null && (l.unitPriceMinor() == null || l.unitPriceMinor() == keep.unitPriceMinor())) {
-                kept.add(same.poll());
-                requested.add(new SaleLineRequest(l.productId(), l.qty(), null, l.unitId(), null));
+            List<StoredLine> same = onOrder.getOrDefault(new LineKey(l.productId(), l.unitId()), List.of());
+            StoredLine keep = same.stream()
+                    .filter(s -> s.qty().compareTo(l.qty()) == 0
+                            && (l.unitPriceMinor() == null || l.unitPriceMinor() == s.unitPriceMinor()))
+                    .findFirst()
+                    .orElse(null);
+            kept.add(keep);
+            if (keep != null) {
+                same.remove(keep);
+                String why = "override".equals(keep.priceSource())
+                        ? keep.overrideReason()
+                        : "Price agreed on order " + h.orderNo();
+                requested.add(new SaleLineRequest(l.productId(), l.qty(), keep.unitPriceMinor(), l.unitId(), why));
+                agreements.add(new SalesService.Agreement(keep.priceSource(), keep.overriddenBy()));
             } else {
-                kept.add(null);
                 requested.add(new SaleLineRequest(
                         l.productId(), l.qty(), l.unitPriceMinor(), l.unitId(), l.priceOverrideReason()));
+                agreements.add(null);
             }
         }
         Customer buyer = h.customerId() == null
                 ? null
                 : salesRepo.customer(h.customerId()).orElse(null);
         List<FieldProblem> problems = new ArrayList<>();
-        Priced priced = sales.priceLines(h.branchId(), today(), buyer, null, requested, problems);
+        Priced priced = sales.priceLines(h.branchId(), today(), buyer, null, requested, problems, agreements);
         int revision = h.itemsRevision() + 1;
         List<Hold> holds = new ArrayList<>();
         List<NewItem> rows = new ArrayList<>();
@@ -510,15 +527,35 @@ class CustomerOrdersService {
         for (int i = 0; i < priced.lines().size(); i++) {
             NewLine l = priced.lines().get(i);
             StoredLine keep = kept.get(i);
-            boolean pack = l.saleUnitId() != null;
-            BigDecimal qty = pack ? l.saleQty() : l.qty();
-            long price = keep != null ? keep.unitPriceMinor() : pack ? l.saleUnitPriceMinor() : l.unitPriceMinor();
-            long total = keep != null ? Quantities.value(qty, price) : l.lineTotalMinor();
-            items = Math.addExact(items, total);
-            // A kept override stays the override of whoever changed the price; a new one is the caller's.
-            UUID by = keep != null ? keep.overriddenBy() : principal.userId();
-            rows.add(new NewItem(l, qty, price, total, keep != null ? keep.pricing() : l.pricing(), by));
-            holds.add(new Hold(h.branchId(), l.productId(), l.qty()));
+            NewItem row;
+            if (keep != null) {
+                // Written as it was: the unit, the quantities, the price and how it was chosen, the override's author.
+                row = new NewItem(
+                        l.lineNo(),
+                        keep.productId(),
+                        keep.unitId(),
+                        keep.qty(),
+                        keep.baseQty(),
+                        keep.unitPriceMinor(),
+                        keep.lineTotalMinor(),
+                        keep.pricing(),
+                        keep.overriddenBy());
+            } else {
+                boolean pack = l.saleUnitId() != null;
+                row = new NewItem(
+                        l.lineNo(),
+                        l.productId(),
+                        l.saleUnitId(),
+                        pack ? l.saleQty() : l.qty(),
+                        l.qty(),
+                        pack ? l.saleUnitPriceMinor() : l.unitPriceMinor(),
+                        l.lineTotalMinor(),
+                        l.pricing(),
+                        principal.userId());
+            }
+            items = Math.addExact(items, row.totalMinor());
+            rows.add(row);
+            holds.add(new Hold(h.branchId(), row.productId(), row.baseQty()));
         }
         if (items > RetailCatalogue.MAX_AMOUNT_MINOR
                 || items + h.deliveryFeeMinor() > RetailCatalogue.MAX_AMOUNT_MINOR) {
@@ -528,15 +565,14 @@ class CustomerOrdersService {
             return view(h, true);
         }
         for (NewItem row : rows) {
-            NewLine l = row.line();
             repo.insertLine(
                     id,
                     revision,
-                    l.lineNo(),
-                    l.productId(),
-                    l.saleUnitId(),
+                    row.lineNo(),
+                    row.productId(),
+                    row.unitId(),
                     row.qty(),
-                    l.qty(),
+                    row.baseQty(),
                     row.unitPriceMinor(),
                     row.totalMinor(),
                     row.pricing(),
@@ -550,6 +586,8 @@ class CustomerOrdersService {
                         .map(l -> new Hold(h.branchId(), l.productId(), l.baseQty()))
                         .toList(),
                 holds);
+        // A packed order whose items changed is ordered again: what was packed is not what it now holds.
+        boolean wasPacked = h.status().equals("packed");
         if (repo.markItemsChanged(id, h.version(), revision, items) == 0) {
             throw Versions.conflict(repo.find(id, false).orElseThrow().version());
         }
@@ -557,7 +595,7 @@ class CustomerOrdersService {
         String changes = itemChanges(was, now);
         String note = blankToNull(r.note());
         String text = "Items changed: " + changes + "."
-                + (h.status().equals("packed") ? " It was packed already: pack it again." : "")
+                + (wasPacked ? " It was packed, so it is back to ordered: pack it again." : "")
                 + (note == null ? "" : " " + note);
         repo.event(
                 id, "items_changed", text.length() > 500 ? text.substring(0, 497) + "..." : text, principal.userId());

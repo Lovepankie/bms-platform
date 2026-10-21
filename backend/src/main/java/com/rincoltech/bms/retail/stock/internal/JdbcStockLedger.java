@@ -199,7 +199,7 @@ class JdbcStockLedger implements StockLedger {
                 BigDecimal shown = free.signum() < 0 ? BigDecimal.ZERO : free;
                 throw ApiException.rule(
                         "insufficient_stock",
-                        "Product " + h.productId() + " has "
+                        itemName(h.productId()) + " has "
                                 + shown.stripTrailingZeros().toPlainString()
                                 + " free at this branch ("
                                 + locked.reserved().stripTrailingZeros().toPlainString()
@@ -211,6 +211,15 @@ class JdbcStockLedger implements StockLedger {
                              WHERE branch_id = ? AND product_id = ?
                             """).params(h.qty(), h.branchId(), h.productId()).update();
         }
+    }
+
+    /** The item as the seller knows it, for a refusal in plain words (issue #393): its description, never its id. */
+    private String itemName(UUID productId) {
+        return jdbc.sql("SELECT description FROM retail_products WHERE id = ?")
+                .param(productId)
+                .query(String.class)
+                .optional()
+                .orElse("This item");
     }
 
     /** Holds of one branch and product added together, in branch and product order, so concurrent orders cannot deadlock. */

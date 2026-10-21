@@ -101,8 +101,8 @@ final class CustomerOrdersApi {
     @Schema(
             name = "RetailOrderItemsRequest",
             description =
-                    "The whole new set of items. A line of an item already on the order, in the same unit, with no price or"
-                            + " the price agreed, keeps the price agreed; any other line is priced as a new order's would be")
+                    "The whole new set of items. A line left as it was (the same item, unit and quantity, with no price or"
+                            + " the price agreed) keeps the price agreed; any other line is priced as a new order's would be")
     record ItemsRequest(
             @NotEmpty @Size(max = 200) List<@Valid @NotNull OrderLineRequest> lines,
 

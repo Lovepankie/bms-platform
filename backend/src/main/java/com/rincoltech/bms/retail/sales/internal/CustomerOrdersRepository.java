@@ -457,11 +457,14 @@ class CustomerOrdersRepository {
                 .update();
     }
 
-    /** A change of items (issue #393): the next revision of lines and their total, the step unchanged. */
+    /**
+     * A change of items (issue #393): the next revision of lines and their total. A packed order is ordered again, its packing
+     * cleared, since what was packed is no longer what it holds.
+     */
     int markItemsChanged(UUID id, int version, int itemsRevision, long itemsTotalMinor) {
         return jdbc.sql("""
-                        UPDATE retail_customer_orders SET items_revision = ?, items_total_minor = ?, updated_at = now(),
-                               version = version + 1
+                        UPDATE retail_customer_orders SET items_revision = ?, items_total_minor = ?, status = 'ordered',
+                               packed_at = NULL, packed_by = NULL, updated_at = now(), version = version + 1
                          WHERE id = ? AND version = ? AND items_revision = ? - 1 AND status IN ('ordered', 'packed')
                         """)
                 .params(itemsRevision, itemsTotalMinor, id, version, itemsRevision)

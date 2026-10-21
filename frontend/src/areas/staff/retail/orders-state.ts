@@ -1,7 +1,7 @@
 import type { Product } from '../../../api/retail';
 import type { DeliverRequest, ItemsRequest, Order, OrderRequest, OrderSource, OrderStatus } from '../../../api/retail-orders';
-import { milliOf, qtyString, showQty } from './maths';
-import { defaultPrice, lineFigures, lineHint, type DraftLine } from './sale-state';
+import { milliOf, parseQty, qtyString, showQty } from './maths';
+import { defaultPrice, lineFigures, lineHint, newLine, type DraftLine } from './sale-state';
 import { chosenPack } from './units-state';
 
 // The rules of the customer order screens (issue #385, ADR-052), kept apart from the markup so they are tested on their own.
@@ -69,24 +69,54 @@ export function itemsProblem(lines: DraftLine[]): string | null {
   return null;
 }
 
+/** The line of the order in the same item and unit as a draft line (the one of the same quantity first), or undefined. */
+function agreedLine(o: Pick<Order, 'lines'>, l: DraftLine) {
+  const unit = chosenPack(l.product, l.unitId)?.unit_id ?? '';
+  const same = (o.lines ?? []).filter((x) => x.product_id === l.product.id && (x.unit_id ?? '') === unit);
+  return same.find((x) => milliOf(x.qty ?? '0') === parseQty(l.qty)) ?? same[0];
+}
+
+/** An item from the picker: a new line in its base unit, unless a base unit line of it is there already (an item and unit is one line). */
+export function addItem(lines: DraftLine[], p: Product): DraftLine[] {
+  return lines.some((l) => l.product.id === p.id && !chosenPack(l.product, l.unitId)) ? lines : [...lines, newLine(p)];
+}
+
 /**
- * The new items for the server. An item already on the order in the same unit sends its price, so the price agreed is kept when
- * it is unchanged (the server compares); a new item sends a price only when it differs from today's, as a new order does.
+ * A new quantity on a line. An item already on the order whose quantity changes is priced again as on a new order, so a price
+ * left at the one agreed shows today's price instead; back at the quantity agreed, it shows the price agreed again.
+ */
+export function withItemsQty(o: Pick<Order, 'lines'>, l: DraftLine, qty: string): DraftLine {
+  const agreed = agreedLine(o, { ...l, qty });
+  if (!agreed) return { ...l, qty };
+  const agreedPrice = String(agreed.unit_price_minor ?? 0);
+  const today = String(defaultPrice(l.product, l.unitId));
+  const sameQty = milliOf(agreed.qty ?? '0') === parseQty(qty);
+  if (!sameQty && l.price === agreedPrice) return { ...l, qty, price: today };
+  if (sameQty && l.price === today) return { ...l, qty, price: agreedPrice };
+  return { ...l, qty };
+}
+
+/**
+ * The new items for the server. A line left as it is on the order (the same item, unit and quantity at the price agreed) sends the
+ * price agreed, which the server keeps. Any other line, an item on the order whose quantity changed included, is priced again as on
+ * a new order: it sends a price only when one was typed that differs from today's and from the one agreed.
  */
 export function buildItemsRequest(o: Pick<Order, 'lines'>, lines: DraftLine[], note: string): ItemsRequest {
-  const onOrder = new Set((o.lines ?? []).map((l) => `${l.product_id}|${l.unit_id ?? ''}`));
   return {
     lines: lines.map((l) => {
       const f = lineFigures(l);
       if (!f) throw new Error('invalid line');
       const pack = chosenPack(l.product, l.unitId);
-      const known = onOrder.has(`${l.product.id}|${pack?.unit_id ?? ''}`);
+      const agreed = agreedLine(o, l);
+      const agreedPrice = agreed?.unit_price_minor;
+      const kept = agreed !== undefined && milliOf(agreed.qty ?? '0') === f.qtyMilli && f.priceMinor === agreedPrice;
+      const typed = f.priceMinor !== defaultPrice(l.product, pack?.unit_id) && f.priceMinor !== agreedPrice;
       return {
         product_id: l.product.id ?? '',
         qty: qtyString(f.qtyMilli),
         ...(pack ? { unit_id: pack.unit_id } : {}),
-        ...(known || f.priceMinor !== defaultPrice(l.product, pack?.unit_id) ? { unit_price_minor: f.priceMinor } : {}),
-        ...(l.reason?.trim() ? { price_override_reason: l.reason.trim() } : {}),
+        ...(kept || typed ? { unit_price_minor: f.priceMinor } : {}),
+        ...(typed && l.reason?.trim() ? { price_override_reason: l.reason.trim() } : {}),
       };
     }),
     ...(note.trim() ? { note: note.trim() } : {}),

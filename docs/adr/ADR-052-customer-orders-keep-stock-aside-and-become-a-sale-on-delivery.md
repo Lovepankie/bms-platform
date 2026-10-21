@@ -115,25 +115,31 @@ Chat customers change baskets often. A cancel and a new order filled the cancell
 of an order now change in place.
 
 1. **When.** Only while the order is ordered or packed. Out for delivery, delivered or cancelled refuse with 409 `order_step_not_allowed`
-   in plain words (an order already out is cancelled and taken again). A packed order stays packed and its history says to pack it again.
+   in plain words (an order already out is cancelled and taken again). A packed order goes back to ordered (`packed_at` and `packed_by`
+   cleared, the one step back the guard trigger allows), since what was packed is no longer what it holds; its history says so and to
+   pack it again.
 2. **How.** `POST /retail/orders/{id}/items` with the whole new set of lines, under `If-Match` (409 `version_conflict` on a stale
    version) and an `Idempotency-Key` (it is money moving: it changes what the order will sell). The permission is `retail.order.manage`
    at the order's shop; another branch's order is not found; a Store refuses as on taking an order.
 3. **One transaction, the order row first.** The order row is locked, then the balance rows: `StockLedger.rehold` nets what the old lines
    kept against what the new lines keep per branch and product and applies it in one pass in branch and product order under each
    row's lock, so a change cannot deadlock against an order, a sale or a delivery. A rise larger than what is free (the balance less what
-   orders keep) is refused with 422 `insufficient_stock` and nothing changes. A change racing the delivery is serialised on the order row:
+   orders keep) is refused with 422 `insufficient_stock`, naming the item by its description, and nothing changes. A change racing the delivery is serialised on the order row:
    either the change lands first and the delivery sells the new items, or the delivery does and the change is refused.
-4. **Prices.** A line of an item already on the order in the same unit, sent with no price or with the price agreed, keeps the price
-   agreed and how it was chosen (an override stays the override of the person who changed it). Every other line, and a kept line with a
-   different price, is priced by `SalesService.priceLines` exactly as on taking an order (units, price lists, the price floor, an
-   override with the permission and a reason, stored on the line with the caller as `overridden_by`). Every line is checked again as a
-   new order's would be (the item active, the unit, the price list has a price); only the agreed price of a kept line is not re-priced.
-5. **The lines stay append-only.** Migration `V77` (renamed at merge to the next free number in merge order) adds
-   `retail_customer_orders.items_revision` and `retail_customer_order_lines.revision`; the new lines are written under the next revision
-   and the order's current lines are those of its `items_revision`, so every earlier set of lines is kept. The guard trigger lets
-   `items_revision` and `items_total_minor` change only on an ordered or packed order, without a change of step, by one revision with
-   one version. The order keeps its number.
+4. **Prices.** A line left as it was (the same item, unit and quantity, sent with no price or with the price agreed) keeps the price
+   agreed and how it was chosen, written again as it was (an override stays the override of the person who changed it). It goes to
+   `SalesService.priceLines` with an `Agreement` entry, as on delivery, so an item switched off since, a pack switched off or a cost
+   risen above the agreed price does not block the change. Every other line is priced by `priceLines` exactly as on taking an order
+   (units, price lists and their price breaks, the inactive item, the price floor, an override with `retail.price.override` and a
+   reason, stored on the line with the caller as `overridden_by`). That includes a line already on the order whose quantity changed:
+   its price break is found again for the new quantity and the agreed `price_break_min_qty` and resolved price are never carried onto
+   it, and the agreed price sent with a larger quantity is a new override, needing the permission and a reason again and credited to
+   the person changing it. Without a price, a new quantity takes today's price.
+5. **The lines stay append-only.** Migration `V77` (main is at `V75` and PR #415 holds `V76` and merges first, so this one merges after
+   #415) adds `retail_customer_orders.items_revision` and `retail_customer_order_lines.revision`; the new lines are written under the
+   next revision and the order's current lines are those of its `items_revision`, so every earlier set of lines is kept. The guard
+   trigger lets `items_revision` and `items_total_minor` change only on an ordered or packed order, by one revision with one version,
+   leaving it ordered (a packed order goes back to ordered with its packing cleared). The order keeps its number.
 6. **History and audit.** The history gets `items_changed` with who and when and a note in plain words (items added, removed, a
    quantity from and to, a price from and to, and the reason given); the audit row `retail.order.items_changed` keeps the lines before
    and after. Sending the same items again changes nothing and writes nothing.

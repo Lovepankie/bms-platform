@@ -1184,7 +1184,8 @@ own: the order is copied from the chat, so the form asks for the phone first and
   form.
 - **One order** (`/staff/retail/orders/$orderId`, `order.tsx`): the summary and the step buttons, Change the items while
   the order is ordered or packed (issue #393: the same item picker and line cards as New order, the items at the price agreed, a new
-  item at today's price, why a price changed, why the items changed for the history; a packed order says to pack it again), Change the
+  item or a new quantity at today's price (the price shown changes with the quantity), why a price changed, why the items changed for the history; a packed order
+  goes back to ordered and says to pack it again; the picker adds an item once per item and unit, so a second unit of an item on the order is its own line), Change the
   delivery details (name, phone, place, day, fee, notes), Open sale (the ordinary sale view, with its payments, returns and void) once delivered,
   and the history: each step with the time, the person and the note. The breadcrumb names the order.
 - **Delivery fees and cancellations** (`/staff/retail/orders-report`, `orders-report.tsx`): the days (the last 30 by default), the fees taken

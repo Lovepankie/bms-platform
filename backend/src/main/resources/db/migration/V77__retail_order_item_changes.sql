@@ -2,8 +2,8 @@
 -- number; the lines it had stay as written (append-only) under their revision, the new set is written under the next revision,
 -- and the stock kept aside follows in the same transaction (StockLedger.rehold).
 --
--- Numbered V77: main is at V75 and V76 (issue #412) merges first. Flyway runs with outOfOrder off, so the file is renamed
--- at merge to the next free number in merge order if that changes.
+-- Numbered V77: main is at V75 and PR #415 (issue #412) holds V76 and merges first, so this PR merges after #415. Flyway runs
+-- with outOfOrder off.
 --
 -- Expand only, safe on a populated database. Two columns with a constant default (every existing order and line is revision 1),
 -- the unique line number widened to the revision, the guard trigger taught the item change, one more history step. No existing
@@ -47,7 +47,8 @@ ALTER TABLE retail_customer_order_events
 ALTER TABLE retail_customer_order_events VALIDATE CONSTRAINT retail_customer_order_events_step_check;
 
 -- As in V70, with one rule added first: the items (items_revision and items_total_minor) change only on an order that is ordered
--- or packed, without a change of step, and the revision rises by exactly one.
+-- or packed, the revision rises by exactly one, and the order is ordered after it: a packed order goes back to ordered with
+-- packed_at and packed_by cleared (the one step back, since what was packed is no longer what it holds).
 CREATE OR REPLACE FUNCTION retail_customer_orders_guard_update() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -58,10 +59,13 @@ BEGIN
         RAISE EXCEPTION 'retail_customer_orders: the version rises by one per change';
     END IF;
     IF NEW.items_revision <> OLD.items_revision OR NEW.items_total_minor <> OLD.items_total_minor THEN
-        IF NOT (OLD.status IN ('ordered', 'packed') AND NEW.status = OLD.status
+        IF NOT (OLD.status IN ('ordered', 'packed') AND NEW.status = 'ordered'
+                AND NEW.packed_at IS NULL AND NEW.packed_by IS NULL
                 AND NEW.items_revision = OLD.items_revision + 1) THEN
             RAISE EXCEPTION 'retail_customer_orders: the items of a % order do not change', OLD.status;
         END IF;
+        -- The one step back: a packed order whose items changed is ordered again, its packing cleared.
+        RETURN NEW;
     END IF;
     IF OLD.status = 'delivered' AND NEW.status = 'delivered' AND OLD.fee_method = 'account' AND OLD.fee_paid_at IS NULL
        AND NEW.fee_paid_at IS NOT NULL AND NEW.sale_id = OLD.sale_id AND NEW.fee_entry_id = OLD.fee_entry_id

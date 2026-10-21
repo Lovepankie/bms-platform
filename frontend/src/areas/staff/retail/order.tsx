@@ -6,11 +6,11 @@ import { retailOrders, type Order } from '../../../api/retail-orders';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { OrderActions, OrderSummary } from './orders';
-import { buildItemsRequest, feeOf, isOpen, itemsDraft, itemsMayChange, itemsProblem, itemsTotal } from './orders-state';
+import { addItem, buildItemsRequest, feeOf, isOpen, itemsDraft, itemsMayChange, itemsProblem, itemsTotal, withItemsQty } from './orders-state';
 import { newIdempotencyKey } from './idempotency';
 import { UNITS, canUse, capabilityOn, holdsAt } from './permissions';
 import { SaleLineCard } from './sale';
-import { newLine, withUnit, type DraftLine } from './sale-state';
+import { withUnit, type DraftLine } from './sale-state';
 import { OpenSale } from './sales';
 import { Gate, Note, Problem, ProductPicker, money, useBranchName } from './ui';
 
@@ -115,13 +115,13 @@ function ChangeItems({ order }: { order: Order }) {
   });
   if (!open) return <button type="button" className="btn-sm" data-tour="order-items-change" onClick={() => setOpen(true)}>Change the items</button>;
   const edit = (f: (ls: DraftLine[]) => DraftLine[]) => setLines(f(shown ?? []));
-  const add = (p: Product) => edit((ls) => (ls.some((l) => l.product.id === p.id) ? ls : [...ls, newLine(p)]));
+  const add = (p: Product) => edit((ls) => addItem(ls, p));
   const problem = shown ? itemsProblem(shown) : null;
   return (
     <fieldset data-tour="order-items-change">
       <legend>Change the items</legend>
       <p className="hint">Add, take off or change the quantity of any item. The order keeps its number {order.order_no}.</p>
-      {order.status === 'packed' && <Note>This order is packed already. Pack it again after you save.</Note>}
+      {order.status === 'packed' && <Note>This order is packed already. Saving new items puts it back to ordered: pack it again after you save.</Note>}
       {products.some((q) => q.error) && <Problem error={products.find((q) => q.error)?.error} />}
       {!shown && !products.some((q) => q.error) && <p className="loading">Loading the items</p>}
       {shown && (
@@ -129,11 +129,11 @@ function ChangeItems({ order }: { order: Order }) {
           <ProductPicker id="order-items-search" branchId={order.branch_id ?? ''} showPrice onAdd={add} />
           {shown.map((l, i) => (
             <SaleLineCard
-              key={`${l.product.id}-${i}`}
+              key={`${l.product.id}-${l.unitId ?? 'base'}-${i}`}
               line={l}
               index={i}
               unitsOn={unitsOn}
-              onQty={(v) => edit((ls) => ls.map((x, n) => (n === i ? { ...x, qty: v } : x)))}
+              onQty={(v) => edit((ls) => ls.map((x, n) => (n === i ? withItemsQty(order, x, v) : x)))}
               onPrice={(v) => edit((ls) => ls.map((x, n) => (n === i ? { ...x, price: v } : x)))}
               onUnit={(unitId) => edit((ls) => ls.map((x, n) => (n === i ? withUnit(x, unitId) : x)))}
               onRemove={() => edit((ls) => ls.filter((_, n) => n !== i))}
@@ -144,7 +144,7 @@ function ChangeItems({ order }: { order: Order }) {
           <input id="items-reason" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
           <label htmlFor="items-note">Why the items changed (optional, it stays in the history)</label>
           <input id="items-note" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
-          <p className="hint">Saving keeps the new items aside and puts back on the shelf what was taken off. An item already on the order keeps the price agreed; a new item takes today&apos;s price.</p>
+          <p className="hint">Saving keeps the new items aside and puts back on the shelf what was taken off. An item left as it is on the order keeps the price agreed; a new item, or one whose quantity changed, takes today&apos;s price.</p>
           {problem && <Note>{problem}</Note>}
         </>
       )}
