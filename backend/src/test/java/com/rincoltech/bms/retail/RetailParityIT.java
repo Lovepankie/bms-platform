@@ -140,7 +140,8 @@ class RetailParityIT extends IntegrationTest {
         ResponseEntity<JsonNode> r = api.get("/reports/valuation", "retail.stock.read");
         String body = ok(r).toString();
         assertThat(body).doesNotContain("cost").doesNotContain("profit").doesNotContain("inventory");
-        assertThat(body).contains("expected_sales_minor").contains("\"categories\"");
+        // ADR-055: the value of the stock, even at the selling price, goes with the cost permission.
+        assertThat(body).doesNotContain("expected_sales_minor").contains("\"categories\"");
         assertThat(ok(r).get("categories").get(0).has("category")).isTrue();
     }
 

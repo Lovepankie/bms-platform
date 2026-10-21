@@ -42,7 +42,7 @@ export function DashboardView({ data, nameOf, stockLink }: { data: Dashboard; na
   // ADR-043: with credit sales counted when the buyer pays, the cards say Sold, Received and On credit, and profit is that of
   // the money received. The default way (when the sale is made) keeps its cards exactly as they were.
   const onPayment = data.credit_sale_recognition === 'on_payment';
-  const shopStock = shops.some((s) => s.stock_at_price_minor !== undefined);
+  const shopStock = shops.some((s) => s.out_of_stock !== undefined);
   const shopProfit = shops.some((s) => s.today_gross_profit_minor !== undefined);
   return (
     <section aria-labelledby="dash-title" className="an-dashboard">
@@ -93,7 +93,7 @@ export function DashboardView({ data, nameOf, stockLink }: { data: Dashboard; na
           <h3>Stock</h3>
           <ul className="an-stats">
             {stock.value_at_cost_minor !== undefined && <Stat label="Stock at cost" value={money(stock.value_at_cost_minor)} />}
-            <Stat label="Stock at price" value={money(stock.value_at_price_minor ?? 0)} />
+            {stock.value_at_price_minor !== undefined && <Stat label="Stock at price" value={money(stock.value_at_price_minor)} />}
             <Stat label="Out of stock" value={stock.out_of_stock ?? 0} hint="items at zero or less" />
             <Stat label="Low stock" value={stock.low_stock ?? 0} hint={`${showQty(stock.low_stock_threshold ?? '5')} or fewer left`} />
           </ul>

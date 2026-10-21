@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.stock.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.stock.internal.TransferApi.TransferLine;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -81,7 +82,8 @@ final class LocationApi {
             @Schema(description = "True when any branch's balance is below zero")
             boolean negative,
 
-            long sellMinor,
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = RetailCatalogue.PRICE_ONLY)
+            Long sellMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)
             Long costMinor,

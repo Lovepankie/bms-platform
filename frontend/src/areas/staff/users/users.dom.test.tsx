@@ -35,10 +35,13 @@ const ROLES = [
   { key: 'tenant_admin', name: 'Tenant admin', permissions: [] },
   { key: 'cashier', name: 'Cashier', permissions: [] },
   { key: 'retail_sales', name: 'Sales', permissions: [] },
+  { key: 'retail_storekeeper', name: 'Storekeeper', permissions: [] },
+  { key: 'retail_purchasing', name: 'Purchasing', permissions: [] },
 ];
 const BRANCHES = [
   { id: 'b-head', code: 'HQ', name: 'Head office', status: 'active' },
   { id: 'b-two', code: 'KLA', name: 'Test Branch Two', status: 'active' },
+  { id: 'b-store', code: 'ST', name: 'Test Store', status: 'active', sells_goods: false },
   { id: 'b-old', code: 'OLD', name: 'Test Old Branch', status: 'inactive' },
 ];
 const LINK = 'https://test.example/accept-invitation#token=invented-token-0001';
@@ -103,11 +106,13 @@ function expectNoTokenInCaches() {
   expect(JSON.stringify(lastClient.getMutationCache().getAll().map((m) => [m.state.data, m.state.variables]))).not.toContain(TOKEN);
 }
 
-async function fillInvite(overrides: { name?: string; phone?: string; role?: string } = {}) {
+async function fillInvite(overrides: { name?: string; phone?: string; role?: string; branches?: boolean } = {}) {
   await screen.findByRole('option', { name: 'Cashier' }, { timeout: 5000 });
   fireEvent.change(screen.getByLabelText('Full name'), { target: { value: overrides.name ?? 'Test Cashier 05' } });
   fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: overrides.phone ?? '0700 000 005' } });
   fireEvent.change(screen.getByLabelText('What will this person do?'), { target: { value: overrides.role ?? 'cashier' } });
+  // Where the person works is an explicit choice (ADR-055): every shop and store unless a test ticks branches itself.
+  if (!overrides.branches && (overrides.role ?? 'cashier') !== 'tenant_admin') fireEvent.click(screen.getByRole('checkbox', { name: 'Every shop and store' }));
 }
 
 describe('the invite form', () => {
@@ -130,21 +135,50 @@ describe('the invite form', () => {
     shell(<InviteScreen />);
     await fillInvite();
     expect(screen.getByText(/Takes and records money at the counter/)).toBeTruthy();
-    expect(screen.getByLabelText('Where?')).toBeTruthy();
-    expect(screen.getByRole('option', { name: 'Every branch' })).toBeTruthy();
-    expect(screen.getByRole('option', { name: 'Test Branch Two (KLA)' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Where does this person work?' })).toBeTruthy();
+    expect((screen.getByRole('checkbox', { name: 'Every shop and store' }) as HTMLInputElement).checked).toBe(true);
+    // Taking every one off leaves nothing chosen, which is refused, never every branch.
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Every shop and store' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+    expect(await screen.findByText('Tick where this person works, or every one.')).toBeTruthy();
+    expect(api.invite).not.toHaveBeenCalled();
+    expect(screen.getByRole('checkbox', { name: 'Test Branch Two (KLA)' })).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: 'Test Store (ST), a store' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('What will this person do?'), { target: { value: 'tenant_admin' } });
-    expect(screen.queryByLabelText('Where?')).toBeNull();
-    expect(screen.getByText('An administrator works in every branch.')).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Where does this person work?' })).toBeNull();
+    expect(screen.getByText(/An administrator works everywhere and sees everything/)).toBeTruthy();
   });
 
   it('sends the phone as stored, with the chosen branch', async () => {
     api.invite.mockResolvedValue({ user: { id: 'u-new', full_name: 'Test Cashier 05', phone_e164: '+256700000005' }, invitation: { url: LINK, expires_at: '2026-10-22T10:00:00Z' } });
     shell(<InviteScreen />);
     await fillInvite();
-    fireEvent.change(screen.getByLabelText('Where?'), { target: { value: 'b-two' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Test Branch Two (KLA)' }));
+    expect((screen.getByRole('checkbox', { name: 'Every shop and store' }) as HTMLInputElement).checked).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
     await waitFor(() => expect(api.invite).toHaveBeenCalledWith({ full_name: 'Test Cashier 05', phone: '+256700000005', roles: [{ role_key: 'cashier', branch_id: 'b-two' }] }));
+  });
+
+  // Issue #399, ADR-055: a storekeeper in two places, and a seller who also buys.
+  it('sends a role for each shop and store ticked, and Purchasing in the same places when it is ticked', async () => {
+    api.invite.mockResolvedValue({ user: { id: 'u-new', full_name: 'Test Cashier 05', phone_e164: '+256700000005' }, invitation: { url: LINK, expires_at: '2026-10-22T10:00:00Z' } });
+    shell(<InviteScreen />);
+    await fillInvite({ role: 'retail_sales', branches: true });
+    expect(screen.queryByRole('option', { name: 'Purchasing' })).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Test Branch Two (KLA)' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Test Store (ST), a store' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Can also record purchases and restocks/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+    await waitFor(() => expect(api.invite).toHaveBeenCalledWith({
+      full_name: 'Test Cashier 05',
+      phone: '+256700000005',
+      roles: [
+        { role_key: 'retail_sales', branch_id: 'b-two' },
+        { role_key: 'retail_sales', branch_id: 'b-store' },
+        { role_key: 'retail_purchasing', branch_id: 'b-two' },
+        { role_key: 'retail_purchasing', branch_id: 'b-store' },
+      ],
+    }));
   });
 
   it('invites once when the button is tapped twice before the answer', async () => {
@@ -397,7 +431,7 @@ describe('the staff list', () => {
     const card = (await screen.findByText('Test Seller 02')).closest('li') as HTMLElement;
     fireEvent.click(within(card).getByRole('button', { name: 'Change roles' }));
     fireEvent.change(within(card).getByLabelText('Role'), { target: { value: 'cashier' } });
-    fireEvent.change(within(card).getByLabelText('Where?'), { target: { value: '' } });
+    fireEvent.click(within(card).getByRole('checkbox', { name: 'Every shop and store' }));
     fireEvent.click(within(card).getByRole('button', { name: 'Save the roles' }));
     await waitFor(() => expect(api.setRoles).toHaveBeenCalledWith('u-wait', [{ role_key: 'cashier' }]));
     expect(await screen.findByText('The roles of Test Seller 02 are saved.')).toBeTruthy();
@@ -438,13 +472,14 @@ describe('a role on a branch that has closed', () => {
     shell(<UsersScreen />);
     const card = (await screen.findByText('Test Cashier 06')).closest('li') as HTMLElement;
     fireEvent.click(within(card).getByRole('button', { name: 'Change roles' }));
-    const where = within(card).getByLabelText('Where?') as HTMLSelectElement;
-    // The select shows the branch the person really has, not "Every branch".
-    expect(where.value).toBe('b-old');
-    expect(within(card).getByRole('option', { name: 'Test Old Branch (closed)' })).toBeTruthy();
-    expect(within(card).getByText(/This branch is closed. Pick another branch/)).toBeTruthy();
+    const old = within(card).getByRole('checkbox', { name: 'Test Old Branch (closed)' }) as HTMLInputElement;
+    // The tick boxes show the branch the person really has, not "Every shop and store".
+    expect(old.checked).toBe(true);
+    expect((within(card).getByRole('checkbox', { name: 'Every shop and store' }) as HTMLInputElement).checked).toBe(false);
+    expect(within(card).getByText(/This branch is closed. Take it off/)).toBeTruthy();
     expect((within(card).getByRole('button', { name: 'Save the roles' }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(where, { target: { value: 'b-two' } });
+    fireEvent.click(old);
+    fireEvent.click(within(card).getByRole('checkbox', { name: 'Test Branch Two (KLA)' }));
     expect(within(card).queryByText(/This branch is closed/)).toBeNull();
     fireEvent.click(within(card).getByRole('button', { name: 'Save the roles' }));
     await waitFor(() => expect(api.setRoles).toHaveBeenCalledWith('u-closed', [{ role_key: 'cashier', branch_id: 'b-two' }]));
@@ -453,8 +488,8 @@ describe('a role on a branch that has closed', () => {
   it('is never offered for a new person', async () => {
     shell(<InviteScreen />);
     await fillInvite();
-    expect(screen.getByRole('option', { name: 'Test Branch Two (KLA)' })).toBeTruthy();
-    expect(screen.queryByRole('option', { name: /Test Old Branch/ })).toBeNull();
+    expect(screen.getByRole('checkbox', { name: 'Test Branch Two (KLA)' })).toBeTruthy();
+    expect(screen.queryByRole('checkbox', { name: /Test Old Branch/ })).toBeNull();
   });
 });
 
@@ -468,8 +503,8 @@ describe('adding a role in the role editor', () => {
     fireEvent.click(within(card).getByRole('button', { name: 'Add another role' }));
     const second = within(card).getByLabelText('Role 2') as HTMLSelectElement;
     fireEvent.change(second, { target: { value: 'cashier' } });
-    expect(within(card).queryByRole('option', { name: /Test Old Branch/ })).toBeNull();
-    expect(within(card).getAllByRole('option', { name: 'Test Branch Two (KLA)' }).length).toBeGreaterThan(0);
+    expect(within(card).queryByRole('checkbox', { name: /Test Old Branch/ })).toBeNull();
+    expect(within(card).getAllByRole('checkbox', { name: 'Test Branch Two (KLA)' }).length).toBeGreaterThan(0);
   });
 });
 

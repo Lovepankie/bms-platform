@@ -287,6 +287,20 @@ class ReceiptsService {
         }
         // Lines are applied in request order, so when two lines name one product the later line's cost is the product's
         // cost afterwards (latest receipt wins, ADR-020 decision 5), each change with its own history row.
+        // ADR-055: the selling price applies in every shop; only someone who may change prices sets it from a receipt.
+        if (newLines.stream()
+                        .anyMatch(x -> x.sellMinor() != null
+                                && catalogue
+                                        .find(x.productId())
+                                        .map(p -> p.sellMinor() != x.sellMinor())
+                                        .orElse(true))
+                && !CurrentPrincipal.require().hasPermission("retail.price.edit")) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "permission_denied",
+                    "Permission denied",
+                    "Setting the selling price needs the permission to change prices. Leave the selling price empty.");
+        }
         for (NewLine l : newLines) {
             catalogue.applyPurchasePrices(l.productId(), l.costMinor(), l.sellMinor(), id);
         }
@@ -569,8 +583,10 @@ class ReceiptsService {
     Receipt get(UUID id) {
         capabilities.require(RetailCapabilities.PURCHASING);
         Principal principal = CurrentPrincipal.require();
+        UUID own = PurchasingService.ownRecordsOnly();
         return repo.find(id, false)
                 .filter(x -> principal.may(PERMISSION, x.branchId()))
+                .filter(x -> own == null || own.equals(x.createdBy()))
                 .map(x -> view(x, true))
                 .orElseThrow(ApiException::notFound);
     }
@@ -606,7 +622,8 @@ class ReceiptsService {
                 search,
                 after == null ? null : after.at(),
                 after == null ? null : after.id(),
-                size + 1);
+                size + 1,
+                PurchasingService.ownRecordsOnly());
         boolean more = rows.size() > size;
         List<Row> items = more ? rows.subList(0, size) : rows;
         String next = more

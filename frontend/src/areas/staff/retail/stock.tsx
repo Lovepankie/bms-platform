@@ -30,6 +30,8 @@ type Correctable = { branchId: string };
 
 /** A category group's subtotal: its quantity when the items share a unit, and what it holds at the selling price. */
 function stockSubtotal(rows: { qty?: string; unit?: string; sell_minor?: number }[]): string {
+  // ADR-055: no price came back (a storekeeper), so no value is shown either.
+  if (rows.every((r) => r.sell_minor === undefined)) return sameUnitQty(rows) ?? '';
   const value = rows.reduce((sum, r) => sum + lineTotalMinor(r.sell_minor ?? 0, milliOf(r.qty ?? '0')), 0);
   return [sameUnitQty(rows), `${money(value)} at price`].filter(Boolean).join(', ');
 }
@@ -61,7 +63,7 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
           {keptWords(r.qty, r.reserved_qty) && <div className="hint">{keptWords(r.qty, r.reserved_qty)}</div>}
         </td>
         {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
-        <td className="num">{money(r.sell_minor ?? 0)}</td>
+        <td className="num">{r.sell_minor !== undefined ? money(r.sell_minor) : ''}</td>
       </tr>
       {correctable && corrected === r.product_id && (
         <tr><td colSpan={columns}><CorrectItem row={r} branchId={correctable.branchId} onClose={() => setCorrected(null)} /></td></tr>
@@ -116,7 +118,7 @@ export function AllBranchesTable({ data, showCost: mayCost, searching = false, f
         <td key={c.branch_id} className="num"><Qty qty={c.qty ?? '0'} negative={c.negative} /></td>
       ))}
       {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
-      <td className="num">{money(r.sell_minor ?? 0)}</td>
+      <td className="num">{r.sell_minor !== undefined ? money(r.sell_minor) : ''}</td>
     </tr>
   );
   return (
@@ -157,7 +159,7 @@ export function AllBranchesList({ data, showCost, searching = false, filterKey =
               </span>
               <span className="num"><strong>Total <Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} /></strong></span>
             </div>
-            <p className="hint">{showCost && r.cost_minor !== undefined ? `Cost ${money(r.cost_minor)}, price` : 'Price'} {money(r.sell_minor ?? 0)} each</p>
+            {r.sell_minor !== undefined && <p className="hint">{showCost && r.cost_minor !== undefined ? `Cost ${money(r.cost_minor)}, price` : 'Price'} {money(r.sell_minor)} each</p>}
             <button type="button" className="btn-sm" aria-expanded={expanded} onClick={() => setOpen({ ...open, [id]: !expanded })}>
               {expanded ? 'Hide branches' : 'Show branches'}
             </button>

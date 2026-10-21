@@ -843,12 +843,23 @@ class CatalogueService {
     @Transactional(readOnly = true)
     PriceHistory history(UUID id) {
         repo.find(id).orElseThrow(ApiException::notFound);
+        // ADR-055: the history of an item's prices is for whoever may see prices; a storekeeper is refused.
+        if (!RetailCatalogue.maySeePrices(CurrentPrincipal.require())) {
+            throw new ApiException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "permission_denied",
+                    "Permission denied",
+                    "Prices are for the people who sell or set them.");
+        }
         boolean cost = mayReadCost();
         return new PriceHistory(
                 repo.history(id).stream().map(h -> cost ? h : h.withoutCost()).toList());
     }
 
     Product visible(Product p) {
+        if (!RetailCatalogue.maySeePrices(CurrentPrincipal.require())) {
+            return p.withoutPrice();
+        }
         return mayReadCost() ? p : p.withoutCost();
     }
 

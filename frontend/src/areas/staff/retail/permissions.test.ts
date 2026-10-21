@@ -12,9 +12,9 @@ describe('retail permission gating', () => {
     expect(canUse(sales, 'profit')).toBe(false);
     expect(canUse(sales, 'restock')).toBe(false);
     expect(canUse(sales, 'stocktake')).toBe(false);
-    // Stock value is a stock read; only its cost columns need retail.profit.read.
+    // Stock value, even at the selling price, is the owner's figure (ADR-055), so the seller has no Stock value tile.
     // The seeded sales role also holds four cash book permissions (chapter 8 matrix).
-    expect(screensFor(sales).map((s) => s.screen)).toEqual(['sale', 'creditSales', 'salesHistory', 'orders', 'ordersReport', 'usage', 'stock', 'transfers', 'valuation', 'salesAnalysis', 'stockHealth', 'creditControl', 'catalogue', 'banking', 'savings', 'expenses', 'cashSummary', 'bankingReport', 'expensesReport']);
+    expect(screensFor(sales).map((s) => s.screen)).toEqual(['sale', 'creditSales', 'salesHistory', 'orders', 'ordersReport', 'usage', 'stock', 'transfers', 'salesAnalysis', 'stockHealth', 'creditControl', 'catalogue', 'banking', 'savings', 'expenses', 'cashSummary', 'bankingReport', 'expensesReport']);
     expect(canUse(sales, 'transfer')).toBe(false);
   });
 
@@ -23,7 +23,7 @@ describe('retail permission gating', () => {
     expect(only('retail.sale.create')).toEqual(['sale']);
     expect(only('retail.purchase.create')).toEqual(['restock']);
     expect(only('retail.usage.report')).toEqual(['usage']);
-    expect(only('retail.stock.read')).toEqual(['stock', 'transfers', 'valuation', 'stockHealth']);
+    expect(only('retail.stock.read')).toEqual(['stock', 'transfers', 'stockHealth']);
     expect(only('retail.profit.read')).toEqual(['profit', 'margins', 'evaluation']);
     expect(only('retail.sale.read')).toEqual(['creditSales', 'salesHistory', 'salesAnalysis', 'creditControl']);
     // Controls name staff and rank them by a rate, so it is its own permission, never a sales read.

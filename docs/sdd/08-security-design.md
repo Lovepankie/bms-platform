@@ -164,139 +164,152 @@ A push subscription is per user per device (`push_subscriptions`, forced row-lev
 | Auditor | staff | Internal or external auditor, read only | Usually all branches |
 | Member | member | Borrower, saver, investor | Own records only |
 | Sales | staff | Retail shop staff: sells, reports usage, reads stock (ADR-020) | Assigned branches |
+| Storekeeper | staff | Retail store staff: moves stock between stores and shops, receives it, counts it, reports usage; no selling, prices, money or cost (ADR-055) | Assigned branches |
+| Purchasing | staff | Given on top of another role to chosen people: records purchases and restocks (ADR-055) | Assigned branches |
 
 A user may hold several roles, each with its own branch scope. The effective permission
 set is the union; the branch scope applies per role (a user who is branch manager at A
-and loan officer at B approves loans only at A).
+and loan officer at B approves loans only at A). A role that applies in several branches is
+one assignment per branch: the owner assigns each staff member to the shops and stores they
+work in, and everything the person sees and does through that role is limited to those
+branches (ADR-055).
+
+The tenant admin is never limited by branch: the assignment has no branch (the API refuses one
+and, since migration `V73`, the check `user_role_assignments_admin_every_branch` refuses one in
+the database), so an administrator sees and acts in every shop and store, every aggregation
+across branches, every report, Controls, profit and cost, whatever other role or branch the same
+person is also given; a further role only adds to the union and never narrows it (ADR-055
+decision 4).
 
 ### 8.3.2 Permission matrix
 
 `Y` = granted. Blank = not granted. TA tenant admin, BM branch manager, LO loan officer,
-CA cashier, AC accountant, AU auditor, ME member, SA sales (the retail shop role, ADR-020). Super admin acts only through the
+CA cashier, AC accountant, AU auditor, ME member, SA sales (the retail shop role, ADR-020), SK storekeeper and PU purchasing
+(the retail store and buying roles, ADR-055). Super admin acts only through the
 platform API and holds no tenant permissions.
 
-| Permission | TA | BM | LO | CA | AC | AU | ME | SA |
-|---|---|---|---|---|---|---|---|---|
-| `core.settings.read` | Y | Y | | | Y | Y | | |
-| `core.settings.manage` | Y | | | | | | | |
-| `core.payment_account.manage` | Y | | | | | | | |
-| `core.branches.read` | Y | Y | Y | Y | Y | Y | | |
-| `core.branches.manage` | Y | | | | | | | |
-| `core.users.read` | Y | Y | | | | Y | | |
-| `core.users.manage` | Y | | | | | | | |
-| `core.audit.read` | Y | Y | | | Y | Y | | |
-| `core.audit.export` | Y | | | | | Y | | |
-| `core.approvals.read` | Y | Y | Y | Y | Y | Y | | |
-| `core.ledger.read` | Y | Y | | | Y | Y | | |
-| `core.ledger_accounts.manage` | Y | | | | Y | | | |
-| `core.journals.create` | Y | | | | Y | | | |
-| `core.journals.approve` | Y | | | | Y | | | |
-| `core.periods.close` | Y | | | | Y | | | |
-| `core.periods.approve_close` | Y | | | | Y | | | |
-| `core.payment_methods.manage` | Y | | | | Y | | | |
-| `core.notifications.read` | Y | Y | | | | Y | | |
-| `core.notification_templates.manage` | Y | | | | | | | |
-| `core.imports.manage` | Y | | | | Y | | | |
-| `core.imports.approve_commit` | Y | | | | Y | | | |
-| `core.payments.read` | Y | Y | | Y | Y | Y | | |
-| `core.payments.collect` | Y | Y | | Y | | | | |
-| `core.payments.allocate` | Y | | | Y | Y | | | |
-| `core.reports.financial` | Y | Y | | | Y | Y | | |
-| `core.reports.audit` | Y | | | | | Y | | |
-| `lending.members.read` | Y | Y | Y | Y | Y | Y | | |
-| `lending.members.create` | Y | Y | Y | | | | | |
-| `lending.members.update` | Y | Y | Y | | | | | |
-| `lending.members.verify_kyc` | Y | Y | | | | | | |
-| `lending.members.blacklist` | Y | Y | | | | | | |
-| `lending.members.transfer_approve` | Y | | | | | | | |
-| `lending.products.read` | Y | Y | Y | Y | Y | Y | | |
-| `lending.products.manage` | Y | | | | | | | |
-| `lending.loans.read` | Y | Y | Y | Y | Y | Y | | |
-| `lending.loans.create` | Y | Y | Y | | | | | |
-| `lending.loans.appraise` | Y | Y | Y | | | | | |
-| `lending.loans.approve` | Y | Y | | | | | | |
-| `lending.loans.cancel` | Y | Y | Y | | | | | |
-| `lending.disbursements.request` | Y | Y | | Y | | | | |
-| `lending.disbursements.authorise` | Y | Y | | | Y | | | |
-| `lending.repayments.create` | Y | Y | | Y | | | | |
-| `lending.repayments.reverse_request` | Y | Y | | Y | Y | | | |
-| `lending.repayments.reverse_approve` | Y | Y | | | Y | | | |
-| `lending.credits.refund_approve` | Y | Y | | | Y | | | |
-| `lending.charges.waive_request` | Y | Y | | | Y | | | |
-| `lending.charges.waive_approve` | Y | Y | | | Y | | | |
-| `lending.loans.write_off_request` | Y | | | | Y | | | |
-| `lending.loans.write_off_approve` | Y | | | | | | | |
-| `lending.loans.restructure_request` | Y | Y | | | | | | |
-| `lending.loans.restructure_approve` | Y | | | | Y | | | |
-| `lending.collateral.read` | Y | Y | Y | Y | Y | Y | | |
-| `lending.collateral.manage` | Y | Y | Y | | | | | |
-| `lending.collateral.release_request` | Y | Y | Y | | | | | |
-| `lending.collateral.release_approve` | Y | Y | | | | | | |
-| `lending.savings.read` | Y | Y | Y | Y | Y | Y | | |
-| `lending.savings.open` | Y | Y | Y | | | | | |
-| `lending.savings.deposit` | Y | Y | | Y | | | | |
-| `lending.savings.withdraw` | Y | Y | | Y | | | | |
-| `lending.savings.withdraw_approve` | Y | Y | | | Y | | | |
-| `lending.savings_products.manage` | Y | | | | | | | |
-| `lending.investments.read` | Y | Y | Y | Y | Y | Y | | |
-| `lending.investments.open` | Y | Y | Y | | | | | |
-| `lending.investments.fund` | Y | Y | | Y | | | | |
-| `lending.investments.payout` | Y | Y | | Y | | | | |
-| `lending.investments.early_withdraw_approve` | Y | Y | | | Y | | | |
-| `lending.investments.fund_approve` | Y | Y | | | Y | | | |
-| `lending.investments.reverse_approve` | Y | Y | | | Y | | | |
-| `lending.investment_products.manage` | Y | | | | | | | |
-| `lending.collections.read` | Y | Y | Y | Y | Y | Y | | |
-| `lending.collections.log_action` | Y | Y | Y | Y | | | | |
-| `lending.collections.assign` | Y | Y | | | | | | |
-| `lending.reports.portfolio` | Y | Y | | | Y | Y | | |
-| `lending.reports.collections` | Y | Y | Y | Y | Y | Y | | |
-| `lending.reports.members` | Y | Y | | | | Y | | |
-| `lending.reports.compliance` | Y | | | | Y | Y | | |
-| `lending.insights.read` | Y | Y | Y | | Y | Y | | |
-| `lending.insights.all_officers` | Y | Y | | | Y | Y | | |
-| `lending.insights.export` | Y | Y | Y | | Y | Y | | |
-| `lending.advisor.use` | Y | Y | | | Y | Y | | |
-| `lending.advisor.configure` | Y | | | | | | | |
-| `member.self.read` | | | | | | | Y | |
-| `member.self.apply` | | | | | | | Y | |
-| `member.self.pay` | | | | | | | Y | |
-| `retail.catalogue.manage` | Y | | | | | | | |
-| `retail.price.edit` | Y | | | | | | | |
-| `retail.price.below_cost` | | | | | | | | |
-| `retail.customer.manage` | Y | | | | | | | Y |
-| `retail.sale.create` | Y | | | | | | | Y |
-| `retail.sale.read` | Y | | | | | | | Y |
-| `retail.sale.void` | Y | | | | | | | |
-| `retail.stock.read` | Y | | | | | | | Y |
-| `retail.stock.transfer` | Y | | | | | | | |
-| `retail.stocktake.commit` | Y | | | | | | | |
-| `retail.purchase.create` | Y | | | | | | | |
-| `retail.usage.report` | Y | | | | | | | Y |
-| `retail.profit.read` | Y | | | | | | | |
-| `retail.cashbook.read` | Y | | | | | | | Y |
-| `retail.savings.record` | Y | | | | | | | Y |
-| `retail.savings.overwrite` | Y | | | | | | | |
-| `retail.banking.record` | Y | | | | | | | Y |
-| `retail.expense.record` | Y | | | | | | | Y |
-| `retail.expense.manage` | Y | | | | | | | |
-| `retail.withdrawal.record` | Y | | | | | | | |
-| `retail.advance.create` | Y | | | | | | | |
-| `retail.advance.repay` | Y | | | | | | | |
-| `retail.cashbook.void` | Y | | | | | | | |
-| `retail.branch_role.manage` | Y | | | | | | | |
-| `retail.pricelist.manage` | Y | | | | | | | |
-| `retail.pricelist.use` | Y | | | | | | | |
-| `retail.price.override` | Y | | | | | | | Y |
-| `retail.credit.manage` | Y | | | | | | | |
-| `retail.credit.write_off` | Y | | | | | | | |
-| `retail.credit.override` | Y | | | | | | | |
-| `retail.sale.return` | Y | | | | | | | |
-| `retail.payable.manage` | Y | | | | | | | |
-| `retail.purchase.approve` | Y | | | | | | | |
-| `retail.document.issue` | Y | | | | | | | |
-| `retail.controls.read` | Y | | | | | | | |
-| `retail.order.manage` | Y | | | | | | | Y |
+| Permission | TA | BM | LO | CA | AC | AU | ME | SA | SK | PU |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `core.settings.read` | Y | Y | | | Y | Y | | | | |
+| `core.settings.manage` | Y | | | | | | | | | |
+| `core.payment_account.manage` | Y | | | | | | | | | |
+| `core.branches.read` | Y | Y | Y | Y | Y | Y | | | | |
+| `core.branches.manage` | Y | | | | | | | | | |
+| `core.users.read` | Y | Y | | | | Y | | | | |
+| `core.users.manage` | Y | | | | | | | | | |
+| `core.audit.read` | Y | Y | | | Y | Y | | | | |
+| `core.audit.export` | Y | | | | | Y | | | | |
+| `core.approvals.read` | Y | Y | Y | Y | Y | Y | | | | |
+| `core.ledger.read` | Y | Y | | | Y | Y | | | | |
+| `core.ledger_accounts.manage` | Y | | | | Y | | | | | |
+| `core.journals.create` | Y | | | | Y | | | | | |
+| `core.journals.approve` | Y | | | | Y | | | | | |
+| `core.periods.close` | Y | | | | Y | | | | | |
+| `core.periods.approve_close` | Y | | | | Y | | | | | |
+| `core.payment_methods.manage` | Y | | | | Y | | | | | |
+| `core.notifications.read` | Y | Y | | | | Y | | | | |
+| `core.notification_templates.manage` | Y | | | | | | | | | |
+| `core.imports.manage` | Y | | | | Y | | | | | |
+| `core.imports.approve_commit` | Y | | | | Y | | | | | |
+| `core.payments.read` | Y | Y | | Y | Y | Y | | | | |
+| `core.payments.collect` | Y | Y | | Y | | | | | | |
+| `core.payments.allocate` | Y | | | Y | Y | | | | | |
+| `core.reports.financial` | Y | Y | | | Y | Y | | | | |
+| `core.reports.audit` | Y | | | | | Y | | | | |
+| `lending.members.read` | Y | Y | Y | Y | Y | Y | | | | |
+| `lending.members.create` | Y | Y | Y | | | | | | | |
+| `lending.members.update` | Y | Y | Y | | | | | | | |
+| `lending.members.verify_kyc` | Y | Y | | | | | | | | |
+| `lending.members.blacklist` | Y | Y | | | | | | | | |
+| `lending.members.transfer_approve` | Y | | | | | | | | | |
+| `lending.products.read` | Y | Y | Y | Y | Y | Y | | | | |
+| `lending.products.manage` | Y | | | | | | | | | |
+| `lending.loans.read` | Y | Y | Y | Y | Y | Y | | | | |
+| `lending.loans.create` | Y | Y | Y | | | | | | | |
+| `lending.loans.appraise` | Y | Y | Y | | | | | | | |
+| `lending.loans.approve` | Y | Y | | | | | | | | |
+| `lending.loans.cancel` | Y | Y | Y | | | | | | | |
+| `lending.disbursements.request` | Y | Y | | Y | | | | | | |
+| `lending.disbursements.authorise` | Y | Y | | | Y | | | | | |
+| `lending.repayments.create` | Y | Y | | Y | | | | | | |
+| `lending.repayments.reverse_request` | Y | Y | | Y | Y | | | | | |
+| `lending.repayments.reverse_approve` | Y | Y | | | Y | | | | | |
+| `lending.credits.refund_approve` | Y | Y | | | Y | | | | | |
+| `lending.charges.waive_request` | Y | Y | | | Y | | | | | |
+| `lending.charges.waive_approve` | Y | Y | | | Y | | | | | |
+| `lending.loans.write_off_request` | Y | | | | Y | | | | | |
+| `lending.loans.write_off_approve` | Y | | | | | | | | | |
+| `lending.loans.restructure_request` | Y | Y | | | | | | | | |
+| `lending.loans.restructure_approve` | Y | | | | Y | | | | | |
+| `lending.collateral.read` | Y | Y | Y | Y | Y | Y | | | | |
+| `lending.collateral.manage` | Y | Y | Y | | | | | | | |
+| `lending.collateral.release_request` | Y | Y | Y | | | | | | | |
+| `lending.collateral.release_approve` | Y | Y | | | | | | | | |
+| `lending.savings.read` | Y | Y | Y | Y | Y | Y | | | | |
+| `lending.savings.open` | Y | Y | Y | | | | | | | |
+| `lending.savings.deposit` | Y | Y | | Y | | | | | | |
+| `lending.savings.withdraw` | Y | Y | | Y | | | | | | |
+| `lending.savings.withdraw_approve` | Y | Y | | | Y | | | | | |
+| `lending.savings_products.manage` | Y | | | | | | | | | |
+| `lending.investments.read` | Y | Y | Y | Y | Y | Y | | | | |
+| `lending.investments.open` | Y | Y | Y | | | | | | | |
+| `lending.investments.fund` | Y | Y | | Y | | | | | | |
+| `lending.investments.payout` | Y | Y | | Y | | | | | | |
+| `lending.investments.early_withdraw_approve` | Y | Y | | | Y | | | | | |
+| `lending.investments.fund_approve` | Y | Y | | | Y | | | | | |
+| `lending.investments.reverse_approve` | Y | Y | | | Y | | | | | |
+| `lending.investment_products.manage` | Y | | | | | | | | | |
+| `lending.collections.read` | Y | Y | Y | Y | Y | Y | | | | |
+| `lending.collections.log_action` | Y | Y | Y | Y | | | | | | |
+| `lending.collections.assign` | Y | Y | | | | | | | | |
+| `lending.reports.portfolio` | Y | Y | | | Y | Y | | | | |
+| `lending.reports.collections` | Y | Y | Y | Y | Y | Y | | | | |
+| `lending.reports.members` | Y | Y | | | | Y | | | | |
+| `lending.reports.compliance` | Y | | | | Y | Y | | | | |
+| `lending.insights.read` | Y | Y | Y | | Y | Y | | | | |
+| `lending.insights.all_officers` | Y | Y | | | Y | Y | | | | |
+| `lending.insights.export` | Y | Y | Y | | Y | Y | | | | |
+| `lending.advisor.use` | Y | Y | | | Y | Y | | | | |
+| `lending.advisor.configure` | Y | | | | | | | | | |
+| `member.self.read` | | | | | | | Y | | | |
+| `member.self.apply` | | | | | | | Y | | | |
+| `member.self.pay` | | | | | | | Y | | | |
+| `retail.catalogue.manage` | Y | | | | | | | | | |
+| `retail.price.edit` | Y | | | | | | | | | |
+| `retail.price.below_cost` | | | | | | | | | | |
+| `retail.customer.manage` | Y | | | | | | | Y | | |
+| `retail.sale.create` | Y | | | | | | | Y | | |
+| `retail.sale.read` | Y | | | | | | | Y | | |
+| `retail.sale.void` | Y | | | | | | | | | |
+| `retail.stock.read` | Y | | | | | | | Y | Y | Y |
+| `retail.stock.transfer` | Y | | | | | | | | Y | |
+| `retail.stocktake.commit` | Y | | | | | | | | Y | |
+| `retail.purchase.create` | Y | | | | | | | | | Y |
+| `retail.usage.report` | Y | | | | | | | Y | Y | |
+| `retail.profit.read` | Y | | | | | | | | | |
+| `retail.cashbook.read` | Y | | | | | | | Y | | |
+| `retail.savings.record` | Y | | | | | | | Y | | |
+| `retail.savings.overwrite` | Y | | | | | | | | | |
+| `retail.banking.record` | Y | | | | | | | Y | | |
+| `retail.expense.record` | Y | | | | | | | Y | | |
+| `retail.expense.manage` | Y | | | | | | | | | |
+| `retail.withdrawal.record` | Y | | | | | | | | | |
+| `retail.advance.create` | Y | | | | | | | | | |
+| `retail.advance.repay` | Y | | | | | | | | | |
+| `retail.cashbook.void` | Y | | | | | | | | | |
+| `retail.branch_role.manage` | Y | | | | | | | | | |
+| `retail.pricelist.manage` | Y | | | | | | | | | |
+| `retail.pricelist.use` | Y | | | | | | | | | |
+| `retail.price.override` | Y | | | | | | | Y | | |
+| `retail.credit.manage` | Y | | | | | | | | | |
+| `retail.credit.write_off` | Y | | | | | | | | | |
+| `retail.credit.override` | Y | | | | | | | | | |
+| `retail.sale.return` | Y | | | | | | | | | |
+| `retail.payable.manage` | Y | | | | | | | | | |
+| `retail.purchase.approve` | Y | | | | | | | | | |
+| `retail.document.issue` | Y | | | | | | | | | |
+| `retail.controls.read` | Y | | | | | | | | | |
+| `retail.order.manage` | Y | | | | | | | Y | | |
 
 The staff member and collateral screens (issue #280) offer an action only when the session holds its permission in the record's branch, from `permission_scopes`; the API remains the authority. An ID image is listed and opened only with `lending.members.verify_kyc`. No permission was added.
 
@@ -370,6 +383,32 @@ Notes:
   branch the figures cover, and the counts, quantities and the value at the selling price need only the list's own permission
   (`retail.purchase.create` and `retail.stock.read`) and its branch scope. The restock cards under a group are the existing restocks list, which already shows each line's cost and the total to a holder of `retail.purchase.create`; the summaries add no new exposure there, and their cost figures follow the stricter `retail.profit.read` rule only because they are sums across restocks. Probing the list with `product_id` or `category_id` finds only restocks that put that product into a branch the caller may read.
   The sales role holds no `core.*` permission; the PWA reads the user's branches from `/me`.
+- Storekeeper and Purchasing (issue #399, ADR-055, migration `V73`). The storekeeper (`retail_storekeeper`) holds
+  `retail.stock.read`, `retail.stock.transfer`, `retail.stocktake.commit` and `retail.usage.report`: it sends stock from the
+  stores and shops it works in, receives what arrives there (with the `transfer_receipt` capability), counts stock and
+  corrects a counted quantity, and reports usage and damage, each at its own branches only (the scope rules of
+  `retail.stock.transfer` above: the source for a send, a void and a cancel, the destination for a receipt). It holds no
+  sale, price, purchase, cash book, payable, document or profit permission, so it cannot sell, set a price, touch money or
+  see a cost: every cost field is already absent without `retail.profit.read`, and so, since ADR-055, is the value of the
+  stock at the selling price (`expected_sales_minor` of the valuation, `value_minor` of the stock summary, the dead stock
+  `value_at_price_minor` of stock health), which is the owner's figure. The owner decided on 21 October 2026 that a storekeeper sees no
+  selling prices: `sell_minor` is in an item, stock, stock by location or valuation response only for a caller holding
+  `retail.sale.create`, `retail.price.edit`, `retail.sale.all_sellers` (the supervisor) or `retail.profit.read` (`RetailCatalogue.maySeePrices`, prices are tenant wide),
+  and `GET /retail/products/{id}/price-history` is 403 otherwise. It reads names, codes, quantities and the stock movements of its
+  branches with their quantities (a sale movement says how many left the shelf, not for how much).
+  Purchasing (`retail_purchasing`) holds `retail.stock.read` and `retail.purchase.create` and is given on top of another
+  role to the people the owner chooses (by default only the tenant admin holds `retail.purchase.create`). At its branches it
+  records restocks, and with the `purchasing` capability purchase orders and goods received; it reads the restocks, orders and
+  receipts it recorded itself with their buying prices and totals (without `retail.profit.read`, `GET /retail/purchases`, `/purchases/summary`,
+  `/purchase-orders`, `/goods-receipts` and each record answer only the caller's own, the owner's decision of 21 October 2026); a restock paid in cash or by bank posts that money out of the branch's cash or
+  bank account, as any restock does; and a restock's buying price becomes the item's cost for the whole business (the
+  latest purchase sets the cost, ADR-020 decision 5). A new selling price on a restock or a goods receipt applies in every
+  shop, so it needs `retail.price.edit` too (403 otherwise; the price the item already has may be sent back unchanged, as
+  the restock form does). Supplier invoices and payments stay with `retail.payable.manage`. Neither role is
+  limited by a role name in code: every check is the permission and its branch scope, so a role given to an
+  administrator adds nothing and takes nothing away. Tests: `RetailRolesIT` (a signed-in user of each role, allowed or
+  refused per route and branch, and an administrator with no branch assignment seeing every branch), `PermissionMatrixIT`,
+  `MigrationOrderIT`.
 - Retail cash book (ADR-022, FR-RET-32, migration V34): the ten `retail.cashbook.*`,
   `retail.savings.*`, `retail.banking.record`, `retail.expense.*`, `retail.withdrawal.record` and
   `retail.advance.*` permissions are rows of the matrix above, seeded by the cash book migration.

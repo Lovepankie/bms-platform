@@ -8,6 +8,7 @@ import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.Search;
+import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.stock.BranchRole;
 import com.rincoltech.bms.retail.stock.BranchRoles;
 import com.rincoltech.bms.retail.stock.Quantities;
@@ -178,7 +179,7 @@ class LocationService {
                     Quantities.format(transitQty),
                     Quantities.format(p.total().add(transitQty)),
                     p.negative(),
-                    p.sellMinor(),
+                    RetailCatalogue.maySeePrices(principal) ? p.sellMinor() : null,
                     cost ? p.costMinor() : null,
                     cost ? value : null,
                     cost ? transitValue : null,

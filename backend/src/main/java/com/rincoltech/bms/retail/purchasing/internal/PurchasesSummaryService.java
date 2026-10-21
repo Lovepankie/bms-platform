@@ -106,7 +106,8 @@ class PurchasesSummaryService {
                 q.itemId(),
                 q.status(),
                 offset,
-                size + 1));
+                size + 1,
+                PurchasingService.ownRecordsOnly()));
         boolean more = rows.size() > size;
         List<Group> items = more ? rows.subList(0, size) : rows;
         LocalDate nextTo = more && time ? items.getLast().from().minusDays(1) : null;

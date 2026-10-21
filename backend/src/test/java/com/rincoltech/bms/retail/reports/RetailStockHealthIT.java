@@ -146,9 +146,11 @@ class RetailStockHealthIT extends IntegrationTest {
                 .isEqualTo(250);
         assertThat(dead.get("items").get(0).get("code").asString()).isEqualTo("ANA-3");
 
+        // ADR-055: a seller sees which items do not sell, never what the stock is worth, even at the selling price.
         JsonNode sales = report("", SALES).get("dead_stock");
-        assertThat(sales.get("value_at_price_minor").asLong()).isEqualTo(2_600);
+        assertThat(sales.get("items_total").asInt()).isEqualTo(2);
         assertThat(AnalyticsData.hasKey(sales, "cost")).isFalse();
+        assertThat(AnalyticsData.hasKey(sales, "value")).isFalse();
     }
 
     @Test

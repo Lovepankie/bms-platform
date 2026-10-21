@@ -127,7 +127,7 @@ export function summariseStock(q: StockSummaryQuery, ctx: StockContext): StockSu
   const all = [...groups.entries()].sort(([, a], [, b]) => a.label.localeCompare(b.label));
   const offset = q.offset ?? 0;
   const items: StockSummaryGroup[] = all.slice(offset, offset + 100).map(([key, g]) => ({
-    key, label: g.label, items_count: g.items.size, negative_count: g.negative.size, value_minor: g.value, ...(ctx.cost ? { cost_minor: g.cost } : {}),
+    key, label: g.label, items_count: g.items.size, negative_count: g.negative.size, ...(ctx.cost ? { value_minor: g.value, cost_minor: g.cost } : {}),
   }));
   const more = all.length > offset + 100;
   return { group_by: q.level, levels: q.chain, ...(next ? { next_level: next } : {}), available_levels: ['branch', 'category'], currency: 'UGX', items, has_more: more, ...(more ? { next_offset: offset + 100 } : {}) };

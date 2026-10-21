@@ -29,7 +29,7 @@ const kindFor = (f: StockFilter): TreeKind<StockChainLevel, StockSummaryGroup> =
   title: (_level, g) => g.label ?? g.key ?? '',
   figures: (_level, g) => (
     <>
-      <span className="rt-group-total">{money(g.value_minor ?? 0)}</span>{' '}
+      {g.value_minor !== undefined && <span className="rt-group-total">{money(g.value_minor)}</span>}{' '}
       <span className="rt-group-meta">
         at price, {itemsWord(g.items_count ?? 0)}
         {g.cost_minor !== undefined && <>, {money(g.cost_minor)} at cost</>}

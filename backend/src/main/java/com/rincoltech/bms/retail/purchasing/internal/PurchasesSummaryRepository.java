@@ -62,7 +62,8 @@ class PurchasesSummaryRepository {
             UUID itemId,
             String status,
             int offset,
-            int limit) {}
+            int limit,
+            UUID createdBy) {}
 
     List<Group> groups(Spec spec) {
         String level = spec.level();
@@ -108,6 +109,11 @@ class PurchasesSummaryRepository {
         if (spec.branchIds() != null) {
             sql.append(" AND m.branch_id IN (:branchIds)");
             params.put("branchIds", spec.branchIds());
+        }
+        // ADR-055: without retail.profit.read a buyer adds up only the restocks they recorded.
+        if (spec.createdBy() != null) {
+            sql.append(" AND p.created_by = :createdBy");
+            params.put("createdBy", spec.createdBy());
         }
         if (spec.from() != null) {
             sql.append(" AND p.purchased_on >= :from");

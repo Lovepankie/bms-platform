@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.stock.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
@@ -37,7 +38,8 @@ final class StockApi {
             @Schema(description = "Below zero: flagged until a purchase or stock-take corrects it (ADR-020 decision 4)")
             boolean negative,
 
-            long sellMinor,
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = RetailCatalogue.PRICE_ONLY)
+            Long sellMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)
             Long costMinor,
@@ -92,7 +94,8 @@ final class StockApi {
             @Schema(description = "True when any branch's balance is below zero")
             boolean negative,
 
-            long sellMinor,
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = RetailCatalogue.PRICE_ONLY)
+            Long sellMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY + " in every branch of the page")
             Long costMinor,

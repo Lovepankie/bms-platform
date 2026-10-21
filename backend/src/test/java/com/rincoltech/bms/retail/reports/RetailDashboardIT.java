@@ -131,7 +131,9 @@ class RetailDashboardIT extends IntegrationTest {
         JsonNode r = dashboard(SALES);
         assertThat(r.get("profit_visible").asBoolean()).isFalse();
         assertThat(r.get("today").get("sales_minor").asLong()).isEqualTo(3_600);
-        assertThat(r.get("stock").get("value_at_price_minor").asLong()).isEqualTo(47_050);
+        // ADR-055: the value of the stock, even at the selling price, goes with the cost permission; the counts stay.
+        assertThat(r.get("stock").has("value_at_price_minor")).isFalse();
+        assertThat(r.get("stock").has("out_of_stock")).isTrue();
         assertThat(AnalyticsData.hasKey(r, "cost")).isFalse();
         assertThat(AnalyticsData.hasKey(r, "gross")).isFalse();
         assertThat(AnalyticsData.hasKey(r, "profit_minor")).isFalse();

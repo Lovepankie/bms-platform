@@ -257,6 +257,24 @@ class PurchasingService {
         if (!problems.isEmpty()) {
             throw ApiException.validation(problems);
         }
+        // ADR-055: a restock sets the selling price only for someone who may change prices. Purchasing given to a
+        // seller
+        // records what was bought and at what cost; a new selling price, which applies in every shop, stays the owner's
+        // (the
+        // price the item already has may be sent back unchanged, as the restock form does).
+        if (r.lines().stream()
+                        .anyMatch(x -> x.sellMinor() != null
+                                && catalogue
+                                        .find(x.productId())
+                                        .map(p -> p.sellMinor() != x.sellMinor())
+                                        .orElse(true))
+                && !CurrentPrincipal.require().hasPermission("retail.price.edit")) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "permission_denied",
+                    "Permission denied",
+                    "Setting the selling price needs the permission to change prices. Leave the selling price empty.");
+        }
         for (PurchaseLineRequest l : r.lines()) {
             for (BranchQty b : l.qtyByBranch()) {
                 branches.resolveStocking(PERMISSION, b.branchId());
@@ -426,7 +444,8 @@ class PurchasingService {
                 newestFirst,
                 afterCreated,
                 afterId,
-                size + 1);
+                size + 1,
+                ownRecordsOnly());
         boolean more = rows.size() > size;
         List<Purchase> items = more ? rows.subList(0, size) : rows;
         String next = more
@@ -443,7 +462,19 @@ class PurchasingService {
         if (filter != null && filter.isEmpty()) {
             throw ApiException.notFound();
         }
-        return repo.find(id, filter).orElseThrow(ApiException::notFound);
+        UUID own = ownRecordsOnly();
+        return repo.find(id, filter)
+                .filter(p -> own == null || own.equals(p.createdBy()))
+                .orElseThrow(ApiException::notFound);
+    }
+
+    /**
+     * ADR-055: buying prices are seen on the purchases one records oneself. Without {@code retail.profit.read} (the owner's) a
+     * caller reads only the restocks, orders and receipts they made; null means everyone's.
+     */
+    static UUID ownRecordsOnly() {
+        Principal principal = CurrentPrincipal.require();
+        return principal.hasPermission("retail.profit.read") ? null : principal.userId();
     }
 
     // ---- Void a restock (issue #351, ADR-044) -----------------------------------------------

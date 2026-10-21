@@ -63,7 +63,7 @@ function Stocked({ items, total, empty }: { items: StockedItem[]; total: number;
             <tr key={i.product_id}>
               <td><ToStock>{i.description}</ToStock><br /><span className="hint">{i.code}</span></td>
               <td className="num">{showQty(i.qty_on_hand ?? '0')} {i.unit}</td>
-              <td className="num">{money(i.stock_at_price_minor ?? 0)}</td>
+              <td className="num">{i.stock_at_price_minor !== undefined ? money(i.stock_at_price_minor) : ''}</td>
             </tr>
           ))}
         </tbody>

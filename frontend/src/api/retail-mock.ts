@@ -1055,7 +1055,7 @@ export function createMockRetail(): RetailApi {
       return delay({ ...st });
     },
 
-    // Stock value is read with retail.stock.read; its cost and profit columns need retail.profit.read.
+    // The valuation is read with retail.stock.read; the value at price, cost and profit columns need retail.profit.read (ADR-055).
     // Without a branch it covers every branch, with a total per branch, as the server does (#144).
     valuation: ({ branchId, asOf }) => {
       const bp = (profit: number, atCost: number): { expected_profit_bp?: number } => (atCost > 0 ? { expected_profit_bp: Math.round((profit * 10000) / atCost) } : {});
@@ -1064,14 +1064,14 @@ export function createMockRetail(): RetailApi {
         const milli = bal(id, p.id);
         const sells = lineTotal(p.sellMinor, milli);
         const atCost = lineTotal(p.costMinor, milli);
-        return cost({ branch_id: id, product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor, expected_sales_minor: sells },
-          { cost_minor: p.costMinor, value_at_cost_minor: atCost, expected_profit_minor: sells - atCost, ...bp(sells - atCost, atCost) });
+        return cost({ branch_id: id, product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor },
+          { expected_sales_minor: sells, cost_minor: p.costMinor, value_at_cost_minor: atCost, expected_profit_minor: sells - atCost, ...bp(sells - atCost, atCost) });
       }));
       const sum = (pick: (r: ValuationRow) => number | undefined, from: ValuationRow[] = rows) => from.reduce((s, r) => s + (pick(r) ?? 0), 0);
       const totals = (own: ValuationRow[]) => {
         const sells = sum((r) => r.expected_sales_minor, own);
         const atCost = sum((r) => r.value_at_cost_minor, own);
-        return cost({ expected_sales_minor: sells }, { value_at_cost_minor: atCost, expected_profit_minor: sells - atCost, ...bp(sells - atCost, atCost) });
+        return cost({}, { expected_sales_minor: sells, value_at_cost_minor: atCost, expected_profit_minor: sells - atCost, ...bp(sells - atCost, atCost) });
       };
       const branches = ids.map((id) => ({ branch_id: id, ...totals(rows.filter((r) => r.branch_id === id)) }));
       const categories = CATEGORIES.map((c) => ({ category_id: c.id, category: c.name, ...totals(rows.filter((r) => r.category_id === c.id)) }));

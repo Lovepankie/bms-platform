@@ -28,8 +28,11 @@ final class StockSummaryApi {
             @Schema(description = "Items with a balance below zero")
             long negativeCount,
 
-            @Schema(description = "What the stock holds at the selling price")
-            long valueMinor,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Present only with retail.profit.read in every branch the figures cover (ADR-055): what the stock holds at the selling price")
+            Long valueMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = COST_ONLY + ": what the stock holds at cost")

@@ -6556,6 +6556,7 @@
             "type" : "string"
           },
           "sell_minor" : {
+            "description" : "Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)",
             "format" : "int64",
             "type" : "integer"
           },
@@ -8656,7 +8657,7 @@
             "type" : "integer"
           },
           "stock_at_price_minor" : {
-            "description" : "Present only with retail.stock.read",
+            "description" : "Present only with retail.profit.read in this branch (ADR-055)",
             "format" : "int64",
             "type" : "integer"
           },
@@ -8699,6 +8700,7 @@
             "type" : "integer"
           },
           "value_at_price_minor" : {
+            "description" : "Present only with retail.profit.read in every branch the report covers (ADR-055); stock above zero at the current sell price",
             "format" : "int64",
             "type" : "integer"
           }
@@ -8776,6 +8778,7 @@
             "type" : "integer"
           },
           "value_at_price_minor" : {
+            "description" : "All reported branches; Present only with retail.profit.read in this branch in every branch reported (ADR-055)",
             "format" : "int64",
             "type" : "integer"
           }
@@ -8797,6 +8800,7 @@
             "type" : "integer"
           },
           "value_at_price_minor" : {
+            "description" : "Present only with retail.profit.read in this branch (ADR-055); quantity times the current sell price",
             "format" : "int64",
             "type" : "integer"
           }
@@ -8831,6 +8835,7 @@
             "type" : "integer"
           },
           "value_at_price_minor" : {
+            "description" : "Present only with retail.profit.read in this branch (ADR-055); quantity times the current sell price",
             "format" : "int64",
             "type" : "integer"
           }
@@ -10339,6 +10344,7 @@
             "type" : "string"
           },
           "sell_minor" : {
+            "description" : "Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)",
             "format" : "int64",
             "type" : "integer"
           },
@@ -11977,6 +11983,7 @@
             "type" : "string"
           },
           "sell_minor" : {
+            "description" : "Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)",
             "format" : "int64",
             "type" : "integer"
           },
@@ -14819,6 +14826,7 @@
             "type" : "string"
           },
           "sell_minor" : {
+            "description" : "Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)",
             "format" : "int64",
             "type" : "integer"
           },
@@ -14899,7 +14907,7 @@
             "type" : "integer"
           },
           "value_minor" : {
-            "description" : "What the stock holds at the selling price",
+            "description" : "Present only with retail.profit.read in every branch the figures cover (ADR-055): what the stock holds at the selling price",
             "format" : "int64",
             "type" : "integer"
           }
@@ -14922,7 +14930,7 @@
             "type" : "string"
           },
           "stock_at_price_minor" : {
-            "description" : "Quantity on hand times the current sell price",
+            "description" : "Present only with retail.profit.read in every branch the report covers (ADR-055): quantity on hand times the current sell price",
             "format" : "int64",
             "type" : "integer"
           },
@@ -16608,6 +16616,7 @@
             "type" : "integer"
           },
           "expected_sales_minor" : {
+            "description" : "Expected sales, the stock at the current sell price; present only with retail.profit.read in every branch it covers (ADR-055)",
             "format" : "int64",
             "type" : "integer"
           },
@@ -16641,6 +16650,7 @@
             "type" : "integer"
           },
           "expected_sales_minor" : {
+            "description" : "Expected sales, the stock at the current sell price; present only with retail.profit.read in every branch it covers (ADR-055)",
             "format" : "int64",
             "type" : "integer"
           },
@@ -16682,6 +16692,7 @@
             "type" : "integer"
           },
           "expected_sales_minor" : {
+            "description" : "Expected sales, the stock at the current sell price; present only with retail.profit.read in every branch it covers (ADR-055)",
             "format" : "int64",
             "type" : "integer"
           },
@@ -16731,7 +16742,7 @@
             "type" : "integer"
           },
           "expected_sales_minor" : {
-            "description" : "qty times the current sell price; absent when amount_out_of_range",
+            "description" : "qty times the current sell price; present only with retail.profit.read in this branch (ADR-055); absent when amount_out_of_range",
             "format" : "int64",
             "type" : "integer"
           },
@@ -16746,6 +16757,7 @@
             "type" : "string"
           },
           "sell_minor" : {
+            "description" : "Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)",
             "format" : "int64",
             "type" : "integer"
           },

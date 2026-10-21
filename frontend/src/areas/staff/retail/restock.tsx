@@ -68,7 +68,8 @@ export function buildPurchase(input: { supplierId: string; purchasedOn: string; 
       product_id: l.product.id ?? '',
       ...(chosenPack(l.product, l.unitId) ? { unit_id: l.unitId } : {}),
       cost_minor: parseMinor(l.cost, RETAIL_CURRENCY) ?? 0,
-      sell_minor: parseMinor(l.sell, RETAIL_CURRENCY) ?? l.product.sell_minor ?? 0,
+      // ADR-055: no price is sent when none is known (someone who may not see prices); the item keeps its price.
+      ...((parseMinor(l.sell, RETAIL_CURRENCY) ?? l.product.sell_minor) !== undefined ? { sell_minor: parseMinor(l.sell, RETAIL_CURRENCY) ?? l.product.sell_minor } : {}),
       qty_by_branch: Object.entries(l.qtyByBranch)
         .map(([branchId, q]) => ({ branchId, milli: branchQty(q) ?? 0 }))
         .filter((q) => q.milli > 0)
@@ -106,6 +107,9 @@ export function supplierOptions(all: Supplier[], chosenId: string): Supplier[] {
 export function RestockForm({ onSaved, draftName, initial, again = false }: { onSaved?: (p: Purchase, context: RestockContext) => void; draftName?: string; initial?: RestockDraft; again?: boolean }) {
   const { me, branch } = useStaff();
   const canProfit = useProfitAccess();
+  // A new selling price applies in every shop, so only someone who may change prices sets it here (ADR-055); Purchasing given
+  // to a seller keeps the item's price, which the form sends back unchanged.
+  const canPrice = (me.permissions ?? []).includes('retail.price.edit');
   const queryClient = useQueryClient();
   const branches = (me.branches ?? []).filter((b) => b.id && b.stocks_goods !== false);
   // A restock entered again after a void (issue #351) has a draft of its own, so a restock in progress is never overwritten.
@@ -156,7 +160,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
     setLines((ls) =>
       ls.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0)
         ? ls
-        : [...ls, { product: p, cost: p.cost_minor !== undefined ? String(p.cost_minor) : '', sell: String(p.sell_minor ?? 0), qtyByBranch: { ...(branch && branches.some((b) => b.id === branch) ? { [branch]: '' } : {}) } }],
+        : [...ls, { product: p, cost: p.cost_minor !== undefined ? String(p.cost_minor) : '', sell: p.sell_minor !== undefined ? String(p.sell_minor) : '', qtyByBranch: { ...(branch && branches.some((b) => b.id === branch) ? { [branch]: '' } : {}) } }],
     );
   const patch = (i: number, change: Partial<RestockLine>) => setLines((ls) => ls.map((l, n) => (n === i ? { ...l, ...change } : l)));
   const patchWhole = (i: number, line: RestockLine) => setLines((ls) => ls.map((l, n) => (n === i ? line : l)));
@@ -235,7 +239,8 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
               </div>
               <div>
                 <label htmlFor={`sell-${i}`}>Sell price each{pack ? ` (per ${l.product.unit})` : ''}</label>
-                <input id={`sell-${i}`} inputMode="numeric" value={l.sell} onChange={(e) => patch(i, { sell: e.target.value })} />
+                <input id={`sell-${i}`} inputMode="numeric" value={l.sell} disabled={!canPrice} onChange={(e) => patch(i, { sell: e.target.value })} />
+                {!canPrice && <p className="hint">Only the owner changes selling prices.</p>}
               </div>
             </div>
             <fieldset>

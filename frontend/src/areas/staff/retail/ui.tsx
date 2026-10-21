@@ -273,7 +273,7 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
           <br />
           {!g.active && <CategoryLabel category={p.category} />}
           {!g.active && p.category && <br />}
-          {showPrice && `${money(p.sell_minor ?? 0)} each${showStock ? ', ' : ''}`}
+          {showPrice && p.sell_minor !== undefined && `${money(p.sell_minor)} each${showStock ? ', ' : ''}`}
           {showStock && (
             <>
               in stock here:{' '}

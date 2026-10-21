@@ -301,14 +301,16 @@ class RetailReportsIT extends IntegrationTest {
 
         JsonNode v = signedIn.get("/api/v1/retail/reports/valuation", session.accessToken())
                 .getBody();
-        assertThat(v.has("expected_sales_minor")).isTrue();
+        // ADR-055: no stock value for a seller, even at the selling price; the quantities stay.
+        assertThat(v.has("expected_sales_minor")).isFalse();
         assertThat(v.has("value_at_cost_minor")).isFalse();
         assertThat(v.get("rows")).isNotEmpty();
         for (JsonNode r : v.get("rows")) {
             assertThat(r.get("branch_id").asString()).isEqualTo(t.headOffice().toString());
             assertThat(r.has("cost_minor")).isFalse();
             assertThat(r.has("value_at_cost_minor")).isFalse();
-            assertThat(r.has("expected_sales_minor")).isTrue();
+            assertThat(r.has("expected_sales_minor")).isFalse();
+            assertThat(r.has("qty")).isTrue();
         }
         for (JsonNode br : v.get("branches")) {
             assertThat(br.has("value_at_cost_minor")).isFalse();

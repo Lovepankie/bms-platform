@@ -124,9 +124,9 @@ class SalesAnalysisService {
                 topByQuantity,
                 bySeller,
                 slowDays,
-                stocked ? slow.stream().map(SalesAnalysisService::item).toList() : null,
+                stocked ? slow.stream().map(s -> item(s, profit)).toList() : null,
                 stocked ? (slow.isEmpty() ? 0 : slow.getFirst().total()) : null,
-                stocked ? unsold.stream().map(SalesAnalysisService::item).toList() : null,
+                stocked ? unsold.stream().map(s -> item(s, profit)).toList() : null,
                 stocked ? (unsold.isEmpty() ? 0 : unsold.getFirst().total()) : null);
     }
 
@@ -160,14 +160,15 @@ class SalesAnalysisService {
                 profit ? AnalyticsSupport.marginBp(a.sales() - a.cost(), a.sales()) : null);
     }
 
-    private static StockedItem item(Stocked s) {
+    /** ADR-055: the value of the stock, even at the selling price, goes with the cost permission. */
+    private static StockedItem item(Stocked s, boolean profit) {
         return new StockedItem(
                 s.productId(),
                 s.code(),
                 s.description(),
                 s.unit(),
                 Quantities.format(s.qty()),
-                Quantities.value(s.qty(), s.sellMinor()));
+                profit ? Quantities.value(s.qty(), s.sellMinor()) : null);
     }
 
     static LocalDate bucket(LocalDate day, String group) {

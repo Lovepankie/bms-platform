@@ -158,7 +158,7 @@ class StockService {
                         p.unit(),
                         Quantities.format(p.total()),
                         p.negative(),
-                        p.sellMinor(),
+                        RetailCatalogue.maySeePrices(principal) ? p.sellMinor() : null,
                         cost ? p.costMinor() : null,
                         ids.stream()
                                 .map(b -> {
@@ -217,10 +217,12 @@ class StockService {
                                 items.getLast().code() + "|" + items.getLast().productId()))
                 : null;
         boolean cost = mayReadCost(branch);
+        // ADR-055: a storekeeper sees no selling price.
+        boolean price = RetailCatalogue.maySeePrices(CurrentPrincipal.require());
         return new StockPage(
                 branch,
                 items.stream()
-                        .map(r -> cost
+                        .map(r -> cost && price
                                 ? r
                                 : new StockRow(
                                         r.productId(),
@@ -231,8 +233,8 @@ class StockService {
                                         r.unit(),
                                         r.qty(),
                                         r.negative(),
-                                        r.sellMinor(),
-                                        null,
+                                        price ? r.sellMinor() : null,
+                                        cost ? r.costMinor() : null,
                                         r.reservedQty()))
                         .toList(),
                 Quantities.format(lowStock()),

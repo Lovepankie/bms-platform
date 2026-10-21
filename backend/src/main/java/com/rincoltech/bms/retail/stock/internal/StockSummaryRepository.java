@@ -96,7 +96,8 @@ class StockSummaryRepository {
                         rs.getString("label") == null ? "Unknown" : rs.getString("label"),
                         rs.getLong("items_count"),
                         rs.getLong("negative_count"),
-                        rs.getLong("value_minor"),
+                        // ADR-055: the value of the stock, even at the selling price, goes with the cost permission.
+                        spec.withCost() ? rs.getLong("value_minor") : null,
                         spec.withCost() ? rs.getLong("cost_minor") : null))
                 .list();
     }

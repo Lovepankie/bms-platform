@@ -54,7 +54,9 @@ class PermissionMatrixIT extends IntegrationTest {
             "accountant",
             "auditor",
             "member",
-            "retail_sales");
+            "retail_sales",
+            "retail_storekeeper",
+            "retail_purchasing");
     static final Pattern ROW = Pattern.compile("^\\| `([a-z_]+\\.[a-z_]+\\.[a-z_]+)` \\|(.*)\\|\\s*$");
 
     @Autowired

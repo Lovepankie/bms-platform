@@ -98,7 +98,9 @@ class StockHealthService {
             boolean cost = principal.may(PROFIT_READ, d.branchId());
             atPrice = Math.addExact(atPrice, d.atPrice());
             atCost = Math.addExact(atCost, d.atCost());
-            deadBranches.add(new DeadBranch(d.branchId(), d.items(), d.atPrice(), cost ? d.atCost() : null));
+            // ADR-055: the value of the stock, even at the selling price, goes with the cost permission.
+            deadBranches.add(
+                    new DeadBranch(d.branchId(), d.items(), cost ? d.atPrice() : null, cost ? d.atCost() : null));
         }
         List<DeadRow> deadRows = repo.deadItems(filter, deadSince, today, top);
         List<DeadItem> deadItems = deadRows.stream()
@@ -109,7 +111,7 @@ class StockHealthService {
                         r.description(),
                         r.unit(),
                         Quantities.format(r.qty()),
-                        r.atPrice(),
+                        principal.may(PROFIT_READ, r.branchId()) ? r.atPrice() : null,
                         principal.may(PROFIT_READ, r.branchId()) ? r.atCost() : null))
                 .toList();
         DeadStock dead = new DeadStock(
@@ -118,7 +120,7 @@ class StockHealthService {
                 deadItems,
                 totals.stream().mapToInt(DeadTotal::items).sum(),
                 costEverywhere ? atCost : null,
-                atPrice);
+                costEverywhere ? atPrice : null);
 
         return new Report(
                 w.from(),

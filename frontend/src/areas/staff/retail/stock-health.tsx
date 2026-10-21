@@ -76,7 +76,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
                     <td><ToStock>{nameOf(b.branch_id)}</ToStock></td>
                     <td className="num">{b.item_count}</td>
                     <td className="num">
-                      {money(b.value_at_price_minor ?? 0)}
+                      {b.value_at_price_minor !== undefined ? money(b.value_at_price_minor) : ''}
                       {withCost && phone && b.value_at_cost_minor !== undefined && <><br /><span className="hint">cost {money(b.value_at_cost_minor)}</span></>}
                     </td>
                     {withCost && !phone && <td className="num">{moneyOrNone(b.value_at_cost_minor)}</td>}
@@ -86,7 +86,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
                   <td><strong>All</strong></td>
                   <td className="num">{dead?.items_total}</td>
                   <td className="num">
-                    {money(dead?.value_at_price_minor ?? 0)}
+                    {dead?.value_at_price_minor !== undefined ? money(dead.value_at_price_minor) : ''}
                     {withCost && phone && dead?.value_at_cost_minor !== undefined && <><br /><span className="hint">cost {money(dead.value_at_cost_minor)}</span></>}
                   </td>
                   {withCost && !phone && <td className="num">{moneyOrNone(dead?.value_at_cost_minor)}</td>}
@@ -105,7 +105,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
                     </td>
                     {!phone && <td className="num">{showQty(i.qty_on_hand ?? '0')} {i.unit}</td>}
                     <td className="num">
-                      {money(i.value_at_price_minor ?? 0)}
+                      {i.value_at_price_minor !== undefined ? money(i.value_at_price_minor) : ''}
                       {withCost && phone && i.value_at_cost_minor !== undefined && <><br /><span className="hint">cost {money(i.value_at_cost_minor)}</span></>}
                     </td>
                     {withCost && !phone && <td className="num">{moneyOrNone(i.value_at_cost_minor)}</td>}

@@ -135,8 +135,8 @@ const NEEDS: Record<RetailScreen, string[]> = {
   // Landed costs and supplier credit notes are the administrator's too (issue #199): no new permission exists.
   landedCosts: [PAYABLE_MANAGE],
   supplierCredits: [PAYABLE_MANAGE],
-  // Stock value is a stock read; its cost columns and the profit report need retail.profit.read.
-  valuation: ['retail.stock.read'],
+  // Stock value, even at the selling price, is the owner's figure (ADR-055): the server leaves it out without retail.profit.read.
+  valuation: ['retail.stock.read', PROFIT],
   profit: [PROFIT],
   // The analytics reports (issue #149); profit columns arrive only with retail.profit.read.
   salesAnalysis: ['retail.sale.read'],

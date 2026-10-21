@@ -269,7 +269,12 @@ class OrdersService {
     @Transactional(readOnly = true)
     Order get(UUID id) {
         capabilities.require(RetailCapabilities.PURCHASING);
-        return view(visible(id, false), true);
+        OrderRow o = visible(id, false);
+        UUID own = PurchasingService.ownRecordsOnly();
+        if (own != null && !own.equals(o.createdBy())) {
+            throw ApiException.notFound();
+        }
+        return view(o, true);
     }
 
     @Transactional(readOnly = true)
@@ -300,7 +305,8 @@ class OrdersService {
                 search,
                 after == null ? null : after.at(),
                 after == null ? null : after.id(),
-                size + 1);
+                size + 1,
+                PurchasingService.ownRecordsOnly());
         boolean more = rows.size() > size;
         List<OrderRow> items = more ? rows.subList(0, size) : rows;
         String next = more

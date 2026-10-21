@@ -203,12 +203,18 @@ class ReceiptsRepository {
             Search.Query query,
             Instant afterCreated,
             UUID afterId,
-            int limit) {
+            int limit,
+            UUID createdBy) {
         if (branchIds != null && branchIds.isEmpty()) {
             return List.of();
         }
         StringBuilder sql = new StringBuilder(SELECT_RECEIPT + " WHERE true");
         Map<String, Object> params = new LinkedHashMap<>();
+        // ADR-055: without retail.profit.read a buyer reads only what they recorded themselves.
+        if (createdBy != null) {
+            sql.append(" AND r.created_by = :createdBy");
+            params.put("createdBy", createdBy);
+        }
         if (branchIds != null) {
             sql.append(" AND r.branch_id IN (:branchIds)");
             params.put("branchIds", branchIds);

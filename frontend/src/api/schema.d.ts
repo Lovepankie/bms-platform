@@ -8622,7 +8622,10 @@ export interface components {
             negative?: boolean;
             /** Format: uuid */
             product_id?: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)
+             */
             sell_minor?: number;
             /** @description The sum over the branches of the page */
             total_qty?: string;
@@ -9773,7 +9776,7 @@ export interface components {
             stock_at_cost_minor?: number;
             /**
              * Format: int64
-             * @description Present only with retail.stock.read
+             * @description Present only with retail.profit.read in this branch (ADR-055)
              */
             stock_at_price_minor?: number;
             /**
@@ -9810,7 +9813,10 @@ export interface components {
              * @description Present only with retail.profit.read in every branch the report covers; stock above zero at the current cost
              */
             value_at_cost_minor?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers (ADR-055); stock above zero at the current sell price
+             */
             value_at_price_minor?: number;
         };
         RetailDashboardToday: {
@@ -9863,7 +9869,10 @@ export interface components {
              * @description All reported branches; Present only with retail.profit.read in this branch in every branch reported
              */
             value_at_cost_minor?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description All reported branches; Present only with retail.profit.read in this branch in every branch reported (ADR-055)
+             */
             value_at_price_minor?: number;
         };
         RetailDeadStockBranch: {
@@ -9876,7 +9885,10 @@ export interface components {
              * @description Present only with retail.profit.read in this branch; quantity times the current cost
              */
             value_at_cost_minor?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in this branch (ADR-055); quantity times the current sell price
+             */
             value_at_price_minor?: number;
         };
         /** @description The largest by value at price */
@@ -9894,7 +9906,10 @@ export interface components {
              * @description Present only with retail.profit.read in this branch
              */
             value_at_cost_minor?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in this branch (ADR-055); quantity times the current sell price
+             */
             value_at_price_minor?: number;
         };
         /** @description A delivery fee left on the buyer's account, paid on its order */
@@ -10653,7 +10668,10 @@ export interface components {
             negative?: boolean;
             /** Format: uuid */
             product_id?: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)
+             */
             sell_minor?: number;
             /** @description The sum of the balances of each role present in the report */
             subtotals?: components["schemas"]["RetailRoleQuantity"][];
@@ -11467,7 +11485,10 @@ export interface components {
             qty?: string;
             /** @description Issue #385: of the branch balance, what open customer orders keep aside (so not free to sell); sent only with branch_id, and only when something is kept */
             reserved_qty?: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)
+             */
             sell_minor?: number;
             /**
              * Format: int32
@@ -12940,7 +12961,10 @@ export interface components {
             qty?: string;
             /** @description Issue #385: of qty, what open customer orders keep aside (not free to sell); absent when nothing is kept */
             reserved_qty?: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)
+             */
             sell_minor?: number;
             unit?: string;
         };
@@ -12983,7 +13007,7 @@ export interface components {
             negative_count?: number;
             /**
              * Format: int64
-             * @description What the stock holds at the selling price
+             * @description Present only with retail.profit.read in every branch the figures cover (ADR-055): what the stock holds at the selling price
              */
             value_minor?: number;
         };
@@ -12996,7 +13020,7 @@ export interface components {
             qty_on_hand?: string;
             /**
              * Format: int64
-             * @description Quantity on hand times the current sell price
+             * @description Present only with retail.profit.read in every branch the report covers (ADR-055): quantity on hand times the current sell price
              */
             stock_at_price_minor?: number;
             unit?: string;
@@ -13849,7 +13873,10 @@ export interface components {
              * @description Present only with retail.profit.read; expected sales less value at cost
              */
             expected_profit_minor?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Expected sales, the stock at the current sell price; present only with retail.profit.read in every branch it covers (ADR-055)
+             */
             expected_sales_minor?: number;
             rows?: components["schemas"]["RetailValuationRow"][];
             /**
@@ -13871,7 +13898,10 @@ export interface components {
              * @description Present only with retail.profit.read; expected sales less value at cost
              */
             expected_profit_minor?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Expected sales, the stock at the current sell price; present only with retail.profit.read in every branch it covers (ADR-055)
+             */
             expected_sales_minor?: number;
             /**
              * Format: int64
@@ -13904,7 +13934,10 @@ export interface components {
              * @description Present only with retail.profit.read
              */
             expected_profit_minor?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Expected sales, the stock at the current sell price; present only with retail.profit.read in every branch it covers (ADR-055)
+             */
             expected_sales_minor?: number;
             /**
              * Format: int64
@@ -13939,14 +13972,17 @@ export interface components {
             expected_profit_minor?: number;
             /**
              * Format: int64
-             * @description qty times the current sell price; absent when amount_out_of_range
+             * @description qty times the current sell price; present only with retail.profit.read in this branch (ADR-055); absent when amount_out_of_range
              */
             expected_sales_minor?: number;
             negative?: boolean;
             /** Format: uuid */
             product_id?: string;
             qty?: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)
+             */
             sell_minor?: number;
             unit?: string;
             /**

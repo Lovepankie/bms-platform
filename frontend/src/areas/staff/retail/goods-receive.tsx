@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { retail, type GoodsReceiptRequest, type Product, type PurchaseOrder } from '../../../api/retail';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { SkeletonList } from '../../../components/states';
-import { useStaff } from '../context';
+import { useOptionalStaff, useStaff } from '../context';
 import { newIdempotencyKey, usePersistedDraft } from './idempotency';
 import { UNITS, canUse, capabilityOn } from './permissions';
 import {
@@ -30,6 +30,10 @@ function LineCard({ line, index, order, onChange, onRemove }: {
 }) {
   const problem = receiveLineProblem(line);
   const more = overOrdered(line, order);
+  // A new selling price applies in every shop: offered only to someone who may change prices (ADR-055).
+  // Outside the staff layout (a test of the line alone) the server is the only judge, so the field shows.
+  const staff = useOptionalStaff();
+  const canPrice = !staff || (staff.me.permissions ?? []).includes('retail.price.edit');
   return (
     <li className="rt-card" data-testid={`receive-line-${index}`}>
       <p><strong>{line.description}</strong> ({line.code})</p>
@@ -55,8 +59,12 @@ function LineCard({ line, index, order, onChange, onRemove }: {
           <input id={`rc-cost-${index}`} inputMode="numeric" value={line.cost} onChange={(e) => onChange({ ...line, cost: e.target.value })} aria-invalid={problem !== null} />
         </div>
       </div>
-      <label htmlFor={`rc-sell-${index}`}>New selling price of {line.description}, per {line.baseUnit} (optional)</label>
-      <input id={`rc-sell-${index}`} inputMode="numeric" value={line.sell} placeholder="Leave blank to keep the price" onChange={(e) => onChange({ ...line, sell: e.target.value })} />
+      {canPrice && (
+        <>
+          <label htmlFor={`rc-sell-${index}`}>New selling price of {line.description}, per {line.baseUnit} (optional)</label>
+          <input id={`rc-sell-${index}`} inputMode="numeric" value={line.sell} placeholder="Leave blank to keep the price" onChange={(e) => onChange({ ...line, sell: e.target.value })} />
+        </>
+      )}
       {more && <p role="note" className="alert alert-warning">This is more than was ordered. It is allowed only up to the amount the business has set; if it is too much, the server will say so.</p>}
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
       {isReceived(line) && problem === null && <p data-testid={`receive-line-total-${index}`}>Worth <strong>{money(receiveTotal([line]))}</strong></p>}

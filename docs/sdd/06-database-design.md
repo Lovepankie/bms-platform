@@ -526,6 +526,7 @@ Index `(tenant_id, user_id) WHERE revoked_at IS NULL`. FR-IAM-07, FR-IAM-08.
 `branch_id uuid` (NULL = all branches of the tenant), `granted_by uuid NOT NULL`,
 `revoked_at timestamptz`, `revoked_by uuid`.
 Partial unique `(tenant_id, user_id, role_key, coalesce(branch_id, '00000000-0000-0000-0000-000000000000'::uuid)) WHERE revoked_at IS NULL`.
+Check `user_role_assignments_admin_every_branch` (V73, ADR-055): an active `tenant_admin` row has no branch, so an administrator always covers every branch; V73 widened any limited administrator row before validating it. The roles `retail_storekeeper` and `retail_purchasing` are seeded by V73.
 
 ### `audit_log` (RLS, append-only)
 

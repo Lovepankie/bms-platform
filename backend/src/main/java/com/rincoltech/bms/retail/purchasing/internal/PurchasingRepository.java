@@ -258,11 +258,17 @@ class PurchasingRepository {
             boolean newestFirst,
             Instant afterCreated,
             UUID afterId,
-            int limit) {
+            int limit,
+            UUID createdBy) {
         StringBuilder sql = new StringBuilder(HEADER + " WHERE true");
         Map<String, Object> params = new LinkedHashMap<>();
         if (listedBranches != null && listedBranches.isEmpty()) {
             return List.of();
+        }
+        // ADR-055: without retail.profit.read a buyer reads only what they recorded themselves.
+        if (createdBy != null) {
+            sql.append(" AND p.created_by = :createdBy");
+            params.put("createdBy", createdBy);
         }
         // Which restocks are listed (issue #350): one movement row must match the branch, the category and the item
         // asked

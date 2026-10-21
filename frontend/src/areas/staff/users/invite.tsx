@@ -6,7 +6,7 @@ import { useShellBrand } from '../../../app/branding';
 import { useStaff } from '../context';
 import { LinkBox, type ShownLink } from './link-box';
 import { RolePick } from './role-pick';
-import { canManageUsers, emptyInvite, hasProblems, inviteBody, inviteProblems, roleChoices, type InviteDraft, type InviteProblems } from './state';
+import { PURCHASING, canManageUsers, emptyInvite, hasProblems, inviteBody, inviteProblems, purchasingOffered, roleChoices, type InviteDraft, type InviteProblems } from './state';
 
 // Invite a staff user (issue #319; FR-IAM-01). Phone first: most staff are reached on a phone, so the phone box comes before the
 // email and either one is enough. After the invitation the one-time link is shown once, in a box with Copy and WhatsApp buttons.
@@ -40,6 +40,8 @@ export function InviteScreen() {
   }
 
   const problems = inviteProblems(draft);
+  // A business with the retail module calls its branches shops and stores.
+  const retail = !me.modules || me.modules.includes('retail');
   const set = (patch: Partial<InviteDraft>) => setDraft((d) => ({ ...d, ...patch }));
 
   async function submit() {
@@ -118,14 +120,22 @@ export function InviteScreen() {
 
         <div data-tour="invite-role">
         <RolePick
-          roles={roleChoices(roles.data ?? [])}
+          roles={roleChoices(roles.data ?? [], me.modules).filter((r) => r.key !== PURCHASING)}
           branches={branches.data ?? []}
           roleKey={draft.roleKey}
-          branchId={draft.branchId}
+          branchIds={draft.branchIds}
           onChange={(next) => set(next)}
           problem={shown('roleKey')}
+          retail={retail}
+          showMissing={touched}
         />
         </div>
+        {purchasingOffered(draft.roleKey, roleChoices(roles.data ?? [], me.modules)) && (
+          <label className="check">
+            <input type="checkbox" checked={draft.purchasing} onChange={(e) => set({ purchasing: e.target.checked })} />
+            Can also record purchases and restocks (with the buying prices), in the same shops and stores
+          </label>
+        )}
 
         {error && <p role="alert" className="alert alert-danger">{error}</p>}
         {error && lookInList && (

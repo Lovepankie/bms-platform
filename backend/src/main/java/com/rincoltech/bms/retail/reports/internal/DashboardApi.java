@@ -63,7 +63,8 @@ final class DashboardApi {
     @Schema(name = "RetailDashboardStock")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record Stock(
-            long valueAtPriceMinor,
+            @Schema(description = PROFIT_ONLY + " (ADR-055); stock above zero at the current sell price")
+            Long valueAtPriceMinor,
 
             @Schema(description = PROFIT_ONLY + "; stock above zero at the current cost")
             Long valueAtCostMinor,
@@ -91,7 +92,8 @@ final class DashboardApi {
             @Schema(description = "Present only with retail.profit.read in this branch")
             Long todayGrossProfitMinor,
 
-            @Schema(description = STOCK_ONLY) Long stockAtPriceMinor,
+            @Schema(description = "Present only with retail.profit.read in this branch (ADR-055)")
+            Long stockAtPriceMinor,
 
             @Schema(description = "Present only with retail.profit.read in this branch")
             Long stockAtCostMinor,

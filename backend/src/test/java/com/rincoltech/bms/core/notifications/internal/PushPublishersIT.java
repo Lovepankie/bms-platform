@@ -266,8 +266,8 @@ class PushPublishersIT extends IntegrationTest {
                 "*",
                 etagOfCapabilities());
         assertThat(on.getStatusCode()).as("%s", on.getBody()).isEqualTo(HttpStatus.OK);
-        UUID scoped = Api.staff(t, Api.email("pub-scoped"), new Role("tenant_admin", t.secondBranch()));
-        UUID elsewhere = Api.staff(t, Api.email("pub-elsewhere"), new Role("tenant_admin", t.headOffice()));
+        UUID scoped = Api.staff(t, Api.email("pub-scoped"), new Role("retail_storekeeper", t.secondBranch()));
+        UUID elsewhere = Api.staff(t, Api.email("pub-elsewhere"), new Role("retail_storekeeper", t.headOffice()));
         device(scoped);
         device(elsewhere);
         device(dave);
@@ -294,7 +294,7 @@ class PushPublishersIT extends IntegrationTest {
     /** TransferService.receiveTransfer allows receiving at a closed branch, so its staff must still hear of the dispatch. */
     @Test
     void staffOfAClosedDestinationStillHearOfATransferOnItsWayButNotOfOtherNotices() {
-        UUID scoped = Api.staff(t, Api.email("pub-closed"), new Role("tenant_admin", t.secondBranch()));
+        UUID scoped = Api.staff(t, Api.email("pub-closed"), new Role("retail_storekeeper", t.secondBranch()));
         device(scoped);
         TestDatabase.owner()
                 .sql("UPDATE branches SET status = 'inactive', closed_at = now() WHERE id = ?")

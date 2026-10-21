@@ -65,8 +65,9 @@ final class SalesAnalysisApi {
             String unit,
             String qtyOnHand,
 
-            @Schema(description = "Quantity on hand times the current sell price")
-            long stockAtPriceMinor) {}
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = PROFIT_ONLY + " (ADR-055): quantity on hand times the current sell price")
+            Long stockAtPriceMinor) {}
 
     @Schema(name = "RetailSalesAnalysis")
     @JsonInclude(JsonInclude.Include.NON_NULL)

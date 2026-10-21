@@ -158,7 +158,9 @@ final class CatalogueApi {
             String category,
             UUID unitId,
             String unit,
-            long sellMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = RetailCatalogue.PRICE_ONLY)
+            Long sellMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = COST_ONLY)
             Long costMinor,
@@ -490,6 +492,38 @@ final class CatalogueApi {
                     packs,
                     total,
                     branches,
+                    variant,
+                    reservedQty,
+                    photoId,
+                    itemPhotoId);
+        }
+
+        /** ADR-055: no selling price and no cost, for a caller who may see neither (a storekeeper). */
+        Product withoutPrice() {
+            return withoutCost().withSell(null);
+        }
+
+        private Product withSell(Long sell) {
+            return new Product(
+                    id,
+                    code,
+                    description,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sell,
+                    costMinor,
+                    currency,
+                    active,
+                    createdAt,
+                    updatedAt,
+                    version,
+                    qty,
+                    negative,
+                    packs,
+                    stockOnHand,
+                    stockBranches,
                     variant,
                     reservedQty,
                     photoId,
