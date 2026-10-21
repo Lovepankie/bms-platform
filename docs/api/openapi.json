@@ -11325,6 +11325,26 @@
           }
         }
       },
+      "RetailOrderItemsRequest" : {
+        "description" : "The whole new set of items. A line of an item already on the order, in the same unit, with no price or the price agreed, keeps the price agreed; any other line is priced as a new order's would be",
+        "properties" : {
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailOrderLineRequest"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "note" : {
+            "description" : "Why the items changed, kept in the order's history",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "lines" ]
+      },
       "RetailOrderLine" : {
         "properties" : {
           "base_qty" : {
@@ -30885,6 +30905,58 @@
           }
         },
         "summary" : "Take the payment of a delivery fee left on a credit buyer's account; M (issue #385)",
+        "tags" : [ "retail-orders" ]
+      }
+    },
+    "/api/v1/retail/orders/{order_id}/items" : {
+      "post" : {
+        "operationId" : "changeRetailOrderItems",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "order_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailOrderItemsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOrder"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change the items of an order that is ordered or packed, keeping its number: the stock kept aside follows in the same transaction and the history says what changed; M (issue #393)",
         "tags" : [ "retail-orders" ]
       }
     },

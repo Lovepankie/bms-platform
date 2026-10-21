@@ -76,7 +76,8 @@ class CustomerOrdersRepository {
             String saleStatus,
             Instant createdAt,
             UUID createdBy,
-            int version) {
+            int version,
+            int itemsRevision) {
 
         boolean open() {
             return status.equals("ordered") || status.equals("packed") || status.equals("out_for_delivery");
@@ -97,7 +98,23 @@ class CustomerOrdersRepository {
             BigDecimal baseQty,
             String priceSource,
             String overrideReason,
-            UUID overriddenBy) {
+            UUID overriddenBy,
+            UUID priceListId,
+            BigDecimal breakMinQty,
+            Long resolvedUnitPriceMinor) {
+
+        /** How the price was chosen, as stored (null on a line priced without price lists). */
+        SalesRepository.LinePricing pricing() {
+            return priceSource == null
+                    ? null
+                    : new SalesRepository.LinePricing(
+                            priceSource,
+                            priceListId,
+                            breakMinQty,
+                            resolvedUnitPriceMinor,
+                            overrideReason,
+                            overriddenBy);
+        }
 
         OrderLine view() {
             return new OrderLine(
@@ -157,6 +174,7 @@ class CustomerOrdersRepository {
 
     void insertLine(
             UUID orderId,
+            int revision,
             int lineNo,
             UUID productId,
             UUID unitId,
@@ -168,13 +186,15 @@ class CustomerOrdersRepository {
             UUID by) {
         boolean override = pricing != null && "override".equals(pricing.source());
         jdbc.sql("""
-                        INSERT INTO retail_customer_order_lines (id, tenant_id, order_id, line_no, product_id, unit_id, qty, base_qty,
-                            unit_price_minor, line_total_minor, price_source, price_list_id, price_break_min_qty,
+                        INSERT INTO retail_customer_order_lines (id, tenant_id, order_id, revision, line_no, product_id, unit_id, qty,
+                            base_qty, unit_price_minor, line_total_minor, price_source, price_list_id, price_break_min_qty,
                             resolved_unit_price_minor, price_override_reason, overridden_by)
-                        VALUES (gen_random_uuid(), current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (gen_random_uuid(), current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                            ?)
                         """)
                 .params(
                         orderId,
+                        revision,
                         lineNo,
                         productId,
                         unitId,
@@ -206,12 +226,14 @@ class CustomerOrdersRepository {
                 .optional();
     }
 
+    /** The order's current lines: those of its items revision (V78, issue #393). */
     List<StoredLine> lines(UUID orderId) {
         return jdbc.sql("""
                         SELECT l.line_no, l.product_id, p.code, p.description, l.qty, l.unit_id, coalesce(u.name, bu.name) AS unit,
                                l.unit_price_minor, l.line_total_minor, l.base_qty, l.price_source, l.price_override_reason,
-                               l.overridden_by
+                               l.overridden_by, l.price_list_id, l.price_break_min_qty, l.resolved_unit_price_minor
                           FROM retail_customer_order_lines l
+                          JOIN retail_customer_orders o ON o.id = l.order_id AND o.items_revision = l.revision
                           JOIN retail_products p ON p.id = l.product_id
                           JOIN retail_units bu ON bu.id = p.unit_id
                           LEFT JOIN retail_units u ON u.id = l.unit_id
@@ -232,7 +254,10 @@ class CustomerOrdersRepository {
                         rs.getBigDecimal("base_qty"),
                         rs.getString("price_source"),
                         rs.getString("price_override_reason"),
-                        rs.getObject("overridden_by", UUID.class)))
+                        rs.getObject("overridden_by", UUID.class),
+                        rs.getObject("price_list_id", UUID.class),
+                        rs.getBigDecimal("price_break_min_qty"),
+                        rs.getObject("resolved_unit_price_minor", Long.class)))
                 .list();
     }
 
@@ -432,6 +457,17 @@ class CustomerOrdersRepository {
                 .update();
     }
 
+    /** A change of items (issue #393): the next revision of lines and their total, the step unchanged. */
+    int markItemsChanged(UUID id, int version, int itemsRevision, long itemsTotalMinor) {
+        return jdbc.sql("""
+                        UPDATE retail_customer_orders SET items_revision = ?, items_total_minor = ?, updated_at = now(),
+                               version = version + 1
+                         WHERE id = ? AND version = ? AND items_revision = ? - 1 AND status IN ('ordered', 'packed')
+                        """)
+                .params(itemsRevision, itemsTotalMinor, id, version, itemsRevision)
+                .update();
+    }
+
     int markPacked(UUID id, int version, UUID by) {
         return jdbc.sql("""
                         UPDATE retail_customer_orders SET status = 'packed', packed_at = now(), packed_by = ?, updated_at = now(),
@@ -611,7 +647,8 @@ class CustomerOrdersRepository {
                 rs.getString("sale_status"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getObject("created_by", UUID.class),
-                rs.getInt("version"));
+                rs.getInt("version"),
+                rs.getInt("items_revision"));
     }
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {

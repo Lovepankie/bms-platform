@@ -98,6 +98,17 @@ final class CustomerOrdersApi {
             @Schema(description = "True takes the delivery day off the order")
             Boolean clearDeliveryDate) {}
 
+    @Schema(
+            name = "RetailOrderItemsRequest",
+            description =
+                    "The whole new set of items. A line of an item already on the order, in the same unit, with no price or"
+                            + " the price agreed, keeps the price agreed; any other line is priced as a new order's would be")
+    record ItemsRequest(
+            @NotEmpty @Size(max = 200) List<@Valid @NotNull OrderLineRequest> lines,
+
+            @Size(max = 300) @Schema(description = "Why the items changed, kept in the order's history")
+            String note) {}
+
     @Schema(name = "RetailOrderStepRequest")
     record StepRequest(@Size(max = 500) String note) {}
 

@@ -40,6 +40,13 @@ public interface StockLedger {
     /** Gives back what {@link #reserve} kept (an order cancelled, or delivered just before its sale moves the stock). */
     void release(List<Hold> holds);
 
+    /**
+     * Changes what an order keeps from {@code released} to {@code held} (its items changed, issue #393): the two are netted per
+     * branch and product and applied in one pass in branch and product order under the balance rows' locks, so a change cannot
+     * deadlock against an order or a sale. A rise larger than what is free is refused with 422 {@code insufficient_stock}.
+     */
+    void rehold(List<Hold> released, List<Hold> held);
+
     /** A quantity in base units kept aside at a branch. */
     record Hold(UUID branchId, UUID productId, BigDecimal qty) {}
 

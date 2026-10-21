@@ -179,6 +179,40 @@ class JdbcStockLedger implements StockLedger {
         }
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void rehold(List<Hold> released, List<Hold> held) {
+        List<Hold> net = new ArrayList<>(held);
+        for (Hold h : released) {
+            net.add(new Hold(h.branchId(), h.productId(), h.qty().negate()));
+        }
+        for (Hold h : inLockOrder(net)) {
+            if (h.qty().signum() == 0) {
+                continue;
+            }
+            Locked locked = lockRow(h.branchId(), h.productId());
+            if (h.qty().signum() < 0 && locked.reserved().compareTo(h.qty().negate()) < 0) {
+                throw new IllegalStateException("releasing more than is kept for orders: " + h);
+            }
+            BigDecimal free = locked.qty().subtract(locked.reserved());
+            if (h.qty().signum() > 0 && free.compareTo(h.qty()) < 0) {
+                BigDecimal shown = free.signum() < 0 ? BigDecimal.ZERO : free;
+                throw ApiException.rule(
+                        "insufficient_stock",
+                        "Product " + h.productId() + " has "
+                                + shown.stripTrailingZeros().toPlainString()
+                                + " free at this branch ("
+                                + locked.reserved().stripTrailingZeros().toPlainString()
+                                + " kept for orders), so this order cannot keep "
+                                + h.qty().stripTrailingZeros().toPlainString() + " more.");
+            }
+            jdbc.sql("""
+                            UPDATE retail_stock_balances SET reserved_qty = reserved_qty + ?, updated_at = now()
+                             WHERE branch_id = ? AND product_id = ?
+                            """).params(h.qty(), h.branchId(), h.productId()).update();
+        }
+    }
+
     /** Holds of one branch and product added together, in branch and product order, so concurrent orders cannot deadlock. */
     private static List<Hold> inLockOrder(List<Hold> holds) {
         java.util.Map<List<UUID>, BigDecimal> sums = new java.util.TreeMap<>(
