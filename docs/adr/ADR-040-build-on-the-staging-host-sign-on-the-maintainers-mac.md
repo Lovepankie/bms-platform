@@ -185,3 +185,7 @@ the runner's credentials), so anyone with administrator access to that machine c
 are the group restriction, the signer's merged-pull-request check and the review of `main`; the machine's own hardening is Kyma's.
 The Pi runner `bms-deploy-pi` is removed. Builds cross-compile the arm64 images on x86: every `RUN` is pinned to the build
 platform, so no emulation is needed (as before).
+
+## Amendment 2026-10-21: where the deploy jobs run is a switch
+
+The deploy runner on Jerome's laptop went offline three times on 20 Oct 2026 (battery, Modern Standby, WSL DNS), and each time staging stopped receiving releases. `deploy.yml` now reads the repository variable `DEPLOY_RUNS_ON` (a JSON list) for meta, build, staging-pointer and promote; unset, they run on the `bms-deploy` runner as before. While the repository is public, hosted minutes cost nothing, so it is set to `["ubuntu-latest"]`; it is unset again when the repository goes private. Signing is unchanged: the private key stays in the maintainer's Keychain and the pointer still moves only after cosign verifies the Mac's signatures. A permanent home on the Rincoltech Hetzner box, under its own user with a memory cap, is the planned replacement for the laptop.

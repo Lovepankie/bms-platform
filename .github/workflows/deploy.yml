@@ -30,6 +30,9 @@ name: Deploy
 #     the build jobs write in a `bms-image-digest` log line, and only for a run on main. The pointer
 #     job moves `staging` only after cosign verifies those signatures with deploy/cosign.pub, because the
 #     staging host's puller marks a release failed for good when a signature does not verify.
+#   * DEPLOY_RUNS_ON (repository variable, JSON list) overrides where meta, build, staging-pointer and promote run. Unset means
+#     the bms-deploy runner above. Set to ["ubuntu-latest"] only while the repository is public (hosted minutes are free then);
+#     the signing rule does not change, since nothing on any runner can sign (ADR-040 amendment 2026-10-21).
 #   * deploy-production keeps `ubuntu-latest`: it holds the production SSH key, which never goes on a
 #     shared runner, and it only runs on a release tag after the production VM exists (ADR-040).
 
@@ -48,7 +51,7 @@ jobs:
   meta:
     name: Resolve tags
     if: github.repository == 'RincolTech-Solutions-ltd/bms-platform'
-    runs-on: [self-hosted, bms-deploy]
+    runs-on: ${{ fromJSON(vars.DEPLOY_RUNS_ON || '["self-hosted","bms-deploy"]') }}
     outputs:
       sha_tag: ${{ steps.tags.outputs.sha_tag }}
       version: ${{ steps.tags.outputs.version }}
@@ -90,7 +93,7 @@ jobs:
     name: Build and push ${{ matrix.image }}
     needs: meta
     if: github.ref_type == 'branch'
-    runs-on: [self-hosted, bms-deploy]
+    runs-on: ${{ fromJSON(vars.DEPLOY_RUNS_ON || '["self-hosted","bms-deploy"]') }}
     timeout-minutes: 60
     permissions:
       contents: read
@@ -163,7 +166,7 @@ jobs:
     name: Point staging at ${{ needs.meta.outputs.sha_tag }}
     needs: [meta, build]
     if: github.ref_type == 'branch'
-    runs-on: [self-hosted, bms-deploy]
+    runs-on: ${{ fromJSON(vars.DEPLOY_RUNS_ON || '["self-hosted","bms-deploy"]') }}
     timeout-minutes: 30
     concurrency:
       group: staging-pointer
@@ -251,7 +254,7 @@ jobs:
     name: Retag ${{ needs.meta.outputs.sha_tag }} as ${{ needs.meta.outputs.version }}
     needs: meta
     if: github.ref_type == 'tag'
-    runs-on: [self-hosted, bms-deploy]
+    runs-on: ${{ fromJSON(vars.DEPLOY_RUNS_ON || '["self-hosted","bms-deploy"]') }}
     timeout-minutes: 10
     permissions:
       contents: read
