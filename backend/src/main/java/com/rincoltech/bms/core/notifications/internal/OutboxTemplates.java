@@ -38,7 +38,7 @@ class OutboxTemplates {
     // HTML part from the same text and values. A prose paragraph is one line (a trailing backslash joins
     // source lines), so both parts wrap it to the screen; a kept line break is meant. A paragraph that is
     // only the main link becomes the button named by the third value; the fourth says why the reader got
-    // the email. Signed "Rincol Tech".
+    // the email. Signed "Rincoltech".
     private static final Map<String, Template> EMAIL_CORE = Map.of(
             // Sent to an address nobody has confirmed yet: it carries no text the applicant typed,
             // only the server's reference and link, so the form cannot be used to send someone
@@ -57,7 +57,7 @@ class OutboxTemplates {
                     The link works for 7 days. If you did not apply, ignore this email: nothing \
                     happens without the confirmation.
 
-                    Rincol Tech
+                    Rincoltech
                     """,
                     "Confirm my email",
                     "You got this email because this address was given on an application to use BMS."),
@@ -75,7 +75,7 @@ class OutboxTemplates {
 
                     {link}
 
-                    Rincol Tech
+                    Rincoltech
                     """,
                     "Open my application",
                     "You got this email because you applied to use BMS."),
@@ -93,7 +93,7 @@ class OutboxTemplates {
 
                     {link}
 
-                    Rincol Tech
+                    Rincoltech
                     """,
                     "See my application",
                     "You got this email because you applied to use BMS."),
@@ -112,7 +112,7 @@ class OutboxTemplates {
 
                     After that, sign in at {sign_in_url}
 
-                    Rincol Tech
+                    Rincoltech
                     """,
                     "Set my password",
                     "You got this email because {business_name} applied to use BMS and was accepted."),
@@ -129,7 +129,7 @@ class OutboxTemplates {
 
                     After that, sign in at {sign_in_url}
 
-                    Rincol Tech
+                    Rincoltech
                     """,
                     "Set my password",
                     "You got this email because {business_name} applied to use BMS and was accepted."),
@@ -163,7 +163,7 @@ class OutboxTemplates {
                     If you or another administrator did this, nothing more is needed. If you do not know about it, open \
                     Receive payments in BMS now, check the account, and change your password.
 
-                    Rincol Tech
+                    Rincoltech
                     """,
                     null,
                     "You got this email because you are an administrator of {business_name} on BMS."),
@@ -183,7 +183,7 @@ class OutboxTemplates {
                     If you did not ask for this, ignore this email: your password stays as it is. If you keep \
                     getting it, tell your administrator.
 
-                    Rincol Tech
+                    Rincoltech
                     """,
                     "Choose a new password",
                     "You got this email because a password reset was asked for your BMS sign-in at {tenant_name}."),
@@ -199,9 +199,9 @@ class OutboxTemplates {
                     Nothing has changed yet: your password stays as it is until the reset link, which you are \
                     given in person or by message, is used.
 
-                    If you did not expect this, tell your business's administrators, or Rincol Tech support, at once.
+                    If you did not expect this, tell your business's administrators, or Rincoltech support, at once.
 
-                    Rincol Tech
+                    Rincoltech
                     """,
                     null,
                     "You got this email because you have a BMS sign-in at {tenant_name}."));
@@ -221,7 +221,7 @@ class OutboxTemplates {
                     If this was you, nothing more is needed. If it was not, ask your administrator to reset your \
                     sign-in at once.
 
-                    Rincol Tech
+                    Rincoltech
                     """,
                     null,
                     "You got this email because you have a BMS sign-in at {tenant_name}."),
@@ -250,7 +250,7 @@ class OutboxTemplates {
                     If you or another administrator did this, nothing more is needed. If you do not know about it, open \
                     Credit sales in BMS, check the sale, and change your password.
 
-                    Rincol Tech
+                    Rincoltech
                     """,
                     null,
                     "You got this email because you are an administrator of {business_name} on BMS."));
@@ -269,7 +269,7 @@ class OutboxTemplates {
                     If you or another administrator did this, nothing more is needed. If you do not know about it, \
                     open Business set-up in BMS now, check the rule, and change your password.
 
-                    Rincol Tech
+                    Rincoltech
                     """,
                     null,
                     "You got this email because you are an administrator of {business_name} on BMS."));
@@ -295,7 +295,7 @@ class OutboxTemplates {
 
                     If you did not ask for this, ignore this email: nothing has changed.
 
-                    Rincol Tech
+                    Rincoltech
                     """,
                     null,
                     "You got this email because someone asked for the BMS sign-in page of this address."));
