@@ -226,7 +226,7 @@ class CustomerOrdersRepository {
                 .optional();
     }
 
-    /** The order's current lines: those of its items revision (V78, issue #393). */
+    /** The order's current lines: those of its items revision (V77, issue #393). */
     List<StoredLine> lines(UUID orderId) {
         return jdbc.sql("""
                         SELECT l.line_no, l.product_id, p.code, p.description, l.qty, l.unit_id, coalesce(u.name, bu.name) AS unit,

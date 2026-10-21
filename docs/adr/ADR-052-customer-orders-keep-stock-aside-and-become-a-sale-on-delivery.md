@@ -129,7 +129,7 @@ of an order now change in place.
    different price, is priced by `SalesService.priceLines` exactly as on taking an order (units, price lists, the price floor, an
    override with the permission and a reason, stored on the line with the caller as `overridden_by`). Every line is checked again as a
    new order's would be (the item active, the unit, the price list has a price); only the agreed price of a kept line is not re-priced.
-5. **The lines stay append-only.** Migration `V78` (renamed at merge to the next free number in merge order) adds
+5. **The lines stay append-only.** Migration `V77` (renamed at merge to the next free number in merge order) adds
    `retail_customer_orders.items_revision` and `retail_customer_order_lines.revision`; the new lines are written under the next revision
    and the order's current lines are those of its `items_revision`, so every earlier set of lines is kept. The guard trigger lets
    `items_revision` and `items_total_minor` change only on an ordered or packed order, without a change of step, by one revision with

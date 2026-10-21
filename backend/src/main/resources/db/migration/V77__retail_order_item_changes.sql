@@ -1,9 +1,9 @@
--- V78: change the items of an open customer order without cancelling it (issue #393, ADR-052 amendment 1). The order keeps its
+-- V77: change the items of an open customer order without cancelling it (issue #393, ADR-052 amendment 1). The order keeps its
 -- number; the lines it had stay as written (append-only) under their revision, the new set is written under the next revision,
 -- and the stock kept aside follows in the same transaction (StockLedger.rehold).
 --
--- Numbered V78: main is at V72 and open branches hold numbers up to V77. Flyway runs with outOfOrder off, so the file is renamed
--- at merge to the next free number in merge order.
+-- Numbered V77: main is at V75 and V76 (issue #412) merges first. Flyway runs with outOfOrder off, so the file is renamed
+-- at merge to the next free number in merge order if that changes.
 --
 -- Expand only, safe on a populated database. Two columns with a constant default (every existing order and line is revision 1),
 -- the unique line number widened to the revision, the guard trigger taught the item change, one more history step. No existing
