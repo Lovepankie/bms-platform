@@ -164,6 +164,26 @@ class LogoStorageIT extends IntegrationTest {
                 .isNotNull();
     }
 
+    /** One upload gives both copies of an item photo: gated by the first policy, each scaled to its own long edge. */
+    @Test
+    void oneUploadGivesEveryCopyFromASingleDecode() throws Exception {
+        ImagePolicy full = new ImagePolicy(1024 * 1024, 64, 400, 4_000_000L);
+        ImagePolicy small = new ImagePolicy(1024 * 1024, 1, 100, 4_000_000L);
+        var copies = documents.prepareImages(ImageFixtures.png(800, 600, Color.RED), full, small);
+        assertThat(copies).hasSize(2);
+        var big = javax.imageio.ImageIO.read(
+                new java.io.ByteArrayInputStream(copies.get(0).bytes()));
+        var tiny = javax.imageio.ImageIO.read(
+                new java.io.ByteArrayInputStream(copies.get(1).bytes()));
+        assertThat(big.getWidth()).isEqualTo(400);
+        assertThat(tiny.getWidth()).isEqualTo(100);
+        assertThat(tiny.getHeight()).isEqualTo(75);
+        // The first policy gates the upload: too small a side for it is refused although the small copy would take it.
+        assertThatThrownBy(() -> documents.prepareImages(ImageFixtures.png(50, 50, Color.RED), full, small))
+                .isInstanceOfSatisfying(
+                        ApiException.class, e -> assertThat(e.code()).isEqualTo("image_too_small"));
+    }
+
     private UUID insertDocument(TestDatabase.Fixture tenant, String subjectType, UUID subjectId) {
         UUID id = UUID.randomUUID();
         String key = "tenants/" + tenant.tenantId() + "/upload/test/" + id + ".png";

@@ -11,7 +11,7 @@ export interface PlannedVariant {
   position: number;
 }
 
-/** At most this many are made at a time (the server refuses more with too_many_variants). */
+/** An item never has more than this many sizes and colours (the server refuses more with too_many_variants). */
 export const MAX_VARIANTS = 100;
 
 /** Each of the size and the colour gives at most seven letters or digits to a generated code. */

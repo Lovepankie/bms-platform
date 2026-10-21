@@ -424,7 +424,7 @@ class DashboardService {
                 bestShop(range, book, principal),
                 // Over more than a year the two rankings, which scan every sale line of the span, are left out
                 // (ADR-060).
-                range.leaders() ? leader(Dimension.PRODUCT, filter, range) : null,
+                range.leaders() ? leader(Dimension.ITEM, filter, range) : null,
                 // A ranking of colleagues is management information, as the salesperson level of the sales summary.
                 profit && range.leaders() ? leader(Dimension.SELLER, filter, range) : null);
     }

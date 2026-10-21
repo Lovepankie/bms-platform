@@ -46,14 +46,27 @@ movement and every report, and the many rows already on staging would need a def
   code, prices, stock and history, and the other combinations are made at its prices (switched off when it is). Items kept apart
   until now, one per size, are joined as the sizes of one item (`POST /retail/product-families/join`, or `.../{id}/join` for one that
   exists): each keeps its id, code, prices, stock and history; its name becomes the item's with its size and colour, its category
-  the item's; they must share one unit. A size added to an item whose every size is switched off starts switched off. At most 100
-  variants are made per request; a size or colour is one line of at most 30 characters after trimming.
+  the item's; they must share one unit. A size added to an item whose every size is switched off starts switched off. A new size made from an item (more sizes added to it, or an item given sizes) takes
+  the template variant's active pack sizes (while the units capability is on) and its price list prices that are in force or coming,
+  at the same price, on the rules of a list price set by hand (issue #395): only while the price lists capability is on and the caller
+  also holds `retail.pricelist.manage` (a catalogue-only role adds the size without list prices and always gets the same
+  `price_list_permission` answer, whether the size has list prices or not and whatever the capability, so it learns nothing of the
+  lists); only in the
+  size's own unit or a pack copied with it; only to a size that keeps the template's cost and selling price exactly (a size at its
+  own prices takes none, so a dearer size never sells at the old wholesale price); never below the new size's cost (`below_cost`, told only to a caller with `retail.profit.read`; `not_copied` otherwise); each copy
+  audited as `retail.price_list_item.created`. The answer's `terms_copied` lists every list price not copied and why. Joining into an
+  item that exists takes only the items (a name, base code, category or duplicate reason is refused with 422) and clears each joined
+  product's `duplicate_reason`, which the audit keeps in `before` (issue #395). **An item never has more than 100 sizes and colours:**
+  creating, adding sizes, giving an item sizes and joining all count what the item has already (422 `too_many_variants`); a size
+  or colour is one line of at most 30 characters after trimming.
 - **Reports roll up to the item.** The sales and restock summaries group an `item` as the item with sizes (all its variants together)
   or the item without; a new `variant` level splits an item by size and colour, offered in `available_levels` only to a tenant that has
   an item with sizes. Wherever an item id is a filter (`product_id` of the sales and restock lists, `item_id` of the summaries), the id
   of an item with sizes stands for all its variants; ids are unique across both tables. The item's own page sums the stock of its
-  variants per branch and in all, over the branches the caller may read. The analytics tables (margins, stock health, sales analysis)
-  stay per product, which is now per variant, each named with its size and colour.
+  variants per branch and in all, over the branches the caller may read. The margin report (items by profit, items under the target)
+  and the sales analysis (top items by sales and by quantity) count an item with sizes once, all its sizes together, under its base
+  code (issue #395); price change impact, the slow movers and no-sales lists and stock health stay per product, which is per
+  variant, each named with its size and colour (stock health is being changed by other work).
 - **One name per item (ADR-044 one level up).** An item's name is kept once per unit against the other items with sizes and the
   items without (the same key, the same 422 `duplicate_product_name` naming the one that exists, the same add-anyway with a reason
   for an administrator, kept as `retail_product_families.duplicate_reason`), and an item without sizes cannot take the name of an
@@ -72,9 +85,9 @@ movement and every report, and the many rows already on staging would need a def
 **Worse:**
 - A variant's description duplicates its item's name; a rename of the item rewrites the descriptions of its variants (inside one
   transaction, under the item's row lock).
-- The analytics tables list variants, not items; an owner who wants the item total reads the sales and restock summaries or the item's
+- Price change impact and stock health list variants, not items; an owner who wants the item total reads the sales and restock summaries or the item's
   page.
 
 **Watch for:**
 - A query that groups by `product_id` and is meant to read "per item" must group by `coalesce(family_id, product_id)`.
-- The 100 variants per request and the 7 characters of each size and colour in a generated code; an owner can type a code of their own.
+- The 100 sizes and colours an item may have and the 7 characters of each size and colour in a generated code; an owner can type a code of their own.

@@ -99,8 +99,8 @@ class SalesAnalysisService {
                 .map(a -> row(a, principal.may(PROFIT_READ, a.id())))
                 .toList();
         List<Row> byCategory = rows(Dimension.CATEGORY, filter, w, Order.SALES, top, profit);
-        List<Row> byProduct = rows(Dimension.PRODUCT, filter, w, Order.SALES, top, profit);
-        List<Row> topByQuantity = rows(Dimension.PRODUCT, filter, w, Order.QTY, top, profit);
+        List<Row> byProduct = rows(Dimension.ITEM, filter, w, Order.SALES, top, profit);
+        List<Row> topByQuantity = rows(Dimension.ITEM, filter, w, Order.QTY, top, profit);
         List<Row> bySeller = rows(Dimension.SELLER, filter, w, Order.SALES, top, profit);
 
         // The two stocked lists show quantities and their value at price, so they need retail.stock.read

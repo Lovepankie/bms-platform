@@ -38,8 +38,10 @@ which a list of fifty item cards would turn into fifty audit rows on every visit
   and checks access in a short read-only transaction and fetches the bytes from storage after it, so no connection waits on the
   object store: 404 unless the document is an image of that subject type (so the route is no way into any
   other document), 403 unless the owning module's `DocumentAccess` allows it (whoever holds `retail.stock.read`, the permission of the
-  route itself), and another tenant's photo is not found under row-level security. The response is `private` and may be
-  kept a day: a photo never changes under its id, since a new photo is a new document. A read is not audited; the upload, the
+  route itself), and another tenant's photo is not found under row-level security. The response is `private`, may be
+  kept five minutes and is then asked for again with its `ETag` (`max-age=300, must-revalidate`, `Vary: Cookie, Authorization`; issue
+  #395): a photo never changes under its id, but the permission is checked on every read and a shared till keeps its cache after a
+  sign-out, so a long life would show a photo to whoever sits down next. A read is not audited; the upload, the
   change and the removal are (`retail.product.photo_changed`, `retail.product_family.photo_changed`, `core.document.uploaded`).
 - **Routes.** `POST` and `DELETE /retail/products/{id}/photo` and `/retail/product-families/{id}/photo`, multipart with one `file`,
   `retail.catalogue.manage`. Taking a photo off keeps the file, as every document is kept.
@@ -54,7 +56,7 @@ which a list of fifty item cards would turn into fifty audit rows on every visit
 
 **Worse:**
 - Photo bytes pass through the API instead of straight from the bucket; a long list of photos costs the server a read of a small
-  copy per photo (cached a day by the browser), and every upload stores two images.
+  copy per photo (cached five minutes by the browser, then revalidated), and every upload stores two images, decoded once for both sizes (`Documents.prepareImages`).
 - A photo replaced or taken off stays in the bucket, as every document does.
 
 **Watch for:**

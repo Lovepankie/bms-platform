@@ -21,7 +21,11 @@ final class MarginApi {
             @Schema(description = "Profit over sales in basis points, half up; absent when sales are not above zero")
             Long marginBp) {}
 
-    @Schema(name = "RetailMarginRow", description = "One item or category; code and unit are set for an item only")
+    @Schema(
+            name = "RetailMarginRow",
+            description =
+                    "One item or category; code and unit are set for an item only. An item with sizes and colours is one row,"
+                            + " all its sizes added up, with its base code (issue #395)")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record Row(
             UUID id,
@@ -93,7 +97,10 @@ final class MarginApi {
             int targetBp,
 
             Totals totals,
-            @Schema(description = "The top items by profit") List<Row> byProduct,
+
+            @Schema(description = "The top items by profit; an item with sizes counts once, all its sizes together")
+            List<Row> byProduct,
+
             List<Row> byCategory,
             BelowTarget belowTarget,
             PriceChanges priceChanges) {}

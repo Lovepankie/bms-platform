@@ -8,6 +8,7 @@ import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Family;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Product;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -78,7 +79,8 @@ class PhotoService {
     private record Prepared(Documents.Prepared full, Documents.Prepared small) {}
 
     private Prepared prepare(byte[] bytes) {
-        return new Prepared(documents.prepareImage(bytes, PHOTO), documents.prepareImage(bytes, SMALL));
+        List<Documents.Prepared> copies = documents.prepareImages(bytes, PHOTO, SMALL);
+        return new Prepared(copies.get(0), copies.get(1));
     }
 
     /** Stores both copies in the caller's transaction; the small one names the full one as its subject. */

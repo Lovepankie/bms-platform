@@ -18,7 +18,7 @@ import org.springframework.http.HttpStatus;
  */
 final class VariantGrid {
 
-    /** At most this many variants are made in one request. */
+    /** An item never has more than this many variants, however they are added (issue #395). */
     static final int MAX_VARIANTS = 100;
 
     /** A code is at most 40 characters: the base code (24 at most), then up to 7 of the size and 7 of the colour. */
@@ -107,8 +107,7 @@ final class VariantGrid {
         if (out.size() > MAX_VARIANTS) {
             throw ApiException.rule(
                     "too_many_variants",
-                    "That makes " + out.size() + " sizes and colours. Make at most " + MAX_VARIANTS
-                            + " at a time; add the rest afterwards.");
+                    "That makes " + out.size() + " sizes and colours. An item has at most " + MAX_VARIANTS + ".");
         }
         Set<String> codes = new LinkedHashSet<>();
         for (Planned p : out) {

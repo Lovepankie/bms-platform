@@ -405,6 +405,37 @@ class RetailDashboardRangeIT extends IntegrationTest {
         }
     }
 
+    /**
+     * Issue #395: the best seller is an item, so the sizes of an item with sizes (ADR-051) count together. Two sizes at 2,000
+     * each today are 4,000 together, more than ANA-1's 3,000, though each alone is less.
+     */
+    @Test
+    void theBestSellerCountsAnItemWithSizesOnceAllItsSizesTogether() {
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("name", "Test Sized Shirt");
+        body.put("base_code", "DSZ");
+        body.put("category_id", api.category("Test Sized Category"));
+        body.put("unit_id", api.unit("test-sized-piece"));
+        body.put("cost_minor", 1_000);
+        body.put("sell_minor", 2_000);
+        body.put("sizes", List.of("S", "M"));
+        ResponseEntity<JsonNode> made = api.post("/product-families", body, ADMIN);
+        assertThat(made.getStatusCode()).as("%s", made.getBody()).isEqualTo(HttpStatus.CREATED);
+        String family = made.getBody().get("id").asString();
+        for (JsonNode v : made.getBody().get("variants")) {
+            UUID size = UUID.fromString(v.get("id").asString());
+            api.stockUp(t.headOffice(), size, "5");
+            d.sell(t.headOffice(), "cash", size, "1", 0);
+        }
+        JsonNode best = range("period=today", ADMIN).get("range").get("best_seller");
+        assertThat(best.get("id").asString()).isEqualTo(family);
+        assertThat(best.get("code").asString()).isEqualTo("DSZ");
+        assertThat(best.get("label").asString()).isEqualTo("Test Sized Shirt");
+        assertThat(best.get("sales_minor").asLong()).isEqualTo(4_000);
+        assertThat(best.get("sale_count").asLong()).isEqualTo(2);
+        assertThat(best.get("previous_sales_minor").asLong()).isZero();
+    }
+
     JsonNode shop(JsonNode report, UUID id) {
         for (JsonNode s : report.get("shops")) {
             if (s.get("branch_id").asString().equals(id.toString())) {

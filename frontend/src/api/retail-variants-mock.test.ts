@@ -68,4 +68,17 @@ describe('items with sizes and colours in the mock', () => {
     expect(family.variants?.[0]?.stock_on_hand).toBe(before.stock_on_hand);
     await expect(api.joinFamily(null, { name: 'Again', items: [{ product_id: a?.id ?? '', size: 'S' }] })).rejects.toMatchObject({ code: 'already_has_variants' });
   });
+
+  it('joins into an item that exists, refusing a name, code or category that would name it anew', async () => {
+    const api = createMockRetail();
+    const all = await api.listProducts({});
+    const a = all[0];
+    const b = all.find((p) => p.unit === a?.unit && p.id !== a?.id);
+    const family = await api.joinFamily(null, { name: 'Test joined', items: [{ product_id: a?.id ?? '', size: 'Small' }] });
+    await expect(api.joinFamily(family.id ?? '', { name: 'Renamed', items: [{ product_id: b?.id ?? '', size: 'Large' }] })).rejects.toMatchObject({ status: 422 });
+    await expect(api.joinFamily(family.id ?? '', { duplicate_reason: 'Test reason here', items: [{ product_id: b?.id ?? '', size: 'Large' }] })).rejects.toMatchObject({ status: 422 });
+    const joined = await api.joinFamily(family.id ?? '', { items: [{ product_id: b?.id ?? '', size: 'Large' }] });
+    expect(joined.name).toBe('Test joined');
+    expect(joined.variants?.map((v) => v.id)).toEqual([a?.id, b?.id]);
+  });
 });

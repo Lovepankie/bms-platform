@@ -44,7 +44,9 @@ final class SalesAnalysisApi {
 
     @Schema(
             name = "RetailSalesAnalysisRow",
-            description = "One branch, category, product or seller. code and unit are set for a product only.")
+            description =
+                    "One branch, category, item or seller. code and unit are set for an item only; an item with sizes and"
+                            + " colours is one row, all its sizes added up, with its base code (issue #395).")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record Row(
             UUID id,
@@ -86,10 +88,10 @@ final class SalesAnalysisApi {
             List<Row> byBranch,
             List<Row> byCategory,
 
-            @Schema(description = "The top products by sales")
+            @Schema(description = "The top items by sales; an item with sizes counts once, all its sizes together")
             List<Row> byProduct,
 
-            @Schema(description = "The top products by quantity")
+            @Schema(description = "The top items by quantity; an item with sizes counts once, all its sizes together")
             List<Row> topByQuantity,
 
             List<Row> bySeller,

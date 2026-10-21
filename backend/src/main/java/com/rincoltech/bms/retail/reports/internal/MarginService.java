@@ -66,9 +66,9 @@ class MarginService {
                 total.cost(),
                 total.sales() - total.cost(),
                 AnalyticsSupport.marginBp(total.sales() - total.cost(), total.sales()));
-        List<Row> byProduct = rows(Dimension.PRODUCT, filter, w, Order.PROFIT, null, top);
+        List<Row> byProduct = rows(Dimension.ITEM, filter, w, Order.PROFIT, null, top);
         List<Row> byCategory = rows(Dimension.CATEGORY, filter, w, Order.PROFIT, null, top);
-        List<Agg> below = repo.grouped(Dimension.PRODUCT, filter, w.from(), w.to(), Order.MARGIN, target, top);
+        List<Agg> below = repo.grouped(Dimension.ITEM, filter, w.from(), w.to(), Order.MARGIN, target, top);
 
         List<Impact> impacts = prices.priceChanges(
                 filter,

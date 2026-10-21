@@ -816,6 +816,69 @@ class CatalogueRepository {
                 .update();
     }
 
+    /** The reason a product kept a name that was in use, null when it has none; a join clears it. */
+    String duplicateReason(UUID productId) {
+        return jdbc.sql("SELECT duplicate_reason FROM retail_products WHERE id = ?")
+                .param(productId)
+                .query(String.class)
+                .optional()
+                .orElse(null);
+    }
+
+    /** The active pack sizes of a product copied to another (a new size of the same item); rows copied. */
+    int copyPacks(UUID fromProductId, UUID toProductId, UUID by) {
+        return jdbc.sql("""
+                        INSERT INTO retail_product_units (id, tenant_id, product_id, unit_id, factor, created_by)
+                        SELECT gen_random_uuid(), tenant_id, :to, unit_id, factor, :by
+                          FROM retail_product_units WHERE product_id = :from AND active
+                        """)
+                .param("from", fromProductId)
+                .param("to", toProductId)
+                .param("by", by)
+                .update();
+    }
+
+    /**
+     * A price list price of a product, with the base units in its unit: 1 for the product's own unit, the factor of an
+     * active pack, null for any other unit (a pack switched off, or one the product no longer has).
+     */
+    record PriceItemTerms(
+            UUID priceListId,
+            UUID unitId,
+            BigDecimal minQty,
+            long priceMinor,
+            java.time.LocalDate validFrom,
+            java.time.LocalDate validTo,
+            BigDecimal factor) {}
+
+    /** The price list prices of a product that are in force on {@code today} or start later (issue #395). */
+    List<PriceItemTerms> priceItemsInForce(UUID productId, java.time.LocalDate today) {
+        return jdbc.sql("""
+                        SELECT i.price_list_id, i.unit_id, i.min_qty, i.price_minor, i.valid_from, i.valid_to,
+                               CASE WHEN i.unit_id = p.unit_id THEN 1 ELSE k.factor END AS factor
+                          FROM retail_price_list_items i
+                          JOIN retail_products p ON p.tenant_id = i.tenant_id AND p.id = i.product_id
+                          LEFT JOIN retail_product_units k
+                            ON k.tenant_id = i.tenant_id AND k.product_id = i.product_id AND k.unit_id = i.unit_id
+                           AND k.active
+                         WHERE i.product_id = :product AND (i.valid_to IS NULL OR i.valid_to >= :today)
+                         ORDER BY i.price_list_id, i.unit_id, i.min_qty, i.valid_from, i.id
+                        """)
+                .param("product", productId)
+                .param("today", java.sql.Date.valueOf(today))
+                .query((rs, n) -> new PriceItemTerms(
+                        rs.getObject("price_list_id", UUID.class),
+                        rs.getObject("unit_id", UUID.class),
+                        rs.getBigDecimal("min_qty"),
+                        rs.getLong("price_minor"),
+                        rs.getDate("valid_from").toLocalDate(),
+                        rs.getDate("valid_to") == null
+                                ? null
+                                : rs.getDate("valid_to").toLocalDate(),
+                        rs.getBigDecimal("factor")))
+                .list();
+    }
+
     /** Adding variants changes the item: its version moves, so an item read before is known to be stale. */
     void touchFamily(UUID id) {
         jdbc.sql("UPDATE retail_product_families SET updated_at = now(), version = version + 1 WHERE id = ?")

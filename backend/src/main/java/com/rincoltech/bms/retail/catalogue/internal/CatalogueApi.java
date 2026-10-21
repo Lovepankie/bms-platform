@@ -786,7 +786,10 @@ final class CatalogueApi {
             description =
                     "Issue #384: items kept apart until now (one per size) become the sizes and colours of one item. Each keeps"
                             + " its id, code, prices, stock and history; its name becomes the item's name with its size and colour,"
-                            + " its category the item's. They must share one unit and have no sizes yet")
+                            + " its category the item's. They must share one unit and have no sizes yet. Joining an item that exists"
+                            + " (POST /product-families/{id}/join) takes only items: name, base_code, category_id and"
+                            + " duplicate_reason are refused with 422 there, and the item may not pass 100 sizes and colours."
+                            + " A product's reason for a name in use is cleared by a join and kept in the audit trail")
     record JoinRequest(
             @Size(min = 1, max = 200) @Schema(description = "The item's name; required for a new item")
             String name,
@@ -844,7 +847,76 @@ final class CatalogueApi {
             @Schema(
                     description =
                             "Issue #384: the document id of the item's photo, which a size without its own shows; absent when none")
-            UUID photoId) {}
+            UUID photoId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #395: on adding sizes (and giving an item sizes) only, what was copied to the new sizes from"
+                                    + " the size they were made from, and what was not; absent otherwise")
+            TermsCopied termsCopied) {
+
+        Family withTermsCopied(TermsCopied copied) {
+            return new Family(
+                    id,
+                    name,
+                    baseCode,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sizes,
+                    colours,
+                    variants,
+                    stockOnHand,
+                    stockByBranch,
+                    createdAt,
+                    version,
+                    photoId,
+                    copied);
+        }
+    }
+
+    @Schema(
+            name = "RetailTermsCopied",
+            description =
+                    "Issue #395: the pack sizes and price list prices copied to new sizes, and the prices that were not")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record TermsCopied(
+            int packsCopied,
+            int priceListItemsCopied,
+
+            @Schema(
+                    description = "Why no price list price was looked at, absent when they were looked at one by one:"
+                            + " price_list_permission (the caller does not hold retail.pricelist.manage; given whether"
+                            + " or not the size has list prices and whatever the capability, so nothing about the"
+                            + " lists is shown) or price_lists_off (the price lists capability is off)",
+                    allowableValues = {"price_list_permission", "price_lists_off"})
+            String priceListItemsSkipped,
+
+            @Schema(
+                    description =
+                            "Each price list price not copied to a new size, and why; set it on the list if it is wanted")
+            List<PriceNotCopied> priceListItemsNotCopied) {}
+
+    @Schema(
+            name = "RetailPriceNotCopied",
+            description = "Issue #395: a price list price that was not copied to a new size")
+    record PriceNotCopied(
+            @Schema(description = "The new size") UUID productId,
+            UUID priceListId,
+            UUID unitId,
+            String minQty,
+            long priceMinor,
+
+            @Schema(
+                    description =
+                            "price_differs: the new size does not keep the cost and selling price it was made from;"
+                                    + " below_cost: the price is below the new size's cost (only to a caller with"
+                                    + " retail.profit.read); not_copied: the same for a caller without it, who is not told"
+                                    + " about cost; unit_not_sold: the new size is not sold in that pack",
+                    allowableValues = {"price_differs", "below_cost", "not_copied", "unit_not_sold"})
+            String reason) {}
 
     @Schema(name = "RetailProductPage")
     record ProductPage(List<Product> items, String nextCursor) {}

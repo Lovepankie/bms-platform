@@ -31,6 +31,13 @@ public interface Documents {
     Prepared prepareImage(byte[] bytes, ImagePolicy policy);
 
     /**
+     * As {@link #prepareImage} for several copies of one upload (a photo and its small copy): the bytes are checked and decoded
+     * once, the first policy gates the upload (size, shortest side, canvas) and each policy then gives the long edge of its
+     * own copy. The copies come back in the order of the policies.
+     */
+    List<Prepared> prepareImages(byte[] bytes, ImagePolicy policy, ImagePolicy... derived);
+
+    /**
      * The limits of {@link #prepareImage}: bytes in, shortest side at least, longest edge at most,
      * and the largest canvas that is decoded at all (0 keeps the module's 16 megapixel default).
      */

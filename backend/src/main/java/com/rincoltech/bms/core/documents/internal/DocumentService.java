@@ -23,6 +23,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HexFormat;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -184,6 +186,12 @@ class DocumentService implements Documents {
     /** No transaction here either. The type comes from the bytes: SVG is refused, never re-encoded. */
     @Override
     public Prepared prepareImage(byte[] raw, ImagePolicy policy) {
+        return prepareImages(raw, policy).getFirst();
+    }
+
+    /** The upload is decoded once; each policy then scales and encodes its own copy, the first one gating the upload. */
+    @Override
+    public List<Prepared> prepareImages(byte[] raw, ImagePolicy policy, ImagePolicy... derived) {
         if (raw == null || raw.length == 0) {
             throw ApiException.validation(List.of(new FieldProblem("file", "required", "The file is empty.")));
         }
@@ -209,11 +217,19 @@ class DocumentService implements Documents {
             throw imageUnsupported();
         }
         Kind out = jpeg ? Kind.JPEG : Kind.PNG;
-        byte[] stored = reencodeBounded(raw, out.imageFormat, policy);
-        if (stored.length > (long) policy.maxBytes() * 2) {
-            throw fileTooLarge(policy.maxBytes());
+        List<ImagePolicy> policies = new ArrayList<>();
+        policies.add(policy);
+        policies.addAll(List.of(derived));
+        List<byte[]> encoded = reencodeAllBounded(raw, out.imageFormat, policies);
+        List<Prepared> prepared = new ArrayList<>();
+        for (int i = 0; i < encoded.size(); i++) {
+            byte[] stored = encoded.get(i);
+            if (stored.length > (long) policies.get(i).maxBytes() * 2) {
+                throw fileTooLarge(policies.get(i).maxBytes());
+            }
+            prepared.add(new Prepared(stored, out.contentType, out.extension, sha256(stored)));
         }
-        return new Prepared(stored, out.contentType, out.extension, sha256(stored));
+        return prepared;
     }
 
     @Override
@@ -568,6 +584,12 @@ class DocumentService implements Documents {
      * phone photo would otherwise stay sideways).
      */
     static byte[] transcode(byte[] raw, String format, ImagePolicy policy) {
+        return transcodeAll(raw, format, Collections.singletonList(policy)).getFirst();
+    }
+
+    /** One decode, one encode per policy; the first policy's size checks apply to the upload. */
+    static List<byte[]> transcodeAll(byte[] raw, String format, List<ImagePolicy> policies) {
+        ImagePolicy policy = policies.getFirst();
         try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(raw))) {
             Iterator<ImageReader> readers = ImageIO.getImageReaders(in);
             if (!readers.hasNext()) {
@@ -593,27 +615,14 @@ class DocumentService implements Documents {
                 if (orientation > 1) {
                     image = orient(image, orientation);
                 }
-                if (policy != null) {
-                    image = scaleDown(image, policy.maxLongEdge());
-                }
             } finally {
                 reader.dispose();
             }
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            ImageWriter writer = ImageIO.getImageWritersByFormatName(format).next();
-            try (ImageOutputStream ios = ImageIO.createImageOutputStream(out)) {
-                writer.setOutput(ios);
-                ImageWriteParam param = writer.getDefaultWriteParam();
-                if (format.equals("jpeg")) {
-                    // ImageIO's default of 0.75 visibly softens small print on ID cards.
-                    param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-                    param.setCompressionQuality(0.92f);
-                }
-                writer.write(null, new IIOImage(image, null, null), param);
-            } finally {
-                writer.dispose();
+            List<byte[]> copies = new ArrayList<>();
+            for (ImagePolicy p : policies) {
+                copies.add(encode(p != null ? scaleDown(image, p.maxLongEdge()) : image, format));
             }
-            return out.toByteArray();
+            return copies;
         } catch (IOException | RuntimeException e) {
             if (e instanceof ApiException api) {
                 throw api;
@@ -621,6 +630,24 @@ class DocumentService implements Documents {
             // Truncated files, CMYK JPEGs and anything else the decoder refuses.
             throw unsupported();
         }
+    }
+
+    private static byte[] encode(BufferedImage image, String format) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageWriter writer = ImageIO.getImageWritersByFormatName(format).next();
+        try (ImageOutputStream ios = ImageIO.createImageOutputStream(out)) {
+            writer.setOutput(ios);
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            if (format.equals("jpeg")) {
+                // ImageIO's default of 0.75 visibly softens small print on ID cards.
+                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                param.setCompressionQuality(0.92f);
+            }
+            writer.write(null, new IIOImage(image, null, null), param);
+        } finally {
+            writer.dispose();
+        }
+        return out.toByteArray();
     }
 
     /** Halves while the image is more than twice the target, then one smooth last step; alpha is kept. */
@@ -756,6 +783,11 @@ class DocumentService implements Documents {
     }
 
     private byte[] reencodeBounded(byte[] raw, String format, ImagePolicy policy) {
+        return reencodeAllBounded(raw, format, Collections.singletonList(policy))
+                .getFirst();
+    }
+
+    private List<byte[]> reencodeAllBounded(byte[] raw, String format, List<ImagePolicy> policies) {
         boolean acquired;
         try {
             acquired = reencodes.tryAcquire(REENCODE_WAIT_SECONDS, TimeUnit.SECONDS);
@@ -771,7 +803,7 @@ class DocumentService implements Documents {
                     "Too many images are being processed; try again shortly.");
         }
         try {
-            return transcode(raw, format, policy);
+            return transcodeAll(raw, format, policies);
         } finally {
             reencodes.release();
         }

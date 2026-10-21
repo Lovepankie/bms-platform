@@ -134,6 +134,9 @@ class RetailItemPhotosIT extends IntegrationTest {
         assertThat(seen.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(seen.getHeaders().getContentType().toString()).isEqualTo("image/png");
         assertThat(seen.getHeaders().getCacheControl()).contains("private");
+        // Kept five minutes at most, then asked again; a till that signs out does not hand its photos on for a day.
+        assertThat(seen.getHeaders().getCacheControl()).contains("max-age=300").contains("must-revalidate");
+        assertThat(seen.getHeaders().getVary()).contains("Cookie", "Authorization");
         assertThat(ImageIO.read(new java.io.ByteArrayInputStream(seen.getBody()))
                         .getWidth())
                 .isEqualTo(120);

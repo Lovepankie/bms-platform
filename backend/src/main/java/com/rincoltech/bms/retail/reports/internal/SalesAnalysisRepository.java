@@ -28,7 +28,8 @@ class SalesAnalysisRepository {
     enum Dimension {
         BRANCH,
         CATEGORY,
-        PRODUCT,
+        /** A product, or the whole item for the sizes and colours of one (ADR-051): the rows of an item with sizes add up. */
+        ITEM,
         SELLER
     }
 
@@ -196,12 +197,13 @@ class SalesAnalysisRepository {
                 key = "c.id";
                 label = "c.name";
             }
-            case PRODUCT -> {
+            case ITEM -> {
                 join = " JOIN retail_products p ON p.tenant_id = l.tenant_id AND p.id = l.product_id"
-                        + " JOIN retail_units u ON u.tenant_id = p.tenant_id AND u.id = p.unit_id";
-                key = "p.id";
-                code = "p.code";
-                label = "p.description";
+                        + " JOIN retail_units u ON u.tenant_id = p.tenant_id AND u.id = p.unit_id"
+                        + " LEFT JOIN retail_product_families f ON f.tenant_id = p.tenant_id AND f.id = p.family_id";
+                key = "coalesce(p.family_id, p.id)";
+                code = "coalesce(f.base_code, p.code)";
+                label = "coalesce(f.name, p.description)";
                 unit = "u.name";
             }
             default -> {
@@ -213,7 +215,8 @@ class SalesAnalysisRepository {
         String groupBy = switch (dimension) {
             case BRANCH -> "s.branch_id, b.name";
             case CATEGORY -> "c.id, c.name";
-            case PRODUCT -> "p.id, p.code, p.description, u.name";
+            case ITEM ->
+                "coalesce(p.family_id, p.id), coalesce(f.base_code, p.code), coalesce(f.name, p.description), u.name";
             default -> "s.created_by";
         };
         String orderBy = switch (order) {
