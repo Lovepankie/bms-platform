@@ -215,11 +215,21 @@ curl -s -o /dev/null -w "%{http_code}\n" https://<tenant host>/api/v1/me
 
 ## Modules, subscription, suspension
 
-- `PUT /api/v1/platform/tenants/{id}/modules {"modules": [...]}` switches modules; data is kept
+The operator portal does all of this on the Business page (`/platform/businesses`, issue #407); the API is below. **Every
+change needs a `reason`** (5 to 300 characters), kept in `platform_audit_log` with the operator; the same request again changes
+nothing.
+
+- `PUT /api/v1/platform/tenants/{id}/modules {"modules": [...], "reason"}` switches modules; data is kept
   (FR-TEN-03).
-- `POST /api/v1/platform/tenants/{id}/subscription {"status", "next_status_change_on"}` moves the
+- `POST /api/v1/platform/tenants/{id}/subscription {"status", "next_status_change_on", "reason"}` moves the
   subscription (FR-TEN-05). `suspended` or `cancelled` makes the tenant read only;
-  `POST .../suspend` and `.../resume` are shortcuts (FR-TEN-06).
+  `POST .../suspend {"reason"}` and `.../resume {"reason"}` are shortcuts (FR-TEN-06). A resume brings back the
+  status from before the suspension (a free month stays a free month).
+- `PUT .../plan {"plan_code", "reason"}`, `PUT .../subscription-dates {"trial_ends_on"?, "paid_until"?,
+  "clear_trial_ends_on"?, "clear_paid_until"?, "reason"}`, `PUT .../pilot {"pilot", "reason"}` (a pilot is free with
+  no free month end), and `POST .../payments` with an `Idempotency-Key` header (a payment received; an amount far from
+  the plan's price needs `"confirm_unusual_amount": true`).
+- Plans and prices: `PUT /api/v1/platform/plans/{code}` and `POST .../prices`, each with a `reason`.
 
 Every change is written to `platform_audit_log`.
 

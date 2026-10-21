@@ -203,7 +203,7 @@ class PlatformIT extends IntegrationTest {
         ResponseEntity<JsonNode> off = platform.call(
                 HttpMethod.PUT,
                 "/api/v1/platform/tenants/" + tenantId + "/modules",
-                Map.of("modules", List.of()),
+                Map.of("modules", List.of(), "reason", "Test: modules for a test"),
                 operator.accessToken());
         assertThat(off.getBody().get("modules")).isEmpty();
         ResponseEntity<JsonNode> refused = devTenant.call(HttpMethod.GET, "/api/v1/lending/members", null, null, dev);
@@ -220,7 +220,7 @@ class PlatformIT extends IntegrationTest {
         platform.call(
                 HttpMethod.PUT,
                 "/api/v1/platform/tenants/" + tenantId + "/modules",
-                Map.of("modules", List.of("lending")),
+                Map.of("modules", List.of("lending"), "reason", "Test: modules for a test"),
                 operator.accessToken());
         assertThat(devTenant
                         .call(HttpMethod.GET, "/api/v1/lending/members", null, null, dev)
@@ -253,7 +253,8 @@ class PlatformIT extends IntegrationTest {
                 .params(mapping, tenantId, till)
                 .update();
         String path = "/api/v1/platform/tenants/" + tenantId + "/modules";
-        Map<String, Object> both = Map.of("modules", List.of("lending", "retail"));
+        Map<String, Object> both =
+                Map.of("modules", List.of("lending", "retail"), "reason", "Test: modules for a test");
 
         ResponseEntity<JsonNode> refused = platform.call(HttpMethod.PUT, path, both, operator.accessToken());
         assertThat(refused.getStatusCode().value()).as("%s", refused.getBody()).isEqualTo(422);
@@ -310,7 +311,7 @@ class PlatformIT extends IntegrationTest {
                     return platform.call(
                             HttpMethod.PUT,
                             "/api/v1/platform/tenants/" + tenantId + "/modules",
-                            Map.of("modules", List.of("lending", "retail")),
+                            Map.of("modules", List.of("lending", "retail"), "reason", "Test: modules for a test"),
                             operator.accessToken());
                 });
                 start.countDown();
@@ -345,14 +346,17 @@ class PlatformIT extends IntegrationTest {
 
         ResponseEntity<JsonNode> pastDue = platform.post(
                 "/api/v1/platform/tenants/" + tenantId + "/subscription",
-                Map.of("status", "past_due", "next_status_change_on", "2026-11-01"),
+                Map.of("status", "past_due", "next_status_change_on", "2026-11-01", "reason", "Test: payment late"),
                 operator.accessToken());
         assertThat(pastDue.getBody().get("subscription_status").asString()).isEqualTo("past_due");
         assertThat(pastDue.getBody().get("status").asString()).isEqualTo("active");
         assertThat(pastDue.getBody().get("next_status_change_on").asString()).isEqualTo("2026-11-01");
 
-        ResponseEntity<JsonNode> suspended =
-                platform.post("/api/v1/platform/tenants/" + tenantId + "/suspend", null, operator.accessToken());
+        // Issue #407: suspend and resume take the operator's reason.
+        ResponseEntity<JsonNode> suspended = platform.post(
+                "/api/v1/platform/tenants/" + tenantId + "/suspend",
+                Map.of("reason", "Test: still unpaid"),
+                operator.accessToken());
         assertThat(suspended.getBody().get("status").asString()).isEqualTo("suspended");
         Map<String, String> dev = Map.of(
                 "X-Dev-User-Id", UUID.randomUUID().toString(),
@@ -368,7 +372,10 @@ class PlatformIT extends IntegrationTest {
                         .asString())
                 .isEqualTo("tenant_suspended");
 
-        platform.post("/api/v1/platform/tenants/" + tenantId + "/resume", null, operator.accessToken());
+        platform.post(
+                "/api/v1/platform/tenants/" + tenantId + "/resume",
+                Map.of("reason", "Test: paid"),
+                operator.accessToken());
         assertThat(tenant.call(HttpMethod.POST, "/api/v1/branches", Map.of("code", "S1", "name", "Test S"), null, dev)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.CREATED);
@@ -401,13 +408,16 @@ class PlatformIT extends IntegrationTest {
         assertThat(tenant.login(email, Api.PASSWORD).getBody().get("status").asString())
                 .isEqualTo("mfa_required");
 
-        // JUSTIFICATION-A3: the platform reset routes now need the operator's own fresh authenticator code (ADR-042),
-        // so this
-        // existing call sends one; the case itself is unchanged.
+        // JUSTIFICATION-A3: the platform reset routes now need the operator's own fresh authenticator code (ADR-042)
+        // and a reason (issue #407), so this existing call sends both; the case itself is unchanged.
         Api.allowTotpReuse(operatorId);
         ResponseEntity<JsonNode> reset = platform.post(
                 "/api/v1/platform/tenants/" + tenantId + "/users/" + adminId + "/mfa/reset",
-                Map.of("totp_code", Api.totp(operator.totpSecret(), java.time.Instant.now())),
+                Map.of(
+                        "totp_code",
+                        Api.totp(operator.totpSecret(), java.time.Instant.now()),
+                        "reason",
+                        "Test: the owner lost the phone"),
                 operator.accessToken());
         assertThat(reset.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(tenant.login(email, Api.PASSWORD).getBody().get("status").asString())

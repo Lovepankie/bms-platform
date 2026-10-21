@@ -7,7 +7,6 @@ import com.rincoltech.bms.core.platform.TenantProvisioning;
 import com.rincoltech.bms.core.platform.internal.PlatformController.CreateTenantRequest;
 import com.rincoltech.bms.core.platform.internal.PlatformController.CreatedTenantResponse;
 import com.rincoltech.bms.core.platform.internal.PlatformController.FirstAdminInvitation;
-import com.rincoltech.bms.core.platform.internal.PlatformController.PlanResponse;
 import com.rincoltech.bms.core.platform.internal.PlatformController.TenantResponse;
 import com.rincoltech.bms.core.tenancy.ModuleManifest;
 import com.rincoltech.bms.core.tenancy.PlatformHost;
@@ -18,9 +17,12 @@ import com.rincoltech.bms.kernel.TenantContext;
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.DateTimeException;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -79,34 +81,56 @@ class PlatformService implements TenantProvisioning {
         this.moduleKeys = manifests.stream().map(ModuleManifest::key).collect(Collectors.toUnmodifiableSet());
     }
 
-    @Transactional(readOnly = true)
-    List<PlanResponse> plans() {
-        return jdbc.sql("""
-                        SELECT code, name, max_branches, max_staff_users, max_active_members, allowed_modules
-                          FROM plans WHERE is_active ORDER BY code
-                        """)
-                .query((rs, n) -> new PlanResponse(
-                        rs.getString("code"),
-                        rs.getString("name"),
-                        rs.getObject("max_branches", Integer.class),
-                        rs.getObject("max_staff_users", Integer.class),
-                        rs.getObject("max_active_members", Integer.class),
-                        strings(rs.getArray("allowed_modules"))))
-                .list();
-    }
+    private static final List<String> STATUSES = List.of("trial", "active", "past_due", "suspended", "cancelled");
 
+    /**
+     * Every tenant from {@code platform_tenant_overview()}, filtered: {@code q} matches the name, the slug or the owner's
+     * email (any case, as typed, no wildcards), {@code statuses} the subscription status, {@code module} a module switched on.
+     */
     @Transactional(readOnly = true)
-    List<TenantResponse> tenants() {
-        return jdbc.sql("SELECT * FROM platform_list_tenants()")
-                .query(PlatformService::tenant)
-                .list();
+    List<TenantResponse> tenants(String q, List<String> statuses, String module) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM platform_tenant_overview(NULL) o WHERE true");
+        List<Object> params = new ArrayList<>();
+        String typed = q == null ? "" : q.trim();
+        if (typed.length() > 100) {
+            throw ApiException.validation(List.of(new FieldProblem("q", "too_long", "Type at most 100 characters.")));
+        }
+        if (!typed.isEmpty()) {
+            String like = "%" + typed.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+            sql.append(" AND (o.name ILIKE ? OR o.slug ILIKE ? OR coalesce(o.owner_email, '') ILIKE ?)");
+            params.add(like);
+            params.add(like);
+            params.add(like);
+        }
+        List<String> wanted =
+                statuses == null ? List.of() : statuses.stream().distinct().toList();
+        for (String status : wanted) {
+            if (!STATUSES.contains(status)) {
+                throw ApiException.validation(
+                        List.of(new FieldProblem("status", "invalid", "Unknown status " + status + ".")));
+            }
+        }
+        if (!wanted.isEmpty()) {
+            sql.append(" AND o.subscription_status = ANY (?)");
+            params.add(wanted.toArray(String[]::new));
+        }
+        if (module != null && !module.isBlank()) {
+            if (!moduleKeys.contains(module)) {
+                throw ApiException.validation(
+                        List.of(new FieldProblem("module", "invalid", "Unknown module " + module + ".")));
+            }
+            sql.append(" AND ? = ANY (o.modules)");
+            params.add(module);
+        }
+        sql.append(" ORDER BY o.name, o.slug");
+        return jdbc.sql(sql.toString()).params(params).query(this::tenantRow).list();
     }
 
     @Transactional(readOnly = true)
     TenantResponse tenant(UUID tenantId) {
-        return jdbc.sql("SELECT * FROM platform_list_tenants() WHERE id = ?")
+        return jdbc.sql("SELECT * FROM platform_tenant_overview(?)")
                 .param(tenantId)
-                .query(PlatformService::tenant)
+                .query(this::tenantRow)
                 .optional()
                 .orElseThrow(ApiException::notFound);
     }
@@ -259,9 +283,12 @@ class PlatformService implements TenantProvisioning {
     }
 
     @Transactional
-    TenantResponse setModules(UUID tenantId, List<String> requested) {
+    TenantResponse setModules(UUID tenantId, List<String> requested, String reason) {
         TenantResponse before = tenant(tenantId);
         List<String> modules = checkModules(requested);
+        if (modules.equals(before.modules().stream().sorted().toList())) {
+            return before;
+        }
         try {
             jdbc.sql("SELECT platform_set_tenant_modules(?, ?, ?)")
                     .params(
@@ -283,13 +310,37 @@ class PlatformService implements TenantProvisioning {
                 "platform.tenant.modules_changed",
                 CurrentPrincipal.require().userId(),
                 tenantId,
-                Map.of("before", before.modules(), "after", modules));
+                Map.of("before", before.modules(), "after", modules, "reason", reason.trim()));
         return tenant(tenantId);
     }
 
+    /**
+     * FR-TEN-06: a suspended or cancelled tenant goes back to the status it had when it was suspended (kept in
+     * {@code subscriptions.suspended_from}; a free month stays a free month with the same last day), or to active when that
+     * is not known. A tenant that is not suspended or cancelled changes nothing.
+     */
     @Transactional
-    TenantResponse setSubscription(UUID tenantId, String status, LocalDate nextChange) {
-        tenant(tenantId);
+    TenantResponse resume(UUID tenantId, String reason) {
+        TenantResponse current = tenant(tenantId);
+        String status = current.subscriptionStatus();
+        if (!"suspended".equals(status) && !"cancelled".equals(status)) {
+            return current;
+        }
+        String back = current.suspendedFrom() == null ? "active" : current.suspendedFrom();
+        return setSubscription(tenantId, back, null, reason);
+    }
+
+    /**
+     * FR-TEN-05, FR-TEN-06: moves the subscription with the operator's reason. A move to the status it already has (with no
+     * new next change date) changes nothing and writes no audit row, so a repeated suspend or resume is harmless.
+     */
+    @Transactional
+    TenantResponse setSubscription(UUID tenantId, String status, LocalDate nextChange, String reason) {
+        TenantResponse current = tenant(tenantId);
+        if (status.equals(current.subscriptionStatus())
+                && (nextChange == null || nextChange.equals(current.nextStatusChangeOn()))) {
+            return current;
+        }
         String previous = jdbc.sql("SELECT platform_set_subscription_status(?, ?, ?, ?)")
                 .params(tenantId, status, nextChange, CurrentPrincipal.require().userId())
                 .query(String.class)
@@ -298,6 +349,7 @@ class PlatformService implements TenantProvisioning {
         data.put("before", previous);
         data.put("after", status);
         data.put("next_status_change_on", nextChange == null ? null : nextChange.toString());
+        data.put("reason", reason == null ? null : reason.trim());
         platformAudit.record(
                 "platform.tenant.subscription_changed",
                 CurrentPrincipal.require().userId(),
@@ -307,7 +359,7 @@ class PlatformService implements TenantProvisioning {
     }
 
     /** FR-IAM-12, platform path: for a tenant whose only admin lost their second factor. */
-    void resetAdminMfa(UUID tenantId, UUID userId) {
+    void resetAdminMfa(UUID tenantId, UUID userId, String reason) {
         UUID operator = CurrentPrincipal.require().userId();
         transactions.execute(status -> tenant(tenantId));
         TenantContext.callAs(
@@ -315,7 +367,10 @@ class PlatformService implements TenantProvisioning {
                 () -> transactions.execute(status -> {
                     tenantAdmins.resetAdminMfa(userId, operator);
                     platformAudit.record(
-                            "platform.tenant_admin.mfa_reset", operator, tenantId, Map.of("user_id", userId));
+                            "platform.tenant_admin.mfa_reset",
+                            operator,
+                            tenantId,
+                            Map.of("user_id", userId, "reason", reason.trim()));
                     return null;
                 }));
     }
@@ -343,7 +398,7 @@ class PlatformService implements TenantProvisioning {
     }
 
     /** FR-IAM-15, platform path: a tenant admin who forgot the password; nobody in the tenant may reset an admin. */
-    TenantAdmins.ResetLink resetAdminSignIn(UUID tenantId, UUID userId) {
+    TenantAdmins.ResetLink resetAdminSignIn(UUID tenantId, UUID userId, String reason) {
         UUID operator = CurrentPrincipal.require().userId();
         transactions.execute(status -> tenant(tenantId));
         return TenantContext.callAs(
@@ -351,7 +406,10 @@ class PlatformService implements TenantProvisioning {
                 () -> transactions.execute(status -> {
                     TenantAdmins.ResetLink link = tenantAdmins.resetAdminSignIn(userId, operator);
                     platformAudit.record(
-                            "platform.tenant_admin.sign_in_reset", operator, tenantId, Map.of("user_id", userId));
+                            "platform.tenant_admin.sign_in_reset",
+                            operator,
+                            tenantId,
+                            Map.of("user_id", userId, "reason", reason.trim()));
                     return link;
                 }));
     }
@@ -367,19 +425,34 @@ class PlatformService implements TenantProvisioning {
         return unique;
     }
 
-    private static TenantResponse tenant(ResultSet rs, int n) throws SQLException {
+    private TenantResponse tenantRow(ResultSet rs, int n) throws SQLException {
+        String slug = rs.getString("slug");
         return new TenantResponse(
                 rs.getObject("id", UUID.class),
-                rs.getString("slug"),
+                slug,
                 rs.getString("name"),
                 rs.getString("status"),
                 rs.getString("plan_code"),
+                rs.getString("plan_name"),
                 rs.getString("currency"),
                 rs.getString("timezone"),
                 rs.getString("subscription_status"),
                 rs.getObject("next_status_change_on", LocalDate.class),
+                rs.getObject("trial_ends_on", LocalDate.class),
+                rs.getObject("paid_from", LocalDate.class),
+                rs.getObject("paid_until", LocalDate.class),
                 strings(rs.getArray("modules")),
-                rs.getTimestamp("created_at").toInstant());
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getString("owner_name"),
+                rs.getString("owner_email"),
+                instant(rs.getTimestamp("last_sign_in_at")),
+                hosts.tenantOrigin(slug),
+                rs.getString("suspended_from"),
+                rs.getBoolean("is_pilot"));
+    }
+
+    static Instant instant(Timestamp t) {
+        return t == null ? null : t.toInstant();
     }
 
     private static List<String> strings(Array array) throws SQLException {

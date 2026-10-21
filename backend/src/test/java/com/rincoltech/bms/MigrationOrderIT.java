@@ -1811,6 +1811,76 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V75 (issue #407, ADR-056) on a database at V74, the migration before it: the three businesses the owner agreed as pilots are marked pilot with no
+     * free month end and an audit row each, only where the slug exists; every other trial whose staff signed in gets its
+     * free month dated from the first staff session, with a platform.tenant.trial_started row.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates subscriptions across the trial clock migration.
+     */
+    @Test
+    void operatorScreensMigrationMarksTheAgreedPilotsAndDatesTheOtherTrials() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            assertThat(flyway(postgres, "74").migrate().targetSchemaVersion).isEqualTo("74");
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID operator = UUID.randomUUID();
+            owner.sql(
+                            "INSERT INTO platform_users (id, email, full_name) VALUES (?, 'op-v75@example.test', 'Test Operator')")
+                    .param(operator)
+                    .update();
+            UUID pilot = UUID.randomUUID();
+            UUID demo = UUID.randomUUID();
+            for (Object[] t : new Object[][] {{pilot, "hats"}, {demo, "test-v75-demo"}}) {
+                owner.sql(
+                                "SELECT platform_create_tenant(?, ?, 'Test Business', 'growth', 'UGX', 'Africa/Kampala', '{retail}',"
+                                        + " gen_random_uuid(), 'HQ', 'Head Office', ?)")
+                        .params(t[0], t[1], operator)
+                        .query((rs, n) -> 1)
+                        .single();
+                UUID user = UUID.randomUUID();
+                owner.sql("INSERT INTO users (id, tenant_id, kind, full_name, email, status)"
+                                + " VALUES (?, ?, 'staff', 'Test Owner', ?, 'active')")
+                        .params(user, t[0], "owner-" + t[1] + "@example.test")
+                        .update();
+                owner.sql("""
+                                INSERT INTO auth_sessions (id, tenant_id, user_id, family_id, refresh_token_hash, expires_at,
+                                                           idle_expires_at, created_at)
+                                VALUES (gen_random_uuid(), ?, ?, gen_random_uuid(), ?, now(), now(),
+                                        TIMESTAMPTZ '2026-10-01 10:00:00+03')
+                                """)
+                        .params(t[0], user, String.valueOf(t[1]).repeat(64).substring(0, 64))
+                        .update();
+            }
+
+            MigrateResult result =
+                    DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
+            assertThat(result.success).isTrue();
+
+            assertThat(owner.sql("SELECT is_pilot AND trial_ends_on IS NULL FROM subscriptions WHERE tenant_id = ?")
+                            .param(pilot)
+                            .query(Boolean.class)
+                            .single())
+                    .as("the agreed pilot has no free month end")
+                    .isTrue();
+            assertThat(owner.sql("SELECT action FROM platform_audit_log WHERE tenant_id = ?")
+                            .param(pilot)
+                            .query(String.class)
+                            .list())
+                    .containsExactly("platform.tenant.pilot_changed");
+            assertThat(owner.sql("SELECT trial_ends_on::text FROM subscriptions WHERE tenant_id = ? AND NOT is_pilot")
+                            .param(demo)
+                            .query(String.class)
+                            .single())
+                    .isEqualTo("2026-10-31");
+            assertThat(owner.sql("SELECT action FROM platform_audit_log WHERE tenant_id = ?")
+                            .param(demo)
+                            .query(String.class)
+                            .list())
+                    .containsExactly("platform.tenant.trial_started");
+        }
+    }
+
     @Test
     void noTwoMigrationsShareAVersion() {
         try (PostgreSQLContainer postgres = database()) {

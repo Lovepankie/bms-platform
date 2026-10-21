@@ -2,6 +2,7 @@ import type { Me } from '../api/client';
 import type { Tour, TourStep } from './model';
 import { CUSTOMER_TOURS } from './tours-customers';
 import { LENDING_MORE_TOURS } from './tours-lending-more';
+import { OPERATOR_TOURS } from './tours-operator';
 import { PUBLIC_TOURS } from './tours-public';
 import { RETAIL_CASH_TOURS } from './tours-retail-cash';
 import { RETAIL_ORDER_TOURS } from './tours-retail-orders';
@@ -1536,7 +1537,7 @@ const dynamicSegments = (tour: Tour) => (tour.page ?? '').split('/').filter((par
  * segment (`goods-received/new`) must come before its `$` sibling (`goods-received/$receiptId`): the tours with fewer `$` segments go
  * first (the sort is stable, so the order inside each group is the order written). route-coverage.test.ts proves it for every route.
  */
-export const TOURS: readonly Tour[] = [...CORE_TOURS, ...RETAIL_REPORT_TOURS, ...RETAIL_CASH_TOURS, ...RETAIL_PURCHASING_TOURS, ...RETAIL_ORDER_TOURS, ...LENDING_MORE_TOURS, ...PUBLIC_TOURS]
+export const TOURS: readonly Tour[] = [...CORE_TOURS, ...RETAIL_REPORT_TOURS, ...RETAIL_CASH_TOURS, ...RETAIL_PURCHASING_TOURS, ...RETAIL_ORDER_TOURS, ...LENDING_MORE_TOURS, ...PUBLIC_TOURS, ...OPERATOR_TOURS]
   .map((tour, order) => ({ tour, order }))
   .sort((a, b) => dynamicSegments(a.tour) - dynamicSegments(b.tour) || a.order - b.order)
   .map(({ tour }) => tour);

@@ -2523,10 +2523,45 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Plans with their limits (FR-TEN-04) */
+        /** Plans with their limits and the price in force today (FR-TEN-04, FR-SUB-01) */
         get: operations["platformListPlans"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/plans/{plan_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One plan with its price history (FR-SUB-01) */
+        get: operations["platformGetPlan"];
+        /** Create the plan with this code, or change it; the same request again changes nothing (FR-SUB-01) */
+        put: operations["platformSavePlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/plans/{plan_code}/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set the plan's price from a date; the price already in force on that date again changes nothing (FR-SUB-01) */
+        post: operations["platformAddPlanPrice"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2608,7 +2643,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every tenant */
+        /** Every tenant with plan, subscription, owner and last sign-in; search and filter (FR-TEN-05) */
         get: operations["platformListTenants"];
         put?: never;
         /** Create a tenant with head office, modules and an invited first admin (FR-TEN-01) */
@@ -2653,6 +2688,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/tenants/{tenant_id}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The business page: details, owner and admins, price, payments, recent messages and operator history */
+        get: operations["platformTenantOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants/{tenant_id}/payment-account": {
         parameters: {
             query?: never;
@@ -2687,6 +2739,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/tenants/{tenant_id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a payment received; it extends what is paid (ADR-024 decision 4). Needs an Idempotency-Key; a repeat records nothing */
+        post: operations["platformRecordPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/pilot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark or unmark a pilot (complimentary) business, with a reason: free, no free month end; the same mark again changes nothing (ADR-024 decision 6) */
+        put: operations["platformSetTenantPilot"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Move the business to another active plan, with a reason; the same plan again changes nothing (FR-TEN-04) */
+        put: operations["platformSetTenantPlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants/{tenant_id}/resume": {
         parameters: {
             query?: never;
@@ -2696,7 +2799,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Resume a suspended tenant (FR-TEN-06) */
+        /** Resume a suspended tenant with a reason, back to the status it had before (a free month stays a free month); a tenant that is not suspended changes nothing (FR-TEN-06) */
         post: operations["platformResumeTenant"];
         delete?: never;
         options?: never;
@@ -2766,8 +2869,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Move the subscription status (FR-TEN-05) */
+        /** Move the subscription status, with a reason; the same status again changes nothing (FR-TEN-05) */
         post: operations["platformSetSubscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/subscription-dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the last day of the free month or the last day paid for, with a reason (FR-TEN-05) */
+        put: operations["platformSetSubscriptionDates"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2783,7 +2903,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Suspend: the tenant becomes read only (FR-TEN-06) */
+        /** Suspend with a reason: the tenant becomes read only, nothing is deleted; already suspended changes nothing (FR-TEN-06) */
         post: operations["platformSuspendTenant"];
         delete?: never;
         options?: never;
@@ -2800,7 +2920,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reset the lost second factor of a tenant admin; needs a current code from the operator's own authenticator (FR-IAM-12) */
+        /** Reset the lost second factor of a tenant admin, with a reason; needs a current code from the operator's own authenticator (FR-IAM-12) */
         post: operations["platformResetAdminMfa"];
         delete?: never;
         options?: never;
@@ -2817,7 +2937,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Issue a one-time password reset link for a tenant admin; shown once, valid one hour; needs a current code from the operator's own authenticator (FR-IAM-15) */
+        /** Issue a one-time password reset link for a tenant admin, with a reason; shown once, valid one hour; needs a current code from the operator's own authenticator (FR-IAM-15) */
         post: operations["platformResetAdminSignIn"];
         delete?: never;
         options?: never;
@@ -6064,6 +6184,23 @@ export interface components {
             tenant_id?: string;
             tenant_slug?: string;
         };
+        AddPlanPriceRequest: {
+            /** Format: int32 */
+            annual_months: number;
+            /** @description True when the operator checked a monthly price more than 25% away from the one in force (422 price_change_unusual otherwise) */
+            confirm_large_change?: boolean;
+            /** @description Default UGX */
+            currency?: string;
+            /**
+             * Format: date
+             * @description Default today; never before today, so a price never changes the past
+             */
+            effective_from?: string;
+            /** Format: int64 */
+            monthly_minor: number;
+            /** @description Why, kept with the price and in the audit log */
+            reason: string;
+        };
         /** @description Issue #384: more sizes or colours for an item; a combination it has already is skipped. Without variants every combination of sizes and colours is made, sizes in the order given; with variants exactly those are made */
         AddRetailVariantsRequest: {
             colours?: string[];
@@ -6367,6 +6504,17 @@ export interface components {
             theme_primary?: string;
             /** @description #FFFFFF or #111111, the readable text colour on themePrimary; null with it */
             theme_text?: string;
+        };
+        BusinessDetail: {
+            admins?: components["schemas"]["TenantAdmin"][];
+            /** @description Newest first, at most 50 */
+            history?: components["schemas"]["TenantHistoryEntry"][];
+            /** @description Newest first, at most 50; sent messages are purged after a while */
+            messages?: components["schemas"]["TenantMessage"][];
+            /** @description Newest first */
+            payments?: components["schemas"]["SubscriptionPayment"][];
+            plan_price?: components["schemas"]["PlanPrice"];
+            tenant?: components["schemas"]["PlatformTenant"];
         };
         /** @description The reason is required only when the branch still holds stock or has transfers on their way (422 branch_close_needs_reason says which). */
         CloseBranchRequest: {
@@ -8340,20 +8488,73 @@ export interface components {
             /** Format: date */
             value_date?: string;
         };
-        /** @description Limits only; prices are not stored in this repository */
+        /** @description Limits, what the plan includes, and its price in force today */
         Plan: {
+            /** @description False: no new business and no move onto it */
+            active?: boolean;
             allowed_modules?: string[];
             code?: string;
-            /** Format: int32 */
+            current_price?: components["schemas"]["PlanPrice"];
+            description?: string;
+            /**
+             * Format: int32
+             * @description Active lending members; null is unlimited
+             */
             max_active_members?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Shops and stores; null is unlimited
+             */
             max_branches?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Staff users, invited or active; null is unlimited
+             */
             max_staff_users?: number;
             name?: string;
+            next_price?: components["schemas"]["PlanPrice"];
+            /** Format: int32 */
+            sort_order?: number;
+            /**
+             * Format: int64
+             * @description Businesses on this plan
+             */
+            tenant_count?: number;
+        };
+        PlanDetail: {
+            plan?: components["schemas"]["Plan"];
+            /** @description Every price the plan has had, newest first */
+            prices?: components["schemas"]["PlanPrice"][];
         };
         PlanList: {
             items?: components["schemas"]["Plan"][];
+        };
+        /** @description A price of a plan from a date; a later row replaces it from its own date */
+        PlanPrice: {
+            /**
+             * Format: int64
+             * @description monthly_minor times annual_months
+             */
+            annual_minor?: number;
+            /**
+             * Format: int32
+             * @description Months charged for a year, for example 10
+             */
+            annual_months?: number;
+            /** Format: date-time */
+            created_at?: string;
+            created_by_name?: string;
+            currency?: string;
+            /** Format: date */
+            effective_from?: string;
+            /** Format: uuid */
+            id?: string;
+            /**
+             * Format: int64
+             * @description The monthly price in minor units (whole shillings for UGX)
+             */
+            monthly_minor?: number;
+            reason?: string;
         };
         PlatformMe: {
             email?: string;
@@ -8363,6 +8564,10 @@ export interface components {
             /** Format: uuid */
             user_id?: string;
         };
+        PlatformReasonRequest: {
+            /** @description Why; kept in the platform audit log */
+            reason: string;
+        };
         /** @description Shown once to the operator, who hands it to the tenant admin */
         PlatformSignInResetLink: {
             /** Format: date-time */
@@ -8370,25 +8575,58 @@ export interface components {
             url?: string;
         };
         PlatformStepUpRequest: {
+            /** @description Why; kept in the platform audit log (issue #407) */
+            reason: string;
             /** @description A current 6 digit code from the operator's own authenticator app */
             totp_code: string;
         };
         PlatformTenant: {
+            /** @description The business's own address, where its staff sign in */
+            address?: string;
             /** Format: date-time */
             created_at?: string;
             currency?: string;
             /** Format: uuid */
             id?: string;
+            /**
+             * Format: date-time
+             * @description The latest sign-in of any staff user, or null
+             */
+            last_sign_in_at?: string;
             modules?: string[];
             name?: string;
             /** Format: date */
             next_status_change_on?: string;
+            owner_email?: string;
+            /** @description The first tenant admin (the owner), or null */
+            owner_name?: string;
+            /**
+             * Format: date
+             * @description The first day of the paid period, or null
+             */
+            paid_from?: string;
+            /**
+             * Format: date
+             * @description The last day paid for, or null when nothing was paid
+             */
+            paid_until?: string;
+            /** @description A pilot or complimentary business: free, no free month end (ADR-024 decision 6) */
+            pilot?: boolean;
             plan_code?: string;
+            plan_name?: string;
             slug?: string;
             /** @description active or suspended (read only, FR-TEN-06) */
             status?: string;
+            /** @description trial, active, past_due, suspended or cancelled */
             subscription_status?: string;
+            /** @description While suspended or cancelled: the status a resume brings back (trial, active or past_due) */
+            suspended_from?: string;
             timezone?: string;
+            /**
+             * Format: date
+             * @description The last day of the free month; set at the first staff sign-in, null before it
+             */
+            trial_ends_on?: string;
         };
         PlatformTenantList: {
             items?: components["schemas"]["PlatformTenant"][];
@@ -14243,6 +14481,25 @@ export interface components {
             /** @description A current code of the signed-in administrator's own authenticator (step-up), used once */
             totp_code?: string;
         };
+        /** @description Creates the plan with this code, or changes it */
+        SavePlanRequest: {
+            active: boolean;
+            allowed_modules: string[];
+            /** @description True when the operator was warned that businesses on the plan already use more than a lowered limit, and keeps it (422 plan_limit_below_use otherwise) */
+            confirm_below_use?: boolean;
+            description?: string;
+            /** Format: int32 */
+            max_active_members?: number;
+            /** Format: int32 */
+            max_branches?: number;
+            /** Format: int32 */
+            max_staff_users?: number;
+            name: string;
+            /** @description Why, kept in the platform audit log */
+            reason: string;
+            /** Format: int32 */
+            sort_order?: number;
+        };
         SaveSmsTemplateRequest: {
             /** @description The wording with {placeholders} from the event's list; 422 with the code of the first problem */
             text: string;
@@ -14894,13 +15151,131 @@ export interface components {
             subject_id?: string;
             subject_type?: string;
         };
+        /** @description Send one or both dates */
+        SubscriptionDatesRequest: {
+            /** @description True clears what is paid (the last day paid for and the start of the paid period) */
+            clear_paid_until?: boolean;
+            /** @description True clears the last day of the free month (the clock starts again at the next sign-in) */
+            clear_trial_ends_on?: boolean;
+            /**
+             * Format: date
+             * @description The new last day paid for
+             */
+            paid_until?: string;
+            reason: string;
+            /**
+             * Format: date
+             * @description The new last day of the free month
+             */
+            trial_ends_on?: string;
+        };
+        SubscriptionPayment: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            method?: string;
+            /** Format: int32 */
+            months?: number;
+            note?: string;
+            /** Format: date */
+            paid_on?: string;
+            /**
+             * Format: date
+             * @description The last day the payment covers
+             */
+            period_end?: string;
+            /**
+             * Format: date
+             * @description The first day the payment covers
+             */
+            period_start?: string;
+            recorded_by_name?: string;
+            reference?: string;
+            /** @description confirmed (entered by the operator); claimed and rejected arrive with the tenant's billing */
+            status?: string;
+        };
+        /** @description A payment received by mobile money or bank transfer */
+        SubscriptionPaymentRequest: {
+            /**
+             * Format: int64
+             * @description Minor units; whole shillings for UGX; at most 50,000,000
+             */
+            amount_minor: number;
+            /** @description True when the operator checked an amount more than 25% away from the plan's price for these months, or a plan with no price (422 payment_amount_unusual otherwise) */
+            confirm_unusual_amount?: boolean;
+            method: string;
+            /**
+             * Format: int32
+             * @description Months the payment covers: 1 for a month, 12 for a year
+             */
+            months: number;
+            note?: string;
+            /** Format: date */
+            paid_on: string;
+            /** @description Why it is recorded (who confirmed it, how it was checked); kept in the platform audit log */
+            reason: string;
+            /** @description The sender's transaction reference */
+            reference?: string;
+        };
         SubscriptionStatusRequest: {
             /** Format: date */
             next_status_change_on?: string;
+            /** @description Why; kept in the platform audit log */
+            reason: string;
             status: string;
+        };
+        TenantAdmin: {
+            /** Format: date-time */
+            created_at?: string;
+            email?: string;
+            full_name?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: date-time */
+            last_login_at?: string;
+            mfa_enabled?: boolean;
+            phone?: string;
+            /** @description invited, active or deactivated */
+            status?: string;
+        };
+        /** @description An operator action on the business, from the platform audit log */
+        TenantHistoryEntry: {
+            action?: string;
+            after?: string;
+            before?: string;
+            /** Format: date-time */
+            occurred_at?: string;
+            operator_name?: string;
+            reason?: string;
+        };
+        /** @description A message the outbox holds for the business; never its text or link */
+        TenantMessage: {
+            /** Format: int32 */
+            attempts?: number;
+            channel?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            failed_at?: string;
+            /** Format: uuid */
+            id?: string;
+            last_error?: string;
+            /** @description Masked to its last 4 characters */
+            recipient?: string;
+            /** Format: date-time */
+            sent_at?: string;
+            /** @description pending, sent or failed */
+            status?: string;
+            template_key?: string;
         };
         TenantModulesRequest: {
             modules: string[];
+            /** @description Why; kept in the platform audit log (issue #407) */
+            reason: string;
         };
         TenantPaymentAccountStatus: {
             /** @description A closed word: invalid_credentials or registration_refused */
@@ -14909,6 +15284,15 @@ export interface components {
             last_checked_at?: string;
             /** @description not_connected, verified or failed */
             status?: string;
+        };
+        TenantPilotRequest: {
+            /** @description True: a pilot or complimentary business, free with no end (ADR-024 decision 6) */
+            pilot: boolean;
+            reason: string;
+        };
+        TenantPlanRequest: {
+            plan_code: string;
+            reason: string;
         };
         TenantSettings: {
             allow_loans_before_kyc_verified?: boolean;
@@ -19634,7 +20018,9 @@ export interface operations {
     };
     platformListPlans: {
         parameters: {
-            query?: never;
+            query?: {
+                include_inactive?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -19648,6 +20034,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanList"];
+                };
+            };
+        };
+    };
+    platformGetPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDetail"];
+                };
+            };
+        };
+    };
+    platformSavePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavePlanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDetail"];
+                };
+            };
+        };
+    };
+    platformAddPlanPrice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddPlanPriceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDetail"];
                 };
             };
         };
@@ -19750,7 +20210,11 @@ export interface operations {
     };
     platformListTenants: {
         parameters: {
-            query?: never;
+            query?: {
+                q?: string;
+                status?: string[];
+                module?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -19840,6 +20304,28 @@ export interface operations {
             };
         };
     };
+    platformTenantOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessDetail"];
+                };
+            };
+        };
+    };
     platformGetTenantPaymentAccount: {
         parameters: {
             query?: never;
@@ -19888,6 +20374,86 @@ export interface operations {
             };
         };
     };
+    platformRecordPayment: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscriptionPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionPayment"];
+                };
+            };
+        };
+    };
+    platformSetTenantPilot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantPilotRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenant"];
+                };
+            };
+        };
+    };
+    platformSetTenantPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenant"];
+                };
+            };
+        };
+    };
     platformResumeTenant: {
         parameters: {
             query?: never;
@@ -19897,7 +20463,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformReasonRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -20052,6 +20622,32 @@ export interface operations {
             };
         };
     };
+    platformSetSubscriptionDates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscriptionDatesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenant"];
+                };
+            };
+        };
+    };
     platformSuspendTenant: {
         parameters: {
             query?: never;
@@ -20061,7 +20657,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformReasonRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

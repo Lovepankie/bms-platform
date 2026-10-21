@@ -90,6 +90,43 @@
           }
         }
       },
+      "AddPlanPriceRequest" : {
+        "properties" : {
+          "annual_months" : {
+            "format" : "int32",
+            "maximum" : 12,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "confirm_large_change" : {
+            "description" : "True when the operator checked a monthly price more than 25% away from the one in force (422 price_change_unusual otherwise)",
+            "type" : "boolean"
+          },
+          "currency" : {
+            "description" : "Default UGX",
+            "pattern" : "^[A-Z]{3}$",
+            "type" : "string"
+          },
+          "effective_from" : {
+            "description" : "Default today; never before today, so a price never changes the past",
+            "format" : "date",
+            "type" : "string"
+          },
+          "monthly_minor" : {
+            "format" : "int64",
+            "maximum" : 50000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "reason" : {
+            "description" : "Why, kept with the price and in the audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "annual_months", "monthly_minor", "reason" ]
+      },
       "AddRetailVariantsRequest" : {
         "description" : "Issue #384: more sizes or colours for an item; a combination it has already is skipped. Without variants every combination of sizes and colours is made, sizes in the order given; with variants exactly those are made",
         "properties" : {
@@ -812,6 +849,43 @@
           "theme_text" : {
             "description" : "#FFFFFF or #111111, the readable text colour on themePrimary; null with it",
             "type" : "string"
+          }
+        }
+      },
+      "BusinessDetail" : {
+        "properties" : {
+          "admins" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TenantAdmin"
+            },
+            "type" : "array"
+          },
+          "history" : {
+            "description" : "Newest first, at most 50",
+            "items" : {
+              "$ref" : "#/components/schemas/TenantHistoryEntry"
+            },
+            "type" : "array"
+          },
+          "messages" : {
+            "description" : "Newest first, at most 50; sent messages are purged after a while",
+            "items" : {
+              "$ref" : "#/components/schemas/TenantMessage"
+            },
+            "type" : "array"
+          },
+          "payments" : {
+            "description" : "Newest first",
+            "items" : {
+              "$ref" : "#/components/schemas/SubscriptionPayment"
+            },
+            "type" : "array"
+          },
+          "plan_price" : {
+            "$ref" : "#/components/schemas/PlanPrice"
+          },
+          "tenant" : {
+            "$ref" : "#/components/schemas/PlatformTenant"
           }
         }
       },
@@ -5614,8 +5688,12 @@
         }
       },
       "Plan" : {
-        "description" : "Limits only; prices are not stored in this repository",
+        "description" : "Limits, what the plan includes, and its price in force today",
         "properties" : {
+          "active" : {
+            "description" : "False: no new business and no move onto it",
+            "type" : "boolean"
+          },
           "allowed_modules" : {
             "items" : {
               "type" : "string"
@@ -5625,20 +5703,55 @@
           "code" : {
             "type" : "string"
           },
+          "current_price" : {
+            "$ref" : "#/components/schemas/PlanPrice"
+          },
+          "description" : {
+            "type" : "string"
+          },
           "max_active_members" : {
+            "description" : "Active lending members; null is unlimited",
             "format" : "int32",
             "type" : "integer"
           },
           "max_branches" : {
+            "description" : "Shops and stores; null is unlimited",
             "format" : "int32",
             "type" : "integer"
           },
           "max_staff_users" : {
+            "description" : "Staff users, invited or active; null is unlimited",
             "format" : "int32",
             "type" : "integer"
           },
           "name" : {
             "type" : "string"
+          },
+          "next_price" : {
+            "$ref" : "#/components/schemas/PlanPrice"
+          },
+          "sort_order" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tenant_count" : {
+            "description" : "Businesses on this plan",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "PlanDetail" : {
+        "properties" : {
+          "plan" : {
+            "$ref" : "#/components/schemas/Plan"
+          },
+          "prices" : {
+            "description" : "Every price the plan has had, newest first",
+            "items" : {
+              "$ref" : "#/components/schemas/PlanPrice"
+            },
+            "type" : "array"
           }
         }
       },
@@ -5649,6 +5762,47 @@
               "$ref" : "#/components/schemas/Plan"
             },
             "type" : "array"
+          }
+        }
+      },
+      "PlanPrice" : {
+        "description" : "A price of a plan from a date; a later row replaces it from its own date",
+        "properties" : {
+          "annual_minor" : {
+            "description" : "monthly_minor times annual_months",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "annual_months" : {
+            "description" : "Months charged for a year, for example 10",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by_name" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "effective_from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "monthly_minor" : {
+            "description" : "The monthly price in minor units (whole shillings for UGX)",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reason" : {
+            "type" : "string"
           }
         }
       },
@@ -5675,6 +5829,17 @@
           }
         }
       },
+      "PlatformReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "description" : "Why; kept in the platform audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
       "PlatformSignInResetLink" : {
         "description" : "Shown once to the operator, who hands it to the tenant admin",
         "properties" : {
@@ -5689,6 +5854,12 @@
       },
       "PlatformStepUpRequest" : {
         "properties" : {
+          "reason" : {
+            "description" : "Why; kept in the platform audit log (issue #407)",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          },
           "totp_code" : {
             "description" : "A current 6 digit code from the operator's own authenticator app",
             "maxLength" : 20,
@@ -5696,10 +5867,14 @@
             "type" : "string"
           }
         },
-        "required" : [ "totp_code" ]
+        "required" : [ "reason", "totp_code" ]
       },
       "PlatformTenant" : {
         "properties" : {
+          "address" : {
+            "description" : "The business's own address, where its staff sign in",
+            "type" : "string"
+          },
           "created_at" : {
             "format" : "date-time",
             "type" : "string"
@@ -5709,6 +5884,11 @@
           },
           "id" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "last_sign_in_at" : {
+            "description" : "The latest sign-in of any staff user, or null",
+            "format" : "date-time",
             "type" : "string"
           },
           "modules" : {
@@ -5724,7 +5904,31 @@
             "format" : "date",
             "type" : "string"
           },
+          "owner_email" : {
+            "type" : "string"
+          },
+          "owner_name" : {
+            "description" : "The first tenant admin (the owner), or null",
+            "type" : "string"
+          },
+          "paid_from" : {
+            "description" : "The first day of the paid period, or null",
+            "format" : "date",
+            "type" : "string"
+          },
+          "paid_until" : {
+            "description" : "The last day paid for, or null when nothing was paid",
+            "format" : "date",
+            "type" : "string"
+          },
+          "pilot" : {
+            "description" : "A pilot or complimentary business: free, no free month end (ADR-024 decision 6)",
+            "type" : "boolean"
+          },
           "plan_code" : {
+            "type" : "string"
+          },
+          "plan_name" : {
             "type" : "string"
           },
           "slug" : {
@@ -5735,9 +5939,19 @@
             "type" : "string"
           },
           "subscription_status" : {
+            "description" : "trial, active, past_due, suspended or cancelled",
+            "type" : "string"
+          },
+          "suspended_from" : {
+            "description" : "While suspended or cancelled: the status a resume brings back (trial, active or past_due)",
             "type" : "string"
           },
           "timezone" : {
+            "type" : "string"
+          },
+          "trial_ends_on" : {
+            "description" : "The last day of the free month; set at the first staff sign-in, null before it",
+            "format" : "date",
             "type" : "string"
           }
         }
@@ -17080,6 +17294,68 @@
           }
         }
       },
+      "SavePlanRequest" : {
+        "description" : "Creates the plan with this code, or changes it",
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "allowed_modules" : {
+            "items" : {
+              "pattern" : "^[a-z]{2,30}$",
+              "type" : "string"
+            },
+            "maxItems" : 5,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "confirm_below_use" : {
+            "description" : "True when the operator was warned that businesses on the plan already use more than a lowered limit, and keeps it (422 plan_limit_below_use otherwise)",
+            "type" : "boolean"
+          },
+          "description" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "max_active_members" : {
+            "format" : "int32",
+            "maximum" : 10000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "max_branches" : {
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "max_staff_users" : {
+            "format" : "int32",
+            "maximum" : 100000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "name" : {
+            "maxLength" : 80,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Why, kept in the platform audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          },
+          "sort_order" : {
+            "format" : "int32",
+            "maximum" : 1000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "active", "allowed_modules", "name", "reason" ]
+      },
       "SaveSmsTemplateRequest" : {
         "properties" : {
           "text" : {
@@ -18571,10 +18847,148 @@
           }
         }
       },
+      "SubscriptionDatesRequest" : {
+        "description" : "Send one or both dates",
+        "properties" : {
+          "clear_paid_until" : {
+            "description" : "True clears what is paid (the last day paid for and the start of the paid period)",
+            "type" : "boolean"
+          },
+          "clear_trial_ends_on" : {
+            "description" : "True clears the last day of the free month (the clock starts again at the next sign-in)",
+            "type" : "boolean"
+          },
+          "paid_until" : {
+            "description" : "The new last day paid for",
+            "format" : "date",
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          },
+          "trial_ends_on" : {
+            "description" : "The new last day of the free month",
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "SubscriptionPayment" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "method" : {
+            "type" : "string"
+          },
+          "months" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "paid_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "period_end" : {
+            "description" : "The last day the payment covers",
+            "format" : "date",
+            "type" : "string"
+          },
+          "period_start" : {
+            "description" : "The first day the payment covers",
+            "format" : "date",
+            "type" : "string"
+          },
+          "recorded_by_name" : {
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "confirmed (entered by the operator); claimed and rejected arrive with the tenant's billing",
+            "type" : "string"
+          }
+        }
+      },
+      "SubscriptionPaymentRequest" : {
+        "description" : "A payment received by mobile money or bank transfer",
+        "properties" : {
+          "amount_minor" : {
+            "description" : "Minor units; whole shillings for UGX; at most 50,000,000",
+            "format" : "int64",
+            "maximum" : 50000000,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "confirm_unusual_amount" : {
+            "description" : "True when the operator checked an amount more than 25% away from the plan's price for these months, or a plan with no price (422 payment_amount_unusual otherwise)",
+            "type" : "boolean"
+          },
+          "method" : {
+            "minLength" : 1,
+            "pattern" : "mtn_momo|airtel_money|bank_transfer|other",
+            "type" : "string"
+          },
+          "months" : {
+            "description" : "Months the payment covers: 1 for a month, 12 for a year",
+            "format" : "int32",
+            "maximum" : 24,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "note" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "paid_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Why it is recorded (who confirmed it, how it was checked); kept in the platform audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          },
+          "reference" : {
+            "description" : "The sender's transaction reference",
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor", "method", "months", "paid_on", "reason" ]
+      },
       "SubscriptionStatusRequest" : {
         "properties" : {
           "next_status_change_on" : {
             "format" : "date",
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Why; kept in the platform audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
             "type" : "string"
           },
           "status" : {
@@ -18583,7 +18997,105 @@
             "type" : "string"
           }
         },
-        "required" : [ "status" ]
+        "required" : [ "reason", "status" ]
+      },
+      "TenantAdmin" : {
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "email" : {
+            "type" : "string"
+          },
+          "full_name" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "last_login_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "mfa_enabled" : {
+            "type" : "boolean"
+          },
+          "phone" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "invited, active or deactivated",
+            "type" : "string"
+          }
+        }
+      },
+      "TenantHistoryEntry" : {
+        "description" : "An operator action on the business, from the platform audit log",
+        "properties" : {
+          "action" : {
+            "type" : "string"
+          },
+          "after" : {
+            "type" : "string"
+          },
+          "before" : {
+            "type" : "string"
+          },
+          "occurred_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "operator_name" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TenantMessage" : {
+        "description" : "A message the outbox holds for the business; never its text or link",
+        "properties" : {
+          "attempts" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "channel" : {
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "failed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "last_error" : {
+            "type" : "string"
+          },
+          "recipient" : {
+            "description" : "Masked to its last 4 characters",
+            "type" : "string"
+          },
+          "sent_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "pending, sent or failed",
+            "type" : "string"
+          },
+          "template_key" : {
+            "type" : "string"
+          }
+        }
       },
       "TenantModulesRequest" : {
         "properties" : {
@@ -18593,9 +19105,15 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "reason" : {
+            "description" : "Why; kept in the platform audit log (issue #407)",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
           }
         },
-        "required" : [ "modules" ]
+        "required" : [ "modules", "reason" ]
       },
       "TenantPaymentAccountStatus" : {
         "properties" : {
@@ -18612,6 +19130,35 @@
             "type" : "string"
           }
         }
+      },
+      "TenantPilotRequest" : {
+        "properties" : {
+          "pilot" : {
+            "description" : "True: a pilot or complimentary business, free with no end (ADR-024 decision 6)",
+            "type" : "boolean"
+          },
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "pilot", "reason" ]
+      },
+      "TenantPlanRequest" : {
+        "properties" : {
+          "plan_code" : {
+            "minLength" : 1,
+            "pattern" : "^[a-z0-9_-]{1,40}$",
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "plan_code", "reason" ]
       },
       "TenantSettings" : {
         "properties" : {
@@ -25833,6 +26380,14 @@
     "/api/v1/platform/plans" : {
       "get" : {
         "operationId" : "platformListPlans",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "include_inactive",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        } ],
         "responses" : {
           "200" : {
             "content" : {
@@ -25845,7 +26400,106 @@
             "description" : "OK"
           }
         },
-        "summary" : "Plans with their limits (FR-TEN-04)",
+        "summary" : "Plans with their limits and the price in force today (FR-TEN-04, FR-SUB-01)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/plans/{plan_code}" : {
+      "get" : {
+        "operationId" : "platformGetPlan",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "plan_code",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlanDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One plan with its price history (FR-SUB-01)",
+        "tags" : [ "platform" ]
+      },
+      "put" : {
+        "operationId" : "platformSavePlan",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "plan_code",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SavePlanRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlanDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Create the plan with this code, or change it; the same request again changes nothing (FR-SUB-01)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/plans/{plan_code}/prices" : {
+      "post" : {
+        "operationId" : "platformAddPlanPrice",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "plan_code",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AddPlanPriceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlanDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set the plan's price from a date; the price already in force on that date again changes nothing (FR-SUB-01)",
         "tags" : [ "platform" ]
       }
     },
@@ -25968,6 +26622,31 @@
     "/api/v1/platform/tenants" : {
       "get" : {
         "operationId" : "platformListTenants",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "module",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
         "responses" : {
           "200" : {
             "content" : {
@@ -25980,7 +26659,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Every tenant",
+        "summary" : "Every tenant with plan, subscription, owner and last sign-in; search and filter (FR-TEN-05)",
         "tags" : [ "platform" ]
       },
       "post" : {
@@ -26077,6 +26756,34 @@
         "tags" : [ "platform" ]
       }
     },
+    "/api/v1/platform/tenants/{tenant_id}/overview" : {
+      "get" : {
+        "operationId" : "platformTenantOverview",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BusinessDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The business page: details, owner and admins, price, payments, recent messages and operator history",
+        "tags" : [ "platform" ]
+      }
+    },
     "/api/v1/platform/tenants/{tenant_id}/payment-account" : {
       "get" : {
         "operationId" : "platformGetTenantPaymentAccount",
@@ -26143,9 +26850,54 @@
         "tags" : [ "platform" ]
       }
     },
-    "/api/v1/platform/tenants/{tenant_id}/resume" : {
+    "/api/v1/platform/tenants/{tenant_id}/payments" : {
       "post" : {
-        "operationId" : "platformResumeTenant",
+        "operationId" : "platformRecordPayment",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SubscriptionPaymentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SubscriptionPayment"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record a payment received; it extends what is paid (ADR-024 decision 4). Needs an Idempotency-Key; a repeat records nothing",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/pilot" : {
+      "put" : {
+        "operationId" : "platformSetTenantPilot",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenant_id",
@@ -26155,6 +26907,16 @@
             "type" : "string"
           }
         } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TenantPilotRequest"
+              }
+            }
+          },
+          "required" : true
+        },
         "responses" : {
           "200" : {
             "content" : {
@@ -26167,7 +26929,83 @@
             "description" : "OK"
           }
         },
-        "summary" : "Resume a suspended tenant (FR-TEN-06)",
+        "summary" : "Mark or unmark a pilot (complimentary) business, with a reason: free, no free month end; the same mark again changes nothing (ADR-024 decision 6)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/plan" : {
+      "put" : {
+        "operationId" : "platformSetTenantPlan",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TenantPlanRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformTenant"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Move the business to another active plan, with a reason; the same plan again changes nothing (FR-TEN-04)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/resume" : {
+      "post" : {
+        "operationId" : "platformResumeTenant",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformTenant"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Resume a suspended tenant with a reason, back to the status it had before (a free month stays a free month); a tenant that is not suspended changes nothing (FR-TEN-06)",
         "tags" : [ "platform" ]
       }
     },
@@ -26365,7 +27203,45 @@
             "description" : "OK"
           }
         },
-        "summary" : "Move the subscription status (FR-TEN-05)",
+        "summary" : "Move the subscription status, with a reason; the same status again changes nothing (FR-TEN-05)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/subscription-dates" : {
+      "put" : {
+        "operationId" : "platformSetSubscriptionDates",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SubscriptionDatesRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformTenant"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set the last day of the free month or the last day paid for, with a reason (FR-TEN-05)",
         "tags" : [ "platform" ]
       }
     },
@@ -26381,6 +27257,16 @@
             "type" : "string"
           }
         } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
         "responses" : {
           "200" : {
             "content" : {
@@ -26393,7 +27279,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Suspend: the tenant becomes read only (FR-TEN-06)",
+        "summary" : "Suspend with a reason: the tenant becomes read only, nothing is deleted; already suspended changes nothing (FR-TEN-06)",
         "tags" : [ "platform" ]
       }
     },
@@ -26432,7 +27318,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Reset the lost second factor of a tenant admin; needs a current code from the operator's own authenticator (FR-IAM-12)",
+        "summary" : "Reset the lost second factor of a tenant admin, with a reason; needs a current code from the operator's own authenticator (FR-IAM-12)",
         "tags" : [ "platform" ]
       }
     },
@@ -26478,7 +27364,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Issue a one-time password reset link for a tenant admin; shown once, valid one hour; needs a current code from the operator's own authenticator (FR-IAM-15)",
+        "summary" : "Issue a one-time password reset link for a tenant admin, with a reason; shown once, valid one hour; needs a current code from the operator's own authenticator (FR-IAM-15)",
         "tags" : [ "platform" ]
       }
     },

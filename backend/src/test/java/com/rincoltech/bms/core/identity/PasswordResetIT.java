@@ -1135,17 +1135,24 @@ class PasswordResetIT extends IntegrationTest {
         String code = operatorCode(operator);
 
         ResponseEntity<JsonNode> notAdmin =
-                platform.post(base + cashier + "/mfa/reset", Map.of("totp_code", code), operator.accessToken());
+                platform.post(base + cashier + "/mfa/reset", stepUp(code), operator.accessToken());
         assertThat(notAdmin.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(notAdmin.getBody().get("code").asString()).isEqualTo("not_a_tenant_admin");
-        ResponseEntity<JsonNode> missing = platform.post(
-                base + UUID.randomUUID() + "/mfa/reset", Map.of("totp_code", code), operator.accessToken());
+        ResponseEntity<JsonNode> missing =
+                platform.post(base + UUID.randomUUID() + "/mfa/reset", stepUp(code), operator.accessToken());
         assertThat(missing.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
-        // The same code still works for a real tenant admin.
-        assertThat(platform.post(base + target + "/mfa/reset", Map.of("totp_code", code), operator.accessToken())
+        // The same code still works for a real tenant admin, and the reason is audited.
+        assertThat(platform.post(base + target + "/mfa/reset", stepUp(code), operator.accessToken())
                         .getStatusCode())
                 .isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT data ->> 'reason' FROM platform_audit_log WHERE action = 'platform.tenant_admin.mfa_reset' AND tenant_id = ?")
+                        .param(t.tenantId())
+                        .query(String.class)
+                        .single())
+                .isEqualTo("Test: the owner is locked out");
     }
 
     String userEmail(UUID userId) {
@@ -1241,6 +1248,11 @@ class PasswordResetIT extends IntegrationTest {
         assertThat(api.login(email, Api.PASSWORD).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
+    /** The body of a platform reset route: the operator's code and the reason the audit keeps (issue #407). */
+    static Map<String, String> stepUp(String code) {
+        return Map.of("totp_code", code, "reason", "Test: the owner is locked out");
+    }
+
     String operatorCode(Session operator) {
         Api.allowTotpReuse(operator.userId());
         return Api.totp(operator.totpSecret(), Instant.now());
@@ -1257,8 +1269,7 @@ class PasswordResetIT extends IntegrationTest {
         UUID locked = user(adminEmail, "tenant_admin");
         String path = "/api/v1/platform/tenants/" + t.tenantId() + "/users/" + locked + "/reset-sign-in";
 
-        ResponseEntity<JsonNode> issued =
-                platform.post(path, Map.of("totp_code", operatorCode(operator)), operator.accessToken());
+        ResponseEntity<JsonNode> issued = platform.post(path, stepUp(operatorCode(operator)), operator.accessToken());
 
         assertThat(issued.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(issued.getHeaders().getFirst("Cache-Control")).isEqualTo("no-store");
@@ -1279,6 +1290,14 @@ class PasswordResetIT extends IntegrationTest {
                         .query(Long.class)
                         .single())
                 .isEqualTo(1);
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT data ->> 'reason' FROM platform_audit_log WHERE action = 'platform.tenant_admin.sign_in_reset' AND tenant_id = ?")
+                        .param(t.tenantId())
+                        .query(String.class)
+                        .single())
+                .as("the operator's reason is kept in the platform audit log")
+                .isEqualTo("Test: the owner is locked out");
         assertThat(emails("identity.password_reset_issued", adminEmail)).isEqualTo(1);
         // Round 2, m6: the notice names who issued it, and here that is the platform, not "an administrator".
         String who = TestDatabase.owner()
@@ -1303,14 +1322,14 @@ class PasswordResetIT extends IntegrationTest {
         String code = operatorCode(operator);
         ResponseEntity<JsonNode> notAdmin = platform.post(
                 "/api/v1/platform/tenants/" + t.tenantId() + "/users/" + cashier + "/reset-sign-in",
-                Map.of("totp_code", code),
+                stepUp(code),
                 operator.accessToken());
         assertThat(notAdmin.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(notAdmin.getBody().get("code").asString()).isEqualTo("not_a_tenant_admin");
         UUID second = user(Api.email("lockedout2"), "tenant_admin");
         assertThat(platform.post(
                                 "/api/v1/platform/tenants/" + t.tenantId() + "/users/" + second + "/reset-sign-in",
-                                Map.of("totp_code", code),
+                                stepUp(code),
                                 operator.accessToken())
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);
@@ -1339,32 +1358,39 @@ class PasswordResetIT extends IntegrationTest {
                             .is4xxClientError())
                     .as(route)
                     .isTrue();
-            assertThat(platform.post(route, Map.of("totp_code", " "), operator.accessToken())
-                            .getStatusCode())
+            assertThat(platform.post(route, stepUp(" "), operator.accessToken()).getStatusCode())
                     .as(route)
                     .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
-            ResponseEntity<JsonNode> wrong =
-                    platform.post(route, Map.of("totp_code", "000000"), operator.accessToken());
+            ResponseEntity<JsonNode> wrong = platform.post(route, stepUp("000000"), operator.accessToken());
             assertThat(wrong.getStatusCode()).as(route).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
             assertThat(wrong.getBody().get("code").asString()).as(route).isEqualTo("invalid_mfa_code");
         }
         assertThat(openLinks(target)).isZero();
         assertThat(emails("identity.password_reset_issued", userEmail(target))).isZero();
 
-        // A right code works once; the same code a second time is refused (single use, as on the tenant route).
+        // Issue #407: a reason (5 to 300 characters) is required on both routes; without one nothing is done and the
+        // code
+        // is not spent.
         String code = operatorCode(operator);
-        assertThat(platform.post(base + "/reset-sign-in", Map.of("totp_code", code), operator.accessToken())
+        for (String route : List.of(base + "/reset-sign-in", base + "/mfa/reset")) {
+            for (Map<String, String> body :
+                    List.of(Map.of("totp_code", code), Map.of("totp_code", code, "reason", "abc"))) {
+                ResponseEntity<JsonNode> noReason = platform.post(route, body, operator.accessToken());
+                assertThat(noReason.getStatusCode().value()).as(route).isIn(400, 422);
+                assertThat(String.valueOf(noReason.getBody())).as(route).doesNotContain("invalid_mfa_code");
+            }
+        }
+        assertThat(openLinks(target)).isZero();
+
+        // A right code works once; the same code a second time is refused (single use, as on the tenant route).
+        assertThat(platform.post(base + "/reset-sign-in", stepUp(code), operator.accessToken())
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);
-        ResponseEntity<JsonNode> replay =
-                platform.post(base + "/mfa/reset", Map.of("totp_code", code), operator.accessToken());
+        ResponseEntity<JsonNode> replay = platform.post(base + "/mfa/reset", stepUp(code), operator.accessToken());
         assertThat(replay.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(replay.getBody().get("code").asString()).isEqualTo("invalid_mfa_code");
         // With a fresh code the second route works too.
-        assertThat(platform.post(
-                                base + "/mfa/reset",
-                                Map.of("totp_code", operatorCode(operator)),
-                                operator.accessToken())
+        assertThat(platform.post(base + "/mfa/reset", stepUp(operatorCode(operator)), operator.accessToken())
                         .getStatusCode())
                 .isEqualTo(HttpStatus.NO_CONTENT);
     }

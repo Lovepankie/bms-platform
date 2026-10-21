@@ -10,6 +10,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -19,6 +21,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,34 +29,29 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** {@code /api/v1/platform} tenant management (chapter 7 section 7.11.3). Platform operators only. */
+/**
+ * {@code /api/v1/platform} tenant management (chapter 7 section 7.11.3). Platform operators only. The plans and their
+ * prices are {@link PriceBookController}.
+ */
 @RestController
 @RequestMapping(path = "/api/v1/platform", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "platform")
 class PlatformController {
 
     private final PlatformService service;
+    private final BusinessService business;
     private final OperatorSecurity security;
 
-    PlatformController(PlatformService service, OperatorSecurity security) {
+    PlatformController(PlatformService service, BusinessService business, OperatorSecurity security) {
         this.service = service;
+        this.business = business;
         this.security = security;
     }
-
-    @Schema(name = "Plan", description = "Limits only; prices are not stored in this repository")
-    record PlanResponse(
-            String code,
-            String name,
-            Integer maxBranches,
-            Integer maxStaffUsers,
-            Integer maxActiveMembers,
-            List<String> allowedModules) {}
-
-    @Schema(name = "PlanList")
-    record PlanList(List<PlanResponse> items) {}
 
     @Schema(name = "PlatformTenant")
     record TenantResponse(
@@ -65,12 +63,45 @@ class PlatformController {
             String status,
 
             String planCode,
+            String planName,
             String currency,
             String timezone,
+
+            @Schema(description = "trial, active, past_due, suspended or cancelled")
             String subscriptionStatus,
+
             LocalDate nextStatusChangeOn,
+
+            @Schema(description = "The last day of the free month; set at the first staff sign-in, null before it")
+            LocalDate trialEndsOn,
+
+            @Schema(description = "The first day of the paid period, or null")
+            LocalDate paidFrom,
+
+            @Schema(description = "The last day paid for, or null when nothing was paid")
+            LocalDate paidUntil,
+
             List<String> modules,
-            Instant createdAt) {}
+            Instant createdAt,
+
+            @Schema(description = "The first tenant admin (the owner), or null")
+            String ownerName,
+
+            String ownerEmail,
+
+            @Schema(description = "The latest sign-in of any staff user, or null")
+            Instant lastSignInAt,
+
+            @Schema(description = "The business's own address, where its staff sign in")
+            String address,
+
+            @Schema(
+                    description =
+                            "While suspended or cancelled: the status a resume brings back (trial, active or past_due)")
+            String suspendedFrom,
+
+            @Schema(description = "A pilot or complimentary business: free, no free month end (ADR-024 decision 6)")
+            boolean pilot) {}
 
     @Schema(name = "PlatformTenantList")
     record TenantList(List<TenantResponse> items) {}
@@ -108,7 +139,12 @@ class PlatformController {
             @NotBlank
             @Size(max = 20)
             @Schema(description = "A current 6 digit code from the operator's own authenticator app")
-            String totpCode) {}
+            String totpCode,
+
+            @NotBlank
+            @Size(min = 5, max = 300)
+            @Schema(description = "Why; kept in the platform audit log (issue #407)")
+            String reason) {}
 
     @Schema(
             name = "PlatformSignInResetLink",
@@ -123,27 +159,186 @@ class PlatformController {
             TenantResponse tenant, UUID headOfficeBranchId, FirstAdminInvitation adminInvitation) {}
 
     @Schema(name = "TenantModulesRequest")
-    record ModulesRequest(@NotNull List<@Pattern(regexp = "^[a-z]{2,30}$") String> modules) {}
+    record ModulesRequest(
+            @NotNull List<@Pattern(regexp = "^[a-z]{2,30}$") String> modules,
+
+            @NotBlank
+            @Size(min = 5, max = 300)
+            @Schema(description = "Why; kept in the platform audit log (issue #407)")
+            String reason) {}
+
+    @Schema(name = "TenantPilotRequest")
+    record PilotRequest(
+            @NotNull
+            @Schema(description = "True: a pilot or complimentary business, free with no end (ADR-024 decision 6)")
+            Boolean pilot,
+
+            @NotBlank @Size(min = 5, max = 300) String reason) {}
 
     @Schema(name = "SubscriptionStatusRequest")
     record SubscriptionRequest(
             @NotBlank @Pattern(regexp = "trial|active|past_due|suspended|cancelled")
             String status,
 
-            LocalDate nextStatusChangeOn) {}
+            LocalDate nextStatusChangeOn,
 
-    @GetMapping("/plans")
-    @RequiresPermission("platform.tenants.read")
-    @Operation(summary = "Plans with their limits (FR-TEN-04)", operationId = "platformListPlans")
-    PlanList plans() {
-        return new PlanList(service.plans());
-    }
+            @NotBlank @Size(min = 5, max = 300) @Schema(description = "Why; kept in the platform audit log")
+            String reason) {}
+
+    @Schema(name = "PlatformReasonRequest")
+    record ReasonRequest(
+            @NotBlank @Size(min = 5, max = 300) @Schema(description = "Why; kept in the platform audit log")
+            String reason) {}
+
+    @Schema(name = "TenantPlanRequest")
+    record PlanRequest(
+            @NotBlank @Pattern(regexp = PriceBookService.PLAN_CODE)
+            String planCode,
+
+            @NotBlank @Size(min = 5, max = 300) String reason) {}
+
+    @Schema(name = "SubscriptionDatesRequest", description = "Send one or both dates")
+    record DatesRequest(
+            @Schema(description = "The new last day of the free month")
+            LocalDate trialEndsOn,
+
+            @Schema(description = "The new last day paid for")
+            LocalDate paidUntil,
+
+            @Schema(
+                    description =
+                            "True clears the last day of the free month (the clock starts again at the next sign-in)")
+            Boolean clearTrialEndsOn,
+
+            @Schema(description = "True clears what is paid (the last day paid for and the start of the paid period)")
+            Boolean clearPaidUntil,
+
+            @NotBlank @Size(min = 5, max = 300) String reason) {}
+
+    @Schema(name = "SubscriptionPaymentRequest", description = "A payment received by mobile money or bank transfer")
+    record PaymentRequest(
+            @NotNull
+            @Min(1)
+            @Max(PriceBookService.MAX_MINOR)
+            @Schema(description = "Minor units; whole shillings for UGX; at most 50,000,000")
+            Long amountMinor,
+
+            @NotBlank @Pattern(regexp = "mtn_momo|airtel_money|bank_transfer|other")
+            String method,
+
+            @Size(max = 100) @Schema(description = "The sender's transaction reference")
+            String reference,
+
+            @NotNull LocalDate paidOn,
+
+            @NotNull @Min(1) @Max(24) @Schema(description = "Months the payment covers: 1 for a month, 12 for a year")
+            Integer months,
+
+            @Size(max = 500) String note,
+
+            @NotBlank
+            @Size(min = 5, max = 300)
+            @Schema(
+                    description =
+                            "Why it is recorded (who confirmed it, how it was checked); kept in the platform audit log")
+            String reason,
+
+            @Schema(
+                    description =
+                            "True when the operator checked an amount more than 25% away from the plan's price for these months, or a plan with no price (422 payment_amount_unusual otherwise)")
+            Boolean confirmUnusualAmount) {}
+
+    @Schema(name = "SubscriptionPayment")
+    record PaymentResponse(
+            UUID id,
+
+            @Schema(
+                    description =
+                            "confirmed (entered by the operator); claimed and rejected arrive with the tenant's billing")
+            String status,
+
+            long amountMinor,
+            String currency,
+            String method,
+            String reference,
+            LocalDate paidOn,
+            int months,
+
+            @Schema(description = "The first day the payment covers")
+            LocalDate periodStart,
+
+            @Schema(description = "The last day the payment covers")
+            LocalDate periodEnd,
+
+            String note,
+            String recordedByName,
+            Instant createdAt) {}
+
+    @Schema(name = "TenantAdmin")
+    record AdminResponse(
+            UUID id,
+            String fullName,
+            String email,
+            String phone,
+
+            @Schema(description = "invited, active or deactivated")
+            String status,
+
+            boolean mfaEnabled,
+            Instant lastLoginAt,
+            Instant createdAt) {}
+
+    @Schema(name = "TenantMessage", description = "A message the outbox holds for the business; never its text or link")
+    record MessageResponse(
+            UUID id,
+            String channel,
+
+            @Schema(description = "Masked to its last 4 characters")
+            String recipient,
+
+            String templateKey,
+
+            @Schema(description = "pending, sent or failed") String status,
+
+            int attempts,
+            String lastError,
+            Instant createdAt,
+            Instant sentAt,
+            Instant failedAt) {}
+
+    @Schema(
+            name = "TenantHistoryEntry",
+            description = "An operator action on the business, from the platform audit log")
+    record HistoryResponse(
+            String action, String operatorName, Instant occurredAt, String reason, String before, String after) {}
+
+    @Schema(name = "BusinessDetail")
+    record BusinessDetail(
+            TenantResponse tenant,
+
+            @Schema(description = "The price in force today for the business's plan, or null when none was entered")
+            PriceBookController.PlanPriceResponse planPrice,
+
+            List<AdminResponse> admins,
+
+            @Schema(description = "Newest first") List<PaymentResponse> payments,
+
+            @Schema(description = "Newest first, at most 50; sent messages are purged after a while")
+            List<MessageResponse> messages,
+
+            @Schema(description = "Newest first, at most 50")
+            List<HistoryResponse> history) {}
 
     @GetMapping("/tenants")
     @RequiresPermission("platform.tenants.read")
-    @Operation(summary = "Every tenant", operationId = "platformListTenants")
-    TenantList tenants() {
-        return new TenantList(service.tenants());
+    @Operation(
+            summary = "Every tenant with plan, subscription, owner and last sign-in; search and filter (FR-TEN-05)",
+            operationId = "platformListTenants")
+    TenantList tenants(
+            @RequestParam(name = "q", required = false) String q,
+            @RequestParam(name = "status", required = false) List<String> status,
+            @RequestParam(name = "module", required = false) String module) {
+        return new TenantList(service.tenants(q, status, module));
     }
 
     @PostMapping("/tenants")
@@ -165,33 +360,95 @@ class PlatformController {
         return service.tenant(tenantId);
     }
 
+    @GetMapping("/tenants/{tenant_id}/overview")
+    @RequiresPermission("platform.tenants.read")
+    @Operation(
+            summary =
+                    "The business page: details, owner and admins, price, payments, recent messages and operator history",
+            operationId = "platformTenantOverview")
+    BusinessDetail overview(@PathVariable("tenant_id") UUID tenantId) {
+        return business.overview(tenantId);
+    }
+
+    @PutMapping("/tenants/{tenant_id}/plan")
+    @RequiresPermission("platform.tenants.manage")
+    @Operation(
+            summary =
+                    "Move the business to another active plan, with a reason; the same plan again changes nothing (FR-TEN-04)",
+            operationId = "platformSetTenantPlan")
+    TenantResponse plan(@PathVariable("tenant_id") UUID tenantId, @Valid @RequestBody PlanRequest request) {
+        return business.setPlan(tenantId, request.planCode(), request.reason());
+    }
+
+    @PutMapping("/tenants/{tenant_id}/subscription-dates")
+    @RequiresPermission("platform.tenants.manage")
+    @Operation(
+            summary = "Set the last day of the free month or the last day paid for, with a reason (FR-TEN-05)",
+            operationId = "platformSetSubscriptionDates")
+    TenantResponse dates(@PathVariable("tenant_id") UUID tenantId, @Valid @RequestBody DatesRequest request) {
+        return business.setDates(tenantId, request);
+    }
+
+    @PostMapping("/tenants/{tenant_id}/payments")
+    @RequiresPermission("platform.tenants.manage")
+    @Operation(
+            summary =
+                    "Record a payment received; it extends what is paid (ADR-024 decision 4). Needs an Idempotency-Key; a repeat records nothing",
+            operationId = "platformRecordPayment")
+    ResponseEntity<PaymentResponse> payment(
+            @PathVariable("tenant_id") UUID tenantId,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody PaymentRequest request) {
+        BusinessService.Recorded recorded = business.recordPayment(tenantId, idempotencyKey, request);
+        return ResponseEntity.status(recorded.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
+                .body(recorded.payment());
+    }
+
     @PutMapping("/tenants/{tenant_id}/modules")
     @RequiresPermission("platform.tenants.manage")
     @Operation(summary = "Switch modules on or off; data is kept (FR-TEN-03)", operationId = "platformSetModules")
     TenantResponse modules(@PathVariable("tenant_id") UUID tenantId, @Valid @RequestBody ModulesRequest request) {
-        return service.setModules(tenantId, request.modules());
+        return service.setModules(tenantId, request.modules(), request.reason());
+    }
+
+    @PutMapping("/tenants/{tenant_id}/pilot")
+    @RequiresPermission("platform.tenants.manage")
+    @Operation(
+            summary =
+                    "Mark or unmark a pilot (complimentary) business, with a reason: free, no free month end; the same mark again changes nothing (ADR-024 decision 6)",
+            operationId = "platformSetTenantPilot")
+    TenantResponse pilot(@PathVariable("tenant_id") UUID tenantId, @Valid @RequestBody PilotRequest request) {
+        return business.setPilot(tenantId, request.pilot(), request.reason());
     }
 
     @PostMapping("/tenants/{tenant_id}/subscription")
     @RequiresPermission("platform.tenants.manage")
-    @Operation(summary = "Move the subscription status (FR-TEN-05)", operationId = "platformSetSubscription")
+    @Operation(
+            summary = "Move the subscription status, with a reason; the same status again changes nothing (FR-TEN-05)",
+            operationId = "platformSetSubscription")
     TenantResponse subscription(
             @PathVariable("tenant_id") UUID tenantId, @Valid @RequestBody SubscriptionRequest request) {
-        return service.setSubscription(tenantId, request.status(), request.nextStatusChangeOn());
+        return service.setSubscription(tenantId, request.status(), request.nextStatusChangeOn(), request.reason());
     }
 
     @PostMapping("/tenants/{tenant_id}/suspend")
     @RequiresPermission("platform.tenants.manage")
-    @Operation(summary = "Suspend: the tenant becomes read only (FR-TEN-06)", operationId = "platformSuspendTenant")
-    TenantResponse suspend(@PathVariable("tenant_id") UUID tenantId) {
-        return service.setSubscription(tenantId, "suspended", null);
+    @Operation(
+            summary =
+                    "Suspend with a reason: the tenant becomes read only, nothing is deleted; already suspended changes nothing (FR-TEN-06)",
+            operationId = "platformSuspendTenant")
+    TenantResponse suspend(@PathVariable("tenant_id") UUID tenantId, @Valid @RequestBody ReasonRequest request) {
+        return service.setSubscription(tenantId, "suspended", null, request.reason());
     }
 
     @PostMapping("/tenants/{tenant_id}/resume")
     @RequiresPermission("platform.tenants.manage")
-    @Operation(summary = "Resume a suspended tenant (FR-TEN-06)", operationId = "platformResumeTenant")
-    TenantResponse resume(@PathVariable("tenant_id") UUID tenantId) {
-        return service.setSubscription(tenantId, "active", null);
+    @Operation(
+            summary =
+                    "Resume a suspended tenant with a reason, back to the status it had before (a free month stays a free month); a tenant that is not suspended changes nothing (FR-TEN-06)",
+            operationId = "platformResumeTenant")
+    TenantResponse resume(@PathVariable("tenant_id") UUID tenantId, @Valid @RequestBody ReasonRequest request) {
+        return service.resume(tenantId, request.reason());
     }
 
     /**
@@ -203,7 +460,7 @@ class PlatformController {
     @RequiresPermission("platform.tenants.manage")
     @Operation(
             summary =
-                    "Issue a one-time password reset link for a tenant admin; shown once, valid one hour; needs a current code from the operator's own authenticator (FR-IAM-15)",
+                    "Issue a one-time password reset link for a tenant admin, with a reason; shown once, valid one hour; needs a current code from the operator's own authenticator (FR-IAM-15)",
             operationId = "platformResetAdminSignIn")
     SignInResetLink resetAdminSignIn(
             @PathVariable("tenant_id") UUID tenantId,
@@ -213,7 +470,7 @@ class PlatformController {
         NoStore.apply(response);
         service.requireResettableAdmin(tenantId, userId);
         security.requireTotp(request.totpCode());
-        TenantAdmins.ResetLink link = service.resetAdminSignIn(tenantId, userId);
+        TenantAdmins.ResetLink link = service.resetAdminSignIn(tenantId, userId, request.reason());
         return new SignInResetLink(link.url(), link.expiresAt());
     }
 
@@ -221,7 +478,7 @@ class PlatformController {
     @RequiresPermission("platform.tenants.manage")
     @Operation(
             summary =
-                    "Reset the lost second factor of a tenant admin; needs a current code from the operator's own authenticator (FR-IAM-12)",
+                    "Reset the lost second factor of a tenant admin, with a reason; needs a current code from the operator's own authenticator (FR-IAM-12)",
             operationId = "platformResetAdminMfa")
     ResponseEntity<Void> resetAdminMfa(
             @PathVariable("tenant_id") UUID tenantId,
@@ -229,7 +486,7 @@ class PlatformController {
             @Valid @RequestBody StepUpRequest request) {
         service.requireTenantAdmin(tenantId, userId);
         security.requireTotp(request.totpCode());
-        service.resetAdminMfa(tenantId, userId);
+        service.resetAdminMfa(tenantId, userId, request.reason());
         return ResponseEntity.noContent().build();
     }
 }

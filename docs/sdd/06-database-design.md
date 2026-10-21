@@ -200,9 +200,31 @@ another branch's rows (chapter 15).
 | `max_staff_users` | `integer` | NULL = unlimited. |
 | `max_active_members` | `integer` | NULL = unlimited. |
 | `allowed_modules` | `text[] NOT NULL` | For example `{lending}`. |
-| `is_active` | `boolean NOT NULL DEFAULT true` | |
+| `is_active` | `boolean NOT NULL DEFAULT true` | False: offered to no new business and no move onto it. |
+| `description` | `varchar(500)` | What the plan includes, typed by the operator. `V75`. |
+| `sort_order` | `integer NOT NULL DEFAULT 0` | The order in the operator's list. `V75`. |
+| `updated_at`, `updated_by_platform_user_id` | | `V75`. |
 
-Prices are commercial and are not stored in this repository's seed data.
+Checks since `V75`: `plans_code_shape` (`^[a-z0-9_-]{1,40}$`) and `plans_limits_not_negative` (a limit is NULL or 0 and above; the operator screens send 1 and above). Written
+only through `platform_save_plan` (an upsert by code that refuses to take out a module a tenant on the plan has on; ADR-016).
+Prices are commercial and are not stored in this repository's seed data: the operator types them (ADR-056).
+
+### `plan_prices` (reference, no RLS, `bms_app` SELECT only, append-only; `V75`, ADR-056)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PK | |
+| `plan_id` | `uuid NOT NULL` | FK `plans`. |
+| `currency` | `char(3) NOT NULL` | FK `currencies`. |
+| `monthly_minor` | `bigint NOT NULL` | 0 to 50,000,000. |
+| `annual_months` | `integer NOT NULL` | 1 to 12: the months charged for a year. |
+| `effective_from` | `date NOT NULL` | The price in force on a day is the newest row starting on or before it. |
+| `reason` | `varchar(300)` | |
+| `created_by_platform_user_id` | `uuid NOT NULL` | FK `platform_users`. |
+| `created_at` | `timestamptz NOT NULL` | |
+
+Index `(plan_id, currency, effective_from DESC, created_at DESC)`. Written only through `platform_add_plan_price`; the service
+refuses a start before today, so a price never changes the past.
 
 ### `permissions`, `roles`, `role_permissions` (reference, no RLS, `bms_app` SELECT only)
 
@@ -379,7 +401,33 @@ last minute), then by due time, and locks the best twenty candidates in that ord
 `past_due`, `suspended`, `cancelled`], `current_period_start date`,
 `current_period_end date`, `trial_ends_on date`, `next_status_change_on date`,
 `updated_by_platform_user_id uuid`. One current row per tenant
-(`UNIQUE (tenant_id)`); history is in `platform_audit_log`.
+(`UNIQUE (tenant_id)`); history is in `platform_audit_log`. `trial_ends_on` is the last day of
+the free month: since `V75` the trigger `start_trial_clock` on `auth_sessions` sets it once, one
+month from the first session of a staff user, in the tenant's time zone (FR-SUB-02).
+`suspended_from` (`V75`) is the status a resume brings back, kept while the subscription is suspended or cancelled, and set to `active` by a payment recorded meanwhile; `is_pilot` (`V75`, ADR-024 decision 6) marks a pilot or complimentary business with no free month end and no scheduled status change (marking clears both), which the clock and the scheduled transitions skip. `current_period_start` and `current_period_end` are the first and the last day paid for, moved by
+`platform_record_subscription_payment`; the operator can also set the two dates by hand with
+`platform_set_subscription_dates` and the plan with `platform_set_tenant_plan`, which refuses a plan the business is over on open shops and stores, staff or active lending members (ADR-056). `platform_plan_tenants_over` counts the businesses on a plan that a lowered limit would leave over it, for the warning before a plan is saved.
+
+### `subscription_payments` (RLS; `bms_app` SELECT only; append-only; `V75`, ADR-024 decision 4, ADR-056)
+
+(std, no `version`, no `updated_at`) `subscription_id uuid NOT NULL` (composite FK
+`subscriptions`), `plan_id uuid NOT NULL`, `status text NOT NULL DEFAULT 'confirmed'`
+[`claimed`, `confirmed`, `rejected`; only `confirmed` is written in this release],
+`amount_minor bigint NOT NULL` (1 to 50,000,000), `currency char(3) NOT NULL` (the tenant's),
+`method text NOT NULL` [`mtn_momo`, `airtel_money`, `bank_transfer`, `other`],
+`reference varchar(100)`, `paid_on date NOT NULL`, `months integer NOT NULL` (1 to 24),
+`period_start date NOT NULL`, `period_end date NOT NULL` (the first and last day covered),
+`note varchar(500)`, `recorded_by_platform_user_id uuid NOT NULL` (FK `platform_users`). Index
+`(tenant_id, created_at DESC)`. Written only through
+`platform_record_subscription_payment`, which reads the tenant from `app.tenant_id` inside the
+transaction the platform console binds to it (`TenantContext.callAs`), in one transaction with
+the subscription move and the `Idempotency-Key` row. FR-SPM-01.
+
+Reads for the operator across tenants (`V75`, definer functions owned by `bms_owner`):
+`platform_tenant_overview()` (every tenant with its plan, subscription dates, modules, the
+first tenant admin as the owner and the latest staff sign-in), `platform_tenant_admins(tenant)`
+and `platform_tenant_outbox(tenant, limit)` (the outbox rows of one tenant, never their
+parameters).
 
 ### `tenant_modules` (RLS; `bms_app` SELECT only)
 

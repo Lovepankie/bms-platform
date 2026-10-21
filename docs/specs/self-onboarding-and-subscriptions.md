@@ -33,6 +33,12 @@ per-staff add-on pricing, agent logins.
 
 ## 3. Pricing model (FR-SUB-01 to FR-SUB-04)
 
+**Amended by ADR-056 (issue #407, 21 Oct 2026):** the price book is per plan, not per number of modules. A plan holds its limits
+(shops and stores, staff, lending members, the modules it allows) and, in `plan_prices`, a monthly price and the months charged for a
+year from a start day; the operator types every plan and price in Plans and prices, and a new price starts today or later. The free
+month starts at the first staff sign-in (section 4.2 step 3, built), and the operator records a payment received on the Business page
+(section 6, confirmed at once). The rest of this section (deal prices, the minimum price per module) is unchanged and not built.
+
 - A **price book** holds, per number of modules (1, 2, 3 or more), a monthly price, and one
   **annual factor** (months charged for a year; the annual price is the monthly price times the
   factor). Example: one module 40,000 a month; two modules 60,000 a month (the second module is
