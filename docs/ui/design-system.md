@@ -2,7 +2,7 @@
 
 **Status:** Draft · **Chore:** #95, #106 (visual polish) · **Chapter:** `docs/sdd/11-member-channels.md` section 11.2.6 · **Builds on:** #87 (tenant branding, FR-TEN-08)
 
-The look of the PWA: calm, trustworthy business software in Rincoltech blue. One design layer serves the
+The look of the PWA: calm, trustworthy business software in Rincol Tech blue. One design layer serves the
 landing page, the sign-in family, the staff area, every retail screen, the member portal and the platform
 placeholder. Screens use class names from this catalogue and never write a raw colour, size or shadow.
 

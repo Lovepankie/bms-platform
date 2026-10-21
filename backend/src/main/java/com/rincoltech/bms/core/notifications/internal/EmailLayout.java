@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
 /**
  * The HTML part of every outbox email (issue #396, ADR-054): one table-based, inline-styled layout, at most 600 px wide,
  * with no external stylesheet or script, built from the same template and the same values as the plain-text part. The
- * header is the Rincoltech logo, or a business's own logo on the emails of its own staff; one big button carries the
+ * header is the Rincol Tech logo, or a business's own logo on the emails of its own staff; one big button carries the
  * main link, with the raw link below it for copy and paste; the footer says who sent it, why the reader got it and how
  * to reach support. Every value is HTML-escaped here, so a name a user typed can never become markup. Only a URL in a
  * link parameter that the caller trusts (the platform host or a tenant host, with the platform's scheme) becomes an
@@ -24,14 +24,14 @@ final class EmailLayout {
     /** The platform's own colour, the PWA's default {@code --brand}. */
     static final String PLATFORM_COLOUR = "#0D5C75";
 
-    /** The Rincoltech logo of the PWA, served from the platform host (frontend/public/brand), 400 x 114. */
+    /** The Rincol Tech logo of the PWA, served from the platform host (frontend/public/brand), 400 x 114. */
     static final String PLATFORM_LOGO_PATH = "/brand/rincoltech-logo.png";
 
     static final int PLATFORM_LOGO_WIDTH = 180;
     static final int PLATFORM_LOGO_HEIGHT = 51;
 
-    static final String SENDER_LINE = "BMS by Rincoltech Solutions Ltd";
-    static final String POWERED_BY = "Powered by BMS from Rincoltech";
+    static final String SENDER_LINE = "BMS by Rincol Tech Solutions Ltd";
+    static final String POWERED_BY = "Powered by BMS from Rincol Tech";
 
     /** The standard signature delimiter, dash dash space, on a line of its own before the text part's footer. */
     static final String SIGNATURE_DELIMITER = "-- ";
@@ -55,7 +55,7 @@ final class EmailLayout {
      * Whose look the email carries.
      *
      * @param logoUrl absolute URL of the header logo
-     * @param logoAlt the logo's alt text (the business's name, or Rincoltech)
+     * @param logoAlt the logo's alt text (the business's name, or Rincol Tech)
      * @param colour the button colour, {@code #RRGGBB}; anything else is replaced by the platform's
      * @param textOnColour the readable text colour on {@code colour}, {@code #RRGGBB}; anything else is white
      * @param tenant true for a business's own look: the footer then says it is powered by BMS
@@ -78,7 +78,7 @@ final class EmailLayout {
         static Brand platform(String platformOrigin) {
             return new Brand(
                     platformOrigin + PLATFORM_LOGO_PATH,
-                    "Rincoltech",
+                    "Rincol Tech",
                     PLATFORM_LOGO_WIDTH,
                     PLATFORM_LOGO_HEIGHT,
                     PLATFORM_COLOUR,

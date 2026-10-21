@@ -146,7 +146,7 @@ class EmailLayoutTest {
             // The header logo: an absolute URL on the platform host, with alt text, width and height.
             assertThat(body.html())
                     .contains("src=\"" + PLATFORM + EmailLayout.PLATFORM_LOGO_PATH + "\"")
-                    .contains("alt=\"Rincoltech\"")
+                    .contains("alt=\"Rincol Tech\"")
                     .contains("width=\"" + EmailLayout.PLATFORM_LOGO_WIDTH + "\"")
                     .contains("height=\"" + EmailLayout.PLATFORM_LOGO_HEIGHT + "\"");
             assertThat(htmlLinks(body.html())).as("links of %s", key).isEqualTo(textLinks(body.text()));
@@ -170,8 +170,8 @@ class EmailLayoutTest {
                 String href = "href=\"" + EmailLayout.escape(url) + "\"";
                 assertThat(html.split(Pattern.quote(href), -1)).as(key).hasSize(3);
             }
-            // The company is Rincoltech, one word.
-            assertThat(templates.render("email", key, params()).text()).as(key).doesNotContain("Rincol Tech");
+            // The sign-off is two words.
+            assertThat(templates.render("email", key, params()).text()).as(key).doesNotContain("Rincoltech");
         }
     }
 
@@ -246,7 +246,7 @@ class EmailLayoutTest {
     void theTextPartEndsWithTheSameFooter() {
         SmtpEmailChannel.Body body = body("onboarding.verify_email", params(), platform(), "support@example.test");
         assertThat(body.text())
-                .contains("Rincoltech\n")
+                .contains("Rincol Tech\n")
                 .contains("\n-- \n" + EmailLayout.SENDER_LINE + "\n")
                 .contains("You got this email because this address was given on an application to use BMS.")
                 .endsWith("Need help? support@example.test\n");
@@ -257,11 +257,11 @@ class EmailLayoutTest {
         OutboxChannel.Delivery delivery = delivery("identity.password_reset", params());
         SmtpEmailChannel.Body body = SmtpEmailChannel.body(templates, delivery, platform(), "", TRUSTED);
         MimeMessage message = SmtpEmailChannel.compose(
-                Session.getInstance(new Properties()), "BMS by Rincoltech <no-reply@example.test>", delivery, body);
+                Session.getInstance(new Properties()), "BMS by Rincol Tech <no-reply@example.test>", delivery, body);
         message.saveChanges();
         // BMS_MAIL_FROM may carry a display name.
         jakarta.mail.internet.InternetAddress from = (jakarta.mail.internet.InternetAddress) message.getFrom()[0];
-        assertThat(from.getPersonal()).isEqualTo("BMS by Rincoltech");
+        assertThat(from.getPersonal()).isEqualTo("BMS by Rincol Tech");
         assertThat(from.getAddress()).isEqualTo("no-reply@example.test");
         assertThat(message.getContentType()).startsWith("multipart/alternative");
         assertThat(message.getHeader("Message-ID")[0]).isEqualTo(SmtpEmailChannel.messageId(delivery.idempotencyKey()));
@@ -422,7 +422,7 @@ class EmailLayoutTest {
         assertThat(brand.logoHeight()).isEqualTo(64);
         assertThat(brand.colour()).isEqualTo("#112233");
 
-        // No logo set, or a platform row: the Rincoltech look.
+        // No logo set, or a platform row: the Rincol Tech look.
         path.set(java.util.Optional.empty());
         assertThat(channel.brand(row).tenant()).isFalse();
         assertThat(channel.brand(OutboxChannel.RowContext.NONE).logoUrl())

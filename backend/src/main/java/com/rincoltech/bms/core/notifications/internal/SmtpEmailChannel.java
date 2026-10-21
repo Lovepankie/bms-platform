@@ -32,9 +32,9 @@ import org.springframework.stereotype.Component;
  * receiving server can drop the copy.
  *
  * <p>Every email is {@code multipart/alternative} (issue #396, ADR-054): the template's plain text first, then the HTML
- * part that {@link EmailLayout} builds from the same template and values. The header is the Rincoltech logo from the
+ * part that {@link EmailLayout} builds from the same template and values. The header is the Rincol Tech logo from the
  * platform host; a row of a tenant whose logo is set (the emails of its own staff) shows that logo, from the tenant's
- * public logo route, with "Powered by BMS from Rincoltech" in the footer. A brand that cannot be read never stops a
+ * public logo route, with "Powered by BMS from Rincol Tech" in the footer. A brand that cannot be read never stops a
  * send: the email then carries the platform's look.
  */
 @Component

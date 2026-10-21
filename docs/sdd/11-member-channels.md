@@ -86,7 +86,7 @@ page; the logo stays the main brand mark.
 
 ### 11.2.6 Design tokens and components (#95)
 
-Every area draws with one design layer in the Rincoltech look: white surfaces on a light grey page,
+Every area draws with one design layer in the Rincol Tech look: white surfaces on a light grey page,
 Open Sans (self-hosted from `@fontsource-variable/open-sans`, so no font CDN and nothing extra in the
 CSP), bold headings, 8px corners and soft shadows. The tokens are CSS custom properties in
 `frontend/src/app/theme.css`; the component styles are in `frontend/src/app/ui/`, imported once by

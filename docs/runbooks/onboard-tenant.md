@@ -55,7 +55,7 @@ Set these in `/opt/bms/.env` (never in git; `.env.example` lists them empty), th
 | `BMS_SMTP_HOST` | The provider's SMTP host |
 | `BMS_SMTP_PORT` | `465` (implicit TLS; port 587 is blocked on the staging host) |
 | `BMS_SMTP_USER`, `BMS_SMTP_PASSWORD` | The sending account and its app password |
-| `BMS_MAIL_FROM` | The sender address, for example `no-reply@<your domain>`, or with a display name: `BMS by Rincoltech <no-reply@<your domain>>` (quote the whole value in `.env`) |
+| `BMS_MAIL_FROM` | The sender address, for example `no-reply@<your domain>`, or with a display name: `BMS by Rincol Tech <no-reply@<your domain>>` (quote the whole value in `.env`) |
 | `BMS_SUPPORT_CONTACT` | Optional. The support line in the footer of every email, shown as typed, for example `support@<your domain> or <phone>`; empty leaves the line out |
 | `BMS_TELEGRAM_BOT_TOKEN` | The bot's token from BotFather |
 | `BMS_TELEGRAM_OPERATOR_CHAT_ID` | The chat that receives operator alerts |
@@ -69,7 +69,7 @@ applicant, Needs info; for a tenant admin, a new invitation). A bot token that i
 `.env`) switches Telegram off with a warning in the log; fix the line.
 
 Every email is sent as an HTML part and a plain-text part (issue #396, ADR-054). The HTML header
-loads the Rincoltech logo from `https://<BMS_PLATFORM_HOST>/brand/rincoltech-logo.png`, and a
+loads the Rincol Tech logo from `https://<BMS_PLATFORM_HOST>/brand/rincoltech-logo.png`, and a
 business's own staff emails load that business's logo from its public logo route
 (`https://<tenant host>/api/v1/branding/logo`) when one is set. Both must be reachable from the
 internet for the images to show: a host behind an access gate shows the alt text instead, and the
